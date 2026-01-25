@@ -1,0 +1,35 @@
+# Nim build artifacts
+nimcache/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Generated files
+build/
+*.o
+*.obj
+*.ilk
+*.pdb
+*.exp
+*.lib
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Local configuration
+.claude/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test outputs
+*.out

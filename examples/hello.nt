@@ -1,0 +1,14 @@
+#!/usr/bin/env ntalk
+#
+# Simple NimTalk example demonstrating basic functionality
+#
+
+# Create a calculator object
+Calculator := Object derive
+
+# Add the two numbers as properties
+Calculator at: 'x' put: 3
+Calculator at: 'y' put: 4
+
+# Get the result
+Calculator at: 'x'

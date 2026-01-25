@@ -1,0 +1,11 @@
+#!/usr/bin/env ntalk
+#
+# Simple test: Create an object and access its properties
+#
+
+# Create a simple object
+obj := Object derive
+obj at: 'value' put: 7
+
+# Return the value (print happens in some systems)
+obj at: 'value'
