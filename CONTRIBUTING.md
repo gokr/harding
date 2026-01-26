@@ -6,13 +6,13 @@ Thank you for your interest in contributing to Nimtalk! This document provides g
 
 1. **Nim**: Ensure you have Nim 2.2.6 or later installed
 2. **Git**: Clone the repository and create a branch for your changes
-3. **Build Tools**: Nimble for package management
+3. **Build Tools**: Nimble for package management and building
 
 ## Development Workflow
 
 1. **Fork and Branch**: Create a feature branch from `master`
 2. **Make Changes**: Follow the coding guidelines in [CLAUDE.md](CLAUDE.md)
-3. **Test**: Run `nim c -r tests/test_core.nim` to ensure tests pass
+3. **Test**: Run `nimble test` or `nim c -r tests/test_core.nim` to ensure tests pass
 4. **Commit**: Write clear, descriptive commit messages
 5. **Pull Request**: Submit a PR with explanation of changes
 

@@ -37,7 +37,8 @@ Nimtalk is a prototype-based Smalltalk dialect designed for the modern era. It c
 - **Performance**: Leverage Nim's native compilation for deployment
 
 ### Tooling
-- **Command-line REPL** (`ntalk`) for interactive development
+- **Command-line REPL/Interpreter** (`ntalk`) for interactive development and script execution
+- **Compiler** (`ntalkc`) for compiling Nimtalk to Nim code (stub implementation)
 - **Build System**: Integration with Nimble and nims build scripts
 - **Editor Support**: Syntax highlighting and tooling for modern editors
 - **Testing Framework**: Integrated test runner with Nim's unittest
@@ -51,11 +52,14 @@ Nimtalk is a prototype-based Smalltalk dialect designed for the modern era. It c
 git clone https://github.com/yourusername/nimtalk.git
 cd nimtalk
 
-# Build the REPL
-nimble build
+# Build the binaries
+nimble build  # Builds both ntalk (REPL/interpreter) and ntalkc (compiler)
+
+# Alternative: Use the build script
+nim e build.nims repl
 
 # Install the binary (optional)
-nimble install
+nim e build.nims install
 ```
 
 ### Quick Example
@@ -77,9 +81,17 @@ calculator at: 'x'
 
 Run it:
 ```bash
+# Run with interpreter (REPL mode)
 ntalk hello.nt
-# or compile it
-ntalk --compile hello.nt
+
+# Run expression directly
+ntalk -e "3 + 4"
+
+# Start interactive REPL
+ntalk
+
+# Compile (compiler stub - not yet implemented)
+ntalkc hello.nt
 ```
 
 ### REPL Usage
@@ -107,6 +119,7 @@ The compiler transforms Nimtalk to Nim code:
 - **Method Compilation**: Convert Smalltalk methods to Nim procedures
 - **FFI Bridge**: Generate marshaling code for Nim type integration
 - **Optimization**: Leverage Nim's optimizer for performance-critical code
+- **Current Status**: Stub implementation (`ntalkc`) - basic infrastructure in place
 
 ### Dual-Mode Execution
 ```mermaid
@@ -339,12 +352,13 @@ This would provide a powerful built-in persistence model similar to Gemstone and
 ## Development Status
 
 **Current**: Early prototype with basic interpreter and compiler skeleton
-- ✅ Lexer and parser
-- ✅ Prototype object system
-- ✅ AST interpreter core
-- ✅ Basic REPL
-- ✅ Compiler infrastructure
-- ✅ Test suite
+- ✅ Lexer and parser with data structure literal syntax support
+- ✅ Prototype object system with property bags and prototype chains
+- ✅ AST interpreter core with message sending and block evaluation
+- ✅ REPL/Interpreter (`ntalk`) with file execution and interactive mode
+- ✅ Compiler infrastructure with stub implementation (`ntalkc`)
+- ✅ Test suite with comprehensive coverage
+- ✅ Project follows Nim standard layout (source under `src/`)
 
 **In Progress**:
 - FFI integration with Nim
