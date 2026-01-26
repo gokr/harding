@@ -147,7 +147,7 @@ test("Interpreter handles message sends", proc(): bool =
   initGlobals(interp)
 
   # Create object with property
-  let obj = interp.rootObject.clone().toObject()
+  var obj = interp.rootObject.clone().toObject()
   obj.setProperty("value", toValue(3))
 
   # Set current receiver
@@ -169,7 +169,7 @@ test("Canonical Smalltalk test (3 + 4 = 7)", proc(): bool =
   initGlobals(interp)
 
   # Create a number object
-  let numObj = interp.rootObject.clone().toObject()
+  var numObj = interp.rootObject.clone().toObject()
   numObj.setProperty("value", toValue(3))
   numObj.setProperty("other", toValue(4))
 
