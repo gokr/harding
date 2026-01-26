@@ -364,7 +364,7 @@ test "direct ivar access in methods":
 test "generated accessors":
   eval("Person := Object derive: #(name)")
   let person = eval("Person derive initialize")
-  eval("person name: 'Bob'")
+  eval("person name: \"Bob\"")
   check eval("person name") == "Bob"
 ```
 
@@ -425,8 +425,8 @@ check result.hasMethod("greet")
 
 ## References
 
-- [OBJECT-MODEL-README.md](OBJECT-MODEL-README.md) - Problem statement
-- [PROPOSAL-objcet-model.md](PROPOSAL-objcet-model.md) - Full proposal
+- [NIMTALK-NEW-OBJECT-MODEL.md](NIMTALK-NEW-OBJECT-MODEL.md) - Problem statement and design
+- [PROPOSAL-object-model.md](PROPOSAL-object-model.md) - Full proposal
 - [SYNTAX-QUICKREF-updated.md](SYNTAX-QUICKREF-updated.md) - Syntax reference
 - [DECISION-NEEDED.md](DECISION-NEEDED.md) - Design decisions
 

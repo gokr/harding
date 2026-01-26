@@ -266,7 +266,7 @@ Start implementing:
 ## Documentation
 
 - **[IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md)** - Detailed 6-week plan
-- **[PROPOSAL-objcet-model.md](PROPOSAL-objcet-model.md)** - Technical proposal
+- **[PROPOSAL-object-model.md](PROPOSAL-object-model.md)** - Technical proposal
 - **[SYNTAX-QUICKREF-updated.md](SYNTAX-QUICKREF-updated.md)** - Syntax reference
 - **[Object examples](proposal-examples/)** - Working code examples
 

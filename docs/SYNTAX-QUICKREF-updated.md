@@ -363,7 +363,7 @@ result := person name.
 
 ## Resources
 
-- [FULL PROPOSAL](PROPOSAL-objcet-model.md) - Complete design proposal
+- [FULL PROPOSAL](PROPOSAL-object-model.md) - Complete design proposal
 - [EXAMPLES](proposal-examples/) - Example code files using new syntax
 - [SPECIFICATION](SPECIFICATION.md) - Language specification details
 - [DECISIONS NEEDED](DECISION-NEEDED.md) - Key design decisions
