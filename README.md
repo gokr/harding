@@ -141,6 +141,24 @@ obj at: 'key' put: 'value'
 3 + 4
 ```
 
+### Data Structure Literals
+
+```smalltalk
+# Array literals (ordered collections)
+#(1 2 3)
+#('apple' 'banana' 'cherry')
+
+# Table literals (key-value dictionaries)
+#{'key' -> 'value'}
+#{'name' -> 'Alice' 'age' -> 30}
+
+# Object literals (property bags)
+{| name: 'Alice' age: 30 |}
+{| x: 3 y: 4 |}
+```
+
+*Arrays map to Nim `seq[NodeValue]`, tables to `Table[string, NodeValue]`, and object literals create new `ProtoObject` instances.*
+
 ### Objects and Prototypes
 ```smalltalk
 # Create prototype
