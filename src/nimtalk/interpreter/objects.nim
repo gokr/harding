@@ -3,12 +3,40 @@ import ../core/types
 import ../parser/parser
 
 # ============================================================================
-# Object System for NimTalk
+# Object System for Nimtalk
 # Prototype-based objects with delegation
 # ============================================================================
 
 # Global root object (singleton)
 var rootObject*: RootObject = nil
+
+# Create a core method
+type CoreMethodProc = proc(self: ProtoObject, args: seq[NodeValue]): NodeValue {.nimcall.}
+
+type CoreMutMethodProc = proc(self: var ProtoObject, args: seq[NodeValue]): NodeValue {.nimcall.}
+
+proc createCoreMethod(name: string): BlockNode =
+  ## Create a method stub
+  let blk = BlockNode()
+  blk.parameters = if ':' in name:
+                      name.split(':').filterIt(it.len > 0)
+                    else:
+                      @[]
+  blk.temporaries = @[]
+  let placeholder: Node = LiteralNode(value: NodeValue(kind: vkNil))  # Placeholder
+  blk.body = @[placeholder]
+  blk.isMethod = true
+  blk.nativeImpl = nil
+  return blk
+
+# Method installation
+proc addMethod*(obj: ProtoObject, selector: string, blk: BlockNode) =
+  ## Add a method to an object's method dictionary
+  obj.methods[selector] = blk
+
+proc addProperty*(obj: ProtoObject, name: string, value: NodeValue) =
+  ## Add a property to an object's property dictionary
+  obj.properties[name] = value
 
 # Initialize root object with core methods
 proc initRootObject*(): RootObject =
@@ -24,7 +52,7 @@ proc initRootObject*(): RootObject =
     rootObject.nimType = ""
 
     # Install core methods
-      addMethod(rootObject, "clone", createCoreMethod("clone"))
+    addMethod(rootObject, "clone", createCoreMethod("clone"))
     addMethod(rootObject, "derive", createCoreMethod("derive"))
     addMethod(rootObject, "at:", createCoreMethod("at:"))
     addMethod(rootObject, "at:put:", createCoreMethod("at:put:"))
@@ -33,21 +61,35 @@ proc initRootObject*(): RootObject =
 
   return rootObject
 
-# Create a core method
-type CoreMethodProc = proc(self: ProtoObject, args: seq[NodeValue]): NodeValue
+# Nim-level clone function for ProtoObject - returns NodeValue wrapper
+proc clone*(self: ProtoObject): NodeValue =
+  ## Shallow clone of ProtoObject (Nim-level clone) wrapped in NodeValue
+  let objClone = ProtoObject()
+  objClone.properties = self.properties
+  objClone.methods = initTable[string, BlockNode]()
+  for key, value in self.methods:
+    objClone.methods[key] = value
+  objClone.parents = self.parents
+  objClone.tags = self.tags
+  objClone.isNimProxy = self.isNimProxy
+  objClone.nimValue = self.nimValue
+  objClone.nimType = self.nimType
+  result = NodeValue(kind: vkObject, objVal: objClone)
 
-proc createCoreMethod(name: string): BlockNode =
-  ## Create a method stub
-  let method = BlockNode()
-  method.parameters = if ':' in name:
-                        name.split(':').filterIt(it.len > 0)
-                      else:
-                        @[]
-  method.temporaries = @[]
-  method.body = @[LiteralNode(value: NodeValue(kind: vkNil))]  # Placeholder
-  method.isMethod = true
-  method.nativeImpl = nil
-  return method
+# Nim-level clone function for RootObject - returns NodeValue wrapper
+proc clone*(self: RootObject): NodeValue =
+  ## Shallow clone of RootObject (Nim-level clone) wrapped in NodeValue
+  let objClone = RootObject()
+  objClone.properties = self.properties
+  objClone.methods = initTable[string, BlockNode]()
+  for key, value in self.methods:
+    objClone.methods[key] = value
+  objClone.parents = self.parents
+  objClone.tags = self.tags
+  objClone.isNimProxy = self.isNimProxy
+  objClone.nimValue = self.nimValue
+  objClone.nimType = self.nimType
+  result = NodeValue(kind: vkObject, objVal: objClone)
 
 # Core method implementations
 proc cloneImpl(self: ProtoObject, args: seq[NodeValue]): NodeValue =
@@ -84,7 +126,7 @@ proc atImpl(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   let key = args[0].symVal
   return getProperty(self, key)
 
-proc atPutImpl(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+proc atPutImpl(self: var ProtoObject, args: seq[NodeValue]): NodeValue =
   ## Set property value: obj at: 'key' put: value
   if args.len < 2:
     return nilValue()
@@ -113,36 +155,27 @@ proc doesNotUnderstandImpl(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   let selector = args[0].symVal
   raise newException(ValueError, "Message not understood: " & selector)
 
-# Map method names to implementations
-var coreMethods: Table[string, CoreMethodProc]
-
-proc initCoreMethods() =
-  if coreMethods.len == 0:
-    coreMethods = {
-      "clone": cloneImpl,
-      "derive": deriveImpl,
-      "at:": atImpl,
-      "at:put:": atPutImpl,
-      "printString": printStringImpl,
-      "doesNotUnderstand:": doesNotUnderstandImpl
-    }.toTable
-
-# Method installation
-proc addMethod*(obj: ProtoObject, selector: string, method: BlockNode) =
-  ## Add a method to an object's method dictionary
-  obj.methods[selector] = method
-
-proc addProperty*(obj: ProtoObject, name: string, value: NodeValue) =
-  ## Add a property to an object's property dictionary
-  obj.properties[name] = value
+# Map method names to implementations (not currently used)
+# var coreMethods: Table[string, CoreMethodProc]
+#
+# proc initCoreMethods() =
+#   if coreMethods.len == 0:
+#     coreMethods = {
+#       "clone": cloneImpl,
+#       "derive": deriveImpl,
+#       "at:": atImpl,
+#       "at:put:": atPutImpl,
+#       "printString": printStringImpl,
+#       "doesNotUnderstand:": doesNotUnderstandImpl
+#     }.toTable
 
 # Object creation helpers
-proc newObject*(properties: Table[string, NodeValue] = nil): ProtoObject =
+proc newObject*(properties = initTable[string, NodeValue]()): ProtoObject =
   ## Create a new object with optional properties
   let obj = ProtoObject()
-  obj.properties = if properties != nil: properties else: initTable[string, NodeValue]()
+  obj.properties = properties
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject()]
+  obj.parents = @[initRootObject().ProtoObject]  # Convert to base type
   obj.tags = @["derived"]
   obj.isNimProxy = false
   obj.nimValue = nil
@@ -193,41 +226,41 @@ proc printObject*(obj: ProtoObject, indent: int = 0): string =
   return result
 
 # String interpolation and formatting
-proc formatString*(template: string, args: Table[string, NodeValue]): string =
+proc formatString*(tmpl: string, args: Table[string, NodeValue]): string =
   ## Simple string formatting with placeholders
-  result = template
+  result = tmpl
   for key, val in args:
     let placeholder = "{" & key & "}"
     result = result.replace(placeholder, val.toString())
 
-# Create a simple test object hierarchy
-proc makeTestObjects*(): (RootObject, ProtoObject, ProtoObject) =
-  ## Create test object hierarchy for testing
-  let root = initRootObject()
-
-  # Create Animal prototype
-  let animal = root.clone().toObject()
-  animal.tags = @["Animal"]
-  animal.properties = {
-    "species": NodeValue(kind: vkString, strVal: "unknown"),
-    "sound": NodeValue(kind: vkString, strVal: "silence")
-  }.toTable
-
-  # Add makeSound method
-  let makeSoundBlock = BlockNode(
-    parameters: @[],
-    temporaries: @[],
-    body: @[LiteralNode(
-      value: NodeValue(kind: vkNil)
-    )],
-    isMethod: true
-  )
-  addMethod(animal, "makeSound", makeSoundBlock)
-
-  # Create Dog instance
-  let dog = animal.clone()
-  dog.properties["species"] = NodeValue(kind: vkString, strVal: "dog")
-  dog.properties["sound"] = NodeValue(kind: vkString, strVal: "woof")
-  dog.properties["breed"] = NodeValue(kind: vkString, strVal: "golden retriever")
-
-  return (root, animal, dog)
+# Create a simple test object hierarchy (commented out - needs proper method invocation)
+# proc makeTestObjects*(): (RootObject, ProtoObject, ProtoObject) =
+#   ## Create test object hierarchy for testing
+#   let root = initRootObject()
+#
+#   # Create Animal prototype
+#   let animal = newObject()
+#   animal.tags = @["Animal"]
+#   animal.properties = {
+#     "species": NodeValue(kind: vkString, strVal: "unknown"),
+#     "sound": NodeValue(kind: vkString, strVal: "silence")
+#   }.toTable
+#
+#   # Add makeSound method
+#   let makeSoundBlock = BlockNode(
+#     parameters: @[],
+#     temporaries: @[],
+#     body: @[LiteralNode(
+#       value: NodeValue(kind: vkNil)
+#     )],
+#     isMethod: true
+#   )
+#   addMethod(animal, "makeSound", makeSoundBlock)
+#
+#   # Create Dog instance
+#   let dog = newObject()
+#   dog.parents = @[animal]
+#   dog.properties["species"] = NodeValue(kind: vkString, strVal: "dog")
+#   dog.properties["breed"] = NodeValue(kind: vkString, strVal: "golden retriever")
+#
+#   return (root, animal, dog)

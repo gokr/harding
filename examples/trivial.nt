@@ -1,7 +1,7 @@
 #!/usr/bin/env ntalk
 #
 # Trivial demonstration: Just return a number
-# This is the simplest possible NimTalk script
+# This is the simplest possible Nimtalk script
 #
 
 7

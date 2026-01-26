@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NimTalk (formerly snim) is a prototype-based Smalltalk dialect that compiles to Nim. It provides:
+Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim. It provides:
 - Smalltalk-like object system with prototype inheritance
 - Nim compilation backend
 - REPL for interactive development
@@ -446,22 +446,22 @@ nimtalk/
 
 - Source files use `.nim` extension
 - Test files use `test_*.nim` pattern
-- Example files use `.nt` extension (NimTalk source)
+- Example files use `.nt` extension (Nimtalk source)
 
 ## Future Directions
 
 ### BitBarrel Integration
-Consider integrating BitBarrel (the high-performance Bitcask-style key-value storage engine from ../bitbarrel) as a core part of NimTalk. This would provide:
-- First-class barrel objects in NimTalk
+Consider integrating BitBarrel (the high-performance Bitcask-style key-value storage engine from ../bitbarrel) as a core part of Nimtalk. This would provide:
+- First-class barrel objects in Nimtalk
 - Built-in persistence model similar to Gemstone and original OODBs
 - High-performance storage with O(1) reads via in-memory hash index
 - Crash recovery with hint files for fast startup
 - Background compaction
 
 Potential integration approaches:
-1. Expose BitBarrel API as NimTalk objects and methods
+1. Expose BitBarrel API as Nimtalk objects and methods
 2. Implement barrel literals in the language syntax
-3. Provide transparent persistence for NimTalk objects
+3. Provide transparent persistence for Nimtalk objects
 4. Use FFI to call BitBarrel C API or directly link the Nim library
 
-This would give NimTalk a powerful persistence layer built into the language.
+This would give Nimtalk a powerful persistence layer built into the language.

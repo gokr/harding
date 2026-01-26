@@ -1,6 +1,6 @@
 #!/usr/bin/env ntalk
 #
-# NimTalk canonical test
+# Nimtalk canonical test
 # "The canonical test for Smalltalk is calculating 3 + 4 and writing the answer on stdout."
 #
 

@@ -1,9 +1,9 @@
-import std/[sequtils, strutils, tables, options]
+import std/strutils
 import ../parser/lexer
 import ../core/types
 
 # ============================================================================
-# Parser for NimTalk
+# Parser for Nimtalk
 # Parses Smalltalk-style syntax into AST nodes
 # ============================================================================
 
@@ -17,11 +17,13 @@ type
     lastLine*, lastCol*: int
 
 # Forward declarations for recursive parsing functions
-proc parseExpression(parser: var Parser): Node
-proc parseBlock(parser: var Parser): BlockNode
+proc parseExpression*(parser: var Parser): Node
+proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
 proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
+proc parseStatement(parser: var Parser): Node
+proc parseMethod(parser: var Parser): BlockNode
 
 # Parser errors
 proc parseError*(parser: var Parser, msg: string) =
@@ -183,7 +185,7 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): Node =
   return msg
 
 # Parse expressions with precedence
-proc parseExpression(parser: var Parser): Node =
+proc parseExpression*(parser: var Parser): Node =
   # Start with primary
   let primary = parser.parsePrimary()
   if primary == nil:
@@ -205,7 +207,7 @@ proc parseExpression(parser: var Parser): Node =
     return primary
 
 # Parse block literal
-proc parseBlock(parser: var Parser): BlockNode =
+proc parseBlock*(parser: var Parser): BlockNode =
   if not parser.expect(tkLBracket):
     parser.parseError("Expected '[' for block start")
     return nil
@@ -390,6 +392,8 @@ proc parseStatement(parser: var Parser): Node =
   else:
     return expr
 
+# Parse block literal (defined above at line 209)
+
 # Parse method definition (block with isMethod flag)
 proc parseMethod(parser: var Parser): BlockNode =
   let blk = parser.parseBlock()
@@ -398,7 +402,7 @@ proc parseMethod(parser: var Parser): BlockNode =
   return blk
 
 # Parse sequence of statements (method body or REPL input)
-proc parseStatements(parser: var Parser): seq[Node] =
+proc parseStatements*(parser: var Parser): seq[Node] =
   result = @[]
 
   while not parser.peek().isEOF:
@@ -451,48 +455,48 @@ proc printAST*(node: Node, indent: int = 0): string =
 
   of nkMessage:
     let msg = node.MessageNode
-    var result = spaces & "Message(" & msg.selector & ")\n"
-    result.add(spaces & "  receiver:\n")
+    var res = spaces & "Message(" & msg.selector & ")\n"
+    res.add(spaces & "  receiver:\n")
     if msg.receiver != nil:
-      result.add(printAST(msg.receiver, indent + 2))
+      res.add(printAST(msg.receiver, indent + 2))
     else:
-      result.add(spaces & "    (implicit self)\n")
+      res.add(spaces & "    (implicit self)\n")
     for arg in msg.arguments:
-      result.add(spaces & "  arg:\n")
-      result.add(printAST(arg, indent + 2))
-    return result
+      res.add(spaces & "  arg:\n")
+      res.add(printAST(arg, indent + 2))
+    return res
 
   of nkBlock:
     let blk = node.BlockNode
-    var result = spaces & "Block"
+    var res = spaces & "Block"
     if blk.isMethod:
-      result.add(" (method)")
-    result.add("\n")
+      res.add(" (method)")
+    res.add("\n")
     if blk.parameters.len > 0:
-      result.add(spaces & "  params: " & $blk.parameters & "\n")
+      res.add(spaces & "  params: " & $blk.parameters & "\n")
     if blk.temporaries.len > 0:
-      result.add(spaces & "  temps: " & $blk.temporaries & "\n")
-    result.add(spaces & "  body:\n")
+      res.add(spaces & "  temps: " & $blk.temporaries & "\n")
+    res.add(spaces & "  body:\n")
     for stmt in blk.body:
-      result.add(printAST(stmt, indent + 2))
-    return result
+      res.add(printAST(stmt, indent + 2))
+    return res
 
   of nkAssign:
     let assign = node.AssignNode
-    var result = spaces & "Assign(" & assign.variable & ")\n"
-    result.add(spaces & "  value:\n")
-    result.add(printAST(assign.expression, indent + 2))
-    return result
+    var res = spaces & "Assign(" & assign.variable & ")\n"
+    res.add(spaces & "  value:\n")
+    res.add(printAST(assign.expression, indent + 2))
+    return res
 
   of nkReturn:
     let ret = node.ReturnNode
-    var result = spaces & "Return\n"
+    var res = spaces & "Return\n"
     if ret.expression != nil:
-      result.add(spaces & "  value:\n")
-      result.add(printAST(ret.expression, indent + 2))
+      res.add(spaces & "  value:\n")
+      res.add(printAST(ret.expression, indent + 2))
     else:
-      result.add(spaces & "  (self)\n")
-    return result
+      res.add(spaces & "  (self)\n")
+    return res
 
   else:
     return spaces & "Unknown(" & $node.kind & ")\n"

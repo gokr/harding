@@ -1,16 +1,29 @@
-import std/[tables, strutils]
+import std/tables
 
 # ============================================================================
-# Core Types for NimTalk
+# Core Types for Nimtalk
 # ============================================================================
 
 # All type definitions in a single section to allow forward declarations
 type
-  # Forward declarations (incomplete - no parent or fields)
-  ProtoObject* {.inject, inheritable.} = ref object
-  BlockNode* {.inject, inheritable.} = ref object
   Node* = ref object of RootObj
     line*, col*: int
+
+  ProtoObject* = ref object of RootObj
+    properties*: Table[string, NodeValue]  # instance variables
+    methods*: Table[string, BlockNode]     # method dictionary
+    parents*: seq[ProtoObject]             # prototype chain
+    tags*: seq[string]                     # type tags
+    isNimProxy*: bool                      # wraps Nim value
+    nimValue*: pointer                     # proxied Nim value
+    nimType*: string                       # Nim type name
+
+  BlockNode* = ref object of Node
+    parameters*: seq[string]   # method parameters
+    temporaries*: seq[string]  # local variables
+    body*: seq[Node]           # AST statements
+    isMethod*: bool            # true if method definition
+    nativeImpl*: pointer       # compiled implementation
 
   # Value types for AST nodes and runtime values
   ValueKind* = enum
@@ -89,24 +102,6 @@ type
       interpreted*: BlockNode
     of true:
       compiled*: CompiledMethod
-
-type
-  # Complete the forward declarations (ProtoObject and BlockNode)
-  ProtoObject* = ref object of RootObj
-    properties*: Table[string, NodeValue]  # instance variables
-    methods*: Table[string, BlockNode]     # method dictionary
-    parents*: seq[ProtoObject]             # prototype chain
-    tags*: seq[string]                     # type tags
-    isNimProxy*: bool                      # wraps Nim value
-    nimValue*: pointer                     # proxied Nim value
-    nimType*: string                       # Nim type name
-
-  BlockNode* = ref object of Node
-    parameters*: seq[string]   # method parameters
-    temporaries*: seq[string]  # local variables
-    body*: seq[Node]           # AST statements
-    isMethod*: bool            # true if method definition
-    nativeImpl*: pointer       # compiled implementation
 
 # ============================================================================
 # Procs and utilities

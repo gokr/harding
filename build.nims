@@ -1,9 +1,9 @@
-# NimTalk build script
+# Nimtalk build script
 
 import os, strutils
 
 # Build the REPL
-task "repl", "Build the NimTalk REPL":
+task "repl", "Build the Nimtalk REPL":
   exec "nimble build"
 
 # Build tests
@@ -21,7 +21,7 @@ task "clean", "Clean build artifacts":
     removeFile("ntalk.exe")
 
 # Install binary
-task "install", "Install NimTalk":
+task "install", "Install Nimtalk":
   var binPath = getCurrentDir() / "ntalk"
   when defined(windows):
     binPath.add(".exe")

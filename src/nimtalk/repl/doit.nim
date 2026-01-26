@@ -1,10 +1,10 @@
-import std/[strutils, os, terminal, readline, parseutils]
+import std/[strutils, os, terminal, rdstdin, parseutils, tables]
 import ../core/types
 import ../parser/[lexer, parser]
 import ../interpreter/[evaluator, objects, activation]
 
 # ============================================================================
-# NimTalk REPL and Interactive Evaluation
+# Nimtalk REPL and Interactive Evaluation
 # Provides "do-it" evaluation for interactive development
 # ============================================================================
 
@@ -22,7 +22,7 @@ proc newDoitContext*(trace: bool = false): DoitContext =
   result = DoitContext(
     interpreter: newInterpreter(trace),
     globals: initTable[string, NodeValue](),
-    history: @["-- NimTalk REPL History --"],
+    history: @["-- Nimtalk REPL History --"],
     prompt: "nt> ",
     showResults: true
   )
@@ -37,7 +37,7 @@ proc newDoitContext*(trace: bool = false): DoitContext =
 # Print welcome message
 proc printWelcomeRepl() =
   echo "========================================"
-  echo "  NimTalk - REPL"
+  echo "  Nimtalk - REPL"
   echo "  A Prototype-Based Smalltalk for Nim"
   echo "========================================"
   echo ""
@@ -129,7 +129,7 @@ proc runREPL*(ctx: DoitContext = nil) =
   while true:
     # Show prompt
     stdout.write(replCtx.prompt)
-    stdout.flush()
+    flushFile(stdout)
 
     # Read input
     var line = ""
@@ -173,7 +173,7 @@ proc main*() =
 
 # File-based script execution
 proc runScript*(filename: string, ctx: DoitContext = nil): (string, string) =
-  ## Run a NimTalk script file
+  ## Run a Nimtalk script file
   var scriptCtx = if ctx != nil: ctx else: newDoitContext()
 
   if not fileExists(filename):
@@ -237,7 +237,7 @@ proc testREPL*(): (bool, string) =
 
 # Example script content for testing
 const exampleScript* = """
-# Example NimTalk script
+# Example Nimtalk script
 # This demonstrates basic functionality
 
 # Create objects

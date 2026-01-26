@@ -1,11 +1,11 @@
-# NimTalk - Prototype-based Smalltalk dialect for Nim
+# Nimtalk - Prototype-based Smalltalk dialect for Nim
 version = "0.1.0"
-author = "NimTalk Author"
+author = "Göran Krampe"
 description = "Prototype-based Smalltalk dialect that compiles to Nim"
 license = "MIT"
 
-srcDir = "nimtalk"
-bin = @["repl/main"]
+srcDir = "src"
+bin = @["nimtalk/repl/ntalk", "nimtalk/compiler/ntalkc"]
 
 # Current Nim version
 requires "nim == 2.2.6"

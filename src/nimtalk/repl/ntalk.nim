@@ -1,18 +1,19 @@
 #!/usr/bin/env nim
 #
-# NimTalk REPL - Main entry point
+# Nimtalk REPL - Main entry point
 #
 
 import std/[os, strutils, terminal]
 import ../repl/doit
 import ../interpreter/evaluator
+import ../core/types
 
 # ============================================================================
-# Main entry point for NimTalk REPL
+# Main entry point for Nimtalk REPL
 # ============================================================================
 
 proc showUsage() =
-  echo "NimTalk - Prototype-based Smalltalk for Nim"
+  echo "Nimtalk - Prototype-based Smalltalk for Nim"
   echo ""
   echo "Usage:"
   echo "  ntalk                    # Start interactive REPL"
@@ -34,7 +35,7 @@ proc main() =
     of "--help", "-h":
       showUsage()
     of "--version", "-v":
-      echo "NimTalk v0.1.0"
+      echo "Nimtalk v0.1.0"
     else:
       # Check if it's a file or just garbage
       if args[0].endsWith(".nt") and fileExists(args[0]):
@@ -42,7 +43,7 @@ proc main() =
         execScript(args[0])
       elif args[0] == "--test":
         # Run tests
-        echo "Running NimTalk tests..."
+        echo "Running Nimtalk tests..."
         var passed, failed = 0
 
         # Test 1: Basic arithmetic (3 + 4 = 7)
@@ -85,7 +86,7 @@ proc main() =
 
         # Summary
         echo ""
-        echo &"Tests: {passed} passed, {failed} failed"
+        echo "Tests: " & $passed & " passed, " & $failed & " failed"
         if failed == 0:
           echo "All tests passed! ✨"
           quit(0)

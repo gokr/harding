@@ -4,7 +4,7 @@ import ../parser/[lexer, parser]
 import ../interpreter/evaluator
 
 # ============================================================================
-# Simple Interactive REPL for NimTalk
+# Simple Interactive REPL for Nimtalk
 # Works without readline for better portability
 # ============================================================================
 
@@ -28,7 +28,7 @@ proc newReplContext*(trace: bool = false): ReplContext =
 
 proc printWelcome() =
   echo "========================================"
-  echo "  NimTalk - REPL"
+  echo "  Nimtalk - REPL"
   echo "  A Prototype-Based Smalltalk for Nim"
   echo "========================================"
   echo ""
@@ -98,7 +98,7 @@ proc runSimpleREPL*(ctx: ReplContext = ReplContext()) =
 
   while true:
     stdout.write(ctx.prompt)
-    stdout.flush()
+    flushFile(stdout)
 
     var line = ""
     if not stdin.readLine(line):

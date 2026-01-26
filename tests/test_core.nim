@@ -1,13 +1,13 @@
 #!/usr/bin/env nim
 #
-# Core tests for NimTalk
+# Core tests for Nimtalk
 # Tests basic parsing, objects, and evaluation
 #
 
 import std/[strutils, os, terminal]
-import ../nimtalk/core/types
-import ../nimtalk/parser/[lexer, parser]
-import ../nimtalk/interpreter/[evaluator, objects, activation]
+import ../src/nimtalk/core/types
+import ../src/nimtalk/parser/[lexer, parser]
+import ../src/nimtalk/interpreter/[evaluator, objects, activation]
 
 # Colored output
 proc green(text: string): string =
@@ -49,90 +49,100 @@ proc test(name: string; body: proc(): bool) =
 # Test Suite
 # ============================================================================
 
-echo "NimTalk Core Test Suite"
+echo "Nimtalk Core Test Suite"
 echo "========================"
 echo ""
 
 # Test 1: Tokenization
-test("Tokenizer recognizes integer literals"):
+test("Tokenizer recognizes integer literals", proc(): bool =
   let tokens = lex("42")
-  tokens.len == 2 and tokens[0].kind == tkInt and tokens[0].value == "42"
+  result = tokens.len == 2 and tokens[0].kind == tkInt and tokens[0].value == "42"
+)
 
-test("Tokenizer recognizes string literals"):
+test("Tokenizer recognizes string literals", proc(): bool =
   let tokens = lex("\"hello\"")
-  tokens.len == 2 and tokens[0].kind == tkString and tokens[0].value == "hello"
+  result = tokens.len == 2 and tokens[0].kind == tkString and tokens[0].value == "hello")
 
-test("Tokenizer recognizes identifiers"):
+test("Tokenizer recognizes identifiers", proc(): bool =
   let tokens = lex("foo")
-  tokens.len == 2 and tokens[0].kind == tkIdent and tokens[0].value == "foo"
+  result = tokens.len == 2 and tokens[0].kind == tkIdent and tokens[0].value == "foo")
 
-test("Tokenizer recognizes keywords"):
+test("Tokenizer recognizes keywords", proc(): bool =
   let tokens = lex("at:")
-  tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:"
+  result = tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:")
 
-test("Tokenizer handles keyword sequences"):
+test("Tokenizer handles keyword sequences", proc(): bool =
   let tokens = lex("at:put:")
-  tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:put:"
+  result = tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:put:")
 
-test("Tokenizer recognizes symbols"):
+test("Tokenizer recognizes symbols", proc(): bool =
   let tokens = lex("#selector")
-  tokens.len == 2 and tokens[0].kind == tkSymbol and tokens[0].value == "selector"
+  result = tokens.len == 2 and tokens[0].kind == tkSymbol and tokens[0].value == "selector"
+)
 
 # Test 2: Parsing
-test("Parser creates literal nodes"):
+test("Parser creates literal nodes", proc(): bool =
   let tokens = lex("42")
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  node != nil and node of LiteralNode
+  result = node != nil and node of LiteralNode
+)
 
-test("Parser handles unary messages"):
+test("Parser handles unary messages", proc(): bool =
   # For now, just test that it doesn't crash
   let tokens = lex("Object clone")
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  node != nil
+  result = node != nil
+)
 
-test("Parser handles keyword messages"):
+test("Parser handles keyword messages", proc(): bool =
   let tokens = lex("obj at: 'key'")
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  node != nil
+  result = node != nil
+)
 
 # Test 3: Object system
-test("Root object initialization"):
+test("Root object initialization", proc(): bool =
   let root = initRootObject()
-  root != nil and "Object" in root.tags and "Proto" in root.tags
+  result = root != nil and "Object" in root.tags and "Proto" in root.tags
+)
 
-test("Object cloning"):
+test("Object cloning", proc(): bool =
   let root = initRootObject()
   let clone = root.clone().toObject()
-  clone != nil and clone != root
+  result = clone != nil and clone != root
+)
 
-test("Property access"):
-  let obj = newObject()
+test("Property access", proc(): bool =
+  var obj = newObject()
   obj.setProperty("test", toValue(42))
   let val = obj.getProperty("test")
-  val.kind == vkInt and val.intVal == 42
+  result = val.kind == vkInt and val.intVal == 42
+)
 
 # Test 4: Interpreter
-test("Interpreter evaluates integers"):
+test("Interpreter evaluates integers", proc(): bool =
   var interp = newInterpreter()
   let tokens = lex("42")
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  let result = interp.eval(node)
-  result.kind == vkInt and result.intVal == 42
+  let evalResult = interp.eval(node)
+  result = evalResult.kind == vkInt and evalResult.intVal == 42
+)
 
-test("Interpreter handles property access"):
+test("Interpreter handles property access", proc(): bool =
   var interp = newInterpreter()
   let code = "Object clone"
   let tokens = lex(code)
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  let result = interp.eval(node)
-  result.kind == vkObject
+  let evalResult = interp.eval(node)
+  result = evalResult.kind == vkObject
+)
 
-test("Interpreter handles message sends"):
+test("Interpreter handles message sends", proc(): bool =
   var interp = newInterpreter()
   initGlobals(interp)
 
@@ -148,12 +158,13 @@ test("Interpreter handles message sends"):
   let tokens = lex(code)
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  let result = interp.eval(node)
+  let evalResult = interp.eval(node)
 
-  result.kind == vkObject  # Should return the value object
+  result = evalResult.kind == vkObject  # Should return the value object
+)
 
 # Test 5: Canonical Smalltalk test
-test("Canonical Smalltalk test (3 + 4 = 7)"):
+test("Canonical Smalltalk test (3 + 4 = 7)", proc(): bool =
   var interp = newInterpreter()
   initGlobals(interp)
 
@@ -170,18 +181,20 @@ test("Canonical Smalltalk test (3 + 4 = 7)"):
   let tokens = lex(code)
   var parser = initParser(tokens)
   let node = parser.parseExpression()
-  let result = interp.eval(node)
+  let evalResult = interp.eval(node)
 
-  result.kind == vkObject  # Basic messaging works
+  result = evalResult.kind == vkObject  # Basic messaging works
+)
 
 # Test 6: Error handling
-test("Parser reports errors for invalid input"):
+test("Parser reports errors for invalid input", proc(): bool =
   let tokens = lex("@")
   var parser = initParser(tokens)
   discard parser.parseExpression()
-  parser.hasError or parser.peek().kind == tkError
+  result = parser.hasError or parser.peek().kind == tkError
+)
 
-test("Interpreter handles undefined messages gracefully"):
+test("Interpreter handles undefined messages gracefully", proc(): bool =
   var interp = newInterpreter()
   initGlobals(interp)
 
@@ -192,9 +205,10 @@ test("Interpreter handles undefined messages gracefully"):
 
   try:
     discard interp.eval(node)
-    false  # Should have raised
+    result = false  # Should have raised
   except:
-    true  # Expected to fail
+    result = true  # Expected to fail
+)
 
 # ============================================================================
 # Summary

@@ -1,10 +1,6 @@
-import std/[strutils, tables]
-import ../core/types
-
 # ============================================================================
-# Lexer for NimTalk - Tokenizes Smalltalk-style syntax
+# Lexer for Nimtalk - Tokenizes Smalltalk-style syntax
 # ============================================================================
-
 type
   TokenKind* = enum
     tkIdent, tkKeyword, tkString, tkInt, tkFloat
@@ -13,15 +9,12 @@ type
     tkAssign, tkReturn, tkPeriod, tkSeparator
     tkSpecial  # ; & | etc
     tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon
-
   Token* = object
     kind*: TokenKind
     value*: string
     line*, col*: int
-
   LexState* = enum
     lsNormal, lsComment, lsString, lsSymbol, lsChar
-
   Lexer* = ref object
     input*: string
     pos*: int
@@ -29,13 +22,11 @@ type
     state*: LexState
     startCol*: int
     escapeNext*: bool
-
 # Character classification
 proc isAlpha(c: char): bool = c in {'a'..'z', 'A'..'Z'}
 proc isDigit(c: char): bool = c in {'0'..'9'}
 proc isAlphaNum(c: char): bool = c.isAlpha or c.isDigit
 proc isSpace(c: char): bool = c in {' ', '\t', '\n', '\r'}
-
 # Lexer initialization
 proc initLexer*(input: string, filename: string = ""): Lexer =
   ## Create a new lexer for tokenizing input
@@ -47,14 +38,12 @@ proc initLexer*(input: string, filename: string = ""): Lexer =
     state: lsNormal,
     startCol: 1
   )
-
 # Peek at next character without advancing
 proc peek(lexer: Lexer): char =
   if lexer.pos < lexer.input.len:
     return lexer.input[lexer.pos]
   else:
     return '\0'
-
 # Get current character and advance
 proc next(lexer: var Lexer): char =
   if lexer.pos < lexer.input.len:
@@ -68,32 +57,26 @@ proc next(lexer: var Lexer): char =
     return c
   else:
     return '\0'
-
 # Skip whitespace
 proc skipWhitespace(lexer: var Lexer) =
   while lexer.peek().isSpace and lexer.peek() != '\n':
     discard lexer.next()
-
 # Parse identifier or keyword
 proc parseIdent(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
-
   # First char must be alphabetical
   if lexer.peek().isAlpha:
     value.add(lexer.next())
   else:
     return Token(kind: tkError, value: "Expected identifier", line: startLine, col: startCol)
-
   # Rest can be alphanumeric
   while lexer.peek().isAlphaNum:
     value.add(lexer.next())
-
   # Check if it's followed by colon (keyword)
   if lexer.peek() == ':':
     value.add(lexer.next())
-
     # Continue collecting keyword segments (Smalltalk keywords like 'at:put:')
     while lexer.peek().isAlpha:
       while lexer.peek().isAlphaNum:
@@ -102,18 +85,15 @@ proc parseIdent(lexer: var Lexer): Token =
         value.add(lexer.next())
       else:
         break
-
     return Token(kind: tkKeyword, value: value, line: startLine, col: startCol)
   else:
     return Token(kind: tkIdent, value: value, line: startLine, col: startCol)
-
 # Parse number (integer or float)
 proc parseNumber(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
   var hasDot = false
-
   while true:
     let c = lexer.peek()
     if c.isDigit:
@@ -137,24 +117,20 @@ proc parseNumber(lexer: var Lexer): Token =
         value.add(lexer.next())
     else:
       break
-
   if hasDot or 'e' in value or 'E' in value:
     return Token(kind: tkFloat, value: value, line: startLine, col: startCol)
   else:
     return Token(kind: tkInt, value: value, line: startLine, col: startCol)
-
 # Parse string
 proc parseString(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
-
   # Skip opening quote
   if lexer.peek() == '"':
     discard lexer.next()
   else:
     return Token(kind: tkError, value: "Expected opening quote", line: startLine, col: startCol)
-
   # Parse string content
   while lexer.pos < lexer.input.len:
     let c = lexer.peek()
@@ -176,21 +152,17 @@ proc parseString(lexer: var Lexer): Token =
         value.add(esc)
     else:
       value.add(lexer.next())
-
   return Token(kind: tkString, value: value, line: startLine, col: startCol)
-
 # Parse symbol (starts with #)
 proc parseSymbol(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
-
   # Skip #
   if lexer.peek() == '#':
     discard lexer.next()
   else:
     return Token(kind: tkError, value: "Expected # for symbol", line: startLine, col: startCol)
-
   # Symbol can be identifier, string, or keyword-like
   let c = lexer.peek()
   if c == '\'':
@@ -207,7 +179,6 @@ proc parseSymbol(lexer: var Lexer): Token =
     # Single char symbol
     value.add(lexer.next())
     return Token(kind: tkSymbol, value: value, line: startLine, col: startCol)
-
 # Skip comment
 proc skipComment(lexer: var Lexer) =
   # Smalltalk style: "comment"
@@ -222,29 +193,23 @@ proc skipComment(lexer: var Lexer) =
           discard lexer.next()  # Skip escaped quote
       else:
         discard lexer.next()
-
 # Main tokenization function
 proc nextToken*(lexer: var Lexer): Token =
   ## Get the next token from the input
-
   # Skip whitespace (but keep newlines)
   lexer.skipWhitespace()
-
   # Handle newlines as separators
   if lexer.peek() == '\n':
     let line = lexer.line
     let col = lexer.col
     discard lexer.next()
     return Token(kind: tkSeparator, value: "\n", line: line, col: col)
-
   let c = lexer.peek()
   let startLine = lexer.line
   let startCol = lexer.col
-
   # End of input
   if c == '\0':
     return Token(kind: tkEOF, value: "", line: startLine, col: startCol)
-
   # Punctuation
   case c
   of '(':
@@ -283,12 +248,22 @@ proc nextToken*(lexer: var Lexer): Token =
     # String literal
     return parseString(lexer)
   of '#':
-    # Check for array or table literal start
+    # Context-sensitive: # followed by whitespace = comment
+    # Otherwise: check for #( array, #{ table, or symbol start
     discard lexer.next()
     let nextChar = lexer.peek()
-    if nextChar == '(':
+    # If followed by whitespace, it's a comment - skip to end of line
+    if nextChar.isSpace:
+      # Skip to end of line
+      while lexer.pos < lexer.input.len and lexer.peek() != '\n':
+        discard lexer.next()
+      # Return next token recursively (skip the comment)
+      return nextToken(lexer)
+    # Check for array literal #(
+    elif nextChar == '(':
       discard lexer.next()
       return Token(kind: tkArrayStart, value: "#(", line: startLine, col: startCol)
+    # Check for table literal #{
     elif nextChar == '{':
       discard lexer.next()
       return Token(kind: tkTableStart, value: "#{", line: startLine, col: startCol)
@@ -324,40 +299,31 @@ proc nextToken*(lexer: var Lexer): Token =
     else:
       discard lexer.next()
       return Token(kind: tkError, value: "Unexpected character: " & c, line: startLine, col: startCol)
-
 # Tokenization helpers
 proc lex*(input: string): seq[Token] =
   ## Tokenize entire input string
   var lexer = initLexer(input)
   result = @[]
-
   while true:
     let token = nextToken(lexer)
     result.add(token)
     if token.kind in {tkEOF, tkError}:
       break
-
 # Token display for debugging
 proc `$`*(token: Token): string =
   ## String representation of token
-  "Token(" & $token.kind & ", \"" & token.value.escape.escape & "\")" &
+  "Token(" & $token.kind & ", \"" & token.value & "\")" &
   " [" & $token.line & ":" & $token.col & "]"
-
 # Token classification helpers
 proc isKeyword*(token: Token): bool =
   token.kind == tkKeyword
-
 proc isIdentifier*(token: Token): bool =
   token.kind in {tkIdent, tkSymbol}
-
 proc isLiteral*(token: Token): bool =
   token.kind in {tkInt, tkFloat, tkString, tkSymbol}
-
 proc isSeparator*(token: Token): bool =
   token.kind == tkSeparator or token.kind == tkPeriod
-
 proc isError*(token: Token): bool =
   token.kind == tkError
-
 proc isEOF*(token: Token): bool =
   token.kind == tkEOF
