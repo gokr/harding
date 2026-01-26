@@ -4,225 +4,165 @@
 # Tests basic parsing, objects, and evaluation
 #
 
-import std/[strutils, os, terminal]
+import unittest
 import ../src/nimtalk/core/types
 import ../src/nimtalk/parser/[lexer, parser]
-import ../src/nimtalk/interpreter/[evaluator, objects, activation]
+import ../src/nimtalk/interpreter/[evaluator, objects]
 
-# Colored output
-proc green(text: string): string =
-  if terminal.isatty(stdout):
-    "\x1b[32m" & text & "\x1b[0m"
-  else:
-    text
+suite "Tokenizer":
+  test "recognizes integer literals":
+    let tokens = lex("42")
+    check tokens.len == 2
+    check tokens[0].kind == tkInt
+    check tokens[0].value == "42"
 
-proc red(text: string): string =
-  if terminal.isatty(stdout):
-    "\x1b[31m" & text & "\x1b[0m"
-  else:
-    text
+  test "recognizes string literals":
+    let tokens = lex("\"hello\"")
+    check tokens.len == 2
+    check tokens[0].kind == tkString
+    check tokens[0].value == "hello"
 
-proc yellow(text: string): string =
-  if terminal.isatty(stdout):
-    "\x1b[33m" & text & "\x1b[0m"
-  else:
-    text
+  test "recognizes identifiers":
+    let tokens = lex("foo")
+    check tokens.len == 2
+    check tokens[0].kind == tkIdent
+    check tokens[0].value == "foo"
 
-# Test framework
-var testsPassed = 0
-var testsFailed = 0
+  test "recognizes keywords":
+    let tokens = lex("at:")
+    check tokens.len == 2
+    check tokens[0].kind == tkKeyword
+    check tokens[0].value == "at:"
 
-proc test(name: string; body: proc(): bool) =
-  ## Run a test
-  try:
-    if body():
-      inc testsPassed
-      echo "✓ " & green(name)
-    else:
-      inc testsFailed
-      echo "✗ " & red(name)
-  except Exception as e:
-    inc testsFailed
-    echo "✗ " & red(name) & " (Exception: " & e.msg & ")"
+  test "handles keyword sequences":
+    let tokens = lex("at:put:")
+    check tokens.len == 2
+    check tokens[0].kind == tkKeyword
+    check tokens[0].value == "at:put:"
 
-# ============================================================================
-# Test Suite
-# ============================================================================
+  test "recognizes symbols":
+    let tokens = lex("#selector")
+    check tokens.len == 2
+    check tokens[0].kind == tkSymbol
+    check tokens[0].value == "selector"
 
-echo "Nimtalk Core Test Suite"
-echo "========================"
-echo ""
+suite "Parser":
+  test "creates literal nodes":
+    let tokens = lex("42")
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    check node != nil
+    check node of LiteralNode
 
-# Test 1: Tokenization
-test("Tokenizer recognizes integer literals", proc(): bool =
-  let tokens = lex("42")
-  result = tokens.len == 2 and tokens[0].kind == tkInt and tokens[0].value == "42"
-)
+  test "handles unary messages":
+    # For now, just test that it doesn't crash
+    let tokens = lex("Object clone")
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    check node != nil
 
-test("Tokenizer recognizes string literals", proc(): bool =
-  let tokens = lex("\"hello\"")
-  result = tokens.len == 2 and tokens[0].kind == tkString and tokens[0].value == "hello")
+  test "handles keyword messages":
+    let tokens = lex("obj at: 'key'")
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    check node != nil
 
-test("Tokenizer recognizes identifiers", proc(): bool =
-  let tokens = lex("foo")
-  result = tokens.len == 2 and tokens[0].kind == tkIdent and tokens[0].value == "foo")
+  test "reports errors for invalid input":
+    let tokens = lex("@")
+    var parser = initParser(tokens)
+    discard parser.parseExpression()
+    check parser.hasError or parser.peek().kind == tkError
 
-test("Tokenizer recognizes keywords", proc(): bool =
-  let tokens = lex("at:")
-  result = tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:")
+suite "Object system":
+  test "root object initialization":
+    let root = initRootObject()
+    check root != nil
+    check "Object" in root.tags
+    check "Proto" in root.tags
 
-test("Tokenizer handles keyword sequences", proc(): bool =
-  let tokens = lex("at:put:")
-  result = tokens.len == 2 and tokens[0].kind == tkKeyword and tokens[0].value == "at:put:")
+  test "object cloning":
+    let root = initRootObject()
+    let clone = root.clone().toObject()
+    check clone != nil
+    check clone != root
 
-test("Tokenizer recognizes symbols", proc(): bool =
-  let tokens = lex("#selector")
-  result = tokens.len == 2 and tokens[0].kind == tkSymbol and tokens[0].value == "selector"
-)
+  test "property access":
+    var obj = newObject()
+    obj.setProperty("test", toValue(42))
+    let val = obj.getProperty("test")
+    check val.kind == vkInt
+    check val.intVal == 42
 
-# Test 2: Parsing
-test("Parser creates literal nodes", proc(): bool =
-  let tokens = lex("42")
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  result = node != nil and node of LiteralNode
-)
+suite "Interpreter":
+  test "evaluates integers":
+    var interp = newInterpreter()
+    let tokens = lex("42")
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    let evalResult = interp.eval(node)
+    check evalResult.kind == vkInt
+    check evalResult.intVal == 42
 
-test("Parser handles unary messages", proc(): bool =
-  # For now, just test that it doesn't crash
-  let tokens = lex("Object clone")
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  result = node != nil
-)
+  test "handles property access":
+    var interp = newInterpreter()
+    let code = "Object clone"
+    let tokens = lex(code)
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    let evalResult = interp.eval(node)
+    check evalResult.kind == vkObject
 
-test("Parser handles keyword messages", proc(): bool =
-  let tokens = lex("obj at: 'key'")
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  result = node != nil
-)
+  test "handles message sends":
+    var interp = newInterpreter()
+    initGlobals(interp)
 
-# Test 3: Object system
-test("Root object initialization", proc(): bool =
-  let root = initRootObject()
-  result = root != nil and "Object" in root.tags and "Proto" in root.tags
-)
+    # Create object with property
+    var obj = interp.rootObject.clone().toObject()
+    obj.setProperty("value", toValue(3))
 
-test("Object cloning", proc(): bool =
-  let root = initRootObject()
-  let clone = root.clone().toObject()
-  result = clone != nil and clone != root
-)
+    # Set current receiver
+    interp.currentReceiver = obj
 
-test("Property access", proc(): bool =
-  var obj = newObject()
-  obj.setProperty("test", toValue(42))
-  let val = obj.getProperty("test")
-  result = val.kind == vkInt and val.intVal == 42
-)
+    # Try to access property via message
+    let code = "at: 'value'"
+    let tokens = lex(code)
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    let evalResult = interp.eval(node)
 
-# Test 4: Interpreter
-test("Interpreter evaluates integers", proc(): bool =
-  var interp = newInterpreter()
-  let tokens = lex("42")
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  let evalResult = interp.eval(node)
-  result = evalResult.kind == vkInt and evalResult.intVal == 42
-)
+    # Should return the value object
+    check evalResult.kind == vkObject
 
-test("Interpreter handles property access", proc(): bool =
-  var interp = newInterpreter()
-  let code = "Object clone"
-  let tokens = lex(code)
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  let evalResult = interp.eval(node)
-  result = evalResult.kind == vkObject
-)
+  test "handles canonical Smalltalk test (3 + 4 = 7)":
+    var interp = newInterpreter()
+    initGlobals(interp)
 
-test("Interpreter handles message sends", proc(): bool =
-  var interp = newInterpreter()
-  initGlobals(interp)
+    # Create a number object
+    var numObj = interp.rootObject.clone().toObject()
+    numObj.setProperty("value", toValue(3))
+    numObj.setProperty("other", toValue(4))
 
-  # Create object with property
-  var obj = interp.rootObject.clone().toObject()
-  obj.setProperty("value", toValue(3))
+    # Set as current receiver
+    interp.currentReceiver = numObj
 
-  # Set current receiver
-  interp.currentReceiver = obj
+    # Try to add (basic plumbing test)
+    let code = "at: 'value'"
+    let tokens = lex(code)
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
+    let evalResult = interp.eval(node)
 
-  # Try to access property via message
-  let code = "at: 'value'"
-  let tokens = lex(code)
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  let evalResult = interp.eval(node)
+    # Basic messaging works
+    check evalResult.kind == vkObject
 
-  result = evalResult.kind == vkObject  # Should return the value object
-)
+  test "handles undefined messages gracefully":
+    var interp = newInterpreter()
+    initGlobals(interp)
 
-# Test 5: Canonical Smalltalk test
-test("Canonical Smalltalk test (3 + 4 = 7)", proc(): bool =
-  var interp = newInterpreter()
-  initGlobals(interp)
+    let code = "someUndefinedMessage"
+    let tokens = lex(code)
+    var parser = initParser(tokens)
+    let node = parser.parseExpression()
 
-  # Create a number object
-  var numObj = interp.rootObject.clone().toObject()
-  numObj.setProperty("value", toValue(3))
-  numObj.setProperty("other", toValue(4))
-
-  # Set as current receiver
-  interp.currentReceiver = numObj
-
-  # Try to add (basic plumbing test)
-  let code = "at: 'value'"
-  let tokens = lex(code)
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-  let evalResult = interp.eval(node)
-
-  result = evalResult.kind == vkObject  # Basic messaging works
-)
-
-# Test 6: Error handling
-test("Parser reports errors for invalid input", proc(): bool =
-  let tokens = lex("@")
-  var parser = initParser(tokens)
-  discard parser.parseExpression()
-  result = parser.hasError or parser.peek().kind == tkError
-)
-
-test("Interpreter handles undefined messages gracefully", proc(): bool =
-  var interp = newInterpreter()
-  initGlobals(interp)
-
-  let code = "someUndefinedMessage"
-  let tokens = lex(code)
-  var parser = initParser(tokens)
-  let node = parser.parseExpression()
-
-  try:
-    discard interp.eval(node)
-    result = false  # Should have raised
-  except:
-    result = true  # Expected to fail
-)
-
-# ============================================================================
-# Summary
-# ============================================================================
-
-echo ""
-echo "========================"
-echo "Test Results: " & $testsPassed & " passed, " & $testsFailed & " failed"
-
-if testsFailed == 0:
-  echo ""
-  echo green("✅ All tests passed!")
-  quit(0)
-else:
-  echo ""
-  echo red("❌ Some tests failed")
-  quit(1)
+    expect ValueError:
+      discard interp.eval(node)
