@@ -52,13 +52,19 @@ Nimtalk is a prototype-based Smalltalk dialect designed for the modern era. It c
 git clone https://github.com/yourusername/nimtalk.git
 cd nimtalk
 
-# Build the binaries
+# Build using Nimble (binaries in nimtalk/repl/ and nimtalk/compiler/)
 nimble build  # Builds both ntalk (REPL/interpreter) and ntalkc (compiler)
 
-# Alternative: Use the build script
-nim e build.nims repl
+# Build using build script with binaries copied to root directory
+nim e build.nims repl  # Builds and copies ntalk, ntalkc to current directory
 
-# Install the binary (optional)
+# Run tests
+nim e build.nims test  # or nimble test
+
+# Clean build artifacts
+nim e build.nims clean
+
+# Install binary to ~/.local/bin/ (Unix/Linux/macOS)
 nim e build.nims install
 ```
 
@@ -72,11 +78,11 @@ Create a file `hello.nt`:
 calculator := Object derive
 
 # Add the two numbers as properties
-calculator at: 'x' put: 3
-calculator at: 'y' put: 4
+calculator at: "x" put: 3
+calculator at: "y" put: 4
 
 # Get the result
-calculator at: 'x'
+calculator at: "x"
 ```
 
 Run it:
@@ -151,8 +157,8 @@ obj := Object derive
 
 # Message sends
 Object clone
-obj at: 'key'
-obj at: 'key' put: 'value'
+obj at: "key"
+obj at: "key" put: "value"
 3 + 4
 ```
 
@@ -161,14 +167,14 @@ obj at: 'key' put: 'value'
 ```smalltalk
 # Array literals (ordered collections)
 #(1 2 3)
-#('apple' 'banana' 'cherry')
+#("apple" "banana" "cherry")
 
 # Table literals (key-value dictionaries)
-#{'key' -> 'value'}
-#{'name' -> 'Alice' 'age' -> 30}
+#{"key" -> "value"}
+#{"name" -> "Alice" "age" -> 30}
 
 # Object literals (property bags)
-{| name: 'Alice' age: 30 |}
+{| name: "Alice" age: 30 |}
 {| x: 3 y: 4 |}
 ```
 
@@ -178,15 +184,15 @@ obj at: 'key' put: 'value'
 ```smalltalk
 # Create prototype
 Person := Object derive
-Person at: 'name' put: 'Anonymous'
-Person at: 'greet' put: [ 'Hello, ' + self at: 'name' ]
+Person at: "name" put: "Anonymous"
+Person at: "greet" put: [ "Hello, " + self at: "name" ]
 
 # Create instance
 alice := Person derive
-alice at: 'name' put: 'Alice'
+alice at: "name" put: "Alice"
 
 # Send message
-alice greet  # Returns 'Hello, Alice'
+alice greet  # Returns "Hello, Alice"
 ```
 
 ### Blocks and Control Flow
@@ -214,10 +220,10 @@ Nimtalk extends Smalltalk's syntax with new literal forms for common data struct
 #(1 2 3 4 5)
 
 # Tables (equivalent to Dictionary)
-#{'key' -> 'value' 'name' -> 'Alice'}
+#{"key" -> "value" "name" -> "Alice"}
 
 # Object literals (property bags, runtime-defined)
-{| x: 3 y: 4 color: 'red' |}
+{| x: 3 y: 4 color: "red" |}
 ```
 
 ### Standard Library Differences
@@ -247,24 +253,26 @@ This provides better performance and seamless integration with Nim code while ma
 ```smalltalk
 # No class definition - just prototype-based derivation
 Person := Object derive                      # Create a prototype
-Person at: 'greet' put: [ 'Hello, ' + self at: 'name' ]
+Person at: "greet" put: [ "Hello, " + self at: "name" ]
 
 alice := Person derive                       # Create an instance
-alice at: 'name' put: 'Alice'
-alice greet                                  # => 'Hello, Alice'
+alice at: "name" put: "Alice"
+alice greet                                  # => "Hello, Alice"
 ```
 
 ### Instance Variables and Property Access
 
-**Current State**: Nimtalk currently uses a property bag model where objects behave like JavaScript objects - you can add any property at any time via `at:put:`.
+**Current State**: Nimtalk supports both dynamic property bags and declared instance variables (slots):
+- **Property bag model**: Objects behave like JavaScript objects - you can add any property at any time via `at:put:`.
+- **Slot-based instance variables**: Objects can declare instance variables explicitly for better performance and encapsulation.
 
-**Future Direction**: We plan to evolve toward a more traditional Smalltalk model where:
-- Objects declare their instance variables explicitly
-- Instance variable access is direct (like Smalltalk's instance variable syntax)
-- The system enforces declared structure rather than allowing arbitrary property addition
+**Slot-based instance variables (partially implemented)**:
+- Objects declare instance variables using `deriveWithIVars: #(ivar1 ivar2)` syntax
+- Instance variable access is optimized via direct slot access
+- The system can enforce declared structure rather than allowing arbitrary property addition
 - This provides better encapsulation and enables static optimizations
 
-The property bag model offers flexibility during prototyping, but for production code, we want the clarity and safety of declared instance variables as in traditional Smalltalk.
+The property bag model offers flexibility during prototyping, while slot-based instance variables provide clarity and safety for production code as in traditional Smalltalk.
 
 ### Method Syntax
 
@@ -273,7 +281,7 @@ Method definitions in Nimtalk follow Smalltalk conventions but are stored differ
 ```smalltalk
 # Smalltalk: Methods are defined in class categories
 # Nimtalk: Methods are stored as properties on prototypes
-Person at: 'greet:' put: [ :name | 'Hello, ' + name ]
+Person at: "greet:" put: [ :name | "Hello, " + name ]
 ```
 
 ### Compilation Model
@@ -283,14 +291,14 @@ While standard Smalltalk implementations are typically purely interpreted (with 
 - Compilation to Nim code for production deployment
 - Direct access to Nim's optimizer and native compilation pipeline
 
-See [SPECIFICATION.md](docs/SPECIFICATION.md) for detailed language specification.
+See the documentation in the `docs/` directory for detailed language specification and design documents.
 
 ## Nim Integration
 
 ### Calling Nim Code
 ```smalltalk
 # Import Nim module
-nimMath := Nim import: 'math'
+nimMath := Nim import: "math"
 
 # Call Nim function
 result := nimMath sqrt: 25.0
@@ -300,7 +308,7 @@ result := nimMath sqrt: 25.0
 ```smalltalk
 # Nimtalk to Nim
 nimInt := 42 asNim: int
-nimString := 'hello' asNim: string
+nimString := "hello" asNim: string
 
 # Nim to Nimtalk
 talkObj := fromNim: nimObject
@@ -361,6 +369,7 @@ This would provide a powerful built-in persistence model similar to Gemstone and
 - ✅ Project follows Nim standard layout (source under `src/`)
 
 **In Progress**:
+- Slot-based instance variable system (types and core implementation complete, parser support pending)
 - FFI integration with Nim
 - Complete method compilation
 - Standard library objects

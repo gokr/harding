@@ -11,9 +11,10 @@ This document tracks current work items, future directions, and known issues for
 
 **Core Language**: ⚡ In Progress
 - ✅ Lexer and parser with data structure literal syntax
-- ✅ Prototype object system with property bags
-- ✅ AST interpreter core with message sending
-- ✅ REPL/Interpreter with file execution support
+- ✅ Prototype object system with property bags and prototype chains
+- ✅ AST interpreter core with message sending and block evaluation
+- ✅ REPL/Interpreter with file execution and interactive mode
+- ⏳ Slot-based instance variable system (types and core implementation complete, parser support pending)
 - ⏳ Compiler infrastructure (stub implementation)
 
 ## High Priority Tasks
@@ -31,7 +32,9 @@ This document tracks current work items, future directions, and known issues for
 - [ ] Type conversion utilities (`asNim:`, `fromNim:`)
 
 ### 3. Language Features
-- [ ] Instance variable declaration syntax (`derive: #(ivar1 ivar2)`)
+- [x] Instance variable type system and core implementation (types.nim, objects.nim)
+- [ ] Instance variable declaration syntax (`derive: #(ivar1 ivar2)` - parser support)
+- [ ] Instance variable access syntax (direct slot access)
 - [ ] Method definition syntax (`>>`) for files
 - [ ] `super` support for calling parent methods
 - [ ] Enhanced control flow (loops, conditionals)
@@ -73,9 +76,10 @@ This document tracks current work items, future directions, and known issues for
 ## Known Issues & Bugs
 
 ### Build System
-- [ ] Binaries may appear in source tree (`nimtalk/repl/ntalk`) or root directory
-- [ ] Clean task in `build.nims` has NimScript target restrictions
-- [ ] Need consistent binary output location
+- [x] Binaries may appear in source tree (`nimtalk/repl/ntalk`) or root directory (both locations supported)
+- [x] Clean task in `build.nims` uses shell commands to avoid NimScript restrictions
+- [x] `nim e build.nims repl` copies binaries to root directory for convenience
+- [ ] Need consistent binary output location (Nimble default behavior)
 
 ### Language Implementation
 - [ ] Parser edge cases with nested blocks and literals
@@ -86,16 +90,18 @@ This document tracks current work items, future directions, and known issues for
 ## Documentation Needs
 
 ### User Documentation
-- [ ] Complete language specification
-- [ ] Tutorials and getting started guides
+- [x] README.md with getting started guide and examples (updated)
+- [x] Design documents for slot-based instance variable system (docs/)
+- [ ] Complete language specification (SPECIFICATION.md missing)
+- [ ] Tutorials and comprehensive examples
 - [ ] API reference for built-in objects
-- [ ] Examples covering all language features
 
 ### Developer Documentation
-- [ ] Architecture and design documents
+- [x] Architecture and design documents (docs/IMPLEMENTATION-PLAN.md, docs/NIMTALK-NEW-OBJECT-MODEL.md)
+- [x] Contribution guidelines (CONTRIBUTING.md)
+- [x] Build and deployment instructions (README.md, build.nims)
 - [ ] Internal API documentation
-- [ ] Contribution guidelines and examples
-- [ ] Build and deployment instructions
+- [ ] Code documentation coverage
 
 ## Testing & Quality
 
@@ -115,20 +121,21 @@ This document tracks current work items, future directions, and known issues for
 
 ### Build Commands
 ```bash
-# Build everything
+# Build everything using Nimble (binaries in nimtalk/repl/, nimtalk/compiler/)
 nimble build
 
-# Build just REPL/interpreter
+# Build using build script (copies binaries to root directory)
 nim e build.nims repl
 
 # Run tests
+nim e build.nims test
 nimble test
 nim c -r tests/test_core.nim
 
 # Clean build artifacts
-nim e build.nims clean  # (has NimScript target issues)
+nim e build.nims clean
 
-# Install binary
+# Install binary to ~/.local/bin/ (Unix/Linux/macOS)
 nim e build.nims install
 ```
 
