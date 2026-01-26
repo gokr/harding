@@ -16,6 +16,13 @@ type
     errorMsg*: string
     lastLine*, lastCol*: int
 
+# Forward declarations for recursive parsing functions
+proc parseExpression(parser: var Parser): Node
+proc parseBlock(parser: var Parser): BlockNode
+proc parseArrayLiteral(parser: var Parser): ArrayNode
+proc parseTableLiteral(parser: var Parser): TableNode
+proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
+
 # Parser errors
 proc parseError*(parser: var Parser, msg: string) =
   parser.hasError = true
@@ -114,6 +121,18 @@ proc parsePrimary(parser: var Parser): Node =
     # Block literal
     return parser.parseBlock()
 
+  of tkArrayStart:
+    # Array literal #(...)
+    return parser.parseArrayLiteral()
+
+  of tkTableStart:
+    # Table literal #{...}
+    return parser.parseTableLiteral()
+
+  of tkObjectStart:
+    # Object literal {| ... |}
+    return parser.parseObjectLiteral()
+
   else:
     parser.parseError("Unexpected token: " & token.value)
     return nil
@@ -191,11 +210,11 @@ proc parseBlock(parser: var Parser): BlockNode =
     parser.parseError("Expected '[' for block start")
     return nil
 
-  let block = BlockNode()
-  block.parameters = @[]
-  block.temporaries = @[]
-  block.body = @[]
-  block.isMethod = false
+  let blk = BlockNode()
+  blk.parameters = @[]
+  blk.temporaries = @[]
+  blk.body = @[]
+  blk.isMethod = false
 
   # Check for parameters [:x :y | ...]
   if parser.expect(tkSpecial) and parser.peek().value == ":":
@@ -204,7 +223,7 @@ proc parseBlock(parser: var Parser): BlockNode =
       discard parser.next()  # Skip :
       if parser.expect(tkIdent):
         let paramToken = parser.tokens[parser.pos - 1]
-        block.parameters.add(paramToken.value)
+        blk.parameters.add(paramToken.value)
       else:
         parser.parseError("Expected parameter name after :")
         return nil
@@ -223,9 +242,123 @@ proc parseBlock(parser: var Parser): BlockNode =
 
     let stmt = parser.parseStatement()
     if stmt != nil:
-      block.body.add(stmt)
+      blk.body.add(stmt)
 
-  return block
+  return blk
+
+# Parse array literal #(...)
+proc parseArrayLiteral(parser: var Parser): ArrayNode =
+  if not parser.expect(tkArrayStart):
+    parser.parseError("Expected '#(' for array literal start")
+    return nil
+
+  let array = ArrayNode()
+  array.elements = @[]
+
+  # Parse elements until closing )
+  while not parser.expect(tkRParen):
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed array literal - expected ')'")
+      return nil
+
+    # Parse expression (element)
+    let element = parser.parseExpression()
+    if element == nil:
+      parser.parseError("Expected array element")
+      return nil
+    array.elements.add(element)
+
+    # Skip optional whitespace (already handled by lexer)
+
+  return array
+
+# Parse table literal #{...}
+proc parseTableLiteral(parser: var Parser): TableNode =
+  if not parser.expect(tkTableStart):
+    parser.parseError("Expected '#{' for table literal start")
+    return nil
+
+  let table = TableNode()
+  table.entries = @[]
+
+  # Parse entries until closing }
+  while not (parser.peek().kind == tkSpecial and parser.peek().value == "}"):
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed table literal - expected '}'")
+      return nil
+
+    # Parse key
+    let key = parser.parseExpression()
+    if key == nil:
+      parser.parseError("Expected table key")
+      return nil
+
+    # Expect arrow ->
+    if not (parser.expect(tkArrow)):
+      parser.parseError("Expected '->' after table key")
+      return nil
+
+    # Parse value
+    let value = parser.parseExpression()
+    if value == nil:
+      parser.parseError("Expected table value after '->'")
+      return nil
+
+    table.entries.add((key, value))
+
+    # Skip optional whitespace
+
+  # Consume closing }
+  discard parser.next()  # Skip }
+
+  return table
+
+# Parse object literal {| ... |}
+proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
+  if not parser.expect(tkObjectStart):
+    parser.parseError("Expected '{|' for object literal start")
+    return nil
+
+  let obj = ObjectLiteralNode()
+  obj.properties = @[]
+
+  # Parse properties until closing |}
+  while not (parser.peek().kind == tkSpecial and parser.peek().value == "|"):
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed object literal - expected '|'")
+      return nil
+
+    # Property name (identifier)
+    if not parser.expect(tkIdent):
+      parser.parseError("Expected property name in object literal")
+      return nil
+    let propName = parser.tokens[parser.pos - 1].value
+
+    # Expect colon :
+    if not parser.expect(tkColon):
+      parser.parseError("Expected ':' after property name")
+      return nil
+
+    # Parse value
+    let value = parser.parseExpression()
+    if value == nil:
+      parser.parseError("Expected property value after ':'")
+      return nil
+
+    obj.properties.add((propName, value))
+
+    # Skip optional whitespace
+
+  # Consume closing |
+  discard parser.next()
+
+  # Expect closing }
+  if not (parser.peek().kind == tkSpecial and parser.peek().value == "}"):
+    parser.parseError("Expected '}' after '|' in object literal")
+    return nil
+  discard parser.next()
+
+  return obj
 
 # Parse statement (expression or assignment)
 proc parseStatement(parser: var Parser): Node =
@@ -259,10 +392,10 @@ proc parseStatement(parser: var Parser): Node =
 
 # Parse method definition (block with isMethod flag)
 proc parseMethod(parser: var Parser): BlockNode =
-  let block = parser.parseBlock()
-  if block != nil:
-    block.isMethod = true
-  return block
+  let blk = parser.parseBlock()
+  if blk != nil:
+    blk.isMethod = true
+  return blk
 
 # Parse sequence of statements (method body or REPL input)
 proc parseStatements(parser: var Parser): seq[Node] =
@@ -301,8 +434,8 @@ proc parseMethod*(input: string): (BlockNode, Parser) =
   ## Parse a method definition
   let tokens = lex(input)
   var parser = initParser(tokens)
-  let method = parser.parseMethod()
-  return (method, parser)
+  let meth = parser.parseMethod()
+  return (meth, parser)
 
 # AST printing for debugging
 proc printAST*(node: Node, indent: int = 0): string =
@@ -330,17 +463,17 @@ proc printAST*(node: Node, indent: int = 0): string =
     return result
 
   of nkBlock:
-    let block = node.BlockNode
+    let blk = node.BlockNode
     var result = spaces & "Block"
-    if block.isMethod:
+    if blk.isMethod:
       result.add(" (method)")
     result.add("\n")
-    if block.parameters.len > 0:
-      result.add(spaces & "  params: " & $block.parameters & "\n")
-    if block.temporaries.len > 0:
-      result.add(spaces & "  temps: " & $block.temporaries & "\n")
+    if blk.parameters.len > 0:
+      result.add(spaces & "  params: " & $blk.parameters & "\n")
+    if blk.temporaries.len > 0:
+      result.add(spaces & "  temps: " & $blk.temporaries & "\n")
     result.add(spaces & "  body:\n")
-    for stmt in block.body:
+    for stmt in blk.body:
       result.add(printAST(stmt, indent + 2))
     return result
 
