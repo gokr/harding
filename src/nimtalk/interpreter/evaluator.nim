@@ -158,6 +158,7 @@ proc printCallStack*(interp: Interpreter): string =
 # Variable lookup
 proc lookupVariable(interp: Interpreter, name: string): NodeValue =
   ## Look up variable in activation chain and globals
+  debug("Looking up variable: ", name)
   var activation = interp.currentActivation
   while activation != nil:
     if name in activation.locals:
