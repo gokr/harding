@@ -104,11 +104,38 @@ debug("Variable lookup: ", name, " = ", value.toString())
 
 The `debug` statements are only active when the log level is set to DEBUG or lower.
 
+### AST Debugging
+
+Both `ntalk` and `ntalkc` support an `--ast` flag to dump the Abstract Syntax Tree after parsing. This is useful for understanding how your Nimtalk code is being parsed before execution or compilation.
+
+**For the REPL (ntalk):**
+```bash
+# Show AST for a script and then execute it
+ntalk --ast examples/demo.nt
+
+# Show AST for an expression and show result
+ntalk --ast -e "3 + 4"
+
+# Combine with debug logging for full visibility
+ntalk --ast --loglevel DEBUG script.nt
+```
+
+**For the compiler (ntalkc):**
+```bash
+# Show AST before compiling
+ntalkc compile myprog.nt --ast
+
+# Show AST with debug logging
+ntalkc compile myprog.nt --ast --loglevel DEBUG
+```
+
+The AST output shows the hierarchical structure of parsed expressions, making it easier to understand how messages, literals, and other constructs are represented.
+
 ## Nim Coding Guidelines
 
 ### Code Style and Conventions
 - Use camelCase, not snake_case (avoid `_` in naming)
-- Do not shadow the local `result` variable (Nim built-in)
+- Do not shadow the local `result` variable (Nim built-in). Nim provides an implicit `result` variable that holds the return value; declaring a local variable named `result` shadows it and causes warnings.
 - Doc comments: `##` below proc signature
 - Prefer generics or object variants over methods and type inheritance
 - Use `return expression` for early exits
