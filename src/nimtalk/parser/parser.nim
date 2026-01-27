@@ -352,8 +352,8 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
       parser.parseError("Unclosed array literal - expected ')'")
       return nil
 
-    # Parse expression (element)
-    let element = parser.parseExpression()
+    # Parse expression (element) - don't parse messages inside arrays
+    let element = parser.parseExpression(parseMessages = false)
     if element == nil:
       parser.parseError("Expected array element")
       return nil
