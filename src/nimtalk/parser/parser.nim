@@ -17,12 +17,12 @@ type
     lastLine*, lastCol*: int
 
 # Forward declarations for recursive parsing functions
-proc parseExpression*(parser: var Parser): Node
+proc parseExpression*(parser: var Parser; parseMessages = true): Node
 proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
 proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
-proc parseStatement(parser: var Parser): Node
+proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parseMethod(parser: var Parser): BlockNode
 proc parsePrimitive(parser: var Parser): PrimitiveNode
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node
@@ -151,7 +151,7 @@ proc parseKeywordMessage(parser: var Parser, receiver: Node): MessageNode =
     let token = parser.next()
     selector.add(token.value)  # Includes colon
 
-    let arg = parser.parseExpression()
+    let arg = parser.parseExpression(parseMessages = false)
     if arg == nil:
       parser.parseError("Expected argument after keyword")
       return nil
@@ -173,10 +173,10 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
     return MessageNode(receiver: receiver, selector: "", arguments: @[], isCascade: false)
 
   # Parse the first unary message
-  var result: MessageNode
+  var msg: MessageNode
   if parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
     let token = parser.next()
-    result = MessageNode(
+    msg = MessageNode(
       receiver: receiver,
       selector: token.value,
       arguments: @[],
@@ -186,8 +186,8 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
     # Continue parsing additional unary messages
     while parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
       let token = parser.next()
-      result = MessageNode(
-        receiver: result,
+      msg = MessageNode(
+        receiver: msg,
         selector: token.value,
         arguments: @[],
         isCascade: false
@@ -196,42 +196,46 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
   # Binary messages (operators - not yet implemented)
   # For now, treat binary operators as keywords
 
-  return result
+  return msg
 
 # Parse expressions with precedence (no cascade detection)
-proc parseExpression*(parser: var Parser): Node =
+proc parseExpression*(parser: var Parser; parseMessages = true): Node =
   # Start with primary
   let primary = parser.parsePrimary()
   if primary == nil:
     return nil
 
   # Check for messages
-  let next = parser.peek()
-  case next.kind
-  of tkKeyword:
-    # Keyword message
-    return parser.parseKeywordMessage(primary)
-  of tkIdent:
-    if next.value[0].isLowerAscii():
-      # Unary message
-      return parser.parseBinaryMessage(primary)
+  if parseMessages:
+    let next = parser.peek()
+    case next.kind
+    of tkKeyword:
+      # Keyword message
+      return parser.parseKeywordMessage(primary)
+    of tkIdent:
+      if next.value[0].isLowerAscii():
+        # Unary message
+        return parser.parseBinaryMessage(primary)
+      else:
+        return primary
+    of tkPlus, tkMinus:
+      # Binary operator - handle very simple left-to-right for now
+      discard parser.next()  # Skip operator
+      let right = parser.parseExpression(parseMessages)
+      if right == nil:
+        return nil
+
+      # Create a message node for the operator
+      return MessageNode(
+        receiver: primary,
+        selector: next.value,  # Use the actual operator (+ or -)
+        arguments: @[right],
+        isCascade: false
+      )
     else:
       return primary
-  of tkPlus, tkMinus:
-    # Binary operator - handle very simple left-to-right for now
-    discard parser.next()  # Skip operator
-    let right = parser.parseExpression()
-    if right == nil:
-      return nil
-
-    # Create a message node for the operator
-    return MessageNode(
-      receiver: primary,
-      selector: next.value,  # Use the actual operator (+ or -)
-      arguments: @[right],
-      isCascade: false
-    )
   else:
+    # Don't parse any messages, just return the primary
     return primary
 
 # Parse cascade messages
@@ -275,7 +279,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
     of tkPlus, tkMinus:
       # Binary operator
       discard parser.next()  # Skip operator
-      let right = parser.parseExpression()
+      let right = parser.parseExpression(parseMessages = false)
       if right == nil:
         parser.parseError("Expected expression after binary operator")
         return nil
@@ -335,7 +339,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
       parser.parseError("Unclosed block - expected ']'")
       return nil
 
-    let stmt = parser.parseStatement()
+    let stmt = parser.parseStatement(parseMessages = true)
     if stmt != nil:
       blk.body.add(stmt)
 
@@ -394,7 +398,7 @@ proc parseTableLiteral(parser: var Parser): TableNode =
       return nil
 
     # Parse value
-    let value = parser.parseExpression()
+    let value = parser.parseExpression(parseMessages = true)
     if value == nil:
       parser.parseError("Expected table value after '->'")
       return nil
@@ -435,7 +439,7 @@ proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
       return nil
 
     # Parse value
-    let value = parser.parseExpression()
+    let value = parser.parseExpression(parseMessages = true)
     if value == nil:
       parser.parseError("Expected property value after ':'")
       return nil
@@ -456,18 +460,26 @@ proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
   return obj
 
 # Parse statement (expression or assignment)
-proc parseStatement(parser: var Parser): Node =
+proc parseStatement(parser: var Parser; parseMessages = true): Node =
+  # Skip separators and periods at the start
+  while parser.expect(tkSeparator) or parser.expect(tkPeriod):
+    discard
+
+  # Check for EOF
+  if parser.peek().isEOF:
+    return nil
+
   # Check for primitive declaration
   if parser.peek().kind == tkTag and parser.peek().value.startsWith("primitive"):
     return parser.parsePrimitive()
 
   # Check for return statement
   if parser.expect(tkReturn):
-    let expr = parser.parseExpression()
+    let expr = parser.parseExpression(parseMessages = true)
     return ReturnNode(expression: expr)
 
   # Parse expression
-  let expr = parser.parseExpression()
+  let expr = parser.parseExpression(parseMessages = true)
   if expr == nil:
     return nil
 
@@ -549,7 +561,7 @@ proc parsePrimitive(parser: var Parser): PrimitiveNode =
     # Check if we've reached the end of the block/method
     if parser.peek().kind in {tkRBracket, tkPeriod, tkEOF}:
       break
-    let stmt = parser.parseStatement()
+    let stmt = parser.parseStatement(parseMessages = true)
     if stmt != nil:
       fallback.add(stmt)
     # Skip separators and periods after statement
@@ -571,7 +583,7 @@ proc parseStatements*(parser: var Parser): seq[Node] =
   result = @[]
 
   while not parser.peek().isEOF:
-    let stmt = parser.parseStatement()
+    let stmt = parser.parseStatement(parseMessages = true)
     if stmt != nil:
       result.add(stmt)
 
@@ -595,7 +607,7 @@ proc parseExpression*(input: string): (Node, Parser) =
   ## Parse a single expression for REPL
   let tokens = lex(input)
   var parser = initParser(tokens)
-  let node = parser.parseExpression()
+  let node = parser.parseExpression(parseMessages = true)
   return (node, parser)
 
 # Convenience function to parse a method

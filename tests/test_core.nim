@@ -105,6 +105,8 @@ suite "Interpreter":
 
   test "handles property access":
     var interp = newInterpreter()
+    initGlobals(interp)
+    initSymbolTable()
     let code = "Object clone"
     let tokens = lex(code)
     var parser = initParser(tokens)
@@ -115,51 +117,40 @@ suite "Interpreter":
   test "handles message sends":
     var interp = newInterpreter()
     initGlobals(interp)
+    initSymbolTable()
 
-    # Create object with property
-    var obj = interp.rootObject.clone().toObject()
-    obj.setProperty("value", toValue(3))
-
-    # Set current receiver
-    interp.currentReceiver = obj
-
-    # Try to access property via message
-    let code = "at: 'value'"
+    # Test simple unary message send
+    let code = "3 printString"
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
     let evalResult = interp.eval(node)
 
-    # Should return the value object
-    check evalResult.kind == vkObject
+    # Should return a string representation
+    check evalResult.kind == vkString
 
   test "handles canonical Smalltalk test (3 + 4 = 7)":
     var interp = newInterpreter()
     initGlobals(interp)
+    initSymbolTable()
 
-    # Create a number object
-    var numObj = interp.rootObject.clone().toObject()
-    numObj.setProperty("value", toValue(3))
-    numObj.setProperty("other", toValue(4))
-
-    # Set as current receiver
-    interp.currentReceiver = numObj
-
-    # Try to add (basic plumbing test)
-    let code = "at: 'value'"
+    # Test basic arithmetic addition
+    let code = "3 + 4"
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
     let evalResult = interp.eval(node)
 
-    # Basic messaging works
-    check evalResult.kind == vkObject
+    # Should evaluate to 7
+    check evalResult.kind == vkInt
+    check evalResult.intVal == 7
 
   test "handles undefined messages gracefully":
     var interp = newInterpreter()
     initGlobals(interp)
+    initSymbolTable()
 
-    let code = "someUndefinedMessage"
+    let code = "self someUndefinedMessage"
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
