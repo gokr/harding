@@ -232,7 +232,7 @@ proc lookupMethod(interp: Interpreter, receiver: ProtoObject, selector: string):
       echo "Property kind: ", prop.kind
       if prop.kind == vkBlock:
         let blockNode = prop.blockVal
-        echo "Property is a block, returning as method"
+        echo "Property is a block, returning as method, isMethod: ", blockNode.isMethod
         # Return the block as a method
         return MethodResult(currentMethod: blockNode, receiver: current, found: true)
 
@@ -277,7 +277,7 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
       return nativeProc(receiver, argValues)
 
   # Create new activation
-  echo "Interpreted method execution, param count: ", currentMethod.parameters.len
+  echo "Interpreted method execution, param count: ", currentMethod.parameters.len, " isMethod: ", currentMethod.isMethod
   let activation = newActivation(currentMethod, receiver, interp.currentActivation)
 
   # Bind parameters
@@ -316,6 +316,7 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
       interp.currentActivation = nil
     interp.currentReceiver = receiver
 
+  echo "ExecuteMethod: finished statements, hasReturned: ", activation.hasReturned
   # Return result (or activation.returnValue if non-local return)
   if activation.hasReturned:
     debug("Returning from method (non-local)")
@@ -395,8 +396,8 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
 
   of nkArray:
     # Array literal - evaluate each element
-    echo "EVAL ARRAY with ", arr.elements.len, " elements"
     let arr = node.ArrayNode
+    echo "EVAL ARRAY with ", arr.elements.len, " elements"
     var elements: seq[NodeValue] = @[]
     for i, elem in arr.elements:
       echo "  element ", i, ": kind = ", elem.kind

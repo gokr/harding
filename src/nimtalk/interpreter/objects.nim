@@ -350,6 +350,11 @@ proc atPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
 
   let value = args[1]
   echo "Setting property: ", key, " = ", value.toString(), " on self with tags: ", $self.tags
+  # If value is a block, mark it as a method
+  if value.kind == vkBlock:
+    let blockNode = value.blockVal
+    echo "Marking block as method: ", blockNode.parameters.len, " parameters"
+    blockNode.isMethod = true
   setProperty(self, key, value)
   echo "Property set done, now properties count: ", self.properties.len
   return value
