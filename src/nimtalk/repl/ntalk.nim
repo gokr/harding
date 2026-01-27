@@ -166,8 +166,8 @@ proc main() =
         echo "Some tests failed. ⚠"
         quit(1)
     else:
-      # Check if it's a file
-      if positionalArgs[0].endsWith(".nt") and fileExists(positionalArgs[0]):
+      # Check if it's a file (any extension, not just .nt)
+      if fileExists(positionalArgs[0]):
         # Run script file
         execScript(positionalArgs[0], dumpAst)
       else:
