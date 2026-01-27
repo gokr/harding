@@ -54,3 +54,6 @@ tests/test_simple_derive
 tests/test_derive_from_nimtalk
 tests/benchmark_simple
 examples/test_primitive
+
+# Test results
+testresults/
