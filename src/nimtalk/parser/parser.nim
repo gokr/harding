@@ -199,6 +199,39 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
 
   return msg
 
+# Binary operator tokens for parsing
+const BinaryOpTokens* = {tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma}
+
+# Parse binary operators with left-to-right associativity
+proc parseBinaryOperators(parser: var Parser, left: Node): Node =
+  ## Parse binary operators after unary messages
+  var expr = left
+  while parser.peek().kind in BinaryOpTokens:
+    let opToken = parser.next()
+    # Parse the right operand (primary + unary messages only, not more binary operators yet)
+    var right = parser.parsePrimary()
+    if right == nil:
+      parser.parseError("Expected expression after binary operator")
+      return expr
+
+    # Handle unary messages on right side
+    while parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
+      let unaryToken = parser.next()
+      right = MessageNode(
+        receiver: right,
+        selector: unaryToken.value,
+        arguments: @[],
+        isCascade: false
+      )
+
+    expr = MessageNode(
+      receiver: expr,
+      selector: opToken.value,
+      arguments: @[right],
+      isCascade: false
+    )
+  return expr
+
 # Parse expressions with precedence (no cascade detection)
 proc parseExpression*(parser: var Parser; parseMessages = true): Node =
   # Start with primary
@@ -208,31 +241,33 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
 
   # Check for messages
   if parseMessages:
+    var current: Node = primary
     let next = parser.peek()
+
     case next.kind
     of tkKeyword:
-      # Keyword message
+      # Keyword message (lowest precedence, parsed last)
       return parser.parseKeywordMessage(primary)
     of tkIdent:
       if next.value[0].isLowerAscii():
-        # Unary message
-        return parser.parseBinaryMessage(primary)
+        # Unary message chain first
+        current = parser.parseBinaryMessage(primary)
+        # After unary messages, check for binary operators
+        if parser.peek().kind in BinaryOpTokens:
+          current = parser.parseBinaryOperators(current)
+        # After binary operators, check for keyword messages
+        if parser.peek().kind == tkKeyword:
+          return parser.parseKeywordMessage(current)
+        return current
       else:
         return primary
-    of tkPlus, tkMinus, tkComma:
-      # Binary operator - handle very simple left-to-right for now
-      discard parser.next()  # Skip operator
-      let right = parser.parseExpression(parseMessages)
-      if right == nil:
-        return nil
-
-      # Create a message node for the operator
-      return MessageNode(
-        receiver: primary,
-        selector: next.value,  # Use the actual operator (+, -, or ,)
-        arguments: @[right],
-        isCascade: false
-      )
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma:
+      # Binary operator directly after primary
+      current = parser.parseBinaryOperators(primary)
+      # After binary operators, check for keyword messages
+      if parser.peek().kind == tkKeyword:
+        return parser.parseKeywordMessage(current)
+      return current
     else:
       return primary
   else:
@@ -277,7 +312,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
       else:
         parser.parseError("Expected message after ;")
         return nil
-    of tkPlus, tkMinus:
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma:
       # Binary operator
       discard parser.next()  # Skip operator
       let right = parser.parseExpression(parseMessages = false)
@@ -306,9 +341,11 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
 
 # Parse block literal
 proc parseBlock*(parser: var Parser): BlockNode =
+  debug("parseBlock: starting")
   if not parser.expect(tkLBracket):
     parser.parseError("Expected '[' for block start")
     return nil
+  debug("parseBlock: consumed [")
 
   let blk = BlockNode()
   blk.parameters = @[]
@@ -317,6 +354,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
   blk.isMethod = false
 
   # Check for parameters [:x :y | ...]
+  debug("parseBlock: checking for params, current=", parser.peek().kind, " value=", parser.peek().value)
   if parser.peek().kind == tkColon:
     # Consume initial colon
     discard parser.next()
@@ -339,10 +377,33 @@ proc parseBlock*(parser: var Parser): BlockNode =
       return nil
     discard parser.next()
 
+  # Check for temporaries: | temp1 temp2 | (Smalltalk-style)
+  # OR just consume the | separator and parse body (Nimtalk-style)
+  # In the test syntax, [| ...] means block with no params, just consume | and parse body
+  debug("parseBlock: checking for temporaries, current=", parser.peek().kind, " value=", parser.peek().value)
+  if parser.peek().kind == tkSpecial and parser.peek().value == "|":
+    # Always consume the | separator - it marks the end of params/start of body
+    debug("parseBlock: consuming | separator")
+    discard parser.next()  # Consume |
+    # Skip any whitespace after |
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    # Note: Smalltalk-style temporaries |temp1 temp2| after params are not currently
+    # supported in this simplified syntax. Variables are declared on first assignment.
+
   # Parse statements until closing bracket
+  var loopCount = 0
   while true:
+    loopCount += 1
+    if loopCount > 100:
+      parser.parseError("Block parsing exceeded 100 iterations - possible infinite loop")
+      return nil
+
+    debug("parseBlock: loop ", loopCount, " current=", parser.peek().kind, " value=", parser.peek().value)
+
     # Check for closing bracket first
     if parser.expect(tkRBracket):
+      debug("parseBlock: found closing ]")
       break
 
     # Check for EOF
@@ -353,13 +414,12 @@ proc parseBlock*(parser: var Parser): BlockNode =
     let stmt = parser.parseStatement(parseMessages = true)
     if stmt != nil:
       blk.body.add(stmt)
+      debug("parseBlock: added statement, body now has ", blk.body.len, " statements")
     else:
+      debug("parseBlock: parseStatement returned nil, breaking")
       break
 
-  # After loop, make sure we found the closing bracket
-  if parser.peek().kind == tkRBracket:
-    discard parser.next()
-
+  debug("parseBlock: returning with ", blk.body.len, " statements")
   return blk
 
 # Parse array literal #(...)
@@ -415,14 +475,15 @@ proc parseTableLiteral(parser: var Parser): TableNode =
       return nil
 
     # Parse value
-    let value = parser.parseExpression(parseMessages = true)
+    let value = parser.parseExpression(parseMessages = false)
     if value == nil:
       parser.parseError("Expected table value after '->'")
       return nil
 
     table.entries.add((key, value))
 
-    # Skip optional whitespace
+    # Skip optional comma separator
+    discard parser.expect(tkComma)
 
   # Consume closing }
   discard parser.next()  # Skip }
@@ -456,7 +517,7 @@ proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
       return nil
 
     # Parse value
-    let value = parser.parseExpression(parseMessages = true)
+    let value = parser.parseExpression(parseMessages = false)
     if value == nil:
       parser.parseError("Expected property value after ':'")
       return nil
@@ -535,6 +596,8 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
       parser.parseError("Can only assign to variable name")
       return nil
   else:
+    # Consume optional trailing period (statement separator)
+    discard parser.expect(tkPeriod)
     return expr
 
 # Parse block literal (defined above at line 209)
@@ -575,7 +638,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
       else:
         parser.parseError("Expected parameter name after keyword part: " & keywordPart)
         return nil
-  elif tok.kind == tkSpecial or tok.kind == tkPlus or tok.kind == tkMinus or tok.kind == tkComma:
+  elif tok.kind == tkSpecial or tok.kind in BinaryOpTokens:
     # Binary operator like '+', '-', etc.
     selector = parser.next().value
     # Binary operators have one parameter
