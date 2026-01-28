@@ -48,14 +48,15 @@ Employee := Person derive: #(#salary #department)
 
 ### Method Definition
 ```smalltalk
-# Current syntax (works in both REPL and files)
+# Standard syntax (works in both REPL and files)
 Person at: "greet" put: [ ^ "Hello, " + name ]
 
 # In methods, access ivars directly by name (no need for at:)
 # Automatically compiles to direct slot access for performance
 
-# Planned >> syntax for files (parser support pending)
-# Person>>greet [ ^ "Hello, " + name ]
+# >> syntax for files (parser support complete ✅)
+Person>>greet [ ^ "Hello, " + name ]
+Person>>name: aName [ name := aName ]
 ```
 
 ## Migration Status - ✅ COMPLETE
@@ -76,4 +77,4 @@ The hybrid model preserves backward compatibility while providing dramatic perfo
 - `SYNTAX-QUICKREF-updated.md` - Syntax reference
 - `CLASSES-AND-INSTANCES.md` - Class-based design exploration
 
-*Last updated: 2026-01-28 (Slot-based system fully implemented)*
+*Last updated: 2026-01-28 (Slot-based system fully implemented, >> method syntax complete, super/self complete)*
