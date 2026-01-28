@@ -21,6 +21,8 @@ This document tracks current work items, future directions, and known issues for
 - ✅ Base library with core objects and collections
 - ✅ Lexical closures with comprehensive test coverage
 - ✅ Cascade syntax (`;` operator) for multiple messages to same receiver
+- ✅ `>>` method definition syntax (parser support complete)
+- ✅ `self` and `super` keywords for method dispatch
 - ⏳ Compiler infrastructure (stub implementation - next major priority)
 
 ## High Priority Tasks
@@ -43,8 +45,9 @@ This document tracks current work items, future directions, and known issues for
 - [x] Instance variable access via automatic getters/setters (automatically generated)
 - [x] Lexical closures with variable capture and non-local returns
 - [x] Cascade syntax (`;` operator) for multiple messages to same receiver
-- [x] Method definition syntax (`>>`) for files (parser support completed)
+- [x] Method definition syntax (`>>`) for files and REPL (parser support completed)
 - [x] `super` support for calling parent methods
+- [x] `self` keyword for receiver reference and dynamic dispatch
 - [ ] Enhanced control flow (loops, conditionals)
 
 ## Medium Priority Tasks
@@ -186,5 +189,5 @@ ntalkc hello.nt
 
 ---
 
-*Last Updated: 2026-01-28 (super support, >> method definition syntax, Object/Dictionary split, Symbol method keys)*
+*Last Updated: 2026-01-28 (super and self support complete, >> method definition syntax implemented, Object/Dictionary split, Symbol method keys, comprehensive tests)*
 *Project follows Nim standard layout with `src/` directory structure.*
