@@ -1,4 +1,4 @@
-import std/[tables, strutils, sequtils, logging]
+import std/[tables, strutils, sequtils, logging, random, math]
 import ../core/types
 
 # ============================================================================
@@ -13,6 +13,14 @@ proc deriveWithIVarsImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc atImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc atPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc plusImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc minusImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc starImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc slashImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc sqrtImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc ltImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc gtImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc eqImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc moduloImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc printStringImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc writeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc writelineImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
@@ -22,6 +30,8 @@ proc concatImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc sizeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc atCollectionPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc randomNextImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc randomNewImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 # doCollectionImpl is defined in evaluator.nim as it needs interpreter context
 
 # Global root object (singleton)
@@ -29,6 +39,13 @@ var rootObject*: RootObject = nil
 
 # Global Dictionary prototype (singleton)
 var dictionaryPrototype*: DictionaryPrototype = nil
+
+# Global Random prototype (singleton) - uses DictionaryObj for properties
+var randomPrototype*: DictionaryObj = nil
+
+# Global true/false values for comparison operators
+var trueValue*: NodeValue = nilValue()
+var falseValue*: NodeValue = nilValue()
 
 # Create a core method
 
@@ -154,6 +171,39 @@ proc initRootObject*(): RootObject =
     plusMethod.nativeImpl = cast[pointer](plusImpl)
     addMethod(rootObject, "+", plusMethod)
 
+    let minusMethod = createCoreMethod("-")
+    minusMethod.nativeImpl = cast[pointer](minusImpl)
+    addMethod(rootObject, "-", minusMethod)
+
+    let starMethod = createCoreMethod("*")
+    starMethod.nativeImpl = cast[pointer](starImpl)
+    addMethod(rootObject, "*", starMethod)
+
+    let slashMethod = createCoreMethod("/")
+    slashMethod.nativeImpl = cast[pointer](slashImpl)
+    addMethod(rootObject, "/", slashMethod)
+
+    let sqrtMethod = createCoreMethod("sqrt")
+    sqrtMethod.nativeImpl = cast[pointer](sqrtImpl)
+    addMethod(rootObject, "sqrt", sqrtMethod)
+
+    # Add comparison operators
+    let ltMethod = createCoreMethod("<")
+    ltMethod.nativeImpl = cast[pointer](ltImpl)
+    addMethod(rootObject, "<", ltMethod)
+
+    let gtMethod = createCoreMethod(">")
+    gtMethod.nativeImpl = cast[pointer](gtImpl)
+    addMethod(rootObject, ">", gtMethod)
+
+    let eqMethod = createCoreMethod("=")
+    eqMethod.nativeImpl = cast[pointer](eqImpl)
+    addMethod(rootObject, "=", eqMethod)
+
+    let moduloMethod = createCoreMethod("%")
+    moduloMethod.nativeImpl = cast[pointer](moduloImpl)
+    addMethod(rootObject, "%", moduloMethod)
+
     # Add string concatenation operator (, in Smalltalk)
     let concatMethod = createCoreMethod(",")
     concatMethod.nativeImpl = cast[pointer](concatImpl)
@@ -198,6 +248,33 @@ proc initRootObject*(): RootObject =
     let dictAtPutMethod = createCoreMethod("at:put:")
     dictAtPutMethod.nativeImpl = cast[pointer](atPutImpl)
     addMethod(dictionaryPrototype.ProtoObject, "at:put:", dictAtPutMethod)
+
+    # Initialize Random prototype (uses DictionaryObj for properties)
+    randomPrototype = DictionaryObj()
+    randomPrototype.methods = initTable[string, BlockNode]()
+    randomPrototype.parents = @[rootObject.ProtoObject]
+    randomPrototype.tags = @["Random", "Proto"]
+    randomPrototype.isNimProxy = false
+    randomPrototype.nimValue = nil
+    randomPrototype.nimType = ""
+    randomPrototype.hasSlots = false
+    randomPrototype.slots = @[]
+    randomPrototype.slotNames = initTable[string, int]()
+    randomPrototype.properties = initTable[string, NodeValue]()
+    randomPrototype.properties["seed"] = NodeValue(kind: vkInt, intVal: 74755)
+
+    # Add next method for Random
+    let randomNextMethod = createCoreMethod("next")
+    randomNextMethod.nativeImpl = cast[pointer](randomNextImpl)
+    addMethod(randomPrototype, "next", randomNextMethod)
+
+    # Add new method for Random
+    let randomNewMethod = createCoreMethod("new")
+    randomNewMethod.nativeImpl = cast[pointer](randomNewImpl)
+    addMethod(randomPrototype, "new", randomNewMethod)
+
+    # Add Random to globals
+    addGlobal("Random", NodeValue(kind: vkObject, objVal: randomPrototype))
 
   return rootObject
 
@@ -452,13 +529,10 @@ proc deriveWithIVarsImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
     var setterArgs: seq[Node] = @[]
     setterArgs.add(LiteralNode(value: getSymbol(ivar)))
     setterArgs.add(IdentNode(name: "newValue"))  # Variable reference for parameter
-    setterBody.add(AssignNode(
-      variable: "<ignore>",  # Assignment to slot via setSlot
-      expression: MessageNode(
-        receiver: nil,
-        selector: "setSlot:value:",
-        arguments: setterArgs
-      )
+    setterBody.add(MessageNode(
+      receiver: nil,
+      selector: "setSlot:value:",
+      arguments: setterArgs
     ))
     setterBody.add(ReturnNode(
       expression: IdentNode(name: "newValue")  # Variable reference for parameter
@@ -528,6 +602,124 @@ proc plusImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
     let a = cast[ptr int](self.nimValue)[]
     let b = other.intVal
     return NodeValue(kind: vkInt, intVal: a + b)
+
+  return nilValue()
+
+proc minusImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Subtract two numbers: a - b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    return NodeValue(kind: vkInt, intVal: a - b)
+
+  return nilValue()
+
+proc starImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Multiply two numbers: a * b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    return NodeValue(kind: vkInt, intVal: a * b)
+
+  # Handle float multiplication
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkFloat:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.floatVal
+    return NodeValue(kind: vkInt, intVal: int(float(a) * b))
+
+  return nilValue()
+
+proc slashImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Divide two numbers: a / b (integer division)
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    if b == 0:
+      return nilValue()  # Division by zero
+    return NodeValue(kind: vkInt, intVal: a div b)
+
+  return nilValue()
+
+proc sqrtImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Square root: a sqrt
+  if self.isNimProxy and self.nimType == "int":
+    let a = cast[ptr int](self.nimValue)[]
+    return NodeValue(kind: vkInt, intVal: int(sqrt(float(a))))
+
+  return nilValue()
+
+proc ltImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Less than comparison: a < b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    if a < b:
+      return trueValue
+    else:
+      return falseValue
+
+  return nilValue()
+
+proc gtImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Greater than comparison: a > b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    if a > b:
+      return trueValue
+    else:
+      return falseValue
+
+  return nilValue()
+
+proc eqImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Equality comparison: a = b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    if a == b:
+      return trueValue
+    else:
+      return falseValue
+
+  return nilValue()
+
+proc moduloImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Modulo: a % b
+  if args.len < 1:
+    return nilValue()
+
+  let other = args[0]
+  if self.isNimProxy and self.nimType == "int" and other.kind == vkInt:
+    let a = cast[ptr int](self.nimValue)[]
+    let b = other.intVal
+    if b == 0:
+      return nilValue()  # Modulo by zero
+    return NodeValue(kind: vkInt, intVal: a mod b)
 
   return nilValue()
 
@@ -613,6 +805,10 @@ proc setSlotValueImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   else:
     return nilValue()
   let value = args[1]
+  debug("setSlotValueImpl: setting slot '", key, "' to ", value.toString())
+  when not defined(release):
+    debug("  obj hasSlots: ", self.hasSlots)
+    debug("  obj slotNames: ", self.slotNames)
   setSlot(self, key, value)
   return value
 
@@ -653,6 +849,11 @@ proc concatImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
 
 proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   ## Get element from array or table: arr at: index OR table at: key
+  ## Also handles DictionaryObj properties for regular objects
+  when not defined(release):
+    debug "atCollectionImpl called, nimType=", self.nimType, ", args.len=", args.len
+    if args.len > 0:
+      debug "  key kind=", args[0].kind, " value=", args[0].toString()
   if args.len < 1:
     return nilValue()
 
@@ -661,13 +862,23 @@ proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   # Handle array access (1-based indexing like Smalltalk)
   # Arrays are stored as DictionaryObj with numeric keys
   if self.isNimProxy and self.nimType == "array":
+    when not defined(release):
+      debug "atCollectionImpl: array detected"
     if key.kind == vkInt:
       let idx = key.intVal - 1  # Convert to 0-based
+      when not defined(release):
+        debug "atCollectionImpl: key is int, idx=", idx
       if self of DictionaryObj:
         let dict = cast[DictionaryObj](self)
         let keyStr = $idx
+        when not defined(release):
+          debug "atCollectionImpl: looking for key '", keyStr, "'"
+          for k in dict.properties.keys:
+            debug "  properties key: ", k
         if dict.properties.hasKey(keyStr):
+          debug "atCollectionImpl: found!"
           return dict.properties[keyStr]
+        debug "atCollectionImpl: not found, returning nil"
     return nilValue()
 
   # Handle table access
@@ -686,6 +897,24 @@ proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
         return dict.properties[keyStr]
     return nilValue()
 
+  # Handle regular DictionaryObj property access
+  # This allows at: to work on any Dictionary-based object (not just proxies)
+  if self of DictionaryObj:
+    var keyStr: string
+    if key.kind == vkString:
+      keyStr = key.strVal
+    elif key.kind == vkSymbol:
+      keyStr = key.symVal
+    else:
+      return nilValue()
+    let dict = cast[DictionaryObj](self)
+    when not defined(release):
+      debug "atCollectionImpl: DictionaryObj property access for '", keyStr, "'"
+    if dict.properties.hasKey(keyStr):
+      return dict.properties[keyStr]
+    when not defined(release):
+      debug "atCollectionImpl: property not found"
+
   return nilValue()
 
 proc sizeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
@@ -703,6 +932,7 @@ proc sizeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
 
 proc atCollectionPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
   ## Set element in array: arr at: index put: value
+  ## Also handles DictionaryObj properties for regular objects
   if args.len < 2:
     return nilValue()
 
@@ -718,6 +948,70 @@ proc atCollectionPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
         let keyStr = $idx
         dict.properties[keyStr] = value
         return value
+
+  # Handle table write
+  if self.isNimProxy and self.nimType == "table":
+    var keyStr: string
+    if key.kind == vkString:
+      keyStr = key.strVal
+    elif key.kind == vkSymbol:
+      keyStr = key.symVal
+    else:
+      return nilValue()
+    if self of DictionaryObj:
+      let dict = cast[DictionaryObj](self)
+      dict.properties[keyStr] = value
+      return value
+
+  # Handle regular DictionaryObj property write
+  # This allows at:put: to work on any Dictionary-based object (not just proxies)
+  if self of DictionaryObj:
+    var keyStr: string
+    if key.kind == vkString:
+      keyStr = key.strVal
+    elif key.kind == vkSymbol:
+      keyStr = key.symVal
+    else:
+      return nilValue()
+    when not defined(release):
+      debug "atCollectionPutImpl: setting property '", keyStr, "' = ", value.toString()
+    let dict = cast[DictionaryObj](self)
+    dict.properties[keyStr] = value
+    return value
+
+  return nilValue()
+
+proc randomNextImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Generate random integer: random next
+  ## Uses same LCG as SOM: seed = (seed * 1309 + 13849) & 65535
+  if self.tags.contains("Random") and self of DictionaryObj:
+    let dict = cast[DictionaryObj](self)
+    var seed: int
+    if dict.properties.hasKey("seed"):
+      seed = dict.properties["seed"].intVal
+      # SOM-style LCG
+      seed = ((seed * 1309) + 13849) and 65535
+      dict.properties["seed"] = NodeValue(kind: vkInt, intVal: seed)
+      return NodeValue(kind: vkInt, intVal: seed)
+  return nilValue()
+
+proc randomNewImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Create a new Random instance with fresh seed: Random new
+  if self.tags.contains("Random") and self of DictionaryObj:
+    let selfDict = cast[DictionaryObj](self)
+    let randObj = DictionaryObj()
+    randObj.methods = initTable[string, BlockNode]()
+    randObj.parents = @[selfDict.ProtoObject]
+    randObj.tags = @["Random", "derived"]
+    randObj.isNimProxy = false
+    randObj.nimValue = nil
+    randObj.nimType = ""
+    randObj.hasSlots = false
+    randObj.slots = @[]
+    randObj.slotNames = initTable[string, int]()
+    randObj.properties = initTable[string, NodeValue]()
+    randObj.properties["seed"] = NodeValue(kind: vkInt, intVal: 74755)
+    return NodeValue(kind: vkObject, objVal: randObj.ProtoObject)
   return nilValue()
 
 proc wrapIntAsObject*(value: int): NodeValue =

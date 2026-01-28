@@ -12,7 +12,7 @@ type
     tkSpecial  # ; & | etc
     tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon
     tkTag, tkNimCode
-    tkPlus, tkMinus, tkComma  # Arithmetic and concatenation operators
+    tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
     tkMethodDef  # >> for method definitions
   Token* = object
     kind*: TokenKind
@@ -317,6 +317,18 @@ proc nextToken*(lexer: var Lexer): Token =
   of ',':
     discard lexer.next()
     return Token(kind: tkComma, value: ",", line: startLine, col: startCol)
+  of '*':
+    discard lexer.next()
+    return Token(kind: tkStar, value: "*", line: startLine, col: startCol)
+  of '/':
+    discard lexer.next()
+    return Token(kind: tkSlash, value: "/", line: startLine, col: startCol)
+  of '=':
+    discard lexer.next()
+    return Token(kind: tkEq, value: "=", line: startLine, col: startCol)
+  of '%':
+    discard lexer.next()
+    return Token(kind: tkPercent, value: "%", line: startLine, col: startCol)
   of '>':
     discard lexer.next()
     # Check for method definition operator >>
@@ -324,8 +336,18 @@ proc nextToken*(lexer: var Lexer): Token =
       discard lexer.next()
       return Token(kind: tkMethodDef, value: ">>", line: startLine, col: startCol)
     else:
-      # Single > is not a valid token in Smalltalk, treat as special
-      return Token(kind: tkSpecial, value: ">", line: startLine, col: startCol)
+      # Single > is comparison operator
+      return Token(kind: tkGt, value: ">", line: startLine, col: startCol)
+  of '<':
+    # Check for XML-style tag first
+    let nextChar = if lexer.pos + 1 < lexer.input.len: lexer.input[lexer.pos + 1] else: '\0'
+    if nextChar.isAlpha or nextChar == '/':
+      # This is an XML-style tag
+      return parseTag(lexer)
+    else:
+      # This is a less-than comparison operator
+      discard lexer.next()
+      return Token(kind: tkLt, value: "<", line: startLine, col: startCol)
   of ';':
     discard lexer.next()
     return Token(kind: tkSpecial, value: ";", line: startLine, col: startCol)
@@ -391,9 +413,6 @@ proc nextToken*(lexer: var Lexer): Token =
   of '}':
     discard lexer.next()
     return Token(kind: tkSpecial, value: "}", line: startLine, col: startCol)
-  of '<':
-    # XML-style tag
-    return parseTag(lexer)
   else:
     # Number, identifier, or error
     if c.isDigit:

@@ -194,8 +194,9 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
         isCascade: false
       )
 
-  # Binary messages (operators - not yet implemented)
-  # For now, treat binary operators as keywords
+  # After unary messages, check for keyword message (e.g., self foo bar x: value)
+  if parser.peek().kind == tkKeyword:
+    return parser.parseKeywordMessage(msg)
 
   return msg
 
@@ -223,6 +224,10 @@ proc parseBinaryOperators(parser: var Parser, left: Node): Node =
         arguments: @[],
         isCascade: false
       )
+
+    # After unary messages on right side, check for keyword message
+    if parser.peek().kind == tkKeyword:
+      right = parser.parseKeywordMessage(right)
 
     expr = MessageNode(
       receiver: expr,
@@ -416,7 +421,11 @@ proc parseBlock*(parser: var Parser): BlockNode =
       blk.body.add(stmt)
       debug("parseBlock: added statement, body now has ", blk.body.len, " statements")
     else:
-      debug("parseBlock: parseStatement returned nil, breaking")
+      debug("parseBlock: parseStatement returned nil at pos=", parser.pos, " tok=", parser.peek().kind, " value='", parser.peek().value, "'")
+      # Check if it's the closing bracket - if so, consume it and break properly
+      if parser.peek().kind == tkRBracket:
+        debug("parseBlock: detected closing bracket after nil statement, consuming it")
+        discard parser.expect(tkRBracket)
       break
 
   debug("parseBlock: returning with ", blk.body.len, " statements")
@@ -730,18 +739,35 @@ proc parsePrimitive(parser: var Parser): PrimitiveNode =
 # Parse sequence of statements (method body or REPL input)
 proc parseStatements*(parser: var Parser): seq[Node] =
   result = @[]
+  var loopCount = 0
 
   while not parser.peek().isEOF:
+    inc loopCount
+    if loopCount > 1000:
+      debug("PARSE LOOP DETECTED: parseStatements exceeded 1000 iterations")
+      raise newException(ValueError, "Parse loop detected - infinite loop in parseStatements")
+
+    debug("parseStatements: loop ", loopCount, ", pos=", parser.pos, ", token=", parser.peek().kind, " value='", parser.peek().value, "'")
     let stmt = parser.parseStatement(parseMessages = true)
     if stmt != nil:
+      debug("parseStatements: got statement, adding to results")
       result.add(stmt)
+    else:
+      debug("parseStatements: parseStatement returned nil")
 
     # Skip separators and periods
+    var skipped = 0
     while parser.expect(tkSeparator) or parser.expect(tkPeriod):
-      discard
+      inc skipped
+      if skipped > 100:
+        debug("PARSE LOOP: separator skipping exceeded 100 iterations")
+        raise newException(ValueError, "Parse loop in separator skipping")
 
     if parser.hasError:
+      debug("parseStatements: parser has error, breaking")
       break
+
+  debug("parseStatements: done, parsed ", result.len, " statements in ", loopCount, " loops")
 
 # Convenience function to parse full input
 proc parse*(input: string): (seq[Node], Parser) =
