@@ -31,6 +31,20 @@ proc wrapBoolAsObject*(value: bool): NodeValue =
   obj.nimType = "bool"
   return NodeValue(kind: vkObject, objVal: obj)
 
+# Implementation of wrapStringAsObject for proxy strings
+proc wrapStringAsObject*(s: string): NodeValue =
+  ## Wrap a string as a Nim proxy object that can receive messages
+  let obj = DictionaryObj()
+  obj.methods = initTable[string, BlockNode]()
+  obj.parents = @[initRootObject().ProtoObject]
+  obj.tags = @["String", "Text"]
+  obj.isNimProxy = true
+  obj.nimType = "string"
+  # Store string value
+  obj.properties = initTable[string, NodeValue]()
+  obj.properties["__value"] = NodeValue(kind: vkString, strVal: s)
+  return NodeValue(kind: vkObject, objVal: obj.ProtoObject)
+
 # Implementation of wrapArrayAsObject for proxy arrays
 # Uses DictionaryObj to store elements in properties for safety
 proc wrapArrayAsObject*(arr: seq[NodeValue]): NodeValue =
@@ -485,12 +499,14 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
 
   debug("Message receiver: ", receiverVal.toString())
 
-  # Wrap non-object receivers (like integers, booleans, arrays, tables) in Nim proxy objects
+  # Wrap non-object receivers (like integers, booleans, strings, arrays, tables) in Nim proxy objects
   let wrappedReceiver = case receiverVal.kind
                         of vkInt:
                           wrapIntAsObject(receiverVal.intVal)
                         of vkBool:
                           wrapBoolAsObject(receiverVal.boolVal)
+                        of vkString:
+                          wrapStringAsObject(receiverVal.strVal)
                         of vkArray:
                           wrapArrayAsObject(receiverVal.arrayVal)
                         of vkTable:

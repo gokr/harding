@@ -12,7 +12,8 @@ type
     tkSpecial  # ; & | etc
     tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon
     tkTag, tkNimCode
-    tkPlus, tkMinus  # Arithmetic operators
+    tkPlus, tkMinus, tkComma  # Arithmetic and concatenation operators
+    tkMethodDef  # >> for method definitions
   Token* = object
     kind*: TokenKind
     value*: string
@@ -313,6 +314,18 @@ proc nextToken*(lexer: var Lexer): Token =
       return Token(kind: tkArrow, value: "->", line: startLine, col: startCol)
     else:
       return Token(kind: tkMinus, value: "-", line: startLine, col: startCol)
+  of ',':
+    discard lexer.next()
+    return Token(kind: tkComma, value: ",", line: startLine, col: startCol)
+  of '>':
+    discard lexer.next()
+    # Check for method definition operator >>
+    if lexer.peek() == '>':
+      discard lexer.next()
+      return Token(kind: tkMethodDef, value: ">>", line: startLine, col: startCol)
+    else:
+      # Single > is not a valid token in Smalltalk, treat as special
+      return Token(kind: tkSpecial, value: ">", line: startLine, col: startCol)
   of ';':
     discard lexer.next()
     return Token(kind: tkSpecial, value: ";", line: startLine, col: startCol)

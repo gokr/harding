@@ -152,10 +152,10 @@ proc initRootObject*(): RootObject =
     plusMethod.nativeImpl = cast[pointer](plusImpl)
     addMethod(rootObject, "+", plusMethod)
 
-    # Add string concatenation operator (comma in Smalltalk, stored as #)
-    let concatMethod = createCoreMethod("#")
+    # Add string concatenation operator (, in Smalltalk)
+    let concatMethod = createCoreMethod(",")
     concatMethod.nativeImpl = cast[pointer](concatImpl)
-    addMethod(rootObject, "#", concatMethod)
+    addMethod(rootObject, ",", concatMethod)
 
     # Add collection access method
     let atCollectionMethod = createCoreMethod("at:")
@@ -587,7 +587,7 @@ proc doesNotUnderstandImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue 
   raise newException(ValueError, "Message not understood: " & selector)
 
 proc concatImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
-  ## Concatenate strings: a # b (Smalltalk style using , operator)
+  ## Concatenate strings: a , b (Smalltalk style using , operator)
   if args.len < 1:
     return nilValue()
 
@@ -595,12 +595,21 @@ proc concatImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
 
   # Handle string concatenation
   if self.isNimProxy and self.nimType == "string":
-    let selfStr = cast[ptr string](self.nimValue)[]
-    if other.kind == vkString:
-      return NodeValue(kind: vkString, strVal: selfStr & other.strVal)
-    elif other.kind == vkObject and other.objVal.isNimProxy and other.objVal.nimType == "string":
-      let otherStr = cast[ptr string](other.objVal.nimValue)[]
-      return NodeValue(kind: vkString, strVal: selfStr & otherStr)
+    # Get self string value from properties
+    if self of DictionaryObj:
+      let dict = cast[DictionaryObj](self)
+      let selfVal = dict.properties.getOrDefault("__value")
+      if selfVal.kind == vkString:
+        let selfStr = selfVal.strVal
+        # Get other string value
+        if other.kind == vkString:
+          return NodeValue(kind: vkString, strVal: selfStr & other.strVal)
+        elif other.kind == vkObject and other.objVal.isNimProxy and other.objVal.nimType == "string":
+          if other.objVal of DictionaryObj:
+            let otherDict = cast[DictionaryObj](other.objVal)
+            let otherVal = otherDict.properties.getOrDefault("__value")
+            if otherVal.kind == vkString:
+              return NodeValue(kind: vkString, strVal: selfStr & otherVal.strVal)
 
   return nilValue()
 

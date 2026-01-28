@@ -16,7 +16,7 @@ Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim. It provides
 
 ```bash
 nimble build             # Build the REPL and compiler (binaries in subdirectories)
-nimble setup             # Build and copy binaries to root directory for convenience
+nimble local             # Build and copy binaries to root directory for convenience
 nimble test              # Run all tests (automatic discovery via testament)
 nimble clean             # Clean build artifacts and binaries
 nimble install           # Install ntalk binary to ~/.local/bin/
@@ -26,7 +26,7 @@ nimble install           # Install ntalk binary to ~/.local/bin/
 
 The following nimble tasks provide convenient shortcuts for common development tasks:
 
-- **`nimble setup`**: Builds the project using `nimble build` and copies the `ntalk` and `ntalkc` binaries to the root directory for easy access
+- **`nimble local`**: Builds the project using `nimble build` and copies the `ntalk` and `ntalkc` binaries to the root directory for easy access
 - **`nimble clean`**: Removes build artifacts including nimcache, build directories, and binaries from all locations
 - **`nimble install`**: Copies the `ntalk` binary to `~/.local/bin` (Unix/Linux/macOS) or appropriate Windows location
 

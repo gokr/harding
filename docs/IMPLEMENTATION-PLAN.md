@@ -84,22 +84,21 @@ AssignmentNode(
 4. Maintain backward compatibility for property bag objects
 
 #### Code Modifications:
-- `src/core/object.nim` - Add slot-based storage
+- `src/core/types.nim` - Add DictionaryObj type with property bag
+- `src/interpreter/objects.nim` - Handle Dictionary derivation
 - `src/interpreter/evaluator.nim` - Handle direct ivar access
 
 #### Object Structure:
 ```nim
-# Current (property bag):
+# Current: Object has slots only, Dictionary has property bag
 type ProtoObject = object
-  properties: Table[string, NodeValue]
-  prototype: ProtoObject
-
-# New (with slots):
-type ProtoObject = object
-  properties: Table[string, NodeValue]  # For property bag objects
+  methods: Table[string, BlockNode]     # Method dictionary (Symbol keys)
   slots: seq[NodeValue]                 # For declared ivars
-  slotNames: seq[string]                # Map names to indices
-  prototype: ProtoObject
+  slotNames: Table[string, int]         # Map names to indices
+  parents: seq[ProtoObject]             # Prototype chain
+
+type DictionaryObj = object of ProtoObject
+  properties: Table[string, NodeValue]  # For property bag (Dictionary only)
 ```
 
 ### Phase 3: Accessor Generation
@@ -352,22 +351,26 @@ person name
 
 ## Backward Compatibility
 
-### Property Bag Objects Still Work
+### Property Bag Now Requires Dictionary
 ```smalltalk
-# Old style (still supported)
-dynamic := Object derive
-dynamic at: "anything" put: "value"    # Arbitrary properties
+# Old style (no longer works on Object)
+# dynamic := Object derive
+# dynamic at: "anything" put: "value"    # ERROR: at:put: not on Object
 
-# New style (recommended)
+# New style for dynamic properties
+dynamic := Dictionary derive
+dynamic at: "anything" put: "value"     # Dictionary has property bag
+
+# Structured style (recommended for most objects)
 structured := Person derive: #(name age)
 structured name: "Alice"                 # Declared ivars only
 ```
 
 ### Migration Path
 ```smalltalk
-# Phase 1: Both models work
-# Phase 2: Deprecation warnings for property bag on structured objects
-# Phase 3: Only property bag on plain Object, not on derived prototypes
+# Phase 1: ✓ Object has slots, Dictionary has property bag
+# Phase 2: ✓ Method tables use Symbol keys
+# Phase 3: Future - optimize Dictionary, add more collection types
 ```
 
 ## Testing Strategy

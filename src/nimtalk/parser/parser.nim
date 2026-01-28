@@ -26,6 +26,7 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parseMethod(parser: var Parser): BlockNode
 proc parsePrimitive(parser: var Parser): PrimitiveNode
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node
+proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
 
 # Parser errors
 proc parseError*(parser: var Parser, msg: string) =
@@ -218,7 +219,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
         return parser.parseBinaryMessage(primary)
       else:
         return primary
-    of tkPlus, tkMinus:
+    of tkPlus, tkMinus, tkComma:
       # Binary operator - handle very simple left-to-right for now
       discard parser.next()  # Skip operator
       let right = parser.parseExpression(parseMessages)
@@ -228,7 +229,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
       # Create a message node for the operator
       return MessageNode(
         receiver: primary,
-        selector: next.value,  # Use the actual operator (+ or -)
+        selector: next.value,  # Use the actual operator (+, -, or ,)
         arguments: @[right],
         isCascade: false
       )
@@ -514,6 +515,10 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
     if cascaded != nil:
       return cascaded
 
+  # Check for method definition syntax: Receiver>>selector [ body ]
+  if parser.peek().kind == tkMethodDef:
+    return parser.parseMethodDefinition(expr)
+
   # Check for assignment :=
   if parser.peek().kind == tkAssign:
     discard parser.next()
@@ -540,6 +545,76 @@ proc parseMethod(parser: var Parser): BlockNode =
   if blk != nil:
     blk.isMethod = true
   return blk
+
+# Parse method definition syntax: Receiver>>selector [ body ]
+# Transforms to: Receiver at: "selector" put: [ body ]
+proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
+  ## Parse >> method definition and generate at:put: message
+
+  # Consume >> token
+  discard parser.next()
+
+  # Parse method selector
+  var selector: string
+  var params: seq[string] = @[]
+
+  # Check what kind of selector we have
+  let tok = parser.peek()
+
+  if tok.kind == tkIdent:
+    # Unary: just an identifier like 'greet'
+    selector = parser.next().value
+  elif tok.kind == tkKeyword:
+    # Keyword: one or more keyword parts like 'at:put:' or 'name:'
+    while parser.peek().kind == tkKeyword:
+      let keywordPart = parser.next().value
+      selector.add(keywordPart)
+      # Each keyword part has a parameter
+      if parser.peek().kind == tkIdent:
+        params.add(parser.next().value)
+      else:
+        parser.parseError("Expected parameter name after keyword part: " & keywordPart)
+        return nil
+  elif tok.kind == tkSpecial or tok.kind == tkPlus or tok.kind == tkMinus or tok.kind == tkComma:
+    # Binary operator like '+', '-', etc.
+    selector = parser.next().value
+    # Binary operators have one parameter
+    if parser.peek().kind == tkIdent:
+      params.add(parser.next().value)
+    else:
+      parser.parseError("Expected parameter name for binary operator: " & selector)
+      return nil
+  else:
+    parser.parseError("Expected method selector after >>")
+    return nil
+
+  # Expect [ for method body
+  if not parser.expect(tkLBracket):
+    parser.parseError("Expected '[' for method body after selector: " & selector)
+    return nil
+
+  # Parse method body as a block
+  let blk = parser.parseBlock()
+  if blk == nil:
+    return nil
+
+  # Mark as method
+  blk.isMethod = true
+
+  # Set parameters if we have keyword/binary selector params
+  if params.len > 0:
+    blk.parameters = params
+
+  # Generate at:put: message
+  # Receiver at: "selector" put: [ body ]
+  let arg1: Node = LiteralNode(value: NodeValue(kind: vkSymbol, symVal: selector))
+  let arg2: Node = LiteralNode(value: NodeValue(kind: vkBlock, blockVal: blk))
+  return MessageNode(
+    receiver: receiver,
+    selector: "at:put:",
+    arguments: @[arg1, arg2],
+    isCascade: false
+  )
 
 # Parse primitive declaration: <primitive> ... </primitive> followed by Smalltalk fallback
 proc parsePrimitive(parser: var Parser): PrimitiveNode =

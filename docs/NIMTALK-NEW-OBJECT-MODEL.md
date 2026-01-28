@@ -11,15 +11,16 @@ A new prototype-based object model for Nimtalk that:
 
 ## Quick Example - IMPLEMENTED ✅
 
-### Old Property Bag Model (Replaced)
+### Dictionary (Property Bag Model)
 ```smalltalk
-person := Object derive.
-person at: "name" put: "Alice".    # Dictionary-like access
-person at: "age" put: 30.
-result := person at: "name".       # Slow hash lookup
+# For dynamic property storage, use Dictionary
+dict := Dictionary derive.
+dict at: "name" put: "Alice".    # Dictionary-like access
+dict at: "age" put: 30.
+result := dict at: "name".       # Hash lookup
 ```
 
-### New Declared Ivar Model (Current)
+### Object with Declared Ivars (Current)
 ```smalltalk
 # Use derive: message (no special parser syntax needed!)
 Person := Object derive: #(name age)
@@ -147,10 +148,16 @@ Person>>name: aName [
 ┌─────────────────────┐
 │  ProtoObject       │
 ├─────────────────────┤
-│  properties: Table │  ← For property bag objects
+│  methods: Table    │  ← Method dictionary (Symbol keys)
 │  slots: seq[Value] │  ← For declared ivars (NEW!)
-│  slotNames: seq[Str│  ← Maps names to indices
-│  prototype: ref      │
+│  slotNames: Table  │  ← Maps names to indices
+│  parents: seq[Obj] │  ← Prototype chain
+└─────────────────────┘
+
+┌─────────────────────┐
+│  DictionaryObj     │  ← Extends ProtoObject
+├─────────────────────┤
+│  properties: Table │  ← For dynamic property bag
 └─────────────────────┘
 ```
 
@@ -162,9 +169,9 @@ person name
   → O(1) with no hash calculation
 ```
 
-### Property Bag (Slow)
+### Property Bag (Dictionary)
 ```
-person at: "name"
+dict at: "name"
   → Hash "name" → bucket index
   → Search bucket for key
   → Return value or lookup in prototype
@@ -287,12 +294,13 @@ Start implementing:
 
 | Aspect | Old Nimtalk | New Nimtalk |
 |--------|-------------|-------------|
-| Instance Variables | Arbitrary properties | Declared slots |
-| Access Pattern | Dictionary lookup | Direct access |
-| Performance | Slower | 10-100x faster |
-| Structure | Dynamic | Clear definition |
+| Instance Variables | Arbitrary properties on Object | Declared slots on Object, property bag on Dictionary |
+| Access Pattern | Dictionary lookup | Direct slot access or Dictionary lookup |
+| Performance | Slower | 10-100x faster for slots |
+| Structure | Dynamic everywhere | Dict for dynamic, Object for structured |
 | File Syntax | at:put: only | >> syntax option |
 | String Literals | Single quotes | Double quotes |
+| Method Keys | Strings | Canonical Symbols |
 
 ## Next Steps
 

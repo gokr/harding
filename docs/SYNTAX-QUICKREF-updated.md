@@ -2,13 +2,15 @@
 
 ## Instance Variable Declaration
 
-### Current (Property Bag - Being Replaced)
+### Dictionary (Property Bag)
 ```smalltalk
-person := Object derive.
-person at: "name" put: "Alice"    # Arbitrary property addition
+# For dynamic property storage, use Dictionary
+dict := Dictionary derive.
+dict at: "name" put: "Alice"    # Dictionary access
+result := dict at: "name"
 ```
 
-### New (Declared Instance Variables)
+### Object (Declared Instance Variables)
 ```smalltalk
 # Declare instance variables when creating prototype
 # (derive: is a regular message, not special syntax)
@@ -280,14 +282,19 @@ numbers collect: [ :each | each * 2 ]
 
 ```smalltalk
 #=== Object Creation =========================
-proto := Object derive                        # Empty prototype
+proto := Object derive                        # Empty prototype (no property bag)
+dict  := Dictionary derive                    # Dictionary with property bag
 obj   := proto derive initialize              # Create then init
 
 #=== Instance Variables ======================
 Proto := Object derive: #(#ivar1 #ivar2)        # Declare ivars
 obj   := Proto derive initialize.
-obj at: "ivar1" put: value                    # Old way (deprecated)
-obj ivar1: value                              # New way (accessor)
+obj ivar1: value                              # Accessor method (direct slot access)
+
+#=== Dictionary (Property Bag) ===============
+Dict := Dictionary derive.
+dict at: "key" put: value                     # Property bag access
+dict at: "key"                                # Property retrieval
 
 #=== Methods (in files) ======================
 Proto>>method [ ^ result ]                    # Define unary
@@ -325,24 +332,46 @@ collection do: [ :each | block ].
 
 ## Migration from Property Bag
 
-### Old Code (Property Bag)
+### Old Code (Property Bag on Object - No Longer Supported)
 ```smalltalk
+# This no longer works - Object derive doesn't have property bag
 person := Object derive.
-person at: "name" put: "Alice".
-person at: "age" put: 30.
-result := person at: "name".
+person at: "name" put: "Alice".   # ERROR: at:put: only on Dictionary
 ```
 
-### New Code (Declared Ivars)
+### New Code Options
+
+**Option 1: Dictionary for Dynamic Properties**
 ```smalltalk
-# Define Person in Person.nt
+# Use Dictionary when you need dynamic property storage
+dict := Dictionary derive.
+dict at: "name" put: "Alice".
+dict at: "age" put: 30.
+result := dict at: "name".
+```
+
+**Option 2: Declared Ivars with Object**
+```smalltalk
+# Define Person with declared instance variables
 Person := Object derive: #(#name #age).
 
-# In your code
+# Create and use instance
 person := Person derive initialize.
 person name: "Alice".
 person age: 30.
 result := person name.
+```
+
+**Option 3: Dictionary with Slots**
+```smalltalk
+# Combine property bag with declared ivars
+Person := Dictionary derive: #(#name age).
+Person at: "greet" put: [ ^"Hello, " + name ].
+
+person := Person derive.
+person name: "Alice".
+person at: "nickname" put: "Al".  # Dynamic property
+result := person greet.             # "Hello, Alice"
 ```
 
 ## Key Differences Summary

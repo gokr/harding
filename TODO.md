@@ -11,11 +11,13 @@ This document tracks current work items, future directions, and known issues for
 
 **Core Language**: ✅ **Mostly Complete!**
 - ✅ Lexer and parser with data structure literal syntax
-- ✅ Prototype object system with property bags and prototype chains
+- ✅ Prototype object system with slots and prototype chains
+- ✅ Dictionary prototype for property bag objects
 - ✅ AST interpreter core with message sending and block evaluation
 - ✅ REPL/Interpreter with file execution and interactive mode
 - ✅ Slot-based instance variable system (**fully implemented, 149x performance improvement**)
 - ✅ Native method dispatch from Nimtalk code
+- ✅ Method tables using canonical Symbols for identity-based lookup
 - ✅ Base library with core objects and collections
 - ✅ Lexical closures with comprehensive test coverage
 - ✅ Cascade syntax (`;` operator) for multiple messages to same receiver
@@ -87,7 +89,7 @@ This document tracks current work items, future directions, and known issues for
 ### Build System
 - [x] Binaries may appear in source tree (`nimtalk/repl/ntalk`) or root directory (both locations supported)
 - [x] Clean task in `build.nims` uses shell commands to avoid NimScript restrictions
-- [x] `nim e build.nims repl` copies binaries to root directory for convenience
+- [x] `nimble local` copies binaries to root directory for convenience (renamed from `setup` to avoid clash)
 - [ ] Need consistent binary output location (Nimble default behavior)
 
 ### Language Implementation
@@ -137,7 +139,7 @@ This document tracks current work items, future directions, and known issues for
 nimble build
 
 # Build using build script (copies binaries to root directory)
-nim e build.nims repl
+nimble local
 
 # Run tests
 nim e build.nims test
@@ -183,5 +185,5 @@ ntalkc hello.nt
 
 ---
 
-*Last Updated: 2026-01-28 (Logging system implemented with programmatic control, all tests passing)*
+*Last Updated: 2026-01-28 (Object/Dictionary split, Symbol method keys, nimble local task)*
 *Project follows Nim standard layout with `src/` directory structure.*

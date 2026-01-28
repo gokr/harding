@@ -21,10 +21,11 @@ The language specification is being developed alongside the implementation. Key 
 ## Language Features
 
 ### Core Syntax
-- Prototype-based object system
+- Prototype-based object system with Object and Dictionary prototypes
 - Message passing semantics
 - Block closures with lexical scoping
 - Data structure literals (`#()`, `#{}`, `{|}`)
+- Method tables using canonical Symbols for identity-based lookup
 
 ### Execution Models
 - AST interpreter for development and REPL

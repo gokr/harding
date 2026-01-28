@@ -127,22 +127,25 @@ ntalkc compile input.nt --loglevel DEBUG
 **-h, --help**: Show help
 **-v, --version**: Show version
 
-## Build System: build.nims
+## Nimble Tasks
 
-The build.nims script provides convenient build automation.
+Nimble provides convenient build automation.
 
 ```bash
-# Build both ntalk and ntalkc (copies to root directory)
-nim e build.nims repl
+# Build both ntalk and ntalkc (binaries in subdirectories)
+nimble build
+
+# Build and copy binaries to root directory
+nimble local
 
 # Run tests
-nim e build.nims test
+nimble test
 
 # Clean build artifacts
-nim e build.nims clean
+nimble clean
 
 # Install to ~/.local/bin/
-nim e build.nims install
+nimble install
 ```
 
 ## Debugging Techniques

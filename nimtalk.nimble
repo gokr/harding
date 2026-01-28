@@ -29,7 +29,7 @@ task test, "Run all tests (automatic discovery via testament)":
     # testament pattern "tests/**/**/*.nim" || true
   """
 
-task setup, "Build and copy binaries to root directory":
+task local, "Build and copy binaries to root directory":
   exec "nimble build"
   # Copy binaries to root directory for convenience
   exec "cp nimtalk/repl/ntalk ntalk 2>/dev/null || true"

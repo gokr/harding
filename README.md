@@ -75,7 +75,7 @@ Instance variables declared with `derive:` are stored in slots (fast array acces
 git clone https://github.com/gokr/nimtalk.git
 cd nimtalk
 nimble build
-nimble setup   # Copies binaries to current directory
+nimble local   # Copies binaries to current directory
 ```
 
 Binaries: `ntalk` (REPL/interpreter), `ntalkc` (compiler stub)
