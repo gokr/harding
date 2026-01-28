@@ -253,9 +253,9 @@ suite "Evaluator: Block Evaluation":
       result := obj apply: doubler to: 21
       """)
 
-      check(result[1].len == 0)
-      check(result[0][^1].kind == vkInt)
-      check(result[0][^1].intVal == 42)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
 
   test "blocks can close over variables":  # Requires full closure implementation
     let result = interp.evalStatements("""
@@ -456,18 +456,18 @@ suite "Evaluator: Lexical Closures":
     check(result[0][^2].intVal == 20)
     check(result[0][^1].intVal == 30)
 
-  test "closure captures entire lexical environment" :  # Requires full closure implementation
+  test "closure captures entire lexical environment" :
     let result = interp.evalStatements("""
     Maker := Dictionary derive.
-    Maker at: "makePoint" put: [ :x0 :y0 |
+    Maker at: #makePoint:: put: [ :x0 :y0 |
       x := x0.
       y := y0.
       ^#{
-        "x": [ ^x ],
-        "y": [ ^y ],
-        "setX:": [ :newX | x := newX ],
-        "setY:": [ :newY | y := newY ],
-        "distanceFromOrigin": [
+        #x: [ ^x ],
+        #y: [ ^y ],
+        #setX:: [ :newX | x := newX ],
+        #setY:: [ :newY | y := newY ],
+        #distanceFromOrigin: [
           ^((x * x) + (y * y)) sqrt
         ]
       }
@@ -475,12 +475,12 @@ suite "Evaluator: Lexical Closures":
 
     maker := Maker derive.
     p := maker makePoint: 3 :4.
-    result1 := (p at: "x") value.
-    result2 := (p at: "y") value.
-    result3 := (p at: "distanceFromOrigin") value.
-    (p at: "setX:") value: 6.
-    (p at: "setY:") value: 8.
-    result4 := (p at: "distanceFromOrigin") value
+    result1 := (p at: #x) value.
+    result2 := (p at: #y) value.
+    result3 := (p at: #distanceFromOrigin) value.
+    (p at: #setX:) value: 6.
+    (p at: #setY:) value: 8.
+    result4 := (p at: #distanceFromOrigin) value
     """)
 
     check(result[1].len == 0)
@@ -489,10 +489,10 @@ suite "Evaluator: Lexical Closures":
     check(result[0][^2].intVal == 5)   # sqrt(3^2 + 4^2) = 5
     check(result[0][^1].intVal == 10)  # sqrt(6^2 + 8^2) = 10
 
-  test "closure with non-local return from captured scope" :  # Requires full closure implementation
+  test "closure with non-local return from captured scope" :
     let result = interp.evalStatements("""
     Finder := Dictionary derive.
-    Finder at: "findIn:" put: [ :arr :predicate |
+    Finder at: #findIn:: put: [ :arr :predicate |
       1 to: arr do: [ :i |
         elem := arr at: i.
         (predicate value: elem) ifTrue: [ ^elem ]
