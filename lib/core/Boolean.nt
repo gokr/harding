@@ -10,40 +10,32 @@
 # Control flow
 #====================================================================
 
-true at: 'ifTrue:' put: [
-  :block
+true>>ifTrue: block [
   "Evaluate the block and return its value."
   ^ block value
 ].
 
-true at: 'ifFalse:' put: [
-  :block
+true>>ifFalse: block [
   "Return nil - don't evaluate the block."
   ^ nil
 ].
 
-true at: 'ifTrue:ifFalse:' put: [
-  :trueBlock
-  :falseBlock
+true>>ifTrue: trueBlock ifFalse: falseBlock [
   "Evaluate trueBlock and return its value."
   ^ trueBlock value
 ].
 
-false at: 'ifTrue:' put: [
-  :block
+false>>ifTrue: block [
   "Return nil - don't evaluate the block."
   ^ nil
 ].
 
-false at: 'ifFalse:' put: [
-  :block
+false>>ifFalse: block [
   "Evaluate the block and return its value."
   ^ block value
 ].
 
-false at: 'ifTrue:ifFalse:' put: [
-  :trueBlock
-  :falseBlock
+false>>ifTrue: trueBlock ifFalse: falseBlock [
   "Evaluate falseBlock and return its value."
   ^ falseBlock value
 ].
@@ -52,36 +44,32 @@ false at: 'ifTrue:ifFalse:' put: [
 # Boolean logic
 #====================================================================
 
-true at: 'and:' put: [
-  :block
+true>>and: block [
   "Evaluate block and return its value."
   ^ block value
 ].
 
-true at: 'or:' put: [
-  :block
+true>>or: block [
   "Return true - short circuit."
   ^ true
 ].
 
-true at: 'not' put: [
+true>>not [
   "Return false."
   ^ false
 ].
 
-false at: 'and:' put: [
-  :block
+false>>and: block [
   "Return false - short circuit."
   ^ false
 ].
 
-false at: 'or:' put: [
-  :block
+false>>or: block [
   "Evaluate block and return its value."
   ^ block value
 ].
 
-false at: 'not' put: [
+false>>not [
   "Return true."
   ^ true
 ].
@@ -90,12 +78,10 @@ false at: 'not' put: [
 # Comparison
 #====================================================================
 
-true at: '=' put: [
-  :other
+true>>= other [
   ^ other == true
 ].
 
-false at: '=' put: [
-  :other
+false>>= other [
   ^ other == false
 ].
