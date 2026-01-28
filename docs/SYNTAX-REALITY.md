@@ -5,6 +5,9 @@ This document describes the **actual implemented syntax** in the current Nimtalk
 - ✅ Binary operators implemented as regular messages
 - ✅ Cascade syntax working (`;` operator)
 - ✅ Direct ivar access inside methods
+- ✅ `>>` method definition syntax fully implemented
+- ✅ `super` keyword for method chaining
+- ✅ `self` keyword for receiver reference
 
 ## String Literals
 
@@ -151,9 +154,34 @@ When there's no second `|` block (temporaries), the first `|` acts as the separa
 
 ## Method Definition Syntax
 
-### Current Syntax (Implemented)
+### >> Syntax (Implemented)
 
-Methods are defined using explicit message passing:
+Nimtalk supports the `>>` method definition syntax for cleaner method declarations:
+
+```smalltalk
+# Unary method (no parameters)
+Person>>greet [ ^ "Hello, " + name ]
+
+# Method with one parameter
+Person>>name: aName [ name := aName ]
+
+# Method with multiple keyword parameters
+Point>>moveX: dx y: dy [
+  x := x + dx.
+  y := y + dy.
+  ^ self
+]
+
+# Multiple definitions work in both REPL and files
+Person>>id [ ^ 42 ].
+Person>>label: text [ text ].
+```
+
+The `>>` syntax is parsed and transformed into standard `at:put:` message sends. Works in both interactive REPL mode and file mode.
+
+### Standard Syntax (Also Implemented)
+
+Methods can also be defined using explicit message passing:
 
 ```smalltalk
 # Define a method on Object
@@ -173,6 +201,8 @@ Array at: 'inject:into:' put: [
   ^ result
 ].
 ```
+
+Both `>>` syntax and `at:put:` syntax are equivalent - the parser transforms `>>` into `at:put:`.
 
 ## Assignment
 
@@ -262,8 +292,9 @@ The receiver is evaluated once, then each message in the cascade is sent to that
 3. **No metaclasses**: Class methods are defined on the class object itself
 4. **Nim integration**: Can embed Nim code using `<primitive>` tags
 5. **Dual storage**: Property bags for dynamic objects + slots for performance (149x faster)
-6. **No `>>` syntax yet**: Methods defined via `at:put:` (planned parser support)
+6. **`>>` method syntax**: Implemented for cleaner method definitions (transforms to `at:put:`)
 7. **Direct ivar access**: Inside methods, access ivars by name without `at:`
+8. **`super` and `self` keywords**: Fully implemented for method dispatch and receiver reference
 
 ## Embedding Nim Code
 
