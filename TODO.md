@@ -64,6 +64,7 @@ This document tracks current work items, future directions, and known issues for
 - [x] Better error messages and debugging support
 - [x] AST inspection with `--ast` flag
 - [x] Execution tracing with `--loglevel DEBUG`
+- [x] Programmatic logging control (`configureLogging()`, `setLogLevel()`)
 - [ ] Syntax highlighting definitions for editors
 - [ ] Build system improvements
 
@@ -182,5 +183,5 @@ ntalkc hello.nt
 
 ---
 
-*Last Updated: 2026-01-28 (Slot system fully implemented, all tests passing)*
+*Last Updated: 2026-01-28 (Logging system implemented with programmatic control, all tests passing)*
 *Project follows Nim standard layout with `src/` directory structure.*

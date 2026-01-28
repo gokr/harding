@@ -308,6 +308,26 @@ debug("Custom trace: ", someValue)
 
 These only appear with `--loglevel DEBUG`.
 
+### Programmatic Logging Control
+
+For tests and embedded usage, control logging programmatically:
+
+```nim
+import std/logging
+import nimtalk/core/types
+
+# Configure logging with specific level
+configureLogging(lvlError)  # Suppress debug output
+configureLogging(lvlDebug)  # Enable debug output
+
+# Or just set the level
+setLogLevel(lvlWarn)
+```
+
+Available levels: `lvlDebug`, `lvlInfo`, `lvlWarn`, `lvlError`, `lvlFatal`
+
+This is used in the test suite to keep test output clean while allowing debug output when needed.
+
 ### Debugging the Debugger
 
 If debugging tools themselves have issues:

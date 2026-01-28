@@ -89,7 +89,17 @@ ntalk -e "3 + 4"         # Evaluate expression
 ntalk --ast script.nt    # Show AST, then execute
 ntalk --loglevel DEBUG   # Verbose execution trace
 
-ntalkc compile file.nt   # Compile to Nim (stub)
+ntalkc compile file.nt   # Compile to Nim
+ntalkc run file.nt       # Compile and run
+```
+
+### Debugging
+
+Use `--loglevel DEBUG` for detailed execution tracing, or control logging programmatically in tests:
+
+```nim
+import nimtalk/core/types
+configureLogging(lvlError)  # Suppress debug output
 ```
 
 ## Language Basics
