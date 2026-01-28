@@ -443,7 +443,7 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
     for elem in arr.elements:
       # Special handling for symbol literals inside arrays
       # They should be treated as literal symbols, not variable lookups
-      if elem of LiteralNode:
+      if elem.kind == nkLiteral:
         let lit = elem.LiteralNode
         if lit.value.kind == vkSymbol:
           # Use symbol value directly, don't evaluate as variable
@@ -452,7 +452,7 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
           continue
       # Inside #(...), bare identifiers like 'a' in #(a b) are syntactic sugar for symbols
       # So #(name age) is equivalent to #(#name #age)
-      if elem of IdentNode:
+      if elem.kind == nkIdent:
         let ident = cast[IdentNode](elem)
         debug("Identifier in array literal treated as symbol: ", ident.name)
         elements.add(getSymbol(ident.name))

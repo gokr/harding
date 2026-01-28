@@ -20,6 +20,8 @@ proc getSlotImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc setSlotValueImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc concatImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc sizeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc atCollectionPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue
 # doCollectionImpl is defined in evaluator.nim as it needs interpreter context
 
 # Global root object (singleton)
@@ -161,6 +163,16 @@ proc initRootObject*(): RootObject =
     let atCollectionMethod = createCoreMethod("at:")
     atCollectionMethod.nativeImpl = cast[pointer](atCollectionImpl)
     addMethod(rootObject, "at:", atCollectionMethod)
+
+    # Add collection size method
+    let sizeMethod = createCoreMethod("size")
+    sizeMethod.nativeImpl = cast[pointer](sizeImpl)
+    addMethod(rootObject, "size", sizeMethod)
+
+    # Add collection write method
+    let atPutMethod = createCoreMethod("at:put:")
+    atPutMethod.nativeImpl = cast[pointer](atCollectionPutImpl)
+    addMethod(rootObject, "at:put:", atPutMethod)
 
     # Initialize Dictionary prototype
     dictionaryPrototype = DictionaryPrototype()
@@ -429,7 +441,7 @@ proc deriveWithIVarsImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
     var setterBody: seq[Node] = @[]
     var setterArgs: seq[Node] = @[]
     setterArgs.add(LiteralNode(value: getSymbol(ivar)))
-    setterArgs.add(LiteralNode(value: NodeValue(kind: vkSymbol, symVal: "newValue")))
+    setterArgs.add(IdentNode(name: "newValue"))  # Variable reference for parameter
     setterBody.add(AssignNode(
       variable: "<ignore>",  # Assignment to slot via setSlot
       expression: MessageNode(
@@ -439,7 +451,7 @@ proc deriveWithIVarsImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
       )
     ))
     setterBody.add(ReturnNode(
-      expression: LiteralNode(value: NodeValue(kind: vkSymbol, symVal: "newValue"))
+      expression: IdentNode(name: "newValue")  # Variable reference for parameter
     ))
 
     let setterBlock = BlockNode(
@@ -648,6 +660,38 @@ proc atCollectionImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
         return dict.properties[keyStr]
     return nilValue()
 
+  return nilValue()
+
+proc sizeImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Get size of array: arr size
+  # Handle array size
+  if self.isNimProxy and self.nimType == "array":
+    if self of DictionaryObj:
+      let dict = cast[DictionaryObj](self)
+      # Count contiguous elements starting from indices 0, 1, 2, ...
+      var size = 0
+      while dict.properties.hasKey($size):
+        size += 1
+      return NodeValue(kind: vkInt, intVal: size)
+  return nilValue()
+
+proc atCollectionPutImpl*(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Set element in array: arr at: index put: value
+  if args.len < 2:
+    return nilValue()
+
+  let key = args[0]
+  let value = args[1]
+
+  # Handle array write (1-based indexing like Smalltalk)
+  if self.isNimProxy and self.nimType == "array":
+    if key.kind == vkInt:
+      let idx = key.intVal - 1  # Convert to 0-based
+      if idx >= 0 and self of DictionaryObj:
+        let dict = cast[DictionaryObj](self)
+        let keyStr = $idx
+        dict.properties[keyStr] = value
+        return value
   return nilValue()
 
 proc wrapIntAsObject*(value: int): NodeValue =
