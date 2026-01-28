@@ -17,10 +17,10 @@
 **Status**: ✅ Core types implemented with direct slot access, syntax design complete (automatic accessors)
 
 ### 3. Method Definition Syntax (`>>`)
-**Current State**: Methods stored as properties via `at:put:`
+**Current State**: ✅ Methods stored as properties via `at:put:` and `>>` syntax implemented
 **Proposal**: `>>` syntax for method definitions in files
-**Decision Needed**: How to parse `>>` syntax? Special file mode or always available?
-**Status**: Not implemented, design phase
+**Decision**: ✅ **IMPLEMENTED** - Parser supports `>>` syntax for method definitions
+**Status**: ✅ Complete - Works in both REPL and file mode with full test coverage
 
 ### 4. Class-based vs Prototype-based
 **Current State**: Pure prototype-based system
@@ -66,4 +66,4 @@
 3. Submit proposals or feedback
 4. Help implement decided features
 
-*Last updated: 2026-01-28 (Slot system complete, decisions updated)*
+*Last updated: 2026-01-28 (Slot system complete, >> method syntax implemented, super/self support complete)*
