@@ -12,20 +12,19 @@ Object := nil  # Will be set to the root object by the interpreter
 # Object creation and copying
 #====================================================================
 
-Object at: 'clone' put: [
+Object>>clone [
   "Create a shallow copy of this object without prototype links.
    The copy has no parents and shares property/method dictionaries."
   ^ self perform: 'primitiveClone'
 ].
 
-Object at: 'derive' put: [
+Object>>derive [
   "Create a child object with this object as its parent.
    The child inherits behavior through the prototype chain."
   ^ self perform: 'primitiveDerive'
 ].
 
-Object at: 'derive:' put: [
-  :ivarArray
+Object>>derive: ivarArray [
   "Create a child with declared instance variables.
    ivarArray should be an array of symbols like #(name age address)."
   ^ self perform: 'primitiveDeriveWithIVars:' with: ivarArray
@@ -35,26 +34,22 @@ Object at: 'derive:' put: [
 # Property access
 #====================================================================
 
-Object at: 'at:' put: [
-  :key
+Object>>at: key [
   "Get the value of a property. Searches the object and its prototype chain."
   ^ self perform: 'primitiveAt:' with: key
 ].
 
-Object at: 'at:put:' put: [
-  :key
-  :value
+Object>>at: key put: value [
   "Set a property value on this object (not in prototypes)."
   ^ self perform: 'primitiveAt:put:' with: key with: value
 ].
 
-Object at: 'hasProperty:' put: [
-  :key
+Object>>hasProperty: key [
   "Check if this object directly has a property (not in parents)."
   ^ self perform: 'primitiveHasProperty:' with: key
 ].
 
-Object at: 'properties' put: [
+Object>>properties [
   "Return a collection of all property keys on this object."
   ^ self perform: 'primitiveProperties'
 ].
@@ -63,19 +58,17 @@ Object at: 'properties' put: [
 # Method management
 #====================================================================
 
-Object at: 'respondsTo:' put: [
-  :selector
+Object>>respondsTo: selector [
   "Check if this object or its prototype chain responds to a message."
   ^ self perform: 'primitiveRespondsTo:' with: selector
 ].
 
-Object at: 'methods' put: [
+Object>>methods [
   "Return a collection of all method selectors on this object."
   ^ self perform: 'primitiveMethods'
 ].
 
-Object at: 'doesNotUnderstand:' put: [
-  :message
+Object>>doesNotUnderstand: message [
   "Default handler for unrecognized messages.
    Subclasses can override to provide custom behavior."
   self error: 'Message not understood: ' + message asString
@@ -85,18 +78,17 @@ Object at: 'doesNotUnderstand:' put: [
 # Identity and comparison
 #====================================================================
 
-Object at: '==' put: [
-  :other
+Object>>== other [
   "Test if this object is the same object as other (identity)."
   ^ self perform: 'primitiveEquals:' with: other
 ].
 
-Object at: 'printString' put: [
+Object>>printString [
   "Return a string representation of this object."
   ^ '<' + (self className) + '>'
 ].
 
-Object at: 'className' put: [
+Object>>className [
   "Return the class name of this object."
   | tags |
   tags := self at: 'tags'.
@@ -109,8 +101,7 @@ Object at: 'className' put: [
 # Error handling
 #====================================================================
 
-Object at: 'error:' put: [
-  :message
+Object>>error: message [
   "Signal an error with the given message."
   self perform: 'primitiveError:' with: message
 ].
@@ -119,12 +110,12 @@ Object at: 'error:' put: [
 # Testing and debugging
 #====================================================================
 
-Object at: 'inspect' put: [
+Object>>inspect [
   "Open an inspector on this object. (placeholder)"
   self printString print
 ].
 
-Object at: 'yourself' put: [
+Object>>yourself [
   "Return self - useful for cascading messages."
   ^ self
 ].
@@ -133,7 +124,7 @@ Object at: 'yourself' put: [
 # Initialization
 #====================================================================
 
-Object at: 'initialize' put: [
+Object>>initialize [
   "Initialize a new instance. Subclasses should override."
   ^ self
 ].
