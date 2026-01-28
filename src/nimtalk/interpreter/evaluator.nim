@@ -194,21 +194,25 @@ proc printCallStack*(interp: Interpreter): string =
     dec level
 
 # Variable lookup
-proc lookupVariable(interp: Interpreter, name: string): NodeValue =
+type
+  LookupResult = tuple[found: bool, value: NodeValue]
+
+proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
   ## Look up variable in activation chain and globals
+  ## Returns (found: true, value: ...) if found, (found: false, value: nil) if not found
   debug("Looking up variable: ", name)
   var activation = interp.currentActivation
   while activation != nil:
     if name in activation.locals:
       debug("Found variable in activation: ", name)
-      return activation.locals[name]
+      return (true, activation.locals[name])
     activation = activation.sender
 
   # Check globals
   if name in interp.globals:
     debug("Found variable in globals: ", name, " = ", interp.globals[name].toString())
     let val = interp.globals[name]
-    return val
+    return (true, val)
 
   # Check if it's a property on self (only for Dictionary objects)
   if interp.currentReceiver != nil and interp.currentReceiver of DictionaryObj:
@@ -216,10 +220,15 @@ proc lookupVariable(interp: Interpreter, name: string): NodeValue =
     let prop = getProperty(dict, name)
     if prop.kind != vkNil:
       debug("Found property on self: ", name)
-      return prop
+      return (true, prop)
 
   debug("Variable not found: ", name)
-  return nilValue()
+  return (false, nilValue())
+
+# Backward-compatible wrapper
+proc lookupVariable(interp: Interpreter, name: string): NodeValue =
+  ## Look up variable (returns nilValue if not found)
+  lookupVariableWithStatus(interp, name).value
 
 # Variable assignment
 proc setVariable(interp: var Interpreter, name: string, value: NodeValue) =
@@ -374,16 +383,14 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
 
   case node.kind
   of nkLiteral:
-    # Literal value - check if it's a symbol that should be looked up as a variable
-    let val = node.LiteralNode.value
-    if val.kind == vkSymbol:
-      # Look up symbol as variable
-      debug("Literal symbol lookup: ", val.symVal)
-      let varVal = lookupVariable(interp, val.symVal)
-      if varVal.kind != vkNil:
-        debug("Returning variable value: ", varVal.toString())
-        return varVal
-    return val
+    # Literal value - return as-is (symbols are literal values, not variable references)
+    return node.LiteralNode.value
+
+  of nkIdent:
+    # Identifier - look up as variable
+    let ident = cast[IdentNode](node)
+    debug("Identifier lookup: ", ident.name)
+    return lookupVariable(interp, ident.name)
 
   of nkMessage:
     # Message send
@@ -443,6 +450,13 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
           debug("Symbol literal in array: ", lit.value.symVal)
           elements.add(lit.value)
           continue
+      # Inside #(...), bare identifiers like 'a' in #(a b) are syntactic sugar for symbols
+      # So #(name age) is equivalent to #(#name #age)
+      if elem of IdentNode:
+        let ident = cast[IdentNode](elem)
+        debug("Identifier in array literal treated as symbol: ", ident.name)
+        elements.add(getSymbol(ident.name))
+        continue
       # Normal evaluation for other elements
       elements.add(interp.eval(elem))
     debug("Array result: ", elements.len, " elements")

@@ -85,9 +85,13 @@ type
     nimCode*: string               # Raw Nim code between tags
     fallback*: seq[Node]           # Smalltalk AST after closing tag
 
+  # Identifier node for variable lookup
+  IdentNode* = ref object of Node
+    name*: string
+
   # Node type enum for pattern matching
   NodeKind* = enum
-    nkLiteral, nkMessage, nkBlock, nkAssign, nkReturn,
+    nkLiteral, nkIdent, nkMessage, nkBlock, nkAssign, nkReturn,
     nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkCascade
 
   # Root object (global singleton)
@@ -130,6 +134,7 @@ type
 proc kind*(node: Node): NodeKind =
   ## Get the node kind for pattern matching
   if node of LiteralNode: nkLiteral
+  elif node of IdentNode: nkIdent
   elif node of MessageNode: nkMessage
   elif node of BlockNode: nkBlock
   elif node of AssignNode: nkAssign

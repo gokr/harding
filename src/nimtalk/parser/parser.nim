@@ -103,8 +103,8 @@ proc parsePrimary(parser: var Parser): Node =
 
   of tkIdent:
     discard parser.next()
-    # Identifiers can be variables or message receivers
-    return LiteralNode(value: getSymbol(token.value))
+    # Identifiers need variable lookup at runtime
+    return IdentNode(name: token.value)
 
   of tkLParen:
     # Parenthesized expression
@@ -523,9 +523,9 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
   if parser.peek().kind == tkAssign:
     discard parser.next()
 
-    # Left side must be a symbol
-    if expr of LiteralNode and expr.LiteralNode.value.kind == vkSymbol:
-      let varName = expr.LiteralNode.value.symVal
+    # Left side must be an identifier
+    if expr of IdentNode:
+      let varName = expr.IdentNode.name
       let valueExpr = parser.parseExpression()
       if valueExpr == nil:
         parser.parseError("Expected expression after :=")
