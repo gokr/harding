@@ -543,7 +543,7 @@ suite "Evaluator: Global Variables":
 
   test "class objects stored as globals":
     let result = interp.evalStatements("""
-    Person := Object derive: #(name age).
+    Person := Dictionary derive: #(name age).
     Person at: "new" put: [ ^self derive ].
 
     p1 := Person new.
@@ -690,7 +690,7 @@ suite "Evaluator: Complex Expressions":
 
   test "mixed unary, binary, and keyword messages" :  # Requires operator precedence handling
     let result = interp.evalStatements("""
-    Number := Object derive: #(value).
+    Number := Dictionary derive: #(value).
     Number at: "+" put: [ :other | ^self value + other ].
     Number at: "double" put: [ ^self value * 2 ].
     Number at: "add:to:" put: [ :a :b | ^a + b ].
