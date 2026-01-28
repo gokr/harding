@@ -763,21 +763,20 @@ suite "Evaluator: Special Features":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkNil)
 
-  test "booleans are first-class objects" :  # Requires boolean object wrappers
+  test "booleans are object wrappers" :  # Booleans are wrapped objects for method dispatch
     let result = interp.evalStatements("""
     result1 := true.
     result2 := false.
-    result3 := true == false
     """)
 
     check(result[1].len == 0)
-    check(result[0][^3].kind == vkObject)
     check(result[0][^2].kind == vkObject)
+    check(result[0][^1].kind == vkObject)
 
   test "primitive methods have fallback to Smalltalk":
     let result = interp.evalStatements("""
     # Test that primitives with fallbacks work
-    obj := Object clone.
+    obj := Dictionary derive.
     obj at: "test" put: 1.
     result := obj at: "test"
     """)

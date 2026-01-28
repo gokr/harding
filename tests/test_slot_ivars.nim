@@ -241,7 +241,11 @@ suite "Slot-based Instance Variables (derive: message)":
     check child.parents[0] == parent
 
   test "property bag operations don't affect slots":
-    let person = initSlotObject(@["name", "age"])
+    # DictionaryObj has both slots and properties
+    var person = initDictionaryObject()
+    person.slotNames = {"name": 0, "age": 1}.toTable
+    person.slots = @[nilValue(), nilValue()]
+    person.hasSlots = true
 
     # Set properties (should not affect slots)
     person.properties["extra"] = NodeValue(kind: vkString, strVal: "data")
@@ -252,7 +256,10 @@ suite "Slot-based Instance Variables (derive: message)":
     check person.getSlot("name").kind == vkNil
 
   test "slot operations don't affect properties":
-    var person = initSlotObject(@["name"])
+    var person = initDictionaryObject()
+    person.slotNames = {"name": 0}.toTable
+    person.slots = @[nilValue()]
+    person.hasSlots = true
     person.properties["extra"] = NodeValue(kind: vkString, strVal: "data")
 
     # Set slot (should not affect properties)
