@@ -26,6 +26,8 @@ The language specification is being developed alongside the implementation. Key 
 - Block closures with lexical scoping
 - Data structure literals (`#()`, `#{}`, `{|}`)
 - Method tables using canonical Symbols for identity-based lookup
+- String concatenation with comma operator (`'Hello' , ' World'`)
+- Collection access with `at:` method (works on arrays and tables)
 
 ### Execution Models
 - AST interpreter for development and REPL
@@ -67,4 +69,4 @@ configureLogging(lvlError)  # Suppress debug output
 setLogLevel(lvlDebug)       # Enable debug output
 ```
 
-*Last updated: 2026-01-28*
+*Last updated: 2026-01-28 (updated with comma operator and collection access documentation)*

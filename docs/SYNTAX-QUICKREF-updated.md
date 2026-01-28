@@ -246,6 +246,10 @@ It can span multiple lines
 # Collections
 #(1 2 3)                # Array literal (ordered)
 #{"key" -> "value"}    # Table literal (dictionary)
+
+# Collection access
+arr at: 2              # Get element from array (1-based indexing)
+tab at: "key"          # Get value from table
 ```
 
 ## Control Flow
@@ -274,6 +278,7 @@ numbers collect: [ :each | each * 2 ]
 | Method Storage | Class dictionary | Stored on prototype |
 | Method Definitions | Browser | `>>` syntax (files only) |
 | Collections | OrderedCollection, Dictionary | seq, Table (Nim types) |
+| String Concat | `,` (comma) | `,` (comma) - same as Smalltalk |
 | File Structure | Image-based | File-based |
 | Parsing | Single mode | REPL + Definition modes |
 | String Literals | Single quotes | Double quotes (Nim-style) |

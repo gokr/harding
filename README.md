@@ -31,6 +31,7 @@ p x  "Returns 110"
 **What feels familiar:**
 
 - Message syntax is identical: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
+- String concatenation with comma: `'Hello' , ' World'`
 - Blocks work as expected: `[:x | x * 2]` with proper lexical scoping and non-local returns
 - Everything is an object, everything happens via message sends
 - Live evaluation in the REPL: `ntalk` gives you an interactive prompt
