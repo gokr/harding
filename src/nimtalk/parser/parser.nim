@@ -588,12 +588,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
     parser.parseError("Expected method selector after >>")
     return nil
 
-  # Expect [ for method body
-  if not parser.expect(tkLBracket):
-    parser.parseError("Expected '[' for method body after selector: " & selector)
-    return nil
-
-  # Parse method body as a block
+  # Parse method body as a block (parseBlock expects the [ itself)
   let blk = parser.parseBlock()
   if blk == nil:
     return nil
