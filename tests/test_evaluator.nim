@@ -42,7 +42,7 @@ suite "Evaluator: Basic Message Dispatch":
   test "handles undefined messages with doesNotUnderstand":
     let result = interp.evalStatements("""
     obj := Dictionary derive.
-    obj at: #doesNotUnderstand: put: [ :msg | ^"caught: " + msg ].
+    obj at: #doesNotUnderstand: put: [ :msg | ^"caught: " , msg ].
     result := obj someUndefinedMessage
     """)
     check(result[1].len == 0)
@@ -66,7 +66,7 @@ suite "Evaluator: Method Execution with Parameters":
   var interp: Interpreter
 
   setup:
-    configureLogging(lvlDebug)
+    configureLogging(lvlWarn)
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
@@ -114,8 +114,8 @@ suite "Evaluator: Method Execution with Parameters":
       result := person introduce
       """)
 
-      check(result[1].len == 0)
-      check(result[0][^1].kind == vkString)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
       # Note: String concatenation may need proper implementation
 
   test "methods with complex body execute all statements":  # Requires Stdout and string concatenation
@@ -134,9 +134,9 @@ suite "Evaluator: Method Execution with Parameters":
       result := counter incrementBy: 5 andPrint: "Incrementing\n"
       """)
 
-      check(result[1].len == 0)
-      check(result[0][^1].kind == vkInt)
-      check(result[0][^1].intVal == 5)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 5)
 
 suite "Evaluator: Control Flow":
   var interp: Interpreter
@@ -199,7 +199,7 @@ suite "Evaluator: Control Flow":
       result2 := num describe
       """)
 
-      check(result[1].len == 0)
+    check(result[1].len == 0)
       # Should return appropriate strings
 
   test "nested conditionals":  # Requires string concatenation or better boolean handling
@@ -222,7 +222,7 @@ suite "Evaluator: Control Flow":
       result5 := cat classify: 500
       """)
 
-      check(result[1].len == 0)
+    check(result[1].len == 0)
       # All classifications should work
 
 suite "Evaluator: Block Evaluation":
@@ -275,11 +275,11 @@ suite "Evaluator: Block Evaluation":
       result3 := c value
       """)
 
-      check(result[1].len == 0)
-      # Counter should increment each time
-      check(result[0][^3].kind == vkInt)
-      check(result[0][^2].kind == vkInt)
-      check(result[0][^1].kind == vkInt)
+    check(result[1].len == 0)
+    # Counter should increment each time
+    check(result[0][^3].kind == vkInt)
+    check(result[0][^2].kind == vkInt)
+    check(result[0][^1].kind == vkInt)
 
   test "blocks support non-local return":  # Requires non-local return implementation
     let result = interp.evalStatements("""
@@ -292,9 +292,9 @@ suite "Evaluator: Block Evaluation":
       result := obj callWithEarlyReturn: [ ^"Early exit" ]
       """)
 
-      check(result[1].len == 0)
-      check(result[0][^1].kind == vkString)
-      check(result[0][^1].strVal == "Early exit")
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Early exit")
 
   test "blocks as higher-order functions":
     # Requires collection iteration protocol
