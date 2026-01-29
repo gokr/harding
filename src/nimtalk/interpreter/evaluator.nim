@@ -45,18 +45,28 @@ proc wrapStringAsObject*(s: string): NodeValue =
   obj.properties["__value"] = NodeValue(kind: vkString, strVal: s)
   return NodeValue(kind: vkObject, objVal: obj.ProtoObject)
 
+# Forward declaration for array parent resolution
+var arrayPrototypeCache: ProtoObject = nil
+
 # Implementation of wrapArrayAsObject for proxy arrays
 # Uses DictionaryObj to store elements in properties for safety
 proc wrapArrayAsObject*(arr: seq[NodeValue]): NodeValue =
   ## Wrap an array (seq) as a Nim proxy object that can receive messages
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().ProtoObject]
+
+  # Try to use Array prototype as parent if available
+  if arrayPrototypeCache != nil:
+    obj.parents = @[arrayPrototypeCache]
+  else:
+    obj.parents = @[initRootObject().ProtoObject]
+
   obj.tags = @["Array", "Collection"]
   obj.isNimProxy = true
   obj.nimType = "array"
   # Store elements in properties with numeric keys
   obj.properties = initTable[string, NodeValue]()
+  obj.properties["__size"] = NodeValue(kind: vkInt, intVal: arr.len)
   for i, elem in arr:
     obj.properties[$i] = elem  # 0-based index internally
   return NodeValue(kind: vkObject, objVal: obj.ProtoObject)
@@ -112,6 +122,13 @@ proc wrapBlockAsObject*(blockNode: BlockNode): NodeValue =
 # ============================================================================
 
 type
+  # Exception handler record for on:do: mechanism
+  ExceptionHandler* = object
+    exceptionClass*: ProtoObject    # The exception class to catch
+    handlerBlock*: BlockNode        # Block to execute when caught
+    activation*: Activation         # Activation where handler was installed
+    stackDepth*: int                # Stack depth when handler installed
+
   Interpreter* = ref object
     globals*: Table[string, NodeValue]
     activationStack*: seq[Activation]
@@ -121,6 +138,7 @@ type
     maxStackDepth*: int
     traceExecution*: bool
     lastResult*: NodeValue
+    exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
 
 type
   EvalError* = object of ValueError
@@ -233,14 +251,23 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode)
 proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeValue]): NodeValue
 
 proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
-  ## Look up variable in activation chain and globals
+  ## Look up variable in activation chain, captured environment, and globals
   ## Returns (found: true, value: ...) if found, (found: false, value: nil) if not found
   debug("Looking up variable: ", name)
   var activation = interp.currentActivation
   while activation != nil:
+    # Check locals first
     if name in activation.locals:
       debug("Found variable in activation: ", name)
       return (true, activation.locals[name])
+
+    # Check captured environment of the current method/block
+    if activation.currentMethod != nil and activation.currentMethod.capturedEnv.len > 0:
+      if name in activation.currentMethod.capturedEnv:
+        let value = activation.currentMethod.capturedEnv[name].value
+        debug("Found variable in captured environment: ", name, " = ", value.toString())
+        return (true, value)
+
     activation = activation.sender
 
   # Check globals
@@ -975,6 +1002,34 @@ proc evalBlock(interp: var Interpreter, receiver: ProtoObject, blockNode: BlockN
 
   return blockResult
 
+proc evalBlockWithArg(interp: var Interpreter, receiver: ProtoObject, blockNode: BlockNode, arg: NodeValue): NodeValue =
+  ## Evaluate a block with one argument
+  let activation = newActivation(blockNode, receiver, interp.currentActivation)
+
+  # Bind the first parameter to the argument
+  if blockNode.parameters.len > 0:
+    activation.locals[blockNode.parameters[0]] = arg
+
+  interp.activationStack.add(activation)
+  let savedActivation = interp.currentActivation
+  let savedReceiver = interp.currentReceiver
+  interp.currentActivation = activation
+  interp.currentReceiver = receiver
+
+  var blockResult = nilValue()
+  try:
+    for stmt in blockNode.body:
+      blockResult = interp.eval(stmt)
+      if activation.hasReturned:
+        blockResult = activation.returnValue
+        break
+  finally:
+    discard interp.activationStack.pop()
+    interp.currentActivation = savedActivation
+    interp.currentReceiver = savedReceiver
+
+  return blockResult
+
 # Collection iteration method (interpreter-aware)
 proc doCollectionImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue =
   ## Iterate over collection: collection do: [:item | ... ]
@@ -1141,6 +1196,117 @@ proc whileFalseImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeVa
 
   return lastResult
 
+# Exception handling methods
+proc onDoImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Install exception handler: [ protectedBlock ] on: ExceptionClass do: [ :ex | handler ]
+  ## self is the protected block (receiver), args[0] is exception class, args[1] is handler block
+  if args.len < 2 or args[1].kind != vkBlock:
+    return nilValue()
+
+  # Extract protected block from self
+  var protectedBlock: BlockNode = nil
+  if self of DictionaryObj:
+    let dict = cast[DictionaryObj](self)
+    if dict.properties.hasKey("__blockNode"):
+      let blockVal = dict.properties["__blockNode"]
+      if blockVal.kind == vkBlock:
+        protectedBlock = blockVal.blockVal
+
+  if protectedBlock == nil:
+    return nilValue()
+
+  let exceptionClass = args[0]
+  let handlerBlock = args[1].blockVal
+
+  # Push exception handler onto stack
+  let handler = ExceptionHandler(
+    exceptionClass: if exceptionClass.kind == vkObject: exceptionClass.objVal else: nil,
+    handlerBlock: handlerBlock,
+    activation: interp.currentActivation,
+    stackDepth: interp.activationStack.len
+  )
+  interp.exceptionHandlers.add(handler)
+
+  var blockResult = nilValue()
+  try:
+    # Execute protected block
+    blockResult = evalBlock(interp, interp.currentReceiver, protectedBlock)
+  except ValueError as e:
+    # Check if we have a handler for this exception type
+    var handled = false
+    for i in countdown(interp.exceptionHandlers.len - 1, 0):
+      let h = interp.exceptionHandlers[i]
+      # Simple type check - in full implementation, check inheritance
+      if h.stackDepth <= interp.activationStack.len:
+        # Found a handler - execute it
+        let exObj = ExceptionObj()
+        exObj.message = e.msg
+        exObj.stackTrace = "Stack trace placeholder"
+        exObj.methods = initTable[string, BlockNode]()
+        exObj.parents = @[rootObject.ProtoObject]
+        exObj.tags = @["Exception", "Error"]
+        exObj.isNimProxy = false
+        exObj.hasSlots = false
+
+        # Remove this handler and all above it
+        interp.exceptionHandlers.setLen(i)
+
+        # Execute handler with exception as argument
+        let exVal = NodeValue(kind: vkObject, objVal: exObj.ProtoObject)
+        blockResult = evalBlockWithArg(interp, interp.currentReceiver, h.handlerBlock, exVal)
+        handled = true
+        break
+
+    if not handled:
+      # No handler found - re-raise
+      raise
+  finally:
+    # Remove our handler if still present (if no exception was raised)
+    if interp.exceptionHandlers.len > 0:
+      let lastIdx = interp.exceptionHandlers.len - 1
+      if interp.exceptionHandlers[lastIdx].handlerBlock == handlerBlock:
+        interp.exceptionHandlers.setLen(lastIdx)
+
+  return blockResult
+
+proc signalImpl(self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Signal an exception: exception signal
+  ## self is the exception object
+  var message = "Unknown error"
+  if args.len >= 1 and args[0].kind == vkString:
+    message = args[0].strVal
+  elif self of ExceptionObj:
+    let ex = cast[ExceptionObj](self)
+    message = ex.message
+  raise newException(ValueError, message)
+
+# Array iteration method
+proc arrayDoImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Iterate over array elements: arr do: [ :elem | code ]
+  ## self is the array, args[0] is the block to execute for each element
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  # Check if this is an array
+  if not (self of DictionaryObj):
+    return nilValue()
+
+  let dict = cast[DictionaryObj](self)
+  if not dict.properties.hasKey("__size"):
+    return nilValue()
+
+  let size = dict.properties["__size"].intVal
+  let blockNode = args[0].blockVal
+  var lastResult = nilValue()
+
+  # Iterate over array elements (1-based indexing for Smalltalk)
+  for i in 1..size:
+    let elem = dict.properties.getOrDefault($(i-1))  # Convert to 0-based for storage
+    # Invoke block with element as argument
+    lastResult = interp.invokeBlock(blockNode, @[elem])
+
+  return lastResult
+
 # Built-in globals
 proc initGlobals*(interp: var Interpreter) =
   ## Initialize built-in global variables
@@ -1183,7 +1349,13 @@ proc initGlobals*(interp: var Interpreter) =
   arrayNewMethod.nativeImpl = cast[pointer](arrayNewImpl)
   addMethod(arrayProto, "primitiveNew:", arrayNewMethod)
 
+  let arrayDoMethod = createCoreMethod("do:")
+  arrayDoMethod.nativeImpl = cast[pointer](arrayDoImpl)
+  arrayDoMethod.hasInterpreterParam = true
+  addMethod(arrayProto, "do:", arrayDoMethod)
+
   interp.globals["Array"] = arrayProto.toValue()
+  arrayPrototypeCache = arrayProto  # Set cache for array literals
 
   # Create Table prototype
   let tableProto = ProtoObject()
@@ -1422,6 +1594,11 @@ proc initGlobals*(interp: var Interpreter) =
   whileFalseMethod.hasInterpreterParam = true
   addMethod(blockProto, "whileFalse:", whileFalseMethod)
 
+  let onDoMethod = createCoreMethod("on:do:")
+  onDoMethod.nativeImpl = cast[pointer](onDoImpl)
+  onDoMethod.hasInterpreterParam = true
+  addMethod(blockProto, "on:do:", onDoMethod)
+
   interp.globals["Block"] = blockProto.toValue()
 
   interp.globals["true"] = trueObj.toValue()
@@ -1431,6 +1608,32 @@ proc initGlobals*(interp: var Interpreter) =
   # Set global true/false values for comparison operators
   trueValue = trueObj.toValue()
   falseValue = falseObj.toValue()
+
+  # Create Exception prototype
+  let exceptionProto = ExceptionObj()
+  exceptionProto.methods = initTable[string, BlockNode]()
+  exceptionProto.parents = @[interp.rootObject.ProtoObject]
+  exceptionProto.tags = @["Exception", "Error"]
+  exceptionProto.isNimProxy = false
+  exceptionProto.nimValue = nil
+  exceptionProto.nimType = ""
+  exceptionProto.hasSlots = false
+  exceptionProto.slots = @[]
+  exceptionProto.slotNames = initTable[string, int]()
+  exceptionProto.message = ""
+  exceptionProto.stackTrace = ""
+  exceptionProto.signaler = nil
+
+  let signalMethod = createCoreMethod("signal:")
+  signalMethod.nativeImpl = cast[pointer](signalImpl)
+  addMethod(exceptionProto.ProtoObject, "signal:", signalMethod)
+
+  let signalNoArgMethod = createCoreMethod("signal")
+  signalNoArgMethod.nativeImpl = cast[pointer](signalImpl)
+  addMethod(exceptionProto.ProtoObject, "signal", signalNoArgMethod)
+
+  interp.globals["Exception"] = exceptionProto.ProtoObject.toValue()
+  interp.globals["Error"] = exceptionProto.ProtoObject.toValue()
 
   # Note: do: method is registered on array and table proxy objects dynamically
   # It would be better to have a Collection prototype, but for now we rely on
@@ -1449,7 +1652,8 @@ proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
     "Number.nt",
     "Collections.nt",
     "String.nt",
-    "FileStream.nt"
+    "FileStream.nt",
+    "Exception.nt"
   ]
 
   for filename in stdlibFiles:

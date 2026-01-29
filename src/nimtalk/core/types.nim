@@ -128,6 +128,12 @@ type
     mode*: string
     isOpen*: bool
 
+  # Exception object for error handling
+  ExceptionObj* = ref object of ProtoObject
+    message*: string
+    stackTrace*: string
+    signaler*: ProtoObject
+
   # Compiled method representation
   CompiledMethod* = ref object of RootObj
     selector*: string
