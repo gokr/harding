@@ -122,6 +122,12 @@ type
   DictionaryPrototype* = ref object of DictionaryObj
     ## Global Dictionary prototype - provides property bag functionality
 
+  # FileStream object for file I/O
+  FileStreamObj* = ref object of ProtoObject
+    file*: File
+    mode*: string
+    isOpen*: bool
+
   # Compiled method representation
   CompiledMethod* = ref object of RootObj
     selector*: string
