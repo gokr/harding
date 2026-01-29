@@ -37,11 +37,15 @@ proc captureEnvironment(interp: Interpreter, blockNode: BlockNode)
 ```
 
 **Capture process:**
-1. Initialize `capturedEnv` as an empty table
-2. Walk up the activation chain from current to root
-3. For each activation, copy locals (except `self` and `super`)
-4. Wrap each captured value in a `MutableCell` for shared mutability
-5. Store the current activation as `homeActivation` for non-local returns
+1. Create a **new copy** of the BlockNode (each evaluation gets its own captured environment)
+2. Initialize `capturedEnv` as an empty table
+3. Walk up the activation chain from current to root
+4. For each activation, copy locals (except `self` and `super`)
+5. Wrap each captured value in a `MutableCell` for shared mutability
+6. Store the current activation as `homeActivation` for non-local returns
+
+**Block Copying:**
+Each time a block literal is evaluated, a fresh BlockNode is created. This ensures that multiple invocations of the same block definition (e.g., `makeCounter`) create independent closures with isolated captured variables.
 
 **Inherited Captures:**
 Nested closures automatically inherit captured variables from their enclosing block:
@@ -53,6 +57,18 @@ if currentMethod.capturedEnv.len > 0:
 ```
 
 This ensures that closures at different nesting levels share the same `MutableCell` instances.
+
+**Sibling Block Sharing:**
+Multiple blocks created in the same scope (e.g., a table of closures) share captured variables through the activation's `capturedVars` table:
+
+```nim
+# When capturing, check if sibling block already captured this variable
+if activation.capturedVars.hasKey(name):
+  cell = activation.capturedVars[name]  # Share existing cell
+else:
+  cell = MutableCell(value: value)       # Create new cell
+  activation.capturedVars[name] = cell   # Store for siblings
+```
 
 ### MutableCell
 
@@ -94,11 +110,12 @@ proc invokeBlock(interp: var Interpreter, blockNode: BlockNode,
 
 When a variable is assigned, `setVariable()` checks:
 
-1. Current activation locals
-2. Current method's captured environment (via `MutableCell`)
-3. Creates new local if not found
+1. **Current method's captured environment first** (via `MutableCell`) - this ensures shared state is updated
+2. Current activation locals
+3. Globals (if variable exists in global scope)
+4. Creates new local if not found
 
-This allows closures to both read and write captured variables.
+This allows closures to both read and write captured variables, with changes visible to other closures sharing the same captured cell.
 
 ### Non-Local Returns
 
@@ -148,20 +165,16 @@ Each call to `makeCounter` creates a new closure with its own `count` variable.
 ```smalltalk
 makePair := [ |
   value := 10.
-  ^#{
-    "inc": [ value := value + 1 ],
-    "dec": [ value := value - 1 ],
-    "get": [ ^value ]
-  }
+  ^#{#inc -> [ value := value + 1 ], #dec -> [ value := value - 1 ], #get -> [ ^value ]}
 ].
 
 pair := makePair value.
-(pair at: "get") value.   "Returns 10"
-(pair at: "inc") value.   "Returns nil, increments value"
-(pair at: "get") value.   "Returns 11"
+(pair at: #get) value.   "Returns 10"
+(pair at: #inc) value.   "Returns 11 (the new value)"
+(pair at: #get) value.   "Returns 11"
 ```
 
-All three closures share the same `value` variable through their captured environment.
+All three closures share the same `value` variable through their captured environment. Note the use of `#symbol` for selectors and `->` for table literal key-value pairs.
 
 ### Non-Local Return
 
