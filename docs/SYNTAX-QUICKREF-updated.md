@@ -340,6 +340,25 @@ Proto>>arg1: x arg2: y [ ^ x + y ]            # Multi-keyword
 Proto at: #method put: [ ^ result ]          # Standard way
 Proto perform: #method                       # Call dynamically
 
+#=== Method Batching (extend:) ===============
+Proto extend: [
+  self >> method [ ^ result ]                # Batch instance methods
+].
+
+Proto extendClass: [
+  self >> new [ ^ self derive ]              # Batch class-side methods
+].
+
+#=== Combined Creation (derive:methods:) =====
+Proto := Object derive: #(#ivar) methods: [
+  self >> method [ ^ result ]                # Create class with methods
+].
+
+#=== Self-Rebinding (asSelfDo:) ==============
+obj asSelfDo: [
+  self doSomething                           # self is obj here
+]
+
 #=== Message Sending =========================
 obj method                                    # Unary
 obj method: value                             # Keyword
@@ -386,16 +405,76 @@ a \ b                                       # Modulo
 a ~~ b                                      # Not identity
 ```
 
+## Method Definition Approaches
+
+Nimtalk supports multiple approaches for defining methods:
+
+### Approach 1: Individual Definition (>> syntax)
+```smalltalk
+# In .nt files only - transformed by parser
+Person>>greet [ ^ "Hello, " , name ]
+Person>>name: aName [ name := aName ]
+```
+
+### Approach 2: Batched Definition (extend:)
+```smalltalk
+# Works in both files and REPL
+Person extend: [
+  self >> greet [ ^ "Hello, " , name ].
+  self >> name: aName [ name := aName ].
+  self >> printString [ ^ name ]
+]
+```
+
+### Approach 3: Combined Creation (derive:methods:)
+```smalltalk
+# Create class with ivars AND methods in one expression
+Person := Object derive: #(name age) methods: [
+  self >> greet [ ^ "Hello, I am " , name ].
+  self >> haveBirthday [ age := age + 1 ]
+]
+```
+
+### Approach 4: Class-side Methods (extendClass:)
+```smalltalk
+# Factory methods on the class object
+Person extendClass: [
+  self >> newNamed: n aged: a [
+    | person |
+    person := self derive.
+    person name: n.
+    person age: a.
+    ^ person
+  ]
+]
+
+# Usage
+p := Person newNamed: "Alice" aged: 30
+```
+
+### Dynamic Message Sending (perform:)
+```smalltalk
+# Send message dynamically using symbols
+obj perform: #methodName
+obj perform: #method: with: arg
+obj perform: #method:with: with: arg1 with: arg2
+
+# Get all methods or properties
+obj methods        # Returns array of symbols
+obj properties     # Returns array of symbols
+```
+
 ## Key Differences Summary
 
 1. **String Literals**: Use `"double quotes"` only - single quotes are reserved
-2. **Ivar Declaration**: `derive: #(#ivar1 #ivar2)` not property bags
-3. **Method Definitions**: `>>` syntax in files, `at:put:` in REPL
-4. **No Trailing Periods**: After method definitions (closing `]` is terminator)
-5. **Direct Access**: Inside methods, access ivars directly by name
-6. **Accessor Methods**: Used outside methods, compile to direct access
-7. **Temporary Variables**: Must be first in block after `[` before any comments
-8. **Multiline Keywords**: Keyword messages can span lines without periods
+2. **Symbol Literals**: Use `#symbol` for selectors and keys
+3. **Ivar Declaration**: `derive: #(#ivar1 #ivar2)` not property bags
+4. **Method Definitions**: `>>` syntax in files, `at:put:` in REPL, `extend:` in both
+5. **No Trailing Periods**: After method definitions (closing `]` is terminator)
+6. **Direct Access**: Inside methods, access ivars directly by name
+7. **Accessor Methods**: Used outside methods, compile to direct access
+8. **Temporary Variables**: Must be first in block after `[` before any comments
+9. **Multiline Keywords**: Keyword messages can span lines without periods
 
 ## Next Steps
 
@@ -415,6 +494,10 @@ a ~~ b                                      # Not identity
 12. ✅ Enhanced comment handling (`#====` section headers)
 13. ✅ Smalltalk-style temporary variables in blocks
 14. ✅ Multiline keyword message support
+15. ✅ `asSelfDo:` for self-rebinding blocks
+16. ✅ `extend:` and `extendClass:` for method batching
+17. ✅ `derive:methods:` for combined class creation
+18. ✅ `perform:` family for dynamic message sending
 
 ## Additional Features Implemented
 

@@ -18,6 +18,11 @@ This document tracks current work items and future directions for Nimtalk develo
 - Smalltalk-style temporary variables in blocks (`| temp |`) ✅
 - Multiline keyword message support (no `.` needed between lines) ✅
 - **All stdlib files load successfully** ✅
+- **asSelfDo:** for self-rebinding blocks ✅
+- **extend:** for extending objects with methods ✅
+- **extendClass:** for class-side method definition ✅
+- **derive:methods:** for combined class creation ✅
+- **perform:** family for dynamic message sending ✅
 
 **Not Yet Implemented**: Compiler (ntalkc is stub), FFI, advanced standard library.
 
@@ -76,6 +81,11 @@ This document tracks current work items and future directions for Nimtalk develo
 - ~~Comment handling for `#====`~~ ✅ Fixed
 - ~~Temporary variables in blocks~~ ✅ Fixed
 - ~~Multiline keyword messages~~ ✅ Fixed
+- ~~asSelfDo: for self-rebinding~~ ✅ Implemented
+- ~~extend: for instance method batching~~ ✅ Implemented
+- ~~extendClass: for class-side methods~~ ✅ Implemented
+- ~~derive:methods: combined class creation~~ ✅ Implemented
+- ~~perform: family for dynamic dispatch~~ ✅ Implemented
 - Memory management for circular references
 - Error handling improvements needed
 - Compiler implementation (ntalkc is stub)
@@ -125,6 +135,17 @@ nimble clean       # Clean artifacts
 - Updated all docs to reflect double-quoted strings only
 - Reserved single quotes for future use in lexer
 
+## Recent Completed Work (2026-01-31)
+
+### Self-Rebinding and Method Batching
+- Implemented `asSelfDo:` primitive for evaluating blocks with rebound self
+- Added `extend:` for batching instance method definitions
+- Added `extendClass:` for class-side (factory) method definitions
+- Added `derive:methods:` for combined class creation with methods
+- Implemented `perform:`, `perform:with:`, `perform:with:with:` for dynamic dispatch
+- All `perform:` calls now use symbols (`#selector`) instead of strings
+- Updated `doesNotUnderstand:` to accept selector with optional arguments
+
 ---
 
-*Last Updated: 2026-01-30*
+*Last Updated: 2026-01-31*

@@ -70,6 +70,58 @@ p printString  "Returns '(42, 99)'"
 
 Instance variables declared with `derive:` are stored in slots (fast array access). Prototypes have merged method tables for fast O(1) lookup. The `derive:` syntax creates a prototype and generates accessor methods `x`, `x:`, `y`, `y:` for O(1) direct slot access.
 
+### Method Definition Approaches
+
+Nimtalk supports multiple ways to define methods:
+
+**Approach 1: Individual method definition (>> syntax)**
+```smalltalk
+Point>>moveBy: dx and: dy [
+    x := x + dx.
+    y := y + dy.
+    ^ self
+]
+```
+
+**Approach 2: Batched method definition (extend:)**
+```smalltalk
+Point extend: [
+    self >> moveBy: dx and: dy [
+        x := x + dx.
+        y := y + dy
+    ].
+    self >> distanceFromOrigin [
+        ^ ((x * x) + (y * y)) sqrt
+    ]
+]
+```
+
+**Approach 3: Combined class creation with methods (derive:methods:)**
+```smalltalk
+Person := Object derive: #(name age) methods: [
+    self >> greet [ "Hello, I am " , name ].
+    self >> haveBirthday [ age := age + 1 ]
+]
+```
+
+**Approach 4: Class-side (factory) methods (extendClass:)**
+```smalltalk
+Person extendClass: [
+    self >> newNamed: n aged: a [
+        | person |
+        person := self derive.
+        person name: n.
+        person age: a.
+        ^ person
+    ]
+]
+
+# Usage
+p := Person newNamed: "Alice" aged: 30.
+```
+
+The `extend:` and `extendClass:` methods use `asSelfDo:` internally, which temporarily rebinds `self` to the target object during block evaluation. This enables clean method batching syntax.
+
 ## Installation
 
 ```bash
@@ -105,6 +157,7 @@ Use `--loglevel DEBUG` for detailed execution tracing.
 #(1 2 3) "array (seq)"
 #{"key" -> "value"} "table (dictionary)"
 {| x: 1 y: 2 |} "object literal"
+#symbol "symbol literal"
 ```
 
 **Assignment and messages:**
@@ -148,6 +201,9 @@ Working:
 - Enhanced comment handling (`#` followed by special chars)
 - Standard library (Object, Boolean, Block, Number, Collections, String, FileStream, Exception, TestCase)
 - All stdlib files load successfully
+- Dynamic message sending: `perform:`, `perform:with:`, `perform:with:with:`
+- Method batching: `extend:`, `extendClass:`, `derive:methods:`
+- Self-rebinding: `asSelfDo:` for evaluating blocks with modified self
 
 In progress:
 - Compiler to Nim (ntalkc is stub)

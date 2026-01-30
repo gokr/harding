@@ -1,12 +1,12 @@
 # Nimtalk Language Specification
 
-Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim code. This document specifies the complete language syntax, semantics, and behavior.
+Nimtalk is a class-based Smalltalk dialect that compiles to Nim code. This document specifies the complete language syntax, semantics, and behavior.
 
 ## Overview
 
 Nimtalk combines Smalltalk's message-passing semantics with Nim's compilation and performance characteristics. Key features include:
 
-- Prototype-based object system with multiple inheritance
+- Class-based object system with multiple inheritance
 - Message-passing semantics (unary, binary, keyword)
 - Block closures with lexical scoping
 - Direct slot access for declared instance variables (O(1) access)
@@ -22,7 +22,7 @@ Nimtalk combines Smalltalk's message-passing semantics with Nim's compilation an
 ```nimtalk
 42              # Integer literal
 3.14            # Float literal
-"hello"         # String literal (double quotes only)
+'hello'         # String literal (single quotes)
 "\n"            # Escape sequences (\n, \t, \r, \\\", \\)
 ```
 
@@ -102,28 +102,28 @@ The `^` operator returns a value from a block or method:
 
 ## Types
 
-### ProtoObject
+### Object
 
-The type that defines structure and behavior for prototypes:
+The root type that defines structure and behavior:
 
-- `methods: Table[string, BlockNode]` - Methods defined directly on this prototype
+- `methods: Table[string, BlockNode]` - Methods defined directly on this object
 - `allMethods: Table[string, BlockNode]` - All methods including inherited (for fast lookup)
-- `slotNames: seq[string]` - Slot names defined on this prototype
+- `slotNames: seq[string]` - Slot names defined on this object
 - `allSlotNames: seq[string]` - All slots including inherited (instance layout)
-- `parents: seq[ProtoObject]` - Direct parent prototypes
-- `subclasses: seq[ProtoObject]` - Direct children (for efficient invalidation)
-- `name: string` - Prototype name for debugging
+- `parents: seq[Object]` - Direct parent objects (for inheritance)
+- `subclasses: seq[Object]` - Direct children (for efficient invalidation)
+- `name: string` - Object name for debugging
 
 ### Instance
 
-The type for prototype instances with pure data:
+The type for object instances with pure data:
 
-- `proto: ProtoObject` - Reference to the prototype
+- `class: Object` - Reference to the class object
 - `slots: seq[NodeValue]` - Instance data indexed by allSlotNames position
 
 ### DictionaryObj
 
-Extends ProtoObject with a property bag:
+Extends Object with a property bag:
 
 - `properties: Table[Value, Value]` - For dynamic properties
 
@@ -206,6 +206,97 @@ Person at: #greet put: [ ^ "Hello, " , name ]
 Person at: #name: put: [ :aName | name := aName ]
 ```
 
+### Method Batching (extend:)
+
+Define multiple methods in a single block with rebound self:
+
+```smalltalk
+Person extend: [
+  self >> greet [ ^ "Hello, " , name ].
+  self >> name: aName [ name := aName ].
+  self >> printString [ ^ name ]
+]
+```
+
+The `extend:` method evaluates the block with `self` temporarily bound to the target object, allowing clean method batching syntax. This is equivalent to:
+
+```smalltalk
+Person asSelfDo: [
+  self >> greet [ ^ "Hello, " , name ].
+  ...
+]
+```
+
+### Combined Class Creation (derive:methods:)
+
+Create a class with instance variables AND define methods in one expression:
+
+```smalltalk
+Person := Object derive: #(name age) methods: [
+  self >> greet [ ^ "Hello, I am " , name ].
+  self >> haveBirthday [ age := age + 1 ]
+]
+```
+
+This is equivalent to:
+
+```smalltalk
+Person := Object derive: #(name age).
+Person extend: [
+  self >> greet [ ^ "Hello, I am " , name ].
+  self >> haveBirthday [ age := age + 1 ]
+]
+```
+
+### Class-side Methods (extendClass:)
+
+Define factory methods on the class object itself:
+
+```smalltalk
+Person extendClass: [
+  self >> newNamed: n aged: a [
+    | person |
+    person := self derive.
+    person name: n.
+    person age: a.
+    ^ person
+  ]
+]
+
+# Usage
+p := Person newNamed: "Alice" aged: 30
+```
+
+### Dynamic Message Sending (perform:)
+
+Send messages dynamically using symbols:
+
+```smalltalk
+# Send message by name
+obj perform: #methodName
+
+# Send with one argument
+obj perform: #method: with: arg
+
+# Send with two arguments
+obj perform: #method:with: with: arg1 with: arg2
+```
+
+The `perform:` family enables dynamic dispatch and is used internally by methods like `extend:` to invoke primitives.
+
+### Self-Rebinding (asSelfDo:)
+
+Evaluate a block with `self` temporarily bound to a specific object:
+
+```smalltalk
+someObject asSelfDo: [
+  self doSomething.    # self is someObject here
+  self at: #key put: 42
+]
+```
+
+This is the primitive that enables `extend:` and other DSL patterns.
+
 ### Method Dispatch
 
 Method lookup uses merged tables for O(1) access:
@@ -214,7 +305,7 @@ Method lookup uses merged tables for O(1) access:
 2. If not found, trigger `doesNotUnderstand:`
 
 For class methods:
-1. Look up selector in `proto.allMethods` (called on the prototype itself)
+1. Look up selector in `class.allMethods` (called on the class object itself)
 
 ### Super Send
 
