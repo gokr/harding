@@ -5,12 +5,24 @@ import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
 
+# Forward declaration for prototype caches
+var arrayPrototypeCache: ProtoObject = nil
+var integerPrototypeCache: ProtoObject = nil
+var stringPrototypeCache: ProtoObject = nil
+var truePrototypeCache: ProtoObject = nil
+var falsePrototypeCache: ProtoObject = nil
+var blockPrototypeCache: ProtoObject = nil
+
 # Forward declarations for methods defined later in this file
 proc wrapIntAsObject*(value: int): NodeValue =
   ## Wrap an integer as a Nim proxy object that can receive messages
   let obj = ProtoObject()
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().ProtoObject]
+  # Use Integer prototype as parent if available
+  if integerPrototypeCache != nil:
+    obj.parents = @[integerPrototypeCache]
+  else:
+    obj.parents = @[initRootObject().ProtoObject]
   obj.tags = @["Integer", "Number"]
   obj.isNimProxy = true
   obj.nimValue = cast[pointer](alloc(sizeof(int)))
@@ -23,8 +35,14 @@ proc wrapBoolAsObject*(value: bool): NodeValue =
   ## Wrap a boolean as a Nim proxy object that can receive messages
   let obj = ProtoObject()
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().ProtoObject]
-  obj.tags = @["Boolean"]
+  # Use True/False prototype as parent if available
+  if value and truePrototypeCache != nil:
+    obj.parents = @[truePrototypeCache]
+  elif not value and falsePrototypeCache != nil:
+    obj.parents = @[falsePrototypeCache]
+  else:
+    obj.parents = @[initRootObject().ProtoObject]
+  obj.tags = if value: @["Boolean", "True"] else: @["Boolean", "False"]
   obj.isNimProxy = true
   obj.nimValue = cast[pointer](alloc(sizeof(bool)))
   cast[ptr bool](obj.nimValue)[] = value
@@ -36,7 +54,11 @@ proc wrapStringAsObject*(s: string): NodeValue =
   ## Wrap a string as a Nim proxy object that can receive messages
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().ProtoObject]
+  # Use String prototype as parent if available
+  if stringPrototypeCache != nil:
+    obj.parents = @[stringPrototypeCache]
+  else:
+    obj.parents = @[initRootObject().ProtoObject]
   obj.tags = @["String", "Text"]
   obj.isNimProxy = true
   obj.nimType = "string"
@@ -44,9 +66,6 @@ proc wrapStringAsObject*(s: string): NodeValue =
   obj.properties = initTable[string, NodeValue]()
   obj.properties["__value"] = NodeValue(kind: vkString, strVal: s)
   return NodeValue(kind: vkObject, objVal: obj.ProtoObject)
-
-# Forward declaration for array parent resolution
-var arrayPrototypeCache: ProtoObject = nil
 
 # Implementation of wrapArrayAsObject for proxy arrays
 # Uses DictionaryObj to store elements in properties for safety
@@ -107,7 +126,11 @@ proc wrapBlockAsObject*(blockNode: BlockNode): NodeValue =
   ## The BlockNode is stored so it can be executed later
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().ProtoObject]
+  # Use Block prototype as parent if available
+  if blockPrototypeCache != nil:
+    obj.parents = @[blockPrototypeCache]
+  else:
+    obj.parents = @[initRootObject().ProtoObject]
   obj.tags = @["Block", "Closure"]
   obj.isNimProxy = false
   obj.nimType = "block"
@@ -148,6 +171,7 @@ type
 proc eval*(interp: var Interpreter, node: Node): NodeValue
 proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue
 proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue
+proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
 
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false): Interpreter =
@@ -599,6 +623,29 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
     debug("Identifier lookup: ", ident.name)
     return lookupVariable(interp, ident.name)
 
+  of nkPseudoVar:
+    # Pseudo-variable (self, nil, true, false)
+    let pseudo = cast[PseudoVarNode](node)
+    debug("Pseudo-variable: ", pseudo.name)
+    case pseudo.name
+    of "self":
+      if interp.currentReceiver != nil:
+        return interp.currentReceiver.toValue()
+      return nilValue()
+    of "nil":
+      return nilValue()
+    of "true":
+      return trueValue
+    of "false":
+      return falseValue
+    of "super":
+      # Bare super without message - return current receiver (same as self)
+      if interp.currentReceiver != nil:
+        return interp.currentReceiver.toValue()
+      return nilValue()
+    else:
+      return nilValue()
+
   of nkMessage:
     # Message send
     debug("Message send: ", node.MessageNode.selector)
@@ -764,6 +811,25 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
     # Cascade message - send multiple messages to same receiver
     return interp.evalCascade(node.CascadeNode)
 
+  of nkSlotAccess:
+    # Slot access - O(1) direct instance variable access by index
+    let slotNode = cast[SlotAccessNode](node)
+    if interp.currentReceiver != nil:
+      # Check if receiver is an Instance (new class-based model)
+      if interp.currentReceiver of Instance:
+        let inst = cast[Instance](interp.currentReceiver)
+        if slotNode.slotIndex >= 0 and slotNode.slotIndex < inst.slots.len:
+          return inst.slots[slotNode.slotIndex]
+      # Fall back to legacy ProtoObject slot access by name
+      else:
+        return getSlot(interp.currentReceiver, slotNode.slotName)
+    return nilValue()
+
+  of nkSuperSend:
+    # Super send - lookup method in parent class
+    let superNode = cast[SuperSendNode](node)
+    return interp.evalSuperSend(superNode)
+
 
 # Evaluate a message send
 proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
@@ -774,6 +840,8 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
                       interp.eval(msgNode.receiver)
                     else:
                       interp.currentReceiver.toValue()
+
+  debug("Checking receiver kind: ", receiverVal.kind, " selector: ", msgNode.selector)
 
   # Special handling for block invocation via value: messages
   if receiverVal.kind == vkBlock:
@@ -873,6 +941,60 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
     else:
       raise newException(EvalError,
         "Message not understood: " & msgNode.selector & " on " & $receiver.tags)
+
+# Evaluate a super send
+proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue =
+  ## Evaluate super send - lookup method in parent class
+  ## Unqualified super: lookup in parents[0]
+  ## Qualified super<Parent>: lookup in specific parent
+
+  if interp.currentReceiver == nil:
+    raise newException(EvalError, "super send with no current receiver")
+
+  # Get the class of the current receiver
+  var cls: Class = nil
+  if interp.currentReceiver of Instance:
+    cls = cast[Instance](interp.currentReceiver).class
+  elif interp.currentReceiver of ProtoObject:
+    # Legacy: try to find class from protoObject
+    # For now, raise error - super requires class-based model
+    raise newException(EvalError, "super requires class-based object model")
+  else:
+    raise newException(EvalError, "super send on invalid receiver type")
+
+  # Determine which parent to look in
+  var targetParent: Class = nil
+  if superNode.explicitParent.len > 0:
+    # Qualified super<Parent>: find specific parent by name
+    for parent in cls.parents:
+      if parent.name == superNode.explicitParent:
+        targetParent = parent
+        break
+    if targetParent == nil:
+      raise newException(EvalError, "Parent class '" & superNode.explicitParent & "' not found in inheritance chain")
+  else:
+    # Unqualified super: use first parent
+    if cls.parents.len == 0:
+      raise newException(EvalError, "super send in class with no parents")
+    targetParent = cls.parents[0]
+
+  # Look up method in target parent's allMethods
+  let methodBlock = lookupInstanceMethod(targetParent, superNode.selector)
+  if methodBlock == nil:
+    raise newException(EvalError, "Method '" & superNode.selector & "' not found in super class " & targetParent.name)
+
+  # Evaluate arguments
+  var arguments = newSeq[NodeValue]()
+  for argNode in superNode.arguments:
+    arguments.add(interp.eval(argNode))
+
+  # Convert arguments to AST nodes
+  var argNodes = newSeq[Node]()
+  for argVal in arguments:
+    argNodes.add(LiteralNode(value: argVal))
+
+  # Execute the method with current receiver
+  return interp.executeMethod(methodBlock, interp.currentReceiver, argNodes, nil)
 
 # Evaluate a cascade of messages
 proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue =
@@ -1414,6 +1536,34 @@ proc initGlobals*(interp: var Interpreter) =
   arrayNewMethod.nativeImpl = cast[pointer](arrayNewImpl)
   addMethod(arrayProto, "primitiveNew:", arrayNewMethod)
 
+  let arraySizeMethod = createCoreMethod("primitiveSize")
+  arraySizeMethod.nativeImpl = cast[pointer](arraySizeImpl)
+  addMethod(arrayProto, "primitiveSize", arraySizeMethod)
+
+  let arrayAddMethod = createCoreMethod("primitiveAdd:")
+  arrayAddMethod.nativeImpl = cast[pointer](arrayAddImpl)
+  addMethod(arrayProto, "primitiveAdd:", arrayAddMethod)
+
+  let arrayAtMethod = createCoreMethod("at:")
+  arrayAtMethod.nativeImpl = cast[pointer](arrayAtImpl)
+  addMethod(arrayProto, "at:", arrayAtMethod)
+
+  let arrayAtPutMethod = createCoreMethod("at:put:")
+  arrayAtPutMethod.nativeImpl = cast[pointer](arrayAtPutImpl)
+  addMethod(arrayProto, "at:put:", arrayAtPutMethod)
+
+  let arrayRemoveAtMethod = createCoreMethod("primitiveRemoveAt:")
+  arrayRemoveAtMethod.nativeImpl = cast[pointer](arrayRemoveAtImpl)
+  addMethod(arrayProto, "primitiveRemoveAt:", arrayRemoveAtMethod)
+
+  let arrayIncludesMethod = createCoreMethod("primitiveIncludes:")
+  arrayIncludesMethod.nativeImpl = cast[pointer](arrayIncludesImpl)
+  addMethod(arrayProto, "primitiveIncludes:", arrayIncludesMethod)
+
+  let arrayReverseMethod = createCoreMethod("primitiveReverse")
+  arrayReverseMethod.nativeImpl = cast[pointer](arrayReverseImpl)
+  addMethod(arrayProto, "primitiveReverse", arrayReverseMethod)
+
   let arrayDoMethod = createCoreMethod("do:")
   arrayDoMethod.nativeImpl = cast[pointer](arrayDoImpl)
   arrayDoMethod.hasInterpreterParam = true
@@ -1438,6 +1588,26 @@ proc initGlobals*(interp: var Interpreter) =
   let tableNewMethod = createCoreMethod("primitiveTableNew")
   tableNewMethod.nativeImpl = cast[pointer](tableNewImpl)
   addMethod(tableProto, "primitiveTableNew", tableNewMethod)
+
+  let tableAtMethod = createCoreMethod("at:")
+  tableAtMethod.nativeImpl = cast[pointer](tableAtImpl)
+  addMethod(tableProto, "at:", tableAtMethod)
+
+  let tableAtPutMethod = createCoreMethod("at:put:")
+  tableAtPutMethod.nativeImpl = cast[pointer](tableAtPutImpl)
+  addMethod(tableProto, "at:put:", tableAtPutMethod)
+
+  let tableKeysMethod = createCoreMethod("primitiveKeys")
+  tableKeysMethod.nativeImpl = cast[pointer](tableKeysImpl)
+  addMethod(tableProto, "primitiveKeys", tableKeysMethod)
+
+  let tableIncludesKeyMethod = createCoreMethod("primitiveIncludesKey:")
+  tableIncludesKeyMethod.nativeImpl = cast[pointer](tableIncludesKeyImpl)
+  addMethod(tableProto, "primitiveIncludesKey:", tableIncludesKeyMethod)
+
+  let tableRemoveKeyMethod = createCoreMethod("primitiveRemoveKey:")
+  tableRemoveKeyMethod.nativeImpl = cast[pointer](tableRemoveKeyImpl)
+  addMethod(tableProto, "primitiveRemoveKey:", tableRemoveKeyMethod)
 
   interp.globals[]["Table"] = tableProto.toValue()
 
@@ -1473,6 +1643,30 @@ proc initGlobals*(interp: var Interpreter) =
   let stringIndexOfMethod = createCoreMethod("primitiveIndexOf:")
   stringIndexOfMethod.nativeImpl = cast[pointer](stringIndexOfImpl)
   addMethod(stringProto, "primitiveIndexOf:", stringIndexOfMethod)
+
+  let stringIncludesSubStringMethod = createCoreMethod("primitiveIncludesSubString:")
+  stringIncludesSubStringMethod.nativeImpl = cast[pointer](stringIncludesSubStringImpl)
+  addMethod(stringProto, "primitiveIncludesSubString:", stringIncludesSubStringMethod)
+
+  let stringReplaceWithMethod = createCoreMethod("primitiveReplaceWith:")
+  stringReplaceWithMethod.nativeImpl = cast[pointer](stringReplaceWithImpl)
+  addMethod(stringProto, "primitiveReplaceWith:", stringReplaceWithMethod)
+
+  let stringUppercaseMethod = createCoreMethod("primitiveUppercase")
+  stringUppercaseMethod.nativeImpl = cast[pointer](stringUppercaseImpl)
+  addMethod(stringProto, "primitiveUppercase", stringUppercaseMethod)
+
+  let stringLowercaseMethod = createCoreMethod("primitiveLowercase")
+  stringLowercaseMethod.nativeImpl = cast[pointer](stringLowercaseImpl)
+  addMethod(stringProto, "primitiveLowercase", stringLowercaseMethod)
+
+  let stringTrimMethod = createCoreMethod("primitiveTrim")
+  stringTrimMethod.nativeImpl = cast[pointer](stringTrimImpl)
+  addMethod(stringProto, "primitiveTrim", stringTrimMethod)
+
+  let stringSplitMethod = createCoreMethod("primitiveSplit:")
+  stringSplitMethod.nativeImpl = cast[pointer](stringSplitImpl)
+  addMethod(stringProto, "primitiveSplit:", stringSplitMethod)
 
   interp.globals[]["String"] = stringProto.toValue()
 
@@ -1733,6 +1927,38 @@ proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
         debug("Successfully loaded: ", filepath)
     else:
       warn("Stdlib file not found: ", filepath)
+
+  # Set up prototype caches for primitive types
+  # These allow wrapped primitives to inherit methods from stdlib
+  if "Integer" in interp.globals[]:
+    let intVal = interp.globals[]["Integer"]
+    if intVal.kind == vkObject:
+      integerPrototypeCache = intVal.objVal
+      debug("Set integerPrototypeCache from Integer global")
+
+  if "String" in interp.globals[]:
+    let strVal = interp.globals[]["String"]
+    if strVal.kind == vkObject:
+      stringPrototypeCache = strVal.objVal
+      debug("Set stringPrototypeCache from String global")
+
+  if "True" in interp.globals[]:
+    let trueVal = interp.globals[]["True"]
+    if trueVal.kind == vkObject:
+      truePrototypeCache = trueVal.objVal
+      debug("Set truePrototypeCache from True global")
+
+  if "False" in interp.globals[]:
+    let falseVal = interp.globals[]["False"]
+    if falseVal.kind == vkObject:
+      falsePrototypeCache = falseVal.objVal
+      debug("Set falsePrototypeCache from False global")
+
+  if "Block" in interp.globals[]:
+    let blockVal = interp.globals[]["Block"]
+    if blockVal.kind == vkObject:
+      blockPrototypeCache = blockVal.objVal
+      debug("Set blockPrototypeCache from Block global")
 
 # Simple test function (incomplete - commented out)
 ## proc testBasicArithmetic*(): bool =
