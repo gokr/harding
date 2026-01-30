@@ -1,17 +1,18 @@
 # Nimtalk Language Specification
 
-Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim code. This document specifies the complete language syntax, semantics, and behavior.
+Nimtalk is a class-based Smalltalk dialect that compiles to Nim code. This document specifies the complete language syntax, semantics, and behavior.
 
 ## Overview
 
 Nimtalk combines Smalltalk's message-passing semantics with Nim's compilation and performance characteristics. Key features include:
 
-- Prototype-based object system with `Object` and `Dictionary` prototypes
+- Class-based object system with multiple inheritance
 - Message-passing semantics (unary, binary, keyword)
 - Block closures with lexical scoping
-- Direct slot access for declared instance variables (149x faster than property bags)
+- Direct slot access for declared instance variables (O(1) access)
 - Method definition syntax using `>>` operator
 - `self` and `super` keywords for method dispatch
+- Merged method tables for fast O(1) method lookup
 - Symbol canonicalization for identity-based method lookup
 
 ## Lexical Structure
@@ -93,18 +94,30 @@ The `^` operator returns a value from a block or method:
 
 ## Types
 
-### ProtoObject
+### Class
 
-The root object type with declared instance variables (slots):
+The type that defines structure and behavior for instances:
 
-- `methods: Table[Symbol, BlockNode]` - Method dictionary
-- `slots: seq[Value]` - For declared instance variables
-- `slotNames: Table[string, int]` - Maps names to slot indices
-- `parents: seq[ProtoObject]` - Prototype chain
+- `methods: Table[string, BlockNode]` - Methods defined directly on this class
+- `allMethods: Table[string, BlockNode]` - All methods including inherited (for fast lookup)
+- `classMethods: Table[string, BlockNode]` - Class methods (called on the class itself)
+- `allClassMethods: Table[string, BlockNode]` - All class methods including inherited
+- `slotNames: seq[string]` - Slot names defined on this class
+- `allSlotNames: seq[string]` - All slots including inherited (instance layout)
+- `parents: seq[Class]` - Direct parent classes
+- `subclasses: seq[Class]` - Direct children (for efficient invalidation)
+- `name: string` - Class name for debugging
 
-### DictionaryObj
+### Instance
 
-Extends `ProtoObject` with a property bag:
+The type for class instances with pure data:
+
+- `class: Class` - Reference to the class
+- `slots: seq[NodeValue]` - Instance data indexed by allSlotNames position
+
+### DictionaryObj (Legacy)
+
+Extends ProtoObject with a property bag (deprecated in favor of Table):
 
 - `properties: Table[Value, Value]` - For dynamic properties
 
@@ -119,17 +132,14 @@ Extends `ProtoObject` with a property bag:
 
 ## Object System
 
-### Prototype Creation
+### Class Creation
 
 ```smalltalk
-# Empty prototype (no property bag)
-obj := Object derive
-
-# Prototype with declared instance variables
+# Class with declared instance variables
 Point := Object derive: #(x y)
 
-# Property bag dictionary
-dict := Dictionary derive
+# Create an instance
+p := Point new
 ```
 
 ### Instance Variable Declaration
@@ -139,7 +149,7 @@ dict := Dictionary derive
 Person := Object derive: #(name age address)
 
 # Access via automatically generated accessors
-person := Person derive.
+person := Person new.
 person name: "Alice".       # Generated setter
 result := person name       # Generated getter
 ```
@@ -152,6 +162,10 @@ Employee := Person derive: #(salary department)
 
 # Multi-level inheritance
 Manager := Employee derive: #(teamSize)
+
+# Multiple inheritance (traits pattern)
+Enumerable := Object derive: #().
+Employee := Person derive: #(salary) withParents: #(Enumerable)
 ```
 
 ## Methods
@@ -188,10 +202,31 @@ Person at: #name: put: [ :aName | name := aName ]
 
 ### Method Dispatch
 
-Method lookup proceeds through the prototype chain:
+Method lookup uses merged tables for O(1) access:
 
-1. Check receiver's method dictionary
-2. Check parent's method dictionary
+1. Look up selector in `instance.class.allMethods`
+2. If not found, trigger `doesNotUnderstand:`
+
+For class methods:
+1. Look up selector in `class.allClassMethods`
+
+### Super Send
+
+Call a parent class method explicitly:
+
+```smalltalk
+# Unqualified super (uses first parent)
+Employee>>calculatePay [
+    base := super calculatePay.
+    ^ base + self bonus
+]
+
+# Qualified super (explicit parent selection)
+Employee>>calculatePay [
+    base := super<Person> calculatePay.
+    ^ base + self bonus
+]
+```
 3. Continue up the chain
 4. Send `doesNotUnderstand:` if not found
 
