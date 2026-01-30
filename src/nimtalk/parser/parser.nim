@@ -18,6 +18,7 @@ type
 
 # Forward declarations for recursive parsing functions
 proc parseExpression*(parser: var Parser; parseMessages = true): Node
+proc parsePrimaryUnaryOnly(parser: var Parser): Node
 proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
@@ -27,6 +28,9 @@ proc parseMethod(parser: var Parser): BlockNode
 proc parsePrimitive(parser: var Parser): PrimitiveNode
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
+
+# Reserved pseudo-variables that cannot be used as slot names or regular identifiers
+const PseudoVariables* = ["self", "nil", "true", "false", "super"]
 
 # Parser errors
 proc parseError*(parser: var Parser, msg: string) =
@@ -103,7 +107,76 @@ proc parsePrimary(parser: var Parser): Node =
 
   of tkIdent:
     discard parser.next()
-    # Identifiers need variable lookup at runtime
+    # Check for pseudo-variables (self, nil, true, false, super)
+    debug("parsePrimary: tkIdent value='", token.value, "'")
+    if token.value in PseudoVariables:
+      debug("parsePrimary: found pseudo-variable '", token.value, "'")
+      # Special handling for super which can have qualified syntax
+      if token.value == "super":
+        # Check if this is a super send (followed by message selector)
+        let nextTok = parser.peek()
+        if nextTok.kind in {tkIdent, tkKeyword, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent,
+                           tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkLt, tkTag}:
+          # This is a super send, parse it
+          var explicitParent: string = ""
+
+          # Check for explicit parent syntax: super<Parent>
+          if nextTok.kind == tkLt:
+            discard parser.next()
+            if parser.peek().kind == tkIdent:
+              explicitParent = parser.next().value
+            else:
+              parser.parseError("Expected parent class name after super<")
+              return nil
+            if parser.peek().kind == tkGt:
+              discard parser.next()
+            else:
+              parser.parseError("Expected > after parent class name")
+              return nil
+          elif nextTok.kind == tkTag:
+            explicitParent = nextTok.value
+            discard parser.next()
+
+          # Parse the message selector
+          let next = parser.peek()
+          var selector: string = ""
+          var arguments: seq[Node] = @[]
+
+          case next.kind
+          of tkIdent:
+            selector = parser.next().value
+          of tkSpecial, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent,
+             tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
+            selector = parser.next().value
+            let arg = parser.parseExpression(parseMessages = false)
+            if arg == nil:
+              parser.parseError("Expected argument after binary operator in super send")
+              return nil
+            arguments.add(arg)
+          of tkKeyword:
+            while parser.peek().kind == tkKeyword:
+              let kw = parser.next().value
+              selector.add(kw)
+              let arg = parser.parseExpression(parseMessages = false)
+              if arg == nil:
+                parser.parseError("Expected argument after keyword in super send")
+                return nil
+              arguments.add(arg)
+          else:
+            parser.parseError("Expected message selector after super")
+            return nil
+
+          return SuperSendNode(
+            selector: selector,
+            arguments: arguments,
+            explicitParent: explicitParent
+          )
+        # else: fall through to create PseudoVarNode for bare "super"
+
+      # Return PseudoVarNode for all pseudo-variables
+      return PseudoVarNode(name: token.value)
+
+    # Regular identifier - needs variable lookup at runtime
     return IdentNode(name: token.value)
 
   of tkLParen:
@@ -141,6 +214,27 @@ proc parsePrimary(parser: var Parser): Node =
     parser.parseError("Unexpected token: " & token.value)
     return nil
 
+# Parse primary expression with optional unary messages only
+# Used for keyword arguments where we want to allow "obj msg" but not "obj + obj" or "obj msg: obj"
+proc parsePrimaryUnaryOnly(parser: var Parser): Node =
+  let primary = parser.parsePrimary()
+  if primary == nil:
+    return nil
+
+  # Parse unary message chain only (no binary or keyword messages)
+  while parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
+    let token = parser.next()
+    result = MessageNode(
+      receiver: if result == nil: primary else: result,
+      selector: token.value,
+      arguments: @[],
+      isCascade: false
+    )
+
+  if result == nil:
+    return primary
+  return result
+
 # Parse keyword message
 proc parseKeywordMessage(parser: var Parser, receiver: Node): MessageNode =
   debug("parseKeywordMessage: entering, receiver type=", receiver.kind, " current token=", parser.peek().kind)
@@ -152,7 +246,7 @@ proc parseKeywordMessage(parser: var Parser, receiver: Node): MessageNode =
     let token = parser.next()
     selector.add(token.value)  # Includes colon
 
-    let arg = parser.parseExpression(parseMessages = false)
+    let arg = parser.parsePrimaryUnaryOnly()
     if arg == nil:
       parser.parseError("Expected argument after keyword")
       return nil
@@ -201,7 +295,8 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
   return msg
 
 # Binary operator tokens for parsing
-const BinaryOpTokens* = {tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma}
+const BinaryOpTokens* = {tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+                         tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq}
 
 # Parse binary operators with left-to-right associativity
 proc parseBinaryOperators(parser: var Parser, left: Node): Node =
@@ -252,7 +347,11 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
     case next.kind
     of tkKeyword:
       # Keyword message (lowest precedence, parsed last)
-      return parser.parseKeywordMessage(primary)
+      current = parser.parseKeywordMessage(primary)
+      # After keyword messages, check for binary operators (comma concatenation, etc.)
+      if parser.peek().kind in BinaryOpTokens:
+        current = parser.parseBinaryOperators(current)
+      return current
     of tkIdent:
       if next.value[0].isLowerAscii():
         # Unary message chain first
@@ -266,7 +365,8 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
         return current
       else:
         return primary
-    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma:
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
       # Binary operator directly after primary
       current = parser.parseBinaryOperators(primary)
       # After binary operators, check for keyword messages
@@ -317,7 +417,8 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
       else:
         parser.parseError("Expected message after ;")
         return nil
-    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma:
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma,
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
       # Binary operator
       discard parser.next()  # Skip operator
       let right = parser.parseExpression(parseMessages = false)
@@ -387,14 +488,26 @@ proc parseBlock*(parser: var Parser): BlockNode =
   # In the test syntax, [| ...] means block with no params, just consume | and parse body
   debug("parseBlock: checking for temporaries, current=", parser.peek().kind, " value=", parser.peek().value)
   if parser.peek().kind == tkSpecial and parser.peek().value == "|":
-    # Always consume the | separator - it marks the end of params/start of body
-    debug("parseBlock: consuming | separator")
+    # Could be |param| (end of params) or |temp1 temp2| (temporaries)
     discard parser.next()  # Consume |
-    # Skip any whitespace after |
+    # Skip whitespace after |
     while parser.peek().kind == tkSeparator:
       discard parser.next()
-    # Note: Smalltalk-style temporaries |temp1 temp2| after params are not currently
-    # supported in this simplified syntax. Variables are declared on first assignment.
+    # Check if the next token is an identifier (temporary variable declaration)
+    if parser.peek().kind == tkIdent:
+      # Parse temporary variables until we hit another |
+      while parser.peek().kind == tkIdent:
+        let tempName = parser.next().value
+        blk.temporaries.add(tempName)
+        debug("parseBlock: added temporary: ", tempName)
+        # Skip whitespace
+        while parser.peek().kind == tkSeparator:
+          discard parser.next()
+      # Expect closing |
+      if parser.peek().kind == tkSpecial and parser.peek().value == "|":
+        discard parser.next()
+      else:
+        parser.parseError("Expected | to close temporary variable declaration")
 
   # Parse statements until closing bracket
   var loopCount = 0
@@ -631,10 +744,24 @@ proc parseMethod(parser: var Parser): BlockNode =
     blk.isMethod = true
   return blk
 
-# Parse method definition syntax: Receiver>>selector [ body ]
-# Transforms to: Receiver at: "selector" put: [ body ]
+# Parse method definition syntax: Receiver>>selector [ body ] or Receiver class>>selector [ body ]
+# Transforms to: Receiver selector: 'sel' put: [body] (instance method)
+# Or: Receiver classSelector: 'sel' put: [body] (class method)
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
-  ## Parse >> method definition and generate at:put: message
+  ## Parse >> method definition and generate appropriate message
+  ## Handles both instance methods (>>) and class methods (class>>)
+
+  var actualReceiver = receiver
+  var isClassMethod = false
+
+  # Check if receiver is a message "class" sent to an object (class method pattern)
+  # Pattern: Person class>>selector means class method on Person
+  if receiver of MessageNode:
+    let msg = cast[MessageNode](receiver)
+    if msg.selector == "class" and msg.arguments.len == 0:
+      # This is a class method definition - extract the actual receiver
+      actualReceiver = msg.receiver
+      isClassMethod = true
 
   # Consume >> token
   discard parser.next()
@@ -654,9 +781,13 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
     while parser.peek().kind == tkKeyword:
       let keywordPart = parser.next().value
       selector.add(keywordPart)
-      # Each keyword part has a parameter
+      # Each keyword part has a parameter (ident or block literal)
       if parser.peek().kind == tkIdent:
         params.add(parser.next().value)
+      elif parser.peek().kind == tkLBracket:
+        # Block literal as last parameter - name it generically
+        params.add("block")
+        break  # Stop parsing params at this point, parseBlock will handle the block
       else:
         parser.parseError("Expected parameter name after keyword part: " & keywordPart)
         return nil
@@ -685,16 +816,26 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
   if params.len > 0:
     blk.parameters = params
 
-  # Generate at:put: message
-  # Receiver at: "selector" put: [ body ]
+  # Generate appropriate message based on method type
   let arg1: Node = LiteralNode(value: NodeValue(kind: vkSymbol, symVal: selector))
   let arg2: Node = LiteralNode(value: NodeValue(kind: vkBlock, blockVal: blk))
-  return MessageNode(
-    receiver: receiver,
-    selector: "at:put:",
-    arguments: @[arg1, arg2],
-    isCascade: false
-  )
+
+  if isClassMethod:
+    # Class method: Receiver classSelector: 'sel' put: [body]
+    return MessageNode(
+      receiver: actualReceiver,
+      selector: "classSelector:put:",
+      arguments: @[arg1, arg2],
+      isCascade: false
+    )
+  else:
+    # Instance method: Receiver selector: 'sel' put: [body]
+    return MessageNode(
+      receiver: actualReceiver,
+      selector: "selector:put:",
+      arguments: @[arg1, arg2],
+      isCascade: false
+    )
 
 # Parse primitive declaration: <primitive> ... </primitive> followed by Smalltalk fallback
 proc parsePrimitive(parser: var Parser): PrimitiveNode =
@@ -883,5 +1024,28 @@ proc printAST*(node: Node, indent: int = 0): string =
       res.add(spaces & "  - ")
       res.add(printAST(msg, indent + 2))
     return res
+
+  of nkPseudoVar:
+    return spaces & "PseudoVar(" & node.PseudoVarNode.name & ")\n"
+
+  of nkSuperSend:
+    let superNode = node.SuperSendNode
+    var res = spaces & "SuperSend(" & superNode.selector & ")"
+    if superNode.explicitParent.len > 0:
+      res.add(" <" & superNode.explicitParent & ">")
+    res.add("\n")
+    for arg in superNode.arguments:
+      res.add(spaces & "  arg:\n")
+      res.add(printAST(arg, indent + 2))
+    return res
+
+  of nkSlotAccess:
+    let slotNode = node.SlotAccessNode
+    var res = spaces & "SlotAccess(" & slotNode.slotName & "[" & $slotNode.slotIndex & "]"
+    if slotNode.isAssignment:
+      res.add(" :=")
+    res.add(")\n")
+    return res
+
   else:
     return spaces & "Unknown(" & $node.kind & ")\n"
