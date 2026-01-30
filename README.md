@@ -2,7 +2,7 @@
 
 Smalltalk semantics, Nim performance, modern tooling.
 
-Nimtalk is a class-based Smalltalk dialect that compiles to Nim. It preserves Smalltalk's message-passing syntax and live programming feel while adding native compilation, Nim ecosystem access, and familiar Unix tooling.
+Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim. It preserves Smalltalk's message-passing syntax and live programming feel while adding native compilation, Nim ecosystem access, and familiar Unix tooling.
 
 ## Quick Example
 
@@ -32,7 +32,7 @@ p x  "Returns 110"
 
 - Message syntax is identical: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
 - String concatenation with comma: `'Hello' , ' World'`
-- Blocks work as expected: `[:x | x * 2]` with proper lexical scoping and non-local returns
+- Blocks work as expected with temporary variables: `[ | temp | temp := 1 ]`
 - Everything is an object, everything happens via message sends
 - Live evaluation in the REPL: `ntalk` gives you an interactive prompt
 - Familiar collection messages: `do:`, `select:`, `collect:`, etc
@@ -41,24 +41,24 @@ p x  "Returns 110"
 
 | Smalltalk | Nimtalk |
 |-----------|---------|
-| Classes define structure | Classes derive from parents: `Object derive: #(ivars)` |
-| Instance variables declared in class | Declare in class with `derive: #(x y)`, inherited by subclasses |
-| Methods compiled to method dictionary | Methods stored in class tables, inherited via merged lookup |
+| Classes define structure | Prototypes derive from parents: `Object derive: #(ivars)` |
+| Instance variables declared in class | Declare in prototype with `derive: #(x y)`, inherited by derived |
+| Methods compiled to method dictionary | Methods stored on prototype tables, inherited via prototype chain |
 | Image-based persistence | Source files, git, normal Unix workflow |
-| VM execution | Compiles to Nim, then to native code |
+| VM execution | Interprets AST directly, compiles to Nim (in development) |
 | FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
 
-**The class system:**
+**The prototype system:**
 
-Classes inherit from parent classes and instances are created via `new`:
+Prototypes inherit from parent prototypes and instances are created via `new`:
 
 ```smalltalk
-"Create a class with automatic accessors for x and y"
+"Create a prototype with automatic accessors for x and y"
 Point := Object derive: #(x y).
 
 "Add methods using >> syntax"
 Point>>printString [
-    ^ '(' + (x asString) + ', ' + (y asString) + ')'
+    ^ '(' , (x asString) , ', ' , (y asString) , ')'
 ].
 
 "Create an instance"
@@ -68,7 +68,7 @@ p y: 99.
 p printString  "Returns '(42, 99)'"
 ```
 
-Instance variables declared with `derive:` are stored in slots (fast array access). Classes have merged method tables for fast O(1) lookup. The `derive:` syntax creates a class and generates accessor methods `x`, `x:`, `y`, `y:`. Classes track subclasses for efficient method invalidation when methods change.
+Instance variables declared with `derive:` are stored in slots (fast array access). Prototypes have merged method tables for fast O(1) lookup. The `derive:` syntax creates a prototype and generates accessor methods `x`, `x:`, `y`, `y:` for O(1) direct slot access.
 
 ## Installation
 
@@ -89,19 +89,11 @@ ntalk script.nt          # Run a file
 ntalk -e "3 + 4"         # Evaluate expression
 ntalk --ast script.nt    # Show AST, then execute
 ntalk --loglevel DEBUG   # Verbose execution trace
-
-ntalkc compile file.nt   # Compile to Nim
-ntalkc run file.nt       # Compile and run
 ```
 
 ### Debugging
 
-Use `--loglevel DEBUG` for detailed execution tracing, or control logging programmatically in tests:
-
-```nim
-import nimtalk/core/types
-configureLogging(lvlError)  # Suppress debug output
-```
+Use `--loglevel DEBUG` for detailed execution tracing.
 
 ## Language Basics
 
@@ -125,56 +117,84 @@ obj at: 'foo'.
 
 **Blocks and control flow:**
 ```smalltalk
-[:param | param + 1] "block with parameter"
+[ :param | param + 1 ] "block with parameter"
+[ | temp | temp := 1 ] "block with temporary variable"
 
 (x > 0) ifTrue: ['positive'] ifFalse: ['negative'].
 numbers do: [:each | each print].
 ```
 
+**Multiline keyword messages:**
+```smalltalk
+tags isNil
+  ifTrue: [ ^ 'Object' ]
+  ifFalse: [ ^ tags first ]
+```
+
+See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for details on newline handling.
+
 ## Current Status
 
 Working:
 - Lexer, parser, AST interpreter
-- Prototype object system with property bags and slot-based instance variables
+- Prototype object system with slot-based instance variables
 - REPL with file execution
-- **Block closures with lexical scoping, environment capture, and non-local returns**
-- **Closure variable isolation (independent counter instances)**
-- **Sibling block variable sharing (multiple closures accessing shared state)**
+- Block closures with lexical scoping, environment capture, and non-local returns
+- Closure variable isolation and sibling block sharing
 - Data structure literals (arrays, tables, object literals)
-- Method definition syntax (`>>`) for cleaner method declarations
-- `self` and `super` support for method dispatch
-- Base library (collections, core objects)
-- **All 47 tests passing** ✅
-
-**New:** Full Smalltalk-style closures are now implemented with proper variable isolation and sharing! See [docs/closures.md](docs/closures.md) for details.
+- Method definition syntax (`>>`)
+- `self` and `super` support (unqualified and qualified `super<Parent>`)
+- Multi-character binary operators (`==`, `//`, `\`, `<=`, `>=`, `~=`, `~~`)
+- Enhanced comment handling (`#` followed by special chars)
+- Standard library (Object, Boolean, Block, Number, Collections, String, FileStream, Exception)
+- All stdlib files load successfully
 
 In progress:
-- Compiler to Nim (basic infrastructure in place)
+- Compiler to Nim (ntalkc is stub)
 - FFI to Nim
 - Standard library expansion
 
 ## Architecture
 
-Nimtalk uses a dual execution model:
-
-1. **Interpreter**: AST evaluation for REPL and rapid prototyping
-2. **Compiler**: Translates Nimtalk to Nim source, then compiles to native binaries
-
-The interpreter provides full Smalltalk semantics. The compiler (in development) will enable deployment as native single binary executables with better performance.
+Nimtalk uses AST interpretation for REPL and rapid prototyping. The compiler (in development) will enable deployment as native single binary executables with better performance.
 
 ## Differences from Standard Smalltalk
 
 **Syntax additions:**
 - `#( )` array literals (like Smalltalk, but maps to Nim `seq`)
 - `#{ }` table literals (key-value dictionaries, maps to Nim `table`)
-- `{| |}` object literals (property bags)
-- `# comment` (Nim-style comments, in addition to `"comments"`)
+- `{| |}` object literals
+- `# comment` (Nim-style comments) and `#====` section headers
+- `| temp |` for temporary variables in blocks (Smalltalk-style)
+
+**Multi-character binary operators:**
+```smalltalk
+a == b      # Equality comparison
+a ~= b      # Not equal
+a <= b      # Less than or equal
+a >= b      # Greater than or equal
+a // b      # Integer division
+a \ b       # Modulo (single backslash)
+a ~~ b      # Not identity
+```
 
 **Collections:**
-Uses Nim's data structures directly: `seq` instead of `OrderedCollection`, `Table` instead of `Dictionary`. The literal syntax is familiar but the underlying types are Nim's high-performance implementations.
+Uses Nim's data structures directly: `seq` instead of `OrderedCollection`, `Table` instead of `Dictionary`. The literal syntax is familiar but the underlying types are Nim's implementations.
 
 **No images:**
-Nimtalk uses source files and compiles to native binaries. You use git, your regular editor, and standard build tools. The REPL provides live evaluation during development, but persistence is through source code.
+Nimtalk uses source files. You use git, your regular editor, and standard build tools. The REPL provides live evaluation during development, but persistence is through source code.
+
+## Newline Handling
+
+Nimtalk supports newline-based statement separation while allowing keyword messages to span lines:
+
+- Line endings act as statement separators
+- Periods also terminate statements explicitly
+- Keyword message chains can span multiple lines
+- Binary operators cannot span lines
+- Method selectors must be on a single line
+
+See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for complete details.
 
 ## License
 
