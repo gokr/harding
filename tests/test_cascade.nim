@@ -26,7 +26,7 @@ suite "Cascade Tests":
     check(cascade.messages[2].selector == "baz")
 
   test "Parse cascade with keyword messages":
-    let source = "obj at: 1 put: 'a'; at: 2 put: 'b'"
+    let source = "obj at: 1 put: #a; at: 2 put: #b"
     let (nodes, parser) = parse(source)
 
     check(not parser.hasError)
