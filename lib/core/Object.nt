@@ -143,8 +143,8 @@ Object>>notNil [
 ].
 
 Object>>class [
-  "Return the class/prototype of this object"
   | tags |
+  "Return the class/prototype of this object"
   tags := self at: 'tags'.
   tags isNil ifTrue: [ ^ Object ].
   ^ Global at: (tags first) ifAbsent: [ Object ]
@@ -158,6 +158,23 @@ Object>>isKindOf: aClass [
 Object>>asString [
   "Return string representation"
   ^ self printString
+].
+
+Object>>asSelfDo: aBlock [
+  "Evaluate aBlock with self temporarily bound to this object.
+   This allows executing code in the context of any object.
+   Usage: someObject asSelfDo: [ self doSomething ]"
+  ^ self perform: 'primitiveAsSelfDo:' with: aBlock
+].
+
+Object>>extend: aBlock [
+  "Extend this object with methods defined in aBlock.
+   The block is evaluated with self bound to this object.
+   Usage: Person extend: [
+     >> greet [ 'Hello!' ]
+     >> name: n [ name := n ]
+   ]"
+  ^ self asSelfDo: aBlock
 ].
 
 Object>>print [
