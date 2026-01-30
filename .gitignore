@@ -65,3 +65,5 @@ testresults/
 nimble.develop
 nimble.paths
 nimbledeps
+tests/test_class_model
+tests/test_super
