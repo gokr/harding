@@ -39,8 +39,8 @@ suite "Stdlib: Numbers":
     check(result.kind == vkInt)
     check(result.intVal == 3)
 
-  test "modulo \\ works":
-    let (result, err) = interp.doit("17 \\ 5")
+  test "modulo \\\\ works":
+    let (result, err) = interp.doit("17 \\\\ 5")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 2)
