@@ -23,6 +23,6 @@ Stdout writeline: result.
 # Verify result
 (result = 100) ifTrue: [
   Stdout writeline: 'Arith: PASS'
-].
+]
 
 result

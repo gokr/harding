@@ -13,53 +13,53 @@ Integer := Object derive.
 Integer>>new: value [
   # Create a new integer with given value
   ^ value
-].
+]
 
 # Integer arithmetic helpers
 Integer>>abs [
   # Absolute value
   self < 0 ifTrue: [ ^ 0 - self ].
   ^ self
-].
+]
 
 Integer>>even [
   # Check if even
   ^ (self \\ 2) = 0
-].
+]
 
 Integer>>odd [
   # Check if odd
   ^ (self \\ 2) ~= 0
-].
+]
 
 Integer>>max: other [
   # Maximum of self and other
   self > other ifTrue: [ ^ self ] ifFalse: [ ^ other ]
-].
+]
 
 Integer>>min: other [
   # Minimum of self and other
   self < other ifTrue: [ ^ self ] ifFalse: [ ^ other ]
-].
+]
 
 Integer>>negated [
   # Return negated value
   ^ 0 - self
-].
+]
 
 Integer>>to: end do: block [
-  | i |
   # Execute block with each integer from self to end (inclusive)
+  | i |
   i := self.
   [ i <= end ] whileTrue: [
     block value: i.
     i := i + 1
   ]
-].
+]
 
 Integer>>to: end by: step do: block [
-  | i |
   # Execute block with each integer from self to end by step
+  | i |
   i := self.
   step > 0
     ifTrue: [
@@ -74,27 +74,27 @@ Integer>>to: end by: step do: block [
         i := i + step
       ]
     ]
-].
+]
 
 Integer>>timesRepeat: block [
-  | count |
   # Execute block self times
+  | count |
   count := self.
   [ count > 0 ] whileTrue: [
     block value.
     count := count - 1
   ]
-].
+]
 
 Integer>>asFloat [
   # Convert to float
   ^ self perform: "primitiveAsFloat"
-].
+]
 
 Integer>>asString [
   # Convert to string
   ^ self printString
-].
+]
 
 #====================================================================
 # Float methods
@@ -106,56 +106,56 @@ Float := Object derive.
 Float>>new: value [
   # Create a new float with given value
   ^ value asFloat
-].
+]
 
 # Float arithmetic helpers
 Float>>abs [
   # Absolute value
   self < 0.0 ifTrue: [ ^ 0.0 - self ].
   ^ self
-].
+]
 
 Float>>max: other [
   # Maximum of self and other
   self > other ifTrue: [ ^ self ] ifFalse: [ ^ other ]
-].
+]
 
 Float>>min: other [
   # Minimum of self and other
   self < other ifTrue: [ ^ self ] ifFalse: [ ^ other ]
-].
+]
 
 Float>>floor [
   # Return floor (largest integer <= self)
   ^ self perform: "primitiveFloor"
-].
+]
 
 Float>>ceiling [
   # Return ceiling (smallest integer >= self)
   ^ self perform: "primitiveCeiling"
-].
+]
 
 Float>>rounded [
   # Return rounded to nearest integer
   ^ self perform: "primitiveRounded"
-].
+]
 
 Float>>truncated [
   # Return truncated toward zero
   ^ self perform: "primitiveTruncated"
-].
+]
 
 Float>>sqrt [
   # Return square root
   ^ self perform: "primitiveSqrt"
-].
+]
 
 Float>>asInteger [
   # Convert to integer (truncated)
   ^ self perform: "primitiveAsInteger"
-].
+]
 
 Float>>asString [
   # Convert to string
   ^ self printString
-].
+]

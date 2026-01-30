@@ -12,44 +12,44 @@ FileStream := Object derive: #(file mode isOpen).
 FileStream>>open: filename mode: mode [
   # Open file with mode ("r", "w", "a", 'r+', 'w+')
   ^ self perform: "primitiveFileOpen:mode:" with: filename with: mode
-].
+]
 
 FileStream>>close [
   # Close the file
   ^ self perform: "primitiveFileClose"
-].
+]
 
 FileStream>>readLine [
   # Read one line from file
   ^ self perform: "primitiveFileReadLine"
-].
+]
 
 FileStream>>write: string [
   # Write string to file
   ^ self perform: "primitiveFileWrite:" with: string
-].
+]
 
 FileStream>>writeline: string [
   # Write string with newline
   self write: string.
   self write: "\n".
   ^ self
-].
+]
 
 FileStream>>atEnd [
   # Check if at end of file
   ^ self perform: "primitiveFileAtEnd"
-].
+]
 
 FileStream>>readAll [
   # Read entire file contents
   ^ self perform: "primitiveFileReadAll"
-].
+]
 
 FileStream>>isOpen [
   # Check if file is open
   ^ self getSlot: "isOpen"
-].
+]
 
 #====================================================================
 # Class methods for convenience
@@ -58,14 +58,14 @@ FileStream>>isOpen [
 FileStream>>openRead: filename [
   # Open file for reading
   ^ FileStream new open: filename mode: "r"
-].
+]
 
 FileStream>>openWrite: filename [
   # Open file for writing
   ^ FileStream new open: filename mode: "w"
-].
+]
 
 FileStream>>openAppend: filename [
   # Open file for appending
   ^ FileStream new open: filename mode: "a"
-].
+]

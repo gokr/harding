@@ -173,6 +173,7 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue
 proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue
 proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
 proc asSelfDoImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue
+proc performWithImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue
 
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false): Interpreter =
@@ -199,6 +200,14 @@ proc newInterpreter*(trace: bool = false): Interpreter =
   asSelfDoMethod.nativeImpl = cast[pointer](asSelfDoImpl)
   asSelfDoMethod.hasInterpreterParam = true
   addMethod(result.rootObject.ProtoObject, "asSelfDo:", asSelfDoMethod)
+  debug("Added asSelfDo: to root object")
+
+  # Add perform:with: method to root object (interpreter-aware)
+  let performWithMethod = createCoreMethod("perform:with:")
+  performWithMethod.nativeImpl = cast[pointer](performWithImpl)
+  performWithMethod.hasInterpreterParam = true
+  addMethod(result.rootObject.ProtoObject, "perform:with:", performWithMethod)
+  debug("Added perform:with: to root object, methods count: ", result.rootObject.methods.len)
 
 # Check stack depth to prevent infinite recursion
 proc checkStackDepth(interp: var Interpreter) =
@@ -1248,6 +1257,37 @@ proc asSelfDoImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValu
   # Evaluate the block with self (the receiver) as the receiver
   # This makes 'self' inside the block refer to the receiver of asSelfDo:
   return evalBlock(interp, self, blockNode)
+
+# perform:with: implementation (interpreter-aware)
+proc performWithImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue =
+  ## Send a message to self with arguments: self perform: #selector with: arg
+  if args.len < 1:
+    return nilValue()
+
+  # Get the selector from first argument
+  var selector: string
+  if args[0].kind == vkSymbol:
+    selector = args[0].symVal
+  elif args[0].kind == vkString:
+    selector = args[0].strVal
+  else:
+    return nilValue()
+
+  # Look up the method
+  let methodResult = lookupMethod(interp, self, selector)
+  if not methodResult.found:
+    return nilValue()
+
+  # Prepare arguments (skip the selector, take remaining args)
+  var messageArgs: seq[Node] = @[]
+  if args.len >= 2 and args[1].kind != vkNil:
+    # Create a literal node for the argument
+    messageArgs.add(LiteralNode(value: args[1]))
+  if args.len >= 3 and args[2].kind != vkNil:
+    messageArgs.add(LiteralNode(value: args[2]))
+
+  # Execute the method
+  return executeMethod(interp, methodResult.currentMethod, self, messageArgs, methodResult.definingObject)
 
 # Collection iteration method (interpreter-aware)
 proc doCollectionImpl(interp: var Interpreter, self: ProtoObject, args: seq[NodeValue]): NodeValue =

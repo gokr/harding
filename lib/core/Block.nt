@@ -13,41 +13,41 @@ Block := Object derive.
 Block>>value [
   # Evaluate this block with no arguments
   ^ self perform: "primitiveValue"
-].
+]
 
 Block>>value: arg [
   # Evaluate this block with one argument
   ^ self perform: "primitiveValue:" with: arg
-].
+]
 
 Block>>value: arg1 value: arg2 [
   # Evaluate this block with two arguments
   ^ self perform: "primitiveValue:value:" with: arg1 with: arg2
-].
+]
 
 Block>>value: arg1 value: arg2 value: arg3 [
   # Evaluate this block with three arguments
   ^ self perform: "primitiveValue:value:value:" with: arg1 with: arg2 with: arg3
-].
+]
 
 # while loops - receiver is condition block, argument is body block
 Block>>whileTrue: bodyBlock [
   # Execute bodyBlock while receiver evaluates to true
   ^ self perform: "primitiveWhileTrue:" with: bodyBlock
-].
+]
 
 Block>>whileFalse: bodyBlock [
   # Execute bodyBlock while receiver evaluates to false
   ^ self perform: "primitiveWhileFalse:" with: bodyBlock
-].
+]
 
 # repeat loops
 Block>>repeat [
   # Execute this block repeatedly forever (use non-local return to exit)
   [ true ] whileTrue: [ self value ]
-].
+]
 
 Block>>repeat: count [
   # Execute this block count times
   count timesRepeat: [ self value ]
-].
+]

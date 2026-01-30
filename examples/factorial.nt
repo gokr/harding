@@ -11,7 +11,7 @@ Math at: #factorial: put: [ :n |
     (n = 0) ifTrue: [ ^1 ].
     (n = 1) ifTrue: [ ^1 ].
     ^n * (self factorial: (n - 1))
-].
+]
 
 # Calculate factorial of 13
 result := Math factorial: 13.

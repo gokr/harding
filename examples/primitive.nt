@@ -15,7 +15,7 @@ TestObject at: 'add:and:" put: [
   </primitive>
   # Smalltalk fallback (should not be executed in Phase 2)
   ^ self error: 'Primitive failed'
-].
+]
 
 # Create instance and test
 test := TestObject derive

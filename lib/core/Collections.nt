@@ -8,8 +8,8 @@
 #====================================================================
 
 Array>>do: block [
-  | index size |
   # Iterate over each element, evaluating the block.
+  | index size |
   index := 0.
   size := self size.
   [ index < size ] whileTrue: [
@@ -17,94 +17,94 @@ Array>>do: block [
     index := index + 1
   ].
   ^ self
-].
+]
 
 Array>>add: element [
   # Add element to end of array.
   ^ self perform: "primitiveAdd:" with: element
-].
+]
 
 Array>>size [
   # Return number of elements.
   ^ self perform: "primitiveSize"
-].
+]
 
 Array>>isEmpty [
   # Check if array has no elements.
   ^ self size = 0
-].
+]
 
 Array>>notEmpty [
   # Check if array has elements.
   ^ self size > 0
-].
+]
 
 Array>>first [
   # Return first element.
   ^ self at: 0
-].
+]
 
 Array>>last [
   # Return last element.
   ^ self at: (self size - 1)
-].
+]
 
 Array>>removeAt: index [
   # Remove element at index and return it.
   ^ self perform: "primitiveRemoveAt:" with: index
-].
+]
 
 Array>>includes: element [
   # Check if array includes element.
   ^ self perform: "primitiveIncludes:" with: element
-].
+]
 
 Array>>reverse [
   # Return new array with elements reversed.
   ^ self perform: "primitiveReverse"
-].
+]
 
 Array>>sort [
   # Sort array in place.
   ^ self perform: "primitiveSort"
-].
+]
 
 Array>>sorted [
   # Return new sorted array.
   ^ self perform: "primitiveSorted"
-].
+]
 
 #====================================================================
 # High-order collection methods
 #====================================================================
 
 Array>>collect: block [
-  | result |
   # Transform each element with the block, return new array.
+  | result |
   result := Array new.
   self do: [ :each | result add: (block value: each) ].
   ^ result
-].
+]
 
 Array>>select: block [
-  | result |
   # Return new array with elements where block returns true.
+  | result |
   result := Array new.
   self do: [ :each |
     (block value: each) ifTrue: [ result add: each ]
   ].
   ^ result
-].
+]
 
 Array>>reject: block [
-  | result |
   # Return new array with elements where block returns false.
+  | result |
   result := Array new.
   self do: [ :each |
     (block value: each) ifFalse: [ result add: each ]
   ].
   ^ result
-].
+]
 
 Array>>detect: block [
   # Find first element where block returns true.
@@ -112,7 +112,7 @@ Array>>detect: block [
     (block value: each) ifTrue: [ ^ each ]
   ].
   ^ nil
-].
+]
 
 Array>>detect: block ifNone: noneBlock [
   # Find first element where block returns true, or evaluate noneBlock.
@@ -120,17 +120,17 @@ Array>>detect: block ifNone: noneBlock [
     (block value: each) ifTrue: [ ^ each ]
   ].
   ^ noneBlock value
-].
+]
 
 Array>>inject: initialValue into: block [
-  | result |
   # Accumulate a result by iterating with block.
+  | result |
   result := initialValue.
   self do: [ :each |
     result := block value: result value: each
   ].
   ^ result
-].
+]
 
 Array>>anySatisfy: block [
   # Return true if any element satisfies the block.
@@ -138,7 +138,7 @@ Array>>anySatisfy: block [
     (block value: each) ifTrue: [ ^ true ]
   ].
   ^ false
-].
+]
 
 Array>>allSatisfy: block [
   # Return true if all elements satisfy the block.
@@ -146,7 +146,7 @@ Array>>allSatisfy: block [
     (block value: each) ifFalse: [ ^ false ]
   ].
   ^ true
-].
+]
 
 #====================================================================
 # Table (Dictionary) extensions
@@ -158,52 +158,52 @@ Table>>do: block [
     block value: key value: (self at: key)
   ].
   ^ self
-].
+]
 
 Table>>keys [
   # Return array of all keys.
   ^ self perform: "primitiveKeys"
-].
+]
 
 Table>>values [
-  | result |
   # Return array of all values.
+  | result |
   result := Array new.
   self keys do: [ :key | result add: (self at: key) ].
   ^ result
-].
+]
 
 Table>>includesKey: key [
   # Check if key exists in table.
   ^ self perform: "primitiveIncludesKey:" with: key
-].
+]
 
 Table>>removeKey: key [
   # Remove key-value pair and return value (or nil).
   ^ self perform: "primitiveRemoveKey:" with: key
-].
+]
 
 Table>>size [
   # Return number of key-value pairs.
   ^ self keys size
-].
+]
 
 Table>>isEmpty [
   # Check if table has no entries.
   ^ self size = 0
-].
+]
 
 Table>>notEmpty [
   # Check if table has entries.
   ^ self size > 0
-].
+]
 
 Table>>keysAndValuesDo: block [
   # Iterate over all key-value pairs.
   self keys do: [ :key |
     block value: key value: (self at: key)
   ]
-].
+]
 
 #====================================================================
 # Set (using HashSet)
@@ -214,52 +214,52 @@ Set := Object derive.
 Set>>new [
   # Create new empty set.
   ^ self perform: "primitiveSetNew"
-].
+]
 
 Set>>add: element [
   # Add element to set.
   ^ self perform: "primitiveSetAdd:" with: element
-].
+]
 
 Set>>remove: element [
   # Remove element from set.
   ^ self perform: "primitiveSetRemove:" with: element
-].
+]
 
 Set>>includes: element [
   # Check if set includes element.
   ^ self perform: "primitiveSetIncludes:" with: element
-].
+]
 
 Set>>size [
   # Return number of elements.
   ^ self perform: "primitiveSetSize"
-].
+]
 
 Set>>isEmpty [
   # Check if set is empty.
   ^ self size = 0
-].
+]
 
 Set>>union: otherSet [
   # Return union of self and otherSet.
   ^ self perform: "primitiveSetUnion:" with: otherSet
-].
+]
 
 Set>>intersection: otherSet [
   # Return intersection of self and otherSet.
   ^ self perform: "primitiveSetIntersection:" with: otherSet
-].
+]
 
 Set>>difference: otherSet [
   # Return difference (self - otherSet).
   ^ self perform: "primitiveSetDifference:" with: otherSet
-].
+]
 
 Set>>do: block [
   # Iterate over all elements.
   ^ self perform: "primitiveSetDo:" with: block
-].
+]
 
 #====================================================================
 # Collection creation - class methods
@@ -268,14 +268,14 @@ Set>>do: block [
 Array>>new [
   # Create new empty array.
   ^ Array new: 0
-].
+]
 
 Array>>new: size [
   # Create new array with given size.
   ^ self perform: "primitiveNew:" with: size
-].
+]
 
 Table>>new [
   # Create new empty table.
   ^ self perform: "primitiveTableNew"
-].
+]

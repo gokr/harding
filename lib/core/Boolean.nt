@@ -12,37 +12,37 @@ True := Object derive: #().
 True>>ifTrue: block [
   # Evaluate the block and return its value.
   ^ block value
-].
+]
 
 True>>ifFalse: block [
   # Return nil - don't evaluate the block.
   ^ nil
-].
+]
 
 True>>ifTrue: trueBlock ifFalse: falseBlock [
   # Evaluate trueBlock and return its value.
   ^ trueBlock value
-].
+]
 
 True>>and: block [
   # Evaluate block and return its value.
   ^ block value
-].
+]
 
 True>>or: block [
   # Return true - short circuit.
   ^ true
-].
+]
 
 True>>not [
   # Return false.
   ^ false
-].
+]
 
 True>>= other [
   # Check if other is true.
   ^ other == true
-].
+]
 
 #====================================================================
 # False class - represents boolean false value
@@ -53,37 +53,37 @@ False := Object derive: #().
 False>>ifTrue: block [
   # Return nil - don't evaluate the block.
   ^ nil
-].
+]
 
 False>>ifFalse: block [
   # Evaluate the block and return its value.
   ^ block value
-].
+]
 
 False>>ifTrue: trueBlock ifFalse: falseBlock [
   # Evaluate falseBlock and return its value.
   ^ falseBlock value
-].
+]
 
 False>>and: block [
   # Return false - short circuit.
   ^ false
-].
+]
 
 False>>or: block [
   # Evaluate block and return its value.
   ^ block value
-].
+]
 
 False>>not [
   # Return true.
   ^ true
-].
+]
 
 False>>= other [
   # Check if other is false.
   ^ other == false
-].
+]
 
 #====================================================================
 # Create singleton instances

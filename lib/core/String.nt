@@ -16,67 +16,67 @@ String := Object derive.
 String>>concat: other [
   # Concatenate strings (called via , operator)
   ^ self perform: "primitiveConcat:" with: other
-].
+]
 
 String>>size [
   # Return string length.
   ^ self perform: "primitiveStringSize"
-].
+]
 
 String>>at: index [
   # Return character at index (0-based or 1-based depending on convention).
   ^ self perform: "primitiveStringAt:" with: index
-].
+]
 
 String>>from: start to: end [
   # Return substring from start to end (inclusive).
   ^ self perform: "primitiveFromTo:" with: start with: end
-].
+]
 
 String>>indexOf: substring [
   # Return index of substring (0 if not found).
   ^ self perform: "primitiveIndexOf:" with: substring
-].
+]
 
 String>>includesSubString: substring [
   # Check if string includes substring.
   ^ self perform: "primitiveIncludesSubString:" with: substring
-].
+]
 
 String>>replace: old with: new [
   # Replace all occurrences of old with new.
   ^ self perform: "primitiveReplaceWith:" with: old with: new
-].
+]
 
 String>>uppercase [
   # Return uppercase version.
   ^ self perform: "primitiveUppercase"
-].
+]
 
 String>>lowercase [
   # Return lowercase version.
   ^ self perform: "primitiveLowercase"
-].
+]
 
 String>>trim [
   # Remove leading and trailing whitespace.
   ^ self perform: "primitiveTrim"
-].
+]
 
 String>>split: delimiter [
   # Split string by delimiter, return array.
   ^ self perform: "primitiveSplit:" with: delimiter
-].
+]
 
 String>>asInteger [
   # Parse as integer.
   ^ self perform: "primitiveAsInteger"
-].
+]
 
 String>>asSymbol [
   # Convert to symbol.
   ^ self perform: "primitiveAsSymbol"
-].
+]
 
 #====================================================================
 # String convenience methods
@@ -85,25 +85,25 @@ String>>asSymbol [
 String>>isEmpty [
   # Check if string is empty.
   ^ self size = 0
-].
+]
 
 String>>notEmpty [
   # Check if string has content.
   ^ self size > 0
-].
+]
 
 String>>startsWith: prefix [
   # Check if string starts with prefix.
   (self size >= prefix size) ifFalse: [ ^ false ].
   ^ (self from: 1 to: prefix size) = prefix
-].
+]
 
 String>>endsWith: suffix [
-  | selfSize suffixSize start |
   # Check if string ends with suffix.
+  | selfSize suffixSize start |
   selfSize := self size.
   suffixSize := suffix size.
   (selfSize >= suffixSize) ifFalse: [ ^ false ].
   start := selfSize - suffixSize + 1.
   ^ (self from: start to: selfSize) = suffix
-].
+]

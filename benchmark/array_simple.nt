@@ -22,6 +22,6 @@ sum := sum + (arr at: 4).
   Stdout writeline: 'Array: FAIL (expected 42)'.
   Stdout writeline: sum.
   Stdout writeline: ')'
-].
+]
 
 sum

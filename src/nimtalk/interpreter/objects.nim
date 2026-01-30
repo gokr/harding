@@ -124,6 +124,7 @@ proc addMethod*(obj: ProtoObject, selector: string, blk: BlockNode) =
   ## Add a method to an object's method dictionary using canonical symbol
   let sym = getSymbol(selector)
   obj.methods[sym.symVal] = blk
+  debug("Added method: ", selector, " to object with tags: ", $obj.tags)
 
 proc addDictionaryProperty*(dict: DictionaryObj, name: string, value: NodeValue) =
   ## Add a property to a Dictionary's property bag

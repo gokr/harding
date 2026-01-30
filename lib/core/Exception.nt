@@ -12,36 +12,36 @@ Exception := Object derive: #(message stackTrace signaler).
 Exception>>signal [
   # Signal this exception (raise it)
   ^ self perform: "primitiveSignal"
-].
+]
 
 Exception>>signal: messageText [
   # Set message and signal this exception
   self at: "message" put: messageText.
   ^ self signal
-].
+]
 
 Exception>>message [
   # Get exception message
   ^ self getSlot: "message"
-].
+]
 
 Exception>>message: msg [
   # Set exception message
   ^ self at: "message" put: msg
-].
+]
 
 Exception>>stackTrace [
   # Get stack trace
   ^ self getSlot: "stackTrace"
-].
+]
 
 Exception>>printString [
-  | msg |
   # String representation including message
+  | msg |
   msg := self getSlot: "message".
   msg isNil ifTrue: [ msg := 'Unknown error' ].
   ^ 'Exception: ' , msg
-].
+]
 
 #====================================================================
 # Common exception types
@@ -61,9 +61,9 @@ DivisionByZero := Exception derive.
 
 Block>>on: exceptionClass do: handlerBlock [
   # Execute this block with exception handler installed
-  "Usage: [ protected code ] on: Error do: [ :ex | handler code ]"
+  # Usage: [ protected code ] on: Error do: [ :ex | handler code ]
   ^ self perform: "primitiveOnDo:" with: exceptionClass with: handlerBlock
-].
+]
 
 #====================================================================
 # Error handling utilities
@@ -72,26 +72,26 @@ Block>>on: exceptionClass do: handlerBlock [
 Object>>ifError: errorBlock [
   # Execute self, if error occurs run errorBlock with exception
   ^ [ self ] on: Error do: errorBlock
-].
+]
 
 Object>>ifError: errorBlock ifNoError: normalBlock [
-  | result |
   # Execute self, handle error or run normal block with result
+  | result |
   result := [ self ] on: Error do: [ :ex |
     ^ errorBlock value: ex
   ].
   ^ normalBlock value: result
-].
+]
 
 #====================================================================
 # Ensure (finally) support
 #====================================================================
 
 Block>>ensure: cleanupBlock [
-  | result |
   # Execute this block, always run cleanupBlock afterwards
-  "Note: This is a simplified version - full implementation needs primitive support"
+  | result |
+  # Note: This is a simplified version - full implementation needs primitive support
   result := self value.
   cleanupBlock value.
   ^ result
-].
+]
