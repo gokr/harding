@@ -12,7 +12,8 @@ type
     tkSpecial  # ; & | etc
     tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon
     tkTag, tkNimCode
-    tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
+    tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
+    tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq  # Multi-character binary operators: // \\ <= >= ~=
     tkMethodDef  # >> for method definitions
   Token* = object
     kind*: TokenKind
@@ -322,10 +323,26 @@ proc nextToken*(lexer: var Lexer): Token =
     return Token(kind: tkStar, value: "*", line: startLine, col: startCol)
   of '/':
     discard lexer.next()
-    return Token(kind: tkSlash, value: "/", line: startLine, col: startCol)
+    # Check for integer division //
+    if lexer.peek() == '/':
+      discard lexer.next()
+      return Token(kind: tkIntDiv, value: "//", line: startLine, col: startCol)
+    else:
+      return Token(kind: tkSlash, value: "/", line: startLine, col: startCol)
   of '=':
-    discard lexer.next()
-    return Token(kind: tkEq, value: "=", line: startLine, col: startCol)
+    discard lexer.next()  # Consume first '='
+    # Check for === strict equality (longest match first)
+    if lexer.peek() == '=':
+      discard lexer.next()  # Consume second '='
+      if lexer.peek() == '=':
+        discard lexer.next()  # Consume third '='
+        return Token(kind: tkIdent, value: "===", line: startLine, col: startCol)
+      else:
+        # Return == token (already consumed both '=' and second '=')
+        return Token(kind: tkEqEq, value: "==", line: startLine, col: startCol)
+    else:
+      # Single = is comparison operator
+      return Token(kind: tkEq, value: "=", line: startLine, col: startCol)
   of '%':
     discard lexer.next()
     return Token(kind: tkPercent, value: "%", line: startLine, col: startCol)
@@ -335,6 +352,10 @@ proc nextToken*(lexer: var Lexer): Token =
     if lexer.peek() == '>':
       discard lexer.next()
       return Token(kind: tkMethodDef, value: ">>", line: startLine, col: startCol)
+    # Check for >= comparison
+    elif lexer.peek() == '=':
+      discard lexer.next()
+      return Token(kind: tkGtEq, value: ">=", line: startLine, col: startCol)
     else:
       # Single > is comparison operator
       return Token(kind: tkGt, value: ">", line: startLine, col: startCol)
@@ -345,9 +366,32 @@ proc nextToken*(lexer: var Lexer): Token =
       # This is an XML-style tag
       return parseTag(lexer)
     else:
-      # This is a less-than comparison operator
       discard lexer.next()
-      return Token(kind: tkLt, value: "<", line: startLine, col: startCol)
+      # Check for <= comparison
+      if lexer.peek() == '=':
+        discard lexer.next()
+        return Token(kind: tkLtEq, value: "<=", line: startLine, col: startCol)
+      else:
+        # Single < is comparison operator
+        return Token(kind: tkLt, value: "<", line: startLine, col: startCol)
+  of '\\':
+    discard lexer.next()
+    # Check for modulo \\ (two backslashes in source = single \ selector)
+    if lexer.peek() == '\\':
+      discard lexer.next()
+      return Token(kind: tkMod, value: "\\", line: startLine, col: startCol)
+    else:
+      # Single backslash - treat as error (incomplete operator)
+      return Token(kind: tkError, value: "Incomplete operator: single backslash", line: startLine, col: startCol)
+  of '~':
+    discard lexer.next()
+    # Check for not-equal ~=
+    if lexer.peek() == '=':
+      discard lexer.next()
+      return Token(kind: tkNotEq, value: "~=", line: startLine, col: startCol)
+    else:
+      # Single ~ - treat as special
+      return Token(kind: tkSpecial, value: "~", line: startLine, col: startCol)
   of ';':
     discard lexer.next()
     return Token(kind: tkSpecial, value: ";", line: startLine, col: startCol)
@@ -369,8 +413,10 @@ proc nextToken*(lexer: var Lexer): Token =
     # String literal with single quotes
     return parseString(lexer)
   of '#':
-    # Context-sensitive: # followed by whitespace = comment
-    # Otherwise: check for #( array, #{ table, or symbol start
+    # # can start: comments, symbols, array/table literals
+    # - #<whitespace> or #==== or #--- → comment
+    # - #symbol, #1, #:keyword → symbol (but #1 not commonly used)
+    # - #(array), #[array], #{table} → literals
     discard lexer.next()
     let nextChar = lexer.peek()
 
@@ -382,30 +428,28 @@ proc nextToken*(lexer: var Lexer): Token =
       # Return next token (skip the shebang line)
       return nextToken(lexer)
 
-    # If followed by whitespace, it's a comment - skip to end of line
-    if nextChar.isSpace:
-      # Skip to end of line
-      while lexer.pos < lexer.input.len and lexer.peek() != '\n':
-        discard lexer.next()
-      # Return next token recursively (skip the comment)
-      return nextToken(lexer)
-    # Check for array literal #(
-    elif nextChar == '(':
+    # Check for array/table literals
+    if nextChar == '(':
       discard lexer.next()
       return Token(kind: tkArrayStart, value: "#(", line: startLine, col: startCol)
-    # Check for array literal #[ (alternative syntax)
     elif nextChar == '[':
       discard lexer.next()
       return Token(kind: tkArrayStart, value: "#[", line: startLine, col: startCol)
-    # Check for table literal #{
     elif nextChar == '{':
       discard lexer.next()
       return Token(kind: tkTableStart, value: "#{", line: startLine, col: startCol)
-    else:
-      # Regular symbol - put back the # and let parseSymbol handle it
-      lexer.pos = lexer.pos - 1  # Put back the #
-      lexer.col = lexer.col - 1   # Adjust column
-      return parseSymbol(lexer)
+
+    # If followed by whitespace or special chars like =-*, it's a comment
+    # (e.g., #====, #---, #***** etc. are comment separators)
+    if nextChar.isSpace or nextChar in {'=', '-', '*', '/', '.', '|', '&', '@', '!'}:
+      while lexer.pos < lexer.input.len and lexer.peek() != '\n':
+        discard lexer.next()
+      return nextToken(lexer)
+
+    # Otherwise: symbol (#identifier, #1, #:keyword, #'string')
+    lexer.pos = lexer.pos - 1  # Put back the #
+    lexer.col = lexer.col - 1   # Adjust column
+    return parseSymbol(lexer)
   of '{':
     discard lexer.next()
     # Check for object literal start {|
