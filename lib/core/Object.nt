@@ -14,19 +14,31 @@
 Object>>clone [
   # Create a shallow copy of this object without prototype links.
   # The copy has no parents and shares property/method dictionaries.
-  ^ self perform: "primitiveClone"
+  ^ self perform: #primitiveClone
 ]
 
 Object>>derive [
   # Create a child object with this object as its parent.
   # The child inherits behavior through the prototype chain.
-  ^ self perform: "primitiveDerive"
+  ^ self perform: #primitiveDerive
 ]
 
 Object>>derive: ivarArray [
   # Create a child with declared instance variables.
   # ivarArray should be an array of symbols like #(name age address).
-  ^ self perform: "primitiveDeriveWithIVars:" with: ivarArray
+  ^ self perform: #primitiveDeriveWithIVars: with: ivarArray
+]
+
+Object>>derive: ivarArray methods: methodBlock [
+  # Create a child with instance variables AND define methods in one expression.
+  # Usage: Person := Object derive: #(name age) methods: [
+  #   self >> greet [ "Hello, I am " + name ]
+  #   self >> haveBirthday [ age := age + 1 ]
+  # ]
+  | newClass |
+  newClass := self derive: ivarArray.
+  newClass extend: methodBlock.
+  ^ newClass
 ]
 
 #====================================================================
@@ -35,22 +47,22 @@ Object>>derive: ivarArray [
 
 Object>>at: key [
   # Get the value of a property. Searches the object and its prototype chain.
-  ^ self perform: "primitiveAt:" with: key
+  ^ self perform: #primitiveAt: with: key
 ]
 
 Object>>at: key put: value [
   # Set a property value on this object (not in prototypes).
-  ^ self perform: "primitiveAt:put:" with: key with: value
+  ^ self perform: #primitiveAt:put: with: key with: value
 ]
 
 Object>>hasProperty: key [
   # Check if this object directly has a property (not in parents).
-  ^ self perform: "primitiveHasProperty:" with: key
+  ^ self perform: #primitiveHasProperty: with: key
 ]
 
 Object>>properties [
   # Return a collection of all property keys on this object.
-  ^ self perform: "primitiveProperties"
+  ^ self perform: #primitiveProperties
 ]
 
 #====================================================================
@@ -59,12 +71,12 @@ Object>>properties [
 
 Object>>respondsTo: selector [
   # Check if this object or its prototype chain responds to a message.
-  ^ self perform: "primitiveRespondsTo:" with: selector
+  ^ self perform: #primitiveRespondsTo: with: selector
 ]
 
 Object>>methods [
   # Return a collection of all method selectors on this object.
-  ^ self perform: "primitiveMethods"
+  ^ self perform: #primitiveMethods
 ]
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
@@ -81,7 +93,7 @@ Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
 
 Object>>== other [
   # Test if this object is the same object as other (identity).
-  ^ self perform: "primitiveEquals:" with: other
+  ^ self perform: #primitiveEquals: with: other
 ]
 
 Object>>printString [
@@ -104,7 +116,7 @@ Object>>className [
 
 Object>>error: message [
   # Signal an error with the given message.
-  self perform: "primitiveError:" with: message
+  self perform: #primitiveError: with: message
 ]
 
 #====================================================================
@@ -154,7 +166,7 @@ Object>>class [
 
 Object>>isKindOf: aClass [
   # Check if object is kind of aClass (in prototype chain)
-  ^ self perform: "primitiveIsKindOf:" with: aClass
+  ^ self perform: #primitiveIsKindOf: with: aClass
 ]
 
 Object>>asString [
@@ -170,12 +182,24 @@ Object>>asSelfDo: aBlock [
 ]
 
 Object>>extend: aBlock [
-  # Extend this object with methods defined in aBlock.
+  # Extend this object with instance methods defined in aBlock.
   # The block is evaluated with self bound to this object.
   # Usage: Person extend: [
   #   self >> greet [ "Hello!" println ]
   #   self >> name: n [ name := n ]
   # ]
+  ^ self asSelfDo: aBlock
+]
+
+Object>>extendClass: aBlock [
+  # Extend the class-side (metaclass) with methods defined in aBlock.
+  # These are methods on the class object itself, not instances.
+  # Usage: Person extendClass: [
+  #   self >> newNamed: name [ ... create and return instance ... ]
+  #   self >> withName: name age: age [ ... factory method ... ]
+  # ]
+  # For now, this is equivalent to extend: since in the prototype model
+  # the class IS the factory object. Methods added here are factory methods.
   ^ self asSelfDo: aBlock
 ]
 
