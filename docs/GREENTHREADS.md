@@ -1,260 +1,354 @@
 # Green Threads and GTK Integration Plan
 
-This document outlines the implementation plan for cooperative green threads (green processes) and their integration with the GTK4 UI toolkit, creating a reactive GUI environment where all UI code is written in Nimtalk.
+This document outlines the implementation plan for cooperative green processes (green threads) and GTK4 integration for Nimtalk. The design centers around Monitors as the fundamental concurrency primitive, with shared heaps and copy-on-pass by reference.
 
-**See also**:
-- [Concurrency Design](CONCURRENCY.md) – background and theory.
-- [Gtk Intro](GINTRO.md) – notes about the Nim Gtk4 bindings.
-- [Green Thread Scheduler Design](./GREENTHREADS‑DETAILS.md) – internal Nim‑side scheduler design.
+**See also:**
+- [Concurrency Design](./CONCURRENCY.md) – background theory and comparisons.
+- [Gtk Intro](./GINTRO.md) – GTK4 Nim bindings.
+- [Internal Details](./GREENTHREADS-DETAILS.md) – scheduler and Monitor details.
 
 ---
 
 ## 1. What we are building
 
-We implement a cooperative user‑space scheduler that lets Nimtalk code run in **green processes**, each having its own interpreter and activation stack, but no separate OS‑thread. The same scheduler will also drive the GTK4 event loop, so that the UI stays responsive while Nimtalk code can do arbitrary work in the background (e.g., file I/O, number crunching, network).
+We implement a **user‑space cooperative scheduler** for _green processes_, each with its own Nimtalk interpreter and activation stack. The scheduler runs all processes in a single Nim thread, sharing a common heap but with per‑process activation stacks.
 
-All GTK widgets will be exposed as Nimtalk objects; the application UI can be live‑edited without restarting the process.
+A **Monitor** is the fundamental coordination primitive, providing re‑entrant mutual exclusion and condition variables. All other IPC (SharedQueue, Channel) is built on Monitors.
 
----
-
-## 2. Core Design Principles
-
-### 2.1. Green‑process Model (co‑operative)
-- **No pre‑emption** – a process runs until it yields.
-- **Explicit yield points**:
-  1. Explicit `Processor yield.` in Nimtalk.
-  2. Implicit yield after each message send (configurable).
-  3. Automatic yield when a process blocks (channel empty/full, semaphore wait, sleep).
-- **No kernel‑level thread** – one OS thread for all Nimtalk code and GTK main‑loop.
-- **Shared‑nothing by default** – processes share the same heap, but only communicate via channels, mailboxes or (thread‑safe) shared data structures.
-
-### 2.2. Scheduler
-The scheduler is a plain Nim `seq` of run‑ready processes.
-The ready queue is priority‑based; same‑priority processes are served in a round‑robin fashion.
-
-### 2.3. Inter‑process communication
-- **Channel** – bounded or unbounded blocking queue (Nim’s `std/channels` with Nimtalk wrappers).
-- **Semaphores** for classical synchronisation.
-- **Actor‑style mailboxes** for the actor‑model extension (future phase).
-
-### 2.4. Debugging and inspection
-A Nimtalk‑language debugger can attach to any process, suspend it, step through its code, and inspect the activation stack. This is possible because each process has a private `interpreter` field; the debugger can temporarily replace it with a “single‑step” interpreter.
+A GTK‑idle callback runs the scheduler; when the ready‑queue is empty, we yield to the GTK event loop, so GTK events are processed with soft real‑time responsiveness.
 
 ---
 
-## 3. Nim‑Side Data Structures
+## 2. Core Concepts
 
-The Nim‑side definitions for a process and the scheduler.
+### 2.1. Green‑process model (co‑operative)
+
+- **Single‑threaded** Nimtalk VM (one OS thread, green processes scheduled cooperatively).
+- **Explicit yield points** on `Processor yield`, when blocking on a synchronization primitive, or optionally after N message sends (configurable via `yieldEveryNSends`).
+- Processes run in a **shared‑heap, private‑stack** model: the Nimtalk heap is common, but each process has its own activation stack and program‑counter‑like “instruction pointer”.
+- Communication uses Monitors, built‑on‑them SharedQueues, and later channels (bounded buffers). No copying of objects passed via a channel (shared heap, pass‑by‑reference).
+- **Blocking**: when a process would block on a Monitor, SharedQueue, or Channel, the scheduler moves it to a blocked set.
+
+### 2.2. Synchronisation & Communication Primitives
+
+Primitives in order of increasing abstraction:
+
+1. **Monitor (core)** – re‑entrant lock + condition variables (`wait`, `notify`, `notifyAll`).
+   - For single-threaded cooperative scheduling, monitors are pure bookkeeping (no OS locks needed).
+   - Re‑entrancy is per‑process: the same green thread can lock a monitor it already holds.
+
+2. **Semaphore (binary/counting)** – built on Monitor + an integer count. Classic `signal`/`wait`.
+
+3. **SharedQueue (bounded)** – producer‑consumer queue built on a Monitor, with a fixed‑capacity array and two condition variables (`non‑empty`, `non‑full`). This is the primary IPC primitive.
+
+4. **Channel (CSP style, bounded buffer)** – built on SharedQueue, typed messages.
+
+5. **Actor‑style mailbox** – each process can have a mailbox (SharedQueue) that receives messages as (selector‑string, argument‑list).
+
+### 2.3. Communication Primitives (Nim‑side Naming)
+
+| Primitive           | Nim‑side type        | Nimtalk‑side class | Purpose                               |
+|--------------------|---------------------|----------------------|---------------------------------------|
+| Monitor            | `NimtalkMonitor`     | `Monitor`            | Re‑entrant mutex + condition vars   |
+| Semaphore          | `NimtalkSemaphore`  | `Semaphore`          | Binary/counting semaphore            |
+| SharedQueue        | `NimtalkSharedQueue` | `SharedQueue`        | Classic Smalltalk bounded queue      |
+| Channel           | `NimtalkChannel`     | `Channel` (bounded)  | CSP‑style typed channel (future)    |
+
+All primitives are designed to work purely cooperatively: when a green process blocks (waiting on a monitor or queue), the scheduler puts it aside and runs the next process.
+
+### 2.4. Debugging & Inspection
+
+Because each process has its own interpreter and activation stack, a debugger written in Nimtalk can:
+
+1. Attach to any process (suspend it).
+2. Walk its stack frames (each frame has `receiver`, `method`, locals, PC).
+3. Step the process one Nimtalk message‑send at a time.
+
+The debugger is just another Nimtalk process, using the same APIs that the Nim scheduler provides.
+
+---
+
+## 3. Implementation
+
+### 3.1. Nim‑side Data Structures
 
 ```nim
 type
-  ProcessState = enum
-    psReady
-    psRunning
-    psBlocked
-    psSuspended
-    psTerminated
+  ProcessState* = enum
+    psReady, psRunning, psBlocked, psSuspended, psTerminated
 
-  WaitConditionKind = enum
-    wcNone
-    wcSemaphore
-    wcChannel
-    wcTimeout
+  WaitKind* = enum
+    wkMonitor, wkSemaphore, wkQueueFull, wkQueueEmpty
 
-  WaitCondition = object
-    case kind: WaitConditionKind
-    of wcNone: discard
-    of wcSemaphore: sem: Semaphore
-    of wcChannel: chan: NimChannel[NodeValue]    # `NodeValue` = Nimtalk value
-    of wcTimeout: deadline: MonoTime
+  WaitCondition* = object
+    kind*: WaitKind
+    target*: pointer  # The monitor/queue being waited on
 
-  Process = ref object of RootObj
-    state: ProcessState
-    pid: uint64              # unique identifier
+  Process* = ref object
+    pid: uint64
     name: string
-    priority: int
-    waitingOn: WaitCondition
-    interpreter: Interpreter  # each process gets its own interpreter
-    # Scheduler maintains the rest of the state (previous, next pointer, etc.)
-
-  Scheduler = ref object
-    readyQueue: seq[Process]
-    allProcesses: Table[uint64, Process]
-    currentProcess: Process
-    nextPid: uint64
+    interpreter: Interpreter  # Each process has its own interpreter
+    state: ProcessState
+    blockedOn: WaitCondition  # Valid when state == psBlocked
+    priority: int             # Higher = runs first (0 = normal)
 ```
 
-Every process has its own `Interpreter` instance; there is no sharing of activations, local variables, or local heaps. The Nimtalk side does **not** hold a Nim‑side Process pointer; it holds a lightweight proxy object that can be stored inside a Nimtalk Process object.
+**Process/Interpreter Relationship:**
+- Each `Process` contains its own `Interpreter` instance with its own activation stack
+- The activation stack and program counter live inside the `Interpreter`, not duplicated in `Process`
+- All interpreters share a common `globals` table (for global variables)
+- All interpreters share a common `rootObject` (the prototype hierarchy root)
 
----
+### 3.2. Green‑threads Scheduler
 
-## 4. Nim‑side Scheduler
+One global scheduler holds:
 
-The scheduler is a pure‑Nim loop that:
+- `readyQueue: Deque[Process]`
+- `blockedSet: Set[Process]`
+- `allProcesses: Table[uint64, Process]`
 
-1. Pops the highest‑priority, ready‑to‑run process from the ready queue.
-2. Switches the `currentProcess` and its interpreter.
-3. Runs the interpreter **for one quantum**, a single Nimtalk message‑send or a defined number of byte‑code instructions (TBD).
-4. If the process yields or blocks, puts it back in the ready queue (or the appropriate blocked‑set).
-5. When no Nimtalk process is ready, the scheduler invokes `gtk_main_iteration(0)` to handle GTK input and timer events.
+Scheduler loop:
 
-Because the same Nim‑thread runs GTK’s event loop, we can schedule a GTK idle‑callback that yields to other Nimtalk processes, making the UI stay alive while Nimtalk code runs.
+1. If `readyQueue` empty → remove GTK idle callback (nothing to do).
+2. Pop first process from `readyQueue`.
+3. Switch context (current interpreter = its interpreter; set current process).
+4. Let the interpreter run **one Nimtalk message send** (or a time‑slice of byte‑code).
+5. If the process didn't block, push back to tail of readyQueue.
+6. If it blocked on a condition, move it to the appropriate blocked set.
+7. Goto step 1.
 
----
-
-## 5. Yielding and Blocking Points
-
-A Nimtalk process can yield or block in several ways:
-
-| Event                       | Action |
-| -------------------------- | ----------------------------------------------- |
-| `Processor yield`           | Voluntary yield; the process is requeued at the end of its ready‑queue. |
-| Channel send on a full channel | Moved to “blocked” set; woken up when a receive occurs. |
-| Receive on an empty channel  | Block until a sender supplies a value.                 |
-| Wait on a semaphore with zero count | Block until a `signal` occurs. |
-| Wait for a timeout          | Process moves to a timeout‑queue; scheduler will wake it. |
-
-Yielding can be **explicit** via the Nimtalk primitive `Processor yield.` or **implicit** (optionally) after each Nimtalk message‑send.
-
----
-
-## 6. Communication Primitives
-
-Three kinds of inter‑process communication are planned; for the first implementation, only channels will be supported.
-
-1. **Channels** (preferred)
-   - Bounded or unbounded (preferably bounded to back‑pressure over‑producers).
-   - Sending to a full channel blocks the sender; receiving from empty blocks the receiver.
-
-2. **Semaphores** (binary, counting)
-   - Classical `signal`/`wait`.
-   - Mostly for porting code.
-
-3. **Actor‑style mailboxes** (later phase)
-   - Each process can optionally hold a mailbox (a `Channel[Message]`) which is the process’s address for actor‑model message‑passing.
-
-A Channel is a Nimtalk object:
-
-```smalltalk
-ch := Channel new.
-ch send: 42.     "block if full"
-value := ch receive.
-```
-
-Nimtalk channels wrap Nim's `Channel[NodeValue]`.
-
----
-
-## 7. Integration with GTK
-
-### 7.1. Gtk main‑loop
-GTK’s main loop (`gtk_main()`) is incompatible with a busy‑loop that never returns. The solution is a **g‑main‑context**–aware idle‑callback that runs the Nimtalk scheduler for one quantum, then returns control to GTK.
+**GTK Idle Callback Strategy**:
+- Install an idle callback when processes become ready (e.g., after spawning or unblocking).
+- Remove the callback when the ready queue becomes empty.
+- Each callback invocation runs one process slice, then returns control to GTK.
+- This ensures GTK events are processed with soft real-time responsiveness.
 
 ```nim
-# Simplified main loop in Nim
-proc gtkTick =
-  if gtk_pending():
-    discard main_context_iteration(nil, false)
+proc schedulerIdleCallback(): bool =
+  ## Returns true to keep callback installed, false to remove it
+  if sched.readyQueue.len == 0:
+    return false  # Remove callback, nothing to run
+  sched.runOneSlice()
+  return true  # Keep callback installed
+```
+
+### 3.3. GTK Integration
+
+Each Nimtalk‑side GTK widget holds a Nim‑side pointer to the underlying GTK widget and a finalizer.
+
+When a GTK event occurs (button‑click), the GTK main loop invokes our Nim‑side callback, which does:
+
+```nim
+let process = processOwningThisWidget(proc)
+var callbackBlock: BlockNode
+# ... wrap GTK arguments into Nimtalk objects, push a new activation frame
+pushActivation(proc, callbackBlock, args)
+schedule(proc)
+```
+
+The callback is executed next time the associated Nimtalk process is scheduled.
+
+### 3.4. Monitor Implementation
+
+For single-threaded cooperative scheduling, monitors are just bookkeeping—no OS-level locks are needed since only one green process runs at a time:
+
+```nim
+type
+  NimtalkMonitor* = ref object
+    owner*: Process           # Which process holds the lock (nil = unlocked)
+    lockCount*: int           # Re-entrancy count
+    waitQueue*: seq[Process]  # Processes waiting to acquire
+
+proc enter*(m: NimtalkMonitor, sched: Scheduler, caller: Process) =
+  if m.owner == nil:
+    m.owner = caller
+    m.lockCount = 1
+  elif m.owner == caller:
+    inc m.lockCount  # Re-entrant
   else:
-    let
-      p = scheduler.scheduleNext()
-      p.runForOneQuantum()
-    if noReadyProcess and not gtk_events_pending():
-      # no UI events and nothing to run: just block until GTK input
-      gtk_main_iteration()
+    m.waitQueue.add(caller)
+    sched.block(caller, WaitCondition(kind: wkMonitor, target: cast[pointer](m)))
 
-scheduler.gtk_timeout_id = g_timeout_add(20, gtkTick)
+proc leave*(m: NimtalkMonitor, sched: Scheduler) =
+  dec m.lockCount
+  if m.lockCount == 0:
+    m.owner = nil
+    if m.waitQueue.len > 0:
+      let next = m.waitQueue.pop()
+      m.owner = next
+      m.lockCount = 1
+      sched.unblock(next)
 ```
 
-### 7.2. GTK callbacks
-GTK signals (button‑click, mouse‑move) are queued as callbacks in Nimtalk:
+### 3.5. SharedQueue (classic bounded buffer)
+
+A bounded buffer with separate wait queues for producers and consumers:
 
 ```nim
-# Connect GTK signal to Nimtalk block
-proc onClick(button: ptr GtkButton, userData: NimtalkBlock) =
-  let nimtalkCb: NimtalkBlock = cast[ptr Block](userData)
-  # Enqueue the Nimtalk block for execution in the proper interpreter.
+type
+  NimtalkSharedQueue*[T] = ref object
+    data: seq[T]
+    head, tail, count: int
+    capacity: int
+    waitingProducers: seq[Process]  # Blocked on "queue full"
+    waitingConsumers: seq[Process]  # Blocked on "queue empty"
+
+proc put*(q: NimtalkSharedQueue, sched: Scheduler, item: NodeValue, caller: Process) =
+  if q.count == q.capacity:
+    q.waitingProducers.add(caller)
+    sched.block(caller, WaitCondition(kind: wkQueueFull, target: cast[pointer](q)))
+    return
+
+  q.data[q.tail] = item
+  q.tail = (q.tail + 1) mod q.capacity
+  inc q.count
+
+  if q.waitingConsumers.len > 0:
+    sched.unblock(q.waitingConsumers.pop())
+
+proc take*(q: NimtalkSharedQueue, sched: Scheduler, caller: Process): NodeValue =
+  if q.count == 0:
+    q.waitingConsumers.add(caller)
+    sched.block(caller, WaitCondition(kind: wkQueueEmpty, target: cast[pointer](q)))
+    return nil  # Will resume with result when unblocked
+
+  result = q.data[q.head]
+  q.head = (q.head + 1) mod q.capacity
+  dec q.count
+
+  if q.waitingProducers.len > 0:
+    sched.unblock(q.waitingProducers.pop())
 ```
 
-This callback must:
-- convert GTK‑side arguments to Nimtalk objects;
-- store the Nimtalk block as a GC‑rooted reference;
-- schedule the block’s evaluation on the Nimtalk interpreter of its owning process.
+### 3.6. Process Spawning Mechanics
 
-### 7.3. Nimtalk‑side GTK objects
+When a Nimtalk program calls `Processor fork: aBlock`, the following Nim-side code runs:
 
-```nimtalk
-window := GtkWindow new.
-button := GtkButton withLabel: 'Click me'.
-button onClick: [Transcript show: 'clicked'].
-window addChild: button.
+```nim
+proc forkProcess*(sched: var Scheduler, block: BlockNode, receiver: ProtoObject): Process =
+  ## Create a new green process from a Nimtalk block
+  let newInterp = newInterpreter()
+  newInterp.globals = sched.sharedGlobals     # Share globals table
+  newInterp.rootObject = sched.rootObject     # Share prototype root
+
+  result = Process(
+    pid: sched.nextPid(),
+    interpreter: newInterp,
+    state: psReady
+  )
+
+  # Set up initial activation frame for the block
+  let activation = newActivation(receiver, block)
+  newInterp.activationStack.add(activation)
+  newInterp.currentActivation = activation
+
+  # Add to scheduler
+  sched.readyQueue.addLast(result)
+  sched.allProcesses[result.pid] = result
 ```
 
-The Nimtalk object `GtkButton` holds a Nim‑side pointer to the C GTK object. When the Nimtalk object is GC'd, a Nim‑side finalizer is invoked that calls the GTK reference‑count decrement (or marks a "destroy" for the next idle‑callback). This means **we can implement the whole GTK widget tree as Nimtalk objects**, not just opaque FFI handles.
+### 3.7. Nimtalk API Examples
 
----
-
-## 8. Debugging, Stepping and Inspection
-
-The **debugger** is a Nimtalk program, using the same `Process`, `Scheduler`, and `Interpreter` APIs.
+Here's what the Nimtalk programmer sees:
 
 ```smalltalk
-Process class withDebugger: aDebugger [
-    "Suspend this process, set a single‑step flag, and allow the debugger to
-    walk the process' interpreter’s stack."
+"Fork a new process"
+process := Processor fork: [
+  1 to: 10 do: [:i | Transcript show: i]
 ]
+
+"Explicit yield to other processes"
+Processor yield
+
+"Synchronization with Monitor"
+lock := Monitor new.
+lock critical: [
+  sharedCounter := sharedCounter + 1
+]
+
+"Producer-consumer with SharedQueue"
+queue := SharedQueue new: 10.
+Processor fork: [1 to: 100 do: [:i | queue put: i]].
+Processor fork: [100 timesRepeat: [Transcript show: queue take]]
 ```
 
-The debugger can be invoked at a breakpoint, or the debugger‑window can be opened on a particular process. The debugger may be used from within Nimtalk, thus we can inspect and change other processes.
+### 3.8. Error Handling
+
+**Process termination while holding locks:**
+- Release all monitors held by the terminating process.
+- Wake waiters with an error condition (ProcessTerminated).
+
+**Uncaught exceptions in processes:**
+- Terminate the process with state `psTerminated`.
+- Log the error to a system transcript or error log.
+- Other processes continue unaffected.
+
+**Deadlock detection (optional enhancement):**
+- Maintain a wait-for graph: edges from blocked process to the process holding what it waits on.
+- Detect cycles in the graph to identify deadlocks.
+- Report deadlock to debugger or system console.
 
 ---
 
-## 9. Roadmap
+## 4. Implementation Roadmap
 
-### Phase 1 – Scheduler & basic processes  (current phase)
-- [ ] `Process` and `Scheduler` types in Nim.
-- [ ] `Channel[T]` with Nim‑side `send`/`receive` primitives.
-- [ ] `yield` and `suspend` primitives.
-- [ ] Nim‑side scheduler loop with single‑quantum time‑slicing.
-- [ ] GTK idle‑callback integration.
+### Phase 1: Core Scheduler and Monitor (1‑2 weeks)
 
-### Phase 2 – Basic process‑to‑process messaging
-- [ ] Semaphores (counting, binary).
-- [ ] `Process spawn:` primitive for creating a new green thread.
-- [ ] Nimtalk‑side `Process` class with debug‑inspection methods.
+- [ ] `nimtalk/core/process.nim`: Process, Scheduler types.
+- [ ] Basic round‑robin scheduler, with only explicit yields.
+- [ ] Monitor: Nim‑side re‑entrant lock + condition variable.
+- [ ] Simple yield and block/unblock operations.
 
-### Phase 3 – UI integration
-- [ ] GTK widget objects (Nimtalk classes for Button, Window, TextArea, etc.)
-- [ ] Glib main‑loop vs. GTK main‑loop coordination.
-- [ ] Automatic memory‑management (GTK widget lifetime = Nimtalk object lifetime).
+### Phase 2: Synchronisation Primitives (2‑3 weeks)
 
-### Phase 4 – Actor‑model extensions
-- [ ] Mailbox processes (actor‑style “receive”).
-- [ ] Process‑linking, supervisor trees.
-- [ ] Distributed actor discovery.
+- [ ] Semaphore (binary, counting).
+- [ ] SharedQueue (bounded buffer) atop Monitor.
+- [ ] Nimtalk‑side `Monitor` and `SharedQueue` objects.
+- [ ] Process spawning from Nimtalk: `Processor fork: aBlock`.
+- [ ] Debugger: inspection of process stack frames.
 
----
+### Phase 3: GTK Bridge (2 weeks)
 
-## 10. Open questions / decisions
+- [ ] Basic GTK widget objects (Window, Button, Box, TextView).
+- [ ] Event‑loop hook for GTK idles.
+- [ ] Signal‑to‑callback mapping (GTK signal → Nimtalk block evaluation).
 
-*Timeout for channel operations*: A `select` with a timeout, or per‑operation timeout (e.g., channel receive with 0.5 s deadline).
+### Phase 4: Nimtalk‑side UI Framework (2‑3 weeks)
 
-*Priority inversions* – priority‑inheritance in the Nim‑side scheduler, or keep it simple (FIFO per priority‑group).
+- [ ] `GtkApplication` Nimtalk‑side class.
+- [ ] Example apps: Transcript, simple editor, process inspector.
 
-*GTK‑Nimtalk bridge*: Should GTK objects be Nimtalk objects with finalizers, or Nim‑side only? We propose the former: a Nim‑side type that holds a pointer to a Nimtalk proxy.
+### Phase 5: Channels and Actor‑style (future)
 
-*Nimtalk‑side scheduler*: Should there be a Nimtalk‑level `Scheduler` class that can be used from Nimtalk? Probably not; scheduling is a low‑level concept.
+- [ ] Channels: bounded capacity, typed.
+- [ ] Actor‑mailbox processes.
+- [ ] Supervisor‑style process‑linking (re‑invent OTP for Nimtalk).
 
 ---
 
-## 11. Implementation Status
+## 5. Open Questions / Design Decisions
 
-**Phase 1** has been designed but not yet implemented. Current Nimtalk does not contain the Process or Scheduler types yet.
-
-**Phase 2** (Actor‑style mailboxes) and **Phase 3** (GTK integration) are blocked on Phase 1.
-
-The first step is to create the `Process`, `Channel` and `Scheduler` Nim types, plus the Nim‑side scheduler loop that also drives the GTK event loop.
+- **Priority inversion** – simple strict FIFO of same priority. Could add priority inheritance later.
+- **Process‑local GC heaps?** Not for now; single‑heap with sharing is fine for small objects.
+- **Channel type safety** – Nim‑side generic channels possible; Nimtalk values carry type‑tags.
 
 ---
 
-**Plan approved** 2025‑01‑30. Implementation started 2025‑0‑‑ (still pending).
+## 6. Why Monitors as Foundation?
+
+1. **Familiar to Smalltalk programmers** (`Object‑‑MonitorState‑‑Process‑‑Condition`).
+2. **Re‑entrant locks** are easier for Nimtalk: process can re‑enter a Monitor it already holds.
+3. **Condition variables** are exactly the synchronization primitive we need for blocking queues, semaphores, etc.
+4. Simple blocking semantics fit the green‑thread scheduler perfectly.
+
+---
+
+## 7. Summary: What This Gives Us
+
+A simple, **debuggable** cooperative‑concurrency system, where all UI‑level constructs are just Nimtalk objects, fully inspectable and changeable at runtime.
+
+The same cooperative scheduler that runs your GUI app can run the debugger that steps through it. The same green threads that handle UI events also run your application logic. All built from Monitors and one‑thread‑at‑a‑time execution.
+
+---
+
+**Plan approved** 2025‑01‑30.  **Current Phase** – Phase 1.
