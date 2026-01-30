@@ -23,40 +23,40 @@ Nimtalk combines Smalltalk's message-passing semantics with Nim's compilation an
 42              # Integer literal
 3.14            # Float literal
 'hello'         # String literal (single quotes)
-"\n"            # Escape sequences (\n, \t, \r, \\\", \\)
+'\n'            # Escape sequences (\n, \t, \r, \', \\\)
 ```
 
-**Note**: Single quotes are reserved for future use.
+**Note**: Double quotes are used for comments.
 
 ### Symbols
 
 ```nimtalk
 #symbol         # Symbol literal
-#"with spaces"  # Symbol with spaces (double quotes)
+#'with spaces'  # Symbol with spaces (single quotes)
 ```
 
 ### Comments
 
 ```nimtalk
-# This is a comment to end of line
-#====              # Section header (no space needed after #)
-#----------         # Also works with dashes
+"This is a comment - double quotes for comments"
+"==== Section header
+"---------- Also works with dashes
 ```
 
-**Note**: `#` followed by whitespace or special characters (`=`, `-`, `*`, `/`, `.`, `|`, `&`, `@`, `!`) marks a comment. This allows section headers like `#====` to work without requiring spaces. Smalltalk-style `"comment"` syntax is not supported.
+**Note**: Double quotes mark comments. Hash `#` followed by whitespace or special characters (`=`, `-`, `*`, `/`, `.`, `|`, `&`, `@`, `!`) also marks a comment for section headers.
 
 ### Arrays and Tables
 
 ```smalltalk
 #(1 2 3)                    # Array literal (ordered collection)
-#{"key" -> "value"}        # Table literal (key-value pairs)
+#{'key' -> 'value'}        # Table literal (key-value pairs)
 ```
 
 ### Identifiers
 
 ```smalltalk
 variable         # Lowercase for instances
-VariableName     # Capitalized for prototypes (convention)
+VariableName     # Capitalized for classes (convention)
 _at:put:_        # Keyword method selector with colons
 ```
 
@@ -81,7 +81,7 @@ a >= b           # Greater than or equal
 a // b           # Integer division
 a \ b            # Modulo
 a ~~ b           # Not identity
-"a" , "b"        # String concatenation (comma operator)
+'a' , 'b'        # String concatenation (comma operator)
 ```
 
 ### Cascade Operator
@@ -121,11 +121,6 @@ The type for object instances with pure data:
 - `class: Object` - Reference to the class object
 - `slots: seq[NodeValue]` - Instance data indexed by allSlotNames position
 
-### DictionaryObj
-
-Extends Object with a property bag:
-
-- `properties: Table[Value, Value]` - For dynamic properties
 
 ### Basic Types
 
@@ -138,10 +133,10 @@ Extends Object with a property bag:
 
 ## Object System
 
-### Prototype Creation
+### Class Creation
 
 ```smalltalk
-# Prototype with declared instance variables
+# Class with declared instance variables
 Point := Object derive: #(x y)
 
 # Create an instance
@@ -156,7 +151,7 @@ Person := Object derive: #(name age address)
 
 # Access via automatically generated accessors
 person := Person new.
-person name: "Alice".       # Generated setter
+person name: 'Alice'.       # Generated setter
 result := person name       # Generated getter
 ```
 
@@ -180,7 +175,7 @@ Employee := Person derive: #(salary) withParents: #(Enumerable)
 
 ```smalltalk
 # Unary method
-Person>>greet [ ^ "Hello, " , name ]
+Person>>greet [ ^ 'Hello, ' , name ]
 
 # Method with one parameter
 Person>>name: aName [ name := aName ]
@@ -264,7 +259,7 @@ Person extendClass: [
 ]
 
 # Usage
-p := Person newNamed: "Alice" aged: 30
+p := Person newNamed: 'Alice' aged: 30
 ```
 
 ### Dynamic Message Sending (perform:)
@@ -309,7 +304,7 @@ For class methods:
 
 ### Super Send
 
-Call a parent prototype method explicitly:
+Call a parent class method explicitly:
 
 ```smalltalk
 # Unqualified super (uses first parent)
@@ -385,7 +380,7 @@ Conditional execution via message sends:
 
 ```smalltalk
 # If-then-else
-(x > 0) ifTrue: [ "positive" ] ifFalse: [ "negative" ]
+(x > 0) ifTrue: [ 'positive' ] ifFalse: [ 'negative' ]
 
 # While loop
 [ x < 10 ] whileTrue: [ x := x + 1 ]
@@ -408,7 +403,7 @@ See [NEWLINE_RULES.md](NEWLINE_RULES.md) for complete newline handling rules.
 
 ```smalltalk
 x := 42
-name := "Alice"
+name := 'Alice'
 obj := Object derive
 ```
 
@@ -416,7 +411,7 @@ obj := Object derive
 
 ### Object
 
-- `derive` - Create a new prototype
+- `derive` - Create a new class
 - `derive: #(ivar1 ivar2)` - Create with declared instance variables
 - `at: "key"` - Get property
 - `at: "key" put: value` - Set property (only on Dictionary)
