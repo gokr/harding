@@ -242,7 +242,12 @@ proc parseKeywordMessage(parser: var Parser, receiver: Node): MessageNode =
   var arguments = newSeq[Node]()
 
   # Collect keyword segments and arguments
-  while parser.peek().kind == tkKeyword:
+  while true:
+    # Skip separators before checking for next keyword (allows multiline keyword messages)
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind != tkKeyword:
+      break
     let token = parser.next()
     selector.add(token.value)  # Includes colon
 
@@ -359,7 +364,9 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
         # After unary messages, check for binary operators
         if parser.peek().kind in BinaryOpTokens:
           current = parser.parseBinaryOperators(current)
-        # After binary operators, check for keyword messages
+        # After binary operators, skip separators and check for keyword messages
+        while parser.peek().kind == tkSeparator:
+          discard parser.next()
         if parser.peek().kind == tkKeyword:
           return parser.parseKeywordMessage(current)
         return current
@@ -369,7 +376,9 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
        tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
       # Binary operator directly after primary
       current = parser.parseBinaryOperators(primary)
-      # After binary operators, check for keyword messages
+      # After binary operators, skip separators and check for keyword messages
+      while parser.peek().kind == tkSeparator:
+        discard parser.next()
       if parser.peek().kind == tkKeyword:
         return parser.parseKeywordMessage(current)
       return current
