@@ -318,6 +318,15 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
       debug("Found property on self: ", name)
       return (true, prop)
 
+  # Check if it's a slot on self (for objects with declared instance variables)
+  if interp.currentReceiver != nil and interp.currentReceiver.hasSlots:
+    if name in interp.currentReceiver.slotNames:
+      let idx = interp.currentReceiver.slotNames[name]
+      if idx < interp.currentReceiver.slots.len:
+        let val = interp.currentReceiver.slots[idx]
+        debug("Found slot on self: ", name, " = ", val.toString())
+        return (true, val)
+
   debug("Variable not found: ", name)
   return (false, nilValue())
 
@@ -354,6 +363,15 @@ proc setVariable(interp: var Interpreter, name: string, value: NodeValue) =
       interp.globals[][name] = value
       debug("Global updated: ", name, " = ", value.toString())
       return
+
+    # Check if it's a slot on self (for objects with declared instance variables)
+    if interp.currentReceiver != nil and interp.currentReceiver.hasSlots:
+      if name in interp.currentReceiver.slotNames:
+        let idx = interp.currentReceiver.slotNames[name]
+        if idx < interp.currentReceiver.slots.len:
+          interp.currentReceiver.slots[idx] = value
+          debug("Slot updated on self: ", name, " = ", value.toString())
+          return
 
     # Create in current activation
     interp.currentActivation.locals[name] = value
@@ -768,6 +786,28 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         else:
           debug("Identifier in array literal treated as symbol: ", ident.name)
           elements.add(getSymbol(ident.name))
+        continue
+      # Handle pseudo-variables (true, false, nil, self, super) when parsed as PseudoVarNode
+      if elem.kind == nkPseudoVar:
+        let pseudo = cast[PseudoVarNode](elem)
+        case pseudo.name
+        of "true":
+          elements.add(NodeValue(kind: vkBool, boolVal: true))
+        of "false":
+          elements.add(NodeValue(kind: vkBool, boolVal: false))
+        of "nil":
+          elements.add(nilValue())
+        of "self":
+          if interp.currentReceiver != nil:
+            elements.add(interp.currentReceiver.toValue())
+          else:
+            elements.add(interp.globals[]["Object"])
+        of "super":
+          # super refers to parent of current receiver
+          if interp.currentReceiver != nil and interp.currentReceiver.parents.len > 0:
+            elements.add(interp.currentReceiver.parents[0].toValue())
+          else:
+            elements.add(interp.globals[]["Object"])
         continue
       # Normal evaluation for other elements
       elements.add(interp.eval(elem))
@@ -1565,6 +1605,10 @@ proc initGlobals*(interp: var Interpreter) =
   arrayAddMethod.nativeImpl = cast[pointer](arrayAddImpl)
   addMethod(arrayProto, "primitiveAdd:", arrayAddMethod)
 
+  let arrayAddAliasMethod = createCoreMethod("add:")
+  arrayAddAliasMethod.nativeImpl = cast[pointer](arrayAddImpl)
+  addMethod(arrayProto, "add:", arrayAddAliasMethod)
+
   let arrayAtMethod = createCoreMethod("at:")
   arrayAtMethod.nativeImpl = cast[pointer](arrayAtImpl)
   addMethod(arrayProto, "at:", arrayAtMethod)
@@ -1933,7 +1977,8 @@ proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
     "Collections.nt",
     "String.nt",
     "FileStream.nt",
-    "Exception.nt"
+    "Exception.nt",
+    "TestCase.nt"
   ]
 
   for filename in stdlibFiles:
