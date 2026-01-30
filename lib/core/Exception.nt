@@ -39,8 +39,8 @@ Exception>>printString [
   # String representation including message
   | msg |
   msg := self getSlot: "message"
-  msg isNil ifTrue: [ msg := 'Unknown error' ]
-  ^ 'Exception: ' , msg
+  msg isNil ifTrue: [ msg := "Unknown error" ]
+  ^ "Exception: " , msg
 ]
 
 #====================================================================
