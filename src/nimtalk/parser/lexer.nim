@@ -14,6 +14,7 @@ type
     tkTag, tkNimCode
     tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
     tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq  # Multi-character binary operators: // \\ <= >= ~=
+    tkAmpersand, tkPipe  # & and | for logical operations
     tkMethodDef  # >> for method definitions
   Token* = object
     kind*: TokenKind
@@ -313,6 +314,13 @@ proc nextToken*(lexer: var Lexer): Token =
     if lexer.peek() == '>':
       discard lexer.next()
       return Token(kind: tkArrow, value: "->", line: startLine, col: startCol)
+    # Check for negative number literal (like Spry's approach)
+    elif lexer.peek().isDigit:
+      # Parse the number and prepend the minus sign
+      var numToken = lexer.parseNumber()
+      numToken.value = "-" & numToken.value
+      numToken.col = startCol  # Use the minus sign's column
+      return numToken
     else:
       return Token(kind: tkMinus, value: "-", line: startLine, col: startCol)
   of ',':
@@ -397,7 +405,10 @@ proc nextToken*(lexer: var Lexer): Token =
     return Token(kind: tkSpecial, value: ";", line: startLine, col: startCol)
   of '|':
     discard lexer.next()
-    return Token(kind: tkSpecial, value: "|", line: startLine, col: startCol)
+    return Token(kind: tkPipe, value: "|", line: startLine, col: startCol)
+  of '&':
+    discard lexer.next()
+    return Token(kind: tkAmpersand, value: "&", line: startLine, col: startCol)
   of ':':
     # Assignment operator := or colon for object literals
     discard lexer.next()
