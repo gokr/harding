@@ -7,7 +7,7 @@ import std/[strutils, tables]
 
 type
   SymbolKind* = enum
-    skPrototype      ## Prototype name
+    skClass          ## Class name
     skMethod         ## Method selector
     skSlot           ## Slot/instance variable
     skParameter      ## Method parameter
@@ -19,18 +19,18 @@ type
     mangled*: string         ## Mangled identifier
     kind*: SymbolKind        ## Symbol type
     index*: int              ## Index (slot index, param index, etc.)
-    prototype*: string       ## Owning prototype name (if applicable)
+    class*: string       ## Owning class name (if applicable)
 
   SymbolTable* = ref object
     symbols*: Table[string, SymbolInfo]  ## Name -> info
-    prototype*: string        ## Current prototype scope
+    class*: string        ## Current class scope
     currentMethod*: string    ## Current method scope
 
-proc newSymbolTable*(prototype = ""): SymbolTable =
+proc newSymbolTable*(class = ""): SymbolTable =
   ## Create new symbol table
   result = SymbolTable(
     symbols: initTable[string, SymbolInfo](),
-    prototype: prototype,
+    class: class,
     currentMethod: ""
   )
 
@@ -55,9 +55,9 @@ proc mangleSelector*(selector: string): string =
   # Add nt_ prefix
   result = "nt_" & result
 
-proc manglePrototype*(name: string): string =
-  ## Convert prototype name to valid Nim identifier
-  result = "Proto_" & name.replace(":", "_")
+proc mangleClass*(name: string): string =
+  ## Convert class name to valid Nim identifier
+  result = "Class_" & name.replace(":", "_")
 
 proc mangleSlot*(name: string): string =
   ## Convert slot name to valid Nim identifier
@@ -84,10 +84,10 @@ proc clearMethodScope*(table: var SymbolTable) =
       table.symbols.del(name)
   table.currentMethod = ""
 
-proc clearPrototypeScope*(table: var SymbolTable) =
+proc clearClassScope*(table: var SymbolTable) =
   ## Clear all scope-local symbols
   for name, info in table.symbols:
     if info.kind in {skSlot, skMethod}:
       table.symbols.del(name)
-  table.prototype = ""
+  table.class = ""
   table.clearMethodScope()

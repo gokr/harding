@@ -49,12 +49,12 @@ type
     nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
 
   # ============================================================================
-  # Legacy Prototype-Based Types (to be migrated)
+  # Legacy Runtime Types (to be migrated to Class/Instance model)
   # ============================================================================
 
-  ProtoObject* {.acyclic.} = ref object of RootObj
+  RuntimeObject* {.acyclic.} = ref object of RootObj
     methods*: Table[string, BlockNode]     # method dictionary
-    parents*: seq[ProtoObject]             # prototype chain
+    parents*: seq[RuntimeObject]           # inheritance chain
     tags*: seq[string]                     # type tags
     isNimProxy*: bool                      # wraps Nim value
     nimValue*: pointer                     # proxied Nim value
@@ -63,8 +63,8 @@ type
     slots*: seq[NodeValue]                 # instance variables (faster than property bag)
     slotNames*: Table[string, int]         # maps ivar names to slot indices
 
-  DictionaryObj* = ref object of ProtoObject
-    ## Dictionary - prototype with property bag for dynamic key-value storage
+  DictionaryObj* = ref object of RuntimeObject
+    ## Dictionary - runtime object with property bag for dynamic key-value storage
     properties*: Table[string, NodeValue]  # property bag for dynamic objects
 
   # Mutable cell for captured variables (shared between closures)
@@ -87,9 +87,9 @@ type
   # Activation records for method execution (defined after BlockNode)
   ActivationObj* {.acyclic.} = object of RootObj
     sender*: Activation       # calling context
-    receiver*: ProtoObject    # 'self'
+    receiver*: RuntimeObject    # 'self'
     currentMethod*: BlockNode # current method
-    definingObject*: ProtoObject  # object where method was found (for super)
+    definingObject*: RuntimeObject  # object where method was found (for super)
     pc*: int                  # program counter
     locals*: Table[string, NodeValue]  # local variables
     capturedVars*: Table[string, MutableCell]  # shared captured vars for sibling blocks
@@ -109,7 +109,7 @@ type
     of vkSymbol: symVal*: string
     of vkBool: boolVal*: bool
     of vkNil: discard
-    of vkObject: objVal*: ProtoObject
+    of vkObject: objVal*: RuntimeObject
     of vkBlock: blockVal*: BlockNode
     of vkArray: arrayVal*: seq[NodeValue]
     of vkTable: tableVal*: Table[string, NodeValue]
@@ -177,27 +177,27 @@ type
     nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkCascade, nkSlotAccess, nkSuperSend, nkPseudoVar
 
   # Root object (global singleton)
-  RootObject* = ref object of ProtoObject
+  RootObject* = ref object of RuntimeObject
     ## Global root object - parent of all objects
 
   # Dictionary prototype (singleton)
   DictionaryPrototype* = ref object of DictionaryObj
-    ## Global Dictionary prototype - provides property bag functionality
+    ## Global Dictionary - provides property bag functionality
 
   # FileStream object for file I/O
-  FileStreamObj* = ref object of ProtoObject
+  FileStreamObj* = ref object of RuntimeObject
     file*: File
     mode*: string
     isOpen*: bool
 
   # Exception object for error handling
-  ExceptionObj* = ref object of ProtoObject
+  ExceptionObj* = ref object of RuntimeObject
     message*: string
     stackTrace*: string
-    signaler*: ProtoObject
+    signaler*: RuntimeObject
 
   # Global registry object - shared between Nim and Nimtalk
-  GlobalObj* = ref object of ProtoObject
+  GlobalObj* = ref object of RuntimeObject
     tableRef*: ref Table[string, NodeValue]  # Shared heap-allocated table
     categories*: Table[string, seq[string]]  # category name -> global names
 
@@ -273,9 +273,9 @@ proc nilValue*(): NodeValue =
 # Procs and utilities for slot-based instance variables
 # ============================================================================
 
-proc initSlotObject*(ivars: seq[string]): ProtoObject =
+proc initSlotObject*(ivars: seq[string]): RuntimeObject =
   ## Create object with declared instance variables (slots)
-  result = ProtoObject()
+  result = RuntimeObject()
   result.methods = initTable[string, BlockNode]()
   result.parents = @[]
   result.tags = @["slotted"]
@@ -305,7 +305,7 @@ proc initDictionaryObject*(): DictionaryObj =
   result.slotNames = initTable[string, int]()
   result.properties = initTable[string, NodeValue]()
 
-proc getSlot*(obj: ProtoObject, name: string): NodeValue =
+proc getSlot*(obj: RuntimeObject, name: string): NodeValue =
   ## Get slot value by name (returns nil if not found)
   when not defined(release):
     debug "getSlot: looking up '", name, "'"
@@ -320,7 +320,7 @@ proc getSlot*(obj: ProtoObject, name: string): NodeValue =
   let idx = obj.slotNames[name]
   return obj.slots[idx]
 
-proc setSlot*(obj: ProtoObject, name: string, value: NodeValue) =
+proc setSlot*(obj: RuntimeObject, name: string, value: NodeValue) =
   ## Set slot value by name (does nothing if slot doesn't exist)
   when not defined(release):
     debug "setSlot called: '", name, "' = ", value.toString()
@@ -335,11 +335,11 @@ proc setSlot*(obj: ProtoObject, name: string, value: NodeValue) =
     debug "  setting at index ", idx
   obj.slots[idx] = value
 
-proc hasSlotIVars*(obj: ProtoObject): bool =
+proc hasSlotIVars*(obj: RuntimeObject): bool =
   ## Check if object has declared instance variables (slots)
   return obj.hasSlots
 
-proc getSlotNames*(obj: ProtoObject): seq[string] =
+proc getSlotNames*(obj: RuntimeObject): seq[string] =
   ## Get all instance variable names
   if not obj.hasSlots:
     return @[]
@@ -360,7 +360,7 @@ proc toValue*(arr: seq[NodeValue]): NodeValue =
 proc toValue*(tab: Table[string, NodeValue]): NodeValue =
   NodeValue(kind: vkTable, tableVal: tab)
 
-proc toValue*(obj: ProtoObject): NodeValue =
+proc toValue*(obj: RuntimeObject): NodeValue =
   NodeValue(kind: vkObject, objVal: obj)
 
 proc toValue*(blk: BlockNode): NodeValue =
@@ -372,7 +372,7 @@ proc toValue*(cls: Class): NodeValue =
 proc toValue*(inst: Instance): NodeValue =
   NodeValue(kind: vkInstance, instVal: inst)
 
-proc toObject*(val: NodeValue): ProtoObject =
+proc toObject*(val: NodeValue): RuntimeObject =
   if val.kind != vkObject:
     raise newException(ValueError, "Not an object: " & val.toString)
   val.objVal
@@ -404,10 +404,10 @@ proc toTable*(val: NodeValue): Table[string, NodeValue] =
 
 # Dictionary property helpers
 proc getProperty*(dict: DictionaryObj, name: string): NodeValue =
-  ## Get property value from dictionary or its prototype chain
+  ## Get property value from dictionary or its class hierarchy
   if dict.properties.hasKey(name):
     return dict.properties[name]
-  # Search prototype chain for Dictionary prototypes
+  # Search class hierarchy for Dictionary parents
   for parent in dict.parents:
     if parent of DictionaryObj:
       let val = cast[DictionaryObj](parent).getProperty(name)
@@ -417,19 +417,19 @@ proc getProperty*(dict: DictionaryObj, name: string): NodeValue =
   nilValue()
 
 proc setProperty*(dict: DictionaryObj, name: string, value: NodeValue) =
-  ## Set property on dictionary (not in prototypes)
+  ## Set property on dictionary (not on parent classes)
   debug("setProperty for Dictionary: ", $dict.tags, " name: ", name, " = ", value.toString())
   dict.properties[name] = value
 
 # Generic lookup that delegates to DictionaryObj if applicable
-proc getPropertyGeneric*(obj: ProtoObject, name: string): NodeValue =
+proc getPropertyGeneric*(obj: RuntimeObject, name: string): NodeValue =
   ## Get property value - works for Dictionary objects, returns nil for others
   if obj of DictionaryObj:
     return cast[DictionaryObj](obj).getProperty(name)
   return nilValue()
 
-proc lookupMethod*(obj: ProtoObject, selector: string): BlockNode =
-  ## Look up method in object or prototype chain
+proc lookupMethod*(obj: RuntimeObject, selector: string): BlockNode =
+  ## Look up method in object or class hierarchy
   ## NOTE: This is a stub - actual implementation in objects.nim
   nil
 

@@ -19,9 +19,9 @@ type
     returnType*: TypeConstraint ## Return type constraint
     isPrimitive*: bool         ## Has primitive implementation
 
-  PrototypeInfo* = ref object
-    name*: string              ## Prototype name
-    parent*: PrototypeInfo     ## Parent prototype (prototype chain)
+  ClassInfo* = ref object
+    name*: string              ## Class name
+    parent*: ClassInfo     ## Parent class (inheritance chain)
     slots*: seq[SlotDef]       ## Slot definitions
     methods*: seq[MethodType]  ## Method type information
     slotIndex*: Table[string, int]  ## Slot name -> index
@@ -29,8 +29,8 @@ type
   CompilerContext* = ref object
     outputDir*: string
     moduleName*: string
-    prototypes*: Table[string, PrototypeInfo]  ## Prototype registry
-    currentProto*: PrototypeInfo  ## Currently compiling prototype
+    classes*: Table[string, ClassInfo]  ## Class registry
+    currentClass*: ClassInfo  ## Currently compiling class
     symbols*: Table[string, string]  ## Selector -> mangled name
     generatedMethods*: seq[tuple[selector: string, code: string]]
 
@@ -39,15 +39,15 @@ proc newCompiler*(outputDir = "./build", moduleName = "compiled"): CompilerConte
   result = CompilerContext(
     outputDir: outputDir,
     moduleName: moduleName,
-    prototypes: initTable[string, PrototypeInfo](),
-    currentProto: nil,
+    classes: initTable[string, ClassInfo](),
+    currentClass: nil,
     symbols: initTable[string, string](),
     generatedMethods: @[]
   )
 
-proc newPrototypeInfo*(name: string, parent: PrototypeInfo = nil): PrototypeInfo =
-  ## Create new prototype info
-  result = PrototypeInfo(
+proc newClassInfo*(name: string, parent: ClassInfo = nil): ClassInfo =
+  ## Create new class info
+  result = ClassInfo(
     name: name,
     parent: parent,
     slots: @[],
@@ -55,41 +55,41 @@ proc newPrototypeInfo*(name: string, parent: PrototypeInfo = nil): PrototypeInfo
     slotIndex: initTable[string, int]()
   )
 
-proc addSlot*(proto: PrototypeInfo, name: string,
+proc addSlot*(cls: ClassInfo, name: string,
               constraint: TypeConstraint = tcObject): int =
   ## Add a slot definition and return its index
-  if name in proto.slotIndex:
-    return proto.slotIndex[name]
+  if name in cls.slotIndex:
+    return cls.slotIndex[name]
 
   let slot = SlotDef(
     name: name,
     constraint: constraint,
-    index: proto.slots.len,
+    index: cls.slots.len,
     isInherited: false
   )
-  proto.slots.add(slot)
-  proto.slotIndex[name] = slot.index
+  cls.slots.add(slot)
+  cls.slotIndex[name] = slot.index
   return slot.index
 
-proc getSlotIndex*(proto: PrototypeInfo, name: string): int =
-  ## Get slot index, searching prototype chain
-  if name in proto.slotIndex:
-    return proto.slotIndex[name]
-  if proto.parent != nil:
-    return proto.parent.getSlotIndex(name)
+proc getSlotIndex*(cls: ClassInfo, name: string): int =
+  ## Get slot index, searching inheritance chain
+  if name in cls.slotIndex:
+    return cls.slotIndex[name]
+  if cls.parent != nil:
+    return cls.parent.getSlotIndex(name)
   return -1
 
-proc getSlotDef*(proto: PrototypeInfo, name: string): SlotDef =
-  ## Get slot definition, searching prototype chain
-  if name in proto.slotIndex:
-    let idx = proto.slotIndex[name]
-    if idx < proto.slots.len and proto.slots[idx].name == name:
-      return proto.slots[idx]
-  if proto.parent != nil:
-    return proto.parent.getSlotDef(name)
+proc getSlotDef*(cls: ClassInfo, name: string): SlotDef =
+  ## Get slot definition, searching inheritance chain
+  if name in cls.slotIndex:
+    let idx = cls.slotIndex[name]
+    if idx < cls.slots.len and cls.slots[idx].name == name:
+      return cls.slots[idx]
+  if cls.parent != nil:
+    return cls.parent.getSlotDef(name)
   return SlotDef(name: name, constraint: tcNone, index: -1, isInherited: true)
 
-proc addMethod*(proto: PrototypeInfo, selector: string,
+proc addMethod*(cls: ClassInfo, selector: string,
                 parameters: seq[TypeConstraint],
                 returnType: TypeConstraint = tcNone): MethodType =
   ## Add method type information
@@ -99,22 +99,22 @@ proc addMethod*(proto: PrototypeInfo, selector: string,
     returnType: returnType,
     isPrimitive: false
   )
-  proto.methods.add(meth)
+  cls.methods.add(meth)
   return meth
 
-proc getMethodType*(proto: PrototypeInfo, selector: string): MethodType =
-  ## Get method type info, searching prototype chain
-  for meth in proto.methods:
+proc getMethodType*(cls: ClassInfo, selector: string): MethodType =
+  ## Get method type info, searching inheritance chain
+  for meth in cls.methods:
     if meth.selector == selector:
       return meth
-  if proto.parent != nil:
-    return proto.parent.getMethodType(selector)
+  if cls.parent != nil:
+    return cls.parent.getMethodType(selector)
   return MethodType(selector: selector, parameters: @[], returnType: tcNone)
 
-proc getAllSlots*(proto: PrototypeInfo): seq[SlotDef] =
+proc getAllSlots*(cls: ClassInfo): seq[SlotDef] =
   ## Get all slots including inherited ones
   result = @[]
-  var current: PrototypeInfo = proto
+  var current: ClassInfo = cls
   while current != nil:
     for slot in current.slots:
       if not slot.isInherited and result.allIt(it.name != slot.name):
@@ -127,12 +127,12 @@ proc getAllSlots*(proto: PrototypeInfo): seq[SlotDef] =
   result = reversedResult
 
 proc resolveSlotIndices*(ctx: var CompilerContext): void =
-  ## Resolve and assign slot indices across prototype chain
-  for name, proto in ctx.prototypes.mpairs:
-    proto.slotIndex.clear()
-    var idx = proto.parent.getAllSlots().len
-    for slot in proto.slots.mitems:
+  ## Resolve and assign slot indices across inheritance chain
+  for name, cls in ctx.classes.mpairs:
+    cls.slotIndex.clear()
+    var idx = cls.parent.getAllSlots().len
+    for slot in cls.slots.mitems:
       if not slot.isInherited:
         slot.index = idx
-        proto.slotIndex[slot.name] = idx
+        cls.slotIndex[slot.name] = idx
         inc idx
