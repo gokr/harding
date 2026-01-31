@@ -146,7 +146,7 @@ proc parsePrimary(parser: var Parser): Node =
           of tkIdent:
             selector = parser.next().value
           of tkSpecial, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent,
-             tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
+             tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
             selector = parser.next().value
             let arg = parser.parseExpression(parseMessages = false)
             if arg == nil:
@@ -301,7 +301,7 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
 
 # Binary operator tokens for parsing
 const BinaryOpTokens* = {tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
-                         tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq}
+                         tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe}
 
 # Parse binary operators with left-to-right associativity
 proc parseBinaryOperators(parser: var Parser, left: Node): Node =
@@ -381,7 +381,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
       else:
         return primary
     of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
-       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
       # Binary operator directly after primary
       current = parser.parseBinaryOperators(primary)
       # After binary operators, skip separators and check for keyword messages
@@ -495,7 +495,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
         discard parser.next()
 
     # Expect | after parameters
-    if not (parser.peek().kind == tkSpecial and parser.peek().value == "|"):
+    if not (parser.peek().kind == tkPipe):
       parser.parseError("Expected | after block parameters")
       return nil
     discard parser.next()
@@ -508,7 +508,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
   # OR just consume the | separator and parse body (Nimtalk-style)
   # In the test syntax, [| ...] means block with no params, just consume | and parse body
   debug("parseBlock: checking for temporaries, current=", parser.peek().kind, " value=", parser.peek().value)
-  if parser.peek().kind == tkSpecial and parser.peek().value == "|":
+  if parser.peek().kind == tkPipe:
     # Could be |param| (end of params) or |temp1 temp2| (temporaries)
     discard parser.next()  # Consume |
     # Skip whitespace after |
@@ -525,7 +525,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
         while parser.peek().kind == tkSeparator:
           discard parser.next()
       # Expect closing |
-      if parser.peek().kind == tkSpecial and parser.peek().value == "|":
+      if parser.peek().kind == tkPipe:
         discard parser.next()
       else:
         parser.parseError("Expected | to close temporary variable declaration")
@@ -645,7 +645,7 @@ proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
   obj.properties = @[]
 
   # Parse properties until closing |}
-  while not (parser.peek().kind == tkSpecial and parser.peek().value == "|"):
+  while not (parser.peek().kind == tkPipe):
     if parser.peek().kind == tkEOF:
       parser.parseError("Unclosed object literal - expected '|'")
       return nil
