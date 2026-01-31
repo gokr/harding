@@ -122,8 +122,10 @@ var trueValue*: NodeValue = nilValue()
 var falseValue*: NodeValue = nilValue()
 
 # Class caches for wrapped primitives (set by loadStdlib)
+var booleanClassCache*: RuntimeObject = nil
 var trueClassCache*: RuntimeObject = nil
 var falseClassCache*: RuntimeObject = nil
+var numberClassCache*: RuntimeObject = nil
 var integerClassCache*: RuntimeObject = nil
 var stringClassCache*: RuntimeObject = nil
 var arrayClassCache*: RuntimeObject = nil
