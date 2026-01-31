@@ -7,131 +7,9 @@ import ../interpreter/activation
 
 # Class caches are defined in objects.nim and shared across the interpreter
 
-# Forward declarations for methods defined later in this file
-proc wrapIntAsObject*(value: int): NodeValue =
-  ## Wrap an integer as a Nim proxy object that can receive messages
-  let obj = RuntimeObject()
-  obj.methods = initTable[string, BlockNode]()
-  # Use Integer class as parent if available
-  if integerClassCache != nil:
-    obj.parents = @[integerClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = @["Integer", "Number"]
-  obj.isNimProxy = true
-  obj.nimValue = cast[pointer](alloc(sizeof(int)))
-  cast[ptr int](obj.nimValue)[] = value
-  obj.nimType = "int"
-  return NodeValue(kind: vkObject, objVal: obj)
-
-# Implementation of wrapBoolAsObject for proxy booleans
-proc wrapBoolAsObject*(value: bool): NodeValue =
-  ## Wrap a boolean as a Nim proxy object that can receive messages
-  let obj = RuntimeObject()
-  obj.methods = initTable[string, BlockNode]()
-  # Use True/False class as parent if available
-  if value and trueClassCache != nil:
-    obj.parents = @[trueClassCache]
-  elif not value and falseClassCache != nil:
-    obj.parents = @[falseClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = if value: @["Boolean", "True"] else: @["Boolean", "False"]
-  obj.isNimProxy = true
-  obj.nimValue = cast[pointer](alloc(sizeof(bool)))
-  cast[ptr bool](obj.nimValue)[] = value
-  obj.nimType = "bool"
-  return NodeValue(kind: vkObject, objVal: obj)
-
-# Implementation of wrapStringAsObject for proxy strings
-proc wrapStringAsObject*(s: string): NodeValue =
-  ## Wrap a string as a Nim proxy object that can receive messages
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  # Use String class as parent if available
-  if stringClassCache != nil:
-    obj.parents = @[stringClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = @["String", "Text"]
-  obj.isNimProxy = true
-  obj.nimType = "string"
-  # Store string value
-  obj.properties = initTable[string, NodeValue]()
-  obj.properties["__value"] = NodeValue(kind: vkString, strVal: s)
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
-
-# Implementation of wrapArrayAsObject for proxy arrays
-# Uses DictionaryObj to store elements in properties for safety
-proc wrapArrayAsObject*(arr: seq[NodeValue]): NodeValue =
-  ## Wrap an array (seq) as a Nim proxy object that can receive messages
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-
-  # Try to use Array class as parent if available
-  if arrayClassCache != nil:
-    obj.parents = @[arrayClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
-
-  obj.tags = @["Array", "Collection"]
-  obj.isNimProxy = true
-  obj.nimType = "array"
-  # Store elements in properties with numeric keys
-  obj.properties = initTable[string, NodeValue]()
-  obj.properties["__size"] = NodeValue(kind: vkInt, intVal: arr.len)
-  for i, elem in arr:
-    obj.properties[$i] = elem  # 0-based index internally
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
-
-# Implementation of wrapTableAsObject for proxy tables
-# Uses DictionaryObj to store entries in properties for safety
-proc wrapTableAsObject*(tab: Table[string, NodeValue]): NodeValue =
-  ## Wrap a table as a Nim proxy object that can receive messages
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = @["Table", "Collection", "Dictionary"]
-  obj.isNimProxy = true
-  obj.nimType = "table"
-  # Store entries in properties
-  obj.properties = tab
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
-
-# Implementation of wrapFloatAsObject for proxy floats
-proc wrapFloatAsObject*(value: float): NodeValue =
-  ## Wrap a float as a Nim proxy object that can receive messages
-  let obj = RuntimeObject()
-  obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = @["Float", "Number"]
-  obj.isNimProxy = true
-  obj.nimValue = cast[pointer](alloc(sizeof(float)))
-  cast[ptr float](obj.nimValue)[] = value
-  obj.nimType = "float"
-  obj.hasSlots = false
-  obj.slots = @[]
-  obj.slotNames = initTable[string, int]()
-  return NodeValue(kind: vkObject, objVal: obj)
-
-# Implementation of wrapBlockAsObject for blocks (needed for methods like whileTrue:)
-proc wrapBlockAsObject*(blockNode: BlockNode): NodeValue =
-  ## Wrap a block as a RuntimeObject that can receive messages (like whileTrue:)
-  ## The BlockNode is stored so it can be executed later
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  # Use Block class as parent if available
-  if blockClassCache != nil:
-    obj.parents = @[blockClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
-  obj.tags = @["Block", "Closure"]
-  obj.isNimProxy = false
-  obj.nimType = "block"
-  # Store block node in properties so whileTrue:/whileFalse: can access it
-  obj.properties = initTable[string, NodeValue]()
-  obj.properties["__blockNode"] = NodeValue(kind: vkBlock, blockVal: blockNode)
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
+# Forward declarations - implementations are in objects.nim
+# Note: These are imported from objects.nim via the import statement above
+# They are re-exported for backward compatibility with code that imports evaluator
 
 # ============================================================================
 # Evaluation engine for Nimtalk
@@ -2085,6 +1963,14 @@ proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
 
   # Set up class caches for primitive types
   # These allow wrapped primitives to inherit methods from stdlib
+
+  # Number hierarchy: Number -> Integer, Float
+  if "Number" in interp.globals[]:
+    let numVal = interp.globals[]["Number"]
+    if numVal.kind == vkObject:
+      numberClassCache = numVal.objVal
+      debug("Set numberClassCache from Number global")
+
   if "Integer" in interp.globals[]:
     let intVal = interp.globals[]["Integer"]
     if intVal.kind == vkObject:
@@ -2096,6 +1982,13 @@ proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
     if strVal.kind == vkObject:
       stringClassCache = strVal.objVal
       debug("Set stringClassCache from String global")
+
+  # Boolean hierarchy: Boolean -> True, False
+  if "Boolean" in interp.globals[]:
+    let boolVal = interp.globals[]["Boolean"]
+    if boolVal.kind == vkObject:
+      booleanClassCache = boolVal.objVal
+      debug("Set booleanClassCache from Boolean global")
 
   if "True" in interp.globals[]:
     let trueVal = interp.globals[]["True"]
