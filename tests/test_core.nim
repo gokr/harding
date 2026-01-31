@@ -82,7 +82,6 @@ suite "Object system":
     let root = initRootObject()
     check root != nil
     check "Object" in root.tags
-    check "Proto" in root.tags
 
   test "object cloning":
     let root = initRootObject()

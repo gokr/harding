@@ -86,6 +86,10 @@ This document tracks current work items and future directions for Nimtalk develo
 - ~~extendClass: for class-side methods~~ ✅ Implemented
 - ~~derive:methods: combined class creation~~ ✅ Implemented
 - ~~perform: family for dynamic dispatch~~ ✅ Implemented
+- ~~Green threads core scheduler~~ ✅ Implemented
+- ~~Process forking and yielding~~ ✅ Implemented
+- ~~Shared globals between processes~~ ✅ Implemented
+- Monitors and SharedQueues (in progress)
 - Memory management for circular references
 - Error handling improvements needed
 - Compiler implementation (ntalkc is stub)
@@ -145,6 +149,17 @@ nimble clean       # Clean artifacts
 - Implemented `perform:`, `perform:with:`, `perform:with:with:` for dynamic dispatch
 - All `perform:` calls now use symbols (`#selector`) instead of strings
 - Updated `doesNotUnderstand:` to accept selector with optional arguments
+
+### Green Threads (Cooperative Processes)
+- Implemented core scheduler in `nimtalk/core/process.nim`
+- Added `SchedulerContext` for interpreter integration
+- Each process has its own interpreter with isolated activation stack
+- Shared globals and rootObject between all processes
+- Round-robin scheduling with explicit yields
+- Process states: ready, running, blocked, suspended, terminated
+- `Processor` global object with `yield`, `fork:`, `current` methods
+- Process forking from Nimtalk blocks
+- Test suite for scheduler and process lifecycle
 
 ---
 

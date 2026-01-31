@@ -1,11 +1,13 @@
 # Green Threads and GTK Integration Plan
 
-This document outlines the implementation plan for cooperative green processes (green threads) and GTK4 integration for Nimtalk. The design centers around Monitors as the fundamental concurrency primitive, with shared heaps and copy-on-pass by reference.
+This document outlines the implementation of cooperative green processes (green threads) and the planned GTK4 integration for Nimtalk. The design centers around Monitors as the fundamental concurrency primitive, with shared heaps and copy-on-pass by reference.
+
+**Status**: Phase 1 (Core Scheduler) ✅ Implemented | Phase 2 (GTK Integration) 🚧 Planned
 
 **See also:**
 - [Concurrency Design](./CONCURRENCY.md) – background theory and comparisons.
 - [Gtk Intro](./GINTRO.md) – GTK4 Nim bindings.
-- [Internal Details](./GREENTHREADS-DETAILS.md) – scheduler and Monitor details.
+- [API Reference](#api-reference) – Nimtalk-side API documentation.
 
 ---
 
@@ -292,7 +294,7 @@ Processor fork: [100 timesRepeat: [Transcript show: queue take]]
 
 ## 4. Implementation Roadmap
 
-### Phase 1: Core Scheduler and Monitor (1‑2 weeks)
+### Phase 1: Core Scheduler and Monitor (✅ Completed)
 
 - [x] `nimtalk/core/process.nim`: Process, Scheduler types.
 - [x] Basic round‑robin scheduler, with only explicit yields.
@@ -300,8 +302,12 @@ Processor fork: [100 timesRepeat: [Transcript show: queue take]]
 - [x] Simple yield and block/unblock operations.
 - [x] `nimtalk/core/scheduler.nim`: Scheduler-Interpreter integration.
 - [x] Process forking with shared globals and rootObject.
+- [x] Processor global object with `yield`, `fork:`, `current` methods.
+- [x] Test suite for scheduler and process lifecycle.
 
-### Phase 2: Synchronisation Primitives (2‑3 weeks)
+**Status**: Core scheduler is fully functional. Each process has its own interpreter with shared globals and rootObject. Round-robin scheduling with explicit yields is working.
+
+### Phase 2: Synchronisation Primitives (🚧 In Progress)
 
 - [ ] Semaphore (binary, counting).
 - [ ] SharedQueue (bounded buffer) atop Monitor.
@@ -309,18 +315,20 @@ Processor fork: [100 timesRepeat: [Transcript show: queue take]]
 - [x] Process spawning from Nimtalk: `Processor fork: aBlock`.
 - [ ] Debugger: inspection of process stack frames.
 
-### Phase 3: GTK Bridge (2 weeks)
+**Status**: `Processor fork:` and `Processor yield` are implemented. Monitors and SharedQueues are planned but not yet implemented.
+
+### Phase 3: GTK Bridge (📋 Planned)
 
 - [ ] Basic GTK widget objects (Window, Button, Box, TextView).
 - [ ] Event‑loop hook for GTK idles.
 - [ ] Signal‑to‑callback mapping (GTK signal → Nimtalk block evaluation).
 
-### Phase 4: Nimtalk‑side UI Framework (2‑3 weeks)
+### Phase 4: Nimtalk‑side UI Framework (📋 Planned)
 
 - [ ] `GtkApplication` Nimtalk‑side class.
 - [ ] Example apps: Transcript, simple editor, process inspector.
 
-### Phase 5: Channels and Actor‑style (future)
+### Phase 5: Channels and Actor‑style (📋 Future)
 
 - [ ] Channels: bounded capacity, typed.
 - [ ] Actor‑mailbox processes.
@@ -377,4 +385,99 @@ The same cooperative scheduler that runs your GUI app can run the debugger that 
 
 ---
 
-**Plan approved** 2025‑01‑30.  **Current Phase** – Phase 1.
+## API Reference
+
+### Nimtalk-Side API
+
+The `Processor` global object provides the main interface for green thread operations:
+
+#### Processor yield
+Yields the current process, allowing other ready processes to run.
+
+```smalltalk
+"Yield to other processes"
+Processor yield
+```
+
+#### Processor fork: aBlock
+Creates a new green process that will execute `aBlock` when scheduled.
+
+```smalltalk
+"Fork a new process"
+process := Processor fork: [
+  1 to: 10 do: [:i |
+    Stdout writeline: i.
+    Processor yield
+  ]
+]
+```
+
+#### Processor current
+Returns the current process object (placeholder - returns nil in current implementation).
+
+```smalltalk
+"Get current process"
+current := Processor current
+```
+
+### Nim-Side API
+
+#### SchedulerContext
+The main entry point for scheduler operations:
+
+```nim
+# Create scheduler with main process
+let ctx = newSchedulerContext()
+
+# Access scheduler and main process
+let sched = ctx.scheduler
+let main = ctx.mainProcess
+```
+
+#### Process Management
+
+```nim
+# Fork a new process from a block
+let newProc = ctx.forkProcess(blockNode, receiver, "process-name")
+
+# Run one time slice
+let ran = ctx.runOneSlice()
+
+# Run until all processes complete
+let steps = ctx.runToCompletion(maxSteps = 10000)
+
+# Run until no ready processes
+let steps = ctx.runUntilIdle(maxSteps = 1000)
+```
+
+#### Process State
+
+```nim
+type ProcessState = enum
+  psReady       # Ready to run
+  psRunning     # Currently executing
+  psBlocked     # Blocked on synchronization
+  psSuspended   # Suspended for debugging
+  psTerminated  # Finished execution
+```
+
+#### Scheduler Inspection
+
+```nim
+# Get process counts
+let total = sched.processCount
+let ready = sched.readyCount
+let blocked = sched.blockedCount
+
+# List all processes
+for (pid, name, state) in sched.listProcesses():
+  echo pid, " ", name, " ", state
+
+# Print scheduler status
+echo sched.printStatus()
+```
+
+---
+
+**Plan approved** 2025‑01‑30.
+**Phase 1 Completed** 2026‑01‑31 – Core scheduler with explicit yields, process forking, and test suite.

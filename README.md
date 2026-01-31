@@ -122,6 +122,25 @@ p := Person newNamed: "Alice" aged: 30.
 
 The `extend:` and `extendClass:` methods use `asSelfDo:` internally, which temporarily rebinds `self` to the target object during block evaluation. This enables clean method batching syntax.
 
+### Green Threads (Cooperative Processes)
+
+Nimtalk supports cooperative green threads for concurrent execution:
+
+```smalltalk
+"Fork a new process"
+process := Processor fork: [
+  1 to: 10 do: [:i |
+    Stdout writeline: i.
+    Processor yield  "Yield to other processes"
+  ]
+]
+
+"Yield current process"
+Processor yield
+```
+
+Each process has its own interpreter with an isolated activation stack, but all processes share the same globals and class hierarchy. The scheduler uses round-robin scheduling with explicit yields.
+
 ## Installation
 
 ```bash
@@ -204,6 +223,8 @@ Working:
 - Dynamic message sending: `perform:`, `perform:with:`, `perform:with:with:`
 - Method batching: `extend:`, `extendClass:`, `derive:methods:`
 - Self-rebinding: `asSelfDo:` for evaluating blocks with modified self
+- Green threads: cooperative processes with `Processor yield`, `Processor fork:`
+- Per-process interpreters with shared globals
 
 In progress:
 - Compiler to Nim (ntalkc is stub)

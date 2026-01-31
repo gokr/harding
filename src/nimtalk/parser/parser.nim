@@ -325,9 +325,11 @@ proc parseBinaryOperators(parser: var Parser, left: Node): Node =
         isCascade: false
       )
 
-    # After unary messages on right side, check for keyword message
-    if parser.peek().kind == tkKeyword:
-      right = parser.parseKeywordMessage(right)
+    # Note: Do NOT parse keyword messages here - they have lower precedence
+    # than binary operators and should be parsed in parseExpression after
+    # all binary operators are processed. This ensures correct parsing of
+    # expressions like "self < 0 ifTrue: [...]" as "(self < 0) ifTrue: [...]"
+    # rather than "self < (0 ifTrue: [...])".
 
     expr = MessageNode(
       receiver: expr,
