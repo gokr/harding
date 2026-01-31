@@ -44,7 +44,7 @@ proc parseLogLevel(levelStr: string): Level =
     quit(1)
 
 proc showUsage() =
-  echo "Nimtalk REPL - Prototype-based Smalltalk for Nim"
+  echo "Nimtalk REPL - Class-Based Smalltalk for Nim"
   echo ""
   echo "Usage:"
   echo "  ntalk [options]                    # Start interactive REPL"

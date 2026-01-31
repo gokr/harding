@@ -53,7 +53,7 @@ proc newConfig(): Config =
   )
 
 proc showUsage() =
-  echo "Nimtalk Compiler - Prototype-based Smalltalk for Nim"
+  echo "Nimtalk Compiler - Class-based Smalltalk for Nim"
   echo ""
   echo "Usage:"
   echo "  ntalkc <command> [options] <file.nt>"

@@ -3,7 +3,7 @@
 # Object.nt - Root object with core methods
 # This is the foundation of the Nimtalk object system
 
-# Object is the root of the prototype hierarchy
+# Object is the root of the class hierarchy
 # It provides fundamental behaviors that all objects inherit
 
 # Note: Object is set by initGlobals() in interpreter/evaluator.nim
@@ -12,14 +12,14 @@
 #====================================================================
 
 Object>>clone [
-  # Create a shallow copy of this object without prototype links.
+  # Create a shallow copy of this object without class/superclass links.
   # The copy has no parents and shares property/method dictionaries.
   ^ self perform: #primitiveClone
 ]
 
 Object>>derive [
   # Create a child object with this object as its parent.
-  # The child inherits behavior through the prototype chain.
+  # The child inherits behavior through the class hierarchy.
   ^ self perform: #primitiveDerive
 ]
 
@@ -46,12 +46,12 @@ Object>>derive: ivarArray methods: methodBlock [
 #====================================================================
 
 Object>>at: key [
-  # Get the value of a property. Searches the object and its prototype chain.
+  # Get the value of a property. Searches the object and its class hierarchy.
   ^ self perform: #primitiveAt: with: key
 ]
 
 Object>>at: key put: value [
-  # Set a property value on this object (not in prototypes).
+  # Set a property value on this object (not on parent class).
   ^ self perform: #primitiveAt:put: with: key with: value
 ]
 
@@ -70,7 +70,7 @@ Object>>properties [
 #====================================================================
 
 Object>>respondsTo: selector [
-  # Check if this object or its prototype chain responds to a message.
+  # Check if this object or its class hierarchy responds to a message.
   ^ self perform: #primitiveRespondsTo: with: selector
 ]
 
@@ -157,7 +157,7 @@ Object>>notNil [
 ]
 
 Object>>class [
-  # Return the class/prototype of this object
+  # Return the class of this object
   | tags |
   tags := self at: "tags"
   tags isNil ifTrue: [ ^ Object ]
@@ -165,7 +165,7 @@ Object>>class [
 ]
 
 Object>>isKindOf: aClass [
-  # Check if object is kind of aClass (in prototype chain)
+  # Check if object is kind of aClass (in class hierarchy)
   ^ self perform: #primitiveIsKindOf: with: aClass
 ]
 
@@ -198,7 +198,7 @@ Object>>extendClass: aBlock [
   #   self >> newNamed: name [ ... create and return instance ... ]
   #   self >> withName: name age: age [ ... factory method ... ]
   # ]
-  # For now, this is equivalent to extend: since in the prototype model
+  # For now, this is equivalent to extend: since in the class model
   # the class IS the factory object. Methods added here are factory methods.
   ^ self asSelfDo: aBlock
 ]

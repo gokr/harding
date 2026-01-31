@@ -2,7 +2,7 @@
 
 Smalltalk semantics, Nim performance, modern tooling.
 
-Nimtalk is a prototype-based Smalltalk dialect that compiles to Nim. It preserves Smalltalk's message-passing syntax and live programming feel while adding native compilation, Nim ecosystem access, and familiar Unix tooling.
+Nimtalk is a class-based Smalltalk dialect that compiles to Nim. It preserves Smalltalk's message-passing syntax and live programming feel while adding native compilation, Nim ecosystem access, and familiar Unix tooling.
 
 ## Quick Example
 
@@ -41,19 +41,19 @@ p x  "Returns 110"
 
 | Smalltalk | Nimtalk |
 |-----------|---------|
-| Classes define structure | Prototypes derive from parents: `Object derive: #(ivars)` |
-| Instance variables declared in class | Declare in prototype with `derive: #(x y)`, inherited by derived |
-| Methods compiled to method dictionary | Methods stored on prototype tables, inherited via prototype chain |
+| Classes define structure | Classes derive from parents: `Object derive: #(ivars)` |
+| Instance variables declared in class | Declare in class with `derive: #(x y)`, inherited by derived |
+| Methods compiled to method dictionary | Methods stored on class tables, inherited via class hierarchy |
 | Image-based persistence | Source files, git, normal Unix workflow |
 | VM execution | Interprets AST directly, compiles to Nim (in development) |
 | FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
 
-**The prototype system:**
+**The class system:**
 
-Prototypes inherit from parent prototypes and instances are created via `new`:
+Classes inherit from parent classes and instances are created via `new`:
 
 ```smalltalk
-"Create a prototype with automatic accessors for x and y"
+"Create a class with automatic accessors for x and y"
 Point := Object derive: #(x y).
 
 "Add methods using >> syntax"
@@ -68,7 +68,7 @@ p y: 99.
 p printString  "Returns '(42, 99)'"
 ```
 
-Instance variables declared with `derive:` are stored in slots (fast array access). Prototypes have merged method tables for fast O(1) lookup. The `derive:` syntax creates a prototype and generates accessor methods `x`, `x:`, `y`, `y:` for O(1) direct slot access.
+Instance variables declared with `derive:` are stored in slots (fast array access). Classes have merged method tables for fast O(1) lookup. The `derive:` syntax creates a class and generates accessor methods `x`, `x:`, `y`, `y:` for O(1) direct slot access.
 
 ### Method Definition Approaches
 
@@ -209,7 +209,7 @@ See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for details on newline handli
 
 Working:
 - Lexer, parser, AST interpreter
-- Prototype object system with slot-based instance variables
+- Class-based object system with slot-based instance variables
 - REPL with file execution
 - Block closures with lexical scoping, environment capture, and non-local returns
 - Closure variable isolation and sibling block sharing

@@ -40,7 +40,7 @@ proc newDoitContext*(trace: bool = false): DoitContext =
 proc printWelcomeRepl() =
   echo "========================================"
   echo "  Nimtalk - REPL"
-  echo "  A Prototype-Based Smalltalk for Nim"
+  echo "  A Class-Based Smalltalk for Nim"
   echo "========================================"
   echo ""
   echo "Type expressions and press Enter to evaluate."
