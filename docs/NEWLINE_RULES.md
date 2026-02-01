@@ -16,7 +16,7 @@ In Smalltalk, the period `.` is the only statement separator. However, Nimtalk t
 
 Use `.` to explicitly end a statement:
 
-```nimtalk
+```smalltalk
 x := 1.
 y := 2.
 z := x + y.
@@ -26,7 +26,7 @@ z := x + y.
 
 A line ending also acts as a statement separator:
 
-```nimtalk
+```smalltalk
 x := 1
 y := 2
 z := x + y
@@ -38,9 +38,9 @@ Both forms are equivalent.
 
 Keyword message chains can span multiple lines while forming a single statement:
 
-```nimtalk
+```smalltalk
 tags isNil
-  ifTrue: [ ^ 'Object' ]
+  ifTrue: [ ^ "Object" ]
   ifFalse: [ ^ tags first ]
 ```
 
@@ -52,7 +52,7 @@ This is parsed as a single statement: `tags isNil ifTrue: [...] ifFalse: [...]`.
 
 Binary operators must be on the same line as their operands:
 
-```nimtalk
+```smalltalk
 # Valid
 result := x + y
 
@@ -65,7 +65,7 @@ result := x
 
 Unary message chains must be on the same line:
 
-```nimtalk
+```smalltalk
 # Valid
 array addFirst: item
 
@@ -78,7 +78,7 @@ array
 
 Method selectors must be on one line:
 
-```nimtalk
+```smalltalk
 # Valid
 Integer>>to: end do: block [ | i |
   i := self
@@ -95,7 +95,7 @@ Integer>>
 
 Temporary variables must be declared at the beginning of a block, before any statements or comments:
 
-```nimtalk
+```smalltalk
 # Valid
 [ | temp1 temp2 |
   temp1 := 1.
@@ -103,43 +103,45 @@ Temporary variables must be declared at the beginning of a block, before any sta
 ]
 
 # Invalid - comment before temporaries
-[ "some comment"
+[ # some comment
   | temp1 |
   temp1 := 1
 ]
 
 # Valid - comment after temporaries
 [ | temp1 |
-  "some comment"
+  # some comment
   temp1 := 1
 ]
 ```
 
 ## Comments
 
-In Smalltalk, `""` denotes comments that are completely ignored by the parser. In Nimtalk:
+Nimtalk uses `#` for single-line comments:
 
-- `''` is for string literals
-- `""` is for string literals (Nim compatibility), but often used as inline documentation that gets evaluated and discarded
-- `#` followed by whitespace or special chars (`=`, `-`, `*`, `/`, `.`, `|`, `&`, `@`, `!`) is a comment
-
-```nimtalk
+```smalltalk
 # This is a comment
 #==== This header is also a comment
 
 MyMethod>>doSomething [
-  "This is a documentation string (evaluated and discarded)"
+  # This is a comment inside the method
   ^ result
 ]
+```
+
+String literals use double quotes:
+
+```smalltalk
+"This is a string literal"
 ```
 
 ## Summary
 
 | Construct | Multiline? | Example |
 |-----------|-----------|---------|
-| Keyword message chain | ✅ Yes | `obj msg1: a\n msg2: b` |
-| Binary operator | ❌ No | `x\n+\ny` fails |
-| Unary message chain | ❌ No | `obj\nmsg` fails |
-| Method selector | ❌ No | `Class>>\nselector` fails |
-| Statement separator | ✅ Yes (newline or `.`) | `x := 1\ny := 2` |
-| Block temporaries | ✅ Yes | `[ | t |\n t := 1 ]` |
+| Keyword message chain | Yes | `obj msg1: a\n msg2: b` |
+| Binary operator | No | `x\n+\ny` fails |
+| Unary message chain | No | `obj\nmsg` fails |
+| Method selector | No | `Class>>\nselector` fails |
+| Statement separator | Yes (newline or `.`) | `x := 1\ny := 2` |
+| Block temporaries | Yes | `[ | t |\n t := 1 ]` |
