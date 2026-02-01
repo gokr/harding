@@ -73,3 +73,4 @@ tests/test_super
 tests/test_process
 tests/test_scheduler
 *.vsix
+src/nimtalk/parser/lexer
