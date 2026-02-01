@@ -29,7 +29,7 @@ suite "Evaluator: Basic Message Dispatch":
 
   test "evaluates simple property access via messages":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
+    obj := Table derive.
     obj at: #value put: 42.
     result := obj at: #value
     """)
@@ -41,7 +41,7 @@ suite "Evaluator: Basic Message Dispatch":
 
   test "handles undefined messages with doesNotUnderstand":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
+    obj := Table derive.
     obj at: #doesNotUnderstand: put: [ :msg | ^msg ].
     result := obj someUndefinedMessage
     """)
@@ -51,7 +51,7 @@ suite "Evaluator: Basic Message Dispatch":
 
   test "method lookup traverses prototype chain":
     let result = interp.evalStatements("""
-    Parent := Dictionary derive.
+    Parent := Table derive.
     Parent at: #parentMethod put: [ ^"from parent" ].
 
     Child := Parent derive.
@@ -73,7 +73,7 @@ suite "Evaluator: Method Execution with Parameters":
 
   test "executes methods with keyword parameters":
     let result = interp.evalStatements("""
-    Calculator := Dictionary derive.
+    Calculator := Table derive.
     Calculator at: #add:to: put: [ :x y | ^x + y ].
 
     calc := Calculator derive.
@@ -86,7 +86,7 @@ suite "Evaluator: Method Execution with Parameters":
 
   test "executes methods with multiple keyword parameters":
     let result = interp.evalStatements("""
-    Point := Dictionary derive: #(x y).
+    Point := Table derive: #(x y).
     Point at: #setX:setY: put: [ :newX :newY |
       self x: newX.
       self y: newY
@@ -205,7 +205,7 @@ suite "Evaluator: Control Flow":
   test "nested conditionals":  # Requires string concatenation or better boolean handling
     when false:  # DISABLED - uses comparison operators that may not work
       let result = interp.evalStatements("""
-      Category := Dictionary derive.
+      Category := Table derive.
       Category at: "classify:" put: [ :n |
         (n < 0) ifTrue: [ ^"negative" ].
         (n == 0) ifTrue: [ ^"zero" ].
@@ -235,7 +235,7 @@ suite "Evaluator: Block Evaluation":
 
   test "blocks can be stored and evaluated later":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
+    obj := Table derive.
     obj at: #block put: [ ^42 ].
     result := obj block
     """)
@@ -246,7 +246,7 @@ suite "Evaluator: Block Evaluation":
 
   test "blocks with parameters capture arguments":  # Requires full closure implementation
     let result = interp.evalStatements("""
-      obj := Dictionary derive.
+      obj := Table derive.
       obj at: #apply:to: put: [ :block :arg | ^block value: arg ].
 
       doubler := [ :x | ^x * 2 ].
@@ -259,7 +259,7 @@ suite "Evaluator: Block Evaluation":
 
   test "blocks can close over variables":  # Requires full closure implementation
     let result = interp.evalStatements("""
-      Counter := Dictionary derive.
+      Counter := Table derive.
       Counter at: #makeCounter put: [ | count |
         count := 0.
         ^[
@@ -284,7 +284,7 @@ suite "Evaluator: Block Evaluation":
   test "blocks support non-local return":  # Requires non-local return implementation
     when false:  # DISABLED - non-local return from blocks not fully implemented
       let result = interp.evalStatements("""
-        obj := Dictionary derive.
+        obj := Table derive.
         obj at: #callWithEarlyReturn: put: [ :block |
           block value.
           ^"Should not reach here"
@@ -313,7 +313,7 @@ suite "Evaluator: Lexical Closures":
   test "closures capture and isolate variables" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Maker := Dictionary derive.
+      Maker := Table derive.
       Maker at: #makeCounter put: [ |
         count := 0.
         ^[ |
@@ -339,7 +339,7 @@ suite "Evaluator: Lexical Closures":
   test "multiple closures share same captured variable" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Maker := Dictionary derive.
+      Maker := Table derive.
       Maker at: #makePair put: [ |
         value := 10.
         ^#{ #inc -> [ ^value := value + 1 ], #dec -> [ ^value := value - 1 ], #get -> [ ^value ] }
@@ -362,7 +362,7 @@ suite "Evaluator: Lexical Closures":
   test "closures capture different variables from same scope" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Maker := Dictionary derive.
+      Maker := Table derive.
       Maker at: #makeClosures: put: [ :x :y |
         ^#{
           #sum: [ ^x + y ],
@@ -385,7 +385,7 @@ suite "Evaluator: Lexical Closures":
 
   test "nested closures capture multiple levels" :
     let result = interp.evalStatements("""
-    Maker := Dictionary derive.
+    Maker := Table derive.
     Maker at: #makeAdder: put: [ :x |
       ^[ :y |
         ^[ :z |
@@ -406,7 +406,7 @@ suite "Evaluator: Lexical Closures":
   test "closures as object methods capture instance variables" :
     when false:  # DISABLED - slot-based instance variables not fully implemented
       let result = interp.evalStatements("""
-      Account := Dictionary derive: #(balance).
+      Account := Table derive: #(balance).
       Account at: #initialize: put: [ :initial |
         self balance: initial
       ].
@@ -438,7 +438,7 @@ suite "Evaluator: Lexical Closures":
   test "closures outlive their defining scope" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Factory := Dictionary derive.
+      Factory := Table derive.
       Factory at: #create: put: [ :base |
         # This variable should be captured and persist
         multiplier := base * 2.
@@ -460,7 +460,7 @@ suite "Evaluator: Lexical Closures":
   test "closure captures entire lexical environment" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Maker := Dictionary derive.
+      Maker := Table derive.
       Maker at: #makePoint:: put: [ :x0 :y0 |
         x := x0.
         y := y0.
@@ -494,7 +494,7 @@ suite "Evaluator: Lexical Closures":
   test "closure with non-local return from captured scope" :
     when false:  # DISABLED - closure capture not fully implemented
       let result = interp.evalStatements("""
-      Finder := Dictionary derive.
+      Finder := Table derive.
       Finder at: #findIn:: put: [ :arr :predicate |
         1 to: arr do: [ :i |
           elem := arr at: i.
@@ -541,7 +541,7 @@ suite "Evaluator: Global Variables":
     # Define global
     GlobalValue := 100.
 
-    obj := Dictionary derive.
+    obj := Table derive.
     obj at: #getGlobal put: [ ^GlobalValue ].
 
     result := obj getGlobal
@@ -553,7 +553,7 @@ suite "Evaluator: Global Variables":
 
   test "class objects stored as globals":
     let result = interp.evalStatements("""
-    Person := Dictionary derive: #(name age).
+    Person := Table derive: #(name age).
     Person at: #new put: [ ^self derive ].
 
     p1 := Person new.
@@ -613,7 +613,7 @@ suite "Evaluator: Collections":
   test "collections support iteration" :  # Requires collection iteration protocol
     when false:  # DISABLED - uses #[] empty array syntax not supported by parser
       let result = interp.evalStatements("""
-      Mapper := Dictionary derive.
+      Mapper := Table derive.
       Mapper at: "doubleAll:" put: [ :arr |
         result := #[].
         1 to: arr do: [ :i |
@@ -657,7 +657,7 @@ suite "Evaluator: Error Handling":
 
   test "error includes message selector":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
+    obj := Table derive.
     obj undefinedMethod
     """)
 
@@ -666,7 +666,7 @@ suite "Evaluator: Error Handling":
 
   test "parse errors are reported":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
+    obj := Table derive.
     obj at:
     """)
 
@@ -674,9 +674,13 @@ suite "Evaluator: Error Handling":
 
   test "at: reads values correctly (shows at: is valid)":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
-    obj at: #name put: "Alice".
-    result := obj at: #name
+    Person := Table derive: #(name).
+    Person>>name: n [ self at: #name put: n ].
+    Person>>name [ ^self at: #name ].
+
+    obj := Person new.
+    obj name: "Alice".
+    result := obj name
     """)
 
     check(result[1].len == 0)
@@ -692,10 +696,18 @@ suite "Evaluator: Complex Expressions":
 
   test "nested message sends":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
-    obj at: #inner put: Dictionary derive.
-    (obj at: #inner) at: #value put: 42.
-    result := (obj at: #inner) at: #value
+    Container := Table derive: #(inner).
+    Container>>inner: i [ self at: #inner put: i ].
+    Container>>inner [ ^self at: #inner ].
+
+    Box := Table derive: #(value).
+    Box>>value: v [ self at: #value put: v ].
+    Box>>value [ ^self at: #value ].
+
+    obj := Container new.
+    obj inner: (Box new).
+    obj inner value: 42.
+    result := obj inner value
     """)
 
     check(result[1].len == 0)
@@ -704,26 +716,35 @@ suite "Evaluator: Complex Expressions":
 
   test "cascades in complex expressions":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
-    obj at: #x put: 0; at: #y put: 0; at: #z put: 0.
-    result := (obj at: #x) + (obj at: #y) + (obj at: #z)
+    Point := Table derive: #(x y z).
+    Point>>x: v [ self at: #x put: v ].
+    Point>>y: v [ self at: #y put: v ].
+    Point>>z: v [ self at: #z put: v ].
+    Point>>x [ ^self at: #x ].
+    Point>>y [ ^self at: #y ].
+    Point>>z [ ^self at: #z ].
+
+    obj := Point new.
+    obj x: 0; y: 0; z: 0.
+    result := (obj x) + (obj y) + (obj z)
     """)
 
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 0)
 
-  test "mixed unary, binary, and keyword messages" :  # Requires operator precedence handling
+  test "mixed unary, binary, and keyword messages" :
     let result = interp.evalStatements("""
-    Number := Dictionary derive: #(value).
-    Number at: #+ put: [ :other | ^self value + other ].
-    Number at: #double put: [ ^self value * 2 ].
-    Number at: #add:to: put: [ :a :b | ^a + b ].
+    MyNumber := Table derive: #(value).
+    MyNumber>>value: v [ self at: #value put: v ].
+    MyNumber>>value [ ^self at: #value ].
+    MyNumber>>double [ ^self value * 2 ].
+    MyNumber>>add: a to: b [ ^a + b ].
 
-    num := Number derive.
+    num := MyNumber new.
     num value: 10.
     result1 := num double.
-    result2 := num + 5.
+    result2 := num value + 5.
     result3 := num add: 3 to: 7
     """)
 
@@ -748,14 +769,15 @@ suite "Evaluator: Call Stack and Returns":
     initGlobals(interp)
     initSymbolTable()
 
-  test "non-local return exits multiple frames" :  # Requires non-local return implementation
+  test "non-local return exits multiple frames" :
     when false:  # DISABLED - non-local return stack unwinding not fully implemented
       let result = interp.evalStatements("""
-      obj := Dictionary derive.
-      obj at: #level3 put: [ ^"From level 3" ].
-      obj at: #level2 put: [ self level3. ^"Should not reach" ].
-      obj at: #level1 put: [ self level2. ^"Should not reach" ].
+      TestObj := Table derive.
+      TestObj>>level3 [ ^"From level 3" ].
+      TestObj>>level2 [ self level3. ^"Should not reach" ].
+      TestObj>>level1 [ self level2. ^"Should not reach" ].
 
+      obj := TestObj new.
       result := obj level1
       """)
 
@@ -765,10 +787,11 @@ suite "Evaluator: Call Stack and Returns":
 
   test "normal return returns from current method":
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
-    obj at: #method put: [ ^99 ].
+    TestObj := Table derive.
+    TestObj>>testMethod [ ^99 ].
 
-    result := obj method
+    obj := TestObj new.
+    result := obj testMethod
     """)
 
     check(result[1].len == 0)
@@ -783,32 +806,41 @@ suite "Evaluator: Special Features":
     initGlobals(interp)
     initSymbolTable()
 
-  test "nil is a valid value" :  # Requires nil singleton implementation
+  test "nil is a valid value" :
     let result = interp.evalStatements("""
-    obj := Dictionary derive.
-    obj at: #value put: nil.
-    result := obj at: #value
+    Box := Table derive: #(value).
+    Box>>value: v [ self at: #value put: v ].
+    Box>>value [ ^self at: #value ].
+
+    obj := Box new.
+    obj value: nil.
+    result := obj value
     """)
 
     check(result[1].len == 0)
     check(result[0][^1].kind == vkNil)
 
-  test "booleans are object wrappers" :  # Booleans are wrapped objects for method dispatch
+  test "booleans are native values" :
     let result = interp.evalStatements("""
     result1 := true.
     result2 := false.
     """)
 
     check(result[1].len == 0)
-    check(result[0][^2].kind == vkObject)
-    check(result[0][^1].kind == vkObject)
+    check(result[0][^2].kind == vkBool)
+    check(result[0][^2].boolVal == true)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal == false)
 
   test "primitive methods have fallback to Smalltalk":
     let result = interp.evalStatements("""
-    # Test that primitives with fallbacks work
-    obj := Dictionary derive.
-    obj at: #test put: 1.
-    result := obj at: #test
+    Box := Table derive: #(test).
+    Box>>test: v [ self at: #test put: v ].
+    Box>>test [ ^self at: #test ].
+
+    obj := Box new.
+    obj test: 1.
+    result := obj test
     """)
 
     check(result[1].len == 0)
