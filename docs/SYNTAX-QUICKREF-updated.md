@@ -27,10 +27,12 @@ Employee := Person derive: #(#salary #department)
 # Multi-level inheritance
 Manager := Employee derive: #(#teamSize)
 
-# Multiple inheritance (traits pattern)
+# Multiple parents (planned syntax)
 Enumerable := Object derive: #().
 Employee := Person derive: #(#salary) withParents: #(Enumerable)
 ```
+
+**Note**: The first parent defines the "kind" of class (Object, Array, Number, etc.) and determines instance representation. Additional parents act as mixins/traits constrained by compatibility with the primary parent. The `withParents:` syntax is not yet implemented - currently only single inheritance works.
 
 ## Method Definition Syntax (File Format)
 
