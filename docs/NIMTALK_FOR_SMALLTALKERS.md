@@ -361,7 +361,7 @@ obj
   at: #x put: 0;
   at: #y put: 0;
   at: #z put: 0.
-* Equivalent to:
+# Equivalent to:
 obj at: #x put: 0.
 obj at: #y put: 0.
 obj at: #z put: 0.
@@ -393,10 +393,11 @@ Direct access to Nim types and functions via primitives.
 
 1. **Remove metaclass references** - Use `class` message or direct class method storage
 2. **Replace class variables** - Use globals or closures
-3. **Update string quotes** - Both work, but `"` is more common in Nimtalk
-4. **Simplify method definitions** - Use `>>` syntax
-5. **Check statement separators** - Ensure periods/newlines are correct
-6. **Update block syntax** - Optional `|` after parameters
+3. **Update string quotes** - Use double quotes `"..."` (single quotes are reserved)
+4. **Update comments** - Use `#` for comments (double quotes are for strings now)
+5. **Simplify method definitions** - Use `>>` syntax
+6. **Check statement separators** - Ensure periods/newlines are correct
+7. **Update block syntax** - Optional `|` after parameters
 
 ### Common Patterns
 
@@ -409,7 +410,7 @@ Singleton class>>instance
 
 **Nimtalk singleton:**
 ```nimtalk
-* Using captured variable
+# Using captured variable
 Singleton class>>instance [
     | inst |
     inst := nil.
@@ -419,7 +420,7 @@ Singleton class>>instance [
     ] value
 ].
 
-* Or using global
+# Or using global
 Singleton class>>instance [
     (Registry at: #SingletonInstance) isNil ifTrue: [
         Registry at: #SingletonInstance put: self new
