@@ -304,13 +304,13 @@ Object subclass: #MyClass
 **Nimtalk:** Not implemented. Use global tables or symbols:
 
 ```nimtalk
-* Workaround: Global table
+# Workaround: Global table
 Constants := #{
   #MaxSize -> 100
   #DefaultName -> "Unknown"
 }.
 
-* Access as: Constants at: #MaxSize
+# Access as: Constants at: #MaxSize
 ```
 
 ### 4. Metaclass Hierarchy
