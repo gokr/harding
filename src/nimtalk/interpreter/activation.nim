@@ -9,15 +9,15 @@ import ../parser/[lexer, parser]
 # ============================================================================
 
 proc newActivation*(blk: BlockNode,
-                   receiver: RuntimeObject,
+                   receiver: Instance,
                    sender: Activation,
-                   definingObject: RuntimeObject = nil): Activation =
+                   definingClass: Class = nil): Activation =
   ## Create a new activation record
   result = Activation(
     sender: sender,
     receiver: receiver,
     currentMethod: blk,
-    definingObject: definingObject,
+    definingObject: definingClass,  # Store as Class now
     pc: 0,
     locals: initTable[string, NodeValue](),
     capturedVars: initTable[string, MutableCell](),
@@ -28,19 +28,18 @@ proc newActivation*(blk: BlockNode,
   # Initialize 'self' for all activations (blocks invoked as methods need self)
   result.locals["self"] = receiver.toValue()
 
-  # Initialize 'super' in locals for super sends
-  if definingObject != nil and definingObject.parents.len > 0:
-    result.locals["super"] = definingObject.parents[0].toValue()
-  elif receiver != nil:
-    # Super starts from receiver's first parent if no defining object
-    if receiver.parents.len > 0:
-      result.locals["super"] = receiver.parents[0].toValue()
+  # Initialize 'super' in locals for super sends (as Class)
+  if definingClass != nil and definingClass.parents.len > 0:
+    result.locals["super"] = definingClass.parents[0].toValue()
+  elif receiver != nil and receiver.class != nil and receiver.class.parents.len > 0:
+    # Super starts from receiver's class's first parent if no defining object
+    result.locals["super"] = receiver.class.parents[0].toValue()
 
   # Initialize parameters (bound by caller)
   # parameters will be bound when method is invoked
 
 # Create activation from code string (for testing)
-proc parseAndActivate*(source: string, receiver: RuntimeObject = nil): Activation =
+proc parseAndActivate*(source: string, receiver: Instance = nil): Activation =
   ## Parse source code and create an activation for it
 
   let tokens = lex(source)
@@ -51,7 +50,9 @@ proc parseAndActivate*(source: string, receiver: RuntimeObject = nil): Activatio
     raise newException(ValueError,
       "Failed to parse: " & parser.errorMsg)
 
-  let recv = if receiver != nil: receiver else: initRootObject()
+  # Note: For now we need to handle the transition from RuntimeObject to Instance
+  # This will be completed after the full migration
+  let recv = if receiver != nil: receiver else: nil
   return newActivation(parsed, recv, nil)
 
 # Display activation for debugging

@@ -19,23 +19,23 @@ proc wrapStringAsObject*(s: string): NodeValue
 proc wrapArrayAsObject*(arr: seq[NodeValue]): NodeValue
 proc wrapTableAsObject*(tab: Table[string, NodeValue]): NodeValue
 proc wrapFloatAsObject*(value: float): NodeValue
-proc plusImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc minusImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc starImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc slashImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc sqrtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc ltImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc gtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc eqImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc leImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc geImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc neImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc intDivImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc backslashModuloImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc moduloImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc printStringImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc writeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc writelineImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
+proc plusImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc minusImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc starImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc slashImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc sqrtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc ltImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc gtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc eqImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc leImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc geImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc neImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc intDivImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc backslashModuloImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc moduloImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc printStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc writeImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc writelineImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc getSlotImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc setSlotValueImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc concatImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
@@ -45,21 +45,21 @@ proc atCollectionPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc randomNextImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc randomNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 # Collection primitives
-proc arrayNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arraySizeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayAddImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayRemoveAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayIncludesImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayReverseImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc arrayAtPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableKeysImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableIncludesKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableRemoveKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-proc tableAtPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
-# String primitives
+proc arrayNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayRemoveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayReverseImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc arrayAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableRemoveKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc tableAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+# String primitives (legacy RuntimeObject)
 proc stringConcatImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc stringSizeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc stringAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
@@ -71,6 +71,21 @@ proc stringUppercaseImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc stringLowercaseImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc stringTrimImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc stringSplitImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
+# String primitives (new Instance-based)
+proc instStringConcatImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringFromToImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringIndexOfImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringIncludesSubStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringReplaceWithImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringUppercaseImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringLowercaseImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringTrimImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringSplitImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringAsIntegerImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringAsSymbolImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instIdentityImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 # File primitives
 proc fileOpenImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
 proc fileCloseImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
@@ -90,6 +105,9 @@ proc tryGetInt*(value: NodeValue): (bool, int) =
   case value.kind
   of vkInt:
     return (true, value.intVal)
+  of vkInstance:
+    if value.instVal.kind == ikInt:
+      return (true, value.instVal.intVal)
   of vkObject:
     let obj = value.objVal
     if obj.isNimProxy and obj.nimType == "int":
@@ -116,25 +134,23 @@ var rootClass*: Class = nil
 # Global root object (singleton) - legacy prototype-based root
 var rootObject*: RootObject = nil
 
-# Global Dictionary prototype (singleton)
-var dictionaryPrototype*: DictionaryPrototype = nil
-
 # Global Random prototype (singleton) - uses DictionaryObj for properties
 var randomPrototype*: DictionaryObj = nil
 
 # Global true/false values for comparison operators
-var trueValue*: NodeValue = nilValue()
-var falseValue*: NodeValue = nilValue()
+var trueValue*: NodeValue = NodeValue(kind: vkBool, boolVal: true)
+var falseValue*: NodeValue = NodeValue(kind: vkBool, boolVal: false)
 
 # Class caches for wrapped primitives (set by loadStdlib)
-var booleanClassCache*: RuntimeObject = nil
-var trueClassCache*: RuntimeObject = nil
-var falseClassCache*: RuntimeObject = nil
-var numberClassCache*: RuntimeObject = nil
-var integerClassCache*: RuntimeObject = nil
-var stringClassCache*: RuntimeObject = nil
-var arrayClassCache*: RuntimeObject = nil
-var blockClassCache*: RuntimeObject = nil
+# These reference the new Class-based system
+var booleanClassCache*: Class = nil
+var trueClassCache*: Class = nil
+var falseClassCache*: Class = nil
+var numberClassCache*: Class = nil
+var integerClassCache*: Class = nil
+var stringClassCache*: Class = nil
+var arrayClassCache*: Class = nil
+var blockClassCache*: Class = nil
 
 # Create a core method
 
@@ -397,31 +413,6 @@ proc initRootObject*(): RootObject =
     let atPutMethod = createCoreMethod("at:put:")
     atPutMethod.nativeImpl = cast[pointer](atCollectionPutImpl)
     addMethod(rootObject, "at:put:", atPutMethod)
-
-    # Initialize Dictionary prototype
-    dictionaryPrototype = DictionaryPrototype()
-    dictionaryPrototype.methods = initTable[string, BlockNode]()
-    dictionaryPrototype.parents = @[rootObject.RuntimeObject]
-    dictionaryPrototype.tags = @["Dictionary"]
-    dictionaryPrototype.isNimProxy = false
-    dictionaryPrototype.nimValue = nil
-    dictionaryPrototype.nimType = ""
-    dictionaryPrototype.hasSlots = false
-    dictionaryPrototype.slots = @[]
-    dictionaryPrototype.slotNames = initTable[string, int]()
-    dictionaryPrototype.properties = initTable[string, NodeValue]()
-
-    # Add Dictionary to globals
-    addGlobal("Dictionary", NodeValue(kind: vkObject, objVal: dictionaryPrototype.RuntimeObject))
-
-    # Install Dictionary-specific methods (at: and at:put:)
-    let dictAtMethod = createCoreMethod("at:")
-    dictAtMethod.nativeImpl = cast[pointer](atImpl)
-    addMethod(dictionaryPrototype.RuntimeObject, "at:", dictAtMethod)
-
-    let dictAtPutMethod = createCoreMethod("at:put:")
-    dictAtPutMethod.nativeImpl = cast[pointer](atPutImpl)
-    addMethod(dictionaryPrototype.RuntimeObject, "at:put:", dictAtPutMethod)
 
     # Initialize Random prototype (uses DictionaryObj for properties)
     randomPrototype = DictionaryObj()
@@ -828,210 +819,267 @@ proc selectorPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
   debug("Added method: ", selector, " to object with tags: ", $self.tags)
   return args[1]
 
-proc plusImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc plusImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Add two numbers: a + b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return NodeValue(kind: vkInt, intVal: a + otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkInt, intVal: self.intVal + otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal + float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: float(self.intVal) + other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal + other.floatVal)
 
   return nilValue()
 
-proc minusImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc minusImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Subtract two numbers: a - b
   if args.len < 1:
     return nilValue()
 
+  debug("minusImpl: self.kind=", self.kind, ", args[0].kind=", args[0].kind)
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return NodeValue(kind: vkInt, intVal: a - otherVal)
+  debug("tryGetInt result: otherOk=", otherOk, ", otherVal=", otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkInt, intVal: self.intVal - otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal - float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: float(self.intVal) - other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal - other.floatVal)
 
   return nilValue()
 
-proc starImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc starImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Multiply two numbers: a * b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return NodeValue(kind: vkInt, intVal: a * otherVal)
-
-  # Handle float multiplication
-  if self.isNimProxy and self.nimType == "int" and other.kind == vkFloat:
-    let a = cast[ptr int](self.nimValue)[]
-    let b = other.floatVal
-    return NodeValue(kind: vkInt, intVal: int(float(a) * b))
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkInt, intVal: self.intVal * otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal * float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: float(self.intVal) * other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal * other.floatVal)
 
   return nilValue()
 
-proc slashImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
-  ## Divide two numbers: a / b (integer division)
+proc slashImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Divide two numbers: a / b (integer division for ints, float division for floats)
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
+  if self.kind == ikInt and otherOk:
     if otherVal == 0:
       return nilValue()  # Division by zero
-    return NodeValue(kind: vkInt, intVal: a div otherVal)
+    return NodeValue(kind: vkInt, intVal: self.intVal div otherVal)
+  if self.kind == ikFloat and otherOk:
+    if otherVal == 0:
+      return nilValue()
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal / float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    if other.floatVal == 0.0:
+      return nilValue()
+    return NodeValue(kind: vkFloat, floatVal: float(self.intVal) / other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    if other.floatVal == 0.0:
+      return nilValue()
+    return NodeValue(kind: vkFloat, floatVal: self.floatVal / other.floatVal)
 
   return nilValue()
 
-proc sqrtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc sqrtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Square root: a sqrt
-  if self.isNimProxy and self.nimType == "int":
-    let a = cast[ptr int](self.nimValue)[]
-    return NodeValue(kind: vkInt, intVal: int(sqrt(float(a))))
+  if self.kind == ikInt:
+    return NodeValue(kind: vkFloat, floatVal: sqrt(float(self.intVal)))
+  if self.kind == ikFloat:
+    return NodeValue(kind: vkFloat, floatVal: sqrt(self.floatVal))
 
   return nilValue()
 
-proc ltImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc ltImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Less than comparison: a < b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a < otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal < otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal < float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) < other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal < other.floatVal)
 
   return nilValue()
 
-proc gtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc gtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Greater than comparison: a > b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a > otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal > otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal > float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) > other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal > other.floatVal)
 
   return nilValue()
 
-proc eqImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc eqImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Equality comparison: a = b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a == otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal == otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal == float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) == other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal == other.floatVal)
 
   return nilValue()
 
-proc leImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc leImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Less than or equal: a <= b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a <= otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal <= otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal <= float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) <= other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal <= other.floatVal)
 
   return nilValue()
 
-proc geImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc geImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Greater than or equal: a >= b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a >= otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal >= otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal >= float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) >= other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal >= other.floatVal)
 
   return nilValue()
 
-proc neImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
-  ## Not equal: a ~= b
+proc neImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Not equal: a <> b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
-    return wrapBoolAsObject(a != otherVal)
+  if self.kind == ikInt and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.intVal != otherVal)
+  if self.kind == ikFloat and otherOk:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal != float(otherVal))
+  if self.kind == ikInt and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: float(self.intVal) != other.floatVal)
+  if self.kind == ikFloat and other.kind == vkFloat:
+    return NodeValue(kind: vkBool, boolVal: self.floatVal != other.floatVal)
 
   return nilValue()
 
-proc intDivImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc intDivImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Integer division: a // b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
+  if self.kind == ikInt and otherOk:
     if otherVal == 0:
       return nilValue()  # Division by zero
-    return NodeValue(kind: vkInt, intVal: a div otherVal)
+    return NodeValue(kind: vkInt, intVal: self.intVal div otherVal)
 
   return nilValue()
 
-proc backslashModuloImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc backslashModuloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Smalltalk-style modulo: a \\ b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
+  if self.kind == ikInt and otherOk:
     if otherVal == 0:
       return nilValue()  # Modulo by zero
-    return NodeValue(kind: vkInt, intVal: a mod otherVal)
+    return NodeValue(kind: vkInt, intVal: self.intVal mod otherVal)
 
   return nilValue()
 
-proc moduloImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc moduloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Modulo: a % b
   if args.len < 1:
     return nilValue()
 
   let other = args[0]
   let (otherOk, otherVal) = tryGetInt(other)
-  if self.isNimProxy and self.nimType == "int" and otherOk:
-    let a = cast[ptr int](self.nimValue)[]
+  if self.kind == ikInt and otherOk:
     if otherVal == 0:
       return nilValue()  # Modulo by zero
-    return NodeValue(kind: vkInt, intVal: a mod otherVal)
+    return NodeValue(kind: vkInt, intVal: self.intVal mod otherVal)
 
   return nilValue()
 
-proc printStringImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc printStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Default print representation
-  if self.isNimProxy and self.nimType == "int":
-    let val = cast[ptr int](self.nimValue)[]
-    return NodeValue(kind: vkString, strVal: $val)
-  elif self.isNimProxy:
-    return NodeValue(kind: vkString, strVal: "<Nim " & self.nimType & ">")
-  elif "Object" in self.tags:
-    return NodeValue(kind: vkString, strVal: "<object>")
-  else:
-    return NodeValue(kind: vkString, strVal: "<unknown>")
+  case self.kind
+  of ikInt:
+    return NodeValue(kind: vkString, strVal: $self.intVal)
+  of ikFloat:
+    return NodeValue(kind: vkString, strVal: $self.floatVal)
+  of ikString:
+    return NodeValue(kind: vkString, strVal: self.strVal)
+  of ikArray:
+    return NodeValue(kind: vkString, strVal: "#(" & $self.elements.len & " elements)")
+  of ikTable:
+    return NodeValue(kind: vkString, strVal: "{" & $self.entries.len & " entries}")
+  of ikObject:
+    if self.class != nil:
+      return NodeValue(kind: vkString, strVal: "<" & self.class.name & ">")
+    else:
+      return NodeValue(kind: vkString, strVal: "<object>")
 
-proc writeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc writeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Write string to stdout without newline (Stdout write: 'text')
   if args.len < 1:
     return nilValue()
@@ -1041,7 +1089,7 @@ proc writeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
     flushFile(stdout)
   return strVal  ## Return the string written
 
-proc writelineImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc writelineImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Write string or integer to stdout with newline (Stdout writeline: value)
   if args.len < 1:
     stdout.write("\n")
@@ -1356,117 +1404,71 @@ proc randomNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
 # Collection primitives for Array and Table
 # ============================================================================
 
-proc arrayNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Create new array with given size: Array new: 1000
   var size = 0
   if args.len >= 1 and args[0].kind == vkInt:
     size = args[0].intVal
 
-  # Create array proxy with properties for 0-based indexing
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[rootObject.RuntimeObject]
-  obj.tags = @["Array", "Collection"]
-  obj.isNimProxy = true
-  obj.nimType = "array"
-  obj.properties = initTable[string, NodeValue]()
-  obj.properties["__size"] = NodeValue(kind: vkInt, intVal: size)
-  # Initialize all slots to nil
-  for i in 0..<size:
-    obj.properties[$i] = nilValue()
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
+  # Return empty array literal as vkArray
+  var elements = newSeq[NodeValue]()
+  if size > 0:
+    elements.setLen(size)
+    for i in 0..<size:
+      elements[i] = nilValue()
+  return NodeValue(kind: vkArray, arrayVal: elements)
 
-proc arraySizeImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return number of elements in array
-  if not (self of DictionaryObj):
+  if self.kind != ikArray:
     return NodeValue(kind: vkInt, intVal: 0)
-  let dict = cast[DictionaryObj](self)
-  if dict.properties.hasKey("__size"):
-    return dict.properties["__size"]
-  return NodeValue(kind: vkInt, intVal: 0)
+  return NodeValue(kind: vkInt, intVal: self.elements.len)
 
-proc arrayAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get element at index (1-based indexing for Smalltalk compatibility)
-  if args.len < 1 or args[0].kind != vkInt:
+  if self.kind != ikArray or args.len < 1 or args[0].kind != vkInt:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-  let dict = cast[DictionaryObj](self)
   # Convert from 1-based (Smalltalk) to 0-based (internal storage)
   let idx = args[0].intVal - 1
-  if idx < 0:
-    return nilValue()
-  let key = $idx
-  if dict.properties.hasKey(key):
-    return dict.properties[key]
+  if idx >= 0 and idx < self.elements.len:
+    return self.elements[idx]
   return nilValue()
 
-proc arrayAtPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Set element at index (1-based indexing for Smalltalk compatibility)
-  if args.len < 2 or args[0].kind != vkInt:
+  if self.kind != ikArray or args.len < 2 or args[0].kind != vkInt:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-  let dict = cast[DictionaryObj](self)
   # Convert from 1-based (Smalltalk) to 0-based (internal storage)
   let idx = args[0].intVal - 1
-  if idx < 0:
-    return nilValue()
-  let key = $idx
-  dict.properties[key] = args[1]
-  # Expand size if needed (store 1-based size for Smalltalk compatibility)
-  let oneBasedIdx = args[0].intVal
-  if dict.properties.hasKey("__size"):
-    let size = dict.properties["__size"].intVal
-    if oneBasedIdx > size:
-      dict.properties["__size"] = NodeValue(kind: vkInt, intVal: oneBasedIdx)
-  else:
-    dict.properties["__size"] = NodeValue(kind: vkInt, intVal: oneBasedIdx)
+  if idx >= 0:
+    # Expand array if needed
+    while idx >= self.elements.len:
+      self.elements.add(nilValue())
+    self.elements[idx] = args[1]
   return args[1]
 
-proc arrayAddImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Add element to end of array
-  if args.len < 1:
+  if self.kind != ikArray or args.len < 1:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-
-  let dict = cast[DictionaryObj](self)
-  if not dict.properties.hasKey("__size"):
-    dict.properties["__size"] = NodeValue(kind: vkInt, intVal: 0)
-
-  let size = dict.properties["__size"].intVal
-  dict.properties[$size] = args[0]
-  dict.properties["__size"] = NodeValue(kind: vkInt, intVal: size + 1)
+  self.elements.add(args[0])
   return args[0]
 
-proc arrayRemoveAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayRemoveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Remove element at index and return it (1-based indexing for Smalltalk compatibility)
-  if args.len < 1 or args[0].kind != vkInt:
-    return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-
-  let dict = cast[DictionaryObj](self)
-  if not dict.properties.hasKey("__size"):
+  if self.kind != ikArray or args.len < 1 or args[0].kind != vkInt:
     return nilValue()
 
   # Convert from 1-based (Smalltalk) to 0-based (internal storage)
   let idx = args[0].intVal - 1
-  let size = dict.properties["__size"].intVal
-  if idx < 0 or idx >= size:
+  if idx < 0 or idx >= self.elements.len:
     return nilValue()
 
-  # Get element to return (using 0-based internal key)
-  let removedElement = dict.properties.getOrDefault($idx)
+  # Get element to return
+  let removedElement = self.elements[idx]
 
-  # Shift all elements after idx down by one
-  for i in idx..<size-1:
-    dict.properties[$i] = dict.properties.getOrDefault($(i+1))
-
-  # Remove last element
-  dict.properties.del($(size-1))
-  dict.properties["__size"] = NodeValue(kind: vkInt, intVal: size - 1)
+  # Remove element and shift remaining elements
+  self.elements.delete(idx)
   return removedElement
 
 proc valuesEqual(v1, v2: NodeValue): bool =
@@ -1484,99 +1486,52 @@ proc valuesEqual(v1, v2: NodeValue): bool =
   of vkBlock: return v1.blockVal == v2.blockVal
   else: return false  # Arrays and tables - identity comparison only
 
-proc arrayIncludesImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if array includes element (using = comparison)
-  if args.len < 1:
-    return falseValue
-  if not (self of DictionaryObj):
+  if self.kind != ikArray or args.len < 1:
     return falseValue
 
-  let dict = cast[DictionaryObj](self)
-  if not dict.properties.hasKey("__size"):
-    return falseValue
-
-  let size = dict.properties["__size"].intVal
   let element = args[0]
 
-  for i in 0..<size:
-    let elem = dict.properties.getOrDefault($i)
+  for elem in self.elements:
     # Use custom equality check
     if valuesEqual(elem, element):
       return trueValue
 
   return falseValue
 
-proc arrayReverseImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc arrayReverseImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return new array with elements reversed
-  if not (self of DictionaryObj):
+  if self.kind != ikArray:
     return nilValue()
-
-  let dict = cast[DictionaryObj](self)
-  if not dict.properties.hasKey("__size"):
-    return nilValue()
-
-  let size = dict.properties["__size"].intVal
 
   # Create new reversed array
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[rootObject.RuntimeObject]
-  obj.tags = @["Array", "Collection"]
-  obj.isNimProxy = true
-  obj.nimType = "array"
-  obj.properties = initTable[string, NodeValue]()
-  obj.properties["__size"] = NodeValue(kind: vkInt, intVal: size)
+  var reversed = newSeq[NodeValue]()
+  for i in countdown(self.elements.len - 1, 0):
+    reversed.add(self.elements[i])
 
-  for i in 0..<size:
-    obj.properties[$i] = dict.properties.getOrDefault($(size - 1 - i))
+  return NodeValue(kind: vkArray, arrayVal: reversed)
 
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
-
-proc tableNewImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Create new empty table: Table new
-  let obj = DictionaryObj()
-  obj.methods = initTable[string, BlockNode]()
-  obj.parents = @[rootObject.RuntimeObject]
-  obj.tags = @["Table", "Collection", "Dictionary"]
-  obj.isNimProxy = true
-  obj.nimType = "table"
-  obj.properties = initTable[string, NodeValue]()
-  # Table uses native Table[string, NodeValue] in properties
-  return NodeValue(kind: vkObject, objVal: obj.RuntimeObject)
+  return NodeValue(kind: vkTable, tableVal: initTable[string, NodeValue]())
 
-proc tableKeysImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return array of all keys in table
-  if not (self of DictionaryObj):
+  if self.kind != ikTable:
     return nilValue()
 
-  let dict = cast[DictionaryObj](self)
+  # Create array to hold keys
+  var keys = newSeq[NodeValue]()
+  for key in self.entries.keys:
+    keys.add(NodeValue(kind: vkString, strVal: key))
 
-  # Create array proxy to hold keys
-  let arr = DictionaryObj()
-  arr.methods = initTable[string, BlockNode]()
-  arr.parents = @[rootObject.RuntimeObject]
-  arr.tags = @["Array", "Collection"]
-  arr.isNimProxy = true
-  arr.nimType = "array"
-  arr.properties = initTable[string, NodeValue]()
+  return NodeValue(kind: vkArray, arrayVal: keys)
 
-  var idx = 0
-  for key, val in dict.properties:
-    if key != "__size":  # Skip internal properties
-      arr.properties[$idx] = NodeValue(kind: vkString, strVal: key)
-      idx += 1
-
-  arr.properties["__size"] = NodeValue(kind: vkInt, intVal: idx)
-  return NodeValue(kind: vkObject, objVal: arr.RuntimeObject)
-
-proc tableIncludesKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if table includes key
-  if args.len < 1:
+  if self.kind != ikTable or args.len < 1:
     return falseValue
-  if not (self of DictionaryObj):
-    return falseValue
-
-  let dict = cast[DictionaryObj](self)
   var keyStr: string
   if args[0].kind == vkString:
     keyStr = args[0].strVal
@@ -1585,16 +1540,12 @@ proc tableIncludesKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue
   else:
     return falseValue
 
-  return toValue(dict.properties.hasKey(keyStr))
+  return toValue(keyStr in self.entries)
 
-proc tableRemoveKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableRemoveKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Remove key from table and return value (or nil)
-  if args.len < 1:
+  if self.kind != ikTable or args.len < 1:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-
-  let dict = cast[DictionaryObj](self)
   var keyStr: string
   if args[0].kind == vkString:
     keyStr = args[0].strVal
@@ -1603,20 +1554,16 @@ proc tableRemoveKeyImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
   else:
     return nilValue()
 
-  if dict.properties.hasKey(keyStr):
-    let removedValue = dict.properties[keyStr]
-    dict.properties.del(keyStr)
+  if keyStr in self.entries:
+    let removedValue = self.entries[keyStr]
+    self.entries.del(keyStr)
     return removedValue
   return nilValue()
 
-proc tableAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get value at key: table at: 'key'
-  if args.len < 1:
+  if self.kind != ikTable or args.len < 1:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-
-  let dict = cast[DictionaryObj](self)
   var keyStr: string
   if args[0].kind == vkString:
     keyStr = args[0].strVal
@@ -1625,18 +1572,14 @@ proc tableAtImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
   else:
     return nilValue()
 
-  if dict.properties.hasKey(keyStr):
-    return dict.properties[keyStr]
+  if keyStr in self.entries:
+    return self.entries[keyStr]
   return nilValue()
 
-proc tableAtPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
+proc tableAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Set value at key: table at: 'key' put: value
-  if args.len < 2:
+  if self.kind != ikTable or args.len < 2:
     return nilValue()
-  if not (self of DictionaryObj):
-    return nilValue()
-
-  let dict = cast[DictionaryObj](self)
   var keyStr: string
   if args[0].kind == vkString:
     keyStr = args[0].strVal
@@ -1645,7 +1588,7 @@ proc tableAtPutImpl*(self: RuntimeObject, args: seq[NodeValue]): NodeValue =
   else:
     return nilValue()
 
-  dict.properties[keyStr] = args[1]
+  self.entries[keyStr] = args[1]
   return args[1]
 
 # ============================================================================
@@ -1806,16 +1749,12 @@ proc wrapIntAsObject*(value: int): NodeValue =
 
 proc wrapBoolAsObject*(value: bool): NodeValue =
   ## Wrap a boolean as a Nim proxy object that can receive messages
-  ## Uses True/False class caches if available for proper method inheritance
+  ## Legacy - booleans are now vkBool, not wrapped objects
   let obj = RuntimeObject()
   obj.methods = initTable[string, BlockNode]()
-  # Use True/False class caches if available
-  if value and trueClassCache != nil:
-    obj.parents = @[trueClassCache]
-  elif not value and falseClassCache != nil:
-    obj.parents = @[falseClassCache]
-  else:
-    obj.parents = @[rootObject.RuntimeObject]
+  # Note: trueClassCache/falseClassCache are now Class type, not RuntimeObject
+  # Use root object as parent for legacy compatibility
+  obj.parents = @[rootObject.RuntimeObject]
   obj.tags = if value: @["Boolean", "True"] else: @["Boolean", "False"]
   obj.isNimProxy = true
   obj.nimValue = cast[pointer](alloc(sizeof(bool)))
@@ -1829,13 +1768,12 @@ proc wrapBoolAsObject*(value: bool): NodeValue =
 proc wrapBlockAsObject*(blockNode: BlockNode): NodeValue =
   ## Wrap a block as a RuntimeObject that can receive messages (like whileTrue:)
   ## The BlockNode is stored so it can be executed later
+  ## Legacy - blocks are now handled differently in class-based model
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  # Use Block class as parent if available
-  if blockClassCache != nil:
-    obj.parents = @[blockClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
+  # Note: blockClassCache is now Class type, not RuntimeObject
+  # Use root object as parent for legacy compatibility
+  obj.parents = @[initRootObject().RuntimeObject]
   obj.tags = @["Block", "Closure"]
   obj.isNimProxy = false
   obj.nimType = "block"
@@ -1846,13 +1784,12 @@ proc wrapBlockAsObject*(blockNode: BlockNode): NodeValue =
 
 proc wrapStringAsObject*(s: string): NodeValue =
   ## Wrap a string as a Nim proxy object that can receive messages
+  ## Legacy - use class-based newStringInstance instead
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  # Use String class as parent if available
-  if stringClassCache != nil:
-    obj.parents = @[stringClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
+  # Note: stringClassCache is now Class type, not RuntimeObject
+  # Use root object as parent for legacy compatibility
+  obj.parents = @[initRootObject().RuntimeObject]
   obj.tags = @["String", "Text"]
   obj.isNimProxy = true
   obj.nimType = "string"
@@ -1863,13 +1800,12 @@ proc wrapStringAsObject*(s: string): NodeValue =
 
 proc wrapArrayAsObject*(arr: seq[NodeValue]): NodeValue =
   ## Wrap an array (seq) as a Nim proxy object that can receive messages
+  ## Legacy - use class-based newArrayInstance instead
   let obj = DictionaryObj()
   obj.methods = initTable[string, BlockNode]()
-  # Try to use Array class as parent if available
-  if arrayClassCache != nil:
-    obj.parents = @[arrayClassCache]
-  else:
-    obj.parents = @[initRootObject().RuntimeObject]
+  # Note: arrayClassCache is now Class type, not RuntimeObject
+  # Use root object as parent for legacy compatibility
+  obj.parents = @[initRootObject().RuntimeObject]
   obj.tags = @["Array", "Collection"]
   obj.isNimProxy = true
   obj.nimType = "array"
@@ -2348,11 +2284,185 @@ proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
 
   return args[1]
 
-proc initRootClass*(): Class =
-  ## Initialize the global root class
-  if rootClass == nil:
-    rootClass = newClass()
-    rootClass.tags = @["Object", "Class", "Root"]
-    rootClass.name = "Object"
+# ============================================================================
+# Instance-based String primitives (for new class system)
+# ============================================================================
 
-  return rootClass
+proc instStringConcatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Concatenate strings (called via , operator)
+  if self.kind != ikString or args.len < 1:
+    return nilValue()
+  let otherStr = if args[0].kind == vkString: args[0].strVal
+                   elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
+                   else: ""
+  return NodeValue(kind: vkString, strVal: self.strVal & otherStr)
+
+proc instStringSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return string length
+  if self.kind != ikString:
+    return nilValue()
+  return NodeValue(kind: vkInt, intVal: self.strVal.len)
+
+proc instStringAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return character at index (0-based)
+  if self.kind != ikString or args.len < 1:
+    return nilValue()
+  let idx = if args[0].kind == vkInt: args[0].intVal
+            elif args[0].kind == vkInstance and args[0].instVal.kind == ikInt: args[0].instVal.intVal
+            else: -1
+  if idx < 0 or idx >= self.strVal.len:
+    return nilValue()
+  return NodeValue(kind: vkString, strVal: $self.strVal[idx])
+
+proc instStringFromToImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return substring from start to end (inclusive, 1-based in Smalltalk style)
+  if self.kind != ikString or args.len < 2:
+    return nilValue()
+  let startIdx = if args[0].kind == vkInt: args[0].intVal - 1  # Convert to 0-based
+                 elif args[0].kind == vkInstance and args[0].instVal.kind == ikInt: args[0].instVal.intVal - 1
+                 else: 0
+  let endIdx = if args[1].kind == vkInt: args[1].intVal  # Inclusive, so use as-is for slicing
+               elif args[1].kind == vkInstance and args[1].instVal.kind == ikInt: args[1].instVal.intVal
+               else: self.strVal.len
+  if startIdx < 0 or endIdx > self.strVal.len or startIdx >= endIdx:
+    return NodeValue(kind: vkString, strVal: "")
+  return NodeValue(kind: vkString, strVal: self.strVal[startIdx ..< endIdx])
+
+proc instStringIndexOfImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return index of substring (0 if not found, 1-based in Smalltalk)
+  if self.kind != ikString or args.len < 1:
+    return NodeValue(kind: vkInt, intVal: 0)
+  let substr = if args[0].kind == vkString: args[0].strVal
+               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
+               else: ""
+  if substr.len == 0:
+    return NodeValue(kind: vkInt, intVal: 0)
+  let idx = self.strVal.find(substr)
+  if idx < 0:
+    return NodeValue(kind: vkInt, intVal: 0)
+  return NodeValue(kind: vkInt, intVal: idx + 1)  # 1-based indexing for Smalltalk
+
+proc instStringIncludesSubStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Check if string includes substring
+  if self.kind != ikString or args.len < 1:
+    return NodeValue(kind: vkBool, boolVal: false)
+  let substr = if args[0].kind == vkString: args[0].strVal
+               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
+               else: ""
+  return NodeValue(kind: vkBool, boolVal: self.strVal.contains(substr))
+
+proc instStringReplaceWithImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Replace all occurrences of old with new
+  if self.kind != ikString or args.len < 2:
+    return nilValue()
+  let oldStr = if args[0].kind == vkString: args[0].strVal
+               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
+               else: ""
+  let newStr = if args[1].kind == vkString: args[1].strVal
+               elif args[1].kind == vkInstance and args[1].instVal.kind == ikString: args[1].instVal.strVal
+               else: ""
+  if oldStr.len == 0:
+    return NodeValue(kind: vkString, strVal: self.strVal)
+  return NodeValue(kind: vkString, strVal: self.strVal.replace(oldStr, newStr))
+
+proc instStringUppercaseImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return uppercase version
+  if self.kind != ikString:
+    return nilValue()
+  return NodeValue(kind: vkString, strVal: self.strVal.toUpperAscii())
+
+proc instStringLowercaseImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return lowercase version
+  if self.kind != ikString:
+    return nilValue()
+  return NodeValue(kind: vkString, strVal: self.strVal.toLowerAscii())
+
+proc instStringTrimImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Remove leading and trailing whitespace
+  if self.kind != ikString:
+    return nilValue()
+  return NodeValue(kind: vkString, strVal: self.strVal.strip())
+
+proc instStringSplitImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Split string by delimiter, return array
+  if self.kind != ikString or args.len < 1:
+    return nilValue()
+  let delim = if args[0].kind == vkString: args[0].strVal
+              elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
+              else: " "
+  let parts = self.strVal.split(delim)
+  var result = newSeq[NodeValue]()
+  for part in parts:
+    result.add(NodeValue(kind: vkString, strVal: part))
+  return NodeValue(kind: vkArray, arrayVal: result)
+
+proc instStringAsIntegerImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Parse as integer
+  if self.kind != ikString:
+    return nilValue()
+  try:
+    return NodeValue(kind: vkInt, intVal: parseInt(self.strVal))
+  except ValueError:
+    return nilValue()
+
+proc instStringAsSymbolImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Convert to symbol
+  if self.kind != ikString:
+    return nilValue()
+  return NodeValue(kind: vkSymbol, symVal: self.strVal)
+
+proc instIdentityImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Identity comparison - true if same object (same memory address)
+  if args.len < 1:
+    return NodeValue(kind: vkBool, boolVal: false)
+  let other = args[0]
+  # For identity, we compare if they're the exact same object
+  # For value types, we compare values
+  var result = false
+  case self.kind
+  of ikObject:
+    if other.kind == vkInstance and other.instVal.kind == ikObject:
+      # Same object only if same reference
+      result = (self == other.instVal)  # Nim identity for refs
+    elif other.kind == vkObject:
+      result = false  # Can't be same as legacy type
+    else:
+      result = false
+  of ikInt:
+    if other.kind == vkInt:
+      result = self.intVal == other.intVal
+    elif other.kind == vkInstance and other.instVal.kind == ikInt:
+      result = self.intVal == other.instVal.intVal
+    else:
+      result = false
+  of ikFloat:
+    if other.kind == vkFloat:
+      result = self.floatVal == other.floatVal
+    elif other.kind == vkInstance and other.instVal.kind == ikFloat:
+      result = self.floatVal == other.instVal.floatVal
+    else:
+      result = false
+  of ikString:
+    if other.kind == vkString:
+      result = self.strVal == other.strVal
+    elif other.kind == vkInstance and other.instVal.kind == ikString:
+      result = self.strVal == other.instVal.strVal
+    else:
+      result = false
+  of ikArray:
+    if other.kind == vkArray:
+      result = false  # Arrays are not identical unless same ref
+    elif other.kind == vkInstance and other.instVal.kind == ikArray:
+      result = (self == other.instVal)
+    else:
+      result = false
+  of ikTable:
+    if other.kind == vkTable:
+      result = false  # Tables are not identical unless same ref
+    elif other.kind == vkInstance and other.instVal.kind == ikTable:
+      result = (self == other.instVal)
+    else:
+      result = false
+  else:
+    result = false
+  return NodeValue(kind: vkBool, boolVal: result)
