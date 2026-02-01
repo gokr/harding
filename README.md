@@ -153,6 +153,36 @@ p := Person newNamed: "Alice" aged: 30
 
 The `extend:` and `extendClass:` methods use `asSelfDo:` internally, which temporarily rebinds `self` to the target object during block evaluation. This enables clean method batching syntax.
 
+### Multiple Inheritance and Conflict Resolution
+
+Nimtalk's class model supports multiple parents. When creating a class with multiple parents, the system checks for conflicts:
+
+- **Slot name conflicts**: If two parents define the same slot name, an error is raised
+- **Method selector conflicts**: If two parents define the same method selector, an error is raised
+
+However, you can resolve conflicts by overriding methods in the child class, then using `addParent:` to add the conflicting parents:
+
+```smalltalk
+# Define two classes with conflicting methods
+Parent1 := Object derive: #(a)
+Parent1 >> foo [ ^ "foo1" ]
+
+Parent2 := Object derive: #(b)
+Parent2 >> foo [ ^ "foo2" ]
+
+# Create a child class that overrides the conflicting method
+Child := Object derive: #(x)
+Child >> foo [ ^ "child" ]
+
+# Now add the conflicting parents - this works because child overrides
+Child addParent: Parent1
+Child addParent: Parent2
+
+result := Child new foo  # Returns "child" (child's override takes precedence)
+```
+
+**Important**: Only directly-defined methods on parents are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause false conflicts.
+
 ### Green Threads (Cooperative Processes)
 
 Nimtalk supports cooperative green threads for concurrent execution:
@@ -278,6 +308,8 @@ See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for details on newline handli
 - Self-rebinding: `asSelfDo:` for evaluating blocks with modified self
 - Green threads: cooperative processes with `Processor yield`, `Processor fork:`
 - Per-process interpreters with shared globals
+- Conflict detection for multiple inheritance (slot names, method selectors)
+- `addParent:` message for adding parents after class creation
 
 **In progress:**
 - Compiler to Nim (ntalkc is stub)

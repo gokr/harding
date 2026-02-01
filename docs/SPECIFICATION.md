@@ -171,6 +171,49 @@ Employee := Person derive: #(salary) withParents: #(Enumerable)
 
 **Note**: The internal class model supports multiple parents. The first parent defines the "kind" of class (Object, Array, Number, etc.) and determines the instance representation. Additional parents act as mixins/traits and are constrained based on compatibility with the primary parent. The `withParents:` syntax is not yet implemented - currently only single inheritance works via `derive:`.
 
+### Conflict Detection
+
+When creating a class with multiple parents, Nimtalk checks for conflicts:
+
+- **Slot name conflicts**: If any slot name exists in multiple parent hierarchies, an error is raised
+- **Method selector conflicts**: If directly-defined method selectors conflict between parents, an error is raised
+
+```smalltalk
+# This will raise an error:
+Parent1 := Object derive: #(shared)
+Parent2 := Object derive: #(shared)
+try (
+  Child := Object derive: #(x) parents: #(Parent1 Parent2)
+  # Error: Slot name conflict: 'shared' exists in multiple parents
+) catch (:err | err printString)
+```
+
+### Adding Parents After Creation (addParent:)
+
+The `addParent:` message allows adding a parent to an existing class. This is useful for resolving method conflicts by overriding the conflicting method first, then adding the parent:
+
+```smalltalk
+Parent1 := Object derive: #(a)
+Parent1 >> foo [ ^ "foo1" ]
+
+Parent2 := Object derive: #(b)
+Parent2 >> foo [ ^ "foo2" ]
+
+# Create child with override first
+Child := Object derive: #(x)
+Child >> foo [ ^ "child" ]
+
+# Add conflicting parents - this works because child overrides
+Child addParent: Parent1
+Child addParent: Parent2
+
+(Child new foo)  # Returns "child"
+```
+
+The `addParent:` message checks for conflicts but allows them if the child class overrides the conflicting method.
+
+**Note**: Only directly-defined methods on each parent are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause conflicts.
+
 ## Methods
 
 ### Method Definition (>> Syntax)
@@ -417,6 +460,14 @@ obj := Object derive
 - `derive: #(ivar1 ivar2)` - Create with declared instance variables
 - `at: #key` - Get property
 - `at: #key put: value` - Set property
+- `addParent: parentClass` - Add a parent to an existing class (useful for resolving conflicts by overriding first)
+
+### Class Methods
+
+- `new` - Create a new instance of the class
+- `selector:put:block` - Add an instance method to the class
+- `classSelector:put:block` - Add a class method to the class
+- `addParent:parentClass` - Add a parent to this class (allows conflict resolution with overrides)
 
 ### Boolean
 

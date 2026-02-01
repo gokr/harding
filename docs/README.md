@@ -14,6 +14,7 @@ These documents describe the current implementation and are kept up to date:
 - **[SYNTAX-REALITY.md](SYNTAX-REALITY.md)** - Current implemented syntax details
 - **[SPECIFICATION.md](SPECIFICATION.md)** - Language specification
 - **[GRAMMAR.md](GRAMMAR.md)** - Formal BNF grammar for the language
+- **[INHERITANCE.md](INHERITANCE.md)** - Multiple inheritance and conflict resolution
 - **[TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md)** - Guide for using ntalk and ntalkc tools
 - **[GREENTHREADS.md](GREENTHREADS.md)** - Green threads implementation and API
 - **[CONCURRENCY.md](CONCURRENCY.md)** - Concurrency design and comparisons

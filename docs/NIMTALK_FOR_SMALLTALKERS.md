@@ -224,6 +224,46 @@ Employee := Person derive: #(salary) withParents: #(Enumerable).
 
 The internal class model stores `parents: seq[Class]`. The first parent defines the "kind" of class (Object, Array, Number, etc.) and determines instance representation. Additional parents act as mixins/traits and are constrained based on compatibility with the primary parent. The `withParents:` syntax is not yet implemented. Method lookup uses merged method tables for O(1) dispatch.
 
+### Conflict Detection for Multiple Inheritance
+
+When creating a class with multiple parents (or adding parents via `addParent:`), Nimtalk checks for conflicts:
+
+- **Slot name conflicts**: If any slot name exists in multiple parent hierarchies, an error is raised
+- **Method selector conflicts**: If directly-defined method selectors conflict between parents, an error is raised
+
+```nimtalk
+# This will raise an error:
+Parent1 := Object derive: #(shared)
+Parent2 := Object derive: #(shared)
+Child := Object derive: #(x)
+  addParent: Parent1
+  addParent: Parent2  # Error: Slot name conflict: 'shared' exists in multiple parents
+```
+
+### Resolving Conflicts with addParent:
+
+To work with conflicting parent methods, override the method in the child class first, then use `addParent:`:
+
+```nimtalk
+Parent1 := Object derive: #(a)
+Parent1 >> foo [ ^ "foo1" ]
+
+Parent2 := Object derive: #(b)
+Parent2 >> foo [ ^ "foo2" ]
+
+# Create child with override first
+Child := Object derive: #(x)
+Child >> foo [ ^ "child" ]
+
+# Add conflicting parents - works because child overrides
+Child addParent: Parent1
+Child addParent: Parent2
+
+(Child new foo)  # Returns "child"
+```
+
+**Note**: Only directly-defined methods on each parent are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause false conflicts.
+
 ### 4. Super Sends
 
 **Smalltalk:** `super` starts method lookup in the parent class.
@@ -438,7 +478,7 @@ Nimtalk preserves the essence of Smalltalk (message passing, blocks, live progra
 
 1. No metaclasses - classes are just objects
 2. No class variables - use globals or closures
-3. Single inheritance currently - multiple parents planned
+3. Multiple inheritance with conflict detection - use `addParent:` for conflict resolution
 4. Nim primitives - embed native code directly
 5. Use double quotes for strings - hash `#` for comments
 

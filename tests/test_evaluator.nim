@@ -28,10 +28,11 @@ suite "Evaluator: Basic Message Dispatch":
     initSymbolTable()
 
   test "evaluates simple property access via messages":
+    # Use Table instance with at:/at:put: for key-value storage
     let result = interp.evalStatements("""
-    obj := Table derive.
-    obj at: #value put: 42.
-    result := obj at: #value
+    t := Table new.
+    t at: #value put: 42.
+    result := t at: #value
     """)
 
     check(result[1].len == 0)
@@ -40,9 +41,11 @@ suite "Evaluator: Basic Message Dispatch":
     check(result[0][^1].intVal == 42)
 
   test "handles undefined messages with doesNotUnderstand":
+    # Create a class with custom doesNotUnderstand:
     let result = interp.evalStatements("""
-    obj := Table derive.
-    obj at: #doesNotUnderstand: put: [ :msg | ^msg ].
+    MyClass := Object derive.
+    MyClass selector: #doesNotUnderstand: put: [ :msg | ^msg ].
+    obj := MyClass new.
     result := obj someUndefinedMessage
     """)
     check(result[1].len == 0)
@@ -50,12 +53,13 @@ suite "Evaluator: Basic Message Dispatch":
     check(result[0][^1].symVal == "someUndefinedMessage")
 
   test "method lookup traverses prototype chain":
+    # Use class-based inheritance with selector:put: for method definition
     let result = interp.evalStatements("""
-    Parent := Table derive.
-    Parent at: #parentMethod put: [ ^"from parent" ].
+    Parent := Object derive.
+    Parent selector: #parentMethod put: [ ^"from parent" ].
 
     Child := Parent derive.
-    child := Child derive.
+    child := Child new.
     result := child parentMethod
     """)
     check(result[1].len == 0)
@@ -73,10 +77,10 @@ suite "Evaluator: Method Execution with Parameters":
 
   test "executes methods with keyword parameters":
     let result = interp.evalStatements("""
-    Calculator := Table derive.
-    Calculator at: #add:to: put: [ :x y | ^x + y ].
+    Calculator := Object derive.
+    Calculator selector: #add:to: put: [ :x :y | ^x + y ].
 
-    calc := Calculator derive.
+    calc := Calculator new.
     result := calc add: 5 to: 10
     """)
 
@@ -86,13 +90,13 @@ suite "Evaluator: Method Execution with Parameters":
 
   test "executes methods with multiple keyword parameters":
     let result = interp.evalStatements("""
-    Point := Table derive: #(x y).
-    Point at: #setX:setY: put: [ :newX :newY |
+    Point := Object derive: #(x y).
+    Point selector: #setX:setY: put: [ :newX :newY |
       self x: newX.
       self y: newY
     ].
 
-    point := Point derive.
+    point := Point new.
     point setX: 10 setY: 20.
     resultX := point x.
     resultY := point y
