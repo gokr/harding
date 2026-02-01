@@ -152,6 +152,28 @@ nimble local   # Copies binaries to current directory
 
 Binaries: `ntalk` (REPL/interpreter), `ntalkc` (compiler stub)
 
+### VSCode Extension
+
+Syntax highlighting for `.nt` files is available via the included VSCode extension. To install:
+
+```bash
+# From command line
+code --install-extension nimtalk-lang-0.1.0.vsix
+
+# Or from VSCode:
+# 1. Press Ctrl+Shift+P (Cmd+Shift+P on Mac)
+# 2. Type "Extensions: Install from VSIX..."
+# 3. Select nimtalk-lang-0.1.0.vsix
+# 4. Reload VSCode when prompted
+```
+
+Or manually rebuild the extension after making changes to the grammar:
+
+```bash
+npm install -g @vscode/vsce
+vsce package
+```
+
 ## Usage
 
 ```bash
