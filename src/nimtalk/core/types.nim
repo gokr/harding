@@ -16,6 +16,14 @@ type
   # Class-Based Object Model (New)
   # ============================================================================
 
+  InstanceKind* = enum
+    ikObject       # Regular object with slots
+    ikArray        # Array with dynamic element storage
+    ikTable        # Table with key-value storage
+    ikInt          # Integer instance (optimized)
+    ikFloat        # Float instance (optimized)
+    ikString       # String instance (optimized)
+
   Class* {.acyclic.} = ref object of RootObj
     ## Class object - defines structure and behavior for instances
     # Instance methods (methods that instances of this class will have)
@@ -43,8 +51,21 @@ type
 
   Instance* {.acyclic.} = ref object of RootObj
     ## Instance object - pure data with reference to its class
+    ## Using case object variant for memory efficiency - only allocate fields needed
     class*: Class                           # Reference to class
-    slots*: seq[NodeValue]                  # Instance data only (indexed by allSlotNames position)
+    case kind*: InstanceKind
+    of ikObject:
+      slots*: seq[NodeValue]                # Instance variables (indexed by allSlotNames position)
+    of ikArray:
+      elements*: seq[NodeValue]             # Array elements
+    of ikTable:
+      entries*: Table[string, NodeValue]    # Table entries
+    of ikInt:
+      intVal*: int                          # Direct storage (no boxing)
+    of ikFloat:
+      floatVal*: float                      # Direct storage
+    of ikString:
+      strVal*: string                       # Direct storage
     isNimProxy*: bool                       # Instance wraps Nim value
     nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
 
@@ -86,15 +107,15 @@ type
 
   # Activation records for method execution (defined after BlockNode)
   ActivationObj* {.acyclic.} = object of RootObj
-    sender*: Activation       # calling context
-    receiver*: RuntimeObject    # 'self'
-    currentMethod*: BlockNode # current method
-    definingObject*: RuntimeObject  # object where method was found (for super)
-    pc*: int                  # program counter
-    locals*: Table[string, NodeValue]  # local variables
+    sender*: Activation               # calling context
+    receiver*: Instance               # 'self' (Instance type)
+    currentMethod*: BlockNode         # current method
+    definingObject*: Class            # class where method was found (for super)
+    pc*: int                          # program counter
+    locals*: Table[string, NodeValue] # local variables
     capturedVars*: Table[string, MutableCell]  # shared captured vars for sibling blocks
-    returnValue*: NodeValue   # return value
-    hasReturned*: bool        # non-local return flag
+    returnValue*: NodeValue           # return value
+    hasReturned*: bool                # non-local return flag
 
   # Value types for AST nodes and runtime values
   ValueKind* = enum
@@ -248,8 +269,18 @@ proc toString*(val: NodeValue): string =
   of vkBool: $val.boolVal
   of vkNil: "nil"
   of vkClass: "<class " & val.classVal.name & ">"
-  of vkInstance: "<instance of " & val.instVal.class.name & ">"
-  of vkObject: "<object>"
+  of vkInstance:
+    if val.instVal == nil or val.instVal.class == nil:
+      "<instance nil>"
+    else:
+      case val.instVal.kind
+      of ikInt: $(val.instVal.intVal)
+      of ikFloat: $(val.instVal.floatVal)
+      of ikString: val.instVal.strVal
+      of ikArray: "#(" & $val.instVal.elements.len & ")"
+      of ikTable: "#{" & $val.instVal.entries.len & "}"
+      of ikObject: "<instance of " & val.instVal.class.name & ">"
+  of vkObject: "<object>"  # Legacy, for backward compatibility
   of vkBlock: "<block>"
   of vkArray: "#(" & $val.arrayVal.len & ")"
   of vkTable: "#{" & $val.tableVal.len & "}"
@@ -489,6 +520,32 @@ proc configureLogging*(level: Level = lvlError) =
       handler.levelThreshold = level
 
 # ============================================================================
+# Root Class (New Class-Based Model)
+# ============================================================================
+
+var
+  rootClass*: Class = nil                      # Root class (zero methods)
+  objectClass*: Class = nil                     # Object class, derives from Root
+  booleanClass*: Class = nil
+  integerClass*: Class = nil
+  floatClass*: Class = nil
+  stringClass*: Class = nil
+  arrayClass*: Class = nil
+  tableClass*: Class = nil
+  blockClass*: Class = nil
+
+# Forward declarations
+proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class
+
+proc initRootClass*(): Class =
+  ## Initialize the global root class
+  ## Root has zero methods - used as base for DNU wrappers/proxies
+  if rootClass == nil:
+    rootClass = newClass(name = "Root")
+    rootClass.tags = @["Root"]
+  return rootClass
+
+# ============================================================================
 # Class and Instance Helpers
 # ============================================================================
 
@@ -497,6 +554,7 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
   result = Class()
   result.methods = initTable[string, BlockNode]()
   result.allMethods = initTable[string, BlockNode]()
+  result.classMethods = initTable[string, BlockNode]()
   result.classMethods = initTable[string, BlockNode]()
   result.allClassMethods = initTable[string, BlockNode]()
   result.slotNames = slotNames
@@ -509,16 +567,53 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
   result.nimtalkType = ""
   result.hasSlots = slotNames.len > 0
 
+  # Add to parents' subclasses lists and inherit methods
+  for parent in parents:
+    parent.subclasses.add(result)
+    # Inherit instance methods
+    for selector, methodBlock in parent.allMethods:
+      result.allMethods[selector] = methodBlock
+    # Inherit class methods
+    for selector, methodBlock in parent.allClassMethods:
+      result.allClassMethods[selector] = methodBlock
+    # Inherit slot names
+    for slotName in parent.allSlotNames:
+      if slotName notin result.allSlotNames:
+        result.allSlotNames.add(slotName)
+  # Add own slot names
+  for slotName in slotNames:
+    if slotName notin result.allSlotNames:
+      result.allSlotNames.add(slotName)
+
 proc newInstance*(cls: Class): Instance =
-  ## Create a new Instance of the given Class
-  result = Instance()
-  result.class = cls
+  ## Create a new Instance of the given Class (ikObject variant)
+  result = Instance(kind: ikObject, class: cls)
   result.slots = newSeq[NodeValue](cls.allSlotNames.len)
   # Initialize all slots to nil
   for i in 0..<result.slots.len:
     result.slots[i] = nilValue()
   result.isNimProxy = false
   result.nimValue = nil
+
+proc newIntInstance*(cls: Class, value: int): Instance =
+  ## Create a new Integer instance with direct value storage
+  Instance(kind: ikInt, class: cls, intVal: value, isNimProxy: false, nimValue: nil)
+
+proc newFloatInstance*(cls: Class, value: float): Instance =
+  ## Create a new Float instance with direct value storage
+  Instance(kind: ikFloat, class: cls, floatVal: value, isNimProxy: false, nimValue: nil)
+
+proc newStringInstance*(cls: Class, value: string): Instance =
+  ## Create a new String instance with direct value storage
+  Instance(kind: ikString, class: cls, strVal: value, isNimProxy: false, nimValue: nil)
+
+proc newArrayInstance*(cls: Class, elements: seq[NodeValue]): Instance =
+  ## Create a new Array instance
+  Instance(kind: ikArray, class: cls, elements: elements, isNimProxy: false, nimValue: nil)
+
+proc newTableInstance*(cls: Class, entries: Table[string, NodeValue]): Instance =
+  ## Create a new Table instance
+  Instance(kind: ikTable, class: cls, entries: entries, isNimProxy: false, nimValue: nil)
 
 proc getSlotIndex*(cls: Class, name: string): int =
   ## Get slot index by name, returns -1 if not found
@@ -528,15 +623,66 @@ proc getSlotIndex*(cls: Class, name: string): int =
   return -1
 
 proc getSlot*(inst: Instance, index: int): NodeValue =
-  ## Get slot value by index
+  ## Get slot value by index (only for ikObject instances)
+  if inst.kind != ikObject:
+    return nilValue()
   if index < 0 or index >= inst.slots.len:
     return nilValue()
   return inst.slots[index]
 
 proc setSlot*(inst: Instance, index: int, value: NodeValue) =
-  ## Set slot value by index
+  ## Set slot value by index (only for ikObject instances)
+  if inst.kind != ikObject:
+    return
   if index >= 0 and index < inst.slots.len:
     inst.slots[index] = value
+
+# Helper procs for Instance variant checking
+proc isInt*(inst: Instance): bool = inst.kind == ikInt
+proc isFloat*(inst: Instance): bool = inst.kind == ikFloat
+proc isString*(inst: Instance): bool = inst.kind == ikString
+proc isArray*(inst: Instance): bool = inst.kind == ikArray
+proc isTable*(inst: Instance): bool = inst.kind == ikTable
+proc isObject*(inst: Instance): bool = inst.kind == ikObject
+
+# Helper procs for getting values from Instance variants
+proc getIntValue*(inst: Instance): int =
+  if inst.kind != ikInt:
+    raise newException(ValueError, "Not an int instance")
+  inst.intVal
+
+proc getFloatValue*(inst: Instance): float =
+  if inst.kind != ikFloat:
+    raise newException(ValueError, "Not a float instance")
+  inst.floatVal
+
+proc getStringValue*(inst: Instance): string =
+  if inst.kind != ikString:
+    raise newException(ValueError, "Not a string instance")
+  inst.strVal
+
+proc getArrayElements*(inst: Instance): seq[NodeValue] =
+  if inst.kind != ikArray:
+    raise newException(ValueError, "Not an array instance")
+  inst.elements
+
+proc getTableEntries*(inst: Instance): Table[string, NodeValue] =
+  if inst.kind != ikTable:
+    raise newException(ValueError, "Not a table instance")
+  inst.entries
+
+proc getTableValue*(inst: Instance, key: string): NodeValue =
+  ## Get a value from a table instance
+  if inst.kind != ikTable:
+    return nilValue()
+  if key in inst.entries:
+    return inst.entries[key]
+  return nilValue()
+
+proc setTableValue*(inst: Instance, key: string, value: NodeValue) =
+  ## Set a value in a table instance
+  if inst.kind == ikTable:
+    inst.entries[key] = value
 
 proc lookupInstanceMethod*(cls: Class, selector: string): BlockNode =
   ## Look up instance method in class (fast O(1) lookup)
@@ -549,3 +695,50 @@ proc lookupClassMethod*(cls: Class, selector: string): BlockNode =
   if selector in cls.allClassMethods:
     return cls.allClassMethods[selector]
   return nil
+
+# ============================================================================
+# NodeValue to Instance conversion (for transition from legacy to new model)
+# ============================================================================
+
+proc valueToInstance*(val: NodeValue): Instance =
+  ## Convert a NodeValue to an Instance variant
+  ## Used during migration to handle both legacy and new values
+  case val.kind
+  of vkInstance:
+    return val.instVal
+  of vkInt:
+    if integerClass != nil:
+      return newIntInstance(integerClass, val.intVal)
+    else:
+      # Fallback during initialization
+      return Instance(kind: ikInt, class: nil, intVal: val.intVal, isNimProxy: false, nimValue: nil)
+  of vkFloat:
+    if floatClass != nil:
+      return newFloatInstance(floatClass, val.floatVal)
+    else:
+      return Instance(kind: ikFloat, class: nil, floatVal: val.floatVal, isNimProxy: false, nimValue: nil)
+  of vkString:
+    if stringClass != nil:
+      return newStringInstance(stringClass, val.strVal)
+    else:
+      return Instance(kind: ikString, class: nil, strVal: val.strVal, isNimProxy: false, nimValue: nil)
+  of vkArray:
+    if arrayClass != nil:
+      return newArrayInstance(arrayClass, val.arrayVal)
+    else:
+      return Instance(kind: ikArray, class: nil, elements: val.arrayVal, isNimProxy: false, nimValue: nil)
+  of vkTable:
+    if tableClass != nil:
+      return newTableInstance(tableClass, val.tableVal)
+    else:
+      return Instance(kind: ikTable, class: nil, entries: val.tableVal, isNimProxy: false, nimValue: nil)
+  of vkBool:
+    # Boolean values - store in nimValue for compatibility
+    let p = cast[pointer](alloc(sizeof(bool)))
+    cast[ptr bool](p)[] = val.boolVal
+    return Instance(kind: ikObject, class: booleanClass, slots: @[], isNimProxy: true, nimValue: p)
+  of vkBlock:
+    # Blocks are passed as-is, created as ikObject instances
+    return Instance(kind: ikObject, class: blockClass, slots: @[], isNimProxy: false, nimValue: nil)
+  of vkObject, vkClass, vkNil, vkSymbol:
+    raise newException(ValueError, "Cannot convert " & $val.kind & " to Instance")
