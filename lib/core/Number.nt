@@ -1,95 +1,83 @@
 #!/usr/bin/env ntalk
 #
-# Number.nt - Number class hierarchy with Integer and Float
-# Provides Smalltalk-style numeric operations
+# Number.nt - Extensions to Number class hierarchy
+# Adds Smalltalk-style numeric operations to existing Integer and Float classes
+#
+# Note: Number, Integer, and Float classes are defined in the interpreter.
+# This file extends them with additional methods using >> syntax.
 #
 
 #====================================================================
-# Number class - abstract base class for Integer and Float
+# Number class extensions
 #====================================================================
 
-Number := Object derive: #().
-
-Number>>max: other [
-  # Maximum of self and other
+Number >> max: other [
   self > other
     ifTrue: [ ^ self ]
     ifFalse: [ ^ other ]
 ].
 
-Number>>min: other [
-  # Minimum of self and other
+Number >> min: other [
   self < other
     ifTrue: [ ^ self ]
     ifFalse: [ ^ other ]
 ].
 
-Number>>between: min and: max [
-  # Check if self is between min and max (inclusive).
+Number >> between: min and: max [
   (self >= min) ifFalse: [ ^ false ].
   (self <= max) ifFalse: [ ^ false ].
   ^ true
 ].
 
-Number>>isZero [
+Number >> isZero [
   ^ self = 0
 ].
 
-Number>>isPositive [
+Number >> isPositive [
   ^ self > 0
 ].
 
-Number>>isNegative [
+Number >> isNegative [
   ^ self < 0
 ].
 
-Number>>sign [
-  # Return -1, 0, or 1 based on sign
+Number >> sign [
   self < 0 ifTrue: [ ^ 0 - 1 ].
   self > 0 ifTrue: [ ^ 1 ].
   ^ 0
 ].
 
-Number>>asString [
-  # Convert to string
+Number >> asString [
   ^ self printString
 ].
 
-#====================================================================
-# Integer class - whole numbers
-#====================================================================
-
-Integer := Number derive: #().
-
-Integer>>new: value [
-  # Create a new integer with given value
-  ^ value
+Number >> squared [
+  ^ self * self
 ].
 
-Integer>>abs [
-  # Absolute value
+#====================================================================
+# Integer class extensions
+#====================================================================
+
+Integer >> abs [
   self < 0
     ifTrue: [ ^ 0 - self ].
   ^ self
 ].
 
-Integer>>negated [
-  # Return negated value
+Integer >> negated [
   ^ 0 - self
 ].
 
-Integer>>even [
-  # Check if even
+Integer >> even [
   ^ (self \\ 2) = 0
 ].
 
-Integer>>odd [
-  # Check if odd
-  ^ (self \\ 2) ~= 0
+Integer >> odd [
+  ^ (self \\ 2) <> 0
 ].
 
-Integer>>to: end do: block [
-  # Execute block with each integer from self to end (inclusive)
+Integer >> to: end do: block [
   | i |
   i := self.
   [ i <= end ] whileTrue: [
@@ -98,8 +86,7 @@ Integer>>to: end do: block [
   ]
 ].
 
-Integer>>to: end by: step do: block [
-  # Execute block with each integer from self to end by step
+Integer >> to: end by: step do: block [
   | i |
   i := self.
   step > 0
@@ -117,8 +104,7 @@ Integer>>to: end by: step do: block [
     ]
 ].
 
-Integer>>timesRepeat: block [
-  # Execute block self times
+Integer >> timesRepeat: block [
   | count |
   count := self.
   [ count > 0 ] whileTrue: [
@@ -127,19 +113,12 @@ Integer>>timesRepeat: block [
   ]
 ].
 
-Integer>>asFloat [
-  # Convert to float
-  ^ self perform: #primitiveAsFloat
-].
-
-Integer>>factorial [
-  # Calculate factorial
+Integer >> factorial [
   self <= 1 ifTrue: [ ^ 1 ].
   ^ self * (self - 1) factorial
 ].
 
-Integer>>gcd: other [
-  # Greatest common divisor using Euclidean algorithm
+Integer >> gcd: other [
   | a b |
   a := self abs.
   b := other abs.
@@ -152,8 +131,7 @@ Integer>>gcd: other [
   ^ a
 ].
 
-Integer>>lcm: other [
-  # Least common multiple
+Integer >> lcm: other [
   | gcd |
   gcd := self gcd: other.
   gcd = 0 ifTrue: [ ^ 0 ].
@@ -161,86 +139,15 @@ Integer>>lcm: other [
 ].
 
 #====================================================================
-# Float class - floating point numbers
+# Float class extensions
 #====================================================================
 
-Float := Number derive: #().
-
-Float>>new: value [
-  # Create a new float with given value
-  ^ value asFloat
-].
-
-Float>>abs [
-  # Absolute value
+Float >> abs [
   self < 0.0
     ifTrue: [ ^ 0.0 - self ].
   ^ self
 ].
 
-Float>>negated [
-  # Return negated value
+Float >> negated [
   ^ 0.0 - self
 ].
-
-Float>>floor [
-  # Return floor (largest integer <= self)
-  ^ self perform: #primitiveFloor
-].
-
-Float>>ceiling [
-  # Return ceiling (smallest integer >= self)
-  ^ self perform: #primitiveCeiling
-].
-
-Float>>rounded [
-  # Return rounded to nearest integer
-  ^ self perform: #primitiveRounded
-].
-
-Float>>truncated [
-  # Return truncated toward zero
-  ^ self perform: #primitiveTruncated
-].
-
-Float>>sqrt [
-  # Return square root
-  ^ self perform: #primitiveSqrt
-].
-
-Float>>asInteger [
-  # Convert to integer (truncated)
-  ^ self perform: #primitiveAsInteger
-].
-
-Float>>sin [
-  # Return sine
-  ^ self perform: #primitiveSin
-].
-
-Float>>cos [
-  # Return cosine
-  ^ self perform: #primitiveCos
-].
-
-Float>>tan [
-  # Return tangent
-  ^ self perform: #primitiveTan
-].
-
-Float>>exp [
-  # Return e^self
-  ^ self perform: #primitiveExp
-].
-
-Float>>ln [
-  # Return natural logarithm
-  ^ self perform: #primitiveLn
-].
-
-#====================================================================
-# Notes on interpreter integration
-#====================================================================
-# The interpreter provides primitive number objects that inherit
-# from Integer and Float. Integer literals (like 42) and float
-# literals (like 3.14) receive messages defined in this file.
