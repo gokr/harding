@@ -368,15 +368,13 @@ expr ifTrue: [ block ] ifFalse: [ block ].
 collection do: [ :each | block ].
 
 #=== Comments ================================
-"This is a comment (double quotes)
-"==== Section header (no space needed after #)
-'Inline comment' someCode                   # String as comment
+# This is a comment
+#==== Section header
 #!/usr/bin/env ntalk                         # Shebang at start of file
 
 #=== Strings =================================
-'single quoted'                             # String literal
-'''multiline'''                            # Multiline string
-"Note: Use symbols for characters
+"double quoted"                             # String literal
+""""multiline string"""                     # Multiline string
 
 #=== Temporary Variables =====================
 [ | temp1 temp2 |
@@ -406,7 +404,7 @@ Nimtalk supports multiple approaches for defining methods:
 ### Approach 1: Individual Definition (>> syntax)
 ```smalltalk
 # In .nt files only - transformed by parser
-Person>>greet [ ^ 'Hello, ' , name ]
+Person>>greet [ ^ "Hello, " , name ]
 Person>>name: aName [ name := aName ]
 ```
 
@@ -414,7 +412,7 @@ Person>>name: aName [ name := aName ]
 ```smalltalk
 # Works in both files and REPL
 Person extend: [
-  self >> greet [ ^ 'Hello, ' , name ].
+  self >> greet [ ^ "Hello, " , name ].
   self >> name: aName [ name := aName ].
   self >> printString [ ^ name ]
 ]
@@ -443,7 +441,7 @@ Person extendClass: [
 ]
 
 # Usage
-p := Person newNamed: 'Alice' aged: 30
+p := Person newNamed: "Alice" aged: 30
 ```
 
 ### Dynamic Message Sending (perform:)
