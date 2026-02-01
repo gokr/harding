@@ -56,7 +56,7 @@ This document tracks current work items and future directions for Nimtalk develo
 
 ### Tooling
 - [ ] REPL history and completion
-- [ ] Editor syntax highlighting definitions
+- [x] Editor syntax highlighting definitions (VSCode extension)
 - [ ] Build system refinements
 
 ## Future Directions
@@ -188,4 +188,26 @@ nimble clean       # Clean artifacts
 
 ---
 
-*Last Updated: 2026-01-31*
+## Recent Completed Work (2026-02-01)
+
+### VSCode Extension
+- Added comprehensive VSCode syntax highlighting for `.nt` files
+- Created TextMate grammar (.vscode/syntaxes/nt.tmLanguage.json)
+- Added language configuration (.vscode/language-configuration.json)
+- Added extension manifest (package.json)
+- Created `.vscodeignore` for smaller extension packages
+- Added VSCODE.md documentation
+- Extension packaged as .vsix (~276KB)
+
+### Documentation Updates
+- Fixed string literal syntax in documentation (use double quotes, not single quotes)
+- Fixed comment syntax (use # for comments)
+- Updated docs/README.md with new documentation files
+- Updated docs/NEWLINE_RULES.md
+- Updated docs/SPECIFICATION.md
+- Updated docs/SYNTAX-QUICKREF-updated.md
+- Updated TODO.md with VSCode extension completion
+
+---
+
+*Last Updated: 2026-02-01*
