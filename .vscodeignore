@@ -1,0 +1,60 @@
+# Source files
+src/
+lib/
+tests/
+examples/
+docs/
+benchmarks/
+
+# Build artifacts
+nimcache/
+*.o
+*.obj
+*.ilk
+*.pdb
+*.exp
+*.lib
+*.exe
+*.dll
+*.so
+*.dylib
+build/
+
+# Binaries
+ntalk
+ntalkc
+nimtalk/
+
+# Tools
+.nimble/
+
+# Test outputs
+testresults/
+*.out
+
+# Documentation builds
+htmldocs/
+
+# CI
+.github/
+
+# Git
+.git/
+.gitignore
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Nimble
+*.nimble
+nimble.develop
+nimble.paths
+nimbledeps
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
