@@ -232,16 +232,16 @@ Super sends support qualified syntax: `super<ParentClass> methodName`
 ### Examples of Precedence
 
 ```smalltalk
-* Unary before binary:
+# Unary before binary:
   obj foo + bar    → (obj foo) + bar
 
-* Binary left-to-right:
+# Binary left-to-right:
   a + b * c        → (a + b) * c
 
-* Keyword lowest:
+# Keyword lowest:
   a + b at: c      → (a + b) at: c
 
-* Cascade applies to result:
+# Cascade applies to result:
   obj foo; bar     → (obj foo); bar (both sent to obj)
 ```
 
@@ -308,15 +308,15 @@ Nimtalk takes a pragmatic approach to statement separation that differs from tra
 Both periods (`.`) and line endings act as statement separators:
 
 ```smalltalk
-* Explicit periods (Smalltalk-style)
+# Explicit periods (Smalltalk-style)
 x := 1.
 y := 2.
 
-* Implicit line endings (Nimtalk-style)
+# Implicit line endings (Nimtalk-style)
 x := 1
 y := 2
 
-* Mixed style
+# Mixed style
 x := 1.
 y := 2
 z := 3.
@@ -328,7 +328,7 @@ Keyword message chains can span multiple lines while forming a single statement:
 
 ```smalltalk
 tags isNil
-  ifTrue: [ ^ 'Object' ]
+  ifTrue: [ ^ "Object" ]
   ifFalse: [ ^ tags first ]
 ```
 
@@ -349,16 +349,16 @@ The parser recognizes that a line ending after a keyword argument does not termi
 ### Examples
 
 ```smalltalk
-* Valid - keyword message spans lines
+# Valid - keyword message spans lines
 result := dictionary
   at: #key
   ifAbsent: [ defaultValue ]
 
-* Invalid - binary operator cannot span lines
+# Invalid - binary operator cannot span lines
 result := x
-  + y    * This will fail to parse
+  + y    # This will fail to parse
 
-* Valid - block with temporaries can span lines
+# Valid - block with temporaries can span lines
 [ | temp1 temp2 |
   temp1 := 1.
   temp2 := 2
@@ -370,21 +370,21 @@ result := x
 Temporary variables must be declared at the beginning of a block, before any statements:
 
 ```smalltalk
-* Valid
+# Valid
 [ | temp1 temp2 |
   temp1 := 1.
   temp2 := 2
 ]
 
-* Invalid - comment before temporaries
-[ "some comment"
+# Invalid - string literal before temporaries
+[ "some string"
   | temp1 |
   temp1 := 1
 ]
 
-* Valid - comment after temporaries
+# Valid - comment after temporaries
 [ | temp1 |
-  "some comment"
+  # some comment
   temp1 := 1
 ]
 ```
