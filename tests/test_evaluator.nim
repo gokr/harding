@@ -816,7 +816,9 @@ suite "Evaluator: Special Features":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkNil)
+    # nil is now an instance of UndefinedObject (vkInstance), not vkNil
+    check(result[0][^1].kind == vkInstance)
+    check(result[0][^1].toString() == "nil")
 
   test "booleans are native values" :
     let result = interp.evalStatements("""
