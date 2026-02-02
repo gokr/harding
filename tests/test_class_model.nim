@@ -1,12 +1,12 @@
 #
-# test_class_model.nim - Unit tests for Class-Based Object Model
+# test_class_model.nim - Unit tests for Object Model
 #
 
 import std/[unittest, tables, strutils]
 import ../src/nimtalk/core/types
 import ../src/nimtalk/interpreter/[objects, activation]
 
-suite "Class-Based Object Model":
+suite "Class Object Model":
 
   setup:
     # Create fresh classes for each test
@@ -122,22 +122,21 @@ suite "Class-Based Object Model":
     let parent = newClass(parents = @[grandparent], name = "Parent")
     let child = newClass(parents = @[parent], name = "Child")
 
-    # Build subclass chain
-    grandparent.subclasses.add(parent)
-    parent.subclasses.add(child)
+    # Add initial method to grandparent
+    let meth1 = BlockNode()
+    meth1.isMethod = true
+    addMethodToClass(grandparent, "foo", meth1, false)
 
-    # Setup initial methods by copying from grandparent
-    grandparent.allMethods["foo"] = BlockNode()
-    grandparent.allMethods["foo"].isMethod = true
-    parent.allMethods = grandparent.allMethods
-    child.allMethods = parent.allMethods
+    # Check that foo is inherited through the chain
+    check("foo" in parent.allMethods)
+    check("foo" in child.allMethods)
 
     # Add method to grandparent and trigger invalidation
     let meth2 = BlockNode()
     meth2.isMethod = true
     addMethodToClass(grandparent, "bar", meth2, false)
 
-    # Check that invalidation propagated
+    # Check that bar propagated to all subclasses
     check("bar" in parent.allMethods)
     check("bar" in child.allMethods)
 
