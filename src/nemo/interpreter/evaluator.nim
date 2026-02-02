@@ -1938,11 +1938,10 @@ proc primitiveRespondsToImpl(interp: var Interpreter, self: Instance, args: seq[
 
 proc primitiveMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return the class's method selector names as an array
-  if self.kind != ikObject or self.class == nil:
-    return Array.new().toValue()
   var selectors: seq[NodeValue] = @[]
-  for selector in self.classmethods.keys():
-    selectors.add(toSymbol(selector))
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.allMethods.keys():
+      selectors.add(toSymbol(selector))
   return newArrayInstance(arrayClass, selectors).toValue()
 
 proc primitiveErrorImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
