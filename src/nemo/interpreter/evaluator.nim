@@ -4,6 +4,8 @@ import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
+# Note: SchedulerContext is defined in types.nim
+# initProcessorGlobal is called by newSchedulerContext in scheduler.nim
 
 # Class caches are defined in objects.nim and shared across the interpreter
 
@@ -17,26 +19,6 @@ import ../interpreter/activation
 # ============================================================================
 
 type
-  # Exception handler record for on:do: mechanism
-  ExceptionHandler* {.acyclic.} = object
-    exceptionClass*: Class    # The exception class to catch
-    handlerBlock*: BlockNode        # Block to execute when caught
-    activation*: Activation         # Activation where handler was installed
-    stackDepth*: int                # Stack depth when handler installed
-
-  Interpreter* {.acyclic.} = ref object
-    globals*: ref Table[string, NodeValue]
-    activationStack*: seq[Activation]
-    currentActivation*: Activation
-    currentReceiver*: Instance
-    rootClass*: Class  # The root class for exception handling
-    rootObject*: Instance  # The root object instance
-    maxStackDepth*: int
-    traceExecution*: bool
-    lastResult*: NodeValue
-    exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
-
-type
   EvalError* = object of ValueError
     node*: Node
 
@@ -48,6 +30,8 @@ proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
 proc sendMessage*(interp: var Interpreter, receiver: Instance, selector: string, args: varargs[NodeValue]): NodeValue
 proc asSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
+proc installGlobalTableMethods*(globalTableClass: Class)
+proc initNemoGlobal*(interp: var Interpreter)
 
 # ============================================================================
 # AST Rewriter for Slot Access
@@ -445,6 +429,26 @@ proc setVariable(interp: var Interpreter, name: string, value: NodeValue) =
       interp.currentActivation.locals[name] = value
       return
 
+    # Walk up the sender chain to find existing variable in outer scopes
+    # This is crucial for closures to update variables defined in enclosing methods
+    var parentActivation = interp.currentActivation.sender
+    while parentActivation != nil:
+      # Check captured environment in parent
+      if parentActivation.currentMethod != nil:
+        if parentActivation.currentMethod.capturedEnv.len > 0 and name in parentActivation.currentMethod.capturedEnv:
+          parentActivation.currentMethod.capturedEnv[name].value = value
+          parentActivation.locals[name] = value
+          debug("Variable updated in parent captured env: ", name, " = ", value.toString())
+          return
+
+      # Check locals in parent
+      if name in parentActivation.locals:
+        parentActivation.locals[name] = value
+        debug("Variable updated in parent activation: ", name, " = ", value.toString())
+        return
+
+      parentActivation = parentActivation.sender
+
     # Check if variable exists in globals - if so, update it there
     if name in interp.globals[]:
       interp.globals[][name] = value
@@ -778,13 +782,21 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
     debug("Pseudo-variable: ", pseudo.name)
     case pseudo.name
     of "self":
-      debug("currentReceiver is nil: ", interp.currentReceiver == nil)
-      if interp.currentReceiver != nil:
-        debug("currentReceiver class: ", interp.currentReceiver.class.name)
-        let result = interp.currentReceiver.toValue().unwrap()
-        debug("self returning: ", result.toString())
-        return result
-      return nilValue()
+      if interp.currentReceiver == nil:
+        debug("currentReceiver is nil, returning nil")
+        return nilValue()
+      debug("currentReceiver class: ", interp.currentReceiver.class.name, " kind: ", interp.currentReceiver.kind)
+      # Special case: for class methods, self should return the Class object
+      # The hidden class receiver is an ikObject with empty slots and no nimValue
+      if interp.currentReceiver.kind == ikObject and
+         interp.currentReceiver.slots.len == 0 and
+         interp.currentReceiver.isNimProxy == false and
+         interp.currentReceiver.nimValue == nil:
+        debug("self returning as class: <class ", interp.currentReceiver.class.name, ">")
+        return interp.currentReceiver.class.toValue()
+      let result = interp.currentReceiver.toValue().unwrap()
+      debug("self returning: ", result.toString())
+      return result
     of "nil":
       return nilValue()
     of "true":
@@ -912,8 +924,8 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         of "super":
           # super refers to parent of current receiver's class
           if interp.currentReceiver != nil and interp.currentReceiver.class != nil and
-             interp.currentReceiver.class.parents.len > 0:
-            elements.add(interp.currentReceiver.class.parents[0].toValue())
+             interp.currentReceiver.class.superclasses.len > 0:
+            elements.add(interp.currentReceiver.class.superclasses[0].toValue())
           else:
             elements.add(interp.globals[]["Object"])
         else:
@@ -938,8 +950,8 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         of "super":
           # super refers to parent of current receiver's class
           if interp.currentReceiver != nil and interp.currentReceiver.class != nil and
-             interp.currentReceiver.class.parents.len > 0:
-            elements.add(interp.currentReceiver.class.parents[0].toValue())
+             interp.currentReceiver.class.superclasses.len > 0:
+            elements.add(interp.currentReceiver.class.superclasses[0].toValue())
           else:
             elements.add(interp.globals[]["Object"])
         continue
@@ -1175,8 +1187,10 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
       let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
       return interp.executeMethod(currentMethodNode, classReceiver, argNodes, lookup.definingClass)
     else:
-      raise newException(EvalError,
-        "Class method not found: " & msgNode.selector & " on class " & cls.name)
+      # Class method not found - fall through to instance method lookup
+      # by changing receiverVal from vkClass to create an instance wrapper
+      # We do this below in the vkClass case of the conversion section
+      discard
 
   # Convert receiver to Instance - create Instance variants directly
   var receiver: Instance
@@ -1229,6 +1243,13 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
     receiver = blockInst
   of vkNil:
     raise newException(EvalError, "Cannot send message to nil")
+  of vkClass:
+    # Class object - convert to instance wrapper for instance method lookup
+    # This happens when a class method is not found but an instance method exists
+    # (e.g., calling extend: on a Class object)
+    let cls = receiverVal.classVal
+    debug("Converting class to instance wrapper for instance method lookup")
+    receiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
   else:
     raise newException(EvalError, "Message send to unsupported value kind: " & $receiverVal.kind)
 
@@ -1298,7 +1319,7 @@ proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
   var targetParent: Class = nil
   if superNode.explicitParent.len > 0:
     # Qualified super<Parent>: find specific parent by name
-    for parent in definingClass.parents:
+    for parent in definingClass.superclasses:
       if parent.name == superNode.explicitParent:
         targetParent = parent
         break
@@ -1306,9 +1327,9 @@ proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
       raise newException(EvalError, "Parent class '" & superNode.explicitParent & "' not found in inheritance chain")
   else:
     # Unqualified super: use first parent of the defining class
-    if definingClass.parents.len == 0:
+    if definingClass.superclasses.len == 0:
       raise newException(EvalError, "super send in class with no parents")
-    targetParent = definingClass.parents[0]
+    targetParent = definingClass.superclasses[0]
 
   # Look up method in target parent's allMethods
   let methodBlock = lookupInstanceMethod(targetParent, superNode.selector)
@@ -1859,6 +1880,30 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
 
   return lastResult
 
+# Object primitive methods
+
+proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Evaluate a block with self temporarily rebound to this object
+  ## Usage: self perform: #primitiveAsSelfDo: with: block
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  let blockNode = args[0].blockVal
+  debug("primitiveAsSelfDo called, evaluating block with self = ", self.class.name)
+
+  # Save current receiver
+  let savedReceiver = interp.currentReceiver
+
+  # Temporarily set receiver to self
+  interp.currentReceiver = self
+
+  try:
+    # Evaluate the block with new self
+    return evalBlock(interp, self, blockNode)
+  finally:
+    # Restore original receiver
+    interp.currentReceiver = savedReceiver
+
 # Block value methods
 proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Evaluate this block with no arguments
@@ -2029,14 +2074,14 @@ proc initGlobals*(interp: var Interpreter) =
   # Note: derive, derive:, and new class methods are registered in initCoreClasses
   # They properly generate slot accessors for the new class
 
-  # Register addParent: class method on classes
-  # This allows adding a parent to an existing class after creation
-  # Useful for resolving method conflicts by adding parent after overriding methods
-  proc addParentImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
-    # self.class is the Class object receiving the addParent: message
+  # Register addSuperclass: class method on classes
+  # This allows adding a superclass to an existing class after creation
+  # Useful for resolving method conflicts by adding superclass after overriding methods
+  proc addSuperclassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    # self.class is the Class object receiving the addSuperclass: message
     let cls = self.class
     if args.len < 1:
-      raise newException(ValueError, "addParent: requires a parent class as argument")
+      raise newException(ValueError, "addSuperclass: requires a superclass as argument")
 
     var parentClass: Class = nil
     if args[0].kind == vkClass:
@@ -2045,26 +2090,26 @@ proc initGlobals*(interp: var Interpreter) =
       # Instance wrapping a class (from class method dispatch)
       parentClass = args[0].instVal.class
     else:
-      raise newException(ValueError, "addParent: requires a class object, got: " & $args[0].kind)
+      raise newException(ValueError, "addSuperclass: requires a class object, got: " & $args[0].kind)
 
     if parentClass == nil:
-      raise newException(ValueError, "addParent: parent class cannot be nil")
+      raise newException(ValueError, "addSuperclass: superclass cannot be nil")
 
-    addParent(cls, parentClass)
+    addSuperclass(cls, parentClass)
     return nilValue()
 
-  let addParentMethod = createCoreMethod("addParent:")
-  addParentMethod.nativeImpl = cast[pointer](addParentImpl)
-  addParentMethod.hasInterpreterParam = true
-  rootCls.classMethods["addParent:"] = addParentMethod
-  rootCls.allClassMethods["addParent:"] = addParentMethod
+  let addSuperclassMethod = createCoreMethod("addSuperclass:")
+  addSuperclassMethod.nativeImpl = cast[pointer](addSuperclassImpl)
+  addSuperclassMethod.hasInterpreterParam = true
+  rootCls.classMethods["addSuperclass:"] = addSuperclassMethod
+  rootCls.allClassMethods["addSuperclass:"] = addSuperclassMethod
 
   # Use existing Object class from initCoreClasses if available
   # initCoreClasses is called in newInterpreter before initGlobals
   var objectCls: Class
   if objectClass == nil:
     # Fallback: create Object class if initCoreClasses wasn't called
-    objectCls = newClass(parents = @[rootCls], name = "Object")
+    objectCls = newClass(superclasses = @[rootCls], name = "Object")
     objectCls.tags = @["Object"]
     objectClass = objectCls
   else:
@@ -2109,12 +2154,40 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.methods["primitiveIdentity:"] = objIdentityMethod
   objectCls.allMethods["primitiveIdentity:"] = objIdentityMethod
 
+  # Add primitiveAsSelfDo: for asSelfDo: implementation
+  let objAsSelfDoMethod = createCoreMethod("primitiveAsSelfDo:")
+  objAsSelfDoMethod.nativeImpl = cast[pointer](primitiveAsSelfDoImpl)
+  objAsSelfDoMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveAsSelfDo:"] = objAsSelfDoMethod
+  objectCls.allMethods["primitiveAsSelfDo:"] = objAsSelfDoMethod
+
+  # Add print and println as native methods
+  proc objPrintImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    # Print self to stdout without newline
+    stdout.write(self.toValue().toString())
+    return self.toValue()
+
+  proc objPrintlnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    # Print self to stdout with newline
+    echo(self.toValue().toString())
+    return self.toValue()
+
+  let printMethod = createCoreMethod("print")
+  printMethod.nativeImpl = cast[pointer](objPrintImpl)
+  objectCls.methods["print"] = printMethod
+  objectCls.allMethods["print"] = printMethod
+
+  let printlnMethod = createCoreMethod("println")
+  printlnMethod.nativeImpl = cast[pointer](objPrintlnImpl)
+  objectCls.methods["println"] = printlnMethod
+  objectCls.allMethods["println"] = printlnMethod
+
   # Create Number class (derives from Object)
-  let numberCls = newClass(parents = @[objectCls], name = "Number")
+  let numberCls = newClass(superclasses = @[objectCls], name = "Number")
   numberCls.tags = @["Number"]
 
   # Create Integer class (derives from Number)
-  let intCls = newClass(parents = @[numberCls], name = "Integer")
+  let intCls = newClass(superclasses = @[numberCls], name = "Integer")
   intCls.tags = @["Integer", "Number"]
   integerClass = intCls
 
@@ -2193,7 +2266,7 @@ proc initGlobals*(interp: var Interpreter) =
   intCls.allMethods["%"] = moduloMethod
 
   # Create Float class (derives from Number)
-  let floatCls = newClass(parents = @[numberCls], name = "Float")
+  let floatCls = newClass(superclasses = @[numberCls], name = "Float")
   floatCls.tags = @["Float", "Number"]
   floatClass = floatCls
 
@@ -2207,7 +2280,7 @@ proc initGlobals*(interp: var Interpreter) =
   floatCls.allMethods["sqrt"] = sqrtMethod
 
   # Create String class (derives from Object)
-  let stringCls = newClass(parents = @[objectCls], name = "String")
+  let stringCls = newClass(superclasses = @[objectCls], name = "String")
   stringCls.tags = @["String", "Text"]
   stringClass = stringCls
 
@@ -2279,7 +2352,7 @@ proc initGlobals*(interp: var Interpreter) =
   stringCls.allMethods["primitiveAsSymbol"] = stringAsSymbolMethod
 
   # Create Array class (derives from Object)
-  let arrayCls = newClass(parents = @[objectCls], name = "Array")
+  let arrayCls = newClass(superclasses = @[objectCls], name = "Array")
   arrayCls.tags = @["Array", "Collection"]
   arrayClass = arrayCls
 
@@ -2315,7 +2388,7 @@ proc initGlobals*(interp: var Interpreter) =
   arrayCls.allMethods["primitiveReverse"] = arrayReverseMethod
 
   # Create Table class (derives from Object) - exposed as Dictionary for compatibility
-  let tableCls = newClass(parents = @[objectCls], name = "Table")
+  let tableCls = newClass(superclasses = @[objectCls], name = "Table")
   tableCls.tags = @["Table", "Dictionary", "Collection"]
   tableClass = tableCls
 
@@ -2349,7 +2422,7 @@ proc initGlobals*(interp: var Interpreter) =
   tableCls.allClassMethods["new"] = tableNewMethod
 
   # Create Boolean class (derives from Object)
-  let booleanCls = newClass(parents = @[objectCls], name = "Boolean")
+  let booleanCls = newClass(superclasses = @[objectCls], name = "Boolean")
   booleanCls.tags = @["Boolean"]
   booleanClass = booleanCls
 
@@ -2367,17 +2440,17 @@ proc initGlobals*(interp: var Interpreter) =
   booleanCls.allMethods["ifFalse:"] = ifFalseMethod
 
   # Create True class (singleton class for true value)
-  let trueCls = newClass(parents = @[booleanCls], name = "True")
+  let trueCls = newClass(superclasses = @[booleanCls], name = "True")
   trueCls.tags = @["True", "Boolean"]
   trueClassCache = trueCls
 
   # Create False class (singleton class for false value)
-  let falseCls = newClass(parents = @[booleanCls], name = "False")
+  let falseCls = newClass(superclasses = @[booleanCls], name = "False")
   falseCls.tags = @["False", "Boolean"]
   falseClassCache = falseCls
 
   # Create Block class (derives from Object)
-  let blockCls = newClass(parents = @[objectCls], name = "Block")
+  let blockCls = newClass(superclasses = @[objectCls], name = "Block")
   blockCls.tags = @["Block", "Closure"]
   blockClass = blockCls
 
@@ -2419,6 +2492,27 @@ proc initGlobals*(interp: var Interpreter) =
   blockCls.methods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
   blockCls.allMethods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
 
+  # Create FileStream class (derives from Object) - minimal version for stdout
+  let fileStreamCls = newClass(superclasses = @[objectCls], name = "FileStream")
+  fileStreamCls.tags = @["FileStream"]
+
+  # Register FileStream methods using existing writeImpl/writelineImpl from objects.nim
+  let fileStreamWriteMethod = createCoreMethod("write:")
+  fileStreamWriteMethod.nativeImpl = cast[pointer](writeImpl)
+  fileStreamCls.methods["write:"] = fileStreamWriteMethod
+  fileStreamCls.allMethods["write:"] = fileStreamWriteMethod
+
+  let fileStreamWritelineMethod = createCoreMethod("writeline:")
+  fileStreamWritelineMethod.nativeImpl = cast[pointer](writelineImpl)
+  fileStreamCls.methods["writeline:"] = fileStreamWritelineMethod
+  fileStreamCls.allMethods["writeline:"] = fileStreamWritelineMethod
+
+  # Create Stdout instance - a FileStream instance for standard output
+  let stdoutInstance = Instance(kind: ikObject, class: fileStreamCls, slots: @[])
+
+  # Add Stdout as a global
+  interp.globals[]["Stdout"] = stdoutInstance.toValue()
+
   # Create Class instance for each class so it can be stored as a value
   # Add global bindings for classes
   interp.globals[]["Root"] = rootCls.toValue()
@@ -2433,11 +2527,17 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["True"] = trueCls.toValue()
   interp.globals[]["False"] = falseCls.toValue()
   interp.globals[]["Block"] = blockCls.toValue()
+  interp.globals[]["FileStream"] = fileStreamCls.toValue()
 
   # Add primitive values
   interp.globals[]["true"] = NodeValue(kind: vkBool, boolVal: true)
   interp.globals[]["false"] = NodeValue(kind: vkBool, boolVal: false)
   interp.globals[]["nil"] = nilValue()
+
+  # Initialize the Nemo global - an instance of GlobalTable that wraps global namespace
+  # Note: Process and Scheduler classes are initialized by initProcessorGlobal
+  # which is called by newSchedulerContext in the scheduler module
+  initNemoGlobal(interp)
 
 
 proc loadStdlib*(interp: var Interpreter, basePath: string = "") =
@@ -2535,3 +2635,168 @@ proc execWithOutput*(interp: var Interpreter, source: string): (string, string) 
     return ("", err)
   else:
     return (value.toString(), "")
+
+# ============================================================================
+# GlobalTable Class and Nemo Global
+# ============================================================================
+
+type
+  GlobalTableProxy* = ref object
+    globals*: ref Table[string, NodeValue]
+
+proc createGlobalTableClass*(): Class =
+  ## Create the GlobalTable class - a subclass of Table that wraps the globals table
+  ## The global globals table is accessible via the 'Nemo' global
+
+  # Ensure Table class exists
+  if tableClass == nil or objectClass == nil:
+    return nil
+
+  if "GlobalTable" in objectClass.allClassMethods or "GlobalTable" in globals:
+    # Already initialized
+    for name, val in globals:
+      if name == "GlobalTable" and val.kind == vkClass:
+        return val.classVal
+
+  let globalTableClass = newClass(superclasses = @[tableClass], name = "GlobalTable")
+  globalTableClass.tags = @["GlobalTable", "Dictionary"]
+  globalTableClass.isNimProxy = true
+  globalTableClass.nemoType = "GlobalTable"
+
+  # GlobalTable inherits all methods from Table (keys, at:, at:put:, includesKey:)
+  # No additional methods needed - it just wraps the globals table
+
+  return globalTableClass
+
+proc initNemoGlobal*(interp: var Interpreter) =
+  ## Initialize the Nemo global - an instance of GlobalTable that wraps global namespace
+
+  # Create the GlobalTable class
+  let globalTableClass = createGlobalTableClass()
+  if globalTableClass == nil:
+    return  # Table class not initialized yet
+
+  # Install special GlobalTable methods that access the globals table
+  installGlobalTableMethods(globalTableClass)
+
+  # Create a GlobalTable proxy instance
+  let proxy = GlobalTableProxy(globals: interp.globals)
+  let globalTableInstance = Instance(kind: ikObject, class: globalTableClass, slots: @[])
+  globalTableInstance.isNimProxy = true
+  globalTableInstance.nimValue = cast[pointer](proxy)
+
+  # Add to globals as 'Nemo'
+  interp.globals[]["Nemo"] = globalTableInstance.toValue()
+
+  # Also add the GlobalTable class itself to globals for reflection
+  interp.globals[]["GlobalTable"] = globalTableClass.toValue()
+
+# Special handling for GlobalTable - modify Table methods to access globals
+proc globalTableAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable at: - access global variable
+  let proxy = if self.isNimProxy and self.class.nemoType == "GlobalTable" and self.nimValue != nil:
+                cast[GlobalTableProxy](self.nimValue)
+              else:
+                nil
+
+  if proxy != nil:
+    # This is a GlobalTable proxy - access the globals table
+    let key = if args.len > 0:
+                if args[0].kind == vkString: args[0].strVal
+                elif args[0].kind == vkSymbol: args[0].symVal
+                else: ""
+              else:
+                ""
+    if key.len > 0 and key in proxy.globals[]:
+      return proxy.globals[][key]
+    return nilValue()
+  else:
+    # Fall through to regular Table behavior
+    return tableAtImpl(self, args)
+
+proc globalTableAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable at:put: - set global variable
+  let proxy = if self.isNimProxy and self.class.nemoType == "GlobalTable" and self.nimValue != nil:
+                cast[GlobalTableProxy](self.nimValue)
+              else:
+                nil
+
+  if proxy != nil:
+    # This is a GlobalTable proxy - access the globals table
+    if args.len >= 2:
+      let key = if args[0].kind == vkString: args[0].strVal
+                elif args[0].kind == vkSymbol: args[0].symVal
+                else: ""
+      if key.len > 0:
+        proxy.globals[][key] = args[1]
+        return args[1]
+    return nilValue()
+  else:
+    # Fall through to regular Table behavior
+    return tableAtPutImpl(self, args)
+
+proc globalTableKeysImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable keys - get all global names as array
+  let proxy = if self.isNimProxy and self.class.nemoType == "GlobalTable" and self.nimValue != nil:
+                cast[GlobalTableProxy](self.nimValue)
+              else:
+                nil
+
+  if proxy != nil:
+    # This is a GlobalTable proxy - access the globals table
+    var elements: seq[NodeValue] = @[]
+    for key in proxy.globals[].keys():
+      elements.add(toValue(key))
+    return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, elements))
+  else:
+    # Fall through to regular Table behavior
+    return tableKeysImpl(self, args)
+
+proc globalTableIncludesKeyImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable includesKey: - check if global exists
+  let proxy = if self.isNimProxy and self.class.nemoType == "GlobalTable" and self.nimValue != nil:
+                cast[GlobalTableProxy](self.nimValue)
+              else:
+                nil
+
+  if proxy != nil:
+    # This is a GlobalTable proxy - access the globals table
+    if args.len > 0:
+      let key = if args[0].kind == vkString: args[0].strVal
+                elif args[0].kind == vkSymbol: args[0].symVal
+                else: ""
+      return toValue(key in proxy.globals[])
+    return toValue(false)
+  else:
+    # Fall through to regular Table behavior
+    return tableIncludesKeyImpl(self, args)
+
+# Patch GlobalTable methods after class creation
+proc installGlobalTableMethods*(globalTableClass: Class) =
+  ## Install special GlobalTable methods that wrap the globals table
+  if globalTableClass == nil:
+    return
+
+  # Override at: method
+  let atMethod = createCoreMethod("at:")
+  atMethod.nativeImpl = cast[pointer](globalTableAtImpl)
+  atMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "at:", atMethod)
+
+  # Override at:put: method
+  let atPutMethod = createCoreMethod("at:put:")
+  atPutMethod.nativeImpl = cast[pointer](globalTableAtPutImpl)
+  atPutMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "at:put:", atPutMethod)
+
+  # Override keys method
+  let keysMethod = createCoreMethod("keys")
+  keysMethod.nativeImpl = cast[pointer](globalTableKeysImpl)
+  keysMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "keys", keysMethod)
+
+  # Override includesKey: method
+  let includesKeyMethod = createCoreMethod("includesKey:")
+  includesKeyMethod.nativeImpl = cast[pointer](globalTableIncludesKeyImpl)
+  includesKeyMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "includesKey:", includesKeyMethod)

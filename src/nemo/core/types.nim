@@ -39,7 +39,7 @@ type
     allSlotNames*: seq[string]              # All slots including inherited (instance layout)
 
     # Inheritance
-    parents*: seq[Class]                    # Direct parent classes
+    superclasses*: seq[Class]               # Direct superclasses
     subclasses*: seq[Class]                 # Direct children (for efficient invalidation)
 
     # Metadata
@@ -75,6 +75,27 @@ type
 
   # Forward declarations to break circular dependency
   Activation* = ref ActivationObj
+
+  # Exception handler record for on:do: mechanism
+  ExceptionHandler* {.acyclic.} = object
+    exceptionClass*: Class    # The exception class to catch
+    handlerBlock*: BlockNode        # Block to execute when caught
+    activation*: Activation         # Activation where handler was installed
+    stackDepth*: int                # Stack depth when handler installed
+
+  # Interpreter type defined here to avoid circular dependency between scheduler and evaluator
+  Interpreter* {.acyclic.} = ref object
+    globals*: ref Table[string, NodeValue]
+    activationStack*: seq[Activation]
+    currentActivation*: Activation
+    currentReceiver*: Instance
+    rootClass*: Class  # The root class for exception handling
+    rootObject*: Instance  # The root object instance
+    maxStackDepth*: int
+    traceExecution*: bool
+    lastResult*: NodeValue
+    exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
+    schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
 
   BlockNode* {.acyclic.} = ref object of Node
     parameters*: seq[string]              # method parameters
@@ -391,8 +412,11 @@ var
   tableClass*: Class = nil
   blockClass*: Class = nil
 
+# SchedulerContext forward declaration (defined in scheduler.nim)
+type SchedulerContext* = ref object
+
 # Forward declarations
-proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class
+proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class
 
 proc initRootClass*(): Class =
   ## Initialize the global root class
@@ -408,7 +432,7 @@ proc initObjectClass*(): Class =
   if objectClass == nil:
     # Ensure Root exists first
     discard initRootClass()
-    objectClass = newClass(parents = @[rootClass], name = "Object")
+    objectClass = newClass(superclasses = @[rootClass], name = "Object")
     objectClass.tags = @["Object"]
   return objectClass
 
@@ -419,7 +443,7 @@ proc initMixinClass*(): Class =
   if mixinClass == nil:
     # Ensure Root exists first
     discard initRootClass()
-    mixinClass = newClass(parents = @[rootClass], name = "Mixin")
+    mixinClass = newClass(superclasses = @[rootClass], name = "Mixin")
     mixinClass.tags = @["Mixin", "Object"]  # Mark as Mixin for type compatibility
   return mixinClass
 
@@ -432,8 +456,8 @@ proc isMixin*(cls: Class): bool =
   ## A mixin can be used as additional parent classes without affecting instance type
   return "Mixin" in cls.tags or cls.allSlotNames.len == 0
 
-proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class =
-  ## Create a new Class with given parents and slot names
+proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class =
+  ## Create a new Class with given superclasses and slot names
   result = Class()
   result.methods = initTable[string, BlockNode]()
   result.allMethods = initTable[string, BlockNode]()
@@ -441,7 +465,7 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
   result.allClassMethods = initTable[string, BlockNode]()
   result.slotNames = slotNames
   result.allSlotNames = @[]
-  result.parents = parents
+  result.superclasses = superclasses
   result.subclasses = @[]
   result.name = name
   result.tags = @["Class"]
@@ -449,12 +473,12 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
   result.nemoType = ""
   result.hasSlots = slotNames.len > 0
 
-  # Check for slot name conflicts from parents
+  # Check for slot name conflicts from superclasses
   var seenSlotNames: seq[string] = @[]
-  for parent in parents:
+  for parent in superclasses:
     for slotName in parent.allSlotNames:
       if slotName in seenSlotNames:
-        raise newException(ValueError, "Slot name conflict: '" & slotName & "' exists in multiple parents")
+        raise newException(ValueError, "Slot name conflict: '" & slotName & "' exists in multiple superclasses")
       seenSlotNames.add(slotName)
 
   # Check for slot name conflicts between new slots and parent slots
@@ -468,23 +492,23 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
       raise newException(ValueError, "Slot name conflict: '" & slotName & "' declared multiple times")
     seenSlotNames.add(slotName)
 
-  # Check for method selector conflicts between parents (only for directly-defined methods)
+  # Check for method selector conflicts between superclasses (only for directly-defined methods)
   # Inherited methods should not cause conflicts
-  # Note: use derive:parents:ivarArray:methods: to specify method overrides
+  # Note: use derive:superclasses:ivarArray:methods: to specify method overrides
   var seenInstanceMethods: seq[string] = @[]
   var seenClassMethods: seq[string] = @[]
-  for parent in parents:
+  for parent in superclasses:
     for selector in parent.methods.keys:  # Only check directly-defined instance methods
       if selector in seenInstanceMethods:
-        raise newException(ValueError, "Method selector conflict: '" & selector & "' exists in multiple parents (use derive:parents:ivarArray:methods: to specify method overrides)")
+        raise newException(ValueError, "Method selector conflict: '" & selector & "' exists in multiple superclasses (use derive:superclasses:ivarArray:methods: to specify method overrides)")
       seenInstanceMethods.add(selector)
     for selector in parent.classMethods.keys:  # Only check directly-defined class methods
       if selector in seenClassMethods:
-        raise newException(ValueError, "Class method selector conflict: '" & selector & "' exists in multiple parents")
+        raise newException(ValueError, "Class method selector conflict: '" & selector & "' exists in multiple superclasses")
       seenClassMethods.add(selector)
 
-  # Add to parents' subclasses lists and inherit methods
-  for parent in parents:
+  # Add to superclasses' subclasses lists and inherit methods
+  for parent in superclasses:
     parent.subclasses.add(result)
     # Inherit instance methods (unless child overrides)
     for selector, methodBlock in parent.allMethods:
@@ -502,10 +526,10 @@ proc newClass*(parents: seq[Class] = @[], slotNames: seq[string] = @[], name: st
     if slotName notin result.allSlotNames:
       result.allSlotNames.add(slotName)
 
-proc addParent*(cls: Class, parent: Class) =
+proc addSuperclass*(cls: Class, parent: Class) =
   ## Add a parent to an existing class
   ## Useful for resolving method conflicts by adding parent after overriding methods
-  if parent in cls.parents:
+  if parent in cls.superclasses:
     return  # Already has this parent
 
   # Check for slot name conflicts (only for directly-defined slots on this parent)
@@ -526,7 +550,7 @@ proc addParent*(cls: Class, parent: Class) =
       raise newException(ValueError, "Class method selector conflict: '" & selector & "' exists in existing parent (override in child class first)")
 
   # Add parent
-  cls.parents.add(parent)
+  cls.superclasses.add(parent)
   parent.subclasses.add(cls)
 
   # Inherit instance methods (unless child overrides)
@@ -705,3 +729,10 @@ proc valueToInstance*(val: NodeValue): Instance =
     return Instance(kind: ikObject, class: blockClass, slots: @[], isNimProxy: false, nimValue: nil)
   of vkClass, vkNil, vkSymbol:
     raise newException(ValueError, "Cannot convert " & $val.kind & " to Instance")
+
+# ============================================================================
+# Scheduler Context Type
+# ============================================================================
+
+# Note: SchedulerContext is defined earlier in this file (line ~382)
+# to avoid circular dependencies between scheduler and evaluator

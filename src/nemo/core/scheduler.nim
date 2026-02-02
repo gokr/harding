@@ -1,7 +1,6 @@
 import std/[tables, logging]
 import ../core/types
 import ../core/process
-import ../interpreter/evaluator
 import ../interpreter/objects
 import ../interpreter/activation
 
@@ -10,15 +9,18 @@ import ../interpreter/activation
 # This module connects the green threads scheduler with the Nemo interpreter
 # ============================================================================
 
-type
-  SchedulerContext* = ref object
-    ## Full scheduler context with interpreter integration
-    scheduler*: Scheduler
-    mainProcess*: Process  ## The initial/main process
+# Forward declarations for procs defined in this module but called from evaluator
+proc createProcessClass*(): Class
+proc createSchedulerClass*(): Class
 
-# ============================================================================
-# Scheduler Context Creation
-# ============================================================================
+# Forward declarations for procs defined in evaluator.nim
+proc newInterpreter(): Interpreter
+proc newInterpreterWithShared(globals: ref Table[string, NodeValue],
+                              root: Instance): Interpreter
+proc initGlobals(interp: Interpreter)
+proc initProcessorGlobal*(interp: var Interpreter)
+proc nilValue(): NodeValue
+proc eval(interp: Interpreter, node: Node): NodeValue
 
 proc newSchedulerContext*(): SchedulerContext =
   ## Create a new scheduler context with a main interpreter
@@ -27,6 +29,12 @@ proc newSchedulerContext*(): SchedulerContext =
   # Create main interpreter
   var mainInterp = newInterpreter()
   initGlobals(mainInterp)
+
+  # Initialize Processor global (also adds Process and Scheduler classes)
+  initProcessorGlobal(mainInterp)
+
+  # Set scheduler context on main interpreter so Processor fork: can access it
+  mainInterp.schedulerContextPtr = cast[pointer](result)
 
   # Create scheduler with shared globals and rootObject
   result.scheduler = newScheduler(
@@ -65,6 +73,9 @@ proc forkProcess*(ctx: SchedulerContext, blockNode: BlockNode,
     sched.sharedGlobals,
     sched.rootObject
   )
+
+  # Set scheduler context on new interpreter
+  newInterp.schedulerContextPtr = cast[pointer](ctx)
 
   # Create the process
   result = sched.newProcess(name)
@@ -186,18 +197,28 @@ proc processorYieldImpl(interp: var Interpreter, self: Instance,
   debug("Processor yield called")
   return nilValue()
 
-# Processor fork: implementation (placeholder - needs scheduler context)
+# Forward declarations for proxy creation functions
+proc createProcessProxy*(process: Process): NodeValue
+proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue
+
+# Processor fork: implementation
 proc processorForkImpl(interp: var Interpreter, self: Instance,
                        args: seq[NodeValue]): NodeValue =
   ## Processor fork: aBlock - creates a new process to run aBlock
-  ## Note: This is a placeholder. Full implementation needs scheduler context.
   if args.len < 1 or args[0].kind != vkBlock:
     return nilValue()
 
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx == nil:
+    debug("Processor fork: called but no scheduler context")
+    return nilValue()
+
+  let blockNode = args[0].blockVal
   debug("Processor fork: called with block")
-  # For now, just return nil - actual forking needs scheduler integration
-  # The full implementation will be in the REPL/runner that has scheduler access
-  return nilValue()
+
+  # Create a new process with an objectClass instance as receiver
+  let newProc = ctx.forkProcess(blockNode, newInstance(objectClass), "")
+  return createProcessProxy(newProc)
 
 # Processor current implementation
 proc processorCurrentImpl(interp: var Interpreter, self: Instance,
@@ -216,7 +237,7 @@ proc createProcessorClass*(): Class =
   # Ensure objectClass is initialized
   discard initCoreClasses()
 
-  processorClass = newClass(parents = @[objectClass], name = "Processor")
+  processorClass = newClass(superclasses = @[objectClass], name = "Processor")
   processorClass.tags = @["Processor", "Scheduler"]
 
   # Add yield method
@@ -245,3 +266,304 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   let cls = createProcessorClass()
   let processorInstance = newInstance(cls)
   interp.globals[]["Processor"] = processorInstance.toValue()
+
+  # Also add Process and Scheduler classes
+  let processCls = createProcessClass()
+  if processCls != nil:
+    interp.globals[]["Process"] = processCls.toValue()
+
+  let schedulerCls = createSchedulerClass()
+  if schedulerCls != nil:
+    interp.globals[]["Scheduler"] = schedulerCls.toValue()
+
+# ============================================================================
+# Process Proxy and Class
+# ============================================================================
+
+type
+  ProcessProxy* = ref object
+    process*: Process
+
+proc createProcessProxy*(process: Process): NodeValue =
+  ## Create a proxy object that wraps a Nim Process
+  let proxy = ProcessProxy(process: process)
+  let obj = Instance(kind: ikObject, class: processClass, slots: @[])
+  obj.isNimProxy = true
+  obj.nimValue = cast[pointer](proxy)
+  return obj.toValue()
+
+proc asProcessProxy*(inst: Instance): ProcessProxy =
+  ## Extract ProcessProxy from a Nemo instance
+  if inst.isNimProxy and inst.nimValue != nil:
+    return cast[ProcessProxy](inst.nimValue)
+  return nil
+
+# Process native method implementations
+
+proc processPidImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get process ID
+  let proxy = self.asProcessProxy()
+  if proxy != nil:
+    return toValue(int(proxy.process.pid))
+  return nilValue()
+
+proc processNameImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get process name
+  let proxy = self.asProcessProxy()
+  if proxy != nil:
+    return toValue(proxy.process.name)
+  return nilValue()
+
+proc processStateImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get process state
+  let proxy = self.asProcessProxy()
+  if proxy != nil:
+    let stateStr = case proxy.process.state
+                     of psReady: "ready"
+                     of psRunning: "running"
+                     of psBlocked: "blocked"
+                     of psSuspended: "suspended"
+                     of psTerminated: "terminated"
+    return toValue(stateStr)
+  return nilValue()
+
+proc processYieldImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Yield the current process
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx != nil and ctx.scheduler.currentProcess != nil:
+    let proxy = self.asProcessProxy()
+    if proxy != nil and proxy.process == ctx.scheduler.currentProcess:
+      ctx.scheduler.yieldCurrentProcess()
+  return nilValue()
+
+proc processSuspendImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Suspend this process
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx != nil:
+    let proxy = self.asProcessProxy()
+    if proxy != nil:
+      ctx.scheduler.suspendProcess(proxy.process)
+  return nilValue()
+
+proc processResumeImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Resume this process
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx != nil:
+    let proxy = self.asProcessProxy()
+    if proxy != nil:
+      ctx.scheduler.resumeProcess(proxy.process)
+  return nilValue()
+
+proc processTerminateImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Terminate this process
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx != nil:
+    let proxy = self.asProcessProxy()
+    if proxy != nil:
+      ctx.scheduler.terminateProcess(proxy.process)
+  return nilValue()
+
+proc createProcessClass*(): Class =
+  ## Create the Process class with native methods
+  if processClass != nil:
+    return processClass
+
+  # Ensure objectClass is initialized
+  discard initCoreClasses()
+
+  processClass = newClass(superclasses = @[objectClass], name = "Process")
+  processClass.tags = @["Process", "Proxy"]
+  processClass.isNimProxy = true
+  processClass.nemoType = "Process"
+
+  # Add pid method
+  let pidMethod = createCoreMethod("pid")
+  pidMethod.nativeImpl = cast[pointer](processPidImpl)
+  pidMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "pid", pidMethod)
+
+  # Add name method
+  let nameMethod = createCoreMethod("name")
+  nameMethod.nativeImpl = cast[pointer](processNameImpl)
+  nameMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "name", nameMethod)
+
+  # Add state method
+  let stateMethod = createCoreMethod("state")
+  stateMethod.nativeImpl = cast[pointer](processStateImpl)
+  stateMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "state", stateMethod)
+
+  # Add yield method
+  let yieldMethod = createCoreMethod("yield")
+  yieldMethod.nativeImpl = cast[pointer](processYieldImpl)
+  yieldMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "yield", yieldMethod)
+
+  # Add suspend method
+  let suspendMethod = createCoreMethod("suspend")
+  suspendMethod.nativeImpl = cast[pointer](processSuspendImpl)
+  suspendMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "suspend", suspendMethod)
+
+  # Add resume method
+  let resumeMethod = createCoreMethod("resume")
+  resumeMethod.nativeImpl = cast[pointer](processResumeImpl)
+  resumeMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "resume", resumeMethod)
+
+  # Add terminate method
+  let terminateMethod = createCoreMethod("terminate")
+  terminateMethod.nativeImpl = cast[pointer](processTerminateImpl)
+  terminateMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "terminate", terminateMethod)
+
+  return processClass
+
+# ============================================================================
+# Scheduler Proxy and Class
+# ============================================================================
+
+type
+  SchedulerProxy* = ref object
+    scheduler*: Scheduler
+    context*: SchedulerContext
+
+proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue =
+  ## Create a proxy object that wraps a Nim Scheduler
+  let proxy = SchedulerProxy(scheduler: ctx.scheduler, context: ctx)
+  let obj = Instance(kind: ikObject, class: schedulerClass, slots: @[])
+  obj.isNimProxy = true
+  obj.nimValue = cast[pointer](proxy)
+  return obj.toValue()
+
+proc asSchedulerProxy*(inst: Instance): SchedulerProxy =
+  ## Extract SchedulerProxy from a Nemo instance
+  if inst.isNimProxy and inst.nimValue != nil:
+    return cast[SchedulerProxy](inst.nimValue)
+  return nil
+
+# Scheduler native method implementations
+
+proc schedulerProcessCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get total number of processes
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil:
+    return toValue(proxy.scheduler.processCount())
+  return nilValue()
+
+proc schedulerReadyCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get number of ready processes
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil:
+    return toValue(proxy.scheduler.readyCount())
+  return nilValue()
+
+proc schedulerBlockedCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get number of blocked processes
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil:
+    return toValue(proxy.scheduler.blockedCount())
+  return nilValue()
+
+proc schedulerCurrentProcessImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get the current process
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil and proxy.scheduler.currentProcess != nil:
+    return createProcessProxy(proxy.scheduler.currentProcess)
+  return nilValue()
+
+proc schedulerForkNameImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Fork a new process with a block and optional name
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx == nil:
+    return nilValue()
+
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  let blockNode = args[0].blockVal
+  let name = if args.len >= 2 and args[1].kind == vkString:
+               args[1].strVal
+             else:
+               ""
+
+  # Create a new process
+  let newProc = ctx.forkProcess(blockNode, newInstance(objectClass), name)
+  return createProcessProxy(newProc)
+
+proc schedulerStepImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Run one time slice
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil:
+    discard proxy.context.runOneSlice()
+  return nilValue()
+
+proc schedulerRunToCompletionImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Run all processes to completion
+  let proxy = self.asSchedulerProxy()
+  if proxy != nil:
+    let maxSteps = if args.len > 0 and args[0].kind == vkInt:
+                     args[0].intVal
+                   else:
+                     100000
+    let stepsExecuted = proxy.context.runToCompletion(maxSteps)
+    return toValue(stepsExecuted)
+  return nilValue()
+
+proc createSchedulerClass*(): Class =
+  ## Create the Scheduler class with native methods
+  if schedulerClass != nil:
+    return schedulerClass
+
+  # Ensure objectClass is initialized
+  discard initCoreClasses()
+
+  schedulerClass = newClass(superclasses = @[objectClass], name = "Scheduler")
+  schedulerClass.tags = @["Scheduler", "Proxy"]
+  schedulerClass.isNimProxy = true
+  schedulerClass.nemoType = "Scheduler"
+
+  # Add processCount method
+  let processCountMethod = createCoreMethod("processCount")
+  processCountMethod.nativeImpl = cast[pointer](schedulerProcessCountImpl)
+  processCountMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "processCount", processCountMethod)
+
+  # Add readyCount method
+  let readyCountMethod = createCoreMethod("readyCount")
+  readyCountMethod.nativeImpl = cast[pointer](schedulerReadyCountImpl)
+  readyCountMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "readyCount", readyCountMethod)
+
+  # Add blockedCount method
+  let blockedCountMethod = createCoreMethod("blockedCount")
+  blockedCountMethod.nativeImpl = cast[pointer](schedulerBlockedCountImpl)
+  blockedCountMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "blockedCount", blockedCountMethod)
+
+  # Add currentProcess method
+  let currentProcessMethod = createCoreMethod("currentProcess")
+  currentProcessMethod.nativeImpl = cast[pointer](schedulerCurrentProcessImpl)
+  currentProcessMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "currentProcess", currentProcessMethod)
+
+  # Add fork:name: method
+  let forkNameMethod = createCoreMethod("fork:name:")
+  forkNameMethod.nativeImpl = cast[pointer](schedulerForkNameImpl)
+  forkNameMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "fork:name:", forkNameMethod)
+
+  # Add step method
+  let stepMethod = createCoreMethod("step")
+  stepMethod.nativeImpl = cast[pointer](schedulerStepImpl)
+  stepMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "step", stepMethod)
+
+  # Add runToCompletion: method
+  let runToCompletionMethod = createCoreMethod("runToCompletion:")
+  runToCompletionMethod.nativeImpl = cast[pointer](schedulerRunToCompletionImpl)
+  runToCompletionMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "runToCompletion:", runToCompletionMethod)
+
+  return schedulerClass
