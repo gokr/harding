@@ -89,11 +89,29 @@ Keywords are identifiers followed by a colon. Multi-part keywords like `at:put:`
 <object-start> ::= "{|"
 ```
 
-### Primitives (Nim Code Embedding)
+### Primitives
+
+Nimtalk supports three primitive syntaxes:
 
 ```bnf
-<primitive-start> ::= "<primitive>" <any-char>* "</primitive>"
+(* XML-style primitive with Nim code embedding *)
+<primitive-xml>    ::= "<primitive>" <nim-code> "</primitive>"
+
+(* Declarative primitive - method IS the primitive *)
+<primitive-decl>   ::= "<primitive:" <symbol> ">"
+
+(* Inline primitive call with keyword message syntax *)
+<primitive-inline> ::= "<primitive" <primitive-selector> ">"
+<primitive-selector> ::= <identifier>                      (* unary: primitiveClone *)
+                       | <keyword-primitive-args>          (* keyword: primitiveAt: key *)
+<keyword-primitive-args> ::= (<keyword> <primitive-arg>)+
+<primitive-arg>    ::= <identifier> | <literal>
 ```
+
+Examples:
+- Declarative: `Object>>clone <primitive: #primitiveClone>`
+- Inline unary: `<primitive primitiveClone>`
+- Inline keyword: `<primitive primitiveAt: key put: value>`
 
 ## Syntactic Grammar
 
@@ -110,6 +128,7 @@ Keywords are identifiers followed by a colon. Multi-part keywords like `at:put:`
 <statement>    ::= <assignment>
                  | <return>
                  | <primitive>
+                 | <primitive-call>
                  | <expression>
                  | <method-definition>
 
@@ -119,12 +138,23 @@ Keywords are identifiers followed by a colon. Multi-part keywords like `at:put:`
 
 <primitive>    ::= "<primitive>" <nim-code> "</primitive>" <fallback>?
 <fallback>     ::= <statement>*
+
+<primitive-call> ::= "<primitive" <primitive-selector> ">"
+```
+
+Inline primitive calls can appear as expressions within method bodies:
+```smalltalk
+Object>>at: key [
+  key isNil ifTrue: [ self error: "Key cannot be nil" ].
+  ^ <primitive primitiveAt: key>
+]
 ```
 
 ### Method Definitions
 
 ```bnf
 <method-def>   ::= <receiver> ">>" <selector> <method-body>
+                 | <receiver> ">>" <selector> <primitive-decl>
 <receiver>     ::= <expression>
                  | <expression> "class"   (* for class methods *)
 <selector>     ::= <identifier>           (* unary selector *)
@@ -132,9 +162,17 @@ Keywords are identifiers followed by a colon. Multi-part keywords like `at:put:`
                  | <binary-op> <param-name>
 <param-name>   ::= <identifier>
 <method-body>  ::= <block>
+<primitive-decl> ::= "<primitive:" <symbol> ">"
 ```
 
 The `>>` syntax is syntactic sugar that transforms to: `Receiver selector:put: [body]`
+
+Declarative primitives allow methods to directly delegate to a primitive:
+```smalltalk
+Object>>clone <primitive: #primitiveClone>
+Object>>at: key <primitive: #primitiveAt:>
+Object>>at: key put: value <primitive: #primitiveAt:put:>
+```
 
 ### Expressions
 
@@ -173,10 +211,13 @@ The `>>` syntax is syntactic sugar that transforms to: `Receiver selector:put: [
                  | <table-literal>
                  | <object-literal>
                  | <super-send>
+                 | <primitive-call>
 
 <pseudo-var>   ::= "self" | "nil" | "true" | "false" | "super"
 
 <parenthesized> ::= "(" <expression> ")"
+
+<primitive-call> ::= "<primitive" <primitive-selector> ">"
 ```
 
 ### Blocks

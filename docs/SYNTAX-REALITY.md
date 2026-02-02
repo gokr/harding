@@ -280,7 +280,36 @@ The receiver is evaluated once, then each message in the cascade is sent to that
 
 ---
 
-## Embedding Nim Code
+## Primitive Syntax
+
+Nimtalk supports three forms for working with primitives:
+
+### Declarative Primitives
+
+For methods that directly delegate to a primitive with no additional logic:
+
+```smalltalk
+Object>>clone <primitive: #primitiveClone>
+Object>>at: key <primitive: #primitiveAt:>
+Object>>at: key put: value <primitive: #primitiveAt:put:>
+```
+
+### Inline Primitives
+
+For calling primitives within method bodies using keyword message syntax:
+
+```smalltalk
+Object>>at: key [
+  key isNil ifTrue: [ self error: "Key cannot be nil" ].
+  ^ <primitive primitiveAt: key>
+]
+
+Object>>at: key put: value [
+  ^ <primitive primitiveAt: key put: value>
+]
+```
+
+### Nim Code Embedding (Legacy)
 
 Use `<primitive>` tags for native Nim implementations:
 

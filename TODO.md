@@ -227,4 +227,19 @@ nimble clean       # Clean artifacts
 
 ---
 
-*Last Updated: 2026-02-01*
+## Recent Completed Work (2026-02-02)
+
+### Inline Primitive Syntax Update
+- Changed inline primitive syntax from positional to keyword message format
+  - Before: `<primitive #primitiveAt:put: key value>`
+  - After: `<primitive primitiveAt: key put: value>`
+- Added `parsePrimitiveTagContent()` helper that properly lexes and parses primitive content
+- Supports unary selectors (`primitiveClone`) with no arguments
+- Supports literals (int, float, string, symbol) as arguments
+- Maintains backward compatibility with optional `#` prefix
+- Added comprehensive test suite for primitive syntax
+- Updated PRIMITIVES.md and GRAMMAR.md documentation
+
+---
+
+*Last Updated: 2026-02-02*

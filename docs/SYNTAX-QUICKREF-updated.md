@@ -434,6 +434,16 @@ a >= b                                      # Greater than or equal
 a // b                                      # Integer division
 a \ b                                       # Modulo
 a ~~ b                                      # Not identity
+
+#=== Primitives ==============================
+# Declarative (method IS the primitive)
+Object>>clone <primitive: #primitiveClone>
+Object>>at: key <primitive: #primitiveAt:>
+
+# Inline (call primitive in method body)
+[ ^ <primitive primitiveClone> ]
+[ :key | ^ <primitive primitiveAt: key> ]
+[ :k :v | <primitive primitiveAt: k put: v> ]
 ```
 
 ## Method Definition Approaches
