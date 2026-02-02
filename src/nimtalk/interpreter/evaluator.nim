@@ -48,6 +48,167 @@ proc sendMessage*(interp: var Interpreter, receiver: Instance, selector: string,
 proc asSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 
+# ============================================================================
+# AST Rewriter for Slot Access
+# Rewrites IdentNodes to SlotAccessNodes where name matches a class slot
+# This enables O(1) slot access by integer index instead of string lookup
+# ============================================================================
+
+proc rewriteNodeForSlotAccess(node: Node, cls: Class, shadowedNames: seq[string]): Node =
+  ## Recursively rewrite a node, replacing slot access patterns with SlotAccessNodes
+  ## shadowedNames contains parameter and temporary names that shadow slots
+  if node == nil:
+    return nil
+
+  case node.kind
+  of nkIdent:
+    # Check if this identifier is a slot name (and not shadowed)
+    let ident = cast[IdentNode](node)
+    debug("rewriteNode: nkIdent name=", ident.name)
+    if ident.name notin shadowedNames:
+      let idx = cls.getSlotIndex(ident.name)
+      debug("rewriteNode: slot lookup for '", ident.name, "' = ", $idx)
+      if idx >= 0:
+        # Replace with SlotAccessNode for O(1) access
+        debug("rewriteNode: replacing ident '", ident.name, "' with SlotAccessNode index=", $idx)
+        return SlotAccessNode(
+          slotName: ident.name,
+          slotIndex: idx,
+          isAssignment: false,
+          valueExpr: nil
+        )
+    return node
+
+  of nkAssign:
+    # Check if assignment target is a slot name
+    let assign = cast[AssignNode](node)
+    debug("rewriteNode: nkAssign var=", assign.variable)
+    if assign.variable notin shadowedNames:
+      let idx = cls.getSlotIndex(assign.variable)
+      debug("rewriteNode: slot lookup for assignment '", assign.variable, "' = ", $idx)
+      if idx >= 0:
+        # Replace with SlotAccessNode for O(1) slot write
+        debug("rewriteNode: replacing assignment '", assign.variable, "' with SlotAccessNode index=", $idx)
+        return SlotAccessNode(
+          slotName: assign.variable,
+          slotIndex: idx,
+          isAssignment: true,
+          valueExpr: rewriteNodeForSlotAccess(assign.expression, cls, shadowedNames)
+        )
+    # Not a slot - rewrite the expression part only
+    assign.expression = rewriteNodeForSlotAccess(assign.expression, cls, shadowedNames)
+    return assign
+
+  of nkMessage:
+    # Rewrite receiver and arguments
+    let msg = cast[MessageNode](node)
+    if msg.receiver != nil:
+      msg.receiver = rewriteNodeForSlotAccess(msg.receiver, cls, shadowedNames)
+    for i in 0..<msg.arguments.len:
+      msg.arguments[i] = rewriteNodeForSlotAccess(msg.arguments[i], cls, shadowedNames)
+    return msg
+
+  of nkReturn:
+    # Rewrite return expression
+    let ret = cast[ReturnNode](node)
+    if ret.expression != nil:
+      ret.expression = rewriteNodeForSlotAccess(ret.expression, cls, shadowedNames)
+    return ret
+
+  of nkBlock:
+    # Rewrite block body, but add block's parameters and temporaries to shadowed names
+    let blk = cast[BlockNode](node)
+    var newShadowed = shadowedNames
+    for param in blk.parameters:
+      newShadowed.add(param)
+    for temp in blk.temporaries:
+      newShadowed.add(temp)
+    for i in 0..<blk.body.len:
+      blk.body[i] = rewriteNodeForSlotAccess(blk.body[i], cls, newShadowed)
+    return blk
+
+  of nkCascade:
+    # Rewrite cascade receiver and all messages
+    let cascade = cast[CascadeNode](node)
+    if cascade.receiver != nil:
+      cascade.receiver = rewriteNodeForSlotAccess(cascade.receiver, cls, shadowedNames)
+    for i in 0..<cascade.messages.len:
+      let msg = cascade.messages[i]
+      for j in 0..<msg.arguments.len:
+        msg.arguments[j] = rewriteNodeForSlotAccess(msg.arguments[j], cls, shadowedNames)
+    return cascade
+
+  of nkPrimitiveCall:
+    # Rewrite primitive arguments
+    let prim = cast[PrimitiveCallNode](node)
+    for i in 0..<prim.arguments.len:
+      prim.arguments[i] = rewriteNodeForSlotAccess(prim.arguments[i], cls, shadowedNames)
+    return prim
+
+  of nkSuperSend:
+    # Rewrite super send arguments
+    let superNode = cast[SuperSendNode](node)
+    for i in 0..<superNode.arguments.len:
+      superNode.arguments[i] = rewriteNodeForSlotAccess(superNode.arguments[i], cls, shadowedNames)
+    return superNode
+
+  of nkArray:
+    # Rewrite array elements
+    let arr = cast[ArrayNode](node)
+    for i in 0..<arr.elements.len:
+      arr.elements[i] = rewriteNodeForSlotAccess(arr.elements[i], cls, shadowedNames)
+    return arr
+
+  of nkTable:
+    # Rewrite table entries
+    let tbl = cast[TableNode](node)
+    for i in 0..<tbl.entries.len:
+      let (key, value) = tbl.entries[i]
+      tbl.entries[i] = (
+        rewriteNodeForSlotAccess(key, cls, shadowedNames),
+        rewriteNodeForSlotAccess(value, cls, shadowedNames)
+      )
+    return tbl
+
+  else:
+    # Other node types don't need rewriting (literals, pseudo-vars, etc.)
+    return node
+
+proc checkSlotShadowing(blk: BlockNode, cls: Class) =
+  ## Check if any parameter or temporary shadows a slot name and raise error if so
+  for param in blk.parameters:
+    if cls.getSlotIndex(param) >= 0:
+      raise newException(EvalError,
+        "Parameter '" & param & "' shadows slot name in class " & cls.name)
+  for temp in blk.temporaries:
+    if cls.getSlotIndex(temp) >= 0:
+      raise newException(EvalError,
+        "Temporary variable '" & temp & "' shadows slot name in class " & cls.name)
+
+proc rewriteMethodForSlotAccess*(blk: BlockNode, cls: Class) =
+  ## Rewrite a method's AST to use SlotAccessNodes for slot access
+  ## Called when a method is installed on a class via selector:put:
+  debug("rewriteMethodForSlotAccess: class=", cls.name, " slots=", $cls.allSlotNames)
+  if cls.allSlotNames.len == 0:
+    debug("rewriteMethodForSlotAccess: no slots, skipping")
+    return  # No slots to optimize
+
+  # Check for shadowing (optional - can be a warning instead of error)
+  # checkSlotShadowing(blk, cls)
+
+  # Build initial shadowed names from method parameters and temporaries
+  var shadowedNames: seq[string] = @[]
+  for param in blk.parameters:
+    shadowedNames.add(param)
+  for temp in blk.temporaries:
+    shadowedNames.add(temp)
+  debug("rewriteMethodForSlotAccess: shadowedNames=", $shadowedNames)
+
+  # Rewrite the method body
+  for i in 0..<blk.body.len:
+    blk.body[i] = rewriteNodeForSlotAccess(blk.body[i], cls, shadowedNames)
+  debug("rewriteMethodForSlotAccess: done")
+
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false): Interpreter =
   ## Create a new interpreter instance
@@ -816,9 +977,13 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         let inst = interp.currentReceiver
         if slotNode.slotIndex >= 0 and slotNode.slotIndex < inst.slots.len:
           if slotNode.isAssignment:
-            # Setter: get value from activation's locals (parameter "newValue")
-            # The setter method has one parameter (e.g., "newValue")
-            if interp.currentActivation != nil and interp.currentActivation.locals.hasKey("newValue"):
+            # Assignment: evaluate valueExpr and store in slot
+            if slotNode.valueExpr != nil:
+              let newValue = interp.eval(slotNode.valueExpr)
+              inst.slots[slotNode.slotIndex] = newValue
+              return newValue
+            # Legacy: get value from activation's locals (for generated setter methods)
+            elif interp.currentActivation != nil and interp.currentActivation.locals.hasKey("newValue"):
               let newValue = interp.currentActivation.locals["newValue"]
               inst.slots[slotNode.slotIndex] = newValue
               return newValue
@@ -902,6 +1067,8 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
         let methodName = arguments[0].symVal
         let methodBlock = arguments[1].blockVal
         methodBlock.isMethod = true
+        # Rewrite method AST to use SlotAccessNodes for O(1) slot access
+        rewriteMethodForSlotAccess(methodBlock, cls)
         cls.methods[methodName] = methodBlock
         cls.allMethods[methodName] = methodBlock
         # Also add to all subclasses' allMethods for inheritance
