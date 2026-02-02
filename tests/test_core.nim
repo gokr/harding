@@ -92,13 +92,85 @@ suite "Object system":
 
   test "property access (using Table instance)":
     # In new system, "properties" are stored in a Table instance
+    # Table keys are now NodeValue (any value type, not just strings)
     let root = initRootClass()
-    var entries = initTable[string, NodeValue]()
-    entries["test"] = toValue(42)
+    var entries = initTable[NodeValue, NodeValue]()
+    entries[toValue("test")] = toValue(42)
     let dict = Instance(kind: ikTable, class: root, entries: entries)
-    let val = dict.entries["test"]
+    let val = dict.entries[toValue("test")]
     check val.kind == vkInt
     check val.intVal == 42
+
+  test "table with arbitrary NodeValue keys":
+    # Test that tables can use any NodeValue as key
+    var entries = initTable[NodeValue, NodeValue]()
+
+    # Integer key
+    entries[toValue(1)] = toValue("one")
+    # String key
+    entries[toValue("name")] = toValue("Alice")
+    # Symbol key
+    entries[toSymbol("age")] = toValue(30)
+    # Float key
+    entries[toValue(3.14)] = toValue("pi")
+    # Nil key
+    entries[nilValue()] = toValue("nilValue")
+
+    check entries[toValue(1)].strVal == "one"
+    check entries[toValue("name")].strVal == "Alice"
+    check entries[toSymbol("age")].intVal == 30
+    check entries[toValue(3.14)].strVal == "pi"
+    check entries[nilValue()].strVal == "nilValue"
+
+  test "NodeValue hash and equality consistency":
+    # Ensure that equal values have equal hashes
+    let int1 = toValue(42)
+    let int2 = toValue(42)
+    let int3 = toValue(99)
+
+    # Equal values should be equal
+    check int1 == int2
+    check int1 != int3
+
+    # Equal values should have equal hashes
+    check hash(int1) == hash(int2)
+
+    # String values
+    let str1 = toValue("hello")
+    let str2 = toValue("hello")
+    let str3 = toValue("world")
+
+    check str1 == str2
+    check str1 != str3
+    check hash(str1) == hash(str2)
+
+  test "Table class with integer keys":
+    # Test using integer keys directly through the Table class
+    discard initCoreClasses()
+    var entries = initTable[NodeValue, NodeValue]()
+    entries[toValue(1)] = toValue(100)
+    entries[toValue(2)] = toValue(200)
+    entries[toValue(99)] = toValue("ninety-nine")
+
+    let t = newTableInstance(tableClass, entries)
+    check getTableValue(t, toValue(1)).intVal == 100
+    check getTableValue(t, toValue(2)).intVal == 200
+    check getTableValue(t, toValue(99)).strVal == "ninety-nine"
+
+  test "Table class with mixed type keys":
+    # Test mixing different key types in the same table
+    discard initCoreClasses()
+    var entries = initTable[NodeValue, NodeValue]()
+    entries[toValue(1)] = toValue("integer key")
+    entries[toValue("string")] = toValue("string key")
+    entries[toValue(2.5)] = toValue("float key")
+    entries[toSymbol("sym")] = toValue("symbol key")
+
+    let t = newTableInstance(tableClass, entries)
+    check getTableValue(t, toValue(1)).strVal == "integer key"
+    check getTableValue(t, toValue("string")).strVal == "string key"
+    check getTableValue(t, toValue(2.5)).strVal == "float key"
+    check getTableValue(t, toSymbol("sym")).strVal == "symbol key"
 
 suite "Interpreter":
   test "evaluates integers":
