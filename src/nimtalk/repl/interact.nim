@@ -29,7 +29,7 @@ proc newReplContext*(trace: bool = false): ReplContext =
 proc printWelcome() =
   echo "========================================"
   echo "  Nimtalk - REPL"
-  echo "  A Class-Based Smalltalk for Nim"
+  echo "  A modern Smalltalk in Nim"
   echo "========================================"
   echo ""
   echo "Commands:"

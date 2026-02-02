@@ -40,7 +40,7 @@ proc newDoitContext*(trace: bool = false): DoitContext =
 proc printWelcomeRepl() =
   echo "========================================"
   echo "  Nimtalk - REPL"
-  echo "  A Class-Based Smalltalk for Nim"
+  echo "  A modern Smalltalk in Nim"
   echo "========================================"
   echo ""
   echo "Type expressions and press Enter to evaluate."
@@ -247,7 +247,7 @@ proc testREPL*(): (bool, string) =
     let (r3, e3) = ctx.doit("Object clone")
     if e3.len > 0:
       return (false, "Test 3 failed: " & e3)
-    if r3.kind != vkObject:
+    if r3.kind != vkInstance:
       return (false, "Test 3 failed: expected object, got " & r3.toString())
 
     return (true, "All tests passed")
