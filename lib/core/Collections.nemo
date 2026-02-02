@@ -385,10 +385,8 @@ Array>>new [
   ^ Array new: 0
 ]
 
-Array>>new: size [
-  # Create new array with given size.
-  <primitive: #new:>
-]
+# Note: Array new: is implemented as a native class method in objects.nim
+# The primitive is registered directly on the Array class
 
 Table>>new [
   # Create new empty table.
