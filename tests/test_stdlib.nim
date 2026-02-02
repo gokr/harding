@@ -289,7 +289,7 @@ suite "Stdlib: Arrays":
       result := hasEven
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkObject)
+    check(result[0][^1].kind == vkInstance)
 
   test "allSatisfy: returns true if all elements match":
     let result = interp.evalStatements("""
@@ -301,7 +301,7 @@ suite "Stdlib: Arrays":
       result := allEven
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkObject)
+    check(result[0][^1].kind == vkInstance)
 
 suite "Stdlib: Tables":
   var interp: Interpreter
@@ -337,7 +337,7 @@ suite "Stdlib: Tables":
       result := t includesKey: "exists"
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkObject)
+    check(result[0][^1].kind == vkInstance)
 
 suite "Stdlib: Strings":
   var interp: Interpreter

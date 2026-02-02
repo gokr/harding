@@ -10,7 +10,7 @@ import ../src/nimtalk/interpreter/objects
 suite "Slot-based Instance Variables (derive: message)":
   setup:
     # Initialize root object before each test
-    discard initRootObject()
+    discard initRootClass()
 
   test "can create object with instance variables":
     let person = initSlotObject(@["name", "age"])

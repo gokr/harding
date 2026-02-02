@@ -5,6 +5,7 @@
 #
 
 import std/logging
+import std/tables
 import unittest
 import ../src/nimtalk/core/types
 import ../src/nimtalk/parser/[lexer, parser]
@@ -79,20 +80,23 @@ suite "Parser":
 
 suite "Object system":
   test "root object initialization":
-    let root = initRootObject()
+    let root = initRootClass()
     check root != nil
-    check "Object" in root.tags
+    check "Root" in root.tags
 
   test "object creation":
     # Test that we can create new instances
-    let root = initRootObject()
+    let root = initRootClass()
     check root != nil
-    check "Object" in root.tags
+    check "Root" in root.tags
 
-  test "property access":
-    var dict = newDictionary()
-    dict.setProperty("test", toValue(42))
-    let val = dict.getProperty("test")
+  test "property access (using Table instance)":
+    # In new system, "properties" are stored in a Table instance
+    let root = initRootClass()
+    var entries = initTable[string, NodeValue]()
+    entries["test"] = toValue(42)
+    let dict = Instance(kind: ikTable, class: root, entries: entries)
+    let val = dict.entries["test"]
     check val.kind == vkInt
     check val.intVal == 42
 
