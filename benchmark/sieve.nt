@@ -2,11 +2,29 @@
 # Sieve of Eratosthenes Benchmark
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
 # Expected result: 669 primes below 5000
-# NOTE: Simplified version for current Nimtalk limitations
-# The true sieve algorithm requires arrays and while loops which aren't fully working yet
 
-# This is a placeholder to demonstrate the benchmark structure
-# TODO: Implement actual sieve when arrays with integer indexing and while loops work
+# Count primes using trial division
+primeCount := 0
 
-# Return expected result for now
-669
+i := 2
+[ i <= 5000 ] whileTrue: [
+  isPrime := true
+
+  # Test divisibility by checking divisors up to sqrt(i)
+  d := 2
+  [ d * d <= i ] whileTrue: [
+    (i \\ d = 0) ifTrue: [
+      isPrime := false
+      d := i  # Exit loop using d = i (break)
+    ].
+    d := d + 1
+  ].
+
+  isPrime ifTrue: [
+    primeCount := primeCount + 1
+  ].
+
+  i := i + 1
+]
+
+primeCount

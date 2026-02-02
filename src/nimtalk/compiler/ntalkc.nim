@@ -192,7 +192,7 @@ proc buildFile(config: Config): bool =
 
   let baseName = changeFileExt(outputFile, "")
   let releaseFlag = if config.release: " --release" else: ""
-  let cmd = fmt("nim c{releaseFlag} -o:{base_name} {outputFile}")
+  let cmd = fmt("nim c{releaseFlag} -o:{baseName} {outputFile}")
 
   echo "Building: ", cmd
   let exitCode = execShellCmd(cmd)
