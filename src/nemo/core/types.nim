@@ -220,6 +220,27 @@ type
       compiled*: CompiledMethod
 
 # ============================================================================
+# Global Class Variables (declared early for use in helper procs)
+# ============================================================================
+
+var
+  rootClass*: Class = nil                      # Root class (zero methods)
+  objectClass*: Class = nil                     # Object class, derives from Root
+  mixinClass*: Class = nil                      # Mixin class, sibling to Object (slotless, can mix with any type)
+  undefinedObjectClass*: Class = nil            # UndefinedObject class, inherits from Object (for nil)
+  booleanClass*: Class = nil
+  integerClass*: Class = nil
+  floatClass*: Class = nil
+  stringClass*: Class = nil
+  arrayClass*: Class = nil
+  tableClass*: Class = nil
+  blockClass*: Class = nil
+
+# nil instance - singleton instance of UndefinedObject
+# Initialized during initCoreClasses, used by nilValue()
+var nilInstance*: Instance = nil
+
+# ============================================================================
 # Node kind helper
 # ============================================================================
 proc kind*(node: Node): NodeKind =
@@ -422,24 +443,6 @@ proc configureLogging*(level: Level = lvlError) =
 # ============================================================================
 # Root Class
 # ============================================================================
-
-var
-  rootClass*: Class = nil                      # Root class (zero methods)
-  objectClass*: Class = nil                     # Object class, derives from Root
-  mixinClass*: Class = nil                      # Mixin class, sibling to Object (slotless, can mix with any type)
-  undefinedObjectClass*: Class = nil            # UndefinedObject class, inherits from Object (for nil)
-  booleanClass*: Class = nil
-  integerClass*: Class = nil
-  floatClass*: Class = nil
-  stringClass*: Class = nil
-  arrayClass*: Class = nil
-  tableClass*: Class = nil
-  blockClass*: Class = nil
-
-# nil instance - singleton instance of UndefinedObject
-# Initialized during initCoreClasses, used by nilValue()
-var nilInstance*: Instance = nil
-
 # SchedulerContext forward declaration (defined in scheduler.nim)
 type SchedulerContext* = ref object
 

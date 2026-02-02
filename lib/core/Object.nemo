@@ -26,7 +26,7 @@
 Object>>clone [
   # Create a shallow copy of this object without class/superclass links.
   # The copy has no superclasses and shares property/method dictionaries.
-  ^ self perform: #primitiveClone
+  <primitive primitiveClone>
 ]
 
 #====================================================================
@@ -98,22 +98,22 @@ Object class>>derive: superclassList methods: methodBlock [
 
 Object>>at: key [
   # Get the value of a property. Searches the object and its class hierarchy.
-  ^ self perform: #primitiveAt: with: key
+  <primitive primitiveAt:>
 ]
 
 Object>>at: key put: value [
   # Set a property value on this object (not on superclass).
-  ^ self perform: #primitiveAt:put: with: key with: value
+  <primitive primitiveAt:put:>
 ]
 
 Object>>hasProperty: key [
   # Check if this object directly has a property (not in superclasses).
-  ^ self perform: #primitiveHasProperty: with: key
+  <primitive primitiveHasProperty:>
 ]
 
 Object>>properties [
   # Return a collection of all property keys on this object.
-  ^ self perform: #primitiveProperties
+  <primitive primitiveProperties>
 ]
 
 #====================================================================
@@ -122,12 +122,12 @@ Object>>properties [
 
 Object>>respondsTo: selector [
   # Check if this object or its class hierarchy responds to a message.
-  ^ self perform: #primitiveRespondsTo: with: selector
+  <primitive primitiveRespondsTo:>
 ]
 
 Object>>methods [
   # Return a collection of all method selectors on this object.
-  ^ self perform: #primitiveMethods
+  <primitive primitiveMethods>
 ]
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
@@ -151,7 +151,7 @@ Object>>= other [
 
 Object>>== other [
   # Test if this object is the same object as other (identity).
-  ^ self perform: #primitiveEquals: with: other
+  <primitive primitiveIdentity:>
 ]
 
 Object>>printString [
@@ -174,7 +174,7 @@ Object>>className [
 
 Object>>error: message [
   # Signal an error with the given message.
-  self perform: #primitiveError: with: message
+  <primitive primitiveError:>
 ]
 
 #====================================================================
@@ -224,7 +224,7 @@ Object>>class [
 
 Object>>isKindOf: aClass [
   # Check if object is kind of aClass (in class hierarchy)
-  ^ self perform: #primitiveIsKindOf: with: aClass
+  <primitive primitiveIsKindOf:>
 ]
 
 Object>>asString [
@@ -236,7 +236,7 @@ Object>>asSelfDo: aBlock [
   # Evaluate aBlock with self temporarily bound to this object.
   # This allows executing code in the context of any object.
   # Usage: someObject asSelfDo: [ self doSomething ]
-  ^ self perform: #primitiveAsSelfDo: with: aBlock
+  <primitive primitiveAsSelfDo:>
 ]
 
 Object>>extend: aBlock [
@@ -282,7 +282,7 @@ Object>>~= other [
 
 Object>>== other [
   # Identity comparison - true if same object
-  ^ self perform: #primitiveIdentity: with: other
+  <primitive primitiveIdentity:>
 ]
 
 Object>>~~ other [
