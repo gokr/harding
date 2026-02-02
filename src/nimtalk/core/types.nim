@@ -165,7 +165,8 @@ type
   SlotAccessNode* = ref object of Node
     slotName*: string      # Name for debugging
     slotIndex*: int        # Index in allSlotNames (updated on layout change)
-    isAssignment*: bool    # true for slot: value, false for slot
+    isAssignment*: bool    # true for slot := value, false for slot read
+    valueExpr*: Node       # Expression to evaluate for assignment (nil for reads)
 
   # Super send node for calling parent class methods
   SuperSendNode* = ref object of Node
