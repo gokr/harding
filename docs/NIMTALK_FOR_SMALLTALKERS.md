@@ -15,8 +15,9 @@ Nemo is a class-based Smalltalk dialect that compiles to Nim. It preserves Small
 | Class variables | Shared class state | Not implemented |
 | Pool dictionaries | Shared constants | Not implemented |
 | Instance variables | Named slots | Indexed slots (faster) |
-| Multiple inheritance | Single only | Single (multiple planned) |
+| Multiple inheritance | Single only | Multiple with conflict detection |
 | Primitives | VM-specific | Nim code embedding |
+| nil | Primitive value | Instance of UndefinedObject class |
 
 ## Syntactic Differences
 
@@ -301,6 +302,21 @@ Object>>primitiveClone [
 
 The Nim code has access to the interpreter context and can manipulate objects directly.
 
+### 6. nil as UndefinedObject
+
+**Smalltalk:** `nil` is a special primitive value defined by the VM.
+
+**Nemo:** `nil` is a singleton instance of the `UndefinedObject` class, which inherits from `Object`:
+
+```nemo
+nil class           # Returns UndefinedObject
+nil isNil           # Returns true
+nil className       # Returns "UndefinedObject"
+nil == nil          # Returns true (identity check)
+```
+
+This design allows `nil` to respond to all Object messages and be inspected like any other object. The `UndefinedObject` class is part of the standard class hierarchy.
+
 ## Missing Features
 
 ### 1. Class Variables
@@ -426,7 +442,33 @@ Hash table literals with arrow syntax:
 dict := #{ "name" -> "Alice" "age" -> 30 }.
 ```
 
-### 4. FFI Integration
+### 4. Stdout Global
+
+Nemo provides a `Stdout` global for console output:
+
+```nemo
+Stdout write: "Hello"           # Print without newline
+Stdout writeline: "World"       # Print with newline
+```
+
+### 5. String repeat:
+
+Repeat a string multiple times:
+
+```nemo
+"ab" repeat: 3                  # Returns "ababab"
+"  " repeat: level              # Useful for indentation
+```
+
+### 6. Array join:
+
+Concatenate array elements with a separator:
+
+```nemo
+#(1 2 3) join: ", "             # Returns "1, 2, 3"
+```
+
+### 7. FFI Integration
 
 Direct access to Nim types and functions via primitives.
 

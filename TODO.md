@@ -23,6 +23,10 @@ This document tracks current work items and future directions for Nemo developme
 - **extendClass:** for class-side method definition ✅
 - **derive:methods:** for combined class creation ✅
 - **perform:** family for dynamic message sending ✅
+- **Process, Scheduler, and GlobalTable as Nemo-side objects** ✅
+- **Nemo global for accessing global namespace** ✅
+- **Process introspection** ✅
+- **Process control** ✅
 
 **Not Yet Implemented**: Compiler (nemoc is stub), FFI, advanced standard library.
 
@@ -44,9 +48,9 @@ This document tracks current work items and future directions for Nemo developme
 
 ### Standard Library
 - [x] Number objects with arithmetic helpers (abs, even, odd, max:, min:, to:do:, etc.)
-- [ ] Enhanced string manipulation
-- [ ] More collection methods (inject:into:, detect:, anySatisfy:, allSatisfy:, etc.)
-- [ ] File I/O primitives
+- [x] Enhanced string manipulation (repeat:, concat with , operator)
+- [x] More collection methods (join:, inject:into:, detect:, anySatisfy:, allSatisfy:, etc.)
+- [x] File I/O primitives (Stdout global with write:, writeline:)
 - [ ] Exception handling primitives
 
 ### Performance
@@ -90,7 +94,8 @@ This document tracks current work items and future directions for Nemo developme
 - ~~Green threads core scheduler~~ ✅ Implemented
 - ~~Process forking and yielding~~ ✅ Implemented
 - ~~Shared globals between processes~~ ✅ Implemented
-- Monitors and SharedQueues (in progress)
+- ~~Process, Scheduler, GlobalTable Nemo-side objects~~ ✅ Implemented
+- Monitors and SharedQueues (planned)
 - Memory management for circular references
 - Error handling improvements needed
 - Compiler implementation (nemoc is stub)
@@ -227,6 +232,43 @@ nimble clean       # Clean artifacts
 
 ---
 
+## Recent Completed Work (2026-02-03)
+
+### Nemo-Side Process, Scheduler, and GlobalTable Objects
+
+Reified Process, Scheduler, and the global namespace as first-class Nemo objects:
+
+#### Process Class
+- Created Process class as Nemo-side object with `isNimProxy=true`
+- Added native methods: `pid` (integer), `name` (string), `state` (string)
+- Added control methods: `suspend`, `resume`, `terminate`, `yield`
+- `Processor fork:` now returns a Process object that can be queried and controlled
+
+#### Scheduler Class
+- Created Scheduler class as Nemo-side object with `isNimProxy=true`
+- Added introspection methods: `processCount`, `readyCount`, `blockedCount`, `currentProcess`
+- Process creation via: `fork:name:`
+
+#### GlobalTable and Nemo Global
+- Created GlobalTable class (subclass of Table) for global namespace access
+- Added `Nemo` global as GlobalTable instance
+- GlobalTable methods: `keys`, `at:`, `at:put:`, `includesKey:`
+- Enables querying and modifying globals from Nemo code
+- All processes share globals via `Nemo`, enabling inter-process communication
+
+#### Implementation Details
+- Used FFI-style pattern with ProcessProxy and SchedulerProxy wrappers
+- Circular import resolved by moving SchedulerContext to types.nim
+- Added `schedulerContext` field to Interpreter type
+- Added class introspection primitives: `className`, `slotNames`, `superclassNames`
+- Added String `repeat:` and Array `join:` primitives
+
+#### Documentation Updates
+- Updated docs/GREENTHREADS.md with Process and Scheduler API reference
+- Updated README.md with Process and Nemo global examples
+
+---
+
 ## Recent Completed Work (2026-02-02)
 
 ### Inline Primitive Syntax Update
@@ -242,4 +284,40 @@ nimble clean       # Clean artifacts
 
 ---
 
-*Last Updated: 2026-02-02*
+## Recent Completed Work (2026-02-03)
+
+### nil as UndefinedObject Instance
+
+- Changed `nil` from primitive value (`vkNil`) to singleton instance of `UndefinedObject` class
+- `UndefinedObject` inherits from `Object` following Smalltalk convention
+- `nil class` returns `UndefinedObject`, `nil isNil` returns `true`
+- Fixed `instIdentityImpl` for proper instance comparison
+- Added `isNilValue()` helper for nil checking
+
+### Stdout Global and FileStream
+
+- Created minimal `FileStream` class with `write:` and `writeline:` methods
+- Created `Stdout` global instance for console output
+- Both available in global namespace for Nemo code
+
+### String and Array Enhancements
+
+- Added `String>>repeat:` for repeating strings (e.g., `"ab" repeat: 3` → "ababab")
+- Changed string concatenation from `concat:` to `,` (comma operator)
+- Added `Array>>join:` for concatenating elements with separator
+
+### Class Introspection Fixes
+
+- Fixed `Object>>class` to use `primitiveClass` native method
+- Fixed `Object>>className` to use `primitiveClassName`
+- Added `name` method on Object class-side for Class objects
+- Fixed `extendClass:` to be on `Object class` (class-side method)
+
+### Global Access
+
+- Added "Global" as alias for GlobalTable instance (in addition to "Nemo")
+- Both `Global at: "String"` and `Nemo at: "String"` work
+
+---
+
+*Last Updated: 2026-02-03*

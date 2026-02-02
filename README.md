@@ -185,10 +185,10 @@ result := Child new foo  # Returns "child" (child's override takes precedence)
 
 ### Green Threads (Cooperative Processes)
 
-Nemo supports cooperative green threads for concurrent execution:
+Nemo supports cooperative green threads for concurrent execution with first-class Process objects:
 
 ```smalltalk
-# Fork a new process
+# Fork a new process - returns a Process object
 process := Processor fork: [
   1 to: 10 do: [:i |
     Stdout writeline: i
@@ -196,11 +196,41 @@ process := Processor fork: [
   ]
 ]
 
+# Query process properties
+process pid       # Returns process ID (integer)
+process name      # Returns process name (string)
+process state     # Returns state: "ready", "running", "blocked", "suspended", "terminated"
+
+# Control processes
+process suspend   # Suspend execution
+process resume    # Resume suspended process
+process terminate # Terminate the process
+
 # Yield current process
 Processor yield
 ```
 
 Each process has its own interpreter with an isolated activation stack, but all processes share the same globals and class hierarchy. The scheduler uses round-robin scheduling with explicit yields.
+
+### Nemo Global (GlobalTable)
+
+The `Nemo` object is a GlobalTable instance that provides access to the global namespace:
+
+```smalltalk
+# List all globals
+Nemo keys         # Returns array of global variable names
+
+# Get a global
+Nemo at: "Object" # Returns the Object class
+
+# Set a global
+Nemo at: "myVar" put: 42
+
+# Check if global exists
+Nemo includesKey: "myVar"  # Returns true/false
+```
+
+Multiple processes can share globals via the `Nemo` GlobalTable, enabling inter-process communication.
 
 ## Installation
 
@@ -310,6 +340,11 @@ See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for details on newline handli
 - Per-process interpreters with shared globals
 - Conflict detection for multiple inheritance (slot names, method selectors)
 - `addParent:` message for adding parents after class creation
+- `nil` as singleton instance of UndefinedObject (not a primitive)
+- `Stdout` global for console output
+- String `repeat:` for repeating strings
+- Array `join:` for concatenating elements
+- String concatenation with comma operator `,`
 
 **In progress:**
 - Compiler to Nim (nemoc is stub)

@@ -19,15 +19,9 @@ Array>>do: block [
   ^ self
 ]
 
-Array>>add: element [
-  # Add element to end of array.
-  <primitive: #add:>
-]
-
-Array>>size [
-  # Return number of elements.
-  <primitive: #size>
-]
+# Native Array methods (defined in objects.nim):
+# add:, size, removeAt:, includes:, reverse, join:, sort, sorted
+# These are registered directly on the Array class
 
 Array>>isEmpty [
   # Check if array has no elements.
@@ -47,36 +41,6 @@ Array>>first [
 Array>>last [
   # Return last element.
   ^ self at: (self size - 1)
-]
-
-Array>>removeAt: index [
-  # Remove element at index and return it.
-  <primitive: #removeAt:>
-]
-
-Array>>includes: element [
-  # Check if array includes element.
-  <primitive: #includes:>
-]
-
-Array>>reverse [
-  # Return new array with elements reversed.
-  <primitive: #reverse>
-]
-
-Array>>join: separator [
-  # Join array elements with separator string.
-  <primitive: #join:>
-]
-
-Array>>sort [
-  # Sort array in place.
-  <primitive: #sort>
-]
-
-Array>>sorted [
-  # Return new sorted array.
-  <primitive: #sorted>
 ]
 
 #====================================================================
@@ -249,10 +213,9 @@ Table>>do: block [
   ^ self
 ]
 
-Table>>keys [
-  # Return array of all keys.
-  <primitive: #keys>
-]
+# Native Table methods (defined in objects.nim):
+# keys, includesKey:, removeKey:
+# These are registered directly on the Table class
 
 Table>>values [
   # Return array of all values.
@@ -260,16 +223,6 @@ Table>>values [
   result := Array new
   self keys do: [ :key | result add: (self at: key) ]
   ^ result
-]
-
-Table>>includesKey: key [
-  # Check if key exists in table.
-  <primitive: #includesKey:>
-]
-
-Table>>removeKey: key [
-  # Remove key-value pair and return value (or nil).
-  <primitive: #removeKey:>
 ]
 
 Table>>size [

@@ -239,7 +239,7 @@ Object>>properties <primitive: #primitiveProperties>
 ### String Primitives
 
 ```smalltalk
-String>>+ other <primitive: #primitiveConcat:>
+String>>, other <primitive: #primitiveConcat:>           # Concatenation (comma operator)
 String>>size <primitive: #primitiveStringSize>
 String>>at: index <primitive: #primitiveStringAt:>
 String>>from: start to: end <primitive: #primitiveFromTo:>
@@ -249,6 +249,7 @@ String>>uppercase <primitive: #primitiveUppercase>
 String>>lowercase <primitive: #primitiveLowercase>
 String>>trim <primitive: #primitiveTrim>
 String>>split: delimiter <primitive: #primitiveSplit:>
+String>>repeat: count <primitive: #primitiveRepeat:>    # Repeat string n times
 ```
 
 ### Collection Primitives
@@ -259,6 +260,7 @@ Array>>size <primitive: #primitiveSize>
 Array>>at: index put: value <primitive: #primitiveAt:put:>
 Array>>removeAt: index <primitive: #primitiveRemoveAt:>
 Array>>includes: element <primitive: #primitiveIncludes:>
+Array>>join: separator <primitive: #primitiveJoin:>    # Join elements with separator
 
 Table>>at: key put: value <primitive: #primitiveTableAt:put:>
 Table>>keys <primitive: #primitiveKeys>

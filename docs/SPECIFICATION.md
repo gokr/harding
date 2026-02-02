@@ -129,7 +129,7 @@ The type for object instances with pure data:
 - `String` - Text strings
 - `Boolean` - `true` or `false`
 - `Symbol` - Canonicalized identifiers
-- `Nil` - Absence of value
+- `UndefinedObject` - The class of nil (singleton instance represents absence of value)
 
 ## Object System
 
@@ -485,6 +485,32 @@ obj := Object derive
 - `do: [ :each | ... ]` - Iterate
 - `select: [ :each | ... ]` - Filter
 - `collect: [ :each | ... ]` - Transform
+
+### Green Threads (Process and Processor)
+
+- `Processor fork: [block]` - Create a new green process, returns Process object
+- `Processor yield` - Yield current process to scheduler
+
+### Process Object
+
+- `pid` - Get process ID (integer)
+- `name` - Get process name (string)
+- `state` - Get process state: "ready", "running", "blocked", "suspended", "terminated"
+- `suspend` - Suspend the process
+- `resume` - Resume a suspended process
+- `terminate` - Terminate the process
+- `yield` - Yield the process (only valid for current process)
+
+### Nemo Global (GlobalTable)
+
+The `Nemo` object provides access to the global namespace:
+
+- `Nemo keys` - Get array of all global variable names
+- `Nemo at: "name"` - Get the value of a global variable
+- `Nemo at: "name" put: value` - Set a global variable
+- `Nemo includesKey: "name"` - Check if a global exists
+
+All processes share the same global namespace via `Nemo`, enabling inter-process communication.
 
 ## Execution Models
 

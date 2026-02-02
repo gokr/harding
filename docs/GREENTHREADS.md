@@ -389,8 +389,6 @@ The same cooperative scheduler that runs your GUI app can run the debugger that 
 
 ### Nemo-Side API
 
-The `Processor` global object provides the main interface for green thread operations:
-
 #### Processor yield
 Yields the current process, allowing other ready processes to run.
 
@@ -400,7 +398,7 @@ Processor yield
 ```
 
 #### Processor fork: aBlock
-Creates a new green process that will execute `aBlock` when scheduled.
+Creates a new green process that will execute `aBlock` when scheduled and returns a Process object.
 
 ```smalltalk
 "Fork a new process"
@@ -412,7 +410,97 @@ process := Processor fork: [
 ]
 ```
 
-#### Processor current
+### Process Class
+
+The Process class represents a green process with introspection and control methods:
+
+#### pid
+Returns the process ID (integer).
+
+```smalltalk
+process pid  # Returns integer process ID
+```
+
+#### name
+Returns the process name (string).
+
+```smalltalk
+process name  # Returns e.g. "Process-2"
+```
+
+#### state
+Returns the process state as a string: "ready", "running", "blocked", "suspended", or "terminated".
+
+```smalltalk
+process state  # Returns "ready", "running", "blocked", "suspended", or "terminated"
+```
+
+#### suspend
+Suspends the process, setting its state to "suspended".
+
+```smalltalk
+process suspend
+```
+
+#### resume
+Resumes a suspended process, setting its state back to "ready".
+
+```smalltalk
+process resume
+```
+
+#### terminate
+Terminates the process, setting its state to "terminated".
+
+```smalltalk
+process terminate
+```
+
+#### yield
+Yields the current process (only works on the current process).
+
+```smalltalk
+Processor yield  # Yield current process from any context
+process yield    # Only valid if process is the current process
+```
+
+### Nemo Global (GlobalTable)
+
+The `Nemo` object is an instance of GlobalTable (a subclass of Table) that provides access to the global namespace:
+
+#### Nemo keys
+Returns an array of all global variable names.
+
+```smalltalk
+keys := Nemo keys  # Returns #("Object" "String" "Array" ...)
+```
+
+#### Nemo at: aKey
+Returns the value of the global variable `aKey`.
+
+```smalltalk
+"Nemo at: 'Object'"  # Returns the Object class
+"Nemo at: 'true'"   # Returns true
+```
+
+#### Nemo at: aKey put: aValue
+Sets the global variable `aKey` to `aValue` and returns the value.
+
+```smalltalk
+"Nemo at: 'myVar' put: 42"  # Creates myVar global with value 42
+```
+
+#### Nemo includesKey: aKey
+Returns true if the global variable `aKey` exists, false otherwise.
+
+```smalltalk
+"Nemo includesKey: 'Object'"      # Returns true
+"Nemo includesKey: 'nonexistent'"  # Returns false
+```
+
+All processes share the same global namespace via the `Nemo` GlobalTable, enabling inter-process communication without additional synchronization primitives.
+
+### Processor current
 Returns the current process object (placeholder - returns nil in current implementation).
 
 ```smalltalk
@@ -430,7 +518,7 @@ The main entry point for scheduler operations:
 let ctx = newSchedulerContext()
 
 # Access scheduler and main process
-let sched = ctx.scheduler
+let sched = ctx.theScheduler
 let main = ctx.mainProcess
 ```
 
@@ -481,3 +569,4 @@ echo sched.printStatus()
 
 **Plan approved** 2025‑01‑30.
 **Phase 1 Completed** 2026‑01‑31 – Core scheduler with explicit yields, process forking, and test suite.
+**Phase 1.5 Completed** 2026‑02‑03 – Nemo-side Process, Scheduler, and GlobalTable objects reified.
