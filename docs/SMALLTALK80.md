@@ -4,7 +4,7 @@ This document compares Nimtalk's current implementation against the Smalltalk-80
 
 ## Overview
 
-Nimtalk is a class-based Smalltalk dialect that compiles to Nim. While it captures much of the Smalltalk "feel" with message passing, blocks, and collection protocols, there are significant gaps compared to the full Smalltalk-80 class library.
+Nimtalk is a Smalltalk dialect that compiles to Nim. While it captures much of the Smalltalk "feel" with message passing, blocks, and collection protocols, there are significant gaps compared to the full Smalltalk-80 class library.
 
 ## What's Already Implemented Well
 
