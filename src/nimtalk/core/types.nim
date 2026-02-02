@@ -1,4 +1,4 @@
-import std/[tables, algorithm, hashes, logging]
+import std/[tables, logging]
 
 # ============================================================================
 # Core Types for Nimtalk
@@ -278,6 +278,23 @@ proc toValue*(cls: Class): NodeValue =
 
 proc toValue*(inst: Instance): NodeValue =
   NodeValue(kind: vkInstance, instVal: inst)
+
+proc unwrap*(val: NodeValue): NodeValue =
+  ## Unwrap primitive values from Instance wrappers
+  # If the value is vkInstance with kind ikInt, ikFloat, or ikString,
+  # convert it to the corresponding primitive NodeValue.
+  if val.kind == vkInstance and val.instVal != nil:
+    case val.instVal.kind
+    of ikInt:
+      return NodeValue(kind: vkInt, intVal: val.instVal.intVal)
+    of ikFloat:
+      return NodeValue(kind: vkFloat, floatVal: val.instVal.floatVal)
+    of ikString:
+      return NodeValue(kind: vkString, strVal: val.instVal.strVal)
+    of ikArray, ikTable, ikObject:
+      # These stay wrapped as vkInstance
+      return val
+  return val
 
 proc toBlock*(val: NodeValue): BlockNode =
   if val.kind != vkBlock:

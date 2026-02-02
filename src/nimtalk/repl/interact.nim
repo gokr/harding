@@ -25,6 +25,7 @@ proc newReplContext*(trace: bool = false): ReplContext =
     showResults: true
   )
   initGlobals(result.interpreter)
+  loadStdlib(result.interpreter)
 
 proc printWelcome() =
   echo "========================================"
