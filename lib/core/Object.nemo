@@ -45,16 +45,51 @@ Object class>>derive: ivarArray methods: methodBlock [
   ^ newClass
 ]
 
-Object class>>derive: slotArray parents: parentsArray methods: methodBlock [
-  # Create a subclass with instance variables, additional parents and define methods in one expression.
+Object class>>derive: slotArray superclasses: superclassList methods: methodBlock [
+  # Create a subclass with instance variables, additional superclasses and define methods in one expression.
   # The receiver class determines the instance type (Integer, Float, String, Array, Table, etc.).
-  # Other parents must be compatible (usually Mixin subclasses with only methods, no conflicting slots).
+  # Other superclasses must be compatible (usually Mixin subclasses with only methods, no conflicting slots).
+  #
+  # Note: Methods are applied BEFORE adding superclasses, so you can override conflicting methods
+  # from superclasses. If methods conflict and are not overridden, an error will be raised.
+  #
+  # Usage:
+  #   Child := Object derive: #(x) superclasses: #(Parent1 Parent2) methods: [
+  #     self >> bar [ 42 ]
+  #   ]
+  #
+  # Or create a mixin class:
+  #   Mixin1 := Object derive: #() superclasses: #() methods: [
+  #     self >> foo [ 1 ]
+  #   ]
+  #
+  #   Mixin2 := Object derive: #() superclasses: #() methods: [
+  #     self >> bar [ 2 ]
+  #   ]
+  #
+  #   Combined := Object derive: #() superclasses: #(Mixin1 Mixin2) methods: [
+  #     self >> both [ self foo + self bar ]
+  #   ]
+  #
+  | newClass |
+  # First create the class with slots (deriving from self as first superclass)
+  newClass := self derive: slotArray.
+
+  # Apply methods FIRST - this allows overrides to resolve conflicts before adding superclasses
+  newClass extend: methodBlock.
+
+  # Then add each additional superclass (this performs conflict detection)
+  superclassList do: [:superclass |
+    newClass addSuperclass: superclass
+  ].
+
+  ^ newClass
 ]
 
-Object class>>derive: parentsArray methods: methodBlock [
-  # Simplified form: derive from multiple parents with no new slots.
-  # The first parent determines the instance type.
-  ^ self derive: parentsArray ivarArray: #() methods: methodBlock
+Object class>>derive: superclassList methods: methodBlock [
+  # Simplified form: derive from multiple superclasses with no new slots.
+  # The first superclass determines the instance type.
+  ^ self derive: superclassList ivarArray: #() methods: methodBlock
 ]
 
 #====================================================================
@@ -67,7 +102,7 @@ Object>>at: key [
 ]
 
 Object>>at: key put: value [
-  # Set a property value on this object (not on parent class).
+  # Set a property value on this object (not on superclass).
   ^ self perform: #primitiveAt:put: with: key with: value
 ]
 
