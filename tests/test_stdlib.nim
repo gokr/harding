@@ -2,10 +2,9 @@
 # test_stdlib.nim - Comprehensive tests for Nimtalk Standard Library
 #
 
-import std/[unittest, tables, strutils]
+import std/unittest
 import ../src/nimtalk/core/types
-import ../src/nimtalk/parser/[lexer, parser]
-import ../src/nimtalk/interpreter/[evaluator, objects, activation]
+import ../src/nimtalk/interpreter/[evaluator, objects]
 
 suite "Stdlib: Numbers":
   var interp: Interpreter

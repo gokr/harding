@@ -4,7 +4,7 @@
 # Tests both declarative and inline primitive syntax
 #
 
-import std/[unittest, strutils]
+import std/unittest
 import ../src/nimtalk/core/types
 import ../src/nimtalk/parser/[lexer, parser]
 import ../src/nimtalk/interpreter/[evaluator, objects]
@@ -133,7 +133,7 @@ suite "Primitive Syntax: Error Handling":
   test "primitive with wrong arity should report error":
     let tokens = lex("Object>>bad [ ^<primitive primitiveAt:> ]")
     var parser = initParser(tokens)
-    let nodes = parser.parseStatements()
+    discard parser.parseStatements()
 
     # Should have a parse error due to missing argument after keyword
     check(parser.hasError)
