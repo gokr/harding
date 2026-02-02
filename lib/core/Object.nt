@@ -11,26 +11,30 @@
 # Object creation and copying
 #====================================================================
 
+# Note: derive, derive:, and new are defined as class methods in initCoreClasses
+# They are installed as native methods on the Object class and create proper
+# Class-based objects with slot accessors.
+#
+# Object class>>derive - Create a subclass with no slots
+# Object class>>derive: - Create a subclass with declared instance variables
+# Object class>>new - Create a new instance of the class
+#
+# Usage: Point := Object derive: #(x y).
+#        point := Point new.
+#        point x: 10.
+
 Object>>clone [
   # Create a shallow copy of this object without class/superclass links.
   # The copy has no parents and shares property/method dictionaries.
   ^ self perform: #primitiveClone
 ]
 
-Object>>derive [
-  # Create a child object with this object as its parent.
-  # The child inherits behavior through the class hierarchy.
-  ^ self perform: #primitiveDerive
-]
+#====================================================================
+# Class-side methods (using class>> syntax)
+#====================================================================
 
-Object>>derive: ivarArray [
-  # Create a child with declared instance variables.
-  # ivarArray should be an array of symbols like #(name age address).
-  ^ self perform: #primitiveDeriveWithIVars: with: ivarArray
-]
-
-Object>>derive: ivarArray methods: methodBlock [
-  # Create a child with instance variables AND define methods in one expression.
+Object class>>derive: ivarArray methods: methodBlock [
+  # Create a subclass with instance variables AND define methods in one expression.
   # Usage: Person := Object derive: #(name age) methods: [
   #   self >> greet [ "Hello, I am " + name ]
   #   self >> haveBirthday [ age := age + 1 ]
@@ -39,6 +43,18 @@ Object>>derive: ivarArray methods: methodBlock [
   newClass := self derive: ivarArray.
   newClass extend: methodBlock.
   ^ newClass
+]
+
+Object class>>derive: slotArray parents: parentsArray methods: methodBlock [
+  # Create a subclass with instance variables, additional parents and define methods in one expression.
+  # The receiver class determines the instance type (Integer, Float, String, Array, Table, etc.).
+  # Other parents must be compatible (usually Mixin subclasses with only methods, no conflicting slots).
+]
+
+Object class>>derive: parentsArray methods: methodBlock [
+  # Simplified form: derive from multiple parents with no new slots.
+  # The first parent determines the instance type.
+  ^ self derive: parentsArray ivarArray: #() methods: methodBlock
 ]
 
 #====================================================================
