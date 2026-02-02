@@ -56,12 +56,12 @@ Use when you need to execute Nimtalk code before or after the primitive call.
 ### Syntax
 
 ```smalltalk
-<primitive #primitiveSelector>
-<primitive #primitiveSelector: argument>
-<primitive #primitiveSelector:with: arg1 arg2>
+<primitive primitiveSelector>
+<primitive primitiveSelector: argument>
+<primitive primitiveSelector: arg1 with: arg2>
 ```
 
-Arguments are provided directly after the selector, separated by spaces.
+Arguments are provided using keyword message syntax, making the code self-documenting.
 
 ### Examples
 
@@ -71,25 +71,25 @@ Array>>at: index [
   (index < 1 or: [index > self size]) ifTrue: [
     self error: "Index out of bounds: " , index asString
   ].
-  ^ <primitive #primitiveAt: index>
+  ^ <primitive primitiveAt: index>
 ]
 
 # Logging before primitive
 Object>>shallowCopy [
   self log: "Creating shallow copy".
-  ^ <primitive #primitiveClone>
+  ^ <primitive primitiveClone>
 ]
 
 # Multiple arguments
 String>>replace: old with: new [
   old isEmpty ifTrue: [ ^ self ].
-  ^ <primitive #primitiveReplace:with: old new>
+  ^ <primitive primitiveReplace: old with: new>
 ]
 
 # Post-processing result
 FileStream>>readLine [
   | line |
-  line := <primitive #primitiveFileReadLine>.
+  line := <primitive primitiveFileReadLine>.
   line isNil ifTrue: [ ^ nil ].
   ^ line withoutTrailingNewline
 ]
@@ -126,7 +126,7 @@ Object>>at: key put: value <primitive: #primitiveAt:put:>
 # Or inline when needed
 Object>>at: key [
   key isNil ifTrue: [ self error: "Key cannot be nil" ].
-  ^ <primitive #primitiveAt: key>
+  ^ <primitive primitiveAt: key>
 ]
 ```
 
@@ -173,7 +173,7 @@ The parser and compiler verify:
      (index < 1 or: [index > self size]) ifTrue: [
        self error: "Out of bounds"
      ].
-     ^ <primitive #primitiveAt: index>
+     ^ <primitive primitiveAt: index>
    ]
    ```
 
@@ -204,11 +204,10 @@ The parser treats `<primitive:` and `<primitive` as special tokens that trigger 
    - Validate arity matches method parameters
    - No method body block expected
 
-2. **Inline**: `<primitive #foo arg1 arg2>`
+2. **Inline**: `<primitive foo: arg1 bar: arg2>`
    - Parse `<primitive` token
-   - Parse the primitive selector symbol
-   - Count colons in selector to determine argument count
-   - Parse that many expressions as arguments
+   - Parse as keyword or unary message format
+   - Keywords interleaved with arguments (keyword message syntax)
    - Expect closing `>`
 
 ### Runtime Behavior

@@ -16,6 +16,92 @@ type
     errorMsg*: string
     lastLine*, lastCol*: int
 
+# Helper to parse primitive tag content as keyword message syntax
+# Input: "primitiveAt: key put: value" or "primitiveClone"
+# Returns: (selector, arguments)
+proc parsePrimitiveTagContent(tagContent: string): (string, seq[Node], string) =
+  ## Parse primitive tag content using keyword message syntax
+  ## Returns (selector, arguments, errorMsg)
+  ## errorMsg is empty on success
+
+  # Strip "primitive " prefix
+  var content = tagContent
+  if content.startsWith("primitive "):
+    content = content[10..^1].strip()
+  elif content.startsWith("primitive\t"):
+    content = content[10..^1].strip()
+  else:
+    return ("", @[], "Expected 'primitive ' prefix in tag content")
+
+  # Skip optional leading # for backward compatibility
+  if content.startsWith("#"):
+    content = content[1..^1]
+
+  if content.len == 0:
+    return ("", @[], "Expected primitive selector after 'primitive'")
+
+  # Lex the content as Nimtalk tokens
+  let tokens = lex(content)
+  if tokens.len == 0:
+    return ("", @[], "Failed to lex primitive content")
+
+  var pos = 0
+  var selector = ""
+  var arguments: seq[Node] = @[]
+
+  # Check first token to determine message type
+  if tokens[pos].kind == tkIdent:
+    # Could be unary selector or start of an argument
+    # Check if next token is a keyword - if so, this ident is an arg
+    if pos + 1 < tokens.len and tokens[pos + 1].kind == tkKeyword:
+      # First token is an argument, we need a keyword selector
+      return ("", @[], "Expected keyword selector, got identifier: " & tokens[pos].value)
+    else:
+      # Unary selector (no arguments)
+      selector = tokens[pos].value
+      inc pos
+  elif tokens[pos].kind == tkKeyword:
+    # Keyword message - parse keyword:arg pairs
+    while pos < tokens.len and tokens[pos].kind == tkKeyword:
+      let keyword = tokens[pos].value
+      selector.add(keyword)
+      inc pos
+
+      # Parse the argument for this keyword part
+      if pos >= tokens.len:
+        return ("", @[], "Expected argument after keyword: " & keyword)
+
+      let argToken = tokens[pos]
+      case argToken.kind
+      of tkIdent:
+        arguments.add(IdentNode(name: argToken.value))
+        inc pos
+      of tkInt:
+        arguments.add(LiteralNode(value: NodeValue(kind: vkInt, intVal: parseInt(argToken.value))))
+        inc pos
+      of tkFloat:
+        arguments.add(LiteralNode(value: NodeValue(kind: vkFloat, floatVal: parseFloat(argToken.value))))
+        inc pos
+      of tkString:
+        arguments.add(LiteralNode(value: NodeValue(kind: vkString, strVal: argToken.value)))
+        inc pos
+      of tkSymbol:
+        arguments.add(LiteralNode(value: getSymbol(argToken.value)))
+        inc pos
+      else:
+        return ("", @[], "Expected argument after keyword, got: " & $argToken.kind)
+  else:
+    return ("", @[], "Expected selector (identifier or keyword), got: " & $tokens[pos].kind)
+
+  # Check for extra tokens (should be at EOF or only have EOF left)
+  while pos < tokens.len:
+    if tokens[pos].kind == tkEOF:
+      break
+    else:
+      return ("", @[], "Unexpected token after primitive arguments: " & tokens[pos].value)
+
+  return (selector, arguments, "")
+
 # Forward declarations for recursive parsing functions
 proc parseExpression*(parser: var Parser; parseMessages = true): Node
 proc parsePrimaryUnaryOnly(parser: var Parser): Node
@@ -25,9 +111,10 @@ proc parseTableLiteral(parser: var Parser): TableNode
 proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
 proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parseMethod(parser: var Parser): BlockNode
-proc parsePrimitive(parser: var Parser): PrimitiveNode
+proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
+proc parseDeclarativePrimitive(parser: var Parser, selector: string, params: seq[string]): PrimitiveCallNode
 
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
 const PseudoVariables* = ["self", "nil", "true", "false", "super"]
@@ -207,6 +294,30 @@ proc parsePrimary(parser: var Parser): Node =
   of tkRBracket:
     # Closing bracket - can appear when parsing blocks
     # Return nil to indicate end of block
+    return nil
+
+  of tkTag:
+    # Handle inline primitive calls: <primitive selector: arg1 other: arg2>
+    discard parser.next()
+    let tagValue = token.value
+
+    # Check if this is an inline primitive call (starts with "primitive" but not "primitive:")
+    if tagValue.startsWith("primitive ") or tagValue.startsWith("primitive\t"):
+      # Parse inline primitive using keyword message syntax
+      let (selector, arguments, errorMsg) = parsePrimitiveTagContent(tagValue)
+      if errorMsg.len > 0:
+        parser.parseError(errorMsg)
+        return nil
+
+      return PrimitiveCallNode(
+        selector: selector,
+        arguments: arguments,
+        line: token.line,
+        col: token.col
+      )
+
+    # Not an inline primitive - error
+    parser.parseError("Unknown tag: " & tagValue)
     return nil
 
   else:
@@ -886,17 +997,54 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
     parser.parseError("Expected method selector after >>")
     return nil
 
-  # Parse method body as a block (parseBlock expects the [ itself)
-  let blk = parser.parseBlock()
-  if blk == nil:
-    return nil
+  # Parse method body - check for declarative primitive syntax: <primitive: #primitiveSelector>
+  var blk: BlockNode
+  if parser.peek().kind == tkTag and parser.peek().value.startsWith("primitive:"):
+    # Declarative primitive - parse directly from tag value
+    let tagValue = parser.next().value  # Consume <primitive: #selector> tag
 
-  # Mark as method
-  blk.isMethod = true
+    # Extract the selector from the tag value (after "primitive: ")
+    var tagParts = tagValue.split({' ', '\t'}, maxSplit = 1)
+    if tagParts.len < 2:
+      parser.parseError("Expected primitive selector after <primitive:, got: " & tagValue)
+      return nil
 
-  # Set parameters if we have keyword/binary selector params
-  if params.len > 0:
-    blk.parameters = params
+    let primSelectorRaw = tagParts[1]
+    # Strip the # prefix from the selector symbol (e.g., "#primitiveClone" -> "primitiveClone")
+    let primSelector = if primSelectorRaw.startsWith("#"):
+                        primSelectorRaw[1..^1]
+                      else:
+                        primSelectorRaw
+
+    # Validate arity (colon count in selector must match param count)
+    let primitiveColonCount = primSelector.count(':')
+    if primitiveColonCount != params.len:
+      parser.parseError("Method takes " & $params.len & " arguments but #" &
+                       primSelector & " expects " & $primitiveColonCount)
+      return nil
+
+    # Create a block with primitive call as return
+    let primCall = parseDeclarativePrimitive(parser, primSelector, params)
+
+    blk = BlockNode(
+      parameters: params,
+      temporaries: @[],
+      body: @[cast[Node](ReturnNode(expression: primCall))],
+      isMethod: true,
+      nativeImpl: nil
+    )
+  else:
+    # Parse method body as a block (parseBlock expects the [ itself)
+    blk = parser.parseBlock()
+    if blk == nil:
+      return nil
+
+    # Mark as method
+    blk.isMethod = true
+
+    # Set parameters if we have keyword/binary selector params
+    if params.len > 0:
+      blk.parameters = params
 
   # Generate appropriate message based on method type
   let arg1: Node = LiteralNode(value: NodeValue(kind: vkSymbol, symVal: selector))
@@ -920,7 +1068,8 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
     )
 
 # Parse primitive declaration: <primitive> ... </primitive> followed by Smalltalk fallback
-proc parsePrimitive(parser: var Parser): PrimitiveNode =
+# OR parse inline primitive call: <primitive #selector args>
+proc parsePrimitive(parser: var Parser): Node =
   let startLine = parser.lastLine
   let startCol = parser.lastCol
 
@@ -930,7 +1079,29 @@ proc parsePrimitive(parser: var Parser): PrimitiveNode =
     parser.parseError("Expected <primitive> tag")
     return nil
 
-  # Collect Nim code tokens until closing </primitive>
+  # Check for inline primitive: <primitive selector: arg1 other: arg2>
+  # The tag value will be like "primitive primitiveAt: key put: value"
+  if openingTag.value.startsWith("primitive ") or openingTag.value.startsWith("primitive\t"):
+    # Inline primitive syntax - parse using keyword message format
+    let (selector, arguments, errorMsg) = parsePrimitiveTagContent(openingTag.value)
+    if errorMsg.len > 0:
+      parser.parseError(errorMsg)
+      return nil
+
+    let node = PrimitiveCallNode(
+      selector: selector,
+      arguments: arguments,
+      line: startLine,
+      col: startCol
+    )
+    return node
+
+  # Check for declarative primitive in wrong context (should be in method definition)
+  if openingTag.value.startsWith("primitive:"):
+    parser.parseError("Declarative primitive syntax <primitive: #selector> is only valid in method definitions")
+    return nil
+
+  # Old XML-style primitive: <primitive> ... </primitive>
   var nimCode = ""
   while parser.pos < parser.tokens.len:
     let token = parser.peek()
@@ -971,6 +1142,27 @@ proc parsePrimitive(parser: var Parser): PrimitiveNode =
   prim.nimCode = nimCode
   prim.fallback = fallback
   return prim
+
+# Parse declarative primitive call in method definition: <primitive: #selector>
+proc parseDeclarativePrimitive(parser: var Parser, selector: string, params: seq[string]): PrimitiveCallNode =
+  let startLine = parser.lastLine
+  let startCol = parser.lastCol
+
+  let primSelector = selector
+
+  # Create primitive call with parameter references as arguments
+  var arguments: seq[Node] = @[]
+  for param in params:
+    arguments.add(IdentNode(name: param))
+
+  let node = PrimitiveCallNode(
+    selector: primSelector,
+    arguments: arguments,
+    line: startLine,
+    col: startCol
+  )
+  return node
+
 
 # Parse sequence of statements (method body or REPL input)
 proc parseStatements*(parser: var Parser): seq[Node] =
@@ -1094,6 +1286,14 @@ proc printAST*(node: Node, indent: int = 0): string =
       res.add(spaces & "  fallback:\n")
       for stmt in prim.fallback:
         res.add(printAST(stmt, indent + 2))
+    return res
+
+  of nkPrimitiveCall:
+    let primCall = node.PrimitiveCallNode
+    var res = spaces & "PrimitiveCall(" & primCall.selector & ")\n"
+    for arg in primCall.arguments:
+      res.add(spaces & "  arg:\n")
+      res.add(printAST(arg, indent + 2))
     return res
 
   of nkCascade:
