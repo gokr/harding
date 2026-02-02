@@ -1,4 +1,4 @@
-import std/[strutils, os, terminal, terminal']
+import std/[strutils, os, terminal]
 import ../core/types
 import ../parser/[lexer, parser]
 import ../interpreter/evaluator
@@ -53,13 +53,13 @@ proc handleCommand(ctx: var ReplContext, line: string): bool =
   of "quit", "q", "exit":
     return true
   of "globals", "g":
-    echo "\\nGlobal Variables:"
+    echo "\nGlobal Variables:"
     for key, val in ctx.globals:
       echo "  " & key & " = " & val.toString()
     echo ""
   of "clear", "c":
     when defined(posix):
-      stdout.write("\\033[2J\\033[H")
+      stdout.write("\033[2J\033[H")
   of "trace", "t":
     ctx.interpreter.traceExecution = not ctx.interpreter.traceExecution
     echo "Trace: " & $ctx.interpreter.traceExecution
