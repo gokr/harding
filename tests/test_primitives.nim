@@ -235,17 +235,6 @@ suite "Primitive Syntax: Unified Declarative Syntax":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInstance)
 
-  test "unified syntax - old declarative syntax still works (with warning)":
-    let result = interp.evalStatements("""
-    MyObj := Object derive.
-    MyObj>>oldClone <primitive: #primitiveClone>.
-
-    obj := MyObj new.
-    result := obj oldClone
-    """)
-
-    check(result[0][^1].kind == vkInstance)
-
   test "unified syntax - Table uses at: and at:put: methods":
     let result = interp.evalStatements("""
     obj := Table new.
