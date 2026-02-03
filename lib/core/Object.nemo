@@ -82,12 +82,12 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
   ^ newClass
 ]
 
-Object class>>printHierarchy [
+Object>>printHierarchy [
   # Print an indented class hierarchy with slots as Nemo code
   self printHierarchyIndent: 0
 ]
 
-Object class>>printHierarchyIndent: level [
+Object>>printHierarchyIndent: level [
   # Print this class and its superclasses recursively with indentation
   # Usage: MyClass printHierarchyIndent: 0  # Start with 0 indentation
   self printClassIndent: level.
@@ -102,7 +102,7 @@ Object class>>printHierarchyIndent: level [
   ]
 ]
 
-Object class>>printClassIndent: level [
+Object>>printClassIndent: level [
   # Print this class definition with indentation
   | indent slotsString |
   indent := "    " repeat: level

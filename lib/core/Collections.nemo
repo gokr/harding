@@ -10,9 +10,9 @@
 Array>>do: block [
   # Iterate over each element, evaluating the block.
   | index size |
-  index := 0
+  index := 1
   size := self size
-  [ index < size ] whileTrue: [
+  [ index <= size ] whileTrue: [
     block value: (self at: index)
     index := index + 1
   ]
@@ -35,12 +35,12 @@ Array>>notEmpty [
 
 Array>>first [
   # Return first element.
-  ^ self at: 0
+  ^ self at: 1
 ]
 
 Array>>last [
   # Return last element.
-  ^ self at: (self size - 1)
+  ^ self at: (self size)
 ]
 
 #====================================================================
@@ -118,11 +118,11 @@ Array>>allSatisfy: block [
 ]
 
 Array>>withIndexDo: block [
-  # Iterate over each element with its index (0-based), evaluating the block.
+  # Iterate over each element with its 1-based index, evaluating the block.
   | index size |
-  index := 0
+  index := 1
   size := self size
-  [ index < size ] whileTrue: [
+  [ index <= size ] whileTrue: [
     block value: (self at: index) value: index
     index := index + 1
   ]
@@ -130,7 +130,7 @@ Array>>withIndexDo: block [
 ]
 
 Array>>copyFrom: start to: end [
-  # Return new array with elements from start to end (inclusive, 0-based).
+  # Return new array with elements from start to end (inclusive, 1-based).
   | result index |
   result := Array new
   index := start
@@ -144,10 +144,10 @@ Array>>copyFrom: start to: end [
 Array>>with: otherArray do: block [
   # Iterate over two collections in parallel, evaluating block with elements from both.
   | index size |
-  index := 0
+  index := 1
   size := self size
   (size = otherArray size) ifFalse: [ self error: "Collections must be same size for with:do:" ]
-  [ index < size ] whileTrue: [
+  [ index <= size ] whileTrue: [
     block value: (self at: index) value: (otherArray at: index)
     index := index + 1
   ]
@@ -183,7 +183,7 @@ Array>>removeFirst [
 Array>>removeLast [
   # Remove and return last element.
   | last index |
-  index := self size - 1
+  index := self size
   last := self at: index
   self removeAt: index
   ^ last
@@ -203,12 +203,13 @@ Array>>removeAll [
 
 Table>>printString [
   # Return a string representation showing key-value pairs.
+  # Uses Smalltalk-style arrow syntax with dot separators: #{key -> value . ...}
   | result isFirst |
   result := "#{".
   isFirst := true.
   self keys do: [ :key |
-    isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ].
-    result := result , (key printString) , ": " , ((self at: key) printString)
+    isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , " . " ].
+    result := result , (key printString) , " -> " , ((self at: key) printString)
   ].
   ^ result , "}"
 ]
