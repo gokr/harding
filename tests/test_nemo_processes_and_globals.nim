@@ -42,16 +42,16 @@ suite "Nemo-side Process, Scheduler, and GlobalTable":
     let ctx = newSchedulerContext()
     var interp = ctx.mainProcess.getInterpreter()
 
-    let (result, err) = interp.doit("Nemo at: 'Object'")
+    let (result, err) = interp.doit("Nemo at: \"Object\"")
     check err.len == 0
-    check result.kind == vkInstance
-    check result.instVal.class.name == "Object"
+    check result.kind == vkClass
+    check result.classVal.name == "Object"
 
   test "Set a global via Nemo at:put:":
     let ctx = newSchedulerContext()
     var interp = ctx.mainProcess.getInterpreter()
 
-    let (setResult, setErr) = interp.doit("Nemo at: 'myTestVar' put: 12345")
+    let (setResult, setErr) = interp.doit("Nemo at: \"myTestVar\" put: 12345")
     check setErr.len == 0
     check setResult.kind == vkInt
     check setResult.intVal == 12345
@@ -64,12 +64,12 @@ suite "Nemo-side Process, Scheduler, and GlobalTable":
     let ctx = newSchedulerContext()
     var interp = ctx.mainProcess.getInterpreter()
 
-    let (hasTrue, err1) = interp.doit("Nemo includesKey: 'true'")
+    let (hasTrue, err1) = interp.doit("Nemo includesKey: \"true\"")
     check err1.len == 0
     check hasTrue.kind == vkBool
     check hasTrue.boolVal == true
 
-    let (hasFake, err2) = interp.doit("Nemo includesKey: 'nonexistentGlobal'")
+    let (hasFake, err2) = interp.doit("Nemo includesKey: \"nonexistentGlobal\"")
     check err2.len == 0
     check hasFake.kind == vkBool
     check hasFake.boolVal == false

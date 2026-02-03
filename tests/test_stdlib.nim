@@ -336,7 +336,8 @@ suite "Stdlib: Tables":
       result := t includesKey: "exists"
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkInstance)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal == true)
 
 suite "Stdlib: Strings":
   var interp: Interpreter

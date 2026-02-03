@@ -12,9 +12,9 @@ suite "Green Threads - Scheduler Integration":
   test "Create scheduler context":
     let ctx = newSchedulerContext()
 
-    check ctx.scheduler != nil
+    check ctx.theScheduler != nil
     check ctx.mainProcess != nil
-    check ctx.scheduler.processCount == 1
+    check ctx.theScheduler.processCount == 1
     check ctx.mainProcess.name == "main"
 
   test "Main process has interpreter":
@@ -34,8 +34,8 @@ suite "Green Threads - Scheduler Integration":
     # Create a second interpreter with shared state
     # Note: newInterpreterWithShared still uses legacy RootObject type
     let newInterp = newInterpreterWithShared(
-      ctx.scheduler.sharedGlobals,
-      ctx.scheduler.rootObject
+      ctx.theScheduler.sharedGlobals,
+      ctx.theScheduler.rootObject
     )
 
     # Check that both interpreters share the same globals
@@ -64,7 +64,7 @@ suite "Green Threads - Scheduler Integration":
     check newProc != nil
     check newProc.name == "test-fork"
     check newProc.state == psReady
-    check ctx.scheduler.processCount == 2
+    check ctx.theScheduler.processCount == 2
 
   test "Forked process has own interpreter":
     let ctx = newSchedulerContext()
@@ -101,8 +101,8 @@ suite "Green Threads - Scheduler Integration":
       discard ctx.forkProcess(blockNode, newInstance(objectClass), "proc-" & $i)
 
     # Should have 4 processes (main + 3 forked)
-    check ctx.scheduler.processCount == 4
-    check ctx.scheduler.readyCount == 4
+    check ctx.theScheduler.processCount == 4
+    check ctx.theScheduler.readyCount == 4
 
   test "Process lifecycle states":
     let ctx = newSchedulerContext()
@@ -120,9 +120,9 @@ suite "Green Threads - Scheduler Integration":
     check proc1.state == psReady
 
     # Select it - becomes running
-    discard ctx.scheduler.selectNextProcess()
-    check ctx.scheduler.currentProcess != nil
-    check ctx.scheduler.currentProcess.state == psRunning
+    discard ctx.theScheduler.selectNextProcess()
+    check ctx.theScheduler.currentProcess != nil
+    check ctx.theScheduler.currentProcess.state == psRunning
 
   test "Processor global initialization":
     let ctx = newSchedulerContext()

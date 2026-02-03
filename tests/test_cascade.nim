@@ -58,10 +58,9 @@ suite "Cascade Tests":
 
   test "Evaluate cascade with builtin unary method":
     # Test cascade with a simple unary method on Array
-    # Note: size uses primitiveSize internally
     let source = """
     arr := #(1 2 3).
-    result := arr primitiveSize; primitiveSize
+    result := arr size; size
     """
     let (results, err) = interp.evalStatements(source)
 
