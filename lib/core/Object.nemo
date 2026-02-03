@@ -23,7 +23,7 @@
 #        point := Point new.
 #        point x: 10.
 
-Object>>clone <primitive: #primitiveClone>
+Object>>clone <primitive primitiveClone>
 
 #====================================================================
 # Class-side methods (using class>> syntax)
@@ -134,30 +134,30 @@ Object>>printClassIndent: level [
 # Property access
 #====================================================================
 
-Object>>at: key <primitive: #primitiveAt:>
+Object>>at: key <primitive primitiveAt: key>
 
-Object>>at: key put: value <primitive: #primitiveAt:put:>
+Object>>at: key put: value <primitive primitiveAt: key put: value>
 
-Object>>hasProperty: key <primitive: #primitiveHasProperty:>
+Object>>hasProperty: key <primitive primitiveHasProperty: key>
 
-Object>>properties <primitive: #primitiveProperties>
+Object>>properties <primitive primitiveProperties>
 
 #====================================================================
 # Class reflection
 #====================================================================
 
-Object>>slotNames <primitive: #primitiveSlotNames>
+Object>>slotNames <primitive primitiveSlotNames>
 
-Object>>superclassNames <primitive: #primitiveSuperclassNames>
+Object>>superclassNames <primitive primitiveSuperclassNames>
 
 
 #====================================================================
 # Method management
 #====================================================================
 
-Object>>respondsTo: selector <primitive: #primitiveRespondsTo:>
+Object>>respondsTo: selector <primitive primitiveRespondsTo: selector>
 
-Object>>methods <primitive: #primitiveMethods>
+Object>>methods <primitive primitiveMethods>
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
   # Default handler for unrecognized messages.
@@ -178,22 +178,22 @@ Object>>= other [
   ^ self == other
 ]
 
-Object>>== other <primitive: #primitiveIdentity:>
+Object>>== other <primitive primitiveEquals: other>
 
 Object>>printString [
   # Return a string representation of this object.
   ^ "<" , self class name , ">"
 ]
 
-Object>>className <primitive: #primitiveClassName>
+Object>>className <primitive primitiveClassName>
 
-Object>>class <primitive: #primitiveClass>
+Object>>class <primitive primitiveClass>
 
 #====================================================================
 # Error handling
 #====================================================================
 
-Object>>error: message <primitive: #primitiveError:>
+Object>>error: message <primitive primitiveError: message>
 
 #====================================================================
 # Testing and debugging
@@ -232,14 +232,14 @@ Object>>notNil [
   ^ self isNil not
 ]
 
-Object>>isKindOf: aClass <primitive: #primitiveIsKindOf:>
+Object>>isKindOf: aClass <primitive primitiveIsKindOf: aClass>
 
 Object>>asString [
   # Return string representation
   ^ self printString
 ]
 
-Object>>asSelfDo: aBlock <primitive: #primitiveAsSelfDo:>
+Object>>asSelfDo: aBlock <primitive primitiveAsSelfDo: aBlock>
 
 Object class>>extend: aBlock [
   # Extend this class with instance methods defined in aBlock.
@@ -261,7 +261,7 @@ Object class>>extendClass: aBlock [
   ^ self asSelfDo: aBlock
 ]
 
-Object class>>name <primitive: #primitiveClassName>
+Object class>>name <primitive primitiveClassName>
 
 Object>>print [
   # Print to stdout without newline
@@ -282,7 +282,7 @@ Object>>~= other [
   ^ (self = other) not
 ]
 
-Object>>== other <primitive: #primitiveIdentity:>
+Object>>== other <primitive primitiveEquals: other>
 
 Object>>~~ other [
   # Not identity - true if different objects
