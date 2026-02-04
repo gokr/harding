@@ -356,4 +356,36 @@ Fixed multiple SIGSEGV and nil access issues in the process/scheduler implementa
 
 ---
 
+## Recent Completed Work (2026-02-04)
+
+### Nemo Object load: Method and Bootstrap File Support
+
+- Added `Nemo load:` method for loading Nemo files from Nemo code
+- Paths resolved relative to `NEMO_HOME` environment variable
+- Added `--home <path>` CLI option to set NEMO_HOME
+- Added `--bootstrap <file>` CLI option for custom bootstrap file
+- Created `lib/core/Bootstrap.nemo` as stdlib entry point
+- Bootstrap file uses `Nemo load:` syntax to load other library files
+- Replaced hardcoded file list in `loadStdlib()` with bootstrap file approach
+
+### Shared CLI Module
+
+- Created `src/nemo/repl/cli.nim` with shared CLI utilities
+- `CliOptions` type for common command-line options
+- `parseCliOptions()` for parsing --home, --bootstrap, --loglevel, --stack-depth, --ast
+- `showUsage()` for displaying help
+- `setupLogging()` for configuring logging
+- Refactored `nemo.nim` and `ide.nim` to use shared CLI module
+- Eliminated code duplication between REPL and IDE
+
+### FileStream Class Identity Fix
+
+- Removed FileStream class creation from Nim `initInterpreter()`
+- FileStream is now fully defined in `FileStream.nemo`
+- Stdout instance created after loading FileStream.nemo
+- Native methods (`write:`, `writeline:`) registered after .nemo file loads
+- Follows principle: define classes in .nemo files, only register primitives from Nim
+
+---
+
 *Last Updated: 2026-02-04*

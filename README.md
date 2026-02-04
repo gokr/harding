@@ -228,9 +228,14 @@ Nemo at: "myVar" put: 42
 
 # Check if global exists
 Nemo includesKey: "myVar"  # Returns true/false
+
+# Load a Nemo file
+Nemo load: "lib/core/MyLibrary.nemo"  # Loads and evaluates file
 ```
 
 Multiple processes can share globals via the `Nemo` GlobalTable, enabling inter-process communication.
+
+The `Nemo load:` method resolves paths relative to `NEMO_HOME` (environment variable or `--home` CLI option).
 
 ## Installation
 
@@ -273,7 +278,27 @@ nemo script.nemo          # Run a file
 nemo -e "3 + 4"         # Evaluate expression
 nemo --ast script.nemo    # Show AST, then execute
 nemo --loglevel DEBUG   # Verbose execution trace
+nemo --home /opt/nemo   # Use custom home directory
+nemo --bootstrap custom.nemo  # Use custom bootstrap file
 ```
+
+### Environment Variables
+
+- `NEMO_HOME` - Default home directory for loading libraries (default: current directory)
+
+### Loading Files from Nemo
+
+The `Nemo load:` method loads and evaluates Nemo files:
+
+```smalltalk
+# Load a file relative to NEMO_HOME
+Nemo load: "lib/core/MyLibrary.nemo"
+
+# Load with absolute path
+Nemo load: "/absolute/path/to/file.nemo"
+```
+
+Paths are resolved relative to `NEMO_HOME` if not absolute.
 
 ### Debugging
 
