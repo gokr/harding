@@ -75,3 +75,8 @@ tests/test_scheduler
 *.vsix
 src/nemo/parser/lexer
 tests/test_primitives
+
+# Temporary test files
+test_debug
+test_debug.nim
+nemo-gui
