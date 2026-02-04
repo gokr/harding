@@ -890,6 +890,9 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
       targetActivation.returnValue = unwrapped
       targetActivation.hasReturned = true
 
+      # Check if this is a non-local return (target is different from current)
+      let isNonLocal = targetActivation != interp.currentActivation
+
       # Propagate hasReturned flag to all activations from current up to target
       var current = interp.currentActivation
       var safetyCount = 0
@@ -898,6 +901,8 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         if safetyCount > 1000:
           raise newException(EvalError, "Return propagation exceeded 1000 activations - possible infinite loop")
         current.hasReturned = true
+        if isNonLocal:
+          current.nonLocalReturnTarget = targetActivation
         # Note: We intentionally do NOT set returnValue on intermediate activations.
         # Only the target activation should have the return value set.
         debug("Marked intermediate activation as returned")
@@ -1763,8 +1768,8 @@ proc ifTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): 
                             interp.currentReceiver
       let blockResult = evalBlock(interp, blockReceiver, blockNode)
 
-      # Check if a non-local return was triggered
-      if callerActivation != nil and callerActivation.hasReturned:
+      # Check if a non-local return was triggered (nonLocalReturnTarget set)
+      if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
         return callerActivation.returnValue
 
       return blockResult
@@ -1796,8 +1801,8 @@ proc ifFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
                             interp.currentReceiver
       let blockResult = evalBlock(interp, blockReceiver, blockNode)
 
-      # Check if a non-local return was triggered
-      if callerActivation != nil and callerActivation.hasReturned:
+      # Check if a non-local return was triggered (nonLocalReturnTarget set)
+      if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
         return callerActivation.returnValue
 
       return blockResult
@@ -1834,8 +1839,8 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
 
-    # Check if a non-local return was triggered (caller activation has returned)
-    if callerActivation != nil and callerActivation.hasReturned:
+    # Check if a non-local return was triggered (nonLocalReturnTarget set)
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       debug("whileTrueImpl: detected non-local return after condition")
       return callerActivation.returnValue
 
@@ -1854,7 +1859,7 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
-    if callerActivation != nil and callerActivation.hasReturned:
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       debug("whileTrueImpl: detected non-local return after body")
       return callerActivation.returnValue
 
@@ -1890,8 +1895,8 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
 
-    # Check if a non-local return was triggered (caller activation has returned)
-    if callerActivation != nil and callerActivation.hasReturned:
+    # Check if a non-local return was triggered (nonLocalReturnTarget set)
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       return callerActivation.returnValue
 
     # Check if condition is false
@@ -1909,7 +1914,7 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
-    if callerActivation != nil and callerActivation.hasReturned:
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       return callerActivation.returnValue
 
   return lastResult
@@ -2037,8 +2042,8 @@ proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
 
     let blockResult = evalBlock(interp, interp.currentReceiver, blockNode)
 
-    # Check if a non-local return was triggered
-    if callerActivation != nil and callerActivation.hasReturned:
+    # Check if a non-local return was triggered (nonLocalReturnTarget set)
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       return callerActivation.returnValue
 
     return blockResult
@@ -2059,8 +2064,8 @@ proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: se
 
     let blockResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, args[0])
 
-    # Check if a non-local return was triggered
-    if callerActivation != nil and callerActivation.hasReturned:
+    # Check if a non-local return was triggered (nonLocalReturnTarget set)
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
       return callerActivation.returnValue
 
     return blockResult
@@ -2072,13 +2077,20 @@ proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args
     return nilValue()
   if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
     let blockNode = cast[BlockNode](self.nimValue)
-    let (result, nonLocalReturn) = evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
-    if nonLocalReturn:
-      # Propagate non-local return to caller's activation
-      if interp.currentActivation != nil:
-        interp.currentActivation.hasReturned = true
-        interp.currentActivation.returnValue = result
-    return result
+
+    # Get caller's activation to detect non-local returns
+    let callerActivation = if interp.activationStack.len > 0:
+                             interp.activationStack[interp.activationStack.len - 1]
+                           else:
+                             nil
+
+    let (blockResult, _) = evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
+
+    # Check if a non-local return was triggered (nonLocalReturnTarget set)
+    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+      return callerActivation.returnValue
+
+    return blockResult
   return nilValue()
 
 proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =

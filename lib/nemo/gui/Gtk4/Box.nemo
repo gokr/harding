@@ -1,0 +1,12 @@
+# GTK Box - Nemo methods for GtkBox
+# Note: GtkBox class is registered by Nim bridge, we just add methods here
+# No derive: needed - we extend the existing class
+
+# Native methods (registered in Nim bridge):
+# - new (class method)
+# - horizontal (class method)
+# - vertical (class method)
+# - newOrientation:spacing: (class method)
+# - append: (add widget to end)
+# - prepend: (add widget to start)
+# - setSpacing:

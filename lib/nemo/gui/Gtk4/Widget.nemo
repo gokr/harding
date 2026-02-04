@@ -1,0 +1,11 @@
+# GTK Widget - Nemo methods for GtkWidget
+# Note: GtkWidget class is registered by Nim bridge, we just add methods here
+# No derive: needed - we extend the existing class
+
+# Native methods (registered in Nim bridge):
+# - show
+# - hide
+# - setSizeRequest:
+# - addCssClass:
+# - removeCssClass:
+# - connect:do:

@@ -1,0 +1,46 @@
+# ============================================================================
+# IdeLauncher - Main IDE launcher window
+# Note: Launcher class is registered in Nim bridge (extends GtkWindow)
+# We just add Nemo methods here
+# ============================================================================
+
+Launcher class>>open [
+  ^self new openInstance
+].
+
+Launcher>>openInstance [
+  # Use native methods to set up the window
+  self title: "Nemo IDE !!"; setDefaultSize: 400 height: 600; present
+  Transcript showCr: "Nemo IDE opened"
+].
+
+Launcher>>menuFile [
+  Transcript showCr: "File menu selected".
+  ^self
+].
+
+Launcher>>menuTools [
+  Transcript showCr: "Tools menu selected".
+  ^self
+].
+
+Launcher>>menuHelp [
+  Transcript showCr: "Help menu selected".
+  ^self
+].
+
+Launcher>>openWorkspace [
+  Transcript showCr: "Opening workspace...".
+  ^self
+].
+
+Launcher>>openTranscript [
+  Transcript open.
+  ^self
+].
+
+Launcher>>quit [
+  Transcript showCr: "Quitting Nemo IDE...".
+  self close.
+  ^self
+].

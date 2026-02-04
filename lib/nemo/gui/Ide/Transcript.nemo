@@ -1,0 +1,57 @@
+# ============================================================================
+# IdeTranscript - Output stream for the IDE
+# Similar to Smalltalk's Transcript, provides logging and output
+# ============================================================================
+
+Transcript := Object derive: #(stream window)
+
+Transcript class>>current [
+  CurrentTranscript ifNil: [
+    CurrentTranscript := self new
+  ]
+  ^CurrentTranscript
+]
+
+Transcript>>initialize [
+  stream := ""
+  window := nil
+]
+
+Transcript>>show: message [
+  stream := stream , message
+  self updateWindow
+]
+
+Transcript>>showCr: message [
+  stream := stream , message , "\n"
+  self updateWindow
+]
+
+Transcript>>showSpace: message [
+  stream := stream , message , " "
+  self updateWindow
+]
+
+Transcript>>clear [
+  stream := ""
+  self updateWindow
+]
+
+Transcript>>contents [
+  ^stream
+]
+
+Transcript>>updateWindow [
+  ^self
+]
+
+Transcript>>open [
+  | box textView |
+  window := Window new
+  window title: "Transcript"
+  # box := Box vertical.
+  textView := nil.
+  # window setChild: box.
+  window present.
+  ^self
+]

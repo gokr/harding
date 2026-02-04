@@ -1,0 +1,7 @@
+# GTK Button - Nemo methods for GtkButton
+# Note: GtkButton class is registered by Nim bridge, we just add methods here
+# No derive: needed - we extend the existing class
+
+GtkButton>>clicked: handlerBlock [
+  self.
+].

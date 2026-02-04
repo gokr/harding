@@ -25,9 +25,9 @@ proc newGtkButtonProxy*(button: GtkButton, interp: ptr Interpreter): GtkButtonPr
   )
 
 ## Factory: create a new button
-proc createGtkButton*(interp: var Interpreter, label: string = nil): NodeValue =
+proc createGtkButton*(interp: var Interpreter, label: string = ""): NodeValue =
   ## Create a new GTK button and return a proxy object
-  let button = if label != nil:
+  let button = if label.len > 0:
     gtkButtonNewWithLabel(label.cstring)
   else:
     gtkButtonNew()
@@ -52,12 +52,12 @@ proc createGtkButton*(interp: var Interpreter, label: string = nil): NodeValue =
 
 ## Native method: new (class method)
 proc buttonNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  createGtkButton(interp, nil)
+  createGtkButton(interp, "")
 
 ## Native method: newLabel: (class method)
 proc buttonNewLabelImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   if args.len < 1 or args[0].kind != vkString:
-    return createGtkButton(interp, nil)
+    return createGtkButton(interp, "")
 
   createGtkButton(interp, args[0].strVal)
 
@@ -80,7 +80,7 @@ proc buttonGetLabelImpl*(interp: var Interpreter, self: Instance, args: seq[Node
     let proxy = cast[GtkButtonProxy](self.nimValue)
     if proxy.widget != nil:
       let label = gtkButtonGetLabel(cast[GtkButton](proxy.widget))
-      return newStringValue($label)
+      return NodeValue(kind: vkString, strVal: $label)
 
   nilValue()
 

@@ -1,0 +1,11 @@
+# GTK Window - Nemo methods for GtkWindow
+# Note: GtkWindow class is registered by Nim bridge, we just add methods here
+# No derive: needed - we extend the existing class
+
+# Native methods (registered in Nim bridge):
+# - new (class method)
+# - title: (set window title)
+# - setDefaultSize:height: (set default size)
+# - setChild: (set child widget)
+# - present (show the window)
+# - close (close the window)

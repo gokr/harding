@@ -119,6 +119,7 @@ type
     capturedVars*: Table[string, MutableCell]  # shared captured vars for sibling blocks
     returnValue*: NodeValue           # return value
     hasReturned*: bool                # non-local return flag
+    nonLocalReturnTarget*: Activation # if set, return is non-local to this activation
 
   # Value types for AST nodes and runtime values
   ValueKind* = enum
