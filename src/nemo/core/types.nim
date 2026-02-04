@@ -96,6 +96,8 @@ type
     lastResult*: NodeValue
     exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
     schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
+    nemoHome*: string  # Home directory for loading libraries
+    shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch
 
   BlockNode* {.acyclic.} = ref object of Node
     parameters*: seq[string]              # method parameters
