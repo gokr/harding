@@ -161,6 +161,8 @@ proc createCoreMethod*(name: string): BlockNode =
   blk.body = @[placeholder]
   blk.isMethod = true
   blk.nativeImpl = nil
+  blk.capturedEnv = initTable[string, MutableCell]()
+  blk.capturedEnvInitialized = true
   return blk
 
 # Global namespace for storing "classes" and constants

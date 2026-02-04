@@ -1,4 +1,4 @@
-import std/[strutils, logging]
+import std/[strutils, logging, tables]
 import ../parser/lexer
 import ../core/types
 
@@ -613,6 +613,8 @@ proc parseBlock*(parser: var Parser): BlockNode =
   blk.temporaries = @[]
   blk.body = @[]
   blk.isMethod = false
+  blk.capturedEnv = initTable[string, MutableCell]()
+  blk.capturedEnvInitialized = true
 
   # Check for parameters [:x :y | ...]
   debug("parseBlock: checking for params, current=", parser.peek().kind, " value=", parser.peek().value)
@@ -1050,7 +1052,9 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
           col: parser.lastCol
         )))],
         isMethod: true,
-        nativeImpl: nil
+        nativeImpl: nil,
+        capturedEnv: initTable[string, MutableCell](),
+        capturedEnvInitialized: true
       )
     else:
       parser.parseError("Expected <primitive selector: ...> syntax in method body")
