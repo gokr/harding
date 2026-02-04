@@ -1,0 +1,15 @@
+# ============================================================================
+# GtkMenuBar - Container for menus
+# MenuBar displays horizontal list of menus
+# ============================================================================
+
+Widget subclass: GtkMenuBar.
+
+GtkMenuBar class>>new [
+  # Create new menu bar
+  ^self primitiveNew
+].
+
+GtkMenuBar>>append: aMenu [
+  # Add a menu to the menu bar
+].

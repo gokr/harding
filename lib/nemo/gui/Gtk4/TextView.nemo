@@ -1,0 +1,29 @@
+# ============================================================================
+# GtkTextView - Multiline text editing widget
+# TextView is used for editing code and displaying large amounts of text
+# ============================================================================
+
+Widget subclass: GtkTextView.
+
+GtkTextView class>>new [
+  # Create new text view with default buffer
+  ^self primitiveNew
+].
+
+GtkTextView>>getBuffer: aBuffer [
+  # Get the text buffer associated with this view
+].
+
+GtkTextView>>setBuffer: aBuffer [
+  # Set the text buffer for this view
+].
+
+GtkTextView>>getText: resultHolder [
+  # Get all text from the view
+  # Returns an array with [text] for Smalltalk result handling
+  ^Array with: self primitiveGetText
+].
+
+GtkTextView>>setText: aString [
+  # Set text in the view
+].

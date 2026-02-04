@@ -1,0 +1,14 @@
+# ============================================================================
+# GtkMenu - Popup menu containing menu items
+# Menu displays a list of clickable items
+# ============================================================================
+
+Object subclass: GtkMenu.
+
+GtkMenu>>append: aMenuItem [
+  # Add menu item to this menu
+].
+
+GtkMenu>>popup [
+  # Show the menu at current pointer position
+].

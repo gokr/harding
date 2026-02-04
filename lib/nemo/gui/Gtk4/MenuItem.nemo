@@ -1,0 +1,25 @@
+# ============================================================================
+# GtkMenuItem - Menu item that can be clicked
+# MenuItem appears in menus and can be activated to perform actions
+# ============================================================================
+
+Widget subclass: GtkMenuItem.
+
+GtkMenuItem class>>new [
+  ^self newLabel: 'Item'
+].
+
+GtkMenuItem class>>newLabel: aString [
+  # Create menu item with label
+  ^self primitiveNewLabel: aString
+].
+
+GtkMenuItem>>activate: aBlock [
+  # Set the block to execute when item is activated
+  ^self activate: aBlock do: aBlock
+].
+
+GtkMenuItem>>activate: signal do: aBlock [
+  # Internal: connect signal via widget mechanism
+  ^self connect: signal do: aBlock
+].

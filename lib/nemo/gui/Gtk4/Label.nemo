@@ -1,0 +1,23 @@
+# ============================================================================
+# GtkLabel - Label display widget
+# Label displays text with no user interaction
+# ============================================================================
+
+Widget subclass: GtkLabel.
+
+GtkLabel class>>new [
+  ^self newLabel: ''
+].
+
+GtkLabel class>>newLabel: aString [
+  # Create label via native implementation (uses Nim create function)
+  ^self primitiveNewLabel: aString
+].
+
+GtkLabel>>text: aString [
+  # Set label text
+].
+
+GtkLabel>>text [
+  # Get label text
+].

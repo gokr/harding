@@ -1,0 +1,29 @@
+# ============================================================================
+# GtkTextBuffer - Text storage for TextView
+# TextBuffer holds the text and manages modifications
+# ============================================================================
+
+Object subclass: GtkTextBuffer.
+
+GtkTextBuffer class>>new [
+  # Create new text buffer
+  ^self primitiveNew
+].
+
+GtkTextBuffer>>setText: aString [
+  # Set all text in the buffer
+].
+
+GtkTextBuffer>>getText: resultHolder [
+  # Get all text from the buffer
+  # Returns an array with [text] for Smalltalk result handling
+  ^Array with: self primitiveGetText
+].
+
+GtkTextBuffer>>insert: aString at: position [
+  # Insert text at position
+].
+
+GtkTextBuffer>>delete: startPos to: endPos [
+  # Delete text from startPos to endPos
+].
