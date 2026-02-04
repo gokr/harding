@@ -325,6 +325,10 @@ type
 proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode)
 proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeValue]): NodeValue
 
+proc isCapturedEnvInitialized(blk: BlockNode): bool =
+  ## Check if capturedEnv is initialized using the explicit flag
+  return blk.capturedEnvInitialized
+
 proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
   ## Look up variable in activation chain, captured environment, and globals
   ## Returns (found: true, value: ...) if found, (found: false, value: nil) if not found
@@ -337,7 +341,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     # should take precedence over local temporaries in the current activation
     # This is the key difference: blocks capture variables from where they were defined,
     # not where they're executed
-    if activation.currentMethod != nil and activation.currentMethod.capturedEnv.len > 0:
+    if activation.currentMethod != nil and activation.currentMethod.capturedEnvInitialized and activation.currentMethod.capturedEnv.len > 0:
       if name in activation.currentMethod.capturedEnv:
         let value = activation.currentMethod.capturedEnv[name].value
         debug("Found variable in captured environment: ", name, " = ", value.toString())
@@ -363,7 +367,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     activation = activation.sender
   while activation != nil:
     # Check captured environment
-    if activation.currentMethod != nil and activation.currentMethod.capturedEnv.len > 0:
+    if activation.currentMethod != nil and activation.currentMethod.capturedEnvInitialized and activation.currentMethod.capturedEnv.len > 0:
       if name in activation.currentMethod.capturedEnv:
         let value = activation.currentMethod.capturedEnv[name].value
         debug("Found variable in captured environment (parent): ", name, " = ", value.toString())
@@ -417,7 +421,7 @@ proc setVariable(interp: var Interpreter, name: string, value: NodeValue) =
     # Check if current method has a captured environment with this variable
     # This must be checked BEFORE locals because captured vars are copied to locals
     let currentMethod = interp.currentActivation.currentMethod
-    if currentMethod != nil:
+    if currentMethod != nil and currentMethod.capturedEnvInitialized:
       if currentMethod.capturedEnv.len > 0 and name in currentMethod.capturedEnv:
         currentMethod.capturedEnv[name].value = value
         # Also update the local copy to keep them in sync
@@ -434,7 +438,7 @@ proc setVariable(interp: var Interpreter, name: string, value: NodeValue) =
     var parentActivation = interp.currentActivation.sender
     while parentActivation != nil:
       # Check captured environment in parent
-      if parentActivation.currentMethod != nil:
+      if parentActivation.currentMethod != nil and parentActivation.currentMethod.capturedEnvInitialized:
         if parentActivation.currentMethod.capturedEnv.len > 0 and name in parentActivation.currentMethod.capturedEnv:
           parentActivation.currentMethod.capturedEnv[name].value = value
           parentActivation.locals[name] = value
@@ -487,14 +491,16 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
   debug("Capturing environment for block")
 
   # Initialize captured environment if not already set
-  # Note: Table is a value type, we check its length to see if initialized
-  blockNode.capturedEnv = initTable[string, MutableCell]()
+  if not blockNode.capturedEnvInitialized:
+    blockNode.capturedEnv = initTable[string, MutableCell]()
+    blockNode.capturedEnvInitialized = true
 
   # First, inherit captured variables from the current method if it's a block
   # This ensures nested closures share the same MutableCells
   if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
     let currentMethod = interp.currentActivation.currentMethod
-    if currentMethod.capturedEnv.len > 0:
+    # Check if capturedEnv is initialized before accessing
+    if currentMethod.capturedEnvInitialized and currentMethod.capturedEnv.len > 0:
       for name, cell in currentMethod.capturedEnv.pairs:
         blockNode.capturedEnv[name] = cell
         debug("Inherited captured variable from outer block: ", name)
@@ -559,7 +565,7 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
 
   # Bind captured environment variables to the new activation
   # This makes captured variables available in the block's scope
-  if blockNode.capturedEnv.len > 0:
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
       capturedVarNames.add(name)
@@ -597,11 +603,23 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
   finally:
     # Save captured variable values back to their cells (for mutable closures)
     # This ensures changes to captured variables persist across invocations
-    if blockNode.capturedEnv.len > 0:
+    if blockNode.capturedEnvInitialized and blockNode.capturedEnv.len > 0:
       for name in capturedVarNames:
         if name in activation.locals:
           blockNode.capturedEnv[name].value = activation.locals[name]
           debug("Saved captured variable: ", name, " = ", activation.locals[name].toString())
+
+    # Also update parent activation's locals for variables that came from there
+    # This ensures changes to captured variables are visible in the outer scope
+    # Walk up the sender chain to find the activation where the variable originated
+    if blockNode.capturedEnvInitialized and blockNode.capturedEnv.len > 0:
+      var parent = activation.sender
+      while parent != nil:
+        for name in capturedVarNames:
+          if name in activation.locals and name in parent.locals:
+            parent.locals[name] = activation.locals[name]
+            debug("Updated parent activation variable: ", name, " = ", activation.locals[name].toString())
+        parent = parent.sender
 
     # Pop the activation
     discard interp.popActivation()
@@ -656,9 +674,9 @@ proc lookupClassMethod(cls: Class, selector: string): MethodResult =
 
 # Execute a currentMethod
 proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
-                  receiver: Instance, arguments: seq[Node],
+                  receiver: Instance, arguments: seq[NodeValue],
                   definingClass: Class = nil): NodeValue =
-  ## Execute a currentMethod with given receiver and arguments
+  ## Execute a currentMethod with given receiver and already-evaluated arguments
   ## definingClass is where the method was found (for super sends)
   interp.checkStackDepth()
 
@@ -670,21 +688,16 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
     # Save currentReceiver to restore after native method execution
     let savedReceiver = interp.currentReceiver
     try:
-      # Evaluate arguments to get NodeValues
-      var argValues = newSeq[NodeValue]()
-      for argNode in arguments:
-        argValues.add(interp.eval(argNode))
-
       # Check if this is an interpreter-aware native method (has interp parameter)
       if currentMethod.hasInterpreterParam:
         type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
         let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-        return nativeProc(interp, receiver, argValues)
+        return nativeProc(interp, receiver, arguments)
       else:
         # Standard native method without interpreter
         type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
         let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
-        return nativeProc(receiver, argValues)
+        return nativeProc(receiver, arguments)
     finally:
       # Restore currentReceiver after native method
       interp.currentReceiver = savedReceiver
@@ -708,7 +721,7 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 
   for i in 0..<currentMethod.parameters.len:
     let paramName = currentMethod.parameters[i]
-    let argValue = interp.eval(arguments[i])
+    let argValue = arguments[i]
     debug("Binding parameter: ", paramName, " = ", argValue.toString())
     activation.locals[paramName] = argValue
 
@@ -826,8 +839,10 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
       parameters: origBlock.parameters,
       temporaries: origBlock.temporaries,
       body: origBlock.body,
-      isMethod: origBlock.isMethod
-      # capturedEnv and homeActivation will be set by captureEnvironment
+      isMethod: origBlock.isMethod,
+      capturedEnv: initTable[string, MutableCell](),
+      capturedEnvInitialized: true,
+      homeActivation: nil
     )
     captureEnvironment(interp, blockNode)
     return NodeValue(kind: vkBlock, blockVal: blockNode)
@@ -859,6 +874,7 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
 
     if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
       let currentMethod = interp.currentActivation.currentMethod
+      debug("Return check: isMethod=", currentMethod.isMethod, " homeActivation nil?=", currentMethod.homeActivation == nil)
       if not currentMethod.isMethod and currentMethod.homeActivation != nil:
         # We're in a block (not a method) - return from the block's home activation
         targetActivation = currentMethod.homeActivation
@@ -882,8 +898,8 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
         if safetyCount > 1000:
           raise newException(EvalError, "Return propagation exceeded 1000 activations - possible infinite loop")
         current.hasReturned = true
-        # Also set return value on intermediate activations for proper propagation
-        current.returnValue = unwrapped
+        # Note: We intentionally do NOT set returnValue on intermediate activations.
+        # Only the target activation should have the return value set.
         debug("Marked intermediate activation as returned")
         current = current.sender
 
@@ -1013,11 +1029,7 @@ proc eval*(interp: var Interpreter, node: Node): NodeValue =
     # Look up the method - primitives are registered as standard methods
     let lookup = lookupMethod(interp, receiver, primCall.selector)
     if lookup.found:
-      # Convert argValues to AST nodes for executeMethod
-      var argNodes = newSeq[Node]()
-      for val in argValues:
-        argNodes.add(LiteralNode(value: val))
-      return executeMethod(interp, lookup.currentMethod, receiver, argNodes, lookup.definingClass)
+      return executeMethod(interp, lookup.currentMethod, receiver, argValues, lookup.definingClass)
     else:
       raise newException(EvalError,
         "Primitive not found: #" & primCall.selector)
@@ -1170,15 +1182,10 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
         let nativeProc = cast[ClassMethodProc](currentMethodNode.nativeImpl)
         return nativeProc(cls, argValues)
 
-      # Convert arguments back to AST nodes for interpreted methods
-      var argNodes = newSeq[Node]()
-      for argVal in arguments:
-        argNodes.add(LiteralNode(value: argVal))
-
       # For class methods, pass the class wrapped in a minimal Instance as receiver
       # This allows native methods to know which class they were called on
       let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
-      return interp.executeMethod(currentMethodNode, classReceiver, argNodes, lookup.definingClass)
+      return interp.executeMethod(currentMethodNode, classReceiver, arguments, lookup.definingClass)
     else:
       # Class method not found - fall through to instance method lookup
       # by changing receiverVal from vkClass to create an instance wrapper
@@ -1261,12 +1268,7 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
     let currentMethodNode = lookup.currentMethod
     debug("Found method, executing")
 
-    # Convert arguments back to AST nodes if needed
-    var argNodes = newSeq[Node]()
-    for argVal in arguments:
-      argNodes.add(LiteralNode(value: argVal))
-
-    return interp.executeMethod(currentMethodNode, receiver, argNodes, lookup.definingClass)
+    return interp.executeMethod(currentMethodNode, receiver, arguments, lookup.definingClass)
   else:
     # Method not found - send doesNotUnderstand:
     debug("Method not found, sending doesNotUnderstand:")
@@ -1278,11 +1280,7 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
     # Look up doesNotUnderstand:
     let dnuLookup = lookupMethod(interp, receiver, dnuSelector)
     if dnuLookup.found:
-      var dnuArgNodes = newSeq[Node]()
-      for argVal in dnuArgs:
-        let node: Node = LiteralNode(value: argVal)
-        dnuArgNodes.add(node)
-      return interp.executeMethod(dnuLookup.currentMethod, receiver, dnuArgNodes, dnuLookup.definingClass)
+      return interp.executeMethod(dnuLookup.currentMethod, receiver, dnuArgs, dnuLookup.definingClass)
     else:
       raise newException(EvalError,
         "Message not understood: " & msgNode.selector & " on " & receiver.class.name)
@@ -1334,14 +1332,9 @@ proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
   for argNode in superNode.arguments:
     arguments.add(interp.eval(argNode))
 
-  # Convert arguments to AST nodes
-  var argNodes = newSeq[Node]()
-  for argVal in arguments:
-    argNodes.add(LiteralNode(value: argVal))
-
   # Execute the method with current receiver, passing targetParent as the defining class
   # This is crucial: the defining class for the super method execution is targetParent
-  return interp.executeMethod(methodBlock, interp.currentReceiver, argNodes, targetParent)
+  return interp.executeMethod(methodBlock, interp.currentReceiver, arguments, targetParent)
 
 # Evaluate a cascade of messages
 proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue =
@@ -1430,15 +1423,10 @@ proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue =
 proc sendMessage*(interp: var Interpreter, receiver: Instance,
                  selector: string, args: varargs[NodeValue]): NodeValue =
   ## Direct message send for internal use
-  var argNodes = newSeq[Node]()
-  for argVal in args:
-    let node: Node = LiteralNode(value: argVal)
-    argNodes.add(node)
-
   # Look up method in receiver's class (O(1) lookup)
   let lookup = lookupMethod(interp, receiver, selector)
   if lookup.found:
-    return interp.executeMethod(lookup.currentMethod, receiver, argNodes, lookup.definingClass)
+    return interp.executeMethod(lookup.currentMethod, receiver, @args, lookup.definingClass)
   else:
     raise newException(EvalError,
       "Message not understood: " & selector)
@@ -1582,8 +1570,9 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
 
   return blockResult
 
-proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2: NodeValue): NodeValue =
+proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2: NodeValue): (NodeValue, bool) =
   ## Evaluate a block with two arguments
+  ## Returns (value, true) if a non-local return occurred, (value, false) otherwise
   let blockReceiver = if blockNode.homeActivation != nil and
                         blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
@@ -1603,18 +1592,20 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
   interp.currentReceiver = receiver
 
   var blockResult = nilValue()
+  var nonLocalReturn = false
   try:
     for stmt in blockNode.body:
       blockResult = interp.eval(stmt)
       if activation.hasReturned:
         blockResult = activation.returnValue.unwrap()
+        nonLocalReturn = true
         break
   finally:
     discard interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
 
-  return blockResult
+  return (blockResult, nonLocalReturn)
 
 proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2, arg3: NodeValue): NodeValue =
   ## Evaluate a block with three arguments
@@ -1687,12 +1678,11 @@ proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     return nilValue()
 
   # Prepare arguments (skip the selector, take remaining args)
-  var messageArgs: seq[Node] = @[]
+  var messageArgs: seq[NodeValue] = @[]
   if args.len >= 2 and args[1].kind != vkNil:
-    # Create a literal node for the argument
-    messageArgs.add(LiteralNode(value: args[1]))
+    messageArgs.add(args[1])
   if args.len >= 3 and args[2].kind != vkNil:
-    messageArgs.add(LiteralNode(value: args[2]))
+    messageArgs.add(args[2])
 
   # Execute the method
   return executeMethod(interp, methodResult.currentMethod, self, messageArgs, methodResult.definingClass)
@@ -1759,20 +1749,25 @@ proc ifTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): 
       # Execute the block with proper context
       # Use the block's home activation's receiver for correct self resolution
       let blockNode = args[0].blockVal
-      debug("ifTrueImpl: homeActivation nil? ", blockNode.homeActivation == nil, " interp.currentReceiver nil? ", interp.currentReceiver == nil)
-      if blockNode.homeActivation != nil:
-        debug("ifTrueImpl: homeActivation.receiver nil? ", blockNode.homeActivation.receiver == nil)
-        if blockNode.homeActivation.receiver != nil:
-          debug("ifTrueImpl: homeActivation.receiver class: ", blockNode.homeActivation.receiver.class.name)
-      if interp.currentReceiver != nil:
-        debug("ifTrueImpl: interp.currentReceiver class: ", interp.currentReceiver.class.name)
+
+      # Get caller's activation to detect non-local returns
+      let callerActivation = if interp.activationStack.len > 0:
+                               interp.activationStack[interp.activationStack.len - 1]
+                             else:
+                               nil
+
       let blockReceiver = if blockNode.homeActivation != nil and
                             blockNode.homeActivation.receiver != nil:
                             blockNode.homeActivation.receiver
                           else:
                             interp.currentReceiver
-      debug("ifTrueImpl: chosen blockReceiver class: ", blockReceiver.class.name)
-      return evalBlock(interp, blockReceiver, blockNode)
+      let blockResult = evalBlock(interp, blockReceiver, blockNode)
+
+      # Check if a non-local return was triggered
+      if callerActivation != nil and callerActivation.hasReturned:
+        return callerActivation.returnValue
+
+      return blockResult
   return nilValue()
 
 proc ifFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1787,12 +1782,25 @@ proc ifFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
       # Execute the block with proper context
       # Use the block's home activation's receiver for correct self resolution
       let blockNode = args[0].blockVal
+
+      # Get caller's activation to detect non-local returns
+      let callerActivation = if interp.activationStack.len > 0:
+                               interp.activationStack[interp.activationStack.len - 1]
+                             else:
+                               nil
+
       let blockReceiver = if blockNode.homeActivation != nil and
                             blockNode.homeActivation.receiver != nil:
                             blockNode.homeActivation.receiver
                           else:
                             interp.currentReceiver
-      return evalBlock(interp, blockReceiver, blockNode)
+      let blockResult = evalBlock(interp, blockReceiver, blockNode)
+
+      # Check if a non-local return was triggered
+      if callerActivation != nil and callerActivation.hasReturned:
+        return callerActivation.returnValue
+
+      return blockResult
   return nilValue()
 
 # Loop method implementations (interpreter-aware)
@@ -1814,10 +1822,22 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
   let bodyBlock = args[0].blockVal
   var lastResult = nilValue()
 
+  # Get the caller's activation to detect non-local returns
+  let callerActivation = if interp.activationStack.len > 0:
+                           interp.activationStack[interp.activationStack.len - 1]
+                         else:
+                           nil
+  debug("whileTrueImpl: callerActivation nil? ", callerActivation == nil)
+
   # Loop while condition is true
   while true:
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
+
+    # Check if a non-local return was triggered (caller activation has returned)
+    if callerActivation != nil and callerActivation.hasReturned:
+      debug("whileTrueImpl: detected non-local return after condition")
+      return callerActivation.returnValue
 
     # Check if condition is true
     var conditionIsTrue = false
@@ -1833,6 +1853,12 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
     # Execute body block
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
 
+    # Check if a non-local return was triggered after body execution
+    if callerActivation != nil and callerActivation.hasReturned:
+      debug("whileTrueImpl: detected non-local return after body")
+      return callerActivation.returnValue
+
+  debug("whileTrueImpl: normal return, lastResult = ", lastResult.toString())
   return lastResult
 
 proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1853,10 +1879,20 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
   let bodyBlock = args[0].blockVal
   var lastResult = nilValue()
 
+  # Get the caller's activation to detect non-local returns
+  let callerActivation = if interp.activationStack.len > 0:
+                           interp.activationStack[interp.activationStack.len - 1]
+                         else:
+                           nil
+
   # Loop while condition is false
   while true:
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
+
+    # Check if a non-local return was triggered (caller activation has returned)
+    if callerActivation != nil and callerActivation.hasReturned:
+      return callerActivation.returnValue
 
     # Check if condition is false
     var conditionIsTrue = false
@@ -1871,6 +1907,10 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
 
     # Execute body block
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
+
+    # Check if a non-local return was triggered after body execution
+    if callerActivation != nil and callerActivation.hasReturned:
+      return callerActivation.returnValue
 
   return lastResult
 
@@ -1988,7 +2028,20 @@ proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
   ## Evaluate this block with no arguments
   if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
     let blockNode = cast[BlockNode](self.nimValue)
-    return evalBlock(interp, interp.currentReceiver, blockNode)
+
+    # Get caller's activation to detect non-local returns
+    let callerActivation = if interp.activationStack.len > 0:
+                             interp.activationStack[interp.activationStack.len - 1]
+                           else:
+                             nil
+
+    let blockResult = evalBlock(interp, interp.currentReceiver, blockNode)
+
+    # Check if a non-local return was triggered
+    if callerActivation != nil and callerActivation.hasReturned:
+      return callerActivation.returnValue
+
+    return blockResult
   return nilValue()
 
 proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1997,7 +2050,20 @@ proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: se
     return nilValue()
   if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
     let blockNode = cast[BlockNode](self.nimValue)
-    return evalBlockWithArg(interp, interp.currentReceiver, blockNode, args[0])
+
+    # Get caller's activation to detect non-local returns
+    let callerActivation = if interp.activationStack.len > 0:
+                             interp.activationStack[interp.activationStack.len - 1]
+                           else:
+                             nil
+
+    let blockResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, args[0])
+
+    # Check if a non-local return was triggered
+    if callerActivation != nil and callerActivation.hasReturned:
+      return callerActivation.returnValue
+
+    return blockResult
   return nilValue()
 
 proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2006,7 +2072,13 @@ proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args
     return nilValue()
   if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
     let blockNode = cast[BlockNode](self.nimValue)
-    return evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
+    let (result, nonLocalReturn) = evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
+    if nonLocalReturn:
+      # Propagate non-local return to caller's activation
+      if interp.currentActivation != nil:
+        interp.currentActivation.hasReturned = true
+        interp.currentActivation.returnValue = result
+    return result
   return nilValue()
 
 proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2925,7 +2997,7 @@ proc globalTableAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
               else:
                 nil
 
-  if proxy != nil:
+  if proxy != nil and proxy.globals != nil:
     # This is a GlobalTable proxy - access the globals table
     let key = if args.len > 0:
                 if args[0].kind == vkString: args[0].strVal
@@ -2947,7 +3019,7 @@ proc globalTableAtPutImpl(interp: var Interpreter, self: Instance, args: seq[Nod
               else:
                 nil
 
-  if proxy != nil:
+  if proxy != nil and proxy.globals != nil:
     # This is a GlobalTable proxy - access the globals table
     if args.len >= 2:
       let key = if args[0].kind == vkString: args[0].strVal
