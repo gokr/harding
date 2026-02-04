@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Nemo Smalltalk: Identity Generator</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto+Mono:wght@300;500&family=Noto+Serif+Display:wght@400;700&display=swap" rel="stylesheet">
+   <style>
+       /* Custom Styles for Victorian/Futurist Aesthetic */
+       :root {
+           --submarine-primary: #D4AF37; /* Brass Gold */
+           --submarine-dark: #0f172a;    /* Deep Blue/Black */
+           --copper-rust: #B87333;
+           --bio-luminescent: #00f2ff;
+       }
+
+       body {
+           background-color: var(--submarine-dark);
+           color: #e2e8f0;
+           font-family: 'Noto Serif Display', serif;
+           overflow-x: hidden;
+       }
+
+       .mono {
+           font-family: 'Roboto Mono', monospace;
+       }
+
+       /* Porthole / Viewer Effect */
+       .porthole-view {
+           position: relative;
+           border-radius: 50%;
+           aspect-ratio: 1/1;
+           overflow: hidden;
+           box-shadow: 
+               inset 0 0 80px #000,
+               inset 0 0 20px rgba(0,0,0,0.8),
+               0 0 0 10px #2d3748, /* Metal Rim */
+               0 0 0 12px #1a202c,
+               0 0 0 25px #D4AF37, /* Brass Rim */
+               0 0 0 28px #000,
+               0 0 50px rgba(0, 242, 255, 0.1);
+           transition: all 0.5s ease;
+       }
+
+       /* Subtle Background Animation */
+       .deep-ocean-bg {
+           background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 40%, #020617 100%);
+           background-size: 200% 200%;
+           animation: oceanDrift 20s ease infinite alternate;
+       }
+
+       @keyframes oceanDrift {
+           0% { background-position: 0% 50%; }
+           100% { background-position: 100% 50%; }
+       }
+
+       /* Leviathan (Nautilus) SVG Styles */
+       .logo-path {
+           stroke-dasharray: 1000;
+           stroke-dashoffset: 1000;
+           animation: draw 3s ease forwards;
+           fill: none;
+           stroke-width: 2;
+           stroke-linecap: round;
+           stroke-linejoin: round;
+           filter: drop-shadow(0 0 5px currentColor);
+       }
+
+       @keyframes draw {
+           to { stroke-dashoffset: 0; }
+       }
+
+       @keyframes float {
+           0%, 100% { transform: translateY(0px); }
+           50% { transform: translateY(-15px); }
+       }
+
+       @keyframes propSpin {
+           from { transform: rotate(0deg); }
+           to { transform: rotate(360deg); }
+       }
+
+       /* Knob/Control Styling */
+       .control-knob {
+           background: linear-gradient(145deg, #2d3748, #1a202c);
+           box-shadow: 5px 5px 10px #0b0f19, -5px -5px 10px #23304f;
+           transition: all 0.2s;
+       }
+       .control-knob:active {
+           transform: scale(0.95);
+           box-shadow: inset 5px 5px 10px #0b0f19, inset -5px -5px 10px #23304f;
+       }
+
+       .crt-overlay {
+           background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+           background-size: 100% 2px, 3px 100%;
+           pointer-events: none;
+       }
+
+       /* Typewriter Cursor */
+       .typing::after {
+           content: '|';
+           animation: blink 1s infinite;
+       }
+       @keyframes blink { 50% { opacity: 0; } }
+
+       /* Steam/Air Bubble Styles */
+       .bubble {
+           position: absolute;
+           background: rgba(255, 255, 255, 0.1);
+           border-radius: 50%;
+           animation: rise 8s infinite ease-in;
+       }
+       @keyframes rise {
+           0% { bottom: -10px; transform: translateX(0); opacity: 0; }
+           50% { opacity: 1; }
+           100% { bottom: 100%; transform: translateX(-20px); opacity: 0; }
+       }
+   </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+   <!-- Ambient Audio hint -->
+   <div class="fixed top-4 right-4 z-50 flex items-center gap-2">
+       <span class="text-xs text-cyan-400 opacity-70 animate-pulse">Live Telemetry</span>
+       <div class="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+   </div>
+
+   <!-- Header -->
+   <header class="p-6 border-b border-gray-800 bg-gray-900/80 backdrop-blur-md sticky top-0 z-40">
+       <div class="max-w-7xl mx-auto flex justify-between items-center">
+           <div class="flex items-center gap-4">
+               <div class="w-10 h-10 rounded-full border-2 border-amber-500 flex items-center justify-center bg-gray-800 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                   <span class="font-bold text-amber-500 text-xl">N</span>
+               </div>
+               <div>
+                   <h1 class="text-2xl font-bold tracking-wider text-gray-100">NEMO <span class="text-amber-500 font-normal italic">Smalltalk</span></h1>
+                   <p class="text-xs text-cyan-400 mono tracking-widest uppercase">Identity Generator v2.0</p>
+               </div>
+           </div>
+           <button id="randomizeBtn" class="group relative px-6 py-2 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded border border-amber-500 transition-all overflow-hidden">
+               <div class="absolute inset-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjwvc3ZnPg==')] opacity-20"></div>
+               <span class="relative flex items-center gap-2">
+                   <svg class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                   Regenerate Identity
+               </span>
+           </button>
+       </div>
+   </header>
+
+   <main class="flex-grow flex flex-col lg:flex-row gap-8 p-6 max-w-7xl mx-auto w-full">
+       
+       <!-- Left Column: Controls -->
+       <aside class="w-full lg:w-1/3 flex flex-col gap-6">
+           
+           <!-- Control Panel Container -->
+           <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-2xl relative overflow-hidden">
+               <!-- Decorative screws -->
+               <div class="absolute top-2 left-2 w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div>
+               <div class="absolute top-2 right-2 w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div>
+               <div class="absolute bottom-2 left-2 w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div>
+               <div class="absolute bottom-2 right-2 w-2 h-2 rounded-full bg-gray-600 border border-gray-500"></div>
+
+               <h2 class="text-xl font-bold text-gray-300 mb-6 border-b border-gray-700 pb-2 flex items-center gap-2">
+                   <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                   Configuration
+               </h2>
+
+               <!-- Base Shape Selector -->
+               <div class="mb-6">
+                   <label class="block text-sm font-bold text-cyan-400 mb-2 uppercase tracking-wider text-xs">Hull Geometry</label>
+                   <div class="grid grid-cols-4 gap-2">
+                       <button class="base-btn p-2 rounded border border-gray-700 hover:border-amber-500 transition-colors bg-gray-800" data-type="nautilus" title="Nautilus Shell">
+                           <svg viewBox="0 0 24 24" class="w-6 h-6 mx-auto text-gray-400 fill-current"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/></svg>
+                       </button>
+                       <button class="base-btn p-2 rounded border border-gray-700 hover:border-amber-500 transition-colors bg-gray-800" data-type="gear" title="Clockwork Gear">
+                           <svg viewBox="0 0 24 24" class="w-6 h-6 mx-auto text-gray-400 fill-current"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.5 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94 0 .31.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                       </button>
+                       <button class="base-btn p-2 rounded border border-gray-700 hover:border-amber-500 transition-colors bg-gray-800" data-type="circle" title="Observation Deck">
+                           <svg viewBox="0 0 24 24" class="w-6 h-6 mx-auto text-gray-400 fill-none stroke-current" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                       </button>
+                       <button class="base-btn p-2 rounded border border-gray-700 hover:border-amber-500 transition-colors bg-gray-800" data-type="cog" title="Industrial Cog">
+                           <svg viewBox="0 0 24 24" class="w-6 h-6 mx-auto text-gray-400 fill-current"><path d="M2 12h2v-2H2v2zm4-6H4v2h2V6zm-4 8h2v2H2v-2zm4 4H4v-2h2v2zm-4-8h2v2H2v-2zm20 0h-2v2h2v-2zm-4-6h-2v2h2V6zm-4-4h-2v2h2V2zm-4 0H8v2h2V2zm-4 4H4v2h2V6zm4 6H8v2h2v-2zm0-4H8v2h2V8zm4 0h-2v2h2V8zm4 4h-2v2h2v-2zm0 4h-2v2h2v-2zm-4 4h-2v2h2v-2zm-4 0H8v2h2v-2z"/></svg>
+                       </button>
+                   </div>
+               </div>
+
+               <!-- Color Palette -->
+               <div class="mb-6">
+                   <label class="block text-sm font-bold text-amber-500 mb-2 uppercase tracking-wider text-xs">Chromatic Plating</label>
+                   <div class="grid grid-cols-4 gap-2" id="palette-container">
+                       <!-- Generated by JS -->
+                   </div>
+               </div>
+
+               <!-- Icon Variants -->
+               <div class="mb-6">
+                   <label class="block text-sm font-bold text-cyan-400 mb-2 uppercase tracking-wider text-xs">Iconography</label>
+                   <div class="grid grid-cols-3 gap-2">
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="nautilus">Vessel</button>
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="kraken">Kraken</button>
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="code">Syntax</button>
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="crew">Crew</button>
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="prop">Propeller</button>
+                       <button class="icon-btn p-2 border border-gray-700 rounded hover:bg-gray-800 text-xs text-gray-400 font-bold" data-icon="none">Zen</button>
+                   </div>
+               </div>
+
+               <!-- Text Content -->
+               <div class="space-y-4">
+                   <div>
+                       <label class="block text-xs text-gray-500 mb-1">Moniker</label>
+                       <input type="text" id="logoTextInput" value="NEMO" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-200 focus:border-amber-500 focus:outline-none mono uppercase font-bold tracking-widest">
+                   </div>
+                   <div>
+                        <label class="block text-xs text-gray-500 mb-1">Subtitle</label>
+                       <input type="text" id="subtitleInput" value="SMALLTALK" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-gray-400 focus:border-amber-500 focus:outline-none mono uppercase text-sm tracking-widest">
+                   </div>
+                   <div class="flex items-center justify-between">
+                       <label class="block text-xs text-gray-500">Valving</label>
+                       <input type="range" id="complexityRange" min="1" max="10" value="5" class="w-2/3 accent-amber-600 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                   </div>
+                   <div class="flex items-center justify-between">
+                        <label class="block text-xs text-gray-500">Porthole Size</label>
+                        <input type="range" id="sizeRange" min="200" max="600" step="50" value="400" class="w-2/3 accent-cyan-600 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                   </div>
+               </div>
+           </div>
+
+           <!-- Code Output (Philosophical notes) -->
+           <div class="bg-black border border-green-900 p-4 rounded text-xs mono text-green-700 h-32 overflow-hidden relative shadow-inner">
+               <div class="crt-overlay absolute inset-0"></div>
+               <div id="consoleLog" class="relative z-10 whitespace-pre-wrap typing">Initializing submersible systems...\n> Design logic engaged.\n> Awaiting input...</div>
+           </div>
+
+       </aside>
+
+       <!-- Right Column: Preview -->
+       <section class="w-full lg:w-2/3 flex flex-col items-center justify-center deep-ocean-bg rounded-xl border border-gray-800 shadow-2xl p-8 relative overflow-hidden">
+           
+           <!-- Bubbles Container -->
+           <div id="bubbles" class="absolute inset-0 pointer-events-none"></div>
+
+           <!-- The Viewport / Porthole -->
+           <div class="relative z-10 transition-all duration-500 ease-out" id="portholeContainer">
+               <div id="theLogo" class="porthole-view bg-gray-900 flex items-center justify-center relative">
+                   
+                   <!-- Background Grid/Texture -->
+                   <div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(#3b82f6 1px, transparent 1px); background-size: 20px 20px;"></div>
+                   
+                   <!-- The SVG Canvas -->
+                   <svg id="logoSvg" viewBox="0 0 500 500" class="w-full h-full p-8 transition-all duration-500" style="animation: float 6s ease-in-out infinite;">
+                       <defs>
+                           <filter id="glow">
+                               <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                               <feMerge>
+                                   <feMergeNode in="coloredBlur"/>
+                                   <feMergeNode in="SourceGraphic"/>
+                               </feMerge>
+                           </filter>
+                           <linearGradient id="metalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                               <stop offset="0%" style="stop-color:#9CA3AF;stop-opacity:1" />
+                               <stop offset="50%" style="stop-color:#4B5563;stop-opacity:1" />
+                               <stop offset="100%" style="stop-color:#1F2937;stop-opacity:1" />
+                           </linearGradient>
+                       </defs>
+
+                       <!-- Dynamic Content Group -->
+                       <g id="svgContentGroup" transform="translate(250, 250) scale(1)">
+                           <!-- Base Shape -->
+                           <g id="baseShapeGroup"></g>
+                           
+                           <!-- Central Icon -->
+                           <g id="centralIconGroup"></g>
+                       </g>
+
+                       <!-- Text Layers -->
+                       <g id="textGroup" transform="translate(0,0)" filter="url(#glow)">
+                           <text x="250" y="450" text-anchor="middle" id="svgTextMain" font-family="'Noto Serif Display', serif" font-weight="bold" font-size="48" fill="var(--submarine-primary)" letter-spacing="8">NEMO</text>
+                           <text x="250" y="480" text-anchor="middle" id="svgTextSub" font-family="'Roboto Mono', monospace" font-size="16" fill="#60A5FA" letter-spacing="4" opacity="0.8">SMALLTALK</text>
+                       </g>
+                   </svg>
+                   
+               </div>
+           </div>
+
+           <!-- Reflection/Refraction glint -->
+           <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent pointer-events-none rounded-xl"></div>
+
+           <div class="mt-8 text-center z-10">
+               <p class="text-cyan-500/50 text-sm mono tracking-widest uppercase italic">"Mobilis in mobile"</p>
+           </div>
+
+       </section>
+   </main>
+
+   <!-- JS Logic -->
+   <script>
+       // --- Application State ---
+       const state = {
+           baseShape: 'nautilus',
+           palette: 0,
+           icon: 'nautilus',
+           textMain: 'NEMO',
+           textSub: 'SMALLTALK',
+           complexity: 5,
+           size: 400
+       };
+
+       // --- Data: Palettes ---
+       const palettes = [
+           { name: 'Deep Sea', primary: '#0f172a', secondary: '#38bdf8', accent: '#f59e0b', metal: '#94a3b8' },
+           { name: 'Antique Brass', primary: '#291e05', secondary: '#d97706', accent: '#78350f', metal: '#fcd34d' },
+           { name: 'Storm Gray', primary: '#111827', secondary: '#9ca3af', accent: '#ef4444', metal: '#e5e7eb' },
+           { name: 'Bio-Luminescence', primary: '#022c22', secondary: '#34d399', accent: '#a7f3d0', metal: '#10b981' }
+       ];
+
+       // --- Data: Shapes (SVG Paths) ---
+       const shapes = {
+           nautilus: { 
+               path: d = `M -150 0 C -150 -100, 0 -200, 150 0 C 150 100, 0 200, -150 0 Z M 0 -140 A 140 140 0 0 1 140 0 A 140 140 0 0 1 0 140 A 140 140 0 0 1 -140 0 A 140 140 0 0 1 0 -140 M 0 -100 A 100 100 0 0 1 100 0 A 100 100 0 0 1 0 100 A 100 100 0 0 1 -100 0 A 100 100 0 0 1 0 -100 M 0 -60 A 60 60 0 0 1 60 0 A 60 60 0 0 1 0 60 A 60 60 0 0 1 -60 0 A 60 60 0 0 1 0 -60 M 0 -20 A 20 20 0 0 1 20 0 A 20 20 0 0 1 0 20 A 20 20 0 0 1 -20 0 A 20 20 0 0 1 0 -20`,
+               fill: 'none', stroke: true 
+           },
+           gear: { 
+               path: d = `M -20 -160 L 20 -160 L 30 -130 A 160 160 0 0 1 130 -30 L 160 -20 L 160 20 L 130 30 A 160 160 0 0 1 30 130 L 20 160 L -20 160 L -30 130 A 160 160 0 0 1 -130 30 L -160 20 L -160 -20 L -130 -30 A 160 160 0 0 1 -30 -130 Z M 0 -90 A 90 90 0 0 1 90 0 A 90 90 0 0 1 0 90 A 90 90 0 0 1 -90 0 A 90 90 0 0 1 0 -90`,
+               fill: 'url(#metalGradient)', stroke: true
+           },
+           circle: { 
+               path: d = `M 0 -180 A 180 180 0 1 1 0 180 A 180 180 0 1 1 0 -180 Z M 0 -150 A 150 150 0 1 0 0 150 A 150 150 0 1 0 0 -150`,
+               fill: 'none', stroke: true
+           },
+           cog: {
+               path: d = `M 0 -180 A 180 180 0 1 1 0 180 A 180 180 0 1 1 0 -180 Z M -15 -180 L -15 -140 L 15 -140 L 15 -180 Z M 15 180 L 15 140 L -15 140 L -15 180 Z M -180 -15 L -140 -15 L -140 15 L -180 15 Z M 180 15 L 140 15 L 140 -15 L 180 -15 Z`,
+                fill: 'url(#metalGradient)', stroke: true, custom: true // simplified for demo
+           }
+       };
+
+       // --- Data: Icons (SVG Paths) ---
+       const icons = {
+           nautilus: `M -60 -20 L 80 -10 L 90 -25 L 100 0 L 90 25 L 80 10 L -60 20 Z M -40 0 L -80 0 M -50 -15 Q -20 -40 10 0 T -50 15`, // Abstract Sub
+           kraken: `M 0 -40 L 0 40 M -20 40 Q 0 10 20 40 M -30 30 Q 0 -10 30 30 M -40 20 Q 0 -20 40 20 M 0 -50 A 15 15 0 1 1 0 -20 A 15 15 0 1 1 0 -50`, // Octopus
+           code: `< >`, // Text replacement handled in render
+           crew: `M 0 30 A 20 20 0 1 1 0 -10 A 20 20 0 1 1 0 30 M -25 15 L 25 15 M 0 30 L 0 -50`, // Diver Helmetish
+           prop: `M 0 -40 L 0 40 M -40 -20 L 40 20 M -40 20 L 40 -20`, // Propeller
+           none: ``
+       };
+
+       // --- Elements ---
+       const dom = {
+           porthole: document.getElementById('theLogo'),
+           svgGroup: document.getElementById('svgContentGroup'),
+           baseShapeGroup: document.getElementById('baseShapeGroup'),
+           centralIconGroup: document.getElementById('centralIconGroup'),
+           svgTextMain: document.getElementById('svgTextMain'),
+           svgTextSub: document.getElementById('svgTextSub'),
+           paletteContainer: document.getElementById('palette-container'),
+           consoleLog: document.getElementById('consoleLog'),
+           bubbles: document.getElementById('bubbles'),
+           inputs: {
+               main: document.getElementById('logoTextInput'),
+               sub: document.getElementById('subtitleInput'),
+               complexity: document.getElementById('complexityRange'),
+               size: document.getElementById('sizeRange')
+           }
+       };
+
+       // --- Functions ---
+
+       function log(msg) {
+           dom.consoleLog.textContent = `> ${msg}\n` + dom.consoleLog.textContent;
+       }
+
+       function createPaletteUI() {
+           dom.paletteContainer.innerHTML = '';
+           palettes.forEach((p, index) => {
+               const btn = document.createElement('button');
+               btn.className = `h-8 rounded border border-gray-600 shadow-sm hover:scale-105 transition-transform`;
+               btn.style.background = `linear-gradient(135deg, ${p.primary}, ${p.secondary})`;
+               btn.onclick = () => {
+                   state.palette = index;
+                   render();
+                   log(`Switching plating to: ${p.name}`);
+               };
+               dom.paletteContainer.appendChild(btn);
+           });
+       }
+
+       function render() {
+           // 1. Apply Colors
+           const currentPalette = palettes[state.palette];
+           document.documentElement.style.setProperty('--submarine-primary', currentPalette.accent);
+           document.documentElement.style.setProperty('--submarine-dark', currentPalette.primary);
+           
+           dom.porthole.style.borderColor = currentPalette.accent;
+           dom.porthole.style.boxShadow = `0 0 0 10px #2d3748, 0 0 0 12px #1a202c, 0 0 0 25px ${currentPalette.accent}, 0 0 0 28px #000, 0 0 50px ${currentPalette.accent}40`;
+
+           dom.svgTextMain.setAttribute('fill', currentPalette.accent);
+           dom.svgTextSub.setAttribute('fill', currentPalette.secondary);
+
+           // 2. Render Base Shape
+           dom.baseShapeGroup.innerHTML = '';
+           const shapeData = shapes[state.baseShape];
+           
+           const shapePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+           shapePath.setAttribute("d", shapeData.path);
+           shapePath.setAttribute("stroke", currentPalette.metal);
+           shapePath.setAttribute("stroke-width", state.complexity / 1.5);
+           
+           if(shapeData.fill !== 'none') {
+               shapePath.setAttribute("fill", currentPalette.primary);
+           } else {
+               shapePath.setAttribute("fill", "none");
+               // Add some internal subtle lines for complexity based on slider
+               if(state.complexity > 3) {
+                   // Could add geometric overlays here
+               }
+           }
+           
+           // Add animation class
+           shapePath.classList.add('logo-path');
+           dom.baseShapeGroup.appendChild(shapePath);
+
+           // 3. Render Central Icon
+           dom.centralIconGroup.innerHTML = '';
+           if (state.icon === 'code') {
+               const textNode = document.createElementNS("http://www.w3.org/2000/svg", "text");
+               textNode.textContent = "< >";
+               textNode.setAttribute("text-anchor", "middle");
+               textNode.setAttribute("dy", ".3em");
+               textNode.setAttribute("font-family", "Roboto Mono");
+               textNode.setAttribute("font-size", "40");
+               textNode.setAttribute("fill", "none");
+               textNode.setAttribute("stroke", currentPalette.secondary);
+               textNode.setAttribute("stroke-width", "2");
+               textNode.classList.add('logo-path');
+               dom.centralIconGroup.appendChild(textNode);
+           } else if (state.icon && icons[state.icon]) {
+               const iconPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+               iconPath.setAttribute("d", icons[state.icon]);
+               iconPath.setAttribute("stroke", currentPalette.secondary);
+               iconPath.setAttribute("stroke-width", "3");
+               iconPath.setAttribute("fill", "none");
+               iconPath.classList.add('logo-path');
+               
+               if(state.icon === 'prop') {
+                   // Add spinning animation specifically for propeller
+                   iconPath.innerHTML = `<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="2s" repeatCount="indefinite" />`;
+               }
+               
+               dom.centralIconGroup.appendChild(iconPath);
+           }
+
+           // 4. Update Text
+           dom.svgTextMain.textContent = state.textMain;
+           dom.svgTextSub.textContent = state.textSub;
+
+           // 5. Update Size
+           dom.porthole.style.width = `${state.size}px`;
+       }
+
+       function initEvents() {
+           // Base Shape Buttons
+           document.querySelectorAll('.base-btn').forEach(btn => {
+               btn.addEventListener('click', (e) => {
+                   state.baseShape = e.currentTarget.dataset.type;
+                   log(`Hull configuration changed to: ${state.baseShape}`);
+                   render();
+               });
+           });
+
+           // Icon Buttons
+           document.querySelectorAll('.icon-btn').forEach(btn => {
+               btn.addEventListener('click', (e) => {
+                   state.icon = e.currentTarget.dataset.icon;
+                   log(`Icon overlay primed: ${state.icon}`);
+                   render();
+               });
+           });
+
+           // Text Inputs
+           dom.inputs.main.addEventListener('input', (e) => {
+               state.textMain = e.target.value;
+               render();
+           });
+           dom.inputs.sub.addEventListener('input', (e) => {
+               state.textSub = e.target.value;
+               render();
+           });
+
+           // Sliders
+           dom.inputs.complexity.addEventListener('input', (e) => {
+               state.complexity = e.target.value;
+               render();
+           });
+           dom.inputs.size.addEventListener('input', (e) => {
+               state.size = e.target.value;
+               render();
+           });
+
+           // Randomize
+           document.getElementById('randomizeBtn').addEventListener('click', () => {
+               const randomPalette = Math.floor(Math.random() * palettes.length);
+               const types = Object.keys(shapes);
+               const iconTypes = Object.keys(icons);
+               
+               state.palette = randomPalette;
+               state.baseShape = types[Math.floor(Math.random() * types.length)];
+               state.icon = iconTypes[Math.floor(Math.random() * iconTypes.length)];
+               state.size = 300 + Math.floor(Math.random() * 300);
+               state.complexity = 2 + Math.floor(Math.random() * 8);
+               
+               log("Initiating chaos engine... Design recomputed.");
+               
+               // Animate button
+               const btn = document.getElementById('randomizeBtn');
+               btn.classList.add('animate-pulse');
+               setTimeout(() => btn.classList.remove('animate-pulse'), 500);
+
+               render();
+           });
+
+           // Audio Effect on Logo Click (Simple Tone.js simulation via Web Audio API)
+           const AudioContext = window.AudioContext || window.webkitAudioContext;
+           let audioCtx;
+
+           dom.porthole.addEventListener('click', () => {
+               if (!audioCtx) audioCtx = new AudioContext();
+               
+               const oscillator = audioCtx.createOscillator();
+               const gainNode = audioCtx.createGain();
+               
+               oscillator.type = 'sine';
+               oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+               oscillator.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.5);
+               
+               gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+               gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+               
+               oscillator.connect(gainNode);
+               gainNode.connect(audioCtx.destination);
+               
+               oscillator.start();
+               oscillator.stop(audioCtx.currentTime + 0.5);
+               
+               log("Sonar pulse transmitted.");
+           });
+       }
+
+       function createBubbles() {
+           const bubbleCount = 15;
+           for(let i=0; i<bubbleCount; i++) {
+               const b = document.createElement('div');
+               b.className = 'bubble';
+               const size = Math.random() * 20 + 5;
+               b.style.width = `${size}px`;
+               b.style.height = `${size}px`;
+               b.style.left = `${Math.random() * 100}%`;
+               b.style.animationDuration = `${Math.random() * 5 + 5}s`;
+               b.style.animationDelay = `${Math.random() * 5}s`;
+               dom.bubbles.appendChild(b);
+           }
+       }
+
+       // --- Initialization ---
+       createPaletteUI();
+       createBubbles();
+       initEvents();
+       render();
+       log("System Online. Depth: Unknown.");
+
+   </script>
+</body>
+</html>
