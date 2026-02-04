@@ -145,6 +145,157 @@ nemoc compile myprog.nemo --ast --loglevel DEBUG
 
 The AST output shows the hierarchical structure of parsed expressions, making it easier to understand how messages, literals, and other constructs are represented.
 
+## Debugging and Development
+
+### Building for Debugging
+
+For debugging sessions, you need to build Nemo with debug symbols and debug information. The key is to add debug flags to your build commands:
+
+**Debug Build with GDB/LDB Support:**
+```bash
+# Build Nemo with debug symbols for use with GDB or LLDB
+nim c -d:debug --debuginfo --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
+
+# Alternative with additional debug info
+nim c -d:debug --debugger:native -d:nimDebugDlOpen --stackTrace:on --lineDir:on -o:nemo_debug src/nemo/repl/nemo.nim
+```
+
+**Common Debug Build Options:**
+```bash
+# With maximum debug information
+nim c -d:debug \
+  --debugger:native \
+  -d:nimDebugDlOpen \
+  --lineDir:on \
+  --stackTrace:on \
+  --stackTraceMsgs:on \
+  -d:nimStackTrace \
+  -o:nemo_debug src/nemo/repl/nemo.nim
+```
+
+**Nimble Task for Debug Builds:**
+Add to your `nemo.nimble`:
+```nim
+task debug, "Build with debug symbols":
+  exec "nim c -d:debug --debugger:native --debuginfo --lineDir:on --stackTrace:on -o:nemo_debug src/nemo/repl/nemo.nim"
+  exec "nim c -d:debug --debugger:native -o:nemoc_debug src/nemo/compiler/nemoc.nim"
+```
+
+### Debugger Integration
+
+#### With GDB/LLDB:
+```bash
+# Build debug version
+nim c -d:debug --debugger:native --stackTrace:on -o:nemo_debug src/nemo/repl/nemo.nim
+
+# Debug with GDB
+gdb --args ./nemo_debug examples/demo.nemo
+
+# Or with LLDB (macOS)
+lldb ./nemo_debug examples/demo.nemo
+```
+
+#### VS Code Debugging
+Create `.vscode/launch.json`:
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Nemo REPL",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/nemo_debug",
+      "args": ["examples/test.nemo"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "logging": {
+        "trace": true,
+        "traceResponse": true
+      }
+    }
+  ]
+}
+```
+
+#### Nim's Built-in Debugger
+Enable Nim's internal debugger with `--debugger:on`:
+```bash
+nim c -d:debug --debugger:on --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
+```
+
+### Using GDB for Debugging
+```bash
+# Start GDB with Nemo
+gdb --args nemo_debug script.nemo
+
+# Common GDB commands for Nemo:
+# (gdb) break nkCall
+# (gdb) break evaluateExpression
+# (gdb) run
+```
+
+### Memory Debugging
+For memory-related issues:
+```bash
+# Build with memory debugging
+nim c -d:useMalloc -d:debug --debugger:native --lineDir:on --stackTrace:on \
+  -o:nemo_memdebug src/nemo/repl/nemo.nim
+```
+
+### VS Code Configuration
+1. Install the "C/C++", "Nim", and "CodeLLDB" VS Code extensions
+2. Add to `.vscode/launch.json` for Nim debugging with CodeLLDB:
+```json
+{
+    "name": "Debug Nemo",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/nemo_debug",
+    "args": ["${input:scriptPath}"],
+    "cwd": "${workspaceFolder}",
+    "preLaunchTask": "nim-build-debug"
+}
+```
+
+### Claude Code and Debugging
+While Claude Code cannot directly attach to debuggers, it can help:
+- Generate debug configurations
+- Suggest breakpoint locations based on stack traces
+- Explain debugging session output
+- Help add debug logging to code
+
+For Nim debugging, Claude can't directly:
+- Set or modify breakpoints at runtime
+- Evaluate variables in running debugger
+- Pause or step through code
+- Start/stop debug sessions
+
+Use VS Code's debugger or terminal-based debuggers (gdb/lldb) for interactive debugging sessions. Claude Code can, however, help you craft the correct debug flags, explain error messages, and suggest debug logging locations.
+
+### Performance Debugging
+For performance issues:
+```bash
+# Profile with debug symbols for better call stack
+nim c -d:debug -d:nimprof --debugger:native -o:nemo_profile src/nemo/repl/nemo.nim
+```
+
+### Testing with Debug Info
+For debugging failing tests:
+```bash
+# Run specific test with debug output
+NIM_DEBUG=1 nim c -d:debug -r tests/test_parser.nim
+```
+
 ## Nim Coding Guidelines
 
 ### Code Style and Conventions

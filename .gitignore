@@ -39,9 +39,9 @@ Thumbs.db
 tests/test_core
 
 # Nemo binaries
-nemo
-nemoc
-/nemo/
+/nemo
+/nemoc
+
 # Binary patterns from source directories
 src/nemo/compiler/*
 !src/nemo/compiler/*.nim
