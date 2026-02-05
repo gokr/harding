@@ -39,6 +39,16 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
 
   let interp = proxy.interp
 
+  # Debug: check if globals are accessible
+  if interp.globals == nil:
+    echo "DEBUG signalCallback: interp.globals is nil!"
+    return
+  if "GtkBox" in interp.globals[]:
+    let boxVal = interp.globals[]["GtkBox"]
+    echo "DEBUG signalCallback: GtkBox in globals kind=", $boxVal.kind
+  else:
+    echo "DEBUG signalCallback: GtkBox NOT in globals!"
+
   # For clicked signals, use the "clicked" handler
   # We check both "clicked" and "activate" since GTK3/GTK4 use different names
   var handler: SignalHandler

@@ -366,7 +366,8 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     # Then check locals (temporaries defined in this activation)
     if name in activation.locals:
       let val = activation.locals[name]
-      echo "DEBUG lookupVariable: found ", name, " in locals kind=", $val.kind
+      let ptrStr = if val.kind == vkInstance and val.instVal != nil: $cast[int](val.instVal) else: "n/a"
+      debug("lookupVariable: found ", name, " in locals kind=", $val.kind, " ptr=", ptrStr)
       return (true, val)
 
     # If this is a block activation and variable not found yet, check globals BEFORE
@@ -447,6 +448,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
 
     # Check if variable exists in current activation's locals
     if name in interp.currentActivation.locals:
+      echo "DEBUG setVariable: storing ", name, " in locals"
       interp.currentActivation.locals[name] = value
       return
 
@@ -607,12 +609,11 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
   # Bind captured environment variables to the new activation
   # This makes captured variables available in the block's scope
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
-    echo "DEBUG invokeBlock: capturedEnv has ", blockNode.capturedEnv.len, " entries"
+    debug("invokeBlock: capturedEnv has ", blockNode.capturedEnv.len, " entries")
     for name, cell in blockNode.capturedEnv:
-      echo "DEBUG invokeBlock: binding ", name, " kind=", $cell.value.kind
+      debug("invokeBlock: binding ", name, " kind=", $cell.value.kind)
       activation.locals[name] = cell.value
       capturedVarNames.add(name)
-      debug("Bound captured variable: ", name, " = ", cell.value.toString())
 
   # Bind parameters to arguments
   for i in 0..<blockNode.parameters.len:
@@ -837,9 +838,10 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
     let result = lookupVariable(interp, ident.name)
     if result.kind == vkInstance:
       if result.instVal == nil:
-        echo "DEBUG: Variable ", ident.name, " has nil instVal!"
+        debug("Variable ", ident.name, " has nil instVal!")
       else:
-        echo "DEBUG: Variable ", ident.name, " instVal.kind=", $result.instVal.kind, " class=", (if result.instVal.class == nil: "nil" else: result.instVal.class.name)
+        let className = if result.instVal.class == nil: "nil" else: result.instVal.class.name
+        debug("Variable ", ident.name, " ptr=", cast[int](result.instVal), " kind=", $result.instVal.kind, " class=", className)
     return result
 
   of nkPseudoVar:
@@ -900,6 +902,12 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
     let assign = node.AssignNode
     debug("Variable assignment: ", assign.variable)
     let value = interp.evalOld(assign.expression)
+    if value.kind == vkInstance:
+      if value.instVal == nil:
+        debug("assign: ", assign.variable, " got nil instVal!")
+      else:
+        let className = if value.instVal.class == nil: "nil" else: value.instVal.class.name
+        debug("assign: ", assign.variable, " ptr=", cast[int](value.instVal), " class=", className)
     setVariable(interp, assign.variable, value)
     return value
 

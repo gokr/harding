@@ -33,12 +33,18 @@ proc createGtkBox*(interp: var Interpreter, orientation: cint, spacing: cint = 0
 
   # Look up the GtkBox class
   var boxClass: Class = nil
+  echo "DEBUG createGtkBox: interp.globals.len=", interp.globals[].len
   if "GtkBox" in interp.globals[]:
     let boxVal = interp.globals[]["GtkBox"]
+    echo "DEBUG createGtkBox: GtkBox found, kind=", $boxVal.kind
     if boxVal.kind == vkClass:
       boxClass = boxVal.classVal
+      echo "DEBUG createGtkBox: using GtkBox class"
+  else:
+    echo "DEBUG createGtkBox: GtkBox NOT in globals!"
 
   if boxClass == nil:
+    echo "DEBUG createGtkBox: falling back to objectClass"
     boxClass = objectClass
 
   let obj = newInstance(boxClass)
@@ -46,6 +52,7 @@ proc createGtkBox*(interp: var Interpreter, orientation: cint, spacing: cint = 0
   storeInstanceWidget(obj, box)
   obj.nimValue = cast[pointer](box)
 
+  echo "DEBUG createGtkBox: created instance ptr=", cast[int](obj), " class=", boxClass.name
   return obj.toValue()
 
 ## Native method: new (class method)
