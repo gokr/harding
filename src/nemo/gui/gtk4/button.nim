@@ -10,7 +10,7 @@ import ./widget
 
 ## GtkButtonProxy extends GtkWidgetProxy
 type
-  GtkButtonProxyObj* {.acyclic.} = object of GtkWidgetProxyObj
+  GtkButtonProxyObj* = object of GtkWidgetProxyObj
     ## Additional button-specific fields can go here
 
   GtkButtonProxy* = ref GtkButtonProxyObj
@@ -109,31 +109,20 @@ proc buttonClickedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
 
   let blockVal = args[0]
 
-  # Create signal handler data
-  var callbackData = cast[ptr SignalCallbackData](alloc0(sizeof(SignalCallbackData)))
-  callbackData.handler = SignalHandler(
+  # Create signal handler and store in proxy's GC-managed table
+  # This ensures the BlockNode and its captured environment are rooted
+  let handler = SignalHandler(
     blockNode: blockVal.blockVal,
     interp: addr(interp)
   )
-  callbackData.signalName = "clicked"
 
-  # Store in proxy's signal handlers table
   if "clicked" notin proxy.signalHandlers:
     proxy.signalHandlers["clicked"] = @[]
-  proxy.signalHandlers["clicked"].add(callbackData.handler)
+  proxy.signalHandlers["clicked"].add(handler)
 
-  # Debug captured environment
-  echo "DEBUG clicked: blockNode.homeActivation=", repr(blockVal.blockVal.homeActivation)
-  if blockVal.blockVal.capturedEnvInitialized:
-    echo "DEBUG clicked: capturedEnv.len=", blockVal.blockVal.capturedEnv.len
-    for name in blockVal.blockVal.capturedEnv.keys:
-      echo "DEBUG clicked:   captured: ", name
-  else:
-    echo "DEBUG clicked: capturedEnv not initialized"
-
-  # Connect the signal
+  # Connect the signal - no userData needed, we look up by widget
   let gObject = cast[GObject](widget)
   discard gSignalConnect(gObject, "clicked",
-                         cast[GCallback](signalCallbackProc), cast[pointer](callbackData))
+                         cast[GCallback](signalCallbackProc), nil)
 
   nilValue()

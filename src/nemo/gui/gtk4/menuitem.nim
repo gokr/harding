@@ -9,7 +9,7 @@ import ./ffi
 import ./widget
 
 type
-  GtkMenuItemProxyObj* {.acyclic.} = object of GtkWidgetProxyObj
+  GtkMenuItemProxyObj* = object of GtkWidgetProxyObj
 
   GtkMenuItemProxy* = ref GtkMenuItemProxyObj
 
@@ -98,26 +98,24 @@ proc menuItemActivateImpl*(interp: var Interpreter, self: Instance, args: seq[No
   if proxy == nil:
     return nilValue()
 
-  # Create signal handler data
-  var callbackData = cast[ptr SignalCallbackData](alloc0(sizeof(SignalCallbackData)))
-  callbackData.handler = SignalHandler(
+  # GTK4 uses clicked signal for button-based menu items
+  let signalName = when defined(gtk4): "clicked" else: "activate"
+
+  # Create signal handler and store in proxy's GC-managed table
+  # This ensures the BlockNode and its captured environment are rooted
+  let handler = SignalHandler(
     blockNode: blockVal.blockVal,
     interp: addr(interp)
   )
 
-  # GTK4 uses clicked signal for button-based menu items
-  let signalName = when defined(gtk4): "clicked" else: "activate"
-  callbackData.signalName = signalName
-
-  # Store in proxy's signal handlers table
   if signalName notin proxy.signalHandlers:
     proxy.signalHandlers[signalName] = @[]
-  proxy.signalHandlers[signalName].add(callbackData.handler)
+  proxy.signalHandlers[signalName].add(handler)
 
-  # Connect the signal
+  # Connect the signal - no userData needed, we look up by widget
   let gObject = cast[GObject](widget)
   discard gSignalConnect(gObject, signalName.cstring,
-                         cast[GCallback](signalCallbackProc), cast[pointer](callbackData))
+                         cast[GCallback](signalCallbackProc), nil)
 
   debug("Connected ", signalName, " signal on menu item")
 

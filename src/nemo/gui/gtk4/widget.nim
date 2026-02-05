@@ -7,57 +7,13 @@ import nemo/core/types
 import nemo/interpreter/evaluator
 import ./ffi
 
-## Signal handler callback type - stores block info for invocation
+## Forward declarations
 type
   SignalHandler* = object
     blockNode*: BlockNode
     interp*: ptr Interpreter
 
-## Signal callback data passed to C callback
-type
-  SignalCallbackData* = object
-    handler*: SignalHandler
-    signalName*: string
-
-## C callback for GTK signals - receives widget and user data
-proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
-  ## Called by GTK when a signal is emitted
-  ## userData points to a SignalCallbackData containing the handler info
-  if userData == nil:
-    return
-
-  var data = cast[ptr SignalCallbackData](userData)
-  if data.handler.interp == nil or data.handler.blockNode == nil:
-    return
-
-  let interp = data.handler.interp
-  let blockNode = data.handler.blockNode
-
-  # Invoke the Nemo block with empty args (typical for signal callbacks)
-  # The block captures the widget/variables it needs via closure
-  try:
-    echo "DEBUG signalCallback: globals count=", interp.globals[].len
-    echo "DEBUG signalCallback: GtkBox in globals=", "GtkBox" in interp.globals[]
-    echo "DEBUG signalCallback: Transcript in globals=", "Transcript" in interp.globals[]
-    if "Transcript" in interp.globals[]:
-      let transcriptVal = interp.globals[]["Transcript"]
-      echo "DEBUG signalCallback: Transcript kind=", $transcriptVal.kind
-    if "GtkBox" in interp.globals[]:
-      let boxClass = interp.globals[]["GtkBox"]
-      echo "DEBUG signalCallback: GtkBox kind=", $boxClass.kind
-      if boxClass.kind == vkClass:
-        echo "DEBUG signalCallback: GtkBox allClassMethods.len=", boxClass.classVal.allClassMethods.len
-    let result = invokeBlock(interp[], blockNode, @[])
-    echo "DEBUG signalCallback: block completed, result=", result.toString
-    discard result  # Signal callbacks generally ignore return values
-  except Exception as e:
-    # Log error but don't crash the GUI
-    echo "DEBUG signalCallback: ERROR: ", e.msg
-    error("Error in signal callback for '", data.signalName, "': ", e.msg)
-
-## GtkWidgetProxy - base class for all GTK widget proxies
-type
-  GtkWidgetProxyObj* {.acyclic.} = object of RootObj
+  GtkWidgetProxyObj* = object of RootObj
     widget*: GtkWidget
     interp*: ptr Interpreter
     signalHandlers*: Table[string, seq[SignalHandler]]
@@ -68,6 +24,48 @@ type
 ## Global proxy table - maps widget pointers to their proxies
 ## This avoids storing ref objects as raw pointers (which GC can move)
 var proxyTable* {.global.}: Table[GtkWidget, GtkWidgetProxy] = initTable[GtkWidget, GtkWidgetProxy]()
+
+## C callback for GTK signals - receives widget and user data
+proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
+  ## Called by GTK when a signal is emitted
+  ## We look up the handler by widget from the proxy table
+  # Look up the proxy for this widget
+  if widget notin proxyTable:
+    return
+
+  let proxy = proxyTable[widget]
+  if proxy.interp == nil:
+    return
+
+  let interp = proxy.interp
+
+  # For clicked signals, use the "clicked" handler
+  # We check both "clicked" and "activate" since GTK3/GTK4 use different names
+  var handler: SignalHandler
+  var found = false
+
+  if "clicked" in proxy.signalHandlers and proxy.signalHandlers["clicked"].len > 0:
+    handler = proxy.signalHandlers["clicked"][0]
+    found = true
+  elif "activate" in proxy.signalHandlers and proxy.signalHandlers["activate"].len > 0:
+    handler = proxy.signalHandlers["activate"][0]
+    found = true
+
+  if not found or handler.blockNode == nil:
+    return
+
+  # Invoke the Nemo block with empty args (typical for signal callbacks)
+  # The block captures the widget/variables it needs via closure
+  try:
+    # Keep the handler alive during invocation to prevent GC collection
+    # of captured variables
+    GC_ref(handler.blockNode)
+    let result = invokeBlock(interp[], handler.blockNode, @[])
+    GC_unref(handler.blockNode)
+    discard result  # Signal callbacks generally ignore return values
+  except Exception as e:
+    # Log error but don't crash the GUI
+    error("Error in signal callback: ", e.msg)
 
 ## Create a new widget proxy - stores in global table instead of raw pointer
 proc newGtkWidgetProxy*(widget: GtkWidget, interp: ptr Interpreter): GtkWidgetProxy =
@@ -183,25 +181,24 @@ proc widgetConnectDoImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
   if proxy == nil:
     return nilValue()
 
-  # Create signal handler data - allocated on heap to persist beyond this call
-  var callbackData = cast[ptr SignalCallbackData](alloc0(sizeof(SignalCallbackData)))
-  callbackData.handler = SignalHandler(
+  let signalStr = signalName.strVal
+
+  # Create signal handler and store in proxy's GC-managed table
+  # This ensures the BlockNode and its captured environment are rooted
+  let handler = SignalHandler(
     blockNode: blockVal.blockVal,
     interp: addr(interp)
   )
-  callbackData.signalName = signalName.strVal
 
-  # Store in proxy's signal handlers table for reference (prevents GC cleanup)
-  if signalName.strVal notin proxy.signalHandlers:
-    proxy.signalHandlers[signalName.strVal] = @[]
-  proxy.signalHandlers[signalName.strVal].add(callbackData.handler)
+  if signalStr notin proxy.signalHandlers:
+    proxy.signalHandlers[signalStr] = @[]
+  proxy.signalHandlers[signalStr].add(handler)
 
-  # Connect the signal using GTK's g_signal_connect
-  # Pass the callback data as user_data
+  # Connect the signal - no userData needed, we look up by widget
   let gObject = cast[GObject](widget)
-  discard gSignalConnect(gObject, signalName.strVal.cstring,
-                         cast[GCallback](signalCallbackProc), cast[pointer](callbackData))
+  discard gSignalConnect(gObject, signalStr.cstring,
+                         cast[GCallback](signalCallbackProc), nil)
 
-  debug("Connected signal '", signalName.strVal, "' on widget")
+  debug("Connected signal '", signalStr, "' on widget")
 
   nilValue()
