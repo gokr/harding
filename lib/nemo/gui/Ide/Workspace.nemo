@@ -7,8 +7,9 @@ Workspace := Object derive: #(window box textView)
 
 Workspace class>>open [
   | workspace window box textView scrolled |
-  window := (GtkWindow new) title: "Nemo Workspace"; setDefaultSize: 600 height: 400
-  box := GtkBox vertical; box setSpacing: 5
+  window := (GtkWindow new) title: "Nemo Workspace"; setDefaultSize: 600 height: 400.
+  box := GtkBox vertical.
+  box setSpacing: 5
 
   textView := GtkTextView new
 

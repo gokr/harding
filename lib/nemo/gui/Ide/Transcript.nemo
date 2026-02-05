@@ -47,7 +47,7 @@ Transcript>>updateWindow [
 
 Transcript>>open [
   | box textView |
-  window := Window new
+  window := GtkWindow new
   window title: "Transcript"
   # box := Box vertical.
   textView := nil.
