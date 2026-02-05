@@ -15,13 +15,19 @@ type
 
 ## Factory: Create new label proxy
 proc newGtkLabelProxy*(widget: GtkLabel, interp: ptr Interpreter): GtkLabelProxy =
-  result = GtkLabelProxy()
+  result = GtkLabelProxy(
+    widget: widget,
+    interp: interp,
+    signalHandlers: initTable[string, seq[SignalHandler]](),
+    destroyed: false
+  )
+  proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
 proc labelNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Create a new empty label
   let widget = gtkLabelNew(nil)
-  let proxy = newGtkLabelProxy(widget, addr(interp))
+  discard newGtkLabelProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkLabel" in interp.globals[]:
@@ -37,8 +43,8 @@ proc labelNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]
 
   let obj = newInstance(cls)
   obj.isNimProxy = true
-  obj.nimValue = cast[pointer](proxy)
-  GC_ref(cast[ref RootObj](proxy))
+  storeInstanceWidget(obj, widget)
+  obj.nimValue = cast[pointer](widget)
   return obj.toValue()
 
 ## Native class method: newLabel:
@@ -48,7 +54,7 @@ proc labelNewLabelImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
     return nilValue()
 
   let widget = gtkLabelNew(args[0].strVal.cstring)
-  let proxy = newGtkLabelProxy(widget, addr(interp))
+  discard newGtkLabelProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkLabel" in interp.globals[]:
@@ -64,8 +70,8 @@ proc labelNewLabelImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
 
   let obj = newInstance(cls)
   obj.isNimProxy = true
-  obj.nimValue = cast[pointer](proxy)
-  GC_ref(cast[ref RootObj](proxy))
+  storeInstanceWidget(obj, widget)
+  obj.nimValue = cast[pointer](widget)
   return obj.toValue()
 
 ## Native instance method: text:
@@ -74,14 +80,16 @@ proc labelSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVa
   if args.len < 1 or args[0].kind != vkString:
     return nilValue()
 
-  if not (self.isNimProxy and self.nimValue != nil):
+  if not self.isNimProxy:
     return nilValue()
 
-  let proxy = cast[GtkLabelProxy](self.nimValue)
-  if proxy.widget == nil:
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkLabel](self.nimValue)
+  if widget == nil:
     return nilValue()
 
-  gtkLabelSetText(cast[GtkLabel](proxy.widget), args[0].strVal.cstring)
+  gtkLabelSetText(widget, args[0].strVal.cstring)
 
   debug("Set label text to '", args[0].strVal, "'")
 
@@ -90,14 +98,16 @@ proc labelSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVa
 ## Native instance method: text (getter)
 proc labelGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get label text
-  if not (self.isNimProxy and self.nimValue != nil):
+  if not self.isNimProxy:
     return nilValue()
 
-  let proxy = cast[GtkLabelProxy](self.nimValue)
-  if proxy.widget == nil:
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkLabel](self.nimValue)
+  if widget == nil:
     return "".toValue()
 
-  let text = gtkLabelGetText(cast[GtkLabel](proxy.widget))
+  let text = gtkLabelGetText(widget)
   if text == nil:
     return "".toValue()
 

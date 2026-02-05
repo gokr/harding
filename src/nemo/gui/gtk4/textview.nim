@@ -16,7 +16,13 @@ type
 
 ## Factory: Create new text view proxy
 proc newGtkTextViewProxy*(widget: GtkTextView, interp: ptr Interpreter): GtkTextViewProxy =
-  result = GtkTextViewProxy()
+  result = GtkTextViewProxy(
+    widget: widget,
+    interp: interp,
+    signalHandlers: initTable[string, seq[SignalHandler]](),
+    destroyed: false
+  )
+  proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
 proc textViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =

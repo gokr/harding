@@ -15,13 +15,19 @@ type
 
 ## Factory: Create new menu item proxy
 proc newGtkMenuItemProxy*(widget: GtkMenuItem, interp: ptr Interpreter): GtkMenuItemProxy =
-  result = GtkMenuItemProxy()
+  result = GtkMenuItemProxy(
+    widget: widget,
+    interp: interp,
+    signalHandlers: initTable[string, seq[SignalHandler]](),
+    destroyed: false
+  )
+  proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
 proc menuItemNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Create a new menu item
   let widget = gtkMenuItemNew()
-  let proxy = newGtkMenuItemProxy(widget, addr(interp))
+  discard newGtkMenuItemProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkMenuItem" in interp.globals[]:
@@ -37,8 +43,8 @@ proc menuItemNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVal
 
   let obj = newInstance(cls)
   obj.isNimProxy = true
-  obj.nimValue = cast[pointer](proxy)
-  GC_ref(cast[ref RootObj](proxy))
+  storeInstanceWidget(obj, widget)
+  obj.nimValue = cast[pointer](widget)
   return obj.toValue()
 
 ## Native class method: newLabel:
@@ -48,7 +54,7 @@ proc menuItemNewLabelImpl*(interp: var Interpreter, self: Instance, args: seq[No
     return nilValue()
 
   let widget = gtkMenuItemNewWithLabel(args[0].strVal.cstring)
-  let proxy = newGtkMenuItemProxy(widget, addr(interp))
+  discard newGtkMenuItemProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkMenuItem" in interp.globals[]:
@@ -64,8 +70,8 @@ proc menuItemNewLabelImpl*(interp: var Interpreter, self: Instance, args: seq[No
 
   let obj = newInstance(cls)
   obj.isNimProxy = true
-  obj.nimValue = cast[pointer](proxy)
-  GC_ref(cast[ref RootObj](proxy))
+  storeInstanceWidget(obj, widget)
+  obj.nimValue = cast[pointer](widget)
   return obj.toValue()
 
 ## Native instance method: activate:
@@ -74,15 +80,22 @@ proc menuItemActivateImpl*(interp: var Interpreter, self: Instance, args: seq[No
   if args.len < 1:
     return nilValue()
 
-  if not (self.isNimProxy and self.nimValue != nil):
+  if not self.isNimProxy:
     return nilValue()
 
   let blockVal = args[0]
   if blockVal.kind != vkBlock:
     return nilValue()
 
-  let proxy = cast[GtkWidgetProxy](self.nimValue)
-  if proxy.widget == nil:
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkWidget](self.nimValue)
+  if widget == nil:
+    return nilValue()
+
+  # Get or create proxy for signal handling
+  let proxy = getGtkWidgetProxy(widget)
+  if proxy == nil:
     return nilValue()
 
   # Create signal handler data
@@ -102,7 +115,7 @@ proc menuItemActivateImpl*(interp: var Interpreter, self: Instance, args: seq[No
   proxy.signalHandlers[signalName].add(callbackData.handler)
 
   # Connect the signal
-  let gObject = cast[GObject](proxy.widget)
+  let gObject = cast[GObject](widget)
   discard gSignalConnect(gObject, signalName.cstring,
                          cast[GCallback](signalCallbackProc), cast[pointer](callbackData))
 
