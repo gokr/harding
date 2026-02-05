@@ -184,5 +184,7 @@ proc gtkTextBufferDelete*(buffer: GtkTextBuffer, start: GtkTextIter, endIter: Gt
 proc gtkScrolledWindowNew*(): GtkScrolledWindow {.cdecl, importc: "gtk_scrolled_window_new".}
 when defined(gtk4):
   proc gtkScrolledWindowSetChild*(scrolled: GtkScrolledWindow, child: GtkWidget) {.cdecl, importc: "gtk_scrolled_window_set_child".}
+  # GLib main loop iteration for GTK4 event processing
+  proc gMainContextIteration*(context: pointer = nil, mayBlock: cint): cint {.cdecl, importc: "g_main_context_iteration".}
 else:
   proc gtkContainerAdd*(container: pointer, widget: GtkWidget) {.cdecl, importc: "gtk_container_add".}

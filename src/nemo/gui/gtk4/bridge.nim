@@ -128,6 +128,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   windowCloseMethod.hasInterpreterParam = true
   addMethodToClass(windowCls, "close", windowCloseMethod)
 
+  let windowConnectDestroyMethod = createCoreMethod("connectDestroy")
+  windowConnectDestroyMethod.nativeImpl = cast[pointer](windowConnectDestroyImpl)
+  windowConnectDestroyMethod.hasInterpreterParam = true
+  addMethodToClass(windowCls, "connectDestroy", windowConnectDestroyMethod)
+
   interp.globals[]["GtkWindow"] = windowCls.toValue()
   debug("Registered GtkWindow class")
 
@@ -474,11 +479,9 @@ proc launcherNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVal
     debug("Created window: ", repr(window))
   else:
     let window = gtkWindowNew(GTKWINDOWTOPLEVEL)
-  let proxy = newGtkWindowProxy(window, addr(interp))
-  debug("Created proxy, proxy.widget=", repr(proxy.widget), " proxy=", repr(cast[pointer](proxy)))
 
-  # Keep proxy alive in GC when stored as raw pointer in nimValue
-  GC_ref(proxy)
+  # Store proxy in global table (not as raw pointer)
+  discard newGtkWindowProxy(window, addr(interp))
 
   # Look up Launcher class from globals (prefer Launcher, fallback to GtkWindow)
   var cls: Class = nil
@@ -495,5 +498,6 @@ proc launcherNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVal
 
   let obj = newInstance(cls)
   obj.isNimProxy = true
-  obj.nimValue = cast[pointer](proxy)
+  storeInstanceWidget(obj, window)
+  obj.nimValue = cast[pointer](window)
   return obj.toValue()
