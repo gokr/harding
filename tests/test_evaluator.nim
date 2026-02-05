@@ -7,7 +7,7 @@
 import std/[unittest, tables, strutils, logging]
 import ../src/nemo/core/types
 import ../src/nemo/parser/[lexer, parser]
-import ../src/nemo/interpreter/[evaluator, objects]
+import ../src/nemo/interpreter/[evaluator, objects, vm]
 
 # Helper to check for errors
 proc checkError(interp: var Interpreter, source: string, expectedError: string = "") =
@@ -17,7 +17,7 @@ proc checkError(interp: var Interpreter, source: string, expectedError: string =
   let nodes = parser.parseStatements()
   if nodes.len > 0:
     expect ValueError:
-      discard interp.eval(nodes[0])
+      discard interp.evalWithVM(nodes[0])
 
 suite "Evaluator: Basic Message Dispatch":
   var interp: Interpreter
@@ -155,7 +155,7 @@ suite "Evaluator: Control Flow":
 
   test "ifTrue: executes block when receiver is true":
     let result = interp.evalStatements("""
-    Result := true ifTrue: [ ^42 ]
+    Result := true ifTrue: [ 42 ]
     """)
 
     check(result[1].len == 0)
@@ -164,7 +164,7 @@ suite "Evaluator: Control Flow":
 
   test "ifTrue: does not execute block when receiver is false":
     let result = interp.evalStatements("""
-    Result := false ifTrue: [ ^42 ]
+    Result := false ifTrue: [ 42 ]
     """)
 
     check(result[1].len == 0)
@@ -173,7 +173,7 @@ suite "Evaluator: Control Flow":
 
   test "ifFalse: executes block when receiver is false":
     let result = interp.evalStatements("""
-    Result := false ifFalse: [ ^99 ]
+    Result := false ifFalse: [ 99 ]
     """)
 
     check(result[1].len == 0)
@@ -182,7 +182,7 @@ suite "Evaluator: Control Flow":
 
   test "ifFalse: does not execute block when receiver is true":
     let result = interp.evalStatements("""
-    Result := true ifFalse: [ ^99 ]
+    Result := true ifFalse: [ 99 ]
     """)
 
     check(result[1].len == 0)
@@ -257,10 +257,10 @@ suite "Evaluator: Block Evaluation":
     let result = interp.evalStatements("""
       # Use new class-based model
       MyClass := Object derive.
-      MyClass selector: #apply:to: put: [ :block :arg | ^block value: arg ].
+      MyClass selector: #apply:to: put: [ :block :arg | block value: arg ].
 
       Obj := MyClass new.
-      Doubler := [ :x | ^x * 2 ].
+      Doubler := [ :x | x * 2 ].
       Result := Obj apply: Doubler to: 21
       """)
 

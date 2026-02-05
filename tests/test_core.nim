@@ -9,7 +9,7 @@ import std/tables
 import unittest
 import ../src/nemo/core/types
 import ../src/nemo/parser/[lexer, parser]
-import ../src/nemo/interpreter/[evaluator, objects]
+import ../src/nemo/interpreter/[evaluator, objects, vm]
 
 # Configure logging for tests - set to ERROR by default to keep test output clean
 configureLogging(lvlError)
@@ -178,7 +178,7 @@ suite "Interpreter":
     let tokens = lex("42")
     var parser = initParser(tokens)
     let node = parser.parseExpression()
-    let evalResult = interp.eval(node)
+    let evalResult = interp.evalWithVM(node)
     check evalResult.kind == vkInt
     check evalResult.intVal == 42
 
@@ -190,7 +190,7 @@ suite "Interpreter":
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
-    let evalResult = interp.eval(node)
+    let evalResult = interp.evalWithVM(node)
     check evalResult.kind == vkInstance  # New Instance model
 
   test "handles message sends":
@@ -203,7 +203,7 @@ suite "Interpreter":
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
-    let evalResult = interp.eval(node)
+    let evalResult = interp.evalWithVM(node)
 
     # Should return a string representation
     check evalResult.kind == vkString
@@ -218,7 +218,7 @@ suite "Interpreter":
     let tokens = lex(code)
     var parser = initParser(tokens)
     let node = parser.parseExpression()
-    let evalResult = interp.eval(node)
+    let evalResult = interp.evalWithVM(node)
 
     # Should evaluate to 7
     check evalResult.kind == vkInt
@@ -235,4 +235,4 @@ suite "Interpreter":
     let node = parser.parseExpression()
 
     expect ValueError:
-      discard interp.eval(node)
+      discard interp.evalWithVM(node)
