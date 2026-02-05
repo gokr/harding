@@ -1,6 +1,5 @@
 import std/[tables, strutils]
 import ../core/types
-import ../interpreter/objects
 import ../parser/[lexer, parser]
 
 # ============================================================================

@@ -42,7 +42,6 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue
 proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue
 proc evalSuperSend(interp: var Interpreter, superNode: SuperSendNode): NodeValue
 proc sendMessage*(interp: var Interpreter, receiver: Instance, selector: string, args: varargs[NodeValue]): NodeValue
-proc asSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc installGlobalTableMethods*(globalTableClass: Class)
 proc initNemoGlobal*(interp: var Interpreter)
@@ -173,17 +172,6 @@ proc rewriteNodeForSlotAccess(node: Node, cls: Class, shadowedNames: seq[string]
     # Other node types don't need rewriting (literals, pseudo-vars, etc.)
     return node
 
-proc checkSlotShadowing(blk: BlockNode, cls: Class) =
-  ## Check if any parameter or temporary shadows a slot name and raise error if so
-  for param in blk.parameters:
-    if cls.getSlotIndex(param) >= 0:
-      raise newException(EvalError,
-        "Parameter '" & param & "' shadows slot name in class " & cls.name)
-  for temp in blk.temporaries:
-    if cls.getSlotIndex(temp) >= 0:
-      raise newException(EvalError,
-        "Temporary variable '" & temp & "' shadows slot name in class " & cls.name)
-
 proc rewriteMethodForSlotAccess*(blk: BlockNode, cls: Class) =
   ## Rewrite a method's AST to use SlotAccessNodes for slot access
   ## Called when a method is installed on a class via selector:put:
@@ -192,8 +180,7 @@ proc rewriteMethodForSlotAccess*(blk: BlockNode, cls: Class) =
     debug("rewriteMethodForSlotAccess: no slots, skipping")
     return  # No slots to optimize
 
-  # Check for shadowing (optional - can be a warning instead of error)
-  # checkSlotShadowing(blk, cls)
+  # Slots are optimized - shadowing is handled by the rewriting logic
 
   # Build initial shadowed names from method parameters and temporaries
   var shadowedNames: seq[string] = @[]
@@ -431,7 +418,7 @@ proc lookupVariable*(interp: Interpreter, name: string): NodeValue =
 # Variable assignment
 proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
   ## Set variable in current activation, captured environment, or create global
-  debug("Setting variable: ", name, " = ", value.toString(), " (activation: ", interp.currentActivation != nil, ")")
+  echo "DEBUG setVariable: name=", name, " activation=", interp.currentActivation != nil
 
   # First check if there's a current activation with a captured environment
   # that contains this variable
@@ -622,9 +609,10 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
     debug("Bound parameter: ", paramName, " = ", args[i].toString())
 
   # Initialize temporaries to nil
+  echo "DEBUG invokeBlock: temporaries.len=", blockNode.temporaries.len
   for tempName in blockNode.temporaries:
     activation.locals[tempName] = nilValue()
-    debug("Initialized temporary: ", tempName)
+    echo "DEBUG invokeBlock: initialized temporary: ", tempName
 
   # Save current state
   let savedReceiver = interp.currentReceiver
@@ -835,14 +823,14 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
     # Identifier - look up as variable
     let ident = cast[IdentNode](node)
     debug("Identifier lookup: ", ident.name)
-    let result = lookupVariable(interp, ident.name)
-    if result.kind == vkInstance:
-      if result.instVal == nil:
+    let identResult = lookupVariable(interp, ident.name)
+    if identResult.kind == vkInstance:
+      if identResult.instVal == nil:
         debug("Variable ", ident.name, " has nil instVal!")
       else:
-        let className = if result.instVal.class == nil: "nil" else: result.instVal.class.name
-        debug("Variable ", ident.name, " ptr=", cast[int](result.instVal), " kind=", $result.instVal.kind, " class=", className)
-    return result
+        let className = if identResult.instVal.class == nil: "nil" else: identResult.instVal.class.name
+        debug("Variable ", ident.name, " ptr=", cast[int](identResult.instVal), " kind=", $identResult.instVal.kind, " class=", className)
+    return identResult
 
   of nkPseudoVar:
     # Pseudo-variable (self, nil, true, false)
@@ -859,9 +847,7 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
       if interp.currentActivation != nil and interp.currentActivation.isClassMethod:
         debug("self returning as class: <class ", interp.currentReceiver.class.name, ">")
         return interp.currentReceiver.class.toValue()
-      result = interp.currentReceiver.toValue().unwrap()
-      debug("self returning: ", result.toString())
-      return
+      return interp.currentReceiver.toValue().unwrap()
     of "nil":
       return nilValue()
     of "true":
@@ -1551,7 +1537,7 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
       lastResult = interp.evalOld(node)
     interp.lastResult = lastResult
     return (lastResult, "")
-  except ValueError as e:
+  except ValueError:
     raise  # Re-raise ValueError for error handling tests
   except EvalError as e:
     return (nilValue(), "Runtime error: " & e.msg)
@@ -1764,20 +1750,6 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
 
   return blockResult
 
-# asSelfDo: implementation (interpreter-aware)
-proc asSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Evaluate a block with self temporarily bound to the receiver
-  ## Usage: someObject asSelfDo: [ ... self ... ]
-  ## Inside the block, 'self' refers to someObject
-  if args.len < 1 or args[0].kind != vkBlock:
-    return nilValue()
-
-  let blockNode = args[0].blockVal
-
-  # Evaluate the block with self (the receiver) as the receiver
-  # This makes 'self' inside the block refer to the receiver of asSelfDo:
-  return evalBlock(interp, self, blockNode)
-
 # perform:with: implementation (interpreter-aware)
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Send a message to self with arguments: self perform: #selector with: arg
@@ -1807,53 +1779,6 @@ proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
 
   # Execute the method
   return executeMethod(interp, methodResult.currentMethod, self, messageArgs, methodResult.definingClass)
-
-# Collection iteration method (interpreter-aware)
-proc doCollectionImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Iterate over collection: collection do: [:item | ... ]
-  ## Returns the collection (like Smalltalk)
-  if args.len < 1 or args[0].kind != vkBlock:
-    return nilValue()
-
-  let blockNode = args[0].blockVal
-
-  # Handle array iteration
-  if self.kind == ikArray:
-    for elem in self.elements:
-      # Create activation for block with element as parameter
-      let activation = newActivation(blockNode, interp.currentReceiver, interp.currentActivation)
-      # Bind the block parameter to the element
-      if blockNode.parameters.len > 0:
-        activation.locals[blockNode.parameters[0]] = elem
-      # Execute block body
-      for stmt in blockNode.body:
-        discard interp.evalOld(stmt)
-        if activation.hasReturned:
-          break
-      if activation.hasReturned:
-        break
-    return self.toValue()
-
-  # Handle table iteration (key-value pairs)
-  if self.kind == ikTable:
-    for key, val in self.entries:
-      let activation = newActivation(blockNode, interp.currentReceiver, interp.currentActivation)
-      # Bind block parameters
-      # Key is now NodeValue (can be any type: string, int, instance, etc.)
-      if blockNode.parameters.len > 0:
-        activation.locals[blockNode.parameters[0]] = key
-      if blockNode.parameters.len > 1:
-        activation.locals[blockNode.parameters[1]] = val
-      # Execute block body
-      for stmt in blockNode.body:
-        discard interp.evalOld(stmt)
-        if activation.hasReturned:
-          break
-      if activation.hasReturned:
-        break
-    return self.toValue()
-
-  return nilValue()
 
 # Conditional method implementations (need to be defined before initGlobals)
 proc ifTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2232,75 +2157,6 @@ proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, ar
   return nilValue()
 
 # Exception handling methods
-proc formatStackTrace*(interp: Interpreter): string  ## Forward declaration
-
-proc onDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Install exception handler: [ protectedBlock ] on: ExceptionClass do: [ :ex | handler ]
-  ## self is the protected block (receiver), args[0] is exception class, args[1] is handler block
-  if args.len < 2 or args[1].kind != vkBlock:
-    return nilValue()
-
-  # Extract protected block from self
-  var protectedBlock: BlockNode = nil
-  if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
-    # New class-based model - block stored in nimValue
-    protectedBlock = cast[BlockNode](self.nimValue)
-
-  if protectedBlock == nil:
-    return nilValue()
-
-  let exceptionClass = args[0]
-  let handlerBlock = args[1].blockVal
-
-  # Push exception handler onto stack
-  let handler = ExceptionHandler(
-    exceptionClass: if exceptionClass.kind == vkClass: exceptionClass.classVal else: nil,
-    handlerBlock: handlerBlock,
-    activation: interp.currentActivation,
-    stackDepth: interp.activationStack.len
-  )
-  interp.exceptionHandlers.add(handler)
-
-  var blockResult = nilValue()
-  try:
-    # Execute protected block
-    blockResult = evalBlock(interp, interp.currentReceiver, protectedBlock)
-  except ValueError as e:
-    # Check if we have a handler for this exception type
-    var handled = false
-    for i in countdown(interp.exceptionHandlers.len - 1, 0):
-      let h = interp.exceptionHandlers[i]
-      # Simple type check - in full implementation, check inheritance
-      if h.stackDepth <= interp.activationStack.len:
-        # Found a handler - execute it
-        # Create an exception object (using the new class system)
-        let stackTrace = formatStackTrace(interp)
-        var exSlots = newSeq[NodeValue]()
-        exSlots.add(toValue(e.msg))  # message slot
-        exSlots.add(toValue(stackTrace))  # stackTrace slot
-        let exObj = Instance(kind: ikObject, class: interp.rootClass, slots: exSlots)
-
-        # Remove this handler and all above it
-        interp.exceptionHandlers.setLen(i)
-
-        # Execute handler with exception as argument
-        let exVal = toValue(exObj)
-        blockResult = evalBlockWithArg(interp, interp.currentReceiver, h.handlerBlock, exVal)
-        handled = true
-        break
-
-    if not handled:
-      # No handler found - re-raise
-      raise
-  finally:
-    # Remove our handler if still present (if no exception was raised)
-    if interp.exceptionHandlers.len > 0:
-      let lastIdx = interp.exceptionHandlers.len - 1
-      if interp.exceptionHandlers[lastIdx].handlerBlock == handlerBlock:
-        interp.exceptionHandlers.setLen(lastIdx)
-
-  return blockResult
-
 proc formatStackTrace*(interp: Interpreter): string =
   ## Format the current activation stack as a readable stack trace
   result = ""
@@ -2310,42 +2166,6 @@ proc formatStackTrace*(interp: Interpreter): string =
       result.add($frameNum & ": <method>\n")
     else:
       result.add($frameNum & ": <unknown>\n")
-
-proc signalImpl(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Signal an exception: exception signal
-  var message = "Unknown error"
-  if args.len >= 1 and args[0].kind == vkString:
-    message = args[0].strVal
-  raise newException(ValueError, message)
-
-# Global namespace methods - using shared table reference
-proc globalAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Global at: key - lookup global by name
-  if args.len < 1 or args[0].kind != vkString:
-    return nilValue()
-  let key = args[0].strVal
-  if interp.globals[].hasKey(key):
-    return interp.globals[][key]
-  return nilValue()
-
-proc globalAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Global at: key put: value - set global
-  if args.len < 2 or args[0].kind != vkString:
-    return nilValue()
-  let key = args[0].strVal
-  let val = args[1]
-  interp.globals[][key] = val
-  return val
-
-proc globalAtIfAbsentImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Global at: key ifAbsent: block - lookup or execute block
-  if args.len < 2 or args[0].kind != vkString or args[1].kind != vkBlock:
-    return nilValue()
-  let key = args[0].strVal
-  if interp.globals[].hasKey(key):
-    return interp.globals[][key]
-  # Execute the ifAbsent block
-  return evalBlock(interp, self, args[1].blockVal)
 
 # Array iteration method
 proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =

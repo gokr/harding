@@ -123,9 +123,6 @@ proc primitiveCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc primitiveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc primitiveAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 
-# Global root class (singleton, local to this module)
-var rootClass: Class = nil
-
 # Global true/false values for comparison operators
 var trueValue*: NodeValue = NodeValue(kind: vkBool, boolVal: true)
 var falseValue*: NodeValue = NodeValue(kind: vkBool, boolVal: false)
@@ -1090,10 +1087,10 @@ proc instStringRepeatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   if self.kind == ikString and args.len > 0:
     let (ok, count) = args[0].tryGetInt()
     if ok and count > 0:
-      var result = ""
+      var strResult = ""
       for i in 0..<count:
-        result.add(self.strVal)
-      return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, result))
+        strResult.add(self.strVal)
+      return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, strResult))
     elif ok and count <= 0:
       return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, ""))
   return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal))
@@ -1154,12 +1151,12 @@ proc arrayJoinImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     let sep = if args.len > 0 and args[0].kind == vkString: args[0].strVal
               elif args.len > 0 and args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
               else: ""
-    var result = ""
+    var joinResult = ""
     for i, elem in self.elements:
       if i > 0:
-        result.add(sep)
-      result.add(elem.toString())
-    return NodeValue(kind: vkInstance, instVal: newStringInstance(stringClass, result))
+        joinResult.add(sep)
+      joinResult.add(elem.toString())
+    return NodeValue(kind: vkInstance, instVal: newStringInstance(stringClass, joinResult))
   return NodeValue(kind: vkInstance, instVal: newStringInstance(stringClass, ""))
 
 # Table primitives
