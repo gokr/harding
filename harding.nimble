@@ -5,7 +5,7 @@ description = "Modern Smalltalk dialect written in Nim"
 license = "MIT"
 
 srcDir = "src"
-binDir = "."
+bin = @["harding/repl/harding","harding/compiler/granite"]
 
 # Current Nim version
 requires "nim == 2.2.6"
@@ -48,35 +48,6 @@ task gui3, "Build the GUI IDE with GTK3":
 task clean, "Clean build artifacts using build.nims":
   exec "nim e build.nims clean"
 
-task install, "Install harding to ~/.local/bin/":
-  var binPath = ""
-  for possiblePath in ["harding", "harding/repl/harding"]:
-    if possiblePath.fileExists:
-      binPath = possiblePath
-      break
-
-  when defined(windows):
-    if binPath == "":
-      for possiblePath in ["harding.exe", "harding/repl/harding.exe"]:
-        if possiblePath.fileExists:
-          binPath = possiblePath
-          break
-
-  if binPath == "" or not binPath.fileExists:
-    echo "Error: harding binary not found. Run 'nimble build' or 'nimble setup' first."
-    echo "Checked locations: ./harding, harding/repl/harding"
-    system.quit(1)
-
-  when defined(windows):
-    let dest = getHomeDir() / "harding" / "harding.exe"
-    exec "mkdir -p " & (getHomeDir() / "harding")
-    exec "cp " & binPath & " " & dest
-    echo "Installed to: " & dest
-  else:
-    let dest = getHomeDir() / ".local" / "bin" / "harding"
-    exec "mkdir -p " & (getHomeDir() / ".local" / "bin")
-    exec "cp " & binPath & " " & dest & " && chmod +x " & dest
-    echo "Installed to: " & dest
 
 task vsix, "Build the VS Code extension (vsix file)":
   ## Build the Harding VS Code extension package
