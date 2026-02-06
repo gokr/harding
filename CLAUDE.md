@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Nemo is a prototype-based Smalltalk dialect that compiles to Nim. It provides:
+Harding is a prototype-based Smalltalk dialect that compiles to Nim. It provides:
 - Smalltalk-like object system with prototype inheritance
 - Nim compilation backend
 - REPL for interactive development
@@ -19,18 +19,18 @@ nimble local             # Build and copy binaries to root directory (PREFERRED)
 nimble build             # Build the REPL and compiler (binaries in subdirectories only)
 nimble test              # Run all tests (automatic discovery via testament)
 nimble clean             # Clean build artifacts and binaries
-nimble install           # Install nemo binary to ~/.local/bin/
+nimble install           # Install harding binary to ~/.local/bin/
 ```
 
-**IMPORTANT**: Always use `nimble local` when developing. This is the only command that updates the `./nemo` and `./nemoc` binaries in the root directory. Using `nimble build` alone will NOT update the root directory binaries.
+**IMPORTANT**: Always use `nimble local` when developing. This is the only command that updates the `./harding` and `./hardingc` binaries in the root directory. Using `nimble build` alone will NOT update the root directory binaries.
 
 ### Convenience Tasks
 
 The following nimble tasks provide convenient shortcuts for common development tasks:
 
-- **`nimble local`**: Builds the project using `nimble build` and copies the `nemo` and `nemoc` binaries to the root directory for easy access. **Always use this when developing.**
+- **`nimble local`**: Builds the project using `nimble build` and copies the `harding` and `hardingc` binaries to the root directory for easy access. **Always use this when developing.**
 - **`nimble clean`**: Removes build artifacts including nimcache, build directories, and binaries from all locations
-- **`nimble install`**: Copies the `nemo` binary to `~/.local/bin` (Unix/Linux/macOS) or appropriate Windows location
+- **`nimble install`**: Copies the `harding` binary to `~/.local/bin` (Unix/Linux/macOS) or appropriate Windows location
 
 These tasks match the functionality previously only available through `nim e build.nims <task>`.
 
@@ -44,7 +44,7 @@ nim c -r tests/test_core.nim
 
 ## Logging and Debugging
 
-Both `nemo` and `nemoc` support a `--loglevel` option to control logging output. This is useful for debugging execution flow and tracing interpreter behavior.
+Both `harding` and `hardingc` support a `--loglevel` option to control logging output. This is useful for debugging execution flow and tracing interpreter behavior.
 
 ### Available Log Levels
 
@@ -56,28 +56,28 @@ Both `nemo` and `nemoc` support a `--loglevel` option to control logging output.
 
 ### Using Logging
 
-**For the REPL (nemo):**
+**For the REPL (harding):**
 ```bash
 # Start REPL with debug logging
-nemo --loglevel DEBUG
+harding --loglevel DEBUG
 
 # Run a script with debug logging
-nemo --loglevel DEBUG myprogram.nemo
+harding --loglevel DEBUG myprogram.harding
 
 # Evaluate expression with info logging
-nemo --loglevel INFO -e "3 + 4"
+harding --loglevel INFO -e "3 + 4"
 ```
 
-**For the compiler (nemoc):**
+**For the compiler (hardingc):**
 ```bash
 # Compile with debug logging
-nemoc compile myprogram.nemo --loglevel DEBUG
+hardingc compile myprogram.harding --loglevel DEBUG
 
 # Build with info logging
-nemoc build myprogram.nemo --loglevel INFO
+hardingc build myprogram.harding --loglevel INFO
 
 # Run with debug logging
-nemoc run myprogram.nemo --loglevel DEBUG
+hardingc run myprogram.harding --loglevel DEBUG
 ```
 
 ### Debug Logging Output
@@ -120,27 +120,27 @@ The `debug` statements are only active when the log level is set to DEBUG or low
 
 ### AST Debugging
 
-Both `nemo` and `nemoc` support an `--ast` flag to dump the Abstract Syntax Tree after parsing. This is useful for understanding how your Nemo code is being parsed before execution or compilation.
+Both `harding` and `hardingc` support an `--ast` flag to dump the Abstract Syntax Tree after parsing. This is useful for understanding how your Harding code is being parsed before execution or compilation.
 
-**For the REPL (nemo):**
+**For the REPL (harding):**
 ```bash
 # Show AST for a script and then execute it
-nemo --ast examples/demo.nemo
+harding --ast examples/demo.harding
 
 # Show AST for an expression and show result
-nemo --ast -e "3 + 4"
+harding --ast -e "3 + 4"
 
 # Combine with debug logging for full visibility
-nemo --ast --loglevel DEBUG script.nemo
+harding --ast --loglevel DEBUG script.harding
 ```
 
-**For the compiler (nemoc):**
+**For the compiler (hardingc):**
 ```bash
 # Show AST before compiling
-nemoc compile myprog.nemo --ast
+hardingc compile myprog.harding --ast
 
 # Show AST with debug logging
-nemoc compile myprog.nemo --ast --loglevel DEBUG
+hardingc compile myprog.harding --ast --loglevel DEBUG
 ```
 
 The AST output shows the hierarchical structure of parsed expressions, making it easier to understand how messages, literals, and other constructs are represented.
@@ -149,15 +149,15 @@ The AST output shows the hierarchical structure of parsed expressions, making it
 
 ### Building for Debugging
 
-For debugging sessions, you need to build Nemo with debug symbols and debug information. The key is to add debug flags to your build commands:
+For debugging sessions, you need to build Harding with debug symbols and debug information. The key is to add debug flags to your build commands:
 
 **Debug Build with GDB/LDB Support:**
 ```bash
-# Build Nemo with debug symbols for use with GDB or LLDB
-nim c -d:debug --debuginfo --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
+# Build Harding with debug symbols for use with GDB or LLDB
+nim c -d:debug --debuginfo --debugger:native -o:harding_debug src/harding/repl/harding.nim
 
 # Alternative with additional debug info
-nim c -d:debug --debugger:native -d:nimDebugDlOpen --stackTrace:on --lineDir:on -o:nemo_debug src/nemo/repl/nemo.nim
+nim c -d:debug --debugger:native -d:nimDebugDlOpen --stackTrace:on --lineDir:on -o:harding_debug src/harding/repl/harding.nim
 ```
 
 **Common Debug Build Options:**
@@ -170,15 +170,15 @@ nim c -d:debug \
   --stackTrace:on \
   --stackTraceMsgs:on \
   -d:nimStackTrace \
-  -o:nemo_debug src/nemo/repl/nemo.nim
+  -o:harding_debug src/harding/repl/harding.nim
 ```
 
 **Nimble Task for Debug Builds:**
-Add to your `nemo.nimble`:
+Add to your `harding.nimble`:
 ```nim
 task debug, "Build with debug symbols":
-  exec "nim c -d:debug --debugger:native --debuginfo --lineDir:on --stackTrace:on -o:nemo_debug src/nemo/repl/nemo.nim"
-  exec "nim c -d:debug --debugger:native -o:nemoc_debug src/nemo/compiler/nemoc.nim"
+  exec "nim c -d:debug --debugger:native --debuginfo --lineDir:on --stackTrace:on -o:harding_debug src/harding/repl/harding.nim"
+  exec "nim c -d:debug --debugger:native -o:hardingc_debug src/harding/compiler/hardingc.nim"
 ```
 
 ### Debugger Integration
@@ -186,13 +186,13 @@ task debug, "Build with debug symbols":
 #### With GDB/LLDB:
 ```bash
 # Build debug version
-nim c -d:debug --debugger:native --stackTrace:on -o:nemo_debug src/nemo/repl/nemo.nim
+nim c -d:debug --debugger:native --stackTrace:on -o:harding_debug src/harding/repl/harding.nim
 
 # Debug with GDB
-gdb --args ./nemo_debug examples/demo.nemo
+gdb --args ./harding_debug examples/demo.harding
 
 # Or with LLDB (macOS)
-lldb ./nemo_debug examples/demo.nemo
+lldb ./harding_debug examples/demo.harding
 ```
 
 #### VS Code Debugging
@@ -202,11 +202,11 @@ Create `.vscode/launch.json`:
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Nemo REPL",
+      "name": "Debug Harding REPL",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/nemo_debug",
-      "args": ["examples/test.nemo"],
+      "program": "${workspaceFolder}/harding_debug",
+      "args": ["examples/test.harding"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "externalConsole": false,
@@ -230,15 +230,15 @@ Create `.vscode/launch.json`:
 #### Nim's Built-in Debugger
 Enable Nim's internal debugger with `--debugger:on`:
 ```bash
-nim c -d:debug --debugger:on --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
+nim c -d:debug --debugger:on --debugger:native -o:harding_debug src/harding/repl/harding.nim
 ```
 
 ### Using GDB for Debugging
 ```bash
-# Start GDB with Nemo
-gdb --args nemo_debug script.nemo
+# Start GDB with Harding
+gdb --args harding_debug script.harding
 
-# Common GDB commands for Nemo:
+# Common GDB commands for Harding:
 # (gdb) break nkCall
 # (gdb) break evaluateExpression
 # (gdb) run
@@ -249,7 +249,7 @@ For memory-related issues:
 ```bash
 # Build with memory debugging
 nim c -d:useMalloc -d:debug --debugger:native --lineDir:on --stackTrace:on \
-  -o:nemo_memdebug src/nemo/repl/nemo.nim
+  -o:harding_memdebug src/harding/repl/harding.nim
 ```
 
 ### VS Code Configuration
@@ -257,10 +257,10 @@ nim c -d:useMalloc -d:debug --debugger:native --lineDir:on --stackTrace:on \
 2. Add to `.vscode/launch.json` for Nim debugging with CodeLLDB:
 ```json
 {
-    "name": "Debug Nemo",
+    "name": "Debug Harding",
     "type": "lldb",
     "request": "launch",
-    "program": "${workspaceFolder}/nemo_debug",
+    "program": "${workspaceFolder}/harding_debug",
     "args": ["${input:scriptPath}"],
     "cwd": "${workspaceFolder}",
     "preLaunchTask": "nim-build-debug"
@@ -286,7 +286,7 @@ Use VS Code's debugger or terminal-based debuggers (gdb/lldb) for interactive de
 For performance issues:
 ```bash
 # Profile with debug symbols for better call stack
-nim c -d:debug -d:nimprof --debugger:native -o:nemo_profile src/nemo/repl/nemo.nim
+nim c -d:debug -d:nimprof --debugger:native -o:harding_profile src/harding/repl/harding.nim
 ```
 
 ### Testing with Debug Info
@@ -701,7 +701,7 @@ proc close*(barrel: Barrel) =
 ## Project Structure
 
 ```
-nemo/
+harding/
 ├── core/           # Core types and object system
 ├── parser/         # Lexer and parser
 ├── interpreter/    # Evaluation and activation
@@ -728,22 +728,22 @@ When working with documentation, prefer the root-level user guides over research
 
 - Source files use `.nim` extension
 - Test files use `test_*.nim` pattern
-- Example files use `.nemo` extension (Nemo source)
+- Example files use `.harding` extension (Harding source)
 
 ## Future Directions
 
 ### BitBarrel Integration
-Consider integrating BitBarrel (the high-performance Bitcask-style key-value storage engine from ../bitbarrel) as a core part of Nemo. This would provide:
-- First-class barrel objects in Nemo
+Consider integrating BitBarrel (the high-performance Bitcask-style key-value storage engine from ../bitbarrel) as a core part of Harding. This would provide:
+- First-class barrel objects in Harding
 - Built-in persistence model similar to Gemstone and original OODBs
 - High-performance storage with O(1) reads via in-memory hash index
 - Crash recovery with hint files for fast startup
 - Background compaction
 
 Potential integration approaches:
-1. Expose BitBarrel API as Nemo objects and methods
+1. Expose BitBarrel API as Harding objects and methods
 2. Implement barrel literals in the language syntax
-3. Provide transparent persistence for Nemo objects
+3. Provide transparent persistence for Harding objects
 4. Use FFI to call BitBarrel C API or directly link the Nim library
 
-This would give Nemo a powerful persistence layer built into the language.
+This would give Harding a powerful persistence layer built into the language.

@@ -1,6 +1,6 @@
-# Nemo Development TODO
+# Harding Development TODO
 
-This document tracks current work items and future directions for Nemo development.
+This document tracks current work items and future directions for Harding development.
 
 ## Current Status
 
@@ -29,15 +29,15 @@ This document tracks current work items and future directions for Nemo developme
 - **extendClass:** for class-side method definition ✅
 - **derive:methods:** for combined class creation ✅
 - **perform:** family for dynamic message sending ✅
-- **Process, Scheduler, and GlobalTable as Nemo-side objects** ✅
-- **Nemo global for accessing global namespace** ✅
+- **Process, Scheduler, and GlobalTable as Harding-side objects** ✅
+- **Harding global for accessing global namespace** ✅
 - **Process introspection (pid, name, state)** ✅
 - **Process control (suspend, resume, terminate)** ✅
 - **Green threads with Processor fork: and Processor yield** ✅
-- **Nemo load: method for loading .nemo files** ✅
+- **Harding load: method for loading .harding files** ✅
 - **--home and --bootstrap CLI options** ✅
 
-**Still Needed**: Compiler (nemoc is stub), FFI to Nim, standard library expansion.
+**Still Needed**: Compiler (hardingc is stub), FFI to Nim, standard library expansion.
 
 ## High Priority
 
@@ -45,7 +45,7 @@ This document tracks current work items and future directions for Nemo developme
 - [ ] Method compilation from AST to Nim procedures
 - [ ] Nim type definitions for Class and Instance
 - [ ] Symbol export for compiled methods
-- [ ] Working `nemoc` (currently stub)
+- [ ] Working `hardingc` (currently stub)
 
 ### FFI Integration
 - [ ] Nim type marshaling
@@ -96,7 +96,7 @@ This document tracks current work items and future directions for Nemo developme
 - Block body corruption in forked processes when running in test suite (works in isolation)
 - Memory management for circular references
 - Error handling improvements needed
-- Compiler implementation (nemoc is stub)
+- Compiler implementation (hardingc is stub)
 
 ## Documentation Needs
 
@@ -112,29 +112,29 @@ This document tracks current work items and future directions for Nemo developme
 
 ```bash
 nimble local       # Build and copy binaries to root directory (recommended)
-nimble build       # Build nemo and nemoc
+nimble build       # Build harding and hardingc
 nimble test        # Run tests
 nimble clean       # Clean artifacts
-nimble install     # Install nemo to ~/.local/bin/
+nimble install     # Install harding to ~/.local/bin/
 ```
 
 ### Debug Builds
 
 ```bash
 # Build with debug symbols
-nim c -d:debug --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
+nim c -d:debug --debugger:native -o:harding_debug src/harding/repl/harding.nim
 
 # Debug with GDB
-gdb --args ./nemo_debug script.nemo
+gdb --args ./harding_debug script.harding
 ```
 
 ### Logging Options
 
 ```bash
-nemo --loglevel DEBUG script.nemo    # Verbose tracing
-nemo --loglevel INFO script.nemo     # General information
-nemo --loglevel WARN script.nemo     # Warnings only
-nemo --loglevel ERROR script.nemo    # Errors only (default)
+harding --loglevel DEBUG script.harding    # Verbose tracing
+harding --loglevel INFO script.harding     # General information
+harding --loglevel WARN script.harding     # Warnings only
+harding --loglevel ERROR script.harding    # Errors only (default)
 ```
 
 ## Recent Completed Work
@@ -143,15 +143,21 @@ nemo --loglevel ERROR script.nemo    # Errors only (default)
 - Updated README.md with concise example and proper documentation links
 - Fixed all example files to use `new` for instance creation (not `derive`)
 - Fixed all example files to use double quotes for strings (not single quotes)
-- Updated documentation to match current syntax
+- Updated all documentation to match current syntax
+- Renamed .nemo files to .hrd extension throughout codebase
+- Fixed QUICKREF.md title (was "N Syntax")
+- Fixed VSCODE.md to reference correct grammar file (harding.tmLanguage.json)
+- Updated README to use `hardingc` consistently (was `granite`)
+- Updated all shebang lines from `nemo` to `harding`
+- Fixed examples/README.md with correct binary and extension names
 
 ### Exception Handling (2025-02-03)
 - Implemented exception handling via `on:do:` mechanism
 - Created Exception class hierarchy (Error, MessageNotUnderstood, SubscriptOutOfBounds, DivisionByZero)
-- Errors in Nemo code now use Nim exceptions with stack traces
+- Errors in Harding code now use Nim exceptions with stack traces
 - Exception support in TestCase for test assertion failures
 
-### Nemo Object System Updates (2025-02-03)
+### Harding Object System Updates (2025-02-03)
 - `nil` as singleton UndefinedObject instance (not primitive)
 - Stdout global for console output
 - String `repeat:` and Array `join:` methods
@@ -159,11 +165,11 @@ nemo --loglevel ERROR script.nemo    # Errors only (default)
 - Fixed class-side method definition via `extendClass:`
 
 ### Process, Scheduler, GlobalTable (2025-02-03)
-- Process class as Nemo-side object with pid, name, state methods
+- Process class as Harding-side object with pid, name, state methods
 - Process control: suspend, resume, terminate
 - Scheduler class with process introspection
-- GlobalTable class and Nemo global for namespace access
-- All processes share globals via `Nemo`
+- GlobalTable class and Harding global for namespace access
+- All processes share globals via `Harding`
 
 ### Multiple Inheritance (2025-02-01)
 - Conflict detection for slot names in multiple parent classes
@@ -193,7 +199,7 @@ nemo --loglevel ERROR script.nemo    # Errors only (default)
 - 1-based array indexing (Smalltalk compatible)
 
 ### VSCode Extension (2025-02-01)
-- Comprehensive syntax highlighting for `.nemo` files
+- Comprehensive syntax highlighting for `.harding` files
 - TextMate grammar with language configuration
 - Packaged as .vsix extension
 

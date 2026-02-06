@@ -1,6 +1,6 @@
-# Nemo
+# Harding
 
-Nemo is a Smalltalk dialect written in Nim that preserves most of the distinguishing features of the Smalltalk language while fitting in with modern tooling and strong abilities to integrate with libraries from the Nim and C ecosystems. The language currently has a stackless AST based interpreter supporting green threads in classic Smalltalk style.
+Harding is a Smalltalk dialect written in Nim that preserves most of the distinguishing features of the Smalltalk language while fitting in with modern tooling and strong abilities to integrate with libraries from the Nim and C ecosystems. The language currently has a stackless AST based interpreter supporting green threads in classic Smalltalk style.
 
 ## Quick Example
 
@@ -18,33 +18,33 @@ p distanceFromOrigin println  # Prints: 5.0
 ## Installation
 
 ```bash
-git clone https://github.com/gokr/nemo.git
-cd nemo
+git clone https://github.com/gokr/harding.git
+cd harding
 nimble local  # Build and copy binaries to root directory
 ```
 
-Binaries: `nemo` (REPL/interpreter), `nemoc` (compiler stub)
+Binaries: `harding` (REPL/interpreter), `hardingc` (compiler stub)
 
 ## Usage
 
 ```bash
-nemo                    # Interactive REPL
-nemo script.nemo        # Run a file
-nemo -e "3 + 4"         # Evaluate expression
-nemo --ast script.nemo  # Show AST, then execute
-nemo --loglevel DEBUG   # Verbose execution trace
+harding                    # Interactive REPL
+harding script.hrd         # Run a file
+harding -e "3 + 4"         # Evaluate expression
+harding --ast script.hrd   # Show AST, then execute
+harding --loglevel DEBUG   # Verbose execution trace
 ```
 
 ### Environment Variables
 
-- `NEMO_HOME` - Default home directory for loading libraries
+- `HARDING_HOME` - Default home directory for loading libraries
 
 ### VSCode Extension
 
-Syntax highlighting for `.nemo` files:
+Syntax highlighting for `.hrd` files:
 
 ```bash
-code --install-extension nemo-lang-0.1.0.vsix
+code --install-extension harding-lang-0.1.0.vsix
 ```
 
 ## For Smalltalkers
@@ -57,13 +57,13 @@ code --install-extension nemo-lang-0.1.0.vsix
 - String concatenation with comma: `"Hello" , " World"`
 - Blocks are proper lexical closures with temporaries and can do early returns: `[ | temp | temp := 1 ]`
 - Everything is an object, everything happens via message sends
-- Live evaluation in the REPL with `nemo`
+- Live evaluation in the REPL with `harding`
 - Collection messages: `do:`, `select:`, `collect:`, etc.
 
 **What's different:**
 
-| Smalltalk | Nemo |
-|-----------|------|
+| Smalltalk | Harding |
+|-----------|---------|
 | Required period end-of-statement | Optional - newline or period both work |
 | Double quotes for comments | Hash `#` for comments |
 | Single quotes for strings | Double quotes for strings |
@@ -74,7 +74,7 @@ code --install-extension nemo-lang-0.1.0.vsix
 
 ### Variable Naming Rule
 
-Nemo distinguishes globals from locals by capitalization and enforces this in parsing:
+Harding distinguishes globals from locals by capitalization and enforces this in parsing:
 
 | Type | Convention | Example |
 |------|------------|---------|
@@ -83,8 +83,8 @@ Nemo distinguishes globals from locals by capitalization and enforces this in pa
 
 ### Key Syntax Differences
 
-| Feature | Nemo Syntax |
-|---------|------------|
+| Feature | Harding Syntax |
+|---------|----------------|
 | Comments | `# This is a comment` |
 | Strings | `"Double quotes only"` |
 | Create subclass | `Point := Object derive: #(x y)` |
@@ -108,7 +108,7 @@ Nemo distinguishes globals from locals by capitalization and enforces this in pa
 - Dynamic message sending: `perform:`, `perform:with:`
 
 **In progress:**
-- Compiler to Nim (nemoc is stub)
+- Compiler to Nim (hardingc is stub)
 - FFI to Nim
 - Standard library expansion
 
@@ -125,10 +125,10 @@ Nemo distinguishes globals from locals by capitalization and enforces this in pa
 ## Examples
 
 ```bash
-nemo examples/01_hello.nemo
-nemo examples/05_classes.nemo
-nemo examples/10_blocks.nemo
-nemo examples/process_demo.nemo
+harding examples/01_hello.hrd
+harding examples/05_classes.hrd
+harding examples/10_blocks.hrd
+harding examples/process_demo.hrd
 ```
 
 See the `examples/` directory for more examples covering arithmetic, variables, objects, classes, methods, inheritance, collections, control flow, and blocks.

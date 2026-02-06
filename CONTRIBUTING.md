@@ -1,6 +1,6 @@
-# Contributing to Nemo
+# Contributing to Harding
 
-Thank you for your interest in contributing to Nemo! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Harding! This document provides guidelines and instructions for contributing.
 
 ## Development Environment
 
@@ -29,7 +29,7 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive Nim coding guidelines, including:
 ## Areas for Contribution
 
 ### High Priority
-- **FFI Integration**: Calling Nim code from Nemo
+- **FFI Integration**: Calling Nim code from Harding
 - **Compiler**: Complete method compilation to Nim
 - **Standard Library**: Basic collection objects and utilities
 
@@ -39,7 +39,7 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive Nim coding guidelines, including:
 - **Performance**: Optimizations for interpreter and compiler
 
 ### Documentation
-- **Examples**: More .nemo example files
+- **Examples**: More .harding example files
 - **Tutorials**: Step-by-step guides
 - **API Documentation**: Generated docs from source
 
@@ -56,4 +56,4 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive Nim coding guidelines, including:
 3. **Design Review**: Architectural alignment with project goals
 4. **Merge**: After approval, maintainers will merge
 
-Thank you for contributing to making Nemo a better language!
+Thank you for contributing to making Harding a better language!
