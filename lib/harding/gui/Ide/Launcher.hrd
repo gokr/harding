@@ -11,6 +11,9 @@ Launcher class>>open [
 Launcher>>openInstance [
   | menuBar mainBox |
 
+  # Initialize window collection
+  windows := #().
+
   # Set up the window
   self title: "Harding IDE".
   self setDefaultSize: 800 height: 600.
@@ -43,12 +46,12 @@ Launcher>>createMenuBar [
 
   # Workspace button
   workspaceItem := GtkButton newLabel: "Workspace".
-  workspaceItem clicked: [ Workspace open ].
+  workspaceItem clicked: [ self openWorkspace ].
   menuBar append: workspaceItem.
 
   # Transcript button
   transcriptItem := GtkButton newLabel: "Transcript".
-  transcriptItem clicked: [ Transcript open ].
+  transcriptItem clicked: [ self openTranscript ].
   menuBar append: transcriptItem.
 
   # Quit button
@@ -65,11 +68,11 @@ Launcher>>createFileMenu [
   menu := GtkMenu new.
 
   workspaceItem := GtkMenuItem newLabel: "Open Workspace".
-  workspaceItem activate: [ Workspace open ].
+  workspaceItem activate: [ self openWorkspace ].
   menu append: workspaceItem.
 
   transcriptItem := GtkMenuItem newLabel: "Open Transcript".
-  transcriptItem activate: [ Transcript open ].
+  transcriptItem activate: [ self openTranscript ].
   menu append: transcriptItem.
 
   quitItem := GtkMenuItem newLabel: "Quit".
@@ -79,14 +82,24 @@ Launcher>>createFileMenu [
   ^menu
 ].
 
+Launcher>>addWindow: aWindow [
+  windows add: aWindow.
+  Transcript showCr: "Window added, count: " , windows size toString
+].
+
+Launcher>>removeWindow: aWindow [
+  windows := windows reject: [ :w | w == aWindow ].
+  Transcript showCr: "Window removed, count: " , windows size toString
+].
+
 Launcher>>openWorkspace [
   Transcript showCr: "Opening workspace...".
-  Workspace open.
+  Workspace openFor: self.
   ^self
 ].
 
 Launcher>>openTranscript [
-  Transcript open.
+  Transcript openFor: self.
   ^self
 ].
 

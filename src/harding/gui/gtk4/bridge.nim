@@ -54,7 +54,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let widgetCls = newClass(superclasses = @[objectClass], name = "GtkWidget")
   widgetCls.tags = @["GTK", "Widget"]
   widgetCls.isNimProxy = true
-  widgetCls.hrdType = "GtkWidget"
+  widgetCls.hardingType = "GtkWidget"
 
   # Add Widget methods
   let widgetShowMethod = createCoreMethod("show")
@@ -94,7 +94,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let windowCls = newClass(superclasses = @[widgetCls], name = "GtkWindow")
   windowCls.tags = @["GTK", "Window"]
   windowCls.isNimProxy = true
-  windowCls.hrdType = "GtkWindow"
+  windowCls.hardingType = "GtkWindow"
 
   # Add Window class methods (new)
   let windowNewMethod = createCoreMethod("new")
@@ -133,6 +133,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   windowConnectDestroyMethod.hasInterpreterParam = true
   addMethodToClass(windowCls, "connectDestroy", windowConnectDestroyMethod)
 
+  let windowDestroyedMethod = createCoreMethod("destroyed:")
+  windowDestroyedMethod.nativeImpl = cast[pointer](windowDestroyedImpl)
+  windowDestroyedMethod.hasInterpreterParam = true
+  addMethodToClass(windowCls, "destroyed:", windowDestroyedMethod)
+
   interp.globals[]["GtkWindow"] = windowCls.toValue()
   debug("Registered GtkWindow class")
 
@@ -140,7 +145,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let buttonCls = newClass(superclasses = @[widgetCls], name = "GtkButton")
   buttonCls.tags = @["GTK", "Button"]
   buttonCls.isNimProxy = true
-  buttonCls.hrdType = "GtkButton"
+  buttonCls.hardingType = "GtkButton"
 
   # Add Button class methods
   let buttonNewMethod = createCoreMethod("new")
@@ -176,7 +181,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let boxCls = newClass(superclasses = @[widgetCls], name = "GtkBox")
   boxCls.tags = @["GTK", "Box", "Layout"]
   boxCls.isNimProxy = true
-  boxCls.hrdType = "GtkBox"
+  boxCls.hardingType = "GtkBox"
 
   # Add Box class methods
   let boxNewMethod = createCoreMethod("new")
@@ -222,7 +227,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let labelCls = newClass(superclasses = @[widgetCls], name = "GtkLabel")
   labelCls.tags = @["GTK", "Label", "Display"]
   labelCls.isNimProxy = true
-  labelCls.hrdType = "GtkLabel"
+  labelCls.hardingType = "GtkLabel"
 
   # Add Label class methods
   let labelNewMethod = createCoreMethod("new")
@@ -253,7 +258,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let textViewCls = newClass(superclasses = @[widgetCls], name = "GtkTextView")
   textViewCls.tags = @["GTK", "TextView", "Editor"]
   textViewCls.isNimProxy = true
-  textViewCls.hrdType = "GtkTextView"
+  textViewCls.hardingType = "GtkTextView"
 
   # Add TextView class methods
   let textViewNewMethod = createCoreMethod("new")
@@ -289,7 +294,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let textBufferCls = newClass(superclasses = @[objectClass], name = "GtkTextBuffer")
   textBufferCls.tags = @["GTK", "TextBuffer"]
   textBufferCls.isNimProxy = true
-  textBufferCls.hrdType = "GtkTextBuffer"
+  textBufferCls.hardingType = "GtkTextBuffer"
 
   # Add TextBuffer class methods
   let textBufferNewMethod = createCoreMethod("new")
@@ -325,7 +330,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let menuItemCls = newClass(superclasses = @[widgetCls], name = "GtkMenuItem")
   menuItemCls.tags = @["GTK", "MenuItem", "Menu"]
   menuItemCls.isNimProxy = true
-  menuItemCls.hrdType = "GtkMenuItem"
+  menuItemCls.hardingType = "GtkMenuItem"
 
   # Add MenuItem class methods
   let menuItemNewMethod = createCoreMethod("new")
@@ -351,7 +356,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let menuCls = newClass(superclasses = @[objectClass], name = "GtkMenu")
   menuCls.tags = @["GTK", "Menu"]
   menuCls.isNimProxy = true
-  menuCls.hrdType = "GtkMenu"
+  menuCls.hardingType = "GtkMenu"
 
   # Add Menu instance methods
   let menuAppendMethod = createCoreMethod("append:")
@@ -371,7 +376,7 @@ proc initGtkBridge*(interp: var Interpreter) =
   let menuBarCls = newClass(superclasses = @[widgetCls], name = "GtkMenuBar")
   menuBarCls.tags = @["GTK", "MenuBar", "Menu"]
   menuBarCls.isNimProxy = true
-  menuBarCls.hrdType = "GtkMenuBar"
+  menuBarCls.hardingType = "GtkMenuBar"
 
   # Add MenuBar class method
   let menuBarNewMethod = createCoreMethod("new")
@@ -389,10 +394,10 @@ proc initGtkBridge*(interp: var Interpreter) =
   debug("Registered GtkMenuBar class")
 
   # Register Launcher class (derived from GtkWindow)
-  let launcherCls = newClass(superclasses = @[windowCls], name = "Launcher")
+  let launcherCls = newClass(superclasses = @[windowCls], slotNames = @["windows"], name = "Launcher")
   launcherCls.tags = @["GTK", "Window", "Launcher", "IDE"]
   launcherCls.isNimProxy = true
-  launcherCls.hrdType = "Launcher"
+  launcherCls.hardingType = "Launcher"
 
   # Add Launcher class method - native new that creates a Launcher instance
   let launcherNewMethod = createCoreMethod("new")

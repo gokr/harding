@@ -77,6 +77,31 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
     # Log error but don't crash the GUI
     error("Error in signal callback: ", e.msg)
 
+## C callback for GTK destroy signals
+proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
+  ## Called by GTK when a destroy signal is emitted
+  if widget notin proxyTable:
+    return
+
+  let proxy = proxyTable[widget]
+  if proxy.interp == nil:
+    return
+
+  if "destroy" notin proxy.signalHandlers or proxy.signalHandlers["destroy"].len == 0:
+    return
+
+  let handler = proxy.signalHandlers["destroy"][0]
+  if handler.blockNode == nil:
+    return
+
+  try:
+    GC_ref(handler.blockNode)
+    let result = invokeBlock(proxy.interp[], handler.blockNode, @[])
+    GC_unref(handler.blockNode)
+    discard result
+  except Exception as e:
+    error("Error in destroy callback: ", e.msg)
+
 ## Create a new widget proxy - stores in global table instead of raw pointer
 proc newGtkWidgetProxy*(widget: GtkWidget, interp: ptr Interpreter): GtkWidgetProxy =
   result = GtkWidgetProxy(

@@ -3,26 +3,46 @@
 # Workspace provides a text editor with do-it and print-it functionality
 # ============================================================================
 
-Workspace := Object derive: #(window box textView)
+Workspace := Object derive: #(window box textView owner)
 
 Workspace class>>open [
-  | workspace window box textView scrolled |
-  window := (GtkWindow new) title: "Harding Workspace"; setDefaultSize: 600 height: 400.
+  ^self openFor: nil
+]
+
+Workspace class>>openFor: anOwner [
+  | workspace window box textView |
+  window := GtkWindow new.
+  window title: "Harding Workspace".
+  window setDefaultSize: 600 height: 400.
+
   box := GtkBox vertical.
-  box setSpacing: 5
+  box setSpacing: 5.
 
-  textView := GtkTextView new
+  textView := GtkTextView new.
 
-  workspace := self new
-  workspace window: window; box: box; textView: textView
+  workspace := self new.
+  workspace window: window.
+  workspace box: box.
+  workspace textView: textView.
+  workspace owner: anOwner.
 
-  window setChild: box
-  box append: textView
+  window setChild: box.
+  box append: textView.
 
-  window present
+  # Connect destroy signal to notify owner
+  window destroyed: [ workspace onDestroy ].
 
-  Transcript showCr: "Harding Workspace opened"
+  # Register with owner
+  anOwner notNil ifTrue: [ anOwner addWindow: workspace ].
+
+  window present.
+
+  Transcript showCr: "Harding Workspace opened".
   ^workspace
+]
+
+Workspace>>onDestroy [
+  owner notNil ifTrue: [ owner removeWindow: self ]
 ]
 
 Workspace>>doIt: codeString [
@@ -56,6 +76,10 @@ Workspace>>textView: aTextView [
   textView := aTextView
 ]
 
+Workspace>>owner: anOwner [
+  owner := anOwner
+]
+
 Workspace>>window [
   ^window
 ]
@@ -66,4 +90,8 @@ Workspace>>box [
 
 Workspace>>textView [
   ^textView
+]
+
+Workspace>>owner [
+  ^owner
 ]

@@ -3,37 +3,31 @@
 # Similar to Smalltalk's Transcript, provides logging and output
 # ============================================================================
 
-Transcript := Object derive: #(stream window)
-
-Transcript class>>current [
-  CurrentTranscript ifNil: [
-    CurrentTranscript := self new
-  ]
-  ^CurrentTranscript
-]
+Transcript := Object derive: #(stream window owner)
 
 Transcript>>initialize [
-  stream := ""
-  window := nil
+  stream := "".
+  window := nil.
+  owner := nil
 ]
 
 Transcript>>show: message [
-  stream := stream , message
+  stream := stream , message.
   self updateWindow
 ]
 
 Transcript>>showCr: message [
-  stream := stream , message , "\n"
+  stream := stream , message , "\n".
   self updateWindow
 ]
 
 Transcript>>showSpace: message [
-  stream := stream , message , " "
+  stream := stream , message , " ".
   self updateWindow
 ]
 
 Transcript>>clear [
-  stream := ""
+  stream := "".
   self updateWindow
 ]
 
@@ -45,13 +39,62 @@ Transcript>>updateWindow [
   ^self
 ]
 
-Transcript>>open [
-  | box textView |
-  window := GtkWindow new
-  window title: "Transcript"
-  # box := Box vertical.
-  textView := nil.
-  # window setChild: box.
+Transcript>>openWindowFor: anOwner [
+  window := GtkWindow new.
+  window title: "Transcript".
+  owner := anOwner.
+
+  # Connect destroy signal to notify owner
+  window destroyed: [ self onDestroy ].
+
+  # Register with owner
+  anOwner notNil ifTrue: [ anOwner addWindow: self ].
+
   window present.
   ^self
+]
+
+Transcript>>openWindow [
+  ^self openWindowFor: nil
+]
+
+Transcript>>onDestroy [
+  window := nil.
+  owner notNil ifTrue: [
+    owner removeWindow: self.
+    owner := nil
+  ]
+]
+
+# Create the singleton instance at load time
+CurrentTranscript := Transcript new.
+CurrentTranscript initialize.
+
+# Class-side convenience methods that delegate to the singleton instance
+Transcript class>>current [
+  ^CurrentTranscript
+]
+
+Transcript class>>open [
+  ^self current openWindow
+]
+
+Transcript class>>openFor: anOwner [
+  ^self current openWindowFor: anOwner
+]
+
+Transcript class>>show: message [
+  ^self current show: message
+]
+
+Transcript class>>showCr: message [
+  ^self current showCr: message
+]
+
+Transcript class>>showSpace: message [
+  ^self current showSpace: message
+]
+
+Transcript class>>clear [
+  ^self current clear
 ]

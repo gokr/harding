@@ -153,3 +153,39 @@ proc windowConnectDestroyImpl*(interp: var Interpreter, self: Instance, args: se
                              cast[GCallback](onWindowDestroy), nil)
 
   nilValue()
+
+## Native method: destroyed: (block-based destroy signal)
+proc windowDestroyedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Connect destroy signal to a Harding block
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  if not self.isNimProxy:
+    return nilValue()
+
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkWidget](self.nimValue)
+  if widget == nil:
+    return nilValue()
+
+  let proxy = getGtkWidgetProxy(widget)
+  if proxy == nil:
+    return nilValue()
+
+  let blockVal = args[0]
+
+  let handler = SignalHandler(
+    blockNode: blockVal.blockVal,
+    interp: addr(interp)
+  )
+
+  if "destroy" notin proxy.signalHandlers:
+    proxy.signalHandlers["destroy"] = @[]
+  proxy.signalHandlers["destroy"].add(handler)
+
+  let gObject = cast[GObject](widget)
+  discard gSignalConnect(gObject, "destroy",
+                         cast[GCallback](destroyCallbackProc), nil)
+
+  nilValue()
