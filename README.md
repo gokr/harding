@@ -1,452 +1,137 @@
 # Nemo
 
-Smalltalk semantics, Nim performance, modern tooling.
-
-Nemo is a Smalltalk dialect written in Nim. It preserves Smalltalk's message-passing syntax and live programming feel while adding native compilation, Nim ecosystem access, and familiar Unix tooling.
+Nemo is a Smalltalk dialect written in Nim that preserves most of the distinguishing features of the Smalltalk language while fitting in with modern tooling and strong abilities to integrate with libraries from the Nim and C ecosystems. The language currently has a stackless AST based interpreter supporting green threads in classic Smalltalk style.
 
 ## Quick Example
 
 ```smalltalk
-#!/usr/bin/env nemo
+"Hello, World!" println
 
-# Create a class with instance variables
 Point := Object derive: #(x y)
+Point>>distanceFromOrigin [ ^ ((x * x) + (y * y)) sqrt ]
 
-# Add a method using >> syntax
-Point>>moveBy: dx and: dy [
-    x := x + dx
-    y := y + dy
-    self
-]
-
-# Create an instance and use it
-P := Point new
-P x: 100 y: 200
-P moveBy: 10 and: 20
-P x  # Returns 110
+p := Point new
+p x: 3 y: 4
+p distanceFromOrigin println  # Prints: 5.0
 ```
-
-## For Smalltalkers
-
-**What feels familiar:**
-
-- Message syntax is identical: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
-- String concatenation with comma: `"Hello" , " World"`
-- Blocks work as expected with temporary variables: `[ | temp | temp := 1 ]`
-- Everything is an object, everything happens via message sends
-- Live evaluation in the REPL: `nemo` gives you an interactive prompt
-- Familiar collection messages: `do:`, `select:`, `collect:`, etc
-
-**What's different:**
-
-| Smalltalk | Nemo |
-|-----------|---------|
-| Period required at end of statements | Optional - newline or period both work |
-| Comments in double quotes | Hash `#` comments |
-| Single or double quotes for strings | Double quotes only for strings |
-| Classes define structure via class definition | Classes derive from parents: `Object derive: #(ivars)` |
-| Instance variables declared in class | Declare in class with `derive: #(x y)`, inherited by derived |
-| Methods compiled to method dictionary | Methods stored on class tables, inherited via class hierarchy |
-| Image-based persistence | Source files, git, normal Unix workflow |
-| VM execution | Interprets AST directly, compiles to Nim (in development) |
-| FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
-
-### Variable Naming Convention
-
-Nemo enforces a capitalization convention to distinguish between globals and locals:
-
-| Type | Convention | Example |
-|------|------------|---------|
-| **Globals** (class names, global variables) | Uppercase first letter | `Point`, `MyGlobal`, `Counter` |
-| **Locals** (temporaries, method parameters, block parameters) | Lowercase first letter | `temp`, `index`, `value` |
-
-```smalltalk
-# Global variable (starts with uppercase)
-Counter := 0
-
-# Method with local parameters and temporaries
-Counter>>incrementBy: amount [
-    | oldValue |
-    oldValue := count
-    count := count + amount
-    ^ oldValue
-]
-
-# Block with lowercase parameter
-Doubler := [:n | n * 2]
-```
-
-This convention prevents accidental global creation from typos and makes variable scope visually clear.
-
-### Syntax Notes
-
-**Comments:**
-```smalltalk
-# This is a hash comment - the standard comment style
-#==== Section headers also use hash style
-```
-
-**Strings:**
-```smalltalk
-"Hello, World"           # Double quotes for strings
-```
-
-**Statements:**
-```smalltalk
-# Both styles work - newline or period:
-X := 1
-Y := 2
-
-X := 1.
-Y := 2.
-```
-
-**The class system:**
-
-Classes inherit from parent classes via `derive:`, and instances are created via `new`:
-
-```smalltalk
-# Create a class with automatic accessors for x and y
-Point := Object derive: #(x y)
-
-# Add methods using >> syntax
-Point>>printString [
-    ^ '(' , (x asString) , ', ' , (y asString) , ')'
-]
-
-# Create an instance
-P := Point new
-P x: 42
-P y: 99
-P printString  # Returns '(42, 99)'
-```
-
-Key differences to understand:
-- `Object derive: #(x y)` - Creates a **class** (a subclass of Object) with instance variables
-- `Point new` - Creates an **instance** of the Point class
-- `Point new x: 42` - You can cascade initialization after `new`
-
-Instance variables declared with `derive:` are stored in slots (fast array access). Classes have merged method tables for fast O(1) lookup. Slot access within methods is via direct slot access. For external slot manipulation, use `at:/at:put:` on collection instances (Array, Table).
-
-### Method Definition Approaches
-
-Nemo supports multiple ways to define methods:
-
-**Approach 1: Individual method definition (>> syntax)**
-```smalltalk
-Point>>moveBy: dx and: dy [
-    x := x + dx
-    y := y + dy
-    ^ self
-]
-```
-
-**Approach 2: Batched method definition (extend:)**
-```smalltalk
-Point extend: [
-    self >> moveBy: dx and: dy [
-        x := x + dx
-        y := y + dy
-    ]
-    self >> distanceFromOrigin [
-        ^ ((x * x) + (y * y)) sqrt
-    ]
-]
-```
-
-**Approach 3: Combined class creation with methods (derive:methods:)**
-```smalltalk
-Person := Object derive: #(name age) methods: [
-    self >> greet [ ^ "Hello, I am " , name ]
-    self >> haveBirthday [ age := age + 1 ]
-]
-```
-
-**Approach 4: Class-side (factory) methods (extendClass:)**
-```smalltalk
-Person extendClass: [
-    self >> newNamed: n aged: a [
-        | person |
-        person := self derive
-        person name: n
-        person age: a
-        ^ person
-    ]
-]
-
-# Usage
-P := Person newNamed: "Alice" aged: 30
-```
-
-The `extend:` and `extendClass:` methods use `asSelfDo:` internally, which temporarily rebinds `self` to the target object during block evaluation. This enables clean method batching syntax.
-
-### Multiple Inheritance and Conflict Resolution
-
-Nemo's class model supports multiple parents. When creating a class with multiple parents, the system checks for conflicts:
-
-- **Slot name conflicts**: If two parents define the same slot name, an error is raised
-- **Method selector conflicts**: If two parents define the same method selector, an error is raised
-
-However, you can resolve conflicts by overriding methods in the child class, then using `addParent:` to add the conflicting parents:
-
-```smalltalk
-# Define two classes with conflicting methods
-Parent1 := Object derive: #(a)
-Parent1 >> foo [ ^ "foo1" ]
-
-Parent2 := Object derive: #(b)
-Parent2 >> foo [ ^ "foo2" ]
-
-# Create a child class that overrides the conflicting method
-Child := Object derive: #(x)
-Child >> foo [ ^ "child" ]
-
-# Now add the conflicting parents - this works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
-
-Result := Child new foo  # Returns "child" (child's override takes precedence)
-```
-
-**Important**: Only directly-defined methods on parents are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause false conflicts.
-
-### Green Threads (Cooperative Processes)
-
-Nemo supports cooperative green threads for concurrent execution with first-class Process objects:
-
-```smalltalk
-# Fork a new process - returns a Process object
-Process := Processor fork: [
-  1 to: 10 do: [:i |
-    Stdout writeline: i
-    Processor yield  # Yield to other processes
-  ]
-]
-
-# Query process properties
-Process pid       # Returns process ID (integer)
-Process name      # Returns process name (string)
-Process state     # Returns state: "ready", "running", "blocked", "suspended", "terminated"
-
-# Control processes
-Process suspend   # Suspend execution
-Process resume    # Resume suspended process
-Process terminate # Terminate the process
-
-# Yield current process
-Processor yield
-```
-
-Each process has its own interpreter with an isolated activation stack, but all processes share the same globals and class hierarchy. The scheduler uses round-robin scheduling with explicit yields.
-
-### Nemo Global (GlobalTable)
-
-The `Nemo` object is a GlobalTable instance that provides access to the global namespace:
-
-```smalltalk
-# List all globals
-Nemo keys         # Returns array of global variable names
-
-# Get a global
-Nemo at: "Object" # Returns the Object class
-
-# Set a global
-Nemo at: "myVar" put: 42
-
-# Check if global exists
-Nemo includesKey: "myVar"  # Returns true/false
-
-# Load a Nemo file
-Nemo load: "lib/core/MyLibrary.nemo"  # Loads and evaluates file
-```
-
-Multiple processes can share globals via the `Nemo` GlobalTable, enabling inter-process communication.
-
-The `Nemo load:` method resolves paths relative to `NEMO_HOME` (environment variable or `--home` CLI option).
 
 ## Installation
 
 ```bash
 git clone https://github.com/gokr/nemo.git
 cd nemo
-nimble build
-nimble local   # Copies binaries to current directory
+nimble local  # Build and copy binaries to root directory
 ```
 
 Binaries: `nemo` (REPL/interpreter), `nemoc` (compiler stub)
-
-### VSCode Extension
-
-Syntax highlighting for `.nemo` files is available via the included VSCode extension. To install:
-
-```bash
-# From command line
-code --install-extension nemo-lang-0.1.0.vsix
-
-# Or from VSCode:
-# 1. Press Ctrl+Shift+P (Cmd+Shift+P on Mac)
-# 2. Type "Extensions: Install from VSIX..."
-# 3. Select nemo-lang-0.1.0.vsix
-# 4. Reload VSCode when prompted
-```
-
-Or manually rebuild the extension after making changes to the grammar:
-
-```bash
-npm install -g @vscode/vsce
-vsce package
-```
 
 ## Usage
 
 ```bash
 nemo                    # Interactive REPL
-nemo script.nemo          # Run a file
+nemo script.nemo        # Run a file
 nemo -e "3 + 4"         # Evaluate expression
-nemo --ast script.nemo    # Show AST, then execute
+nemo --ast script.nemo  # Show AST, then execute
 nemo --loglevel DEBUG   # Verbose execution trace
-nemo --home /opt/nemo   # Use custom home directory
-nemo --bootstrap custom.nemo  # Use custom bootstrap file
 ```
 
 ### Environment Variables
 
-- `NEMO_HOME` - Default home directory for loading libraries (default: current directory)
+- `NEMO_HOME` - Default home directory for loading libraries
 
-### Loading Files from Nemo
+### VSCode Extension
 
-The `Nemo load:` method loads and evaluates Nemo files:
+Syntax highlighting for `.nemo` files:
 
-```smalltalk
-# Load a file relative to NEMO_HOME
-Nemo load: "lib/core/MyLibrary.nemo"
-
-# Load with absolute path
-Nemo load: "/absolute/path/to/file.nemo"
+```bash
+code --install-extension nemo-lang-0.1.0.vsix
 ```
 
-Paths are resolved relative to `NEMO_HOME` if not absolute.
+## For Smalltalkers
 
-### Debugging
+**What feels familiar:**
 
-Use `--loglevel DEBUG` for detailed execution tracing.
+- Message syntax: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
+- Cascade messages
+- Classes and class methods
+- String concatenation with comma: `"Hello" , " World"`
+- Blocks are proper lexical closures with temporaries and can do early returns: `[ | temp | temp := 1 ]`
+- Everything is an object, everything happens via message sends
+- Live evaluation in the REPL with `nemo`
+- Collection messages: `do:`, `select:`, `collect:`, etc.
 
-## Language Basics
+**What's different:**
 
-**Literals:**
-```smalltalk
-42                  # integer
-3.14                # float
-"hello"             # string
-#(1 2 3)            # array (seq)
-#{"key" -> "value"} # table (dictionary)
-{| x: 1 y: 2 |}    # object literal
-#symbol             # symbol literal
-```
+| Smalltalk | Nemo |
+|-----------|------|
+| Required period end-of-statement | Optional - newline or period both work |
+| Double quotes for comments | Hash `#` for comments |
+| Single quotes for strings | Double quotes for strings |
+| Classes define structure via class definition | Class construction using derive: `Object derive: #(ivars)` |
+| Image-based persistence | Source files loaded on startup, git friendly source format, normal Unix workflow |
+| VM execution | Interprets AST directly, native compiler via Nim (in development) |
+| FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
 
-**Assignment and messages:**
-```smalltalk
-x := 42
-obj := Object derive
-obj at: #foo put: #bar
-obj at: #foo
-```
+### Variable Naming Rule
 
-**Blocks and control flow:**
-```smalltalk
-[ :param | param + 1 ]     # block with parameter
-[ | temp | temp := 1 ]     # block with temporary variable
+Nemo distinguishes globals from locals by capitalization and enforces this in parsing:
 
-(x > 0) ifTrue: ["positive"] ifFalse: ["negative"]
-numbers do: [:each | each print]
-```
+| Type | Convention | Example |
+|------|------------|---------|
+| Globals (class names, global variables) | Uppercase first | `Point`, `MyGlobal` |
+| Locals (instance variables, temporaries, parameters, block params) | Lowercase first | `temp`, `index`, `value` |
 
-**Multiline keyword messages:**
-```smalltalk
-tags isNil
-  ifTrue: [ ^ "Object" ]
-  ifFalse: [ ^ tags first ]
-```
+### Key Syntax Differences
 
-See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for details on newline handling.
+| Feature | Nemo Syntax |
+|---------|------------|
+| Comments | `# This is a comment` |
+| Strings | `"Double quotes only"` |
+| Create subclass | `Point := Object derive: #(x y)` |
+| Create instance | `p := Point new` |
+| Define method | `Point>>move: dx [ ... ]` |
+| Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
 
 ## Current Status
 
 **Working:**
-- Lexer, parser, AST interpreter
-- Class-based object system with slot-based instance variables
+- Lexer, parser, stackless AST interpreter
+- Class-based object system with slots
 - REPL with file execution
-- Block closures with lexical scoping, environment capture, and non-local returns
-- Closure variable isolation and sibling block sharing
-- Data structure literals (arrays, tables, object literals)
-- Method definition syntax (`>>`)
-- `self` and `super` support (unqualified and qualified `super<Parent>`)
-- Multi-character binary operators (`==`, `//`, `\`, `<=`, `>=`, `~=`, `~~`, `&`, `|`)
-- Enhanced comment handling (`#` followed by special chars)
-- Standard library (Object, Boolean, Block, Number, Collections, String, FileStream, Exception, TestCase)
-- All stdlib files load successfully
-- Dynamic message sending: `perform:`, `perform:with:`, `perform:with:with:`
-- Method batching: `extend:`, `extendClass:`, `derive:methods:`
-- Self-rebinding: `asSelfDo:` for evaluating blocks with modified self
-- Green threads: cooperative processes with `Processor yield`, `Processor fork:`
-- Per-process interpreters with shared globals
-- Conflict detection for multiple inheritance (slot names, method selectors)
-- `addParent:` message for adding parents after class creation
-- `nil` as singleton instance of UndefinedObject (not a primitive)
-- `Stdout` global for console output
-- String `repeat:` for repeating strings
-- Array `join:` for concatenating elements
-- String concatenation with comma operator `,`
+- Block closures with lexical scoping and support for early returns
+- Data structure literals
+- Method definition (`>>`), `self` and `super` support
+- Multi-character operators (`==`, `//`, `<=`, `>=`, `~=`, `~~`)
+- Standard library (Object, Boolean, Block, Number, Collections, String)
+- Green threads: `Processor fork:`, `Processor yield`
+- Multiple inheritance with conflict detection and scoped super send
+- Dynamic message sending: `perform:`, `perform:with:`
 
 **In progress:**
 - Compiler to Nim (nemoc is stub)
 - FFI to Nim
 - Standard library expansion
 
-## Architecture
+## Documentation
 
-Nemo uses AST interpretation for REPL and rapid prototyping. The compiler (in development) will enable deployment as native single binary executables with better performance.
+- [Quick Reference](docs/QUICKREF.md) - Syntax quick reference
+- [Language Manual](docs/MANUAL.md) - Complete language manual
+- [Implementation](docs/IMPLEMENTATION.md) - VM internals
+- [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
+- [Future Plans](docs/FUTURE.md) - Roadmap
+- [GTK Integration](docs/GTK.md) - GUI development
+- [VSCode Extension](docs/VSCODE.md) - Editor support
 
-## Differences from Standard Smalltalk
+## Examples
 
-**Syntax additions:**
-- `#( )` array literals (like Smalltalk, but maps to Nim `seq`)
-- `#{ }` table literals (key-value dictionaries, maps to Nim `table`)
-- `{| |}` object literals
-- `# comment` (Nim-style comments) and `#====` section headers
-- `| temp |` for temporary variables in blocks (Smalltalk-style)
-- Newline as implicit statement separator (period still works explicitly)
-
-**Multi-character binary operators:**
-```smalltalk
-a == b      # Equality comparison
-a ~= b      # Not equal
-a <= b      # Less than or equal
-a >= b      # Greater than or equal
-a // b      # Integer division
-a \ b       # Modulo (single backslash)
-a ~~ b      # Not identity
-a & b       # Logical AND
-a | b       # Logical OR
+```bash
+nemo examples/01_hello.nemo
+nemo examples/05_classes.nemo
+nemo examples/10_blocks.nemo
+nemo examples/process_demo.nemo
 ```
 
-**Collections:**
-Uses Nim's data structures directly: `seq` instead of `OrderedCollection`, `Table` instead of `Dictionary`. The literal syntax is familiar but the underlying types are Nim's implementations.
-
-**No images:**
-Nemo uses source files. You use git, your regular editor, and standard build tools. The REPL provides live evaluation during development, but persistence is through source code.
-
-## Newline Handling
-
-Nemo supports newline-based statement separation while allowing keyword messages to span lines:
-
-- Line endings act as statement separators
-- Periods also terminate statements explicitly
-- Keyword message chains can span multiple lines
-- Binary operators cannot span lines
-- Method selectors must be on a single line
-
-See [docs/NEWLINE_RULES.md](docs/NEWLINE_RULES.md) for complete details.
+See the `examples/` directory for more examples covering arithmetic, variables, objects, classes, methods, inheritance, collections, control flow, and blocks.
 
 ## License
 
@@ -454,4 +139,4 @@ MIT
 
 ---
 
-*Smalltalk's semantics, without the image.*
+*Smalltalk's semantics, modern implementation.*

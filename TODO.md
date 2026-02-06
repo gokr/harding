@@ -7,6 +7,8 @@ This document tracks current work items and future directions for Nemo developme
 **Core Language**: The interpreter is fully functional with:
 - Lexer, parser, AST interpreter
 - **Class-based object system with inheritance and merged method tables** ✅
+- **Multiple inheritance with conflict detection** ✅
+- **addParent: for adding parents after class creation** ✅
 - REPL with file execution
 - **Block closures with full lexical scoping, environment capture, and non-local returns** ✅
 - **Closure variable isolation and sibling block sharing** ✅
@@ -15,6 +17,10 @@ This document tracks current work items and future directions for Nemo developme
 - Multi-character binary operators (`==`, `//`, `\`, `<=`, `>=`, `~=`, `~~`, `&`, `|`) ✅
 - Enhanced comment handling (`#` followed by special chars) ✅
 - Standard library (Object, Boolean, Block, Number, Collections, String, FileStream, Exception, TestCase) ✅
+- **Exception handling via on:do:** ✅
+- **Exception class hierarchy (Error, MessageNotUnderstood, SubscriptOutOfBounds, DivisionByZero)** ✅
+- **nil as singleton UndefinedObject instance** ✅
+- **Stdout global for console output** ✅
 - Smalltalk-style temporary variables in blocks (`| temp |`) ✅
 - Multiline keyword message support (no `.` needed between lines) ✅
 - **All stdlib files load successfully** ✅
@@ -25,10 +31,13 @@ This document tracks current work items and future directions for Nemo developme
 - **perform:** family for dynamic message sending ✅
 - **Process, Scheduler, and GlobalTable as Nemo-side objects** ✅
 - **Nemo global for accessing global namespace** ✅
-- **Process introspection** ✅
-- **Process control** ✅
+- **Process introspection (pid, name, state)** ✅
+- **Process control (suspend, resume, terminate)** ✅
+- **Green threads with Processor fork: and Processor yield** ✅
+- **Nemo load: method for loading .nemo files** ✅
+- **--home and --bootstrap CLI options** ✅
 
-**Not Yet Implemented**: Compiler (nemoc is stub), FFI, advanced standard library.
+**Still Needed**: Compiler (nemoc is stub), FFI to Nim, standard library expansion.
 
 ## High Priority
 
@@ -46,24 +55,30 @@ This document tracks current work items and future directions for Nemo developme
 
 ## Medium Priority
 
-### Standard Library
-- [x] Number objects with arithmetic helpers (abs, even, odd, max:, min:, to:do:, etc.)
-- [x] Enhanced string manipulation (repeat:, concat with , operator)
-- [x] More collection methods (join:, inject:into:, detect:, anySatisfy:, allSatisfy:, etc.)
-- [x] File I/O primitives (Stdout global with write:, writeline:)
-- [ ] Exception handling primitives
+### Standard Library Expansion
+- [ ] More collection methods
+- [ ] Regular expression support
+- [ ] Date/time handling
+- [ ] Additional file I/O capabilities
+- [ ] Networking primitives
 
 ### Performance
-- [ ] Method caching
+- [ ] Method caching (beyond current allMethods table)
 - [ ] AST optimization passes
-- [ ] Memory management improvements
+- [ ] Memory management improvements for circular references
 
 ### Tooling
 - [ ] REPL history and completion
 - [x] Editor syntax highlighting definitions (VSCode extension)
 - [ ] Build system refinements
+- [ ] Better error messages
 
-## Future Directions
+### Green Threads
+- [ ] Monitor synchronization primitive
+- [ ] SharedQueue for producer-consumer patterns
+- [ ] Semaphore for counting/binary locks
+
+## Low Priority
 
 ### BitBarrel Integration
 - [ ] First-class barrel objects
@@ -71,356 +86,117 @@ This document tracks current work items and future directions for Nemo developme
 - [ ] Crash recovery support
 
 ### Language Evolution
-- [ ] Multiple inheritance syntax (`withParents:`) - first parent defines "kind", additional parents are mixins
+- [x] Multiple inheritance syntax (implemented via `addParent:`)
 - [ ] Optional static type checking
 - [ ] Module/namespace system
-- [ ] Concurrency model
 - [ ] Metaprogramming APIs
 
 ## Known Issues
 
-- ~~Parser edge cases with nested blocks~~ ✅ Fixed
-- ~~Closure variable isolation~~ ✅ Fixed
-- ~~Non-local return implementation~~ ✅ Fixed
-- ~~Multi-character binary operators~~ ✅ Fixed
-- ~~Comment handling for `#====`~~ ✅ Fixed
-- ~~Temporary variables in blocks~~ ✅ Fixed
-- ~~Multiline keyword messages~~ ✅ Fixed
-- ~~asSelfDo: for self-rebinding~~ ✅ Implemented
-- ~~extend: for instance method batching~~ ✅ Implemented
-- ~~extendClass: for class-side methods~~ ✅ Implemented
-- ~~derive:methods: combined class creation~~ ✅ Implemented
-- ~~perform: family for dynamic dispatch~~ ✅ Implemented
-- ~~Green threads core scheduler~~ ✅ Implemented
-- ~~Process forking and yielding~~ ✅ Implemented
-- ~~Shared globals between processes~~ ✅ Implemented
-- ~~Process, Scheduler, GlobalTable Nemo-side objects~~ ✅ Implemented
-- ~~Global variable capitalization convention~~ ✅ Implemented
-- ~~Non-local return through nested blocks~~ ✅ Fixed
-- ~~Orphaned block handling~~ ✅ Fixed
-- Monitors and SharedQueues (planned)
+- Block body corruption in forked processes when running in test suite (works in isolation)
 - Memory management for circular references
 - Error handling improvements needed
 - Compiler implementation (nemoc is stub)
-- **Block body corruption in forked processes when running in test suite** - Works in isolation but fails with other tests due to GC/test isolation issues
 
 ## Documentation Needs
 
-- [x] Newline handling documentation (docs/NEWLINE_RULES.md)
+- [x] Quick Reference (docs/QUICKREF.md)
+- [x] Language Manual (docs/MANUAL.md)
+- [x] Implementation docs (docs/IMPLEMENTATION.md)
+- [x] Tools & Debugging docs (docs/TOOLS_AND_DEBUGGING.md)
 - [ ] Tutorials and comprehensive examples
 - [ ] API reference for built-in objects
-- [ ] Internal API documentation
 - [ ] Help text improvements
 
 ## Build Quick Reference
 
 ```bash
+nimble local       # Build and copy binaries to root directory (recommended)
 nimble build       # Build nemo and nemoc
-nimble local       # Build and copy to root
 nimble test        # Run tests
 nimble clean       # Clean artifacts
+nimble install     # Install nemo to ~/.local/bin/
 ```
 
-## Recent Completed Work (2026-01-30)
+### Debug Builds
 
-### Parser & Lexer Fixes
-- Fixed multi-character binary operators (`==`, `===`, `//`, `\\`, `<=`, `>=`, `~=`) to match multi-char before single-char fallback
-- Fixed comment handling for `#====` and similar section headers (no space needed after `#`)
-- Added Smalltalk-style temporary variables in blocks: `[ | temp1 temp2 | ... ]`
-- Multi-character method selectors now supported (e.g., `Object>>~~ other [...]`)
-- Added `parsePrimaryUnaryOnly` for parsing keyword arguments that allow unary messages
-- Fixed keyword messages to span multiple lines (newline-aware parsing)
+```bash
+# Build with debug symbols
+nim c -d:debug --debugger:native -o:nemo_debug src/nemo/repl/nemo.nim
 
-### Object Model & Runtime Fixes
-- Fixed array indexing to use 1-based indexing (Smalltalk compatible)
-- Added `selectorPutImpl` for proper method storage on runtime objects with slots
-- Added slot variable access in methods (lookup and assignment)
-- Fixed array literal evaluation to handle pseudo-variables (true, false, nil)
-- Added `add:` alias for `primitiveAdd:` on arrays
+# Debug with GDB
+gdb --args ./nemo_debug script.nemo
+```
 
-### Testing Framework
-- Created TestCase class in stdlib with assertion methods
-- Support for `assert:`, `assert:equals:`, `fail:` methods
-- Test lifecycle methods (initialize, setUp, tearDown)
-- Example tests in examples/test_example.nemo
+### Logging Options
 
-### Documentation
-- Created docs/NEWLINE_RULES.md documenting newline behavior
-- Updated all docs to reflect double-quoted strings only
-- Reserved single quotes for future use in lexer
+```bash
+nemo --loglevel DEBUG script.nemo    # Verbose tracing
+nemo --loglevel INFO script.nemo     # General information
+nemo --loglevel WARN script.nemo     # Warnings only
+nemo --loglevel ERROR script.nemo    # Errors only (default)
+```
 
-## Recent Completed Work (2026-01-31)
+## Recent Completed Work
 
-### Self-Rebinding and Method Batching
-- Implemented `asSelfDo:` primitive for evaluating blocks with rebound self
-- Added `extend:` for batching instance method definitions
-- Added `extendClass:` for class-side (factory) method definitions
-- Added `derive:methods:` for combined class creation with methods
-- Implemented `perform:`, `perform:with:`, `perform:with:with:` for dynamic dispatch
-- All `perform:` calls now use symbols (`#selector`) instead of strings
-- Updated `doesNotUnderstand:` to accept selector with optional arguments
+### Documentation and Cleanup (2025-02-06)
+- Updated README.md with concise example and proper documentation links
+- Fixed all example files to use `new` for instance creation (not `derive`)
+- Fixed all example files to use double quotes for strings (not single quotes)
+- Updated documentation to match current syntax
 
-### Green Threads (Cooperative Processes)
-- Implemented core scheduler in `nemo/core/process.nim`
-- Added `SchedulerContext` for interpreter integration
-- Each process has its own interpreter with isolated activation stack
-- Shared globals and rootObject between all processes
-- Round-robin scheduling with explicit yields
+### Exception Handling (2025-02-03)
+- Implemented exception handling via `on:do:` mechanism
+- Created Exception class hierarchy (Error, MessageNotUnderstood, SubscriptOutOfBounds, DivisionByZero)
+- Errors in Nemo code now use Nim exceptions with stack traces
+- Exception support in TestCase for test assertion failures
+
+### Nemo Object System Updates (2025-02-03)
+- `nil` as singleton UndefinedObject instance (not primitive)
+- Stdout global for console output
+- String `repeat:` and Array `join:` methods
+- Class introspection: `className`, `slotNames`, `superclassNames`
+- Fixed class-side method definition via `extendClass:`
+
+### Process, Scheduler, GlobalTable (2025-02-03)
+- Process class as Nemo-side object with pid, name, state methods
+- Process control: suspend, resume, terminate
+- Scheduler class with process introspection
+- GlobalTable class and Nemo global for namespace access
+- All processes share globals via `Nemo`
+
+### Multiple Inheritance (2025-02-01)
+- Conflict detection for slot names in multiple parent classes
+- Conflict detection for method selectors in multiple parent classes
+- `addParent:` message for adding parents after class creation
+- Override methods in child to resolve conflicts
+
+### Green Threads (2025-01-31)
+- Core scheduler with round-robin scheduling
+- Process forking with `Processor fork:`
+- Each process has isolated activation stack
+- Shared globals between all processes
 - Process states: ready, running, blocked, suspended, terminated
-- `Processor` global object with `yield`, `fork:`, `current` methods
-- Process forking from Nemo blocks
-- Test suite for scheduler and process lifecycle
+
+### Method Definition Enhancements (2025-01-31)
+- `asSelfDo:` for self-rebinding blocks
+- `extend:` for batching instance methods
+- `extendClass:` for class-side (factory) methods
+- `derive:methods:` for combined class creation
+- `perform:` family for dynamic message sending
+
+### Parser and Syntax (2025-01-30)
+- Multi-character binary operators (`==`, `//`, `<=`, `>=`, `~=`, `~~`, `&`, `|`)
+- Smalltalk-style temporaries in blocks: `[ | temp1 temp2 | ... ]`
+- Multiline keyword messages (newline-aware)
+- `#====` section header comments
+- 1-based array indexing (Smalltalk compatible)
+
+### VSCode Extension (2025-02-01)
+- Comprehensive syntax highlighting for `.nemo` files
+- TextMate grammar with language configuration
+- Packaged as .vsix extension
 
 ---
 
-## Recent Completed Work (2026-01-31)
-
-### Boolean and Number Class Hierarchies
-- Created Boolean as parent class for True and False
-- Created Number as parent class for Integer and Float
-- Updated stdlib to use new hierarchies
-
-### Block Self Resolution Fix
-- Fixed self resolution in blocks to use homeActivation.receiver
-- Blocks now correctly refer to their creating object's self
-
-### New Binary Operators
-- Added & and | as binary operators (logical AND/OR)
-- Added support for & and | as method selectors (True>>& other, True>>| other)
-
-### Negative Number Literals
-- Added support for negative number literals using Spry-style lexer approach
-- Numbers like -5 are now parsed as single negative literals
-
-### Missing Wrap Functions
-- Added wrapBlockAsObject for block method support
-- Added wrapStringAsObject, wrapArrayAsObject, wrapTableAsObject, wrapFloatAsObject
-
----
-
-## Recent Completed Work (2026-02-01)
-
-### VSCode Extension
-- Added comprehensive VSCode syntax highlighting for `.nemo` files
-- Created TextMate grammar (.vscode/syntaxes/nt.tmLanguage.json)
-- Added language configuration (.vscode/language-configuration.json)
-- Added extension manifest (package.json)
-- Created `.vscodeignore` for smaller extension packages
-- Added VSCODE.md documentation
-- Extension packaged as .vsix (~276KB)
-
-### Documentation Updates
-- Fixed string literal syntax in documentation (use double quotes, not single quotes)
-- Fixed comment syntax (use # for comments)
-- Updated docs/README.md with new documentation files
-- Updated docs/NEWLINE_RULES.md
-- Updated docs/SPECIFICATION.md
-- Updated docs/SYNTAX-QUICKREF-updated.md
-- Updated TODO.md with VSCode extension completion
-
----
-
-*Last Updated: 2026-02-01*
-
-## Recent Completed Work (2026-02-01)
-
-### Multiple Inheritance Conflict Detection and addParent:
-
-- Added conflict detection for slot names in multiple parent classes
-- Added conflict detection for method selectors in multiple parent classes
-  - Only checks directly-defined methods, not inherited ones
-- Implemented `addParent:` class message to add parents after class creation
-  - Allows resolving conflicts by overriding methods first, then adding parents
-- Conflict detection provides clear error messages with guidance
-- Added example tests demonstrating conflict detection and resolution
-
----
-
-## Recent Completed Work (2026-02-03)
-
-### Nemo-Side Process, Scheduler, and GlobalTable Objects
-
-Reified Process, Scheduler, and the global namespace as first-class Nemo objects:
-
-#### Process Class
-- Created Process class as Nemo-side object with `isNimProxy=true`
-- Added native methods: `pid` (integer), `name` (string), `state` (string)
-- Added control methods: `suspend`, `resume`, `terminate`, `yield`
-- `Processor fork:` now returns a Process object that can be queried and controlled
-
-#### Scheduler Class
-- Created Scheduler class as Nemo-side object with `isNimProxy=true`
-- Added introspection methods: `processCount`, `readyCount`, `blockedCount`, `currentProcess`
-- Process creation via: `fork:name:`
-
-#### GlobalTable and Nemo Global
-- Created GlobalTable class (subclass of Table) for global namespace access
-- Added `Nemo` global as GlobalTable instance
-- GlobalTable methods: `keys`, `at:`, `at:put:`, `includesKey:`
-- Enables querying and modifying globals from Nemo code
-- All processes share globals via `Nemo`, enabling inter-process communication
-
-#### Implementation Details
-- Used FFI-style pattern with ProcessProxy and SchedulerProxy wrappers
-- Circular import resolved by moving SchedulerContext to types.nim
-- Added `schedulerContext` field to Interpreter type
-- Added class introspection primitives: `className`, `slotNames`, `superclassNames`
-- Added String `repeat:` and Array `join:` primitives
-
-#### Documentation Updates
-- Updated docs/GREENTHREADS.md with Process and Scheduler API reference
-- Updated README.md with Process and Nemo global examples
-
----
-
-## Recent Completed Work (2026-02-02)
-
-### Inline Primitive Syntax Update
-- Changed inline primitive syntax from positional to keyword message format
-  - Before: `<primitive #primitiveAt:put: key value>`
-  - After: `<primitive primitiveAt: key put: value>`
-- Added `parsePrimitiveTagContent()` helper that properly lexes and parses primitive content
-- Supports unary selectors (`primitiveClone`) with no arguments
-- Supports literals (int, float, string, symbol) as arguments
-- Maintains backward compatibility with optional `#` prefix
-- Added comprehensive test suite for primitive syntax
-- Updated PRIMITIVES.md and GRAMMAR.md documentation
-
----
-
-## Recent Completed Work (2026-02-03)
-
-### nil as UndefinedObject Instance
-
-- Changed `nil` from primitive value (`vkNil`) to singleton instance of `UndefinedObject` class
-- `UndefinedObject` inherits from `Object` following Smalltalk convention
-- `nil class` returns `UndefinedObject`, `nil isNil` returns `true`
-- Fixed `instIdentityImpl` for proper instance comparison
-- Added `isNilValue()` helper for nil checking
-
-### Stdout Global and FileStream
-
-- Created minimal `FileStream` class with `write:` and `writeline:` methods
-- Created `Stdout` global instance for console output
-- Both available in global namespace for Nemo code
-
-### String and Array Enhancements
-
-- Added `String>>repeat:` for repeating strings (e.g., `"ab" repeat: 3` → "ababab")
-- Changed string concatenation from `concat:` to `,` (comma operator)
-- Added `Array>>join:` for concatenating elements with separator
-
-### Class Introspection Fixes
-
-- Fixed `Object>>class` to use `primitiveClass` native method
-- Fixed `Object>>className` to use `primitiveClassName`
-- Added `name` method on Object class-side for Class objects
-- Fixed `extendClass:` to be on `Object class` (class-side method)
-
-### Global Access
-
-- Added "Global" as alias for GlobalTable instance (in addition to "Nemo")
-- Both `Global at: "String"` and `Nemo at: "String"` work
-
----
-
-## Recent Completed Work (2026-02-04)
-
-### Bug Fixes for Process, Scheduler, and GlobalTable
-
-Fixed multiple SIGSEGV and nil access issues in the process/scheduler implementation:
-
-**Process.nim:**
-- Fixed SIGSEGV in `newProcess` when accessing `result.pid` during object construction
-- Store PID in local variable first, then use in constructor
-
-**Scheduler.nim:**
-- Added nil checks for `proxy.process` in all process methods (pid, name, state, suspend, resume, terminate)
-- Added `processProxies` sequence to keep ProcessProxy references alive (GC protection since nimValue is raw pointer)
-- Initialize `capturedEnv` in `forkProcess` for safety
-
-**Evaluator.nim:**
-- Fixed `executeMethod` double evaluation bug - changed to accept `seq[NodeValue]` instead of `seq[Node]`
-- Added `isCapturedEnvInitialized` helper using explicit flag
-- Initialize `capturedEnv` in block literal evaluation with `capturedEnvInitialized: true`
-- Fixed `captureEnvironment` to check flag before accessing
-- Fixed `performWithImpl` to use `seq[NodeValue]` directly
-
-**Types.nim:**
-- Added `capturedEnvInitialized` flag to BlockNode to track initialization state
-
-**Parser.nim & Objects.nim:**
-- Set `capturedEnvInitialized: true` when creating BlockNodes
-
-**Tests:**
-- Fixed string syntax (single quotes to double quotes) in test expressions
-- Made PID checks flexible (unique and positive vs specific values)
-- Disabled "Multiple processes can share globals" test due to block body corruption in test suite context
-
----
-
-## Recent Completed Work (2026-02-04)
-
-### Nemo Object load: Method and Bootstrap File Support
-
-- Added `Nemo load:` method for loading Nemo files from Nemo code
-- Paths resolved relative to `NEMO_HOME` environment variable
-- Added `--home <path>` CLI option to set NEMO_HOME
-- Added `--bootstrap <file>` CLI option for custom bootstrap file
-- Created `lib/core/Bootstrap.nemo` as stdlib entry point
-- Bootstrap file uses `Nemo load:` syntax to load other library files
-- Replaced hardcoded file list in `loadStdlib()` with bootstrap file approach
-
-### Shared CLI Module
-
-- Created `src/nemo/repl/cli.nim` with shared CLI utilities
-- `CliOptions` type for common command-line options
-- `parseCliOptions()` for parsing --home, --bootstrap, --loglevel, --stack-depth, --ast
-- `showUsage()` for displaying help
-- `setupLogging()` for configuring logging
-- Refactored `nemo.nim` and `ide.nim` to use shared CLI module
-- Eliminated code duplication between REPL and IDE
-
-### FileStream Class Identity Fix
-
-- Removed FileStream class creation from Nim `initInterpreter()`
-- FileStream is now fully defined in `FileStream.nemo`
-- Stdout instance created after loading FileStream.nemo
-- Native methods (`write:`, `writeline:`) registered after .nemo file loads
-- Follows principle: define classes in .nemo files, only register primitives from Nim
-
----
-
-## Recent Completed Work (2026-02-05)
-
-### Non-Local Return Fixes
-
-Fixed multiple issues with non-local returns (`^`) from blocks:
-
-**Problem**: Non-local returns from nested blocks and orphaned blocks were not working correctly:
-- `inject:into:` was returning initial value instead of accumulated result
-- `detect:` was returning nil instead of found element
-- Blocks created inside methods that returned closures lost their return target
-
-**Solution**:
-- Added `nonLocalReturnTarget` field to Activation for tracking true non-local returns
-- Chain non-local returns through nested blocks to find actual method activation
-- Handle orphaned blocks (whose home activation is no longer on stack) by using current activation as target
-- Update captured variable changes back to parent activations
-
-**Tests Fixed**:
-- `inject:into: reduces elements`
-- `detect: finds first matching element`
-- `blocks can close over variables`
-- `nested closures capture multiple levels`
-
-### Global Variable Capitalization Convention
-
-- Globals must start with uppercase letter (A-Z)
-- Locals/temporaries use lowercase
-- Protected globals cannot be reassigned (Object, Class, Nemo, etc.)
-- This prevents typos from accidentally creating globals
-
----
-
-*Last Updated: 2026-02-05*
+*Last Updated: 2025-02-06*
