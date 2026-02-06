@@ -1,4 +1,4 @@
-import std/[tables, strutils, math, strformat, logging, os, hashes]
+import std/[tables, strutils, math, strformat, logging, os, hashes, sequtils]
 import ../core/types
 import ../parser/lexer
 import ../parser/parser
@@ -418,7 +418,7 @@ proc lookupVariable*(interp: Interpreter, name: string): NodeValue =
 # Variable assignment
 proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
   ## Set variable in current activation, captured environment, or create global
-  echo "DEBUG setVariable: name=", name, " activation=", interp.currentActivation != nil
+  debug("setVariable: name=", name, " activation=", $( interp.currentActivation != nil))
 
   # First check if there's a current activation with a captured environment
   # that contains this variable
@@ -435,7 +435,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
 
     # Check if variable exists in current activation's locals
     if name in interp.currentActivation.locals:
-      echo "DEBUG setVariable: storing ", name, " in locals"
+      debug("setVariable: storing ", name, " in locals")
       interp.currentActivation.locals[name] = value
       return
 
@@ -609,10 +609,8 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
     debug("Bound parameter: ", paramName, " = ", args[i].toString())
 
   # Initialize temporaries to nil
-  echo "DEBUG invokeBlock: temporaries.len=", blockNode.temporaries.len
   for tempName in blockNode.temporaries:
     activation.locals[tempName] = nilValue()
-    echo "DEBUG invokeBlock: initialized temporary: ", tempName
 
   # Save current state
   let savedReceiver = interp.currentReceiver
@@ -761,6 +759,13 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
     debug("Binding parameter: ", paramName, " = ", argValue.toString())
     activation.locals[paramName] = argValue
 
+  # Initialize temporaries to nil (must be in locals so they shadow slots)
+  for tempName in currentMethod.temporaries:
+    if tempName notin activation.locals:  # Don't overwrite parameters
+      activation.locals[tempName] = nilValue()
+      echo "DEBUG executeMethod: initialized temp '", tempName, "' in locals"
+  echo "DEBUG executeMethod: locals keys=", toSeq(activation.locals.keys)
+
   # Push activation
   debug("Pushing activation, stack depth: ", interp.activationStack.len + 1)
   let savedReceiver = interp.currentReceiver
@@ -886,15 +891,24 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
   of nkAssign:
     # Variable assignment
     let assign = node.AssignNode
-    debug("Variable assignment: ", assign.variable)
+    echo "DEBUG nkAssign: var=", assign.variable
     let value = interp.evalOld(assign.expression)
     if value.kind == vkInstance:
       if value.instVal == nil:
-        debug("assign: ", assign.variable, " got nil instVal!")
+        echo "DEBUG nkAssign: ", assign.variable, " got nil instVal!"
       else:
         let className = if value.instVal.class == nil: "nil" else: value.instVal.class.name
-        debug("assign: ", assign.variable, " ptr=", cast[int](value.instVal), " class=", className)
+        echo "DEBUG nkAssign: ", assign.variable, " = Instance class=", className, " kind=", value.instVal.kind
+    else:
+      echo "DEBUG nkAssign: ", assign.variable, " = ", $value.kind
     setVariable(interp, assign.variable, value)
+    # Verify it was stored correctly
+    let verify = lookupVariable(interp, assign.variable)
+    if verify.kind == vkInstance and verify.instVal != nil:
+      let vClass = if verify.instVal.class == nil: "nil" else: verify.instVal.class.name
+      echo "DEBUG nkAssign verify: ", assign.variable, " => class=", vClass
+    else:
+      echo "DEBUG nkAssign verify: ", assign.variable, " => kind=", $verify.kind
     return value
 
   of nkReturn:
@@ -1256,10 +1270,9 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
       let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
       return interp.executeMethod(currentMethodNode, classReceiver, arguments, lookup.definingClass, isClassMethod = true)
     else:
-      # Class method not found - fall through to instance method lookup
-      # by changing receiverVal from vkClass to create an instance wrapper
-      # We do this below in the vkClass case of the conversion section
-      discard
+      # Class method not found - raise doesNotUnderstand
+      raise newException(EvalError,
+        "Message not understood: " & msgNode.selector & " on " & cls.name & " class")
 
   # Convert receiver to Instance - create Instance variants directly
   var receiver: Instance
@@ -1313,12 +1326,8 @@ proc evalMessage(interp: var Interpreter, msgNode: MessageNode): NodeValue =
   of vkNil:
     raise newException(EvalError, "Cannot send message to nil")
   of vkClass:
-    # Class object - convert to instance wrapper for instance method lookup
-    # This happens when a class method is not found but an instance method exists
-    # (e.g., calling extend: on a Class object)
-    let cls = receiverVal.classVal
-    debug("Converting class to instance wrapper for instance method lookup")
-    receiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+    # Should not reach here - class method dispatch handles vkClass above
+    raise newException(EvalError, "Message send to class should be handled by class method dispatch")
   else:
     raise newException(EvalError, "Message send to unsupported value kind: " & $receiverVal.kind)
 
@@ -1495,7 +1504,7 @@ proc evalCascade(interp: var Interpreter, cascadeNode: CascadeNode): NodeValue =
   # Restore previous receiver
   interp.currentReceiver = savedReceiver
 
-  # Return result of last message
+  # Return result of last message (ANSI Smalltalk semantics)
   return cascadeResult
 
 # Special form for sending messages directly without AST
