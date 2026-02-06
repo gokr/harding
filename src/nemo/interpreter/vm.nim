@@ -597,6 +597,48 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkSymbol:
       receiver = newStringInstance(stringClass, receiverVal.symVal)
 
+    # Special stackless handling for control flow primitives
+    if receiver.isNimProxy and receiver.kind == ikObject and receiver.class != nil:
+      # Boolean ifTrue:/ifFalse: - use stackless work frames
+      if (receiver.class == trueClassCache or receiver.class == falseClassCache) and args.len > 0 and args[0].kind == vkBlock:
+        case frame.selector
+        of "ifTrue:":
+          let boolVal = cast[ptr bool](receiver.nimValue)[]
+          if boolVal:
+            # True - execute then block
+            interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
+          else:
+            # False - push nil result
+            interp.pushValue(nilValue())
+          return true
+        of "ifFalse:":
+          let boolVal = cast[ptr bool](receiver.nimValue)[]
+          if not boolVal:
+            # False - execute then block (the block passed to ifFalse:)
+            interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
+          else:
+            # True - push nil result
+            interp.pushValue(nilValue())
+          return true
+        else:
+          discard  # Fall through to regular method dispatch
+
+    # Special stackless handling for block whileTrue:/whileFalse:
+    if receiver.kind == ikObject and receiver.class == blockClass and not receiver.isNimProxy and args.len > 0 and args[0].kind == vkBlock:
+      let conditionBlock = cast[BlockNode](receiver.nimValue)
+      let bodyBlock = args[0].blockVal
+      case frame.selector
+      of "whileTrue:":
+        # Evaluate condition first, then body if true
+        interp.pushWorkFrame(newWhileLoopFrame(true, conditionBlock, bodyBlock, lsEvaluateCondition))
+        return true
+      of "whileFalse:":
+        # Evaluate condition first, then body if false
+        interp.pushWorkFrame(newWhileLoopFrame(false, conditionBlock, bodyBlock, lsEvaluateCondition))
+        return true
+      else:
+        discard  # Fall through to regular method dispatch
+
     if receiver == nil:
       raise newException(ValueError, "Cannot send message to nil receiver")
 
