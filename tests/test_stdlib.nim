@@ -412,3 +412,99 @@ suite "Stdlib: Object utilities":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkBool)
     check(result[0][^1].boolVal == true)
+
+suite "Stdlib: Accessor Generation":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "deriveWithAccessors: generates getters and setters":
+    let result = interp.evalStatements("""
+      Auto := Object deriveWithAccessors: #(x y).
+      AutoInst := Auto new.
+      AutoInst x: 10.
+      AutoInst y: 20.
+      Sum := AutoInst x + AutoInst y.
+      Result := Sum
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 30)
+
+  test "deriveWithAccessors: getter returns correct value":
+    let result = interp.evalStatements("""
+      Auto := Object deriveWithAccessors: #(name).
+      AutoInst := Auto new.
+      AutoInst name: "Test".
+      Result := AutoInst name
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Test")
+
+  test "derive:getters:setters: generates selective accessors":
+    let result = interp.evalStatements("""
+      Selective := Object derive: #(x y)
+                              getters: #(x y)
+                              setters: #(x).
+      SelInst := Selective new.
+      SelInst x: 5.
+      XValue := SelInst x.
+      Result := XValue
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 5)
+
+  test "derive:getters:setters: only generates specified accessors":
+    let result = interp.evalStatements("""
+      Selective := Object derive: #(x y)
+                              getters: #(x)
+                              setters: #(x).
+      SelInst := Selective new.
+      SelInst x: 5.
+      XValue := SelInst x.
+      Result := XValue
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 5)
+
+  test "deriveWithAccessors: works with multiple slots":
+    let result = interp.evalStatements("""
+      Multi := Object deriveWithAccessors: #(a b c d).
+      MultiInst := Multi new.
+      MultiInst a: 1.
+      MultiInst b: 2.
+      MultiInst c: 3.
+      MultiInst d: 4.
+      Total := MultiInst a + MultiInst b + MultiInst c + MultiInst d.
+      Result := Total
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 10)
+
+  test "deriveWithAccessors: works with string slots":
+    let result = interp.evalStatements("""
+      Person := Object deriveWithAccessors: #(name age).
+      PersonInst := Person new.
+      PersonInst name: "Alice".
+      PersonInst age: 30.
+      Greeting := PersonInst name.
+      Result := Greeting
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Alice")
+
+  test "deriveWithAccessors: getter returns nil for unset slot":
+    let result = interp.evalStatements("""
+      Thing := Object deriveWithAccessors: #(value).
+      ThingInst := Thing new.
+      Result := ThingInst value
+    """)
+    check(result[1].len == 0)
+    # In Harding, nil is represented as an instance of UndefinedObject
+    check(result[0][^1].kind == vkInstance)
