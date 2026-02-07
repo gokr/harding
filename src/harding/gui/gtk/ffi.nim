@@ -1,13 +1,13 @@
 ## ============================================================================
 ## GTK FFI Bindings for Harding
 ## Supports both GTK3 and GTK4 via compile-time flag
-## Use -d:gtk4 to compile with GTK4 support (default is GTK3)
+## Use -d:gtk3 to compile with GTK3 support (default is GTK4)
 ## ============================================================================
 
-when defined(gtk4):
-  {.passl: "-lgtk-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
-else:
+when defined(gtk3):
   {.passl: "-lgtk-3 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+else:
+  {.passl: "-lgtk-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
 
 ## Types
 type
@@ -37,7 +37,7 @@ const
   GCONNECTAFTER* = 1.GConnectFlags
   GCONNECTSWAPPED* = 2.GConnectFlags
 
-when defined(gtk4):
+when not defined(gtk3):
   # GTK4 specific imports
   proc gtkWindowNew*(): GtkWindow {.cdecl, importc: "gtk_window_new".}
   proc gtkWindowSetChild*(window: GtkWindow, child: GtkWidget) {.cdecl, importc: "gtk_window_set_child".}
@@ -99,7 +99,7 @@ proc gSignalConnectData*(instance: GObject, detailedSignal: cstring, cHandler: G
 proc gSignalEmit*(instance: GObject, signalId: cuint, detail: cuint) {.cdecl, importc: "g_signal_emit_by_name".}
 
 # GTK Main Loop (GTK3 only)
-when not defined(gtk4):
+when defined(gtk3):
   proc gtkMain*() {.cdecl, importc: "gtk_main".}
   proc gtkMainQuit*() {.cdecl, importc: "gtk_main_quit".}
   proc gtkMainIterationDo*(blocking: cint): cint {.cdecl, importc: "gtk_main_iteration_do".}
@@ -108,7 +108,7 @@ when not defined(gtk4):
 type
   GApplicationFlags* = cint
 
-when defined(gtk4):
+when not defined(gtk3):
   proc gtkApplicationNew*(applicationId: cstring, flags: GApplicationFlags): GtkApplication {.cdecl, importc: "gtk_application_new".}
   proc gApplicationRun*(app: GApplication, argc: cint, argv: pointer): cint {.cdecl, importc: "g_application_run".}
   proc gApplicationQuit*(app: GApplication) {.cdecl, importc: "g_application_quit".}
@@ -126,7 +126,7 @@ proc gSignalConnect*(instance: GObject, signal: cstring, cHandler: GCallback, da
   gSignalConnectData(instance, signal, cHandler, data, nil, 0.GConnectFlags)
 
 # Helper to initialize GTK (works with both versions)
-when defined(gtk4):
+when not defined(gtk3):
   proc initGtk*() =
     gtkInit()
 else:
@@ -134,16 +134,16 @@ else:
     gtkInit(nil, nil)
 
 # GTK MenuBar, Menu, MenuItem (GTK3 only - not available in GTK4)
-when not defined(gtk4):
+when defined(gtk3):
   proc gtkMenuBarNew*(): GtkMenuBar {.cdecl, importc: "gtk_menu_bar_new".}
   proc gtkMenuNew*(): GtkMenu {.cdecl, importc: "gtk_menu_new".}
   proc gtkMenuPopupAtPointer*(menu: GtkMenu, triggerEvent: pointer) {.cdecl, importc: "gtk_menu_popup_at_pointer".}
   proc gtkMenuItemNew*(): GtkMenuItem {.cdecl, importc: "gtk_menu_item_new".}
   proc gtkMenuItemNewWithLabel*(label: cstring): GtkMenuItem {.cdecl, importc: "gtk_menu_item_new_with_label".}
-  proc gtkShellAppend*(menuShell: pointer, child: GtkWidget) {.cdecl, importc: "gtk_shell_append".}
+  proc gtkMenuShellAppend*(menuShell: pointer, child: GtkWidget) {.cdecl, importc: "gtk_menu_shell_append".}
 
 # GTK4 doesn't have GtkMenuBar/GtkMenu/GtkMenuItem
-when defined(gtk4):
+when not defined(gtk3):
   # Stub implementations to allow compilation
   # In GTK4, menus are implemented using GMenuModel and GtkPopover
   # These use gtk_box_new and gtk_button_new as fallbacks with proper parameters
@@ -182,7 +182,7 @@ proc gtkTextBufferDelete*(buffer: GtkTextBuffer, start: GtkTextIter, endIter: Gt
 
 # ScrolledWindow (for wrapping TextView)
 proc gtkScrolledWindowNew*(): GtkScrolledWindow {.cdecl, importc: "gtk_scrolled_window_new".}
-when defined(gtk4):
+when not defined(gtk3):
   proc gtkScrolledWindowSetChild*(scrolled: GtkScrolledWindow, child: GtkWidget) {.cdecl, importc: "gtk_scrolled_window_set_child".}
   # GLib main loop iteration for GTK4 event processing
   proc gMainContextIteration*(context: pointer = nil, mayBlock: cint): cint {.cdecl, importc: "g_main_context_iteration".}

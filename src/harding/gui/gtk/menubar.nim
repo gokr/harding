@@ -78,12 +78,12 @@ proc menuBarAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
   if menuItemWidget == nil:
     return nilValue()
 
-  when defined(gtk4):
+  when not defined(gtk3):
     # GTK4: use gtkBoxAppend since GtkMenuBar is a GtkBox
     gtkBoxAppend(cast[GtkBox](menuBarWidget), menuItemWidget)
     gtkWidgetShow(menuItemWidget)
   else:
-    # GTK3: use gtkShellAppend
-    gtkShellAppend(menuBarWidget, menuItemWidget)
+    # GTK3: use gtkMenuShellAppend
+    gtkMenuShellAppend(menuBarWidget, menuItemWidget)
 
   nilValue()

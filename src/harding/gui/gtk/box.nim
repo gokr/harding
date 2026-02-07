@@ -96,7 +96,7 @@ proc boxAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue
       if childWidget == nil and childInstance.nimValue != nil:
         childWidget = cast[GtkWidget](childInstance.nimValue)
       if childWidget != nil and boxWidget != nil:
-        when defined(gtk4):
+        when not defined(gtk3):
           gtkBoxAppend(boxWidget, childWidget)
           gtkWidgetShow(childWidget)
         else:
@@ -115,7 +115,7 @@ proc boxPrependImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValu
 
     if childInstance.isNimProxy and childInstance.nimValue != nil:
       let childWidget = cast[GtkWidget](childInstance.nimValue)
-      when defined(gtk4):
+      when not defined(gtk3):
         gtkBoxPrepend(box, childWidget)
       else:
         gtkBoxPackEnd(box, childWidget, 1, 1, 0)

@@ -762,8 +762,8 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   for tempName in currentMethod.temporaries:
     if tempName notin activation.locals:  # Don't overwrite parameters
       activation.locals[tempName] = nilValue()
-      echo "DEBUG executeMethod: initialized temp '", tempName, "' in locals"
-  echo "DEBUG executeMethod: locals keys=", toSeq(activation.locals.keys)
+      debug("executeMethod: initialized temp '", tempName, "' in locals")
+  debug("executeMethod: locals keys=", $toSeq(activation.locals.keys))
 
   # Push activation
   debug("Pushing activation, stack depth: ", interp.activationStack.len + 1)
@@ -890,24 +890,24 @@ proc evalOld*(interp: var Interpreter, node: Node): NodeValue =
   of nkAssign:
     # Variable assignment
     let assign = node.AssignNode
-    echo "DEBUG nkAssign: var=", assign.variable
+    debug("nkAssign: var=", assign.variable)
     let value = interp.evalOld(assign.expression)
     if value.kind == vkInstance:
       if value.instVal == nil:
-        echo "DEBUG nkAssign: ", assign.variable, " got nil instVal!"
+        debug("nkAssign: ", assign.variable, " got nil instVal!")
       else:
         let className = if value.instVal.class == nil: "nil" else: value.instVal.class.name
-        echo "DEBUG nkAssign: ", assign.variable, " = Instance class=", className, " kind=", value.instVal.kind
+        debug("nkAssign: ", assign.variable, " = Instance class=", className, " kind=", value.instVal.kind)
     else:
-      echo "DEBUG nkAssign: ", assign.variable, " = ", $value.kind
+      debug("nkAssign: ", assign.variable, " = ", $value.kind)
     setVariable(interp, assign.variable, value)
     # Verify it was stored correctly
     let verify = lookupVariable(interp, assign.variable)
     if verify.kind == vkInstance and verify.instVal != nil:
       let vClass = if verify.instVal.class == nil: "nil" else: verify.instVal.class.name
-      echo "DEBUG nkAssign verify: ", assign.variable, " => class=", vClass
+      debug("nkAssign verify: ", assign.variable, " => class=", vClass)
     else:
-      echo "DEBUG nkAssign verify: ", assign.variable, " => kind=", $verify.kind
+      debug("nkAssign verify: ", assign.variable, " => kind=", $verify.kind)
     return value
 
   of nkReturn:

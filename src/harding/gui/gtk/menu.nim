@@ -38,12 +38,12 @@ proc menuAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValu
   if menuItemProxy.widget == nil:
     return nilValue()
 
-  when defined(gtk4):
+  when not defined(gtk3):
     # GTK4: use gtkBoxAppend since Menu is a Box
     gtkBoxAppend(cast[GtkBox](menuProxy.widget), menuItemProxy.widget)
   else:
-    # GTK3: use gtkShellAppend
-    gtkShellAppend(menuProxy.widget, menuItemProxy.widget)
+    # GTK3: use gtkMenuShellAppend
+    gtkMenuShellAppend(menuProxy.widget, menuItemProxy.widget)
 
   debug("Appended item to menu")
 

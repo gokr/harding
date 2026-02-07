@@ -169,7 +169,7 @@ proc widgetSetSizeRequestImpl*(interp: var Interpreter, self: Instance, args: se
 
 ## Native method: addCssClass:
 proc widgetAddCssClassImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  when defined(gtk4):
+  when not defined(gtk3):
     if args.len < 1 or args[0].kind != vkString:
       return nilValue()
 
@@ -182,7 +182,7 @@ proc widgetAddCssClassImpl*(interp: var Interpreter, self: Instance, args: seq[N
 
 ## Native method: removeCssClass:
 proc widgetRemoveCssClassImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  when defined(gtk4):
+  when not defined(gtk3):
     if args.len < 1 or args[0].kind != vkString:
       return nilValue()
 

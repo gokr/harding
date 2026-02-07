@@ -28,7 +28,7 @@ proc newGtkWindowProxy*(window: GtkWindow, interp: ptr Interpreter): GtkWindowPr
 ## Factory: create a new window
 proc createGtkWindow*(interp: var Interpreter): NodeValue =
   ## Create a new GTK window and return a proxy object
-  when defined(gtk4):
+  when not defined(gtk3):
     let window = gtkWindowNew()
   else:
     let window = gtkWindowNew(GTKWINDOWTOPLEVEL)
@@ -104,7 +104,7 @@ proc windowSetChildImpl*(interp: var Interpreter, self: Instance, args: seq[Node
         if childWidget == nil and childInstance.nimValue != nil:
           childWidget = cast[GtkWidget](childInstance.nimValue)
         if childWidget != nil:
-          when defined(gtk4):
+          when not defined(gtk3):
             gtkWindowSetChild(window, childWidget)
             gtkWidgetShow(childWidget)
           else:

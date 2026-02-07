@@ -99,7 +99,7 @@ proc menuItemActivateImpl*(interp: var Interpreter, self: Instance, args: seq[No
     return nilValue()
 
   # GTK4 uses clicked signal for button-based menu items
-  let signalName = when defined(gtk4): "clicked" else: "activate"
+  let signalName = when not defined(gtk3): "clicked" else: "activate"
 
   # Create signal handler and store in proxy's GC-managed table
   # This ensures the BlockNode and its captured environment are rooted

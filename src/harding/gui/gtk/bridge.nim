@@ -12,9 +12,10 @@ import ./widget
 import ./window
 import ./button
 import ./box
-import ./menubar
-import ./menu
-import ./menuitem
+when defined(gtk3):
+  import ./menubar
+  import ./menu
+  import ./menuitem
 import ./textview
 import ./textbuffer
 import ./label
@@ -326,72 +327,73 @@ proc initGtkBridge*(interp: var Interpreter) =
   interp.globals[]["GtkTextBuffer"] = textBufferCls.toValue()
   debug("Registered GtkTextBuffer class")
 
-  # Create MenuItem class
-  let menuItemCls = newClass(superclasses = @[widgetCls], name = "GtkMenuItem")
-  menuItemCls.tags = @["GTK", "MenuItem", "Menu"]
-  menuItemCls.isNimProxy = true
-  menuItemCls.hardingType = "GtkMenuItem"
+  when defined(gtk3):
+    # Create MenuItem class (GTK3 only)
+    let menuItemCls = newClass(superclasses = @[widgetCls], name = "GtkMenuItem")
+    menuItemCls.tags = @["GTK", "MenuItem", "Menu"]
+    menuItemCls.isNimProxy = true
+    menuItemCls.hardingType = "GtkMenuItem"
 
-  # Add MenuItem class methods
-  let menuItemNewMethod = createCoreMethod("new")
-  menuItemNewMethod.nativeImpl = cast[pointer](menuItemNewImpl)
-  menuItemNewMethod.hasInterpreterParam = true
-  addMethodToClass(menuItemCls, "new", menuItemNewMethod, isClassMethod = true)
+    # Add MenuItem class methods
+    let menuItemNewMethod = createCoreMethod("new")
+    menuItemNewMethod.nativeImpl = cast[pointer](menuItemNewImpl)
+    menuItemNewMethod.hasInterpreterParam = true
+    addMethodToClass(menuItemCls, "new", menuItemNewMethod, isClassMethod = true)
 
-  let menuItemNewLabelMethod = createCoreMethod("newLabel:")
-  menuItemNewLabelMethod.nativeImpl = cast[pointer](menuItemNewLabelImpl)
-  menuItemNewLabelMethod.hasInterpreterParam = true
-  addMethodToClass(menuItemCls, "newLabel:", menuItemNewLabelMethod, isClassMethod = true)
+    let menuItemNewLabelMethod = createCoreMethod("newLabel:")
+    menuItemNewLabelMethod.nativeImpl = cast[pointer](menuItemNewLabelImpl)
+    menuItemNewLabelMethod.hasInterpreterParam = true
+    addMethodToClass(menuItemCls, "newLabel:", menuItemNewLabelMethod, isClassMethod = true)
 
-  # Add MenuItem instance methods
-  let menuItemActivateMethod = createCoreMethod("activate:")
-  menuItemActivateMethod.nativeImpl = cast[pointer](menuItemActivateImpl)
-  menuItemActivateMethod.hasInterpreterParam = true
-  addMethodToClass(menuItemCls, "activate:", menuItemActivateMethod)
+    # Add MenuItem instance methods
+    let menuItemActivateMethod = createCoreMethod("activate:")
+    menuItemActivateMethod.nativeImpl = cast[pointer](menuItemActivateImpl)
+    menuItemActivateMethod.hasInterpreterParam = true
+    addMethodToClass(menuItemCls, "activate:", menuItemActivateMethod)
 
-  interp.globals[]["GtkMenuItem"] = menuItemCls.toValue()
-  debug("Registered GtkMenuItem class")
+    interp.globals[]["GtkMenuItem"] = menuItemCls.toValue()
+    debug("Registered GtkMenuItem class")
 
-  # Create Menu class
-  let menuCls = newClass(superclasses = @[objectClass], name = "GtkMenu")
-  menuCls.tags = @["GTK", "Menu"]
-  menuCls.isNimProxy = true
-  menuCls.hardingType = "GtkMenu"
+    # Create Menu class (GTK3 only)
+    let menuCls = newClass(superclasses = @[objectClass], name = "GtkMenu")
+    menuCls.tags = @["GTK", "Menu"]
+    menuCls.isNimProxy = true
+    menuCls.hardingType = "GtkMenu"
 
-  # Add Menu instance methods
-  let menuAppendMethod = createCoreMethod("append:")
-  menuAppendMethod.nativeImpl = cast[pointer](menuAppendImpl)
-  menuAppendMethod.hasInterpreterParam = true
-  addMethodToClass(menuCls, "append:", menuAppendMethod)
+    # Add Menu instance methods
+    let menuAppendMethod = createCoreMethod("append:")
+    menuAppendMethod.nativeImpl = cast[pointer](menuAppendImpl)
+    menuAppendMethod.hasInterpreterParam = true
+    addMethodToClass(menuCls, "append:", menuAppendMethod)
 
-  let menuPopupAtPointerMethod = createCoreMethod("popup")
-  menuPopupAtPointerMethod.nativeImpl = cast[pointer](menuPopupAtPointerImpl)
-  menuPopupAtPointerMethod.hasInterpreterParam = true
-  addMethodToClass(menuCls, "popup", menuPopupAtPointerMethod)
+    let menuPopupAtPointerMethod = createCoreMethod("popup")
+    menuPopupAtPointerMethod.nativeImpl = cast[pointer](menuPopupAtPointerImpl)
+    menuPopupAtPointerMethod.hasInterpreterParam = true
+    addMethodToClass(menuCls, "popup", menuPopupAtPointerMethod)
 
-  interp.globals[]["GtkMenu"] = menuCls.toValue()
-  debug("Registered GtkMenu class")
+    interp.globals[]["GtkMenu"] = menuCls.toValue()
+    debug("Registered GtkMenu class")
 
-  # Create MenuBar class
-  let menuBarCls = newClass(superclasses = @[widgetCls], name = "GtkMenuBar")
-  menuBarCls.tags = @["GTK", "MenuBar", "Menu"]
-  menuBarCls.isNimProxy = true
-  menuBarCls.hardingType = "GtkMenuBar"
+    # Create MenuBar class (GTK3 only)
+    let menuBarCls = newClass(superclasses = @[widgetCls], name = "GtkMenuBar")
+    menuBarCls.tags = @["GTK", "MenuBar", "Menu"]
+    menuBarCls.isNimProxy = true
+    menuBarCls.hardingType = "GtkMenuBar"
 
-  # Add MenuBar class method
-  let menuBarNewMethod = createCoreMethod("new")
-  menuBarNewMethod.nativeImpl = cast[pointer](menuBarNewImpl)
-  menuBarNewMethod.hasInterpreterParam = true
-  addMethodToClass(menuBarCls, "new", menuBarNewMethod, isClassMethod = true)
+    # Add MenuBar class method
+    let menuBarNewMethod = createCoreMethod("new")
+    menuBarNewMethod.nativeImpl = cast[pointer](menuBarNewImpl)
+    menuBarNewMethod.hasInterpreterParam = true
+    addMethodToClass(menuBarCls, "new", menuBarNewMethod, isClassMethod = true)
 
-  # Add MenuBar instance method
-  let menuBarAppendMethod = createCoreMethod("append:")
-  menuBarAppendMethod.nativeImpl = cast[pointer](menuBarAppendImpl)
-  menuBarAppendMethod.hasInterpreterParam = true
-  addMethodToClass(menuBarCls, "append:", menuBarAppendMethod)
+    # Add MenuBar instance method
+    let menuBarAppendMethod = createCoreMethod("append:")
+    menuBarAppendMethod.nativeImpl = cast[pointer](menuBarAppendImpl)
+    menuBarAppendMethod.hasInterpreterParam = true
+    addMethodToClass(menuBarCls, "append:", menuBarAppendMethod)
 
-  interp.globals[]["GtkMenuBar"] = menuBarCls.toValue()
-  debug("Registered GtkMenuBar class")
+    interp.globals[]["GtkMenuBar"] = menuBarCls.toValue()
+    debug("Registered GtkMenuBar class")
 
   # Register Launcher class (derived from GtkWindow)
   let launcherCls = newClass(superclasses = @[windowCls], slotNames = @["windows"], name = "Launcher")
@@ -424,11 +426,15 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
     "Box.hrd",
     "Label.hrd",
     "TextView.hrd",
-    "TextBuffer.hrd",
-    "MenuItem.hrd",
-    "Menu.hrd",
-    "MenuBar.hrd"
+    "TextBuffer.hrd"
   ]
+
+  when defined(gtk3):
+    let gtk3WrapperFiles = [
+      "MenuItem.hrd",
+      "Menu.hrd",
+      "MenuBar.hrd"
+    ]
 
   for filename in wrapperFiles:
     let filepath = libPath / filename
@@ -442,6 +448,20 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
         debug("Successfully loaded: ", filepath)
     else:
       debug("GTK wrapper file not found (optional): ", filepath)
+
+  when defined(gtk3):
+    for filename in gtk3WrapperFiles:
+      let filepath = libPath / filename
+      if fileExists(filepath):
+        debug("Loading GTK wrapper: ", filepath)
+        let source = readFile(filepath)
+        let (_, err) = interp.evalStatements(source)
+        if err.len > 0:
+          warn("Failed to load ", filepath, ": ", err)
+        else:
+          debug("Successfully loaded: ", filepath)
+      else:
+        debug("GTK wrapper file not found (optional): ", filepath)
 
 ## Load IDE tool files
 proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
@@ -471,7 +491,7 @@ proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
 
 ## Launcher new implementation - separated to avoid closure capture issues
 proc launcherNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.cdecl.} =
-  when defined(gtk4):
+  when not defined(gtk3):
     # Use GtkApplicationWindow if we have an app, otherwise fallback to regular window
     var window: GtkWindow
     debug("Creating Launcher window, gtkApp=", repr(gtkApp))
