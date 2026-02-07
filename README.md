@@ -7,6 +7,14 @@ Harding is a Smalltalk dialect written in Nim that preserves most of the disting
 ```smalltalk
 "Hello, World!" println
 
+# Class with automatic accessors
+Person := Object deriveWithAccessors: #(name age)
+p := Person new
+p name: "Alice"
+p age: 30
+("Hello, " , p name) println
+
+# Class with manual method definition
 Point := Object derive: #(x y)
 Point>>distanceFromOrigin [ ^ ((x * x) + (y * y)) sqrt ]
 
@@ -86,6 +94,7 @@ code --install-extension harding-lang-0.1.0.vsix
 | Double quotes for comments | Hash `#` for comments |
 | Single quotes for strings | Double quotes for strings |
 | Classes define structure via class definition | Class construction using derive: `Object derive: #(ivars)` |
+| Manual accessor definition | Auto-generated accessors via `deriveWithAccessors:` |
 | Image-based persistence | Source files loaded on startup, git friendly source format, normal Unix workflow |
 | VM execution | Interprets AST directly, native compiler via Nim (in development) |
 | FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
@@ -106,6 +115,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Comments | `# This is a comment` |
 | Strings | `"Double quotes only"` |
 | Create subclass | `Point := Object derive: #(x y)` |
+| Create with accessors | `Point := Object deriveWithAccessors: #(x y)` |
 | Create instance | `p := Point new` |
 | Define method | `Point>>move: dx [ ... ]` |
 | Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
@@ -124,6 +134,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Green threads: `Processor fork:`, `Processor yield`
 - Multiple inheritance with conflict detection and scoped super send
 - Dynamic message sending: `perform:`, `perform:with:`
+- Automatic accessor generation: `deriveWithAccessors:`, `derive:getters:setters:`
 
 **In progress:**
 - Compiler to Nim (granite is stub)

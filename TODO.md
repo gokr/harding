@@ -28,6 +28,8 @@ This document tracks current work items and future directions for Harding develo
 - **extend:** for extending objects with methods ✅
 - **extendClass:** for class-side method definition ✅
 - **derive:methods:** for combined class creation ✅
+- **deriveWithAccessors:** for automatic getter/setter generation ✅
+- **derive:getters:setters:** for selective accessor generation ✅
 - **perform:** family for dynamic message sending ✅
 - **Process, Scheduler, and GlobalTable as Harding-side objects** ✅
 - **Harding global for accessing global namespace** ✅
@@ -143,6 +145,14 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 
 ## Recent Completed Work
 
+### Automatic Accessor Generation (2025-02-07)
+- `deriveWithAccessors:` - Creates class with auto-generated getters and setters for all slots
+- `derive:getters:setters:` - Creates class with selective accessor generation
+- Getters use O(1) SlotAccessNode for fast direct slot access
+- Setters use O(1) SlotAccessNode for fast direct slot assignment
+- Added comprehensive tests in test_stdlib.nim
+- Updated documentation in MANUAL.md and QUICKREF.md
+
 ### Script Files and Temporary Variables (2025-02-07)
 - Script files auto-wrapped in `[ ... ]` blocks before parsing
 - Temporary variables can be declared at file level: `| var1 var2 |`
@@ -224,4 +234,4 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 
 ---
 
-*Last Updated: 2025-02-07*
+*Last Updated: 2025-02-08*

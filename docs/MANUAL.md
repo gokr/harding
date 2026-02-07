@@ -189,8 +189,16 @@ chmod +x script.hrd
 ### Creating Classes
 
 ```smalltalk
-# Create a class with instance variables
+# Create a class with instance variables (no accessors)
 Point := Object derive: #(x y)
+
+# Create a class with automatic accessors
+Person := Object deriveWithAccessors: #(name age)
+
+# Create a class with selective accessors
+Account := Object derive: #(balance owner)
+                       getters: #(balance owner)
+                       setters: #(balance)
 
 # Create an instance
 p := Point new
@@ -209,6 +217,57 @@ Point>>moveBy: dx and: dy [
     ^ self
 ]
 ```
+
+### Automatic Accessor Generation
+
+Harding provides convenience methods for generating getters and setters automatically:
+
+#### `deriveWithAccessors:`
+
+Creates a class and auto-generates both getters and setters for all slots:
+
+```smalltalk
+Person := Object deriveWithAccessors: #(name age)
+p := Person new
+p name: "Alice"    # Auto-generated setter
+p age: 30          # Auto-generated setter
+p name             # Auto-generated getter - returns "Alice"
+p age              # Auto-generated getter - returns 30
+```
+
+For each slot `x`, two methods are generated:
+- `x` - Getter method that returns the slot value
+- `x:` - Setter method that takes one argument and assigns it to the slot
+
+#### `derive:getters:setters:`
+
+Creates a class with selective accessor generation:
+
+```smalltalk
+# Generate getters for both slots, but setter only for 'name'
+Person := Object derive: #(name age)
+                       getters: #(name age)
+                       setters: #(name)
+
+p := Person new
+p name: "Alice"    # Works - setter generated
+p name             # Works - getter generated, returns "Alice"
+p age              # Works - getter generated, returns nil
+p age: 30          # Error - no setter generated for 'age'
+```
+
+This is useful when you want:
+- Read-only slots (include in getters but not setters)
+- Write-only slots (include in setters but not getters)
+- Public getters with private setters (convention: only generate setters for internal use)
+
+#### Performance
+
+Generated accessors use `SlotAccessNode` for O(1) direct slot access:
+- Getter: Direct slot read by index
+- Setter: Direct slot write by index
+
+This provides the same performance as manually written accessor methods that use direct slot access.
 
 ### Inheritance
 

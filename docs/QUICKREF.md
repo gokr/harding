@@ -206,7 +206,18 @@ Person := Object derive: #(name age) methods: [
 ### Creating Classes
 
 ```smalltalk
+# Class without accessors (manual method definition required)
 Point := Object derive: #(x y)
+
+# Class with automatic accessors for all slots
+Person := Object deriveWithAccessors: #(name age)
+
+# Class with selective accessor generation
+Account := Object derive: #(balance owner)
+                       getters: #(balance owner)
+                       setters: #(balance)
+
+# Subclass
 ColoredPoint := Point derive: #(color)
 ```
 
@@ -226,6 +237,27 @@ Point>>moveBy: dx y: dy [
     y := y + dy.
     ^self
 ]
+```
+
+### Automatic Accessors
+
+```smalltalk
+# Class with auto-generated getters and setters
+Person := Object deriveWithAccessors: #(name age)
+p := Person new
+p name: "Alice"      # Setter
+p age: 30            # Setter
+p name               # Getter - returns "Alice"
+
+# Selective accessor generation
+Account := Object derive: #(balance owner)
+                       getters: #(balance owner)
+                       setters: #(balance)
+acc := Account new
+acc balance: 100     # Setter for balance
+acc balance          # Getter - returns 100
+acc owner            # Getter - returns nil (not set)
+# acc owner: "Bob"   # Error - no setter for owner
 ```
 
 ### Property Access
