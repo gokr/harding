@@ -1,12 +1,12 @@
 ---
 title: Harding Smalltalk
-tagline: Smalltalk Semantics, Nim Performance
+tagline: Smalltalk feeling, modern tooling
 ---
 
 ## Hero Section
 
 **Title:** Harding Smalltalk
-**Subtitle:** Smalltalk semantics, modern tooling.
+**Subtitle:** Smalltalk feeling, modern tooling.
 **Description:** A modern Smalltalk dialect aiming at native compilation. File-based, git-friendly, and designed for modern tooling.
 
 **CTA Primary:** Get Started
@@ -16,25 +16,20 @@ tagline: Smalltalk Semantics, Nim Performance
 
 ```harding
 # Define a Point class with x and y slots
-Point := Object derive: #(x y)
+# auto generate setter and getter methods
+Point := Object deriveWithAccessors: #(x y)
 
-# Add method using selector:put:
+# Add a method to the class using selector:put:
+# and a block representing the code
 Point selector: #moveBy:and: put: [:dx :dy |
     x := x + dx
     y := y + dy
 ]
 
-# Simpler way to add method using >> syntactic sugar
-Point>>x: val [
-    x := val
-]
-
-# Add several methods at once using a special mechanism
-# to bind a block to a specific self - the Point class.
-Point extend: [
-    self>>y: val [ y := val ]
-    self>>y [ ^y ]
-    self>>x [ ^x ]
+# Simpler way to add a method using >> syntactic sugar
+Point>>+ aPoint [
+    x := x + aPoint x
+    y := y + aPoint y
 ]
 
 # Create and use a Point, cascades work fine
@@ -49,10 +44,10 @@ p moveBy: 5 and: 10
 Everything you love about Smalltalk - message passing, blocks, live programming - preserved and modernized.
 
 ### Native Performance
-Compiles through Nim to C to machine code **(future)**. No VM, no bytecode, fast native binaries.
+Two execution models, a stackless VM written in Nim and a planned compiler via Nim -> C -> single binary.
 
 ### File-Based
-No image files. Source lives in .hrd files you can version control, diff, and edit with any editor.
+No image files. Source lives in `.hrd` files you can version control, diff, and edit with any editor.
 
 ### Multiple Inheritance
 Experimental support for multiple inheritance with conflict detection.
@@ -61,7 +56,7 @@ Experimental support for multiple inheritance with conflict detection.
 Cooperative multitasking with first-class Process objects. Built-in scheduler with round-robin execution.
 
 ### Nim Interop
-Call Nim code directly. Access the entire Nim ecosystem: libraries, packages, and system APIs.
+Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.
 
 ## Get Started
 

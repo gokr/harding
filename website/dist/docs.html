@@ -84,35 +84,34 @@ harding -e "3 + 4"   # Evaluate</code></pre>
 
                 <div class="example-item">
                     <h4>Factorial</h4>
-                    <pre><code>factorial := [:n |
+                    <pre><code>| factorial |
+factorial := [:n |
     (n <= 1) ifTrue: [^ 1].
     ^ n * (factorial value: (n - 1))
 ]
-(factorial value: 5) println</code></pre>
+
+(factorial value: 5) println   # 120</code></pre>
                 </div>
 
                 <div class="example-item">
                     <h4>Counter Class</h4>
-                    <pre><code>Counter := Object derive: #(count)
-
-Counter extend: [
-    self >> initialize [ count := 0 ]
-    self >> increment [
-        count := count + 1.
-        ^ count
-    ]
-]
+                    <pre><code>| c |
+Counter := Object derive: #(count)
+Counter >> initialize [ count := 0 ]
+Counter >> value [ ^count ]
+Counter >> increment [ ^count := count + 1]
 
 c := Counter new
 c initialize
-c increment println</code></pre>
+c increment
+c value println   # 1</code></pre>
                 </div>
 
                 <div class="example-item">
                     <h4>Collections</h4>
                     <pre><code>numbers := #(1 2 3 4 5)
 squares := numbers collect: [:n | n * n]
-evens := numbers select: [:n | (n \ 2) = 0]
+evens := numbers select: [:n | (n % 2) = 0]
 sum := numbers inject: 0 into: [:a :n | a + n]</code></pre>
                 </div>
             </div>
@@ -161,6 +160,29 @@ sum := numbers inject: 0 into: [:a :n | a + n]</code></pre>
             <h2 class="section-title">For Smalltalk Programmers</h2>
 
             <div class="diff-table-wrapper">
+                <div class="example-grid" style="margin-bottom: 2rem;">
+                    <div class="example-item">
+                        <h4>What feels familiar</h4>
+                        <ul style="text-align: left; margin-top: 1rem;">
+                            <li>Message syntax: unary <code>obj size</code>, binary <code>3 + 4</code>, keyword <code>dict at: key put: value</code></li>
+                            <li>Cascade messages with <code>;</code></li>
+                            <li>Blocks are proper lexical closures with non-local returns</li>
+                            <li>Everything is an object, everything happens via message sends</li>
+                            <li>Collection messages: <code>do:</code>, <code>select:</code>, <code>collect:</code>, <code>inject:into:</code></li>
+                        </ul>
+                    </div>
+                    <div class="example-item">
+                        <h4>What's different</h4>
+                        <ul style="text-align: left; margin-top: 1rem;">
+                            <li>Optional periods - newlines also separate statements</li>
+                            <li>Hash <code>#</code> for comments (not double quotes)</li>
+                            <li>Double quotes for strings (not single quotes)</li>
+                            <li>Class creation: <code>Point := Object derive: #(x y)</code></li>
+                            <li>File-based, git-friendly source</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <h3>Key Differences from Smalltalk-80</h3>
                 <table class="comparison-table">
                     <thead>
@@ -208,6 +230,17 @@ sum := numbers inject: 0 into: [:a :n | a + n]</code></pre>
                         </tr>
                     </tbody>
                 </table>
+
+                <div class="example-grid" style="margin-top: 2rem;">
+                    <div class="example-item">
+                        <h4>No Metaclasses</h4>
+                        <pre><code># Instance method
+Person >> greet [ ^ "Hello" ]
+
+# Class method - defined on the class itself
+Person class >> newPerson [ ^ self new ]</code></pre>
+                    </div>
+                </div>
             </div>
         </div>
     </section>

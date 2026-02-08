@@ -111,30 +111,230 @@ z := x + y              <span class="comment"># But periods work too</span>
                 <div class="feature-code">
                     <div class="code-block">
                         <div class="code-header">Class Definition</div>
-                        <pre><code><span class="comment"># Create a new class with two instance variables</span>
+                        <pre><code><span class="comment"># Declare a temporary variable to hold an instance</span>
+<span class="keyword">| p |</span>
+
+<span class="comment"># Create a new class with two instance variables</span>
 <span class="type">Point</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x y)
 
-<span class="comment"># Add methods</span>
-<span class="type">Point</span> extend: [
-    <span class="keyword">self</span> <span class="operator">>></span> x: anX y: aY [
-        x := anX
-        y := aY
-    ]
+<span class="comment"># Add methods using >> syntax and direct slot access</span>
+<span class="type">Point</span> <span class="operator">>></span> x: val [ x := val ]
+<span class="type">Point</span> <span class="operator">>></span> y: val [ y := val ]
 
+<span class="comment"># Add multiple methods at a time</span>
+<span class="type">Point</span> extend: [
     <span class="keyword">self</span> <span class="operator">>></span> moveBy: dx and: dy [
-        x := x <span class="operator">+</span> dx
+        x := x <span class="operator">+</span> dx.
         y := y <span class="operator">+</span> dy
     ]
-
     <span class="keyword">self</span> <span class="operator">>></span> distanceFromOrigin [
         <span class="keyword">^</span> ((x <span class="operator">*</span> x) <span class="operator">+</span> (y <span class="operator">*</span> y)) sqrt
     ]
 ]
 
-<span class="comment"># Use it</span>
+<span class="comment"># Create and use a Point</span>
 p := <span class="type">Point</span> new
-p x: <span class="number">3</span> y: <span class="number">4</span>
-p distanceFromOrigin println   <span class="comment"># 5.0</span></code></pre>
+p x: <span class="number">100</span>; y: <span class="number">200</span>
+p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Multiple Inheritance -->
+    <section class="content-section alt">
+        <div class="container">
+            <h2 class="section-title">Multiple Inheritance</h2>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Multi-Parent Classes</h3>
+                    <p>Inherit from multiple parents with conflict detection:</p>
+                    <ul>
+                        <li>Use <code>derive:</code> to create a subclass</li>
+                        <li>Use <code>addParent:</code> to add additional parents</li>
+                        <li>Automatic conflict detection</li>
+                        <li>Flexible mixin patterns</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Multiple Inheritance</div>
+                        <pre><code><span class="comment"># Inherit from multiple parents</span>
+<span class="type">ColoredPoint</span> := <span class="type">Point</span> derive: <span class="keyword">#</span>(color)
+<span class="type">ColoredPoint</span> addParent: <span class="type">Comparable</span>
+<span class="type">ColoredPoint</span> addParent: <span class="type">Printable</span>
+
+<span class="comment"># ColoredPoint now has methods from:</span>
+<span class="comment"># - Point (distanceFromOrigin, etc)</span>
+<span class="comment"># - Comparable (>, <, =, etc)</span>
+<span class="comment"># - Printable (asString, print, etc)</span></code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Full Constructor Syntax</h3>
+                    <p>Create classes with multiple parents, slots, and methods in one call:</p>
+                    <ul>
+                        <li><code>derive:</code> - Initial slots</li>
+                        <li><code>parents:</code> - Additional parent classes</li>
+                        <li><code>ivarArray:</code> - Extra instance variables</li>
+                        <li><code>methods:</code> - Method dictionary</li>
+                    </ul>
+                    <h3>Mixin Class</h3>
+                    <p>For slotless composition, use the <code>Mixin</code> class - ideal for shared behavior without state.</p>
+                    <h3>Conflict Detection</h3>
+                    <p>When multiple parents define the same method, Harding detects conflicts automatically.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Advanced Class Creation</div>
+                        <pre><code><span class="comment"># Full constructor syntax</span>
+<span class="type">MyClass</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(slot1 slot2)
+    parents: <span class="keyword">#</span>(<span class="type">Parent1</span> <span class="type">Parent2</span>)
+    ivarArray: <span class="keyword">#</span>(extraSlot)
+    methods: <span class="keyword">#{</span>
+        #method1 -> [:arg | ...],
+        #method2 -> [:a :b | ...]
+    <span class="keyword">}</span>
+
+<span class="comment"># Mixin for slotless composition</span>
+<span class="type">Comparable</span> := <span class="type">Mixin</span> derive: <span class="keyword">#</span>()
+<span class="type">Comparable</span> <span class="operator">>></span> <span class="operator">&lt;</span> other [
+    <span class="operator">&lt;</span>primitive: primitiveLessThan<span class="operator">&gt;</span>
+]</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advanced Features -->
+    <section class="content-section">
+        <div class="container">
+            <h2 class="section-title">Advanced Features</h2>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Primitives</h3>
+                    <p>Direct access to VM-level operations and Nim interop:</p>
+                    <ul>
+                        <li><code>primitiveClone</code> - Shallow copy</li>
+                        <li><code>primitiveAt:</code> - Access element</li>
+                        <li><code>primitiveAt:put:</code> - Set element</li>
+                        <li><code>primitiveIdentity:</code> - Object identity</li>
+                        <li><code>primitiveCCall:with:</code> - Call C libraries</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Primitive Syntax</div>
+                        <pre><code><span class="comment"># Basic primitive syntax</span>
+<span class="type">Array</span><span class="operator">>></span>at: index <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
+
+<span class="comment"># With validation wrapper</span>
+<span class="type">Array</span><span class="operator">>></span>at: index [
+    (index <span class="operator">&lt;</span> 1 or: [index <span class="operator">&gt;</span> self size]) ifTrue: [
+        self error: <span class="string">"Index out of bounds"</span>
+    ].
+    <span class="keyword">^</span> <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
+]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Super Sends</h3>
+                    <p>Both unqualified and qualified super sends for method overriding:</p>
+                    <ul>
+                        <li><code>super methodName</code> - Unqualified super</li>
+                        <li><code>super&lt;ParentClass&gt; methodName</code> - Qualified super</li>
+                    </ul>
+                    <p>Qualified super is essential when using multiple inheritance to specify which parent's implementation to call.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Super Sends</div>
+                        <pre><code><span class="comment"># Unqualified super</span>
+<span class="type">ColoredRectangle</span><span class="operator">>></span>area [
+    baseArea := super area.
+    <span class="keyword">^</span> baseArea + colorAdjustment
+]
+
+<span class="comment"># Qualified super (for multiple inheritance)</span>
+<span class="type">C</span><span class="operator">>></span>foo [
+    <span class="keyword">^</span> super<span class="operator">&lt;</span>A<span class="operator">&gt;</span> foo, <span class="string">" from C"</span>
+]
+
+<span class="type">C</span><span class="operator">>></span>bar [
+    <span class="keyword">^</span> super<span class="operator">&lt;</span>B<span class="operator">&gt;</span> bar, <span class="string">" from C"</span>
+]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Class-Side Methods</h3>
+                    <p>Define methods on the class itself using <code>class>></code> syntax:</p>
+                    <ul>
+                        <li>Analogous to static methods in other languages</li>
+                        <li>Classes are first-class objects</li>
+                        <li>Alternative: use <code>selector:put:</code> on the class</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Class-Side Methods</div>
+                        <pre><code><span class="comment"># Instance method</span>
+<span class="type">Person</span><span class="operator">>></span>greet [
+    <span class="keyword">^</span> <span class="string">"Hello, I am "</span> + name
+]
+
+<span class="comment"># Class-side method</span>
+<span class="type">Person</span> class<span class="operator">>></span>newNamed: n aged: a [
+    | p |
+    p := self new.
+    p name: n.
+    p age: a.
+    <span class="keyword">^</span> p
+]
+
+<span class="comment"># Usage</span>
+alice := <span class="type">Person</span> newNamed: <span class="string">"Alice"</span> aged: <span class="number">30</span></code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Dynamic Dispatch & Introspection</h3>
+                    <p>Send messages and inspect objects at runtime:</p>
+                    <ul>
+                        <li><code>perform:</code> - Dynamic message send</li>
+                        <li><code>perform:with:</code> - With one argument</li>
+                        <li><code>perform:with:with:</code> - With two arguments</li>
+                        <li><code>superclassNames</code> - Get inheritance chain</li>
+                        <li><code>class</code>, <code>slotNames</code> - Object inspection</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Reflection</div>
+                        <pre><code><span class="comment"># Dynamic dispatch</span>
+obj perform: #description
+obj perform: #at: with: <span class="number">5</span>
+obj perform: #at:put: with: <span class="number">5</span> with: <span class="string">'value'</span>
+
+<span class="comment"># Introspection</span>
+<span class="type">Point</span> superclassNames    <span class="comment"># #(Object)</span>
+obj class               <span class="comment"># Get object's class</span>
+obj slotNames           <span class="comment"># List instance variables</span>
+obj respondsTo: #do:    <span class="comment"># Check method existence</span></code></pre>
                     </div>
                 </div>
             </div>
@@ -166,6 +366,8 @@ p distanceFromOrigin println   <span class="comment"># 5.0</span></code></pre>
 worker suspend
 worker resume
 worker terminate</code></pre>
+                    <p><strong>Process States:</strong> ready, running, blocked, suspended, terminated</p>
+                    <p><strong>Scheduler:</strong> <code>Processor yield</code>, <code>Scheduler listProcesses</code>, <code>process priority:</code></p>
                 </div>
 
                 <div class="feature-card-large">
@@ -194,24 +396,21 @@ Harding REPL (:help for commands, :quit to exit)
 harding> 3 + 4
 7
 
-> Point := Object derive: #(x y)
-Point
+harding> "Hello, World!" println
+Hello, World!
 
-> p := Point new
-Point instance
+harding> numbers := #(1 2 3 4 5)
+#(1 2 3 4 5)
 
-> p x: 10
-10
-
-> p x
-10</code></pre>
+harding> numbers collect: [:n | n * n]
+#(1 4 9 16 25)</code></pre>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Collections -->
-    <section class="content-section">
+    <section class="content-section alt">
         <div class="container">
             <h2 class="section-title">Collections</h2>
 
@@ -238,9 +437,79 @@ scores := <span class="keyword">#{</span><span class="string">"Alice"</span> <sp
 <span class="comment"># Collection methods</span>
 numbers do: [:n | n println]
 squares := numbers collect: [:n | n * n]
-evens := numbers select: [:n | (n \ 2) = 0]
+evens := numbers select: [:n | (n % 2) = 0]
 sum := numbers inject: 0 into: [:acc :n | acc + n]</code></pre>
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interoperability -->
+    <section class="content-section">
+        <div class="container">
+            <h2 class="section-title">Interoperability</h2>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Nim Integration</h3>
+                    <p>Call Nim code directly via primitives. Access the entire Nim ecosystem including libraries, packages, and system APIs.</p>
+                    <h4>Native FFI Fields</h4>
+                    <p>Objects can hold references to Nim values:</p>
+                    <ul>
+                        <li><code>isNimProxy</code> - True if object wraps a Nim value</li>
+                        <li><code>hardingType</code> - Get the Harding type name</li>
+                        <li><code>nimValue</code> - Access underlying Nim value</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Nim Interop</div>
+                        <pre><code><span class="comment"># Access Nim functions via primitives</span>
+<span class="type">Array</span><span class="operator">>></span>at: index <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
+
+<span class="comment"># Objects can wrap Nim values</span>
+obj isNimProxy      <span class="comment"># true if wraps Nim value</span>
+obj hardingType     <span class="comment"># Get Harding type name</span>
+obj nimValue        <span class="comment"># Access Nim value</span>
+
+<span class="comment"># C library access via Nim FFI</span>
+<span class="operator">&lt;</span>primitive primitiveCCall: function with: args<span class="operator">&gt;</span></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Debugging Tools -->
+    <section class="content-section alt">
+        <div class="container">
+            <h2 class="section-title">Debugging Tools</h2>
+
+            <div class="feature-cards">
+                <div class="feature-card-large">
+                    <h3>Log Levels</h3>
+                    <p>Control verbosity of execution output:</p>
+                    <pre><code>harding --loglevel DEBUG script.hrd</code></pre>
+                    <p><strong>Levels:</strong> DEBUG, INFO, WARN, ERROR, FATAL</p>
+                    <p>DEBUG shows AST evaluation, message sends, method lookups, and activation stack operations.</p>
+                </div>
+
+                <div class="feature-card-large">
+                    <h3>AST Output</h3>
+                    <p>View the parsed Abstract Syntax Tree:</p>
+                    <pre><code>harding --ast script.hrd</code></pre>
+                    <p>Shows the hierarchical structure of parsed expressions before execution.</p>
+                </div>
+
+                <div class="feature-card-large">
+                    <h3>Process Inspection</h3>
+                    <p>Inspect running processes:</p>
+                    <pre><code>Scheduler listProcesses
+process state      # ready, running, etc.
+process pid        # Unique process ID
+process name       # Process name
+process priority   # Scheduling priority</code></pre>
                 </div>
             </div>
         </div>
@@ -273,7 +542,7 @@ sum := numbers inject: 0 into: [:acc :n | acc + n]</code></pre>
                             <li><a href="https://discord.gg/R8HU28rNVv">Discord</a></li>
                             <li><a href="https://github.com/gokr/harding/issues">Issues</a></li>
                             <li><a href="https://github.com/gokr/harding/discussions">Discussions</a></li>
-                            <li><a href="https://github.com/gokr/harding/blob/main/CLAUDE.md">Contributing</a></li>
+                            <li><a href="https://github.com/gokr/harding/blob/main/CONTRIBUTING.md">Contributing</a></li>
                         </ul>
                     </div>
                 </div>
