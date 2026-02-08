@@ -56,11 +56,11 @@ proc createGtkBox*(interp: var Interpreter, orientation: cint, spacing: cint = 0
   return obj.toValue()
 
 ## Native method: new (class method) - creates vertical box by default
-proc boxNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc boxNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   createGtkBox(interp, 1, 0)  # GTK_ORIENTATION_VERTICAL = 1
 
 ## Native method: newOrientation:spacing: (class method)
-proc boxNewOrientationSpacingImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc boxNewOrientationSpacingImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   if args.len < 2:
     return nilValue()
 
@@ -69,7 +69,7 @@ proc boxNewOrientationSpacingImpl*(interp: var Interpreter, self: Instance, args
   createGtkBox(interp, orientation, spacing)
 
 ## Native method: append:
-proc boxAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc boxAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   if args.len < 1 or args[0].kind != vkInstance:
     return nilValue()
 
@@ -97,7 +97,7 @@ proc boxAppendImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue
   nilValue()
 
 ## Native method: prepend:
-proc boxPrependImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc boxPrependImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   if args.len < 1 or args[0].kind != vkInstance:
     return nilValue()
 
@@ -115,7 +115,7 @@ proc boxPrependImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValu
   nilValue()
 
 ## Native method: setSpacing:
-proc boxSetSpacingImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc boxSetSpacingImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   if args.len < 1:
     return nilValue()
 
