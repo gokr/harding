@@ -113,6 +113,7 @@ This document tracks current work items and future directions for Harding develo
 - [x] Language Manual (docs/MANUAL.md)
 - [x] Implementation docs (docs/IMPLEMENTATION.md)
 - [x] Tools & Debugging docs (docs/TOOLS_AND_DEBUGGING.md)
+- [x] GtkSourceView syntax highlighting (docs/GTKSOURCEVIEW.md)
 - [ ] Tutorials and comprehensive examples
 - [ ] API reference for built-in objects
 - [ ] Help text improvements
@@ -147,6 +148,20 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 ```
 
 ## Recent Completed Work
+
+### Test Coverage Improvements (2025-02-08)
+- Fixed all disabled tests in test_evaluator.nim (10 tests rewritten using class-based model)
+- Fixed skipped tests in test_super.nim for qualified super sends
+- Added test_perform.nim for dynamic message sending (6 tests)
+- Added test_exception_handling.nim documenting exception handling (primitives not yet implemented)
+- Added test_extend.nim documenting method batching (known limitation with asSelfDo:)
+- Added string concatenation tests with auto-conversion to test_stdlib.nim
+- 15 of 17 test files now passing (2 document known limitations)
+
+### String Concatenation with Auto-Conversion (2025-02-08)
+- `,` operator now auto-converts arguments using `toString`
+- Supports numbers, objects, and any type with string representation
+- Example: `"Value: " , 42` produces `"Value: 42"`
 
 ### Complete Stackless VM Migration (2025-02-08)
 - Removed the old recursive evaluator (`evalOld`, ~1200 lines deleted)

@@ -10,6 +10,12 @@ import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
 
+proc mangleModuleName(name: string): string =
+  ## Convert module name to valid Nim identifier
+  if name.len > 0 and name[0] in {'0'..'9'}:
+    return "module_" & name
+  return name
+
 const VERSION* = block:
   const nimblePath = currentSourcePath().parentDir().parentDir().parentDir().parentDir() / "harding.nimble"
   const nimbleContent = staticRead(nimblePath)
@@ -161,7 +167,8 @@ proc compileFile(config: Config): bool =
     for node in nodes:
       echo printAST(node)
 
-  let moduleName = changeFileExt(extractFilename(config.inputFile), "")
+  let rawModuleName = changeFileExt(extractFilename(config.inputFile), "")
+  let moduleName = mangleModuleName(rawModuleName)
   let outputDir = if config.outputDir.len > 0: config.outputDir else: "./build"
 
   var ctx = newCompiler(outputDir, moduleName)
@@ -184,7 +191,8 @@ proc computeOutputPath(config: Config): string =
   if config.outputFile.len > 0:
     result = config.outputFile
   else:
-    let moduleName = changeFileExt(extractFilename(config.inputFile), "")
+    let rawModuleName = changeFileExt(extractFilename(config.inputFile), "")
+    let moduleName = mangleModuleName(rawModuleName)
     result = config.outputDir / moduleName & ".nim"
 
 proc buildFile(config: Config): bool =

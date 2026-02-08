@@ -25,7 +25,7 @@ var currentRuntime*: ptr Runtime = nil
 proc newRuntime*(): Runtime =
   ## Create new runtime instance
   result = Runtime(
-    rootObject: objectClass.toInstance(),
+    rootObject: nil,
     classes: initTable[string, Instance](),
     methodCache: initTable[string, CompiledMethod](),
     isInitializing: false
@@ -41,8 +41,6 @@ proc shutdownRuntime*() =
   ## Shutdown and cleanup runtime
   if currentRuntime != nil:
     # Clean up classes
-    for obj in currentRuntime.classes.values:
-      obj.methods.clear()
     currentRuntime.classes.clear()
     currentRuntime.methodCache.clear()
     deallocShared(cast[pointer](currentRuntime))
