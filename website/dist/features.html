@@ -181,8 +181,15 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
                     <ul>
                         <li><code>derive:</code> - Initial slots</li>
                         <li><code>parents:</code> - Additional parent classes</li>
-                        <li><code>ivarArray:</code> - Extra instance variables</li>
+                        <li><code>slots:</code> - Extra slots</li>
                         <li><code>methods:</code> - Method dictionary</li>
+                    </ul>
+                    <h3>Comprehensive Constructor</h3>
+                    <p>For complete control with selective getters and setters:</p>
+                    <ul>
+                        <li><code>derive:parents:slots:getters:setters:methods:</code> - Full control</li>
+                        <li><code>getters:</code> - Slots to generate getters for</li>
+                        <li><code>setters:</code> - Slots to generate setters for</li>
                     </ul>
                     <h3>Mixin Class</h3>
                     <p>For slotless composition, use the <code>Mixin</code> class - ideal for shared behavior without state.</p>
@@ -195,10 +202,20 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
                         <pre><code><span class="comment"># Full constructor syntax</span>
 <span class="type">MyClass</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(slot1 slot2)
     parents: <span class="keyword">#</span>(<span class="type">Parent1</span> <span class="type">Parent2</span>)
-    ivarArray: <span class="keyword">#</span>(extraSlot)
+    slots: <span class="keyword">#</span>(extraSlot)
     methods: <span class="keyword">#{</span>
         #method1 -> [:arg | ...],
         #method2 -> [:a :b | ...]
+    <span class="keyword">}</span>
+
+<span class="comment"># Comprehensive with selective accessors</span>
+<span class="type">MyClass</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(slot1 slot2)
+    parents: <span class="keyword">#</span>(<span class="type">Parent1</span> <span class="type">Parent2</span>)
+    slots: <span class="keyword">#</span>(extraSlot)
+    getters: <span class="keyword">#</span>(slot1 extraSlot)
+    setters: <span class="keyword">#</span>(slot2)
+    methods: <span class="keyword">#{</span>
+        #method1 -> [:arg | ...]
     <span class="keyword">}</span>
 
 <span class="comment"># Mixin for slotless composition</span>
