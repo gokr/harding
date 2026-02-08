@@ -122,7 +122,8 @@ proc tryGetInt*(value: NodeValue): (bool, int) =
 
 # Forward declarations for class-based methods
 proc classDeriveImpl*(self: Class, args: seq[NodeValue]): NodeValue
-proc classDeriveParentsIvarArrayMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classNewImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue
@@ -352,10 +353,15 @@ proc initCoreClasses*(): Class =
     deriveWithSlotsMethod.nativeImpl = cast[pointer](classDeriveImpl)
     addMethodToClass(objectClass, "derive:", deriveWithSlotsMethod, isClassMethod = true)
 
-    # derive:parents:ivarArray:methods: - create class from multiple parents with slots and methods
-    let deriveParentsIvarMethod = createCoreMethod("derive:parents:ivarArray:methods:")
-    deriveParentsIvarMethod.nativeImpl = cast[pointer](classDeriveParentsIvarArrayMethodsImpl)
-    addMethodToClass(objectClass, "derive:parents:ivarArray:methods:", deriveParentsIvarMethod, isClassMethod = true)
+    # derive:parents:slots:methods: - create class from multiple parents with slots and methods
+    let deriveParentsSlotsMethod = createCoreMethod("derive:parents:slots:methods:")
+    deriveParentsSlotsMethod.nativeImpl = cast[pointer](classDeriveParentsSlotsMethodsImpl)
+    addMethodToClass(objectClass, "derive:parents:slots:methods:", deriveParentsSlotsMethod, isClassMethod = true)
+
+    # derive:parents:slots:getters:setters:methods: - comprehensive class creation
+    let deriveParentsSlotsGettersSettersMethodsMethod = createCoreMethod("derive:parents:slots:getters:setters:methods:")
+    deriveParentsSlotsGettersSettersMethodsMethod.nativeImpl = cast[pointer](classDeriveParentsSlotsGettersSettersMethodsImpl)
+    addMethodToClass(objectClass, "derive:parents:slots:getters:setters:methods:", deriveParentsSlotsGettersSettersMethodsMethod, isClassMethod = true)
 
     # deriveWithAccessors: - create class with auto-generated getters and setters
     let deriveWithAccessorsMethod = createCoreMethod("deriveWithAccessors:")
@@ -1000,10 +1006,11 @@ proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValu
 
   return NodeValue(kind: vkClass, classVal: newCls)
 
-proc classDeriveParentsIvarArrayMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Create a new class with multiple parents and define methods
   ## args[0]: parents array
-  ## args[1]: slot names array  ## args[2]: methods block (optional, executed with self bound to new class)
+  ## args[1]: slot names array
+  ## args[2]: methods dictionary (optional)
   if args.len < 2:
     return nilValue()
 
@@ -1050,6 +1057,86 @@ proc classDeriveParentsIvarArrayMethodsImpl*(self: Class, args: seq[NodeValue]):
   # For now, skip block execution - it requires an interpreter context
   # This could be enhanced later to support true method definition in the block
   discard
+
+proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  ## Create a new class with multiple parents, slots, selective getters/setters, and methods
+  ## args[0]: parents array
+  ## args[1]: slot names array (all slots)
+  ## args[2]: getters array (slots to generate getters for)
+  ## args[3]: setters array (slots to generate setters for)
+  ## args[4]: methods dictionary (optional)
+  if args.len < 4:
+    return nilValue()
+
+  # Extract parents array
+  var parents: seq[Class] = @[]
+  if args[0].kind == vkInstance and args[0].instVal.kind == ikArray:
+    for elem in args[0].instVal.elements:
+      if elem.kind == vkClass:
+        parents.add(elem.classVal)
+
+  # If no parents provided, use self as the parent
+  if parents.len == 0:
+    parents.add(self)
+
+  # Extract all slot names
+  var slotNames: seq[string] = @[]
+  if args[1].kind == vkInstance and args[1].instVal.kind == ikArray:
+    for elem in args[1].instVal.elements:
+      if elem.kind == vkString or elem.kind == vkSymbol:
+        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
+        if name.len > 0:
+          slotNames.add(name)
+
+  # Extract getter slot names
+  var getterSlotNames: seq[string] = @[]
+  if args[2].kind == vkInstance and args[2].instVal.kind == ikArray:
+    for elem in args[2].instVal.elements:
+      if elem.kind == vkString or elem.kind == vkSymbol:
+        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
+        if name.len > 0:
+          getterSlotNames.add(name)
+
+  # Extract setter slot names
+  var setterSlotNames: seq[string] = @[]
+  if args[3].kind == vkInstance and args[3].instVal.kind == ikArray:
+    for elem in args[3].instVal.elements:
+      if elem.kind == vkString or elem.kind == vkSymbol:
+        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
+        if name.len > 0:
+          setterSlotNames.add(name)
+
+  # Create the new class
+  let actualParents = if args[0].kind == vkNil: @[self] else: parents
+  let className = if parents.len > 0 and parents[0].name.len > 0:
+                    parents[0].name & "+Derived"
+                  elif self.name.len > 0:
+                    self.name & "+Derived"
+                  else:
+                    "Anonymous"
+  let newClass = newClass(superclasses = actualParents, slotNames = slotNames, name = className)
+
+  # Generate getters for specified slots
+  for slotName in getterSlotNames:
+    let getter = createGetterMethod(newClass, slotName)
+    if getter != nil:
+      addMethodToClass(newClass, slotName, getter, isClassMethod = false)
+
+  # Generate setters for specified slots
+  for slotName in setterSlotNames:
+    let setterName = slotName & ":"
+    let setter = createSetterMethod(newClass, slotName)
+    if setter != nil:
+      addMethodToClass(newClass, setterName, setter, isClassMethod = false)
+
+  # Extract and add methods from dictionary if provided
+  if args.len >= 5 and args[4].kind == vkInstance and args[4].instVal.kind == ikTable:
+    let methodTable = args[4].instVal
+    for key, value in methodTable.entries.pairs:
+      if key.kind == vkSymbol and value.kind == vkBlock:
+        let selector = key.symVal
+        let meth = value.blockVal
+        addMethodToClass(newClass, selector, meth, isClassMethod = false)
 
   return NodeValue(kind: vkClass, classVal: newClass)
 

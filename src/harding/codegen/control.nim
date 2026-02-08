@@ -12,7 +12,7 @@ proc genWhileTrueMethod*(): string =
   let nimName = mangleSelector("whileTrue:")
 
   return fmt("""
-proc {nimName}*(self: RuntimeObject, condition: BlockNode, body: BlockNode = nil): NodeValue {{.cdecl, exportc.}} =
+proc {nimName}*(self: NodeValue, condition: BlockNode, body: BlockNode = nil): NodeValue {{.cdecl, exportc.}} =
   ## whileTrue: control structure
   ## Repeatedly evaluate condition and body while condition is true
   ##
@@ -24,7 +24,7 @@ proc {nimName}*(self: RuntimeObject, condition: BlockNode, body: BlockNode = nil
     if body != nil:
       discard currentRuntime[].evalBlock(body)
 
-  return self.toNodeValue()
+  return self
 
 """)
 
@@ -33,7 +33,7 @@ proc genWhileFalseMethod*(): string =
   let nimName = mangleSelector("whileFalse:")
 
   return fmt("""
-proc {nimName}*(self: RuntimeObject, condition: BlockNode, body: BlockNode = nil): NodeValue {{.cdecl, exportc.}} =
+proc {nimName}*(self: NodeValue, condition: BlockNode, body: BlockNode = nil): NodeValue {{.cdecl, exportc.}} =
   ## whileFalse: control structure
   ## Repeatedly evaluate condition and body while condition is false
   ##
@@ -45,7 +45,7 @@ proc {nimName}*(self: RuntimeObject, condition: BlockNode, body: BlockNode = nil
     if body != nil:
       discard currentRuntime[].evalBlock(body)
 
-  return self.toNodeValue()
+  return self
 
 """)
 
