@@ -90,9 +90,26 @@ ColoredPoint addParent: Printable
 # Create a class with multiple parents and methods in one call
 MyClass := Object derive: #(slot1 slot2)
     parents: #(Parent1 Parent2)
-    ivarArray: #(extraSlot)
+    slots: #(extraSlot)
+    methods: [
+        self>>method1 [ ... ]
+        self>>method2 [ ... ]
+    ]
+```
+
+**Comprehensive Constructor:**
+
+For complete control with selective getters and setters:
+
+```harding
+# derive:parents:slots:getters:setters:methods: - full control
+MyClass := Object derive: #(slot1 slot2)
+    parents: #(Parent1 Parent2)
+    slots: #(extraSlot)
+    getters: #(slot1 extraSlot)
+    setters: #(slot2)
     methods: #{
-        #method1 -> [:arg | ... ],
+        #method1 -> [:arg | ...],
         #method2 -> [:a :b | ... ]
     }
 ```
@@ -451,7 +468,7 @@ numbers do: [:n | n println]
 squares := numbers collect: [:n | n * n]
 
 # Filter
-evens := numbers select: [:n | (n \ 2) = 0]
+evens := numbers select: [:n | (n % 2) = 0]
 
 # Reduce
 sum := numbers inject: 0 into: [:acc :n | acc + n]
