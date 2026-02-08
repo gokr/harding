@@ -6,19 +6,26 @@
 SortedCollection := Array derive: #(sortBlock).
 
 SortedCollection class>>new [
-    ^self new: #() sortBlock: [:a :b | a < b]
+    | sc |
+    sc := self newInstance.
+    sc setSortBlock: [:a :b | a < b].
+    ^sc
 ]
 
 SortedCollection class>>new: items sortBlock: aBlock [
     | sc |
-    sc := self new.
-    sc sortBlock: aBlock.
+    sc := self newInstance.
+    sc setSortBlock: aBlock.
     items do: [:item | sc add: item].
     ^sc
 ]
 
 SortedCollection class>>sortBlock: aBlock [
     ^self new: #() sortBlock: aBlock
+]
+
+SortedCollection>>setSortBlock: aBlock [
+    sortBlock := aBlock.
 ]
 
 SortedCollection>>sortBlock [
