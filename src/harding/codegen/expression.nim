@@ -270,7 +270,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
           bodyStmts.add("result = " & genExpression(blockCtx, stmt))
         else:
           bodyStmts.add(genStatement(blockCtx, stmt))
-      return fmt("(proc({params}): NodeValue =\n    {bodyStmts.join(\"\n    \")}\n  )")
+      let bodyStr = bodyStmts.join("; ")
+      return fmt("(proc({params}): NodeValue = {bodyStr})")
     else:
       # Simple block
       var bodyStmts: seq[string] = @[]
@@ -279,7 +280,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
           bodyStmts.add("result = " & genExpression(blockCtx, stmt))
         else:
           bodyStmts.add(genStatement(blockCtx, stmt))
-      return "(proc(): NodeValue =\n    " & bodyStmts.join("\n    ") & "\n  )"
+      let bodyStr = bodyStmts.join("; ")
+      return "(proc(): NodeValue = " & bodyStr & ")"
 
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)
@@ -346,7 +348,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Primitive call as statement
     let primCall = node.PrimitiveCallNode
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt"discard callPrimitive(\"{primCall.selector}\", @[{args}])"
+    return "discard callPrimitive(\"" & primCall.selector & "\", @[" & args & "])"
 
   else:
     # For other nodes, just generate the expression
