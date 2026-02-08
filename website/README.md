@@ -2,6 +2,16 @@
 
 This directory contains the static website for Harding Smalltalk.
 
+## Testing Code Examples
+
+All code examples in the website are tested in `tests/test_website_examples.nim`.
+The tests verify that the examples shown in the documentation work correctly.
+
+Before committing changes to website content:
+1. Run tests: `nimble test`
+2. If example changed, update the corresponding test
+3. Verify in REPL or with `harding script.hrd`
+
 ## Structure
 
 This website uses a **content-driven static site** approach:

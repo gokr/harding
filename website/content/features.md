@@ -46,39 +46,255 @@ z := x + y              # But periods work too if you prefer
 Create classes dynamically with slots and methods:
 
 ```harding
+# Declare a temporary variable to hold an instance
+| p |
+
 # Create a new class with two instance variables
 Point := Object derive: #(x y)
 
-# Add methods
-Point extend: [
-    self >> x: anX y: aY [
-        x := anX
-        y := aY
-    ]
+# Add methods using >> syntax and direct slot access
+Point >> x: val [ x := val ]
+Point >> y: val [ y := val ]
 
+# Add multiple methods at a time
+Point extend: [
     self >> moveBy: dx and: dy [
         x := x + dx
         y := y + dy
     ]
-
     self >> distanceFromOrigin [
         ^ ((x * x) + (y * y)) sqrt
     ]
 ]
 
-# Use it
+# Create and use a Point
 p := Point new
-p x: 3 y: 4
-p distanceFromOrigin println   # 5.0
+p x: 100; y: 200
+p distanceFromOrigin println   # 223.6068...
 ```
 
-Multiple inheritance with conflict detection:
+#### Multiple Inheritance
+
+Harding supports multiple inheritance with conflict detection:
 
 ```harding
 # Inherit from multiple parents
 ColoredPoint := Point derive: #(color)
 ColoredPoint addParent: Comparable
 ColoredPoint addParent: Printable
+```
+
+**Full Constructor Syntax:**
+
+```harding
+# Create a class with multiple parents and methods in one call
+MyClass := Object derive: #(slot1 slot2)
+    parents: #(Parent1 Parent2)
+    ivarArray: #(extraSlot)
+    methods: #{
+        #method1 -> [:arg | ... ],
+        #method2 -> [:a :b | ... ]
+    }
+```
+
+**Mixin Class:**
+
+For slotless composition, use the `Mixin` class:
+
+```harding
+# Mixin is a slotless class for shared behavior
+Comparable := Mixin derive: #()
+Comparable >> < other [ <primitive: primitiveLessThan> ]
+Comparable >> > other [ <primitive: primitiveGreaterThan> ]
+```
+
+**Conflict Detection:**
+
+When multiple parents define the same method, Harding detects conflicts:
+
+```harding
+A := Object derive: #() methods: #{ #foo -> [ ^ 'A' ] }
+B := Object derive: #() methods: #{ #foo -> [ ^ 'B' ] }
+C := Object derive: #() parents: #(A B)  # Conflict detected on #foo
+```
+
+## Advanced Features
+
+### Primitives
+
+Primitives provide direct access to VM-level operations and Nim interop. They use a declarative syntax:
+
+```harding
+# Basic primitive syntax
+Array>>at: index <primitive primitiveAt: index>
+
+# Primitive with validation wrapper
+Array>>at: index [
+    (index < 1 or: [index > self size]) ifTrue: [
+        self error: "Index out of bounds"
+    ].
+    ^ <primitive primitiveAt: index>
+]
+```
+
+**Available Primitives:**
+
+| Primitive | Description |
+|-----------|-------------|
+| `primitiveClone` | Create a shallow copy of an object |
+| `primitiveAt:` | Access element at index (1-based) |
+| `primitiveAt:put:` | Set element at index |
+| `primitiveIdentity:` | Check object identity |
+| `primitiveCCall:with:` | Call C library functions |
+
+**Nim Integration via Primitives:**
+
+Primitives enable calling Nim code directly from Harding:
+
+```harding
+# Call Nim primitive
+String>>size <primitive primitiveStringSize>
+
+# Wrapper with error handling
+String>>at: index [
+    (index < 1 or: [index > self size]) ifTrue: [
+        self error: "Index out of bounds"
+    ].
+    ^ <primitive primitiveStringAt: index>
+]
+```
+
+### Super Sends
+
+Harding supports both unqualified and qualified super sends for method overriding.
+
+**Unqualified Super:**
+
+```harding
+# Call parent implementation without specifying which parent
+Rectangle>>area [
+    ^ width * height
+]
+
+ColoredRectangle>>area [
+    # Do colored rectangle specific work
+    baseArea := super area.  # Calls Rectangle>>area
+    ^ baseArea + colorAdjustment
+]
+```
+
+**Qualified Super:**
+
+When using multiple inheritance, specify which parent's method to call:
+
+```harding
+# Multiple inheritance scenario
+A := Object derive: #() methods: #{ #foo -> [ ^ 'A' ] }
+B := Object derive: #() methods: #{ #bar -> [ ^ 'B' ] }
+C := Object derive: #() parents: #(A B)
+
+# In C, call specific parent's implementation
+C>>foo [
+    # Explicitly call A's foo
+    ^ super<A> foo, " from C"
+]
+
+C>>bar [
+    # Explicitly call B's bar
+    ^ super<B> bar, " from C"
+]
+```
+
+### Class-Side Methods
+
+Define methods on the class itself (analogous to static methods):
+
+```harding
+# Instance method
+Person>>greet [ ^ "Hello, I am " + name ]
+
+# Class-side method syntax using "class>>"
+Person class>>newNamed: n aged: a [
+    | p |
+    p := self new.
+    p name: n.
+    p age: a.
+    ^ p
+]
+
+# Usage
+alice := Person newNamed: "Alice" aged: 30
+```
+
+**Alternative Pattern:**
+
+Since classes are first-class objects, you can also define class methods by sending `selector:put:` to the class:
+
+```harding
+Person selector: #createDefault put: [
+    ^ self new initialize
+]
+```
+
+### Dynamic Dispatch
+
+Send messages dynamically at runtime using `perform:` family of methods:
+
+```harding
+# Perform a selector with no arguments
+obj perform: #description   # Same as: obj description
+
+# Perform with one argument
+obj perform: #at: with: 5    # Same as: obj at: 5
+
+# Perform with two arguments
+obj perform: #at:put: with: 5 with: 'value'  # Same as: obj at: 5 put: 'value'
+
+# Dynamic method invocation
+methodName := condition ifTrue: [#process] ifFalse: [#skip]
+result := obj perform: methodName
+```
+
+**Use Cases:**
+
+- Implementing proxy objects
+- Message forwarding
+- Building interpreters or DSLs
+- Reflection-based tools
+
+### Introspection
+
+Inspect and query objects and classes at runtime:
+
+**Superclass Hierarchy:**
+
+```harding
+# Get list of superclass names
+Point superclassNames   # Returns array like #(Object)
+
+# Check inheritance
+obj isKindOf: Collection
+obj respondsTo: #do:
+```
+
+**Root Class:**
+
+Harding provides a `Root` class that serves as the proxy/DNU base:
+
+```harding
+# Root is the ultimate parent class
+Object superclass   # nil
+
+# Mixin is a slotless class for shared behavior
+Comparable := Mixin derive: #()
+```
+
+**Object Inspection:**
+
+```harding
+obj class           # Get the class of an object
+obj class name      # Get class name
+obj slotNames       # Get list of instance variable names
 ```
 
 ## Runtime Features
@@ -111,6 +327,32 @@ Each process has:
 - State tracking
 - Independent execution
 
+**Process States:**
+
+| State | Description |
+|-------|-------------|
+| `ready` | Waiting for CPU time |
+| `running` | Currently executing |
+| `blocked` | Waiting for I/O or condition |
+| `suspended` | Paused via `suspend` message |
+| `terminated` | Finished execution |
+
+**Scheduler Operations:**
+
+```harding
+# Yield CPU to another process
+Processor yield
+
+# List all processes
+Scheduler listProcesses
+
+# Get current process
+Processor activeProcess
+
+# Set process priority (higher = more CPU)
+process priority: 5
+```
+
 ### Stackless VM
 
 Each Process runs in its own stackless VM, enabling:
@@ -130,17 +372,14 @@ Harding REPL (:help for commands, :quit to exit)
 harding> 3 + 4
 7
 
-> Point := Object derive: #(x y)
-Point
+harding> "Hello, World!" println
+Hello, World!
 
-> p := Point new
-Point instance
+harding> numbers := #(1 2 3 4 5)
+#(1 2 3 4 5)
 
-> p x: 10
-10
-
-> p x
-10
+harding> numbers collect: [:n | n * n]
+#(1 4 9 16 25)
 ```
 
 ### File-Based Development
@@ -258,6 +497,19 @@ Array>>at: index [
 ]
 ```
 
+**Native FFI Fields:**
+
+Objects can hold references to Nim values through special fields:
+
+```harding
+# Objects can have native Nim backing
+obj isNimProxy     # true if object wraps a Nim value
+obj hardingType    # Get the Harding type name
+obj nimValue       # Access the underlying Nim value
+```
+
+These fields enable seamless integration with the Nim ecosystem, allowing Harding objects to wrap Nim structs, pointers, and other native types.
+
 ### C Library Access
 
 Through Nim's FFI:
@@ -267,56 +519,65 @@ Through Nim's FFI:
 <primitive primitiveCCall: function with: args>
 ```
 
-## Performance
-
-### Slot-Based Instance Variables
-
-Direct slot access is 149x faster than property bag access:
-
-```harding
-# Fast - O(1) slot access
-Point>>moveBy: dx and: dy [
-    x := x + dx      # Direct slot
-    y := y + dy
-]
-```
-
-### Native Compilation (Coming)
-
-Compilation to native code via Nim will provide:
-- Fast startup
-- Efficient execution
-- Small binaries
-- Easy deployment
 
 ## Debugging Tools
 
 ### Log Levels
 
+Control verbosity of execution output:
+
 ```bash
+# Debug level shows detailed execution flow
 harding --loglevel DEBUG script.hrd
+
+# Available levels: DEBUG, INFO, WARN, ERROR, FATAL
+harding --loglevel INFO script.hrd
 ```
 
-Levels: DEBUG, INFO, WARN, ERROR, FATAL
+**DEBUG level shows:**
+- Each AST node being evaluated
+- Message sends with receiver and selector
+- Method lookups and execution
+- Variable assignments and lookups
+- Activation stack push/pop operations
 
 ### AST Output
 
+View the parsed Abstract Syntax Tree before execution:
+
 ```bash
+# Show AST and then execute
 harding --ast script.hrd
+
+# Combine with debug logging for full visibility
+harding --ast --loglevel DEBUG script.hrd
 ```
 
-Shows the parsed Abstract Syntax Tree.
+The AST output shows the hierarchical structure of parsed expressions, useful for understanding how code is interpreted.
 
 ### Process Inspection
+
+Inspect running processes:
 
 ```harding
 # List all processes
 Scheduler listProcesses
 
-# Check process state
-process state
-process pid
-process name
+# Check process properties
+process state      # ready, running, blocked, suspended, terminated
+process pid        # Unique process ID
+process name       # Process name
+process priority   # Scheduling priority
+```
+
+### REPL Debugging Commands
+
+When in the REPL, use these commands:
+
+```
+harding> :help        # Show available commands
+harding> :vars        # Show current variables
+harding> :quit        # Exit REPL
 ```
 
 ## What's Next

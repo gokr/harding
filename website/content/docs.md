@@ -11,10 +11,10 @@ title: Documentation
 git clone https://github.com/gokr/harding.git
 cd harding
 
-# Build and install locally
+# Build and put binaries in current directory
 nimble local
 
-# Or install to ~/.local/bin
+# Or install to ~/.nimble/bin
 nimble install
 ```
 
@@ -46,6 +46,21 @@ harding --loglevel DEBUG script.hrd
 
 Start here if you know Smalltalk:
 
+**What feels familiar:**
+- Message syntax: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
+- Cascade messages with `;`
+- Block syntax and that they are proper lexical closures with non-local returns
+- Everything is an object, everything happens via message sends
+- Collection messages: `do:`, `select:`, `collect:`, `inject:into:`
+
+**What's different:**
+- Optional periods - newlines also separate statements
+- Hash-with-space `# <- a space` for comments (not double quotes)
+- Double quotes for strings (not single quotes)
+- Class creation: `Point := Object derive: #(x y)`
+- File-based, git-friendly source
+
+Additional resources:
 - **Key Differences** - [see below](#differences-from-smalltalk)
 - [Smalltalk Compatibility Guide](https://github.com/gokr/harding/blob/main/docs/MANUAL.md#smalltalk-compatibility)
 - [Syntax Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md)
@@ -67,6 +82,7 @@ Hello World:
 
 Factorial:
 ```harding
+| factorial |
 factorial := [:n |
     (n <= 1) ifTrue: [^ 1].
     ^ n * (factorial value: (n - 1))
@@ -77,22 +93,12 @@ factorial := [:n |
 
 Counter Class:
 ```harding
+| c |
 Counter := Object derive: #(count)
+Counter >> initialize [ count := 0 ]
+Counter >> value [ ^count ]
+Counter >> increment [ ^count := count + 1]
 
-Counter extend: [
-    self >> initialize [
-        count := 0
-    ]
-
-    self >> increment [
-        count := count + 1.
-        ^ count
-    ]
-
-    self >> value [
-        ^ count
-    ]
-]
 
 c := Counter new
 c initialize
@@ -145,7 +151,7 @@ In Harding, classes are objects but there are no metaclasses:
 # Instance method
 Person >> greet [ ^ "Hello" ]
 
-# Class method - just a method on the class object
+# Class method - defined on the class itself
 Person class >> newPerson [ ^ self new ]
 ```
 

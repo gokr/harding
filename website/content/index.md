@@ -6,8 +6,8 @@ tagline: Smalltalk Semantics, Nim Performance
 ## Hero Section
 
 **Title:** Harding Smalltalk
-**Subtitle:** Smalltalk semantics. Nim performance.
-**Description:** A modern Smalltalk dialect that compiles to native code. File-based, git-friendly, and designed for modern tooling.
+**Subtitle:** Smalltalk semantics, modern tooling.
+**Description:** A modern Smalltalk dialect aiming at native compilation. File-based, git-friendly, and designed for modern tooling.
 
 **CTA Primary:** Get Started
 **CTA Secondary:** See Examples
@@ -18,23 +18,29 @@ tagline: Smalltalk Semantics, Nim Performance
 # Define a Point class with x and y slots
 Point := Object derive: #(x y)
 
-# Add methods using the >> syntax
-Point extend: [
-    self >> moveBy: dx and: dy [
-        x := x + dx
-        y := y + dy
-        ^ self
-    ]
-
-    self >> distanceFromOrigin [
-        ^ ((x * x) + (y * y)) sqrt
-    ]
+# Add method using selector:put:
+Point selector: #moveBy:and: put: [:dx :dy |
+    x := x + dx
+    y := y + dy
 ]
 
-# Create and use a Point
+# Simpler way to add method using >> syntactic sugar
+Point>>x: val [
+    x := val
+]
+
+# Add several methods at once using a special mechanism
+# to bind a block to a specific self - the Point class.
+Point extend: [
+    self>>y: val [ y := val ]
+    self>>y [ ^y ]
+    self>>x [ ^x ]
+]
+
+# Create and use a Point, cascades work fine
 p := Point new
-p x: 100 y: 200
-p distanceFromOrigin println
+p x: 100; y: 200
+p moveBy: 5 and: 10
 ```
 
 ## Features
@@ -43,7 +49,7 @@ p distanceFromOrigin println
 Everything you love about Smalltalk - message passing, blocks, live programming - preserved and modernized.
 
 ### Native Performance
-Compiles through Nim to C to machine code **(future)**. No VM, no bytecode, just fast native binaries.
+Compiles through Nim to C to machine code **(future)**. No VM, no bytecode, fast native binaries.
 
 ### File-Based
 No image files. Source lives in .hrd files you can version control, diff, and edit with any editor.
@@ -57,32 +63,6 @@ Cooperative multitasking with first-class Process objects. Built-in scheduler wi
 ### Nim Interop
 Call Nim code directly. Access the entire Nim ecosystem: libraries, packages, and system APIs.
 
-## Quick Start
+## Get Started
 
-```bash
-# Clone and build
-git clone https://github.com/gokr/harding.git
-cd harding
-nimble local
-
-# Run
-harding                    # Start REPL
-harding script.hrd         # Run a file
-harding -e "3 + 4"         # Evaluate expression
-```
-
-## For Smalltalkers
-
-**What feels familiar:**
-- Message syntax: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
-- Cascade messages with `;`
-- Blocks are proper lexical closures with non-local returns
-- Everything is an object, everything happens via message sends
-- Collection messages: `do:`, `select:`, `collect:`, `inject:into:`
-
-**What's different:**
-- Optional periods - newlines also separate statements
-- Hash `#` for comments (not double quotes)
-- Double quotes for strings (not single quotes)
-- Class creation: `Point := Object derive: #(x y)`
-- File-based, git-friendly source
+[Install Harding](/docs) and try the REPL, or explore the [full feature list](/features).
