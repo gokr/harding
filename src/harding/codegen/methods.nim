@@ -2,6 +2,7 @@ import std/strutils
 import ../core/types
 import ../compiler/context
 import ../compiler/symbols
+import ./expression
 
 # ============================================================================
 # Method Body Code Generation
@@ -14,13 +15,13 @@ proc genMethodSignature*(cls: ClassInfo, meth: BlockNode,
   let nimName = mangleSelector(selector)
   let clsPrefix = if cls != nil: mangleClass(cls.name) & "_" else: ""
 
-  var output = "proc " & clsPrefix & nimName & "*(self: ref RuntimeObject"
+  var output = "proc " & clsPrefix & nimName & "*(self: Instance"
 
   # Add parameters
   for param in meth.parameters:
     output.add(", " & param & ": NodeValue")
 
-  output.add("): NodeValue {.cdecl, exportc.}\n")
+  output.add("): NodeValue {.cdecl.}\n")
   return output
 
 proc genMethodHeader*(cls: ClassInfo, meth: BlockNode,
@@ -100,53 +101,109 @@ proc genComparisonFastPath*(op: string): string =
   output.add("    return NodeValue(kind: vkBool, boolVal: a.boolVal " & nimOp & " b.boolVal)\n")
   return output
 
+proc genMethodBodyFromAST*(cls: ClassInfo, meth: BlockNode, selector: string): string =
+  ## Generate method body by compiling AST nodes to Nim code
+  ## This is the main method body compilation that translates Harding AST to Nim
+
+  # Create generation context with class info and parameters
+  var ctx = newGenContext(cls)
+  for param in meth.parameters:
+    ctx.parameters.add(param)
+
+  var output = "\n"
+
+  # Generate temporaries
+  if meth.temporaries.len > 0:
+    output.add("  # Temporaries\n")
+    for temp in meth.temporaries:
+      output.add("  var " & temp & " = NodeValue(kind: vkNil)\n")
+      ctx.locals.add(temp)
+    output.add("\n")
+
+  # Generate body statements
+  if meth.body.len == 0:
+    # Empty body - return self
+    output.add("  return self.toValue()\n")
+    return output
+
+  # Process each statement
+  for i, stmt in meth.body:
+    let isLast = (i == meth.body.len - 1)
+
+    case stmt.kind
+    of nkReturn:
+      let ret = stmt.ReturnNode
+      if ret.expression != nil:
+        let exprCode = genExpression(ctx, ret.expression)
+        output.add("  return " & exprCode & "\n")
+      else:
+        output.add("  return self.toValue()\n")
+
+    of nkAssign:
+      let assign = stmt.AssignNode
+      let varName = assign.variable
+      let exprCode = genExpression(ctx, assign.expression)
+
+      # Check if variable is a slot
+      if ctx.isSlot(varName):
+        let idx = ctx.getSlotIndex(varName)
+        output.add("  self.slots[" & $idx & "] = " & exprCode & "\n")
+        if isLast:
+          output.add("  return " & exprCode & "\n")
+      elif ctx.isLocal(varName):
+        # Local variable reassignment
+        output.add("  " & varName & " = " & exprCode & "\n")
+        if isLast:
+          output.add("  return " & exprCode & "\n")
+      else:
+        # New local variable
+        output.add("  var " & varName & " = " & exprCode & "\n")
+        ctx.locals.add(varName)
+        if isLast:
+          output.add("  return " & varName & "\n")
+
+    else:
+      # Expression statement
+      let exprCode = genExpression(ctx, stmt)
+      if isLast:
+        # Last statement - return its value
+        output.add("  return " & exprCode & "\n")
+      else:
+        # Not last - discard result
+        output.add("  discard " & exprCode & "\n")
+
+  return output
+
 proc genMethodBody*(cls: ClassInfo, meth: BlockNode,
                      selector: string): string =
   ## Generate method body with type specialization and fallback
 
-  # Check for known patterns
+  # Check for known patterns that need special handling
   case selector
   of "+", "-", "*", "/":
-    return "\n  # Arithmetic operator not yet implemented with type specialization\n" &
-           "  return sendMessage(currentRuntime[], self, \"" & selector & "\", @[a])\n"
+    # Binary arithmetic operators have special handling at top level
+    return "\n  # Arithmetic operator compiled from AST\n" &
+           genMethodBodyFromAST(cls, meth, selector)
 
   of "<", "<=", ">", ">=", "=":
-    return "\n  # Comparison operator not yet implemented with type specialization\n" &
-           "  return sendMessage(currentRuntime[], self, \"" & selector & "\", @[a, b])\n"
+    # Comparison operators have special handling at top level
+    return "\n  # Comparison operator compiled from AST\n" &
+           genMethodBodyFromAST(cls, meth, selector)
 
   of "at:":
     if meth.parameters.len > 0:
       if cls != nil and meth.parameters[0].len > 0:
-        let param = meth.parameters[0]
-        return "\n  # Slot access with parameter '" & param & "'\n" &
-               "  if param.kind == vkSymbol:\n" &
-               "    let slotName = param.symVal\n" &
-               "    # Try direct slot access\n" &
-               "    if slotName == \"self\":\n" &
-               "      return self.toValue()\n" &
-               "    # Dynamic dispatch for unknown slots\n" &
-               "    return sendMessage(currentRuntime[], self, \"at:\", @[param])\n" &
-               "  return NodeValue(kind: vkNil)\n"
+        # Use AST compilation for slot access methods
+        return genMethodBodyFromAST(cls, meth, selector)
     return "\n  return sendMessage(currentRuntime[], self, \"at:\", @[param])\n"
 
   of "at:put:":
-    return "\n  if key.kind == vkSymbol:\n" &
-           "    let slotName = key.symVal\n" &
-           "    if slotName == \"self\":\n" &
-           "      return value\n" &
-           "    # Dynamic dispatch for at:put:\n" &
-           "    return sendMessage(currentRuntime[], self, \"at:put:\", @[key, value])\n" &
-           "  return value\n"
+    # Use AST compilation for slot assignment methods
+    return genMethodBodyFromAST(cls, meth, selector)
 
   else:
-    # Generic method - use dynamic dispatch
-    if meth.parameters.len == 0:
-      return "\n  return self.toValue()\n"
-
-    let args = meth.parameters.join(", ")
-    return "\n  # Method not yet compiled - using dynamic dispatch\n" &
-           "  return sendMessage(currentRuntime[], self, \"" & selector &
-           "\", @[" & args & "])\n"
+    # Generic method - compile from AST
+    return genMethodBodyFromAST(cls, meth, selector)
 
 proc genMethod*(cls: ClassInfo, meth: BlockNode,
                 selector: string, className: string = ""): string =
@@ -218,5 +275,42 @@ proc floatArg*(args: seq[NodeValue], index: int): float64 =
 proc stringArg*(args: seq[NodeValue], index: int): string =
   ## Get string argument
   return requireArg(args, index, vkString).strVal
+
+# I/O helper functions
+
+proc nt_println*(value: NodeValue): NodeValue =
+  ## Print value with newline
+  echo value.toString()
+  return value
+
+proc nt_print*(value: NodeValue): NodeValue =
+  ## Print value without newline
+  stdout.write(value.toString())
+  return value
+
+proc nt_asString*(value: NodeValue): NodeValue =
+  ## Convert value to string
+  return NodeValue(kind: vkString, strVal: value.toString())
+
+proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
+  ## String concatenation
+  let aStr = a.toString()
+  let bStr = b.toString()
+  return NodeValue(kind: vkString, strVal: aStr & bStr)
+
+# Global variable support
+
+var globals*: Table[string, NodeValue]
+
+proc getGlobal*(name: string): NodeValue =
+  ## Get global variable value
+  if globals.hasKey(name):
+    return globals[name]
+  return NodeValue(kind: vkNil)
+
+proc setGlobal*(name: string, value: NodeValue): NodeValue =
+  ## Set global variable value
+  globals[name] = value
+  return value
 
 """

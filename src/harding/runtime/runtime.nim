@@ -9,8 +9,8 @@ import ../interpreter/[objects, activation]
 
 type
   Runtime* = ref object
-    rootObject*: RuntimeObject
-    classes*: Table[string, RuntimeObject]
+    rootObject*: Instance
+    classes*: Table[string, Instance]
     methodCache*: Table[string, CompiledMethod]
     isInitializing*: bool
 
@@ -25,8 +25,8 @@ var currentRuntime*: ptr Runtime = nil
 proc newRuntime*(): Runtime =
   ## Create new runtime instance
   result = Runtime(
-    rootObject: rootObject,
-    classes: initTable[string, RuntimeObject](),
+    rootObject: objectClass.toInstance(),
+    classes: initTable[string, Instance](),
     methodCache: initTable[string, CompiledMethod](),
     isInitializing: false
   )
@@ -48,12 +48,11 @@ proc shutdownRuntime*() =
     deallocShared(cast[pointer](currentRuntime))
     currentRuntime = nil
 
-proc registerClass*(runtime: var Runtime, name: string, cls: RuntimeObject) =
+proc registerClass*(runtime: var Runtime, name: string, cls: Instance) =
   ## Register a class in the runtime
   runtime.classes[name] = cls
-  cls.tags.add(name)
 
-proc getClass*(runtime: Runtime, name: string): RuntimeObject =
+proc getClass*(runtime: Runtime, name: string): Instance =
   ## Get a registered class by name
   if name in runtime.classes:
     return runtime.classes[name]
@@ -86,13 +85,13 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
 # Convenience procs for common operations
 
-proc toValue*(obj: RuntimeObject): NodeValue =
-  ## Convert RuntimeObject to NodeValue
+proc toValue*(obj: Instance): NodeValue =
+  ## Convert Instance to NodeValue
   if obj == nil:
     return NodeValue(kind: vkNil)
-  return NodeValue(kind: vkObject, objVal: obj)
+  return NodeValue(kind: vkInstance, instVal: obj)
 
-proc toNodeValue*(obj: RuntimeObject): NodeValue =
+proc toNodeValue*(obj: Instance): NodeValue =
   ## Alias for toValue
   return obj.toValue()
 
@@ -124,32 +123,24 @@ proc toBool*(value: NodeValue): bool =
 
 # Slot access helpers
 
-proc getSlot*(obj: RuntimeObject, name: string): NodeValue =
+proc getSlot*(obj: Instance, name: string): NodeValue =
   ## Get slot value by name (O(1) if slot exists)
-  if obj == nil or not obj.hasSlots:
+  if obj == nil or obj.kind != ikObject or obj.class == nil:
     return NodeValue(kind: vkNil)
 
-  if name in obj.slotNames:
-    let idx = obj.slotNames[name]
-    if idx < obj.slots.len:
-      return obj.slots[idx]
+  let idx = obj.class.getSlotIndex(name)
+  if idx >= 0 and idx < obj.slots.len:
+    return obj.slots[idx]
 
   return NodeValue(kind: vkNil)
 
-proc setSlot*(obj: RuntimeObject, name: string, value: NodeValue): NodeValue =
+proc setSlot*(obj: Instance, name: string, value: NodeValue): NodeValue =
   ## Set slot value by name
-  if obj == nil:
-    return NodeValue(kind: vkNil)
+  if obj == nil or obj.kind != ikObject or obj.class == nil:
+    return value
 
-  if not obj.hasSlots:
-    obj.hasSlots = true
-    obj.slotNames = initTable[string, int]()
-
-  if name notin obj.slotNames:
-    obj.slotNames[name] = obj.slots.len
-    obj.slots.add(value)
-  else:
-    let idx = obj.slotNames[name]
+  let idx = obj.class.getSlotIndex(name)
+  if idx >= 0:
     while obj.slots.len <= idx:
       obj.slots.add(NodeValue(kind: vkNil))
     obj.slots[idx] = value

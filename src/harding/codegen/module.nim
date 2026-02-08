@@ -8,6 +8,7 @@ import ../compiler/symbols
 import ./slots
 import ./methods
 import ./control
+import ./expression
 
 # ============================================================================
 # Module Generation
@@ -83,6 +84,72 @@ proc init_{clsName}*(parent: ref RuntimeObject = nil): ref RuntimeObject {{.cdec
 
 """)
 
+proc isClassDefinition(node: Node): bool =
+  ## Check if a node is a class definition (derive: chain)
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  # Check for Class := Parent derive: ... pattern
+  if msg.selector == "at:put:":
+    if msg.arguments.len >= 2 and msg.arguments[1].kind == nkMessage:
+      let valMsg = msg.arguments[1].MessageNode
+      if valMsg.selector == "derive:" or valMsg.selector == "derive":
+        return true
+  return false
+
+proc isMethodDefinition(node: Node): bool =
+  ## Check if a node is a method definition (selector:put: or classSelector:put:)
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  return msg.selector in ["selector:put:", "classSelector:put:"]
+
+proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLevel: seq[Node]] =
+  ## Separate class/method definitions from top-level executable statements
+  var defs: seq[Node] = @[]
+  var topLevel: seq[Node] = @[]
+
+  for node in nodes:
+    if node.isClassDefinition or node.isMethodDefinition:
+      defs.add(node)
+    else:
+      topLevel.add(node)
+
+  return (defs, topLevel)
+
+proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string): string =
+  ## Generate the main() procedure for top-level statement execution
+  var output = ""
+
+  output.add("# Main Entry Point\n")
+  output.add("##################\n\n")
+
+  output.add("proc main(): int =\n")
+  output.add("  ## Main entry point for ")
+  output.add(moduleName)
+  output.add("\n")
+
+  # Initialize runtime
+  output.add("  initRuntime()\n\n")
+
+  # Create generation context for top-level code
+  var genCtx = newGenContext(nil)
+
+  # Generate code for each top-level statement
+  for node in topLevel:
+    let stmtCode = genTopLevelStatement(genCtx, node)
+    if stmtCode.len > 0:
+      # Indent the statement
+      for line in stmtCode.splitLines():
+        output.add("  ")
+        output.add(line)
+        output.add("\n")
+
+  # Return exit code 0
+  output.add("\n  return 0\n")
+
+  return output
+
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 moduleName: string): string =
   ## Generate complete Nim module from parsed nodes
@@ -91,6 +158,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genModuleHeader(ctx, moduleName))
   output.add(genRuntimeHelperMethods())
   output.add("\n")
+
+  # Separate class/method definitions from top-level statements
+  let (classDefs, topLevel) = extractClassAndMethodDefs(nodes)
 
   # Analyze classes
   let analysis = buildClassGraph(nodes)
@@ -130,6 +200,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   for op in ["<", "<=", ">", ">=", "="]:
     output.add(genComparisonMethod(op))
 
+  # Generate main proc for top-level statements
+  output.add(genMainProc(ctx, topLevel, moduleName))
+
   # Module initialization
   output.add("\n")
   output.add("# Module Initialization\n")
@@ -138,10 +211,11 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(fmt("""
 proc init_{moduleName}*() =
   ## Initialize {moduleName} module
+  initRuntime()
   echo "Module loaded: {moduleName}"
 
 when isMainModule:
-  init_{moduleName}()
+  discard main()
 """))
 
   return output
