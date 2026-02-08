@@ -163,6 +163,8 @@ type
     # VM work queue and value stack
     workQueue*: seq[WorkFrame]  # Work queue for AST interpreter
     evalStack*: seq[NodeValue]  # Value stack for expression results
+    # Library support
+    importedLibraries*: seq[Instance]  # Stack of imported Library instances for namespace search
 
   BlockNode* = ref object of Node
     parameters*: seq[string]              # method parameters
@@ -305,6 +307,7 @@ var
   arrayClass*: Class = nil
   tableClass*: Class = nil
   blockClass*: Class = nil
+  libraryClass*: Class = nil                    # Library class for namespace management
 
 # nil instance - singleton instance of UndefinedObject
 # Initialized during initCoreClasses, used by nilValue()
@@ -738,7 +741,10 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   # Check for slot name conflicts between new slots and parent slots
   for slotName in slotNames:
     if slotName in seenSlotNames:
-      raise newException(ValueError, "Slot name conflict: '" & slotName & "' already exists in parent class")
+      var parentInfo = ""
+      for parent in superclasses:
+        parentInfo.add(parent.name & " allSlotNames=" & $parent.allSlotNames & "; ")
+      raise newException(ValueError, "Slot name conflict: '" & slotName & "' already exists in parent class. Parents: " & parentInfo)
 
   # Add new slot names to seen list for checking among new slots
   for slotName in slotNames:
