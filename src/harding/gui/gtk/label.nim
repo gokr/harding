@@ -24,7 +24,7 @@ proc newGtkLabelProxy*(widget: GtkLabel, interp: ptr Interpreter): GtkLabelProxy
   proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
-proc labelNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc labelNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Create a new empty label
   let widget = gtkLabelNew(nil)
   discard newGtkLabelProxy(widget, addr(interp))
@@ -48,7 +48,7 @@ proc labelNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]
   return obj.toValue()
 
 ## Native instance method: text:
-proc labelSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc labelSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set label text
   if args.len < 1 or args[0].kind != vkString:
     return nilValue()
@@ -69,7 +69,7 @@ proc labelSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVa
   nilValue()
 
 ## Native instance method: text (getter)
-proc labelGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc labelGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Get label text
   if not self.isNimProxy:
     return nilValue()

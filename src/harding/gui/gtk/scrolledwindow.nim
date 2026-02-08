@@ -24,7 +24,7 @@ proc newGtkScrolledWindowProxy*(widget: GtkScrolledWindow, interp: ptr Interpret
   proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
-proc scrolledWindowNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc scrolledWindowNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Create a new scrolled window
   when not defined(gtk3):
     let widget = gtkScrolledWindowNew()
@@ -52,7 +52,7 @@ proc scrolledWindowNewImpl*(interp: var Interpreter, self: Instance, args: seq[N
   return obj.toValue()
 
 ## Native instance method: setChild:
-proc scrolledWindowSetChildImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc scrolledWindowSetChildImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set the child widget of the scrolled window
   if args.len < 1 or args[0].kind != vkInstance:
     return nilValue()

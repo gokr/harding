@@ -25,7 +25,7 @@ proc newGtkTextViewProxy*(widget: GtkTextView, interp: ptr Interpreter): GtkText
   proxyTable[cast[GtkWidget](widget)] = result
 
 ## Native class method: new
-proc textViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc textViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Create a new text view
   let widget = gtkTextViewNew()
   let proxy = newGtkTextViewProxy(widget, addr(interp))
@@ -49,7 +49,7 @@ proc textViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVal
   return obj.toValue()
 
 ## Native instance method: getText:
-proc textViewGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc textViewGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Get all text from the text view
   if not (self.isNimProxy and self.nimValue != nil):
     return nilValue()
@@ -71,7 +71,7 @@ proc textViewGetTextImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
   result = toValue($text)
 
 ## Native instance method: setText:
-proc textViewSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc textViewSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set text in the text view
   if args.len < 1 or args[0].kind != vkString:
     return nilValue()
@@ -92,7 +92,7 @@ proc textViewSetTextImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
   nilValue()
 
 ## Native instance method: getBuffer:
-proc textViewGetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc textViewGetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Get the text buffer associated with the text view
   if not (self.isNimProxy and self.nimValue != nil):
     return nilValue()
@@ -122,7 +122,7 @@ proc textViewGetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[N
   nilValue()
 
 ## Native instance method: setBuffer:
-proc textViewSetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+proc textViewSetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set the text buffer for the text view
   if args.len < 1:
     return nilValue()
