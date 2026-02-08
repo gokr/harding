@@ -60,14 +60,15 @@ SortedCollection>>add: anObject [
 
 SortedCollection>>insert: anObject at: index [
     # Insert object at specific index, shifting elements
-    | i |
+    | i idx |
     i := self size.
     self add: nil.  # Expand array by 1
-    [ i >= index ] whileTrue: [
-        self at: i + 1 put: (self at: i).
+    idx := index.
+    [ i >= idx ] whileTrue: [
+        self at: (i + 1) put: (self at: i).
         i := i - 1.
     ].
-    self at: index put: anObject.
+    self at: idx put: anObject.
     ^anObject
 ]
 

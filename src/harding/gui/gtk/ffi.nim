@@ -5,9 +5,9 @@
 ## ============================================================================
 
 when defined(gtk3):
-  {.passl: "-lgtk-3 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+  {.passl: "-lgtk-3 -lgtksourceview-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
 else:
-  {.passl: "-lgtk-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+  {.passl: "-lgtk-4 -lgtksourceview-5 -lgio-2.0 -lgobject-2.0 -lglib-2.0".-}
 
 ## Types
 type
@@ -29,6 +29,13 @@ type
   GtkTextBuffer* = pointer
   GtkTextIter* = pointer
   GtkScrolledWindow* = pointer
+  GtkSourceView* = pointer
+  GtkSourceBuffer* = pointer
+  GtkSourceLanguage* = pointer
+  GtkSourceLanguageManager* = pointer
+  GtkEventController* = pointer
+  GtkEventControllerKey* = pointer
+  GtkPopover* = pointer
 
   GType* = csize_t
   GConnectFlags* = cint
@@ -186,3 +193,66 @@ when not defined(gtk3):
   proc gtkScrolledWindowSetChild*(scrolled: GtkScrolledWindow, child: GtkWidget) {.cdecl, importc: "gtk_scrolled_window_set_child".}
   # GLib main loop iteration for GTK4 event processing
   proc gMainContextIteration*(context: pointer = nil, mayBlock: cint): cint {.cdecl, importc: "g_main_context_iteration".}
+
+# GtkSourceView - Source code editor widget
+when not defined(gtk3):
+  proc gtkSourceViewNew*(): GtkSourceView {.cdecl, importc: "gtk_source_view_new".}
+  proc gtkSourceViewNewWithBuffer*(buffer: GtkSourceBuffer): GtkSourceView {.cdecl, importc: "gtk_source_view_new_with_buffer".}
+  proc gtkSourceViewSetShowLineNumbers*(view: GtkSourceView, show: cint) {.cdecl, importc: "gtk_source_view_set_show_line_numbers".}
+  proc gtkSourceViewSetHighlightCurrentLine*(view: GtkSourceView, highlight: cint) {.cdecl, importc: "gtk_source_view_set_highlight_current_line".}
+  proc gtkSourceViewSetAutoIndent*(view: GtkSourceView, autoIndent: cint) {.cdecl, importc: "gtk_source_view_set_auto_indent".}
+  proc gtkSourceViewSetIndentOnTab*(view: GtkSourceView, indentOnTab: cint) {.cdecl, importc: "gtk_source_view_set_indent_on_tab".}
+  proc gtkSourceViewSetTabWidth*(view: GtkSourceView, tabWidth: cuint) {.cdecl, importc: "gtk_source_view_set_tab_width".}
+else:
+  # GTK3 uses gtk_source_view_ prefix without the 'gtk_source_view_set_' style
+  proc gtkSourceViewNew*(): GtkSourceView {.cdecl, importc: "gtk_source_view_new".}
+  proc gtkSourceViewNewWithBuffer*(buffer: GtkSourceBuffer): GtkSourceView {.cdecl, importc: "gtk_source_view_new_with_buffer".}
+  proc gtkSourceViewSetShowLineNumbers*(view: GtkSourceView, show: cint) {.cdecl, importc: "gtk_source_view_set_show_line_numbers".}
+  proc gtkSourceViewSetHighlightCurrentLine*(view: GtkSourceView, highlight: cint) {.cdecl, importc: "gtk_source_view_set_highlight_current_line".}
+  proc gtkSourceViewSetAutoIndent*(view: GtkSourceView, autoIndent: cint) {.cdecl, importc: "gtk_source_view_set_auto_indent".}
+  proc gtkSourceViewSetIndentOnTab*(view: GtkSourceView, indentOnTab: cint) {.cdecl, importc: "gtk_source_view_set_indent_on_tab".}
+  proc gtkSourceViewSetTabWidth*(view: GtkSourceView, tabWidth: cuint) {.cdecl, importc: "gtk_source_view_set_tab_width".}
+
+# GtkSourceBuffer - Text buffer with syntax highlighting
+proc gtkSourceBufferNew*(table: pointer = nil): GtkSourceBuffer {.cdecl, importc: "gtk_source_buffer_new".}
+proc gtkSourceBufferNewWithLanguage*(language: GtkSourceLanguage): GtkSourceBuffer {.cdecl, importc: "gtk_source_buffer_new_with_language".}
+proc gtkSourceBufferSetLanguage*(buffer: GtkSourceBuffer, language: GtkSourceLanguage) {.cdecl, importc: "gtk_source_buffer_set_language".}
+proc gtkSourceBufferGetLanguage*(buffer: GtkSourceBuffer): GtkSourceLanguage {.cdecl, importc: "gtk_source_buffer_get_language".}
+proc gtkSourceBufferSetHighlightSyntax*(buffer: GtkSourceBuffer, highlight: cint) {.cdecl, importc: "gtk_source_buffer_set_highlight_syntax".}
+
+# GtkSourceLanguage - Language definition
+proc gtkSourceLanguageGetId*(language: GtkSourceLanguage): cstring {.cdecl, importc: "gtk_source_language_get_id".}
+proc gtkSourceLanguageGetName*(language: GtkSourceLanguage): cstring {.cdecl, importc: "gtk_source_language_get_name".}
+
+# GtkSourceLanguageManager - Manages language definitions
+proc gtkSourceLanguageManagerGetDefault*(): GtkSourceLanguageManager {.cdecl, importc: "gtk_source_language_manager_get_default".}
+proc gtkSourceLanguageManagerGetLanguage*(manager: GtkSourceLanguageManager, id: cstring): GtkSourceLanguage {.cdecl, importc: "gtk_source_language_manager_get_language".}
+proc gtkSourceLanguageManagerGetLanguageIds*(manager: GtkSourceLanguageManager): ptr cstring {.cdecl, importc: "gtk_source_language_manager_get_language_ids".}
+proc gtkSourceLanguageManagerSetSearchPath*(manager: GtkSourceLanguageManager, dirs: ptr cstring) {.cdecl, importc: "gtk_source_language_manager_set_search_path".}
+
+# GtkEventController - Base for event controllers (GTK4)
+when not defined(gtk3):
+  proc gtkEventControllerKeyNew*(): GtkEventControllerKey {.cdecl, importc: "gtk_event_controller_key_new".}
+  proc gtkWidgetAddController*(widget: GtkWidget, controller: GtkEventController) {.cdecl, importc: "gtk_widget_add_controller".}
+
+# Key constants for event handling
+const
+  GDKKEYESCAPE* = 65307.cuint
+  GDKKEYRETURN* = 65293.cuint
+  GDKKEYKPENTER* = 65421.cuint
+  GDKKEYTAB* = 65289.cuint
+  GDKKEYBACKSPACE* = 65288.cuint
+  GDKKEYDELETE* = 65535.cuint
+  GDKKEYHOME* = 65360.cuint
+  GDKKEYEND* = 65367.cuint
+  GDKKEYLEFT* = 65361.cuint
+  GDKKEYRIGHT* = 65363.cuint
+  GDKKEYUP* = 65362.cuint
+  GDKKEYDOWN* = 65364.cuint
+  GDKKEYPAGEDOWN* = 65366.cuint
+  GDKKEYPAGEUP* = 65365.cuint
+  GDKKEYA* = 97.cuint
+  GDKKEYD* = 100.cuint
+  GDKKEYP* = 112.cuint
+
+  GDKCONTROLDMASK* = 4.cint  # Control key modifier mask

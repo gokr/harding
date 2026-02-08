@@ -12,6 +12,8 @@ Harding load: "lib/core/Block.hrd"
 # Core numeric and collection classes
 Harding load: "lib/core/Number.hrd"
 Harding load: "lib/core/Collections.hrd"
+Harding load: "lib/core/SortedCollection.hrd"
+Harding load: "lib/core/Interval.hrd"
 Harding load: "lib/core/String.hrd"
 
 # I/O and utilities
