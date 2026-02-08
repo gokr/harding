@@ -2073,6 +2073,8 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       "Block.hrd",
       "Number.hrd",
       "Collections.hrd",
+      "SortedCollection.hrd",
+      "Interval.hrd",
       "String.hrd",
       "FileStream.hrd",
       "Exception.hrd",
@@ -2742,8 +2744,8 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     for argNode in superNode.arguments:
       arguments.add(interp.evalWithVM(argNode))
 
-    let result = executeMethod(interp, methodBlock, interp.currentReceiver, arguments, targetParent)
-    interp.pushValue(result)
+    let methodResult = executeMethod(interp, methodBlock, interp.currentReceiver, arguments, targetParent)
+    interp.pushValue(methodResult)
     return true
 
   of nkObjectLiteral:
@@ -2902,11 +2904,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Handle native class methods
         if currentMethod.nativeImpl != nil:
           let savedReceiver = interp.currentReceiver
+          # Create class receiver wrapper for consistent receiver handling
+          let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+          # Set currentReceiver for consistent method context
+          interp.currentReceiver = classReceiver
           try:
             var resultVal: NodeValue
             if currentMethod.hasInterpreterParam:
-              # Native method with interpreter - needs class receiver wrapper
-              let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+              # Native method with interpreter - pass class receiver wrapper
               type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
               let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
               resultVal = nativeProc(interp, classReceiver, args)
@@ -2935,6 +2940,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Bind parameters
         for i in 0..<currentMethod.parameters.len:
           activation.locals[currentMethod.parameters[i]] = args[i]
+
+        # Initialize temporaries
+        for tempName in currentMethod.temporaries:
+          if tempName notin activation.locals:
+            activation.locals[tempName] = nilValue()
 
         # Save current receiver
         let savedReceiver = interp.currentReceiver
