@@ -1,97 +1,199 @@
 # ============================================================================
 # Workspace - Code editing and evaluation window
-# Workspace provides a text editor with do-it and print-it functionality
+# Workspace provides a source code editor with do-it and print-it functionality
+# Now using GtkSourceView for syntax highlighting
 # ============================================================================
 
-Workspace := Object derive: #(window box textView owner)
+Workspace := Object derive: #(window box scrolledWindow sourceView owner)
 
 Workspace class>>open [
-  ^self openFor: nil
-]
+    ^self openFor: nil
+].
 
 Workspace class>>openFor: anOwner [
-  | workspace window box textView |
-  window := GtkWindow new.
-  window title: "Harding Workspace".
-  window setDefaultSize: 600 height: 400.
+    | workspace window box scrolledWindow sourceView buttonBox doItButton printItButton |
 
-  box := GtkBox vertical.
-  box setSpacing: 5.
+    # Create main window
+    window := GtkWindow new.
+    window title: "Harding Workspace".
+    window setDefaultSize: 800 height: 600.
 
-  textView := GtkTextView new.
+    # Create vertical box layout
+    box := GtkBox vertical.
+    box setSpacing: 5.
 
-  workspace := self new.
-  workspace window: window.
-  workspace box: box.
-  workspace textView: textView.
-  workspace owner: anOwner.
+    # Create scrolled window for source view
+    scrolledWindow := GtkScrolledWindow new.
+    scrolledWindow vexpand: true.
+    scrolledWindow hexpand: true.
 
-  window setChild: box.
-  box append: textView.
+    # Create source view with syntax highlighting
+    sourceView := GtkSourceView new.
+    sourceView showLineNumbers: true.
+    sourceView setTabWidth: 2.
+    sourceView vexpand: true.
+    sourceView hexpand: true.
 
-  # Connect destroy signal to notify owner
-  window destroyed: [ workspace onDestroy ].
+    # Create button box for Do It and Print It buttons
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 5.
 
-  # Register with owner
-  anOwner notNil ifTrue: [ anOwner addWindow: workspace ].
+    # Create Do It button
+    doItButton := GtkButton newLabel: "Do It (Ctrl+D)".
+    doItButton clicked: [ workspace doItSelection ].
+    buttonBox append: doItButton.
 
-  window present.
+    # Create Print It button
+    printItButton := GtkButton newLabel: "Print It (Ctrl+P)".
+    printItButton clicked: [ workspace printItSelection ].
+    buttonBox append: printItButton.
 
-  Transcript showCr: "Harding Workspace opened".
-  ^workspace
-]
+    # Create workspace instance
+    workspace := self new.
+    workspace window: window.
+    workspace box: box.
+    workspace scrolledWindow: scrolledWindow.
+    workspace sourceView: sourceView.
+    workspace owner: anOwner.
+
+    # Assemble the UI
+    window setChild: box.
+    box append: scrolledWindow.
+    scrolledWindow setChild: sourceView.
+    box append: buttonBox.
+
+    # Install keyboard shortcuts
+    workspace installKeyboardShortcuts.
+
+    # Connect destroy signal to notify owner
+    window destroyed: [ workspace onDestroy ].
+
+    # Register with owner
+    anOwner notNil ifTrue: [ anOwner addWindow: workspace ].
+
+    window present.
+
+    Transcript showCr: "Harding Workspace opened (with syntax highlighting)".
+    ^workspace
+].
+
+Workspace>>installKeyboardShortcuts [
+    # Install Ctrl+D for Do It and Ctrl+P for Print It
+    # Enable keyboard handling on source view
+    sourceView enableKeyboardShortcuts.
+
+    # Ctrl+D - Do It
+    sourceView onControlKey: "d" do: [ self doItSelection ].
+
+    # Ctrl+P - Print It
+    sourceView onControlKey: "p" do: [ self printItSelection ].
+].
+
+Workspace>>showContextMenu [
+    # Show popup menu with Do It and Print It options
+    # This is called when user right-clicks in the source view
+    # For now, we just evaluate the selection as a simple approach
+    self doItSelection.
+].
 
 Workspace>>onDestroy [
-  owner notNil ifTrue: [ owner removeWindow: self ]
-]
+    owner notNil ifTrue: [ owner removeWindow: self ]
+].
 
 Workspace>>doIt: codeString [
-  | result |
-  result := Object eval: codeString.
-  Transcript showCr: result printString.
-  ^result
-]
+    | result |
+    result := Object eval: codeString.
+    Transcript showCr: result printString.
+    ^result
+].
 
 Workspace>>printIt: codeString [
-  | result |
-  result := self doIt: codeString.
-  ^result
-]
+    | result |
+    result := self doIt: codeString.
+    ^result
+].
 
-Workspace>>evalSelection [
-  | text |
-  text := self textView getText: nil.
-  ^self doIt: text
-]
+Workspace>>doItSelection [
+    # Do It - evaluate selected text or current line
+    | code result |
+    code := sourceView selectedText.
+    code isEmpty not ifTrue: [
+        Transcript showCr: "--- Do It ---".
+        result := self doIt: code.
+        ^result
+    ].
+    Transcript showCr: "Nothing to evaluate".
+    ^nil
+].
 
+Workspace>>printItSelection [
+    # Print It - evaluate and print selected text or current line
+    | code result |
+    code := sourceView selectedText.
+    code isEmpty not ifTrue: [
+        Transcript showCr: "--- Print It ---".
+        result := self printIt: code.
+        Transcript showCr: "=> ", result printString.
+        ^result
+    ].
+    Transcript showCr: "Nothing to evaluate".
+    ^nil
+].
+
+Workspace>>evalAll [
+    # Evaluate all code in the workspace
+    | code |
+    code := sourceView text.
+    ^self doIt: code
+].
+
+# Accessor methods
 Workspace>>window: aWindow [
-  window := aWindow
-]
+    window := aWindow
+].
 
 Workspace>>box: aBox [
-  box := aBox
-]
+    box := aBox
+].
 
-Workspace>>textView: aTextView [
-  textView := aTextView
-]
+Workspace>>scrolledWindow: aScrolledWindow [
+    scrolledWindow := aScrolledWindow
+].
+
+Workspace>>sourceView: aSourceView [
+    sourceView := aSourceView
+].
 
 Workspace>>owner: anOwner [
-  owner := anOwner
-]
+    owner := anOwner
+].
 
 Workspace>>window [
-  ^window
-]
+    ^window
+].
 
 Workspace>>box [
-  ^box
-]
+    ^box
+].
 
-Workspace>>textView [
-  ^textView
-]
+Workspace>>scrolledWindow [
+    ^scrolledWindow
+].
+
+Workspace>>sourceView [
+    ^sourceView
+].
 
 Workspace>>owner [
-  ^owner
-]
+    ^owner
+].
+
+Workspace>>text [
+    # Get all text from the editor
+    ^sourceView text
+].
+
+Workspace>>text: aString [
+    # Set all text in the editor
+    sourceView text: aString
+].
