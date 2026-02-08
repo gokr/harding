@@ -328,7 +328,7 @@ When developing Harding itself, add debug statements:
 ```nim
 import std/logging
 
-# In evaluator or other components
+# In vm.nim or other components
 debug("Custom trace: ", someValue)
 ```
 

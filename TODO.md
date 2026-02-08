@@ -5,7 +5,7 @@ This document tracks current work items and future directions for Harding develo
 ## Current Status
 
 **Core Language**: The interpreter is fully functional with:
-- Lexer, parser, AST interpreter
+- Lexer, parser, stackless AST interpreter (recursive evaluator removed)
 - **Class-based object system with inheritance and merged method tables** ✅
 - **Multiple inheritance with conflict detection** ✅
 - **addParent: for adding parents after class creation** ✅
@@ -145,6 +145,18 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 
 ## Recent Completed Work
 
+### Complete Stackless VM Migration (2025-02-08)
+- Removed the old recursive evaluator (`evalOld`, ~1200 lines deleted)
+- All execution now goes through the stackless VM work queue
+- Re-entrant evaluation via `evalWithVM` for native methods that need to call Harding code
+- Control flow primitives (`ifTrue:`, `ifFalse:`, `whileTrue:`, `whileFalse:`, block `value:`) handled by VM work frames
+- Fixed captured variable propagation through nested blocks (MutableCell sharing)
+- Fixed non-local returns from deeply nested blocks (`homeActivation` walks to enclosing method)
+- Fixed `doesNotUnderstand:` fallback in VM dispatch
+- Fixed escaped blocks with non-local returns to exited activations
+- Renamed entry points: `doitStackless` -> `doit`, `evalStatementsStackless` -> `evalStatements`
+- All 14 tests pass
+
 ### Automatic Accessor Generation (2025-02-07)
 - `deriveWithAccessors:` - Creates class with auto-generated getters and setters for all slots
 - `derive:getters:setters:` - Creates class with selective accessor generation
@@ -159,7 +171,7 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 - Scripts execute with `self = nil` (Smalltalk workspace convention)
 - No need for uppercase globals in simple scripts
 - Shebang support for executable scripts: `#!/usr/bin/env harding`
-- evalScriptBlock implementation in VM
+- evalScriptBlock implementation in stackless VM
 - Documentation updates for script execution in MANUAL.md and QUICKREF.md
 
 ### Debug Logging Improvements (2025-02-07)
@@ -234,4 +246,4 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 
 ---
 
-*Last Updated: 2025-02-08*
+*Last Updated: 2026-02-08*

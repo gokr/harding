@@ -39,7 +39,7 @@ The GTK bridge provides a way to create and manipulate GTK widgets from Harding 
 
 ### GTK4 Bridge Layer (Nim)
 
-The bridge consists of several components in `src/harding/gui/gtk4/`:
+The bridge consists of several components in `src/harding/gui/gtk/`:
 
 1. **ffi.nim** - Raw GTK4 C function bindings
 2. **widget.nim** - Base widget proxy and two-table system
@@ -167,20 +167,14 @@ When a GTK widget is destroyed:
 
 ## Error Handling
 
-All signal handlers use safe evaluation:
+Signal handlers use safe evaluation via the stackless VM. Widget callbacks construct a `MessageNode` and invoke it through `evalWithVM`, with exception handling to prevent Harding errors from crashing the GTK event loop.
 
 ```nim
-proc safeEvalBlock(interp: ptr Interpreter, blockNode: BlockNode,
-                   args: seq[NodeValue] = @[]): NodeValue =
-  try:
-    result = interp[].evalBlock(blockNode, args)
-  except EvalError as e:
-    stderr.writeLine("Error in signal handler: ", e.msg)
-    # Also try to show in Transcript
-    result = nilValue()
-  except Exception as e:
-    stderr.writeLine("Unexpected error: ", e.msg)
-    result = nilValue()
+# Signal handlers evaluate blocks through the stackless VM
+try:
+  let result = evalWithVM(interp[], msgNode)
+except Exception as e:
+  stderr.writeLine("Error in signal handler: ", e.msg)
 ```
 
 **Implication**: Harding exceptions in signal handlers will not crash the GTK event loop.

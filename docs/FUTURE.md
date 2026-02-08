@@ -97,33 +97,25 @@ All GUI tools are written in Harding code, making them malleable at runtime. Onl
 
 ### High Priority Missing Features
 
-1. **`withIndexDo:`** on Array - Essential for indexed iteration
-   ```smalltalk
-   #('a' 'b' 'c') withIndexDo: [:each:index | ...]
-   ```
-
-2. **`OrderedCollection`** - Growable arrays
+1. **`OrderedCollection`** - Growable arrays
    - `add:`, `addFirst:`, `addLast:`, `addAll:`
    - `removeFirst`, `removeLast`, `remove:ifAbsent:`
 
-3. **`at:ifAbsent:`** and **`at:ifAbsentPut:`** on Table
-   ```smalltalk
-   table at: key ifAbsent: [default].
-   table at: key ifAbsentPut: [computeValue].
-   ```
-
-4. **`between:and:`** on Number - Common idiom
+2. **`between:and:`** on Number - Common idiom
    ```smalltalk
    (x between: 1 and: 10) ifTrue: [...]
    ```
 
-5. **`species`** - Required for Collection methods
+3. **`species`** - Required for Collection methods
    - Ensures `collect:` returns same collection type
 
-6. **`copyFrom:to:`** - Sub-collection extraction
-   ```smalltalk
-   array copyFrom: 2 to: 5
-   ```
+### Already Implemented (in Collections.hrd)
+
+- `withIndexDo:` on Array
+- `at:ifAbsent:`, `at:ifAbsentPut:`, `at:ifPresent:`, `at:ifPresent:ifAbsent:` on Table
+- `copyFrom:to:` on Array
+- `with:do:` for parallel iteration on Array
+- `addFirst:`, `addLast:`, `removeFirst`, `removeLast`, `addAll:`, `removeAll` on Array
 
 ### Medium Priority
 
@@ -131,7 +123,6 @@ All GUI tools are written in Harding code, making them malleable at runtime. Onl
 - **`Bag`** for counting occurrences
 - **`Interval`** to replace `to:do:` with collection iteration
 - **Stream hierarchy** (ReadStream, WriteStream)
-- **`with:do:`** for parallel iteration
 - **`hash`** method on Object
 
 ### Lower Priority

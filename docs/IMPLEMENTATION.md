@@ -9,7 +9,7 @@ This document describes Harding's implementation internals, architecture, and de
 1. [Architecture](#architecture)
 2. [Stackless VM](#stackless-vm)
 3. [Core Types](#core-types)
-4. [Evaluator](#evaluator)
+4. [Method Dispatch](#method-dispatch)
 5. [Scheduler and Processes](#scheduler-and-processes)
 6. [Activation Stack](#activation-stack)
 7. [Slot-Based Instance Variables](#slot-based-instance-variables)
@@ -25,17 +25,17 @@ Harding consists of several subsystems:
 | Lexer | `src/harding/parser/lexer.nim` | Tokenization of source code |
 | Parser | `src/harding/parser/parser.nim` | AST construction |
 | Core Types | `src/harding/core/types.nim` | Node, Instance, Class definitions |
-| Interpreter | `src/harding/interpreter/vm.nim` | Stackless VM execution |
-| Evaluator | `src/harding/interpreter/objects.nim` | Method lookup and invocation |
+| VM | `src/harding/interpreter/vm.nim` | Stackless VM execution and method dispatch |
+| Objects | `src/harding/interpreter/objects.nim` | Object system, class creation, native methods |
 | Scheduler | `src/harding/interpreter/scheduler.nim` | Green thread scheduling |
 | REPL | `src/harding/repl/` | Interactive interface |
 | Compiler | `src/harding/compiler/` | Harding to Nim code generation |
-| GTK Bridge | `src/harding/gui/gtk4/` | GTK widget integration |
+| GTK Bridge | `src/harding/gui/gtk/` | GTK widget integration |
 
 ### Data Flow
 
 ```
-Source Code (.harding)
+Source Code (.hrd)
        ↓
    Lexer
        ↓
@@ -45,13 +45,9 @@ Source Code (.harding)
        ↓
   AST (Abstract Syntax Tree)
        ↓
-  Stackless VM
+  Stackless VM (work queue + eval stack)
        ↓
-  Activation Stack + Eval Stack
-       ↓
-  Evaluator (method dispatch)
-       ↓
-  Native Methods or Interpreted Bodies
+  Method Dispatch → Native Methods or Interpreted Bodies
        ↓
   Result
 ```
@@ -71,12 +67,15 @@ The Harding VM implements an iterative AST interpreter using an explicit work qu
 
 ### Why Stackless?
 
-| Aspect | Recursive Evaluator | Stackless VM |
-|--------|---------------------|--------------|
-| Lines of code | ~3,260 | ~1,200 |
-| Execution model | Recursive Nim calls | Explicit work queue |
-| Stack depth | Nim call stack | User-managed work queue |
-| Multitasking | Limited | Full cooperative |
+The VM uses an explicit work queue rather than recursive Nim procedure calls:
+
+| Aspect | Benefit |
+|--------|---------|
+| Execution model | Explicit work queue, no recursive Nim calls |
+| Stack depth | User-managed work queue, no Nim stack overflow risk |
+| Multitasking | Full cooperative multitasking with yield at any point |
+| Debugging | Single-stepping through a flat loop |
+| State | All execution state is explicit and inspectable |
 
 ### VM Architecture
 
@@ -238,44 +237,35 @@ type
 
 ---
 
-## Evaluator
+## Method Dispatch
 
 ### Method Lookup
 
-The evaluator implements the full method dispatch chain:
+The VM implements the full method dispatch chain via `lookupMethod`:
 
 1. **Direct lookup** - Check method on receiver's class
 2. **Direct parent lookup** - Check each parent class directly
 3. **Inherited lookup** - Check superclass chain
 4. **Parent inheritance lookup** - Check superclass chain of each parent
-5. **class method lookup** - For `ClassName>>method` syntax
+5. **doesNotUnderstand:** - Fallback when method is not found
 
 ### Super Sends
 
-Qualified super sends `super<Class>>method` dispatch directly to the specified parent:
-
-```nim
-proc invokeSuper(interp: var Interpreter, method: Method,
-                 receiver: Instance, args: seq[NodeValue],
-                 superClass: Class): NodeValue =
-  # Bypass normal lookup, use provided superClass
-```
+Qualified super sends `super<Class>>method` dispatch directly to the specified parent class, bypassing normal method lookup on the receiver's class.
 
 ### Native Methods
 
-Native methods are Nim functions that implement Harding methods:
+Native methods are Nim procedures registered on classes:
 
 ```nim
-type
-  MethodImpl* = proc(interp: var Interpreter,
-                     self: Instance,
-                     args: seq[NodeValue]): NodeValue {.gcsafe.}
-
-  Method* = ref object
-    selector*: string
-    body*: seq[Node]
-    nativeImpl*: MethodImpl
+# Native methods can have two signatures:
+# Without interpreter context:
+proc(self: Instance, args: seq[NodeValue]): NodeValue
+# With interpreter context:
+proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 ```
+
+Control flow primitives (`ifTrue:`, `ifFalse:`, `whileTrue:`, `whileFalse:`, block `value:`) are handled directly by the VM's work frame system rather than as native methods, enabling proper stackless execution.
 
 ---
 
@@ -414,22 +404,24 @@ When a method accesses a variable:
 ```
 src/harding/
 ├── core/                # Core type definitions
-│   └── types.nim        # Node, Instance, Class
+│   ├── types.nim        # Node, Instance, Class, WorkFrame
+│   ├── process.nim      # Process type for green threads
+│   └── scheduler.nim    # Scheduler type definitions
 ├── parser/              # Lexer and parser
 │   ├── lexer.nim
 │   └── parser.nim
 ├── interpreter/         # Execution engine
-│   ├── vm.nim          # Stackless VM
-│   ├── objects.nim     # Method dispatch
-│   └── scheduler.nim   # Green thread scheduler
+│   ├── vm.nim           # Stackless VM, method dispatch, native methods
+│   ├── objects.nim      # Object system, class creation
+│   ├── activation.nim   # Activation records
+│   └── scheduler.nim    # Green thread scheduler
 ├── repl/                # Interactive interface
-│   ├── doit.nim
-│   └── interact.nim
+│   ├── doit.nim         # REPL context and script execution
+│   └── interact.nim     # Line editing
 ├── compiler/            # Harding to Nim compilation
 │   └── ...
 └── gui/                 # GTK bridge
-    ├── gtk4/           # GTK4 wrappers
-    └── ...
+    └── gtk/             # GTK4 wrappers and bridge
 ```
 
 ---
