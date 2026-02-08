@@ -17,9 +17,7 @@ import ./expression
 
 proc mangleModuleName*(name: string): string =
   ## Convert module name to valid Nim identifier
-  ## Module names starting with digits get "module_" prefix
-  if name.len > 0 and name[0] in {'0'..'9'}:
-    return "module_" & name
+  ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
   return name
 
 proc genModuleHeader*(ctx: var CompilerContext, moduleName: string): string =

@@ -52,16 +52,21 @@ proc genSlotFastAccess*(cls: ClassInfo, slotName: string): string =
 proc genBinaryOpFastPath*(op: string): string =
   ## Generate inline binary operation for numeric types
   var nimOp = ""
+  var useDiv = false
   case op
   of "+": nimOp = "+"
   of "-": nimOp = "-"
   of "*": nimOp = "*"
-  of "/": nimOp = "/"
+  of "/", "//":
+    nimOp = "/"
+    useDiv = true
+  of "\\": nimOp = "mod"
+  of "%": nimOp = "mod"
   else: nimOp = op
 
   var output = "\n  # Fast path: both operands are integers\n"
   output.add("  if a.kind == vkInt and b.kind == vkInt:\n")
-  if op == "/":
+  if useDiv:
     output.add("    return NodeValue(kind: vkInt, intVal: a.intVal div b.intVal)\n")
   else:
     output.add("    return NodeValue(kind: vkInt, intVal: a.intVal " & nimOp & " b.intVal)\n")
