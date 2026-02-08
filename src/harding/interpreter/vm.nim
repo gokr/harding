@@ -1316,6 +1316,22 @@ proc primitiveMethodsImpl(interp: var Interpreter, self: Instance, args: seq[Nod
       selectors.add(toSymbol(selector))
   return newArrayInstance(arrayClass, selectors).toValue()
 
+proc primitiveAllInstanceMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return the class's instance method selector names as an array
+  var selectors: seq[NodeValue] = @[]
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.allMethods.keys():
+      selectors.add(toSymbol(selector))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveAllClassMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return the class's class method selector names as an array
+  var selectors: seq[NodeValue] = @[]
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.allClassMethods.keys():
+      selectors.add(toSymbol(selector))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
 proc primitiveErrorImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Raise an exception with the given message
   let msg = if args.len > 0: args[0].toString()
@@ -1625,6 +1641,21 @@ proc initGlobals*(interp: var Interpreter) =
   objMethodsMethod.nativeImpl = cast[pointer](primitiveMethodsImpl)
   objMethodsMethod.hasInterpreterParam = true
   objectCls.methods["primitiveMethods"] = objMethodsMethod
+  objectCls.allMethods["primitiveMethods"] = objMethodsMethod
+
+  # Add primitiveAllInstanceMethods for allInstanceMethods implementation
+  let objAllInstanceMethodsMethod = createCoreMethod("primitiveAllInstanceMethods")
+  objAllInstanceMethodsMethod.nativeImpl = cast[pointer](primitiveAllInstanceMethodsImpl)
+  objAllInstanceMethodsMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveAllInstanceMethods"] = objAllInstanceMethodsMethod
+  objectCls.allMethods["primitiveAllInstanceMethods"] = objAllInstanceMethodsMethod
+
+  # Add primitiveAllClassMethods for allClassMethods implementation
+  let objAllClassMethodsMethod = createCoreMethod("primitiveAllClassMethods")
+  objAllClassMethodsMethod.nativeImpl = cast[pointer](primitiveAllClassMethodsImpl)
+  objAllClassMethodsMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveAllClassMethods"] = objAllClassMethodsMethod
+  objectCls.allMethods["primitiveAllClassMethods"] = objAllClassMethodsMethod
 
   # Add primitiveClass for class implementation
   let objClassMethod = createCoreMethod("primitiveClass")
