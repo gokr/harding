@@ -876,7 +876,7 @@ proc newArrayInstance*(cls: Class, elements: seq[NodeValue]): Instance =
 
 proc newTableInstance*(cls: Class, entries: Table[NodeValue, NodeValue]): Instance =
   ## Create a new Table instance
-  Instance(kind: ikTable, class: cls, entries: entries, isNimProxy: false, nimValue: nil)
+  Instance(kind: ikTable, class: cls, entries: entries, isNimProxy: false, nimValue: NimValueDefault)
 
 proc getSlotIndex*(cls: Class, name: string): int =
   ## Get slot index by name, returns -1 if not found
