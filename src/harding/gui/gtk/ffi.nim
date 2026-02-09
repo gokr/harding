@@ -208,6 +208,8 @@ proc gtkTextBufferDelete*(buffer: GtkTextBuffer, start: GtkTextIter, endIter: Gt
 proc gtkTextIterCompare*(lhs: GtkTextIter, rhs: GtkTextIter): cint {.cdecl, importc: "gtk_text_iter_compare".}
 proc gtkTextIterSetLineOffset*(iter: GtkTextIter, charOnLine: cint) {.cdecl, importc: "gtk_text_iter_set_line_offset".}
 proc gtkTextIterForwardToLineEnd*(iter: GtkTextIter): cint {.cdecl, importc: "gtk_text_iter_forward_to_line_end".}
+proc gtkTextBufferInsert*(buffer: GtkTextBuffer, iter: GtkTextIter, text: cstring, len: cint = -1) {.cdecl, importc: "gtk_text_buffer_insert".}
+proc gtkTextBufferSelectRange*(buffer: GtkTextBuffer, ins: GtkTextIter, bound: GtkTextIter) {.cdecl, importc: "gtk_text_buffer_select_range".}
 
 # ScrolledWindow (for wrapping TextView)
 when not defined(gtk3):
