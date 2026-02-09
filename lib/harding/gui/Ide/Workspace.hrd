@@ -115,16 +115,12 @@ Workspace>>printIt: codeString [
 
 Workspace>>doItSelection [
     # Do It - evaluate selected text or current line
-    | code result |
-    code := sourceView selectedText.
+    | code |
+    code := sourceView selectedText
     code isEmpty not ifTrue: [
-        Transcript showCr: "--- Do It ---".
-        result := self doIt: code.
-        ^result
-    ].
-    Transcript showCr: "Nothing to evaluate".
-    ^nil
-].
+        ^self doIt: code
+    ]
+]
 
 Workspace>>printItSelection [
     # Print It - evaluate and insert result after selection
@@ -132,22 +128,19 @@ Workspace>>printItSelection [
     | code result resultString insertPos |
     code := sourceView selectedText.
     code isEmpty not ifTrue: [
-        Transcript showCr: "--- Print It ---".
-        result := self printIt: code.
-        resultString := result printString.
+        result := self printIt: code
+        resultString := result printString
 
         # Insert the result after the selection (or after the line if no selection)
-        insertPos := (sourceView insertTextAtSelectedEnd: resultString).
+        insertPos := (sourceView insertTextAtSelectedEnd: resultString)
 
         # Select the inserted text for easy deletion
-        sourceView selectRangeFrom: insertPos to: (insertPos + resultString size).
+        sourceView selectRangeFrom: insertPos to: (insertPos + resultString size)
 
-        Transcript showCr: ("=> ", resultString).
         ^result
-    ].
-    Transcript showCr: "Nothing to evaluate".
+    ]
     ^nil
-].
+]
 
 Workspace>>evalAll [
     # Evaluate all code in the workspace
