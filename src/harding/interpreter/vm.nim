@@ -5,6 +5,9 @@ import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
 
+when defined(granite):
+  import ../interpreter/compiler_primitives
+
 # Class caches are defined in objects.nim and shared across the interpreter
 
 # Forward declarations - implementations are in objects.nim
@@ -1462,6 +1465,23 @@ proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, ar
     return evalBlockWithThreeArgs(interp, interp.currentReceiver, blockNode, args[0], args[1], args[2])
   return nilValue()
 
+# Set iteration primitive (needs interpreter for block evaluation)
+proc primitiveSetDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Iterate over all elements in the set
+  if self.kind == ikObject and self.slots.len > 0:
+    let elementsVal = self.slots[0]
+    if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
+      if args.len == 0:
+        return nilValue()
+      let blockVal = args[0]
+      if blockVal.kind != vkInstance or blockVal.instVal.class != blockClass:
+        return nilValue()
+      let theBlock = cast[BlockNode](blockVal.instVal.nimValue)
+      for key in elementsVal.instVal.entries.keys():
+        discard evalBlockWithArg(interp, interp.currentReceiver, theBlock, key)
+      return nilValue()
+  return nilValue()
+
 # Exception handling methods
 proc formatStackTrace*(interp: Interpreter): string =
   ## Format the current activation stack as a readable stack trace
@@ -2168,6 +2188,15 @@ proc initGlobals*(interp: var Interpreter) =
   blockCls.methods["primitiveOnDo:"] = primitiveOnDoMethod
   blockCls.allMethods["primitiveOnDo:"] = primitiveOnDoMethod
 
+  # Register Set iteration method (primitiveSetDo: requires interpreter for block evaluation)
+  # The Set class itself was created in initCoreClasses (objects.nim)
+  if types.setClass != nil:
+    let setDoMethod = createCoreMethod("primitiveSetDo:")
+    setDoMethod.nativeImpl = cast[pointer](primitiveSetDoImpl)
+    setDoMethod.hasInterpreterParam = true
+    types.setClass.methods["primitiveSetDo:"] = setDoMethod
+    types.setClass.allMethods["primitiveSetDo:"] = setDoMethod
+
   # Create UndefinedObject class (derives from Object) - the class of nil
   let undefinedObjCls = newClass(superclasses = @[objectCls], name = "UndefinedObject")
   undefinedObjCls.tags = @["UndefinedObject", "Object"]
@@ -2191,6 +2220,7 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["String"] = stringCls.toValue()
   interp.globals[]["Array"] = arrayCls.toValue()
   interp.globals[]["Table"] = tableCls.toValue()
+  interp.globals[]["Set"] = types.setClass.toValue()
   interp.globals[]["Boolean"] = booleanCls.toValue()
   interp.globals[]["True"] = trueCls.toValue()
   interp.globals[]["False"] = falseCls.toValue()
@@ -2327,20 +2357,52 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
                          findClassInLibraries(interp, "FileStream")
 
   if fileStreamCls != nil:
-    let fsWriteMethod = createCoreMethod("write:")
-    fsWriteMethod.nativeImpl = cast[pointer](writeImpl)
-    fileStreamCls.methods["write:"] = fsWriteMethod
-    fileStreamCls.allMethods["write:"] = fsWriteMethod
+    when defined(js):
+      # JS builds: Define methods using Harding code that captures to buffer
+      # The jsOutputBuffer is defined in hardingjs.nim and accessed via emit
+      discard
+    else:
+      # Native builds: Use native implementations
+      let fsWriteMethod = createCoreMethod("write:")
+      fsWriteMethod.nativeImpl = cast[pointer](writeImpl)
+      fileStreamCls.methods["write:"] = fsWriteMethod
+      fileStreamCls.allMethods["write:"] = fsWriteMethod
 
-    let fsWritelineMethod = createCoreMethod("writeline:")
-    fsWritelineMethod.nativeImpl = cast[pointer](writelineImpl)
-    fileStreamCls.methods["writeline:"] = fsWritelineMethod
-    fileStreamCls.allMethods["writeline:"] = fsWritelineMethod
-    debug("Registered native FileStream methods")
+      let fsWritelineMethod = createCoreMethod("writeline:")
+      fsWritelineMethod.nativeImpl = cast[pointer](writelineImpl)
+      fileStreamCls.methods["writeline:"] = fsWritelineMethod
+      fileStreamCls.allMethods["writeline:"] = fsWritelineMethod
+      debug("Registered native FileStream methods")
 
     let stdoutInstance = fileStreamCls.newInstance()
     interp.globals[]["Stdout"] = stdoutInstance.toValue()
     debug("Created Stdout instance from FileStream class")
+
+  when defined(granite):
+    # Register Granite compiler primitives
+    let graniteCls = if "Granite" in interp.globals[]:
+                       let gVal = interp.globals[]["Granite"]
+                       if gVal.kind == vkClass: gVal.classVal else: nil
+                     else:
+                       nil
+
+    if graniteCls != nil:
+      # Register compile: primitive (class method)
+      let compileMethod = createCoreMethod("compile:")
+      compileMethod.nativeImpl = cast[pointer](graniteCompileImpl)
+      graniteCls.methods["compile:"] = compileMethod
+      graniteCls.allMethods["compile:"] = compileMethod
+
+      # Register build: primitive (class method)
+      let buildMethod = createCoreMethod("build:")
+      buildMethod.nativeImpl = cast[pointer](graniteBuildImpl)
+      graniteCls.methods["build:"] = buildMethod
+      graniteCls.allMethods["build:"] = buildMethod
+
+      # Set interpreter reference for primitives
+      compiler_primitives.currentInterpreter = interp
+
+      debug("Registered native Granite compiler methods")
 
 # Simple test function (incomplete - commented out)
 ## proc testBasicArithmetic*(): bool =

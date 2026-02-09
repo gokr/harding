@@ -67,7 +67,10 @@ type
     of ikString:
       strVal*: string                       # Direct storage
     isNimProxy*: bool                       # Instance wraps Nim value
-    nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
+    when defined(js):
+      nimValue*: int                          # Dummy field for JS (not used for FFI)
+    else:
+      nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
 
   # Mutable cell for captured variables (shared between closures)
   MutableCell* = ref object
@@ -157,7 +160,10 @@ type
     traceExecution*: bool
     lastResult*: NodeValue
     exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
-    schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
+    when defined(js):
+      schedulerContextPtr*: int  # Dummy field for JS (scheduler not supported)
+    else:
+      schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
     hardingHome*: string  # Home directory for loading libraries
     shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch
     # VM work queue and value stack
@@ -171,7 +177,10 @@ type
     temporaries*: seq[string]             # local variables
     body*: seq[Node]                      # AST statements
     isMethod*: bool                       # true if method definition
-    nativeImpl*: pointer                  # compiled implementation
+    when defined(js):
+      nativeImpl*: int                      # Dummy field for JS (native code not supported)
+    else:
+      nativeImpl*: pointer                  # compiled implementation (not available in JS)
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
     capturedEnv*: Table[string, MutableCell]  # captured variables from outer scope
     capturedEnvInitialized*: bool         # flag to track if capturedEnv has been initialized
@@ -280,7 +289,8 @@ type
   CompiledMethod* = ref object of RootObj
     selector*: string
     arity*: int
-    nativeAddr*: pointer      # compiled function pointer
+    when not defined(js):
+      nativeAddr*: pointer      # compiled function pointer (not available in JS)
     symbolName*: string       # .so symbol name
 
   # Method entries (can be interpreted or compiled)
@@ -308,6 +318,7 @@ var
   tableClass*: Class = nil
   blockClass*: Class = nil
   libraryClass*: Class = nil                    # Library class for namespace management
+  setClass*: Class = nil                        # Set class for hash set operations
 
 # nil instance - singleton instance of UndefinedObject
 # Initialized during initCoreClasses, used by nilValue()

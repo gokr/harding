@@ -47,9 +47,6 @@ proc compileModule*(ctx: CompilerContext, methods: seq[BlockNode],
   output.add("import ../../src/harding/core/[types]\n")
   output.add("import ../../src/harding/interpreter/[objects, activation]\n\n")
 
-  # Track methods
-  ctx.methods = methods
-
   # Generate method stubs
   for meth in methods:
     # Extract selector from method (for now, use a dummy)

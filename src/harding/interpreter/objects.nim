@@ -68,6 +68,16 @@ proc tableIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc tableRemoveKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc tableAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc tableAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+# Set primitives (Instance-based)
+proc primitiveSetNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetRemoveImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetUnionImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetIntersectionImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetDifferenceImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc primitiveSetKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 # Library primitives (Instance-based)
 proc libraryNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc libraryAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
@@ -738,6 +748,48 @@ proc initCoreClasses*(): Class =
 
     addGlobal("Library", NodeValue(kind: vkClass, classVal: libraryClass))
 
+  # Create Set class (using a Table internally for element storage)
+  if setClass == nil:
+    setClass = newClass(superclasses = @[objectClass], name = "Set")
+    setClass.tags = @["Set", "Collection"]
+
+    let primSetNewMethod = createCoreMethod("primitiveSetNew")
+    primSetNewMethod.nativeImpl = cast[pointer](primitiveSetNewImpl)
+    addMethodToClass(setClass, "primitiveSetNew", primSetNewMethod, isClassMethod = true)
+
+    let primSetAddMethod = createCoreMethod("primitiveSetAdd:")
+    primSetAddMethod.nativeImpl = cast[pointer](primitiveSetAddImpl)
+    addMethodToClass(setClass, "primitiveSetAdd:", primSetAddMethod)
+
+    let primSetRemoveMethod = createCoreMethod("primitiveSetRemove:")
+    primSetRemoveMethod.nativeImpl = cast[pointer](primitiveSetRemoveImpl)
+    addMethodToClass(setClass, "primitiveSetRemove:", primSetRemoveMethod)
+
+    let primSetIncludesMethod = createCoreMethod("primitiveSetIncludes:")
+    primSetIncludesMethod.nativeImpl = cast[pointer](primitiveSetIncludesImpl)
+    addMethodToClass(setClass, "primitiveSetIncludes:", primSetIncludesMethod)
+
+    let primSetSizeMethod = createCoreMethod("primitiveSetSize")
+    primSetSizeMethod.nativeImpl = cast[pointer](primitiveSetSizeImpl)
+    addMethodToClass(setClass, "primitiveSetSize", primSetSizeMethod)
+
+    let primSetUnionMethod = createCoreMethod("primitiveSetUnion:")
+    primSetUnionMethod.nativeImpl = cast[pointer](primitiveSetUnionImpl)
+    addMethodToClass(setClass, "primitiveSetUnion:", primSetUnionMethod)
+
+    let primSetIntersectionMethod = createCoreMethod("primitiveSetIntersection:")
+    primSetIntersectionMethod.nativeImpl = cast[pointer](primitiveSetIntersectionImpl)
+    addMethodToClass(setClass, "primitiveSetIntersection:", primSetIntersectionMethod)
+
+    let primSetDifferenceMethod = createCoreMethod("primitiveSetDifference:")
+    primSetDifferenceMethod.nativeImpl = cast[pointer](primitiveSetDifferenceImpl)
+    addMethodToClass(setClass, "primitiveSetDifference:", primSetDifferenceMethod)
+
+    let primSetKeysMethod = createCoreMethod("primitiveSetKeys")
+    primSetKeysMethod.nativeImpl = cast[pointer](primitiveSetKeysImpl)
+    addMethodToClass(setClass, "primitiveSetKeys", primSetKeysMethod)
+    # Note: primitiveSetDo: is registered in vm.nim with interpreter parameter
+
   # Create Block class
   if blockClass == nil:
     blockClass = newClass(superclasses = @[objectClass], name = "Block")
@@ -762,6 +814,7 @@ proc initCoreClasses*(): Class =
   types.blockClass = blockClass
   types.booleanClass = booleanClass
   types.libraryClass = libraryClass
+  types.setClass = setClass
 
   # Register primitive methods for declarative primitive syntax
   # These are the internal primitive selectors that can be called via standard lookup
@@ -1786,6 +1839,112 @@ proc libraryIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   if bindings != nil and args.len > 0:
     return toValue(args[0] in bindings.entries)
   return toValue(false)
+
+# Set primitives (storing elements in a table at slot 0)
+
+proc getSetElements*(self: Instance): Instance =
+  ## Get the elements Table instance from a Set's slot 0
+  if self.kind == ikObject and self.slots.len > 0:
+    let elementsVal = self.slots[0]
+    if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
+      return elementsVal.instVal
+  return nil
+
+proc primitiveSetNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Create a new Set instance with empty table for elements
+  if setClass == nil:
+    return nilValue()
+  var inst = newInstance(setClass)
+  inst.slots = @[]
+  inst.slots.add(newTableInstance(tableClass, initTable[NodeValue, NodeValue]()).toValue())
+  return inst.toValue()
+
+proc primitiveSetAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Add element to set
+  let elements = getSetElements(self)
+  if elements != nil and args.len > 0:
+    elements.entries[args[0]] = toValue(true)
+  return self.toValue()
+
+proc primitiveSetRemoveImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Remove element from set
+  let elements = getSetElements(self)
+  if elements != nil and args.len > 0:
+    elements.entries.del(args[0])
+  return self.toValue()
+
+proc primitiveSetIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Check if set includes element
+  let elements = getSetElements(self)
+  if elements != nil and args.len > 0:
+    return toValue(args[0] in elements.entries)
+  return toValue(false)
+
+proc primitiveSetSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get set size
+  let elements = getSetElements(self)
+  if elements != nil:
+    return toValue(elements.entries.len)
+  return toValue(0)
+
+proc primitiveSetUnionImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return union of self and otherSet
+  let selfElements = getSetElements(self)
+  let otherElements = getSetElements(args[0].instVal)
+  if selfElements == nil or otherElements == nil:
+    return nilValue()
+  var inst = newInstance(setClass)
+  inst.slots = @[]
+  var newEntries = initTable[NodeValue, NodeValue]()
+  for key in selfElements.entries.keys():
+    newEntries[key] = toValue(true)
+  for key in otherElements.entries.keys():
+    newEntries[key] = toValue(true)
+  inst.slots.add(newTableInstance(tableClass, newEntries).toValue())
+  return inst.toValue()
+
+proc primitiveSetIntersectionImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return intersection of self and otherSet
+  let selfElements = getSetElements(self)
+  let otherElements = getSetElements(args[0].instVal)
+  if selfElements == nil or otherElements == nil:
+    return nilValue()
+  var inst = newInstance(setClass)
+  inst.slots = @[]
+  var newEntries = initTable[NodeValue, NodeValue]()
+  for key in selfElements.entries.keys():
+    if key in otherElements.entries:
+      newEntries[key] = toValue(true)
+  inst.slots.add(newTableInstance(tableClass, newEntries).toValue())
+  return inst.toValue()
+
+proc primitiveSetDifferenceImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return difference (self - otherSet)
+  let selfElements = getSetElements(self)
+  let otherElements = getSetElements(args[0].instVal)
+  if selfElements == nil or otherElements == nil:
+    return nilValue()
+  var inst = newInstance(setClass)
+  inst.slots = @[]
+  var newEntries = initTable[NodeValue, NodeValue]()
+  for key in selfElements.entries.keys():
+    if key notin otherElements.entries:
+      newEntries[key] = toValue(true)
+  inst.slots.add(newTableInstance(tableClass, newEntries).toValue())
+  return inst.toValue()
+
+proc primitiveSetKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get set elements as array
+  let elements = getSetElements(self)
+  if elements != nil:
+    var keys: seq[NodeValue] = @[]
+    for key in elements.entries.keys():
+      keys.add(key)
+    return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, keys))
+  return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, @[]))
+
+# Set>>do: requires interpreter to evaluate blocks
+# Register this in vm.nim's initGlobals where other interpreter-dependent methods are registered
 
 # ============================================================================
 # Class method helpers
