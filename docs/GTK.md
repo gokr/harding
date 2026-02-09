@@ -134,8 +134,93 @@ entry connectKeyPressed: [ :keyval :keycode :mods |
 | Box | `GtkBox vertical` / `horizontal` | `append:`, `prepend:`, `remove:`, `setSpacing:` |
 | Label | `GtkLabel newLabel:` | `label:`, `markup:` |
 | Entry | `GtkEntry new` | `text:`, `text`, `connectTextChanged:` |
-| TextView | `GtkTextView new` | `text:`, `text`, `editable:`, `monospace:` |
+| TextView | `GtkTextView new` | `text:`, `text`, `editable:`, `monospace:`, `insertText:at:`, `selectRangeFrom:to:`, `insertTextAtSelectedEnd:` |
+| SourceView | `GtkSourceView new` | Inherits TextView methods, `showLineNumbers:`, `setTabWidth:`, `selectedText` |
 | ScrolledWindow | `GtkScrolledWindow new` | `setChild:` |
+
+### TextView and SourceView Text Manipulation
+
+TextView and SourceView provide methods for text manipulation:
+
+```harding
+# Get all text
+sourceView text
+
+# Set all text
+sourceView text: "Hello, World!"
+
+# Insert text at a specific position
+sourceView insertText: "injected" at: 5
+
+# Select a range of text (positions are character offsets)
+sourceView selectRangeFrom: 0 to: 10
+
+# Get selected text or current line
+sourceView selectedText
+
+# Insert text after the selection (for Print It)
+resultPos := sourceView insertTextAtSelectedEnd: resultString
+
+# Get selection end position (or cursor position if no selection)
+endPos := sourceView getSelectionEnd
+```
+
+#### SourceView-Specific Features
+
+```harding
+sourceView := GtkSourceView new.
+
+# Configure the editor
+sourceView showLineNumbers: true.
+sourceView setTabWidth: 2.
+
+# Get selected text (or current line if nothing selected)
+code := sourceView selectedText.
+```
+
+## IDE Tools
+
+### Workspace - Code Editor and Evaluation
+
+The Workspace (`lib/harding/gui/Ide/Workspace.hrd`) provides a source code editor with interactive evaluation:
+
+```harding
+# Create a workspace
+Workspace open
+```
+
+#### Do It (Ctrl+D)
+
+Evaluate the selected code or current line and print result to Transcript:
+
+```harding
+self doItSelection
+```
+
+**Behavior:**
+- Evaluates selected text, or current line if no selection
+- Prints result to Transcript
+- No changes to editor content
+
+#### Print It (Ctrl+P)
+
+Evaluate and insert result in the editor:
+
+```harding
+self printItSelection
+```
+
+**Behavior:**
+- Evaluates selected text, or current line if no selection
+- **Inserts result after the selection** (Smalltalk-style)
+- **Automatically selects the inserted text** so you can press Delete to remove it
+- Also prints to Transcript for reference
+
+**Example:**
+1. Select: `3 + 4`
+2. Press Ctrl+P or click "Print It"
+3. Result: `7` appears after the selection and is selected
+4. Press Delete to remove the result
 
 ## Memory Management and Lifecycle
 

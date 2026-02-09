@@ -147,7 +147,19 @@ harding --loglevel WARN script.harding     # Warnings only
 harding --loglevel ERROR script.harding    # Errors only (default)
 ```
 
-## Recent Completed Work
+### GTK IDE Improvements and Print It (2026-02-08)
+  - Fixed calling convention mismatch in GTK native methods (segmentation fault fix)
+  - Added {.nimcall.} pragma to all GTK native method implementations
+  - Fixed GtkTextIter storage with proper buffer allocation (256-byte opaque struct buffers)
+  - Added text manipulation methods to TextView/SourceView:
+    - `insertText:at:` - Insert text at position offset
+    - `selectRangeFrom:to:` - Select text range
+    - `insertTextAtSelectedEnd:` - Insert text after selection
+    - `getSelectionEnd` - Get selection end position
+  - Implemented Smalltalk-style Print It in Workspace
+  - Print It now inserts result in editor (after selection) and selects it for easy deletion
+  - GtkSourceView now inherits from GtkTextView for method sharing
+  - Added FFI bindings for gtkTextBufferInsert and gtkTextBufferSelectRange
 
 ### Test Coverage Improvements (2025-02-08)
 - Fixed all disabled tests in test_evaluator.nim (10 tests rewritten using class-based model)

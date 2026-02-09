@@ -139,6 +139,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Library/namespace system for modular code organization
 - String concatenation with auto-conversion using `,`
 - GTK-based IDE (`bona`) with Workspace and Transcript
+- Smalltalk-style Print It - insert results in editor with selection
 
 **In progress:**
 - Compiler to Nim (granite is stub)
