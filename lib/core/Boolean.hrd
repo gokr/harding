@@ -125,3 +125,12 @@ False>>= other [
 False>>printString [
   ^ "false"
 ].
+
+#====================================================================
+# UndefinedObject class extensions
+#====================================================================
+
+UndefinedObject>>printString [
+  # The nil singleton should print as "nil"
+  ^ "nil"
+].
