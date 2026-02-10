@@ -152,8 +152,17 @@ proc initGtkBridge*(interp: var Interpreter) =
   windowDestroyedMethod.hasInterpreterParam = true
   addMethodToClass(windowCls, "destroyed:", windowDestroyedMethod)
 
+  let windowSetIconNameMethod = createCoreMethod("iconName:")
+  windowSetIconNameMethod.nativeImpl = cast[pointer](windowSetIconNameImpl)
+  windowSetIconNameMethod.hasInterpreterParam = true
+  addMethodToClass(windowCls, "iconName:", windowSetIconNameMethod)
+
   interp.globals[]["GtkWindow"] = windowCls.toValue()
   debug("Registered GtkWindow class")
+
+  # Set default application icon
+  gtkWindowSetDefaultIconName("applications-development")
+  debug("Set default application icon")
 
   # Create Button class
   let buttonCls = newClass(superclasses = @[widgetCls], name = "GtkButton")

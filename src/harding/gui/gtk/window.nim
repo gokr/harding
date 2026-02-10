@@ -189,3 +189,19 @@ proc windowDestroyedImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
                          cast[GCallback](destroyCallbackProc), nil)
 
   nilValue()
+
+## Native method: iconName:
+proc windowSetIconNameImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set the window icon by name (from icon theme)
+  if args.len < 1 or args[0].kind != vkString:
+    return nilValue()
+
+  if self.isNimProxy:
+    var window = getInstanceWidget(self)
+    if window == nil and self.nimValue != nil:
+      window = cast[GtkWindow](self.nimValue)
+    if window != nil:
+      let iconName = args[0].strVal
+      gtkWindowSetIconName(window, iconName.cstring)
+
+  nilValue()

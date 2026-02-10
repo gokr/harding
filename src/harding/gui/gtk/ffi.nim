@@ -83,6 +83,8 @@ proc gtkWindowSetTitle*(window: GtkWindow, title: cstring) {.cdecl, importc: "gt
 proc gtkWindowSetDefaultSize*(window: GtkWindow, width: cint, height: cint) {.cdecl, importc: "gtk_window_set_default_size".}
 proc gtkWindowPresent*(window: GtkWindow) {.cdecl, importc: "gtk_window_present".}
 proc gtkWindowClose*(window: GtkWindow) {.cdecl, importc: "gtk_window_close".}
+proc gtkWindowSetIconName*(window: GtkWindow, name: cstring) {.cdecl, importc: "gtk_window_set_icon_name".}
+proc gtkWindowSetDefaultIconName*(name: cstring) {.cdecl, importc: "gtk_window_set_default_icon_name".}
 
 # GTK Button
 proc gtkButtonNew*(): GtkButton {.cdecl, importc: "gtk_button_new".}
