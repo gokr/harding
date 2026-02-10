@@ -109,7 +109,8 @@ Workspace>>doIt: codeString [
 
 Workspace>>printIt: codeString [
     | result |
-    result := self doIt: codeString.
+    # Evaluate but don't print to Transcript - result will be inserted in editor
+    result := Object eval: codeString.
     ^result
 ].
 
