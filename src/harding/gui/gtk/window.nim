@@ -205,3 +205,33 @@ proc windowSetIconNameImpl*(interp: var Interpreter, self: Instance, args: seq[N
       gtkWindowSetIconName(window, iconName.cstring)
 
   nilValue()
+## Native method: iconFromFile:
+proc windowSetIconFromFileImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set the window icon
+  ## GTK3: Supports file path loading
+  ## GTK4: Treats argument as icon name (uses icon theme)
+  if args.len < 1 or args[0].kind != vkString:
+    return toValue(false)
+
+  if self.isNimProxy:
+    var window = getInstanceWidget(self)
+    if window == nil and self.nimValue != nil:
+      window = cast[GtkWindow](self.nimValue)
+    if window != nil:
+      let iconArg = args[0].strVal
+
+      when defined(gtk3):
+        if fileExists(iconArg):
+          let result = gtkWindowSetIconFromFile(window, iconArg.cstring)
+          if result != 0: return toValue(true)
+        else:
+          gtkWindowSetIconName(window, iconArg.cstring)
+          return toValue(true)
+      else:
+        gtkWindowSetIconName(window, iconArg.cstring)
+        return toValue(true)
+
+  toValue(false)
+          gObjectUnref(gerror)
+
+  toValue(false)

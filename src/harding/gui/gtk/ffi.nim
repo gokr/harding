@@ -77,6 +77,8 @@ else:
     GTKORIENTATIONVERTICAL* = 1.cint
 
   proc gtkInit*(argc: pointer, argv: pointer) {.cdecl, importc: "gtk_init".}
+  proc gtkWindowSetIconFromFile*(window: GtkWindow, filename: cstring): cint {.cdecl, importc: "gtk_window_set_icon_from_file".}
+  proc gtkWindowSetDefaultIconFromFile*(filename: cstring): cint {.cdecl, importc: "gtk_window_set_default_icon_from_file".}
 
 # Common GTK functions (both versions)
 proc gtkWindowSetTitle*(window: GtkWindow, title: cstring) {.cdecl, importc: "gtk_window_set_title".}

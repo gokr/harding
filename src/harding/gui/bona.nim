@@ -41,6 +41,17 @@ proc runIde*(opts: CliOptions) =
   initGtkBridge(interp)
   debug("GTK bridge initialized")
 
+  # Set default application icon from project logo if available
+  let logoPath = "website/content/images/harding-simple.png"
+  if fileExists(logoPath):
+    let success = setGtkDefaultIcon(logoPath)
+    if success:
+      debug("Set default application icon: ", logoPath)
+    else:
+      debug("Failed to set default application icon, using fallback")
+  else:
+    debug("Logo file not found: ", logoPath)
+
   # Load Harding-side GTK wrapper files
   loadGtkWrapperFiles(interp)
   debug("GTK wrapper files loaded")

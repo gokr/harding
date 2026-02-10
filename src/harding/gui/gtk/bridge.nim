@@ -29,6 +29,7 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "")
 proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "")
 proc setGtkApplication*(app: GtkApplication)
 proc getGtkApplication*(): GtkApplication
+proc setGtkDefaultIcon*(iconName: string): bool
 
 ## Global GTK application reference (for GTK4)
 var gtkApp* {.global.}: GtkApplication = nil
@@ -41,6 +42,29 @@ proc getGtkApplication*(): GtkApplication =
 
 ## Forward declaration for launcher new implementation
 proc launcherNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+
+## Set the default application icon
+proc setGtkDefaultIcon*(iconName: string): bool =
+  ## Set the default application icon
+  ##
+  ## In GTK4: Sets the icon name to use from the icon theme (proper GTK4 approach)
+  ## In GTK3: If iconName is a file path that exists, loads from file
+  ##
+  ## Returns true if successful
+  when defined(gtk3):
+    if fileExists(iconName):
+      let result = gtkWindowSetDefaultIconFromFile(iconName.cstring)
+      debug("Set default application icon from file: ", iconName, " result: ", result)
+      return result != 0
+    else:
+      gtkWindowSetDefaultIconName(iconName.cstring)
+      debug("Set default application icon name: ", iconName)
+      return true
+  else:
+    gtkApplicationSetDefaultIcon(iconName.cstring)
+    gtkWindowSetDefaultIconName(iconName.cstring)
+    debug("Set default application icon name: ", iconName)
+    return true
 
 ## Initialize GTK and register all GTK classes
 proc initGtkBridge*(interp: var Interpreter) =
@@ -157,12 +181,13 @@ proc initGtkBridge*(interp: var Interpreter) =
   windowSetIconNameMethod.hasInterpreterParam = true
   addMethodToClass(windowCls, "iconName:", windowSetIconNameMethod)
 
+  let windowSetIconFromFileMethod = createCoreMethod("iconFromFile:")
+  windowSetIconFromFileMethod.nativeImpl = cast[pointer](windowSetIconFromFileImpl)
+  windowSetIconFromFileMethod.hasInterpreterParam = true
+  addMethodToClass(windowCls, "iconFromFile:", windowSetIconFromFileMethod)
+
   interp.globals[]["GtkWindow"] = windowCls.toValue()
   debug("Registered GtkWindow class")
-
-  # Set default application icon
-  gtkWindowSetDefaultIconName("applications-development")
-  debug("Set default application icon")
 
   # Create Button class
   let buttonCls = newClass(superclasses = @[widgetCls], name = "GtkButton")

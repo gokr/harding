@@ -2505,7 +2505,8 @@ proc initHardingGlobal*(interp: var Interpreter) =
   globalTableProxies.add(proxy)  # Keep reference alive for GC
   let globalTableInstance = Instance(kind: ikObject, class: globalTableClass, slots: @[])
   globalTableInstance.isNimProxy = true
-  globalTableInstance.nimValue = cast[pointer](proxy)
+  when not defined(js):
+    globalTableInstance.nimValue = cast[pointer](proxy)
 
   # Add to globals as 'Harding' (the global namespace accessor)
   interp.globals[]["Harding"] = globalTableInstance.toValue()
@@ -2653,59 +2654,60 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     # JS builds don't support file I/O
     writeStderr("Error: Library file I/O not supported in JavaScript build")
     return nilValue()
+  else:
+    # Native builds: proceed with file I/O
+    let pathArg = args[0]
+    let filePath = case pathArg.kind
+      of vkString: pathArg.strVal
+      of vkSymbol: pathArg.symVal
+      else: ""
 
-  let pathArg = args[0]
-  let filePath = case pathArg.kind
-    of vkString: pathArg.strVal
-    of vkSymbol: pathArg.symVal
-    else: ""
-
-  if filePath.len == 0:
-    return nilValue()
-
-  let resolvedPath = if filePath.isAbsolute:
-                       filePath
-                     else:
-                       interp.hardingHome / filePath
-
-  if not fileExists(resolvedPath):
-    writeStderr("Error: File not found: " & resolvedPath)
-    return nilValue()
-
-  # Save original globals and create a copy for capturing new definitions
-  let originalGlobals = interp.globals
-  var tempGlobals: ref Table[string, NodeValue]
-  new(tempGlobals)
-  tempGlobals[] = originalGlobals[]
-
-  # Swap globals to temp table so new definitions go there
-  interp.globals = tempGlobals
-
-  try:
-    let source = readFile(resolvedPath)
-    let (_, err) = interp.evalStatements(source)
-    if err.len > 0:
-      writeStderr("Error loading " & resolvedPath & ": " & err)
-      interp.globals = originalGlobals
+    if filePath.len == 0:
       return nilValue()
 
-    # Restore original globals
-    interp.globals = originalGlobals
+    let resolvedPath = if filePath.isAbsolute:
+                         filePath
+                       else:
+                         interp.hardingHome / filePath
 
-    # Copy new entries into the Library's bindings table
-    let bindings = getLibraryBindings(self)
-    if bindings != nil:
-      for key, val in tempGlobals[]:
-        if key notin originalGlobals[]:
-          setTableValue(bindings, toValue(key), val)
-          debug("Library captured: ", key)
+    if not fileExists(resolvedPath):
+      writeStderr("Error: File not found: " & resolvedPath)
+      return nilValue()
 
-    debug("Successfully loaded into library: ", resolvedPath)
-    return toValue(true)
-  except Exception as e:
-    interp.globals = originalGlobals
-    writeStderr("Error reading " & resolvedPath & ": " & e.msg)
-    return nilValue()
+    # Save original globals and create a copy for capturing new definitions
+    let originalGlobals = interp.globals
+    var tempGlobals: ref Table[string, NodeValue]
+    new(tempGlobals)
+    tempGlobals[] = originalGlobals[]
+
+    # Swap globals to temp table so new definitions go there
+    interp.globals = tempGlobals
+
+    try:
+      let source = readFile(resolvedPath)
+      let (_, err) = interp.evalStatements(source)
+      if err.len > 0:
+        writeStderr("Error loading " & resolvedPath & ": " & err)
+        interp.globals = originalGlobals
+        return nilValue()
+
+      # Restore original globals
+      interp.globals = originalGlobals
+
+      # Copy new entries into the Library's bindings table
+      let bindings = getLibraryBindings(self)
+      if bindings != nil:
+        for key, val in tempGlobals[]:
+          if key notin originalGlobals[]:
+            setTableValue(bindings, toValue(key), val)
+            debug("Library captured: ", key)
+
+      debug("Successfully loaded into library: ", resolvedPath)
+      return toValue(true)
+    except Exception as e:
+      interp.globals = originalGlobals
+      writeStderr("Error reading " & resolvedPath & ": " & e.msg)
+      return nilValue()
 
 proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Harding import: - add a Library to the interpreter's imported libraries list
@@ -3250,15 +3252,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       receiver = newStringInstance(stringClass, receiverVal.strVal)
     of vkBool:
       # Boolean - create ikObject instance with nimValue
-      let p = cast[pointer](alloc(sizeof(bool)))
-      cast[ptr bool](p)[] = receiverVal.boolVal
       var boolInst: Instance
       new(boolInst)
       boolInst.kind = ikObject
       boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
       boolInst.slots = @[]
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
+      when not defined(js):
+        let p = cast[pointer](alloc(sizeof(bool)))
+        cast[ptr bool](p)[] = receiverVal.boolVal
+        boolInst.isNimProxy = true
+        boolInst.nimValue = p
+      else:
+        boolInst.isNimProxy = false
       receiver = boolInst
     of vkNil:
       receiver = nilInstance
@@ -3477,36 +3482,39 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       blockInst.class = blockClass
       blockInst.slots = @[]
       blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
+      when not defined(js):
+        blockInst.nimValue = cast[pointer](receiverVal.blockVal)
       receiver = blockInst
     of vkSymbol:
       receiver = newStringInstance(stringClass, receiverVal.symVal)
 
     # Special stackless handling for control flow primitives
-    if receiver.isNimProxy and receiver.kind == ikObject and receiver.class != nil:
-      # Boolean ifTrue:/ifFalse: - use stackless work frames
-      if (receiver.class == trueClassCache or receiver.class == falseClassCache) and args.len > 0 and args[0].kind == vkBlock:
-        case frame.selector
-        of "ifTrue:":
-          let boolVal = cast[ptr bool](receiver.nimValue)[]
-          if boolVal:
-            # True - execute then block
-            interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
+    when not defined(js):
+      # Native builds only: nimValue pointer operations not supported in JS
+      if receiver.isNimProxy and receiver.kind == ikObject and receiver.class != nil:
+        # Boolean ifTrue:/ifFalse: - use stackless work frames
+        if (receiver.class == trueClassCache or receiver.class == falseClassCache) and args.len > 0 and args[0].kind == vkBlock:
+          case frame.selector
+          of "ifTrue:":
+            let boolVal = cast[ptr bool](receiver.nimValue)[]
+            if boolVal:
+              # True - execute then block
+              interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
+            else:
+              # False - push nil result
+              interp.pushValue(nilValue())
+            return true
+          of "ifFalse:":
+            let boolVal = cast[ptr bool](receiver.nimValue)[]
+            if not boolVal:
+              # False - execute then block (the block passed to ifFalse:)
+              interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
+            else:
+              # True - push nil result
+              interp.pushValue(nilValue())
+            return true
           else:
-            # False - push nil result
-            interp.pushValue(nilValue())
-          return true
-        of "ifFalse:":
-          let boolVal = cast[ptr bool](receiver.nimValue)[]
-          if not boolVal:
-            # False - execute then block (the block passed to ifFalse:)
-            interp.pushWorkFrame(newIfBranchFrame(true, args[0].blockVal, nil))
-          else:
-            # True - push nil result
-            interp.pushValue(nilValue())
-          return true
-        else:
-          discard  # Fall through to regular method dispatch
+            discard  # Fall through to regular method dispatch
 
     # Special stackless handling for block whileTrue:/whileFalse:
     if receiver.kind == ikObject and receiver.class == blockClass and not receiver.isNimProxy and args.len > 0 and args[0].kind == vkBlock:
@@ -3826,15 +3834,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      let p = cast[pointer](alloc(sizeof(bool)))
-      cast[ptr bool](p)[] = receiverVal.boolVal
       var boolInst: Instance
       new(boolInst)
       boolInst.kind = ikObject
       boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
       boolInst.slots = @[]
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
+      when not defined(js):
+        let p = cast[pointer](alloc(sizeof(bool)))
+        cast[ptr bool](p)[] = receiverVal.boolVal
+        boolInst.isNimProxy = true
+        boolInst.nimValue = p
+      else:
+        boolInst.isNimProxy = false
       receiver = boolInst
     of vkBlock:
       var blockInst: Instance
@@ -3843,7 +3854,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       blockInst.class = blockClass
       blockInst.slots = @[]
       blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
+      when not defined(js):
+        blockInst.nimValue = cast[pointer](receiverVal.blockVal)
       receiver = blockInst
     of vkClass:
       var classInst: Instance
@@ -3852,7 +3864,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       classInst.class = objectClass
       classInst.slots = @[]
       classInst.isNimProxy = false
-      classInst.nimValue = cast[pointer](receiverVal.classVal)
+      when not defined(js):
+        classInst.nimValue = cast[pointer](receiverVal.classVal)
       receiver = classInst
     else:
       raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)
@@ -3954,15 +3967,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      let p = cast[pointer](alloc(sizeof(bool)))
-      cast[ptr bool](p)[] = receiverVal.boolVal
       var boolInst: Instance
       new(boolInst)
       boolInst.kind = ikObject
       boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
       boolInst.slots = @[]
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
+      when not defined(js):
+        let p = cast[pointer](alloc(sizeof(bool)))
+        cast[ptr bool](p)[] = receiverVal.boolVal
+        boolInst.isNimProxy = true
+        boolInst.nimValue = p
+      else:
+        boolInst.isNimProxy = false
       receiver = boolInst
     of vkBlock:
       var blockInst: Instance
@@ -3971,7 +3987,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       blockInst.class = blockClass
       blockInst.slots = @[]
       blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
+      when not defined(js):
+        blockInst.nimValue = cast[pointer](receiverVal.blockVal)
       receiver = blockInst
     of vkClass:
       var classInst: Instance
@@ -3980,7 +3997,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       classInst.class = objectClass
       classInst.slots = @[]
       classInst.isNimProxy = false
-      classInst.nimValue = cast[pointer](receiverVal.classVal)
+      when not defined(js):
+        classInst.nimValue = cast[pointer](receiverVal.classVal)
       receiver = classInst
     else:
       raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)

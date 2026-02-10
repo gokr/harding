@@ -2,6 +2,10 @@
 // Harding Website JavaScript
 // ============================================
 
+// Global Harding interpreter instance
+let hardingReady = false;
+
+// Load Harding interpreter
 document.addEventListener('DOMContentLoaded', () => {
     // Mobile navigation toggle
     const navToggle = document.querySelector('.nav-toggle');
@@ -113,31 +117,57 @@ p distanceFromOrigin println`
         });
     });
 
-    // Run button (simulated)
+    // Run button - uses real Harding interpreter
     if (runBtn && output && playgroundCode) {
         runBtn.addEventListener('click', () => {
             const code = playgroundCode.value;
             output.innerHTML = '';
 
-            // Simulate execution delay
+            // Show running indicator
             output.innerHTML = '<div class="output-line">Running...</div>';
+            runBtn.disabled = true;
 
             setTimeout(() => {
                 output.innerHTML = '';
 
-                // Simple simulation based on the code content
-                const lines = simulateExecution(code);
-                lines.forEach(line => {
-                    const div = document.createElement('div');
-                    div.className = 'output-line output';
-                    div.textContent = line;
-                    output.appendChild(div);
-                });
-
-                if (lines.length === 0) {
-                    output.innerHTML = '<div class="output-placeholder">No output (simulated)</div>';
+                // Check if Harding interpreter is available
+                if (typeof Harding === 'undefined' || !Harding.doit) {
+                    output.innerHTML = '<div class="output-line error">Error: Harding interpreter not loaded. Please wait a moment and try again.</div>';
+                    runBtn.disabled = false;
+                    return;
                 }
-            }, 300);
+
+                // Run the code using the real interpreter
+                const result = Harding.doit(code);
+
+                // Display result
+                if (result) {
+                    if (result.startsWith('ERROR:')) {
+                        // Show error
+                        const div = document.createElement('div');
+                        div.className = 'output-line error';
+                        div.textContent = result.substring(6).trim();
+                        output.appendChild(div);
+                    } else {
+                        // Show output lines
+                        const lines = result.split('\n').filter(line => line.length > 0);
+                        if (lines.length === 0) {
+                            output.innerHTML = '<div class="output-placeholder">(no output)</div>';
+                        } else {
+                            lines.forEach(line => {
+                                const div = document.createElement('div');
+                                div.className = 'output-line output';
+                                div.textContent = line;
+                                output.appendChild(div);
+                            });
+                        }
+                    }
+                } else {
+                    output.innerHTML = '<div class="output-placeholder">(no output)</div>';
+                }
+
+                runBtn.disabled = false;
+            }, 50);
         });
     }
 
@@ -208,102 +238,17 @@ p distanceFromOrigin println`
 });
 
 // ============================================
-// Simulated Harding Execution
+// Harding Interpreter Integration
 // ============================================
-function simulateExecution(code) {
-    const output = [];
-    const lines = code.split('\n');
 
-    // Very simple simulation based on common patterns
-    lines.forEach(line => {
-        line = line.trim();
+// The Harding interpreter is loaded via harding.js
+// It exposes a global 'Harding' object with methods:
+// - Harding.doit(code): Returns the result as a string
+// - Harding.version(): Returns the version string
+// - Harding.isInitialized(): Returns true if ready
 
-        // Check for println
-        if (line.includes('println')) {
-            // Extract what's being printed
-            const match = line.match(/(.+?)\s+println/);
-            if (match) {
-                let content = match[1];
-
-                // Handle string concatenation with ,
-                content = content.replace(/\s*,\s*/g, '');
-
-                // Handle simple string literals
-                if (content.startsWith('"') && content.endsWith('"')) {
-                    output.push(content.slice(1, -1));
-                }
-                // Handle numbers
-                else if (/^\d+$/.test(content)) {
-                    output.push(content);
-                }
-                // Handle variable-like outputs
-                else if (content === 'count' || content === 'n' || content === 'i') {
-                    output.push('5');
-                }
-                // Handle expressions
-                else if (content.includes('asString')) {
-                    if (content.includes('factorial')) {
-                        const n = content.match(/value:\s*(\d+)/);
-                        if (n) {
-                            const num = parseInt(n[1]);
-                            output.push(simulateFactorial(num).toString());
-                        }
-                    } else if (content.includes('fib')) {
-                        const n = content.match(/value:\s*(\d+)/);
-                        if (n) {
-                            const num = parseInt(n[1]);
-                            output.push(simulateFibonacci(num).toString());
-                        }
-                    } else {
-                        output.push('123');
-                    }
-                }
-                // Handle toString
-                else if (content.includes('toString')) {
-                    output.push('Point(3, 4)');
-                }
-                // Handle simple expressions
-                else if (content.includes('+') || content.includes('-') || content.includes('*')) {
-                    output.push('42');
-                }
-            }
-        }
-
-        // Check for writeline
-        if (line.includes('writeline:')) {
-            const match = line.match(/writeline:\s*(.+)/);
-            if (match) {
-                let content = match[1];
-                if (content.startsWith('"') && content.endsWith('"')) {
-                    output.push(content.slice(1, -1));
-                } else {
-                    output.push('10');
-                }
-            }
-        }
-
-        // Check for value println pattern
-        if (line.includes('value println') || line.endsWith('println')) {
-            const prevLines = lines.slice(0, lines.indexOf(line));
-            const counterMatch = prevLines.find(l => l.includes('Counter') && l.includes('new'));
-            const initMatch = prevLines.find(l => l.includes('initialize'));
-            const incrementMatch = prevLines.filter(l => l.includes('increment')).length;
-
-            if (counterMatch && initMatch) {
-                output.push(incrementMatch.toString());
-            }
-        }
-    });
-
-    return output;
-}
-
-function simulateFactorial(n) {
-    if (n <= 1) return 1;
-    return n * simulateFactorial(n - 1);
-}
-
-function simulateFibonacci(n) {
-    if (n <= 1) return n;
-    return simulateFibonacci(n - 1) + simulateFibonacci(n - 2);
-}
+// Check if interpreter is loaded
+document.addEventListener('hardingReady', () => {
+    hardingReady = true;
+    console.log('Harding interpreter ready, version:', Harding.version());
+});
