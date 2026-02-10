@@ -3199,6 +3199,45 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         discard  # Fall through to regular dispatch
 
+    # ============================================================================
+    # FAST PATH: Tagged Integer Arithmetic
+    # Skip Instance allocation for primitive integer operations
+    # ============================================================================
+    if receiverVal.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      let a = toTagged(receiverVal)
+      let b = toTagged(args[0])
+      var taggedResult: TaggedValue
+      var isPrimitive = true
+
+      case frame.selector
+      of "+":
+        taggedResult = add(a, b)
+      of "-":
+        taggedResult = sub(a, b)
+      of "*":
+        taggedResult = mul(a, b)
+      of "//":
+        taggedResult = divInt(a, b)
+      of "%":
+        taggedResult = modInt(a, b)
+      of "=":
+        isPrimitive = false  # Will use slow path for boolean result
+      of "<":
+        isPrimitive = false
+      of "<=":
+        isPrimitive = false
+      of ">":
+        isPrimitive = false
+      of ">=":
+        isPrimitive = false
+      else:
+        isPrimitive = false  # Not a primitive integer operation
+
+      if isPrimitive:
+        # Fast path succeeded - push result and return
+        interp.pushValue(toNodeValue(taggedResult))
+        return true
+
     # Convert receiver to Instance for method lookup
     var receiver: Instance
     case receiverVal.kind

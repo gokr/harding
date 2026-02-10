@@ -1054,3 +1054,10 @@ proc toNodeValue*(val: tagged.Value): NodeValue =
 
 # Re-export tagged Value type for convenience
 type TaggedValue* = tagged.Value
+
+# Wrapper procs for tagged value operations (avoiding ambiguity with stdlib)
+proc add*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.add(a, b)
+proc sub*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.sub(a, b)
+proc mul*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.mul(a, b)
+proc divInt*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.divInt(a, b)
+proc modInt*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.modInt(a, b)
