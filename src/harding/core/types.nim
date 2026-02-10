@@ -842,11 +842,15 @@ proc addSuperclass*(cls: Class, parent: Class) =
   if cls.allSlotNames.len > 0:
     cls.hasSlots = true
 
-# Helper for nimValue initialization based on platform
+# Helper for nimValue initialization and comparison based on platform
 when defined(js):
-  const NimValueDefault = 0
+  const NimValueDefault* = 0
+  template nimValueIsSet*(nv: int): bool = nv != 0
+  template nimValueIsNil*(nv: int): bool = nv == 0
 else:
-  const NimValueDefault = nil
+  const NimValueDefault* = nil
+  template nimValueIsSet*(nv: pointer): bool = nv != nil
+  template nimValueIsNil*(nv: pointer): bool = nv == nil
 
 proc newInstance*(cls: Class): Instance =
   ## Create a new Instance of the given Class (ikObject variant)
@@ -974,35 +978,38 @@ proc valueToInstance*(val: NodeValue): Instance =
       return newIntInstance(integerClass, val.intVal)
     else:
       # Fallback during initialization
-      return Instance(kind: ikInt, class: nil, intVal: val.intVal, isNimProxy: false, nimValue: nil)
+      return Instance(kind: ikInt, class: nil, intVal: val.intVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkFloat:
     if floatClass != nil:
       return newFloatInstance(floatClass, val.floatVal)
     else:
-      return Instance(kind: ikFloat, class: nil, floatVal: val.floatVal, isNimProxy: false, nimValue: nil)
+      return Instance(kind: ikFloat, class: nil, floatVal: val.floatVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkString:
     if stringClass != nil:
       return newStringInstance(stringClass, val.strVal)
     else:
-      return Instance(kind: ikString, class: nil, strVal: val.strVal, isNimProxy: false, nimValue: nil)
+      return Instance(kind: ikString, class: nil, strVal: val.strVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkArray:
     if arrayClass != nil:
       return newArrayInstance(arrayClass, val.arrayVal)
     else:
-      return Instance(kind: ikArray, class: nil, elements: val.arrayVal, isNimProxy: false, nimValue: nil)
+      return Instance(kind: ikArray, class: nil, elements: val.arrayVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkTable:
     if tableClass != nil:
       return newTableInstance(tableClass, val.tableVal)
     else:
-      return Instance(kind: ikTable, class: nil, entries: val.tableVal, isNimProxy: false, nimValue: nil)
+      return Instance(kind: ikTable, class: nil, entries: val.tableVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkBool:
-    # Boolean values - store in nimValue for compatibility
-    let p = cast[pointer](alloc(sizeof(bool)))
-    cast[ptr bool](p)[] = val.boolVal
-    return Instance(kind: ikObject, class: booleanClass, slots: @[], isNimProxy: true, nimValue: p)
+    # Boolean values - store in nimValue for compatibility (native only)
+    when defined(js):
+      return Instance(kind: ikObject, class: booleanClass, slots: @[], isNimProxy: true, nimValue: NimValueDefault)
+    else:
+      let p = cast[pointer](alloc(sizeof(bool)))
+      cast[ptr bool](p)[] = val.boolVal
+      return Instance(kind: ikObject, class: booleanClass, slots: @[], isNimProxy: true, nimValue: p)
   of vkBlock:
     # Blocks are passed as-is, created as ikObject instances
-    return Instance(kind: ikObject, class: blockClass, slots: @[], isNimProxy: false, nimValue: nil)
+    return Instance(kind: ikObject, class: blockClass, slots: @[], isNimProxy: false, nimValue: NimValueDefault)
   of vkClass, vkNil, vkSymbol:
     raise newException(ValueError, "Cannot convert " & $val.kind & " to Instance")
 

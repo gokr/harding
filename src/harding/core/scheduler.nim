@@ -382,7 +382,7 @@ proc createProcessProxy*(process: Process): NodeValue =
 
 proc asProcessProxy*(inst: Instance): ProcessProxy =
   ## Extract ProcessProxy from a Harding instance
-  if inst.isNimProxy and inst.nimValue != nil:
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
     return cast[ProcessProxy](inst.nimValue)
   return nil
 
@@ -527,7 +527,7 @@ proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue =
 
 proc asSchedulerProxy*(inst: Instance): SchedulerProxy =
   ## Extract SchedulerProxy from a Harding instance
-  if inst.isNimProxy and inst.nimValue != nil:
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
     return cast[SchedulerProxy](inst.nimValue)
   return nil
 
@@ -733,7 +733,7 @@ proc createMonitorProxy*(monitor: Monitor): NodeValue =
 
 proc asMonitorProxy*(inst: Instance): MonitorProxy =
   ## Extract MonitorProxy from a Harding instance
-  if inst.isNimProxy and inst.nimValue != nil:
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
     return cast[MonitorProxy](inst.nimValue)
   return nil
 
@@ -946,7 +946,7 @@ proc createSharedQueueProxy*(queue: SharedQueue): NodeValue =
   return obj.toValue()
 
 proc asSharedQueueProxy*(inst: Instance): SharedQueueProxy =
-  if inst.isNimProxy and inst.nimValue != nil:
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
     return cast[SharedQueueProxy](inst.nimValue)
   return nil
 
@@ -1135,7 +1135,7 @@ proc createSemaphoreProxy*(sem: Semaphore): NodeValue =
   return obj.toValue()
 
 proc asSemaphoreProxy*(inst: Instance): SemaphoreProxy =
-  if inst.isNimProxy and inst.nimValue != nil:
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
     return cast[SemaphoreProxy](inst.nimValue)
   return nil
 
