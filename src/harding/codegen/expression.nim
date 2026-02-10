@@ -171,21 +171,21 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{mangleSelector(node.selector)}({receiverCode}, {keyCode}, {valCode})")
     return receiverCode
 
-  of "println":
+  of "println", "writeLine:":
     # Print with newline
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("nt_println({argCode})")
+      return fmt("(proc(): NodeValue = echo({argCode}).toString(); return {receiverCode})()")
     else:
-      return fmt("nt_println({receiverCode})")
+      return fmt("(proc(): NodeValue = echo({receiverCode}).toString(); return {receiverCode})()")
 
-  of "print":
+  of "print", "write:":
     # Print without newline
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("nt_print({argCode})")
+      return fmt("(proc(): NodeValue = stdout.write({argCode}).toString(); return {receiverCode})()")
     else:
-      return fmt("nt_print({receiverCode})")
+      return fmt("(proc(): NodeValue = stdout.write({receiverCode}).toString(); return {receiverCode})()")
 
   of "asString":
     # Convert to string
@@ -204,11 +204,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Generic message - try to call compiled method or fall back to runtime
-    let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let escapedSelector = node.selector.replace("\\", "\\\\").replace("\"", "\\\"")
-    # For now, use runtime dispatch - compiled methods will be registered
-    return "sendMessage(currentRuntime[], " & receiverCode & ", \"" & escapedSelector & "\", @[" & args & "])"
+    # Generic message - for now return nil (compiled methods not yet fully supported)
+    # TODO: Generate direct method calls for known selectors
+    return "NodeValue(kind: vkNil)  # " & node.selector & " not yet compiled"
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator

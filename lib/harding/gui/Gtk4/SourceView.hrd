@@ -48,3 +48,4 @@ GtkSourceView>>buffer [
 GtkSourceView>>insertTextAtEnd: aString [
     # Insert text at the current cursor position
     self insertTextAtSelectedEnd: aString.
+].

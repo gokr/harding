@@ -84,15 +84,15 @@ when defined(js):
     of "primitiveEquals:":
       # Object equality
       if args.len == 0:
-        return falseValue()
+        return falseValue
       # For now, simple reference equality
       if receiver.kind == ikInt and args[0].kind == vkInt:
-        return if receiver.intVal == args[0].intVal: trueValue() else: falseValue()
+        return if receiver.intVal == args[0].intVal: trueValue else: falseValue
       if receiver.kind == ikFloat and args[0].kind == vkFloat:
-        return if receiver.floatVal == args[0].floatVal: trueValue() else: falseValue()
+        return if receiver.floatVal == args[0].floatVal: trueValue else: falseValue
       if receiver.kind == ikString and args[0].kind == vkString:
-        return if receiver.strVal == args[0].strVal: trueValue() else: falseValue()
-      return if receiver == args[0].instVal: trueValue() else: falseValue()
+        return if receiver.strVal == args[0].strVal: trueValue else: falseValue
+      return if receiver == args[0].instVal: trueValue else: falseValue
 
     of "primitiveClass":
       # Return the class of the receiver
@@ -109,18 +109,18 @@ when defined(js):
     of "primitiveIsKindOf:":
       # Check if receiver is kind of given class
       if args.len == 0 or args[0].kind != vkClass:
-        return falseValue()
+        return falseValue
       # Simple check: is receiver's class the same as or subclass of args[0]
       var cls = receiver.class
       while cls != nil:
         if cls == args[0].classVal:
-          return trueValue()
-        # Check parents
-        for parent in cls.parents:
+          return trueValue
+        # Check superclasses
+        for parent in cls.superclasses:
           if parent == args[0].classVal:
-            return trueValue()
-        cls = if cls.parents.len > 0: cls.parents[0] else: nil
-      return falseValue()
+            return trueValue
+        cls = if cls.superclasses.len > 0: cls.superclasses[0] else: nil
+      return falseValue
 
     of "primitiveSlotNames":
       # Return array of slot names
@@ -149,21 +149,21 @@ when defined(js):
     of "primitiveHasProperty:":
       # Check if object has a property/slot
       if args.len == 0:
-        return falseValue()
+        return falseValue
       if receiver.class == nil:
-        return falseValue()
+        return falseValue
       let propName = args[0].toString()
-      return if propName in receiver.class.allSlotNames: trueValue() else: falseValue()
+      return if propName in receiver.class.allSlotNames: trueValue else: falseValue
 
     of "primitiveRespondsTo:":
       # Check if object responds to selector
       if args.len == 0:
-        return falseValue()
+        return falseValue
       let selector = args[0].toString()
       if receiver.class == nil:
-        return falseValue()
+        return falseValue
       # Check in methods or allMethods
-      return if selector in receiver.class.allMethods: trueValue() else: falseValue()
+      return if selector in receiver.class.allMethods: trueValue else: falseValue
 
     of "primitiveMethods":
       # Return array of method selectors

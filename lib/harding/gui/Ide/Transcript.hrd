@@ -22,7 +22,7 @@ Transcript>>show: anObject [
 Transcript>>showCr: anObject [
   # Append anObject's printString followed by a newline.
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString).
+    sourceView insertTextAtEnd: ("Banana", (anObject printString)).
     sourceView insertTextAtEnd: "\n".
     self scrollToBottom
   ]
