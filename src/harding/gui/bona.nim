@@ -41,16 +41,48 @@ proc runIde*(opts: CliOptions) =
   initGtkBridge(interp)
   debug("GTK bridge initialized")
 
-  # Set default application icon from project logo if available
+  # Set default application icon
+  # For GTK4, install icon in user icon theme if file exists, then use icon name
+  # For GTK3, can use file path directly
   let logoPath = "website/content/images/harding-simple.png"
-  if fileExists(logoPath):
-    let success = setGtkDefaultIcon(logoPath)
-    if success:
-      debug("Set default application icon: ", logoPath)
+  let iconName = "harding"
+
+  when defined(gtk3):
+    if fileExists(logoPath):
+      let success = setGtkDefaultIcon(logoPath)
+      if success:
+        debug("Set default application icon from file: ", logoPath)
+      else:
+        debug("Failed to set default application icon, using fallback")
     else:
-      debug("Failed to set default application icon, using fallback")
+      debug("Logo file not found: ", logoPath, ", using default icon")
+      discard setGtkDefaultIcon("applications-development")
   else:
-    debug("Logo file not found: ", logoPath)
+    # GTK4: Install icon in user theme directory for development
+    let iconDir = getHomeDir() / ".local/share/icons"
+    let iconPath48 = iconDir / "hicolor/48x48/apps" / (iconName & ".png")
+    let iconPath256 = iconDir / "hicolor/256x256/apps" / (iconName & ".png")
+
+    if fileExists(logoPath):
+      createDir(iconDir / "hicolor/48x48/apps")
+      createDir(iconDir / "hicolor/256x256/apps")
+
+      if not fileExists(iconPath48):
+        copyFile(logoPath, iconPath48)
+        debug("Installed 48px icon to: ", iconPath48)
+
+      if not fileExists(iconPath256):
+        copyFile(logoPath, iconPath256)
+        debug("Installed 256px icon to: ", iconPath256)
+
+      # Note: GTK4 doesn't have gtk_icon_theme_invalidate(), but modern GTK
+      # will pick up the icon from the theme directory automatically
+
+      discard setGtkDefaultIcon(iconName)
+      debug("Set default application icon name: ", iconName)
+    else:
+      debug("Logo file not found: ", logoPath, ", using default icon")
+      discard setGtkDefaultIcon("applications-development")
 
   # Load Harding-side GTK wrapper files
   loadGtkWrapperFiles(interp)

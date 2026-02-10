@@ -7,8 +7,11 @@ when defined(granite):
   import ../parser/parser
   import ../parser/lexer
   import ../codegen/module
+  import ../codegen/expression
+  import ../codegen/methods
   import ../compiler/context
   import ../compiler/codegen
+  import ../compiler/symbols
   import ../interpreter/vm
 
   # Global reference to current interpreter (set during primitive calls)
@@ -151,13 +154,18 @@ when defined(granite):
     ## Generate Nim method implementation from Harding AST
     var output = ""
 
-    # Generate method signature
-    let safeSelector = selector.replace(":", "_")
-    output.add("proc " & cls.name & "_" & safeSelector & "*(self: " & cls.name)
+    # Generate method signature using proper mangling
+    let safeSelector = mangleSelector(selector)
+    output.add("proc " & safeSelector & "*(self: " & cls.name)
 
-    # Add parameters
-    for param in meth.parameters:
-      output.add(", " & param & ": NodeValue")
+    # Add parameters with unique names (avoid duplicates from keyword selectors)
+    var usedNames: HashSet[string] = initHashSet[string]()
+    for i, param in meth.parameters:
+      var uniqueParam = param
+      if param in usedNames or param.len == 0:
+        uniqueParam = "arg" & $i
+      usedNames.incl(uniqueParam)
+      output.add(", " & uniqueParam & ": NodeValue")
     output.add("): NodeValue =\n")
 
     output.add("  ## Compiled method: " & selector & "\n")
@@ -169,14 +177,35 @@ when defined(granite):
         output.add("  var " & temp & " = NodeValue(kind: vkNil)\n")
       output.add("\n")
 
-    # Generate body (simplified for now)
+    # Generate body by compiling Harding AST to Nim
     if meth.body.len == 0:
       output.add("  return NodeValue(kind: vkNil)\n")
     else:
-      # For now, generate a placeholder that uses runtime dispatch
-      output.add("  # Method body (runtime dispatch for now)\n")
-      output.add("  echo \"Calling " & selector & " on \" & $(self[])\n")
-      output.add("  return NodeValue(kind: vkNil)\n")
+      # Create generation context for this method
+      var ctx = newGenContext(nil)
+
+      # Add parameters to context
+      var usedNames: HashSet[string] = initHashSet[string]()
+      for i, param in meth.parameters:
+        var uniqueParam = param
+        if param in usedNames or param.len == 0:
+          uniqueParam = "arg" & $i
+        usedNames.incl(uniqueParam)
+        ctx.parameters.add(uniqueParam)
+
+      # Add temporaries to context
+      for temp in meth.temporaries:
+        ctx.locals.add(temp)
+
+      # Generate each statement
+      for i, stmt in meth.body:
+        let isLast = (i == meth.body.len - 1)
+        let stmtCode = genStatement(ctx, stmt)
+        if stmtCode.len > 0:
+          output.add("  " & stmtCode & "\n")
+        elif isLast:
+          # If last statement generates no code, return nil
+          output.add("  return NodeValue(kind: vkNil)\n")
 
     output.add("\n")
     return output
@@ -191,7 +220,8 @@ when defined(granite):
 
     output.add("import std/[os, tables, sequtils]\n")
     output.add("import ../src/harding/core/[types]\n")
-    output.add("import ../src/harding/interpreter/[objects]\n\n")
+    output.add("import ../src/harding/interpreter/[objects]\n")
+    output.add("import ../src/harding/runtime/[runtime]\n\n")
 
     # Generate type definitions for each class
     output.add("# Class Type Definitions\n")
@@ -242,7 +272,7 @@ when defined(granite):
       # Call main: method with args
       output.add("\n  # Call main: method\n")
       output.add("  let args = NodeValue(kind: vkArray, arrayVal: @[])\n")
-      output.add("  discard " & appClass.name & "_main_(app, args)\n")
+      output.add("  discard " & mangleSelector("main:") & "(app, args)\n")
 
     output.add("\nwhen isMainModule:\n")
     output.add("  main()\n")

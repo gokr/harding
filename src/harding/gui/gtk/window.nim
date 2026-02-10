@@ -232,6 +232,3 @@ proc windowSetIconFromFileImpl*(interp: var Interpreter, self: Instance, args: s
         return toValue(true)
 
   toValue(false)
-          gObjectUnref(gerror)
-
-  toValue(false)

@@ -77,8 +77,43 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
-  discard
-  return NodeValue(kind: vkNil)
+  ## For now, handle basic methods directly
+  case selector
+  of "writeLine:", "println":
+    if args.len > 0:
+      echo args[0].toString()
+    return receiver
+  of "write:", "print":
+    if args.len > 0:
+      stdout.write(args[0].toString())
+    return receiver
+  of "toString", "asString":
+    return NodeValue(kind: vkString, strVal: receiver.toString())
+  of ",":
+    if args.len > 0:
+      let aStr = receiver.toString()
+      let bStr = args[0].toString()
+      return NodeValue(kind: vkString, strVal: aStr & bStr)
+    return receiver
+  of "+", "plus":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal + args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "-", "minus":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal - args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "*", "star":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal * args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "/":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
+    return NodeValue(kind: vkNil)
+  else:
+    # Unknown selector - return nil for now
+    return NodeValue(kind: vkNil)
 
 # Convenience procs for common operations
 

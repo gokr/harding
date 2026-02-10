@@ -175,6 +175,32 @@ proc textViewInsertTextAtImpl*(interp: var Interpreter, self: Instance, args: se
 
   nilValue()
 
+## Native instance method: insertTextAtEnd:
+proc textViewInsertTextAtEndImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Insert text at the end of the text buffer
+  if args.len < 1 or args[0].kind != vkString:
+    return nilValue()
+
+  if not (self.isNimProxy and self.nimValue != nil):
+    debug("insertTextAtEnd: Not a NimProxy or nimValue is nil")
+    return nilValue()
+
+  let widget = cast[GtkTextView](self.nimValue)
+  let buffer = gtkTextViewGetBuffer(widget)
+  if buffer == nil:
+    debug("insertTextAtEnd: buffer is nil")
+    return nilValue()
+
+  var endIterStorage: array[256, byte]
+  let endIter = cast[GtkTextIter](addr(endIterStorage[0]))
+
+  gtkTextBufferGetEndIter(buffer, endIter)
+  gtkTextBufferInsert(buffer, endIter, args[0].strVal.cstring, -1)
+
+  debug("insertTextAtEnd: Inserted text '", args[0].strVal, "' into widget ", repr(cast[int](widget)))
+
+  nilValue()
+
 ## Native instance method: selectRangeFrom:to:
 proc textViewSelectRangeFromToImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Select a range of text in the text view

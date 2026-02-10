@@ -61,7 +61,6 @@ proc setGtkDefaultIcon*(iconName: string): bool =
       debug("Set default application icon name: ", iconName)
       return true
   else:
-    gtkApplicationSetDefaultIcon(iconName.cstring)
     gtkWindowSetDefaultIconName(iconName.cstring)
     debug("Set default application icon name: ", iconName)
     return true
@@ -347,6 +346,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   textViewInsertTextAtMethod.nativeImpl = cast[pointer](textViewInsertTextAtImpl)
   textViewInsertTextAtMethod.hasInterpreterParam = true
   addMethodToClass(textViewCls, "insertText:at:", textViewInsertTextAtMethod)
+
+  let textViewInsertTextAtEndMethod = createCoreMethod("insertTextAtEnd:")
+  textViewInsertTextAtEndMethod.nativeImpl = cast[pointer](textViewInsertTextAtEndImpl)
+  textViewInsertTextAtEndMethod.hasInterpreterParam = true
+  addMethodToClass(textViewCls, "insertTextAtEnd:", textViewInsertTextAtEndMethod)
 
   let textViewSelectRangeFromToMethod = createCoreMethod("selectRangeFrom:to:")
   textViewSelectRangeFromToMethod.nativeImpl = cast[pointer](textViewSelectRangeFromToImpl)

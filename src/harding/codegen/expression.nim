@@ -265,40 +265,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
 
   of nkBlock:
-    let blk = node.BlockNode
-    # Create new context for block with its parameters as locals
-    var blockCtx = GenContext(
-      cls: ctx.cls,
-      inBlock: true,
-      locals: ctx.locals,
-      parameters: ctx.parameters,
-      globals: ctx.globals
-    )
-    for param in blk.parameters:
-      blockCtx.parameters.add(param)
-
-    if blk.parameters.len > 0:
-      # Block with parameters
-      let params = blk.parameters.mapIt(fmt("{it}: NodeValue")).join(", ")
-      var bodyStmts: seq[string] = @[]
-      for i, stmt in blk.body:
-        if i == blk.body.len - 1:
-          # Last statement is the return value
-          bodyStmts.add("result = " & genExpression(blockCtx, stmt))
-        else:
-          bodyStmts.add(genStatement(blockCtx, stmt))
-      let bodyStr = bodyStmts.join("; ")
-      return fmt("(proc({params}): NodeValue = {bodyStr})")
-    else:
-      # Simple block
-      var bodyStmts: seq[string] = @[]
-      for i, stmt in blk.body:
-        if i == blk.body.len - 1:
-          bodyStmts.add("result = " & genExpression(blockCtx, stmt))
-        else:
-          bodyStmts.add(genStatement(blockCtx, stmt))
-      let bodyStr = bodyStmts.join("; ")
-      return "(proc(): NodeValue = " & bodyStr & ")"
+    # For now, blocks use runtime dispatch
+    # Full block compilation would require generating separate proc definitions
+    return "NodeValue(kind: vkNil)"
 
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)

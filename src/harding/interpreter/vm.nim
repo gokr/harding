@@ -18,13 +18,208 @@ when defined(granite):
 # ============================================================================
 
 when defined(js):
-  template writeStderr*(msg: string) =
-    {.emit: "console.error(`msg`);".}
+  proc writeStderr*(s: string) {.inline.} =
+    {.emit: ["console.error(", s, ");"].}
   template nativeImplIsSet*(meth: BlockNode): bool =
     meth.nativeImpl != 0
+
+  # ============================================================================
+  # JS Primitive Dispatcher
+  # ============================================================================
+  # For JS builds, native methods don't have function pointers.
+  # We dispatch primitives by selector name instead.
+
+  proc dispatchPrimitive(interp: var Interpreter, receiver: Instance, selector: string, args: seq[NodeValue]): NodeValue =
+    ## Dispatch primitive methods for JS builds
+    ## This replaces the nativeImpl pointer dispatch used in native builds
+
+    case selector
+    of "primitiveClone":
+      # Clone the receiver instance
+      case receiver.kind
+      of ikObject:
+        let clone = Instance(kind: ikObject, class: receiver.class)
+        clone.slots = receiver.slots
+        clone.isNimProxy = receiver.isNimProxy
+        return clone.toValue()
+      of ikArray:
+        let clone = Instance(kind: ikArray, class: receiver.class)
+        clone.elements = receiver.elements
+        return clone.toValue()
+      of ikTable:
+        let clone = Instance(kind: ikTable, class: receiver.class)
+        clone.entries = receiver.entries
+        return clone.toValue()
+      of ikInt:
+        return toValue(receiver.intVal)
+      of ikFloat:
+        return toValue(receiver.floatVal)
+      of ikString:
+        return toValue(receiver.strVal)
+
+    of "primitiveAt:":
+      # Get slot value by name
+      if args.len == 0:
+        return nilValue()
+      if receiver.kind != ikObject or receiver.class == nil:
+        return nilValue()
+      let slotName = args[0].toString()
+      let slotIdx = receiver.class.allSlotNames.find(slotName)
+      if slotIdx >= 0 and slotIdx < receiver.slots.len:
+        return receiver.slots[slotIdx]
+      return nilValue()
+
+    of "primitiveAt:put:":
+      # Set slot value by name
+      if args.len < 2:
+        return args[1]
+      if receiver.kind != ikObject or receiver.class == nil:
+        return args[1]
+      let slotName = args[0].toString()
+      let slotIdx = receiver.class.allSlotNames.find(slotName)
+      if slotIdx >= 0 and slotIdx < receiver.slots.len:
+        receiver.slots[slotIdx] = args[1]
+      return args[1]
+
+    of "primitiveEquals:":
+      # Object equality
+      if args.len == 0:
+        return falseValue()
+      # For now, simple reference equality
+      if receiver.kind == ikInt and args[0].kind == vkInt:
+        return if receiver.intVal == args[0].intVal: trueValue() else: falseValue()
+      if receiver.kind == ikFloat and args[0].kind == vkFloat:
+        return if receiver.floatVal == args[0].floatVal: trueValue() else: falseValue()
+      if receiver.kind == ikString and args[0].kind == vkString:
+        return if receiver.strVal == args[0].strVal: trueValue() else: falseValue()
+      return if receiver == args[0].instVal: trueValue() else: falseValue()
+
+    of "primitiveClass":
+      # Return the class of the receiver
+      if receiver.class != nil:
+        return receiver.class.toValue()
+      return nilValue()
+
+    of "primitiveClassName":
+      # Return the class name
+      if receiver.class != nil:
+        return toValue(receiver.class.name)
+      return toValue("Object")
+
+    of "primitiveIsKindOf:":
+      # Check if receiver is kind of given class
+      if args.len == 0 or args[0].kind != vkClass:
+        return falseValue()
+      # Simple check: is receiver's class the same as or subclass of args[0]
+      var cls = receiver.class
+      while cls != nil:
+        if cls == args[0].classVal:
+          return trueValue()
+        # Check parents
+        for parent in cls.parents:
+          if parent == args[0].classVal:
+            return trueValue()
+        cls = if cls.parents.len > 0: cls.parents[0] else: nil
+      return falseValue()
+
+    of "primitiveSlotNames":
+      # Return array of slot names
+      if receiver.class == nil:
+        return nilValue()
+      var slotNames: seq[NodeValue] = @[]
+      for name in receiver.class.allSlotNames:
+        slotNames.add(toValue(name))
+      # Create Array instance
+      if arrayClassCache != nil:
+        return newArrayInstance(arrayClassCache, slotNames).toValue()
+      return nilValue()
+
+    of "primitiveProperties":
+      # Return table of properties (for now, same as slot names with values)
+      if receiver.class == nil:
+        return nilValue()
+      var entries: Table[NodeValue, NodeValue]
+      for i, name in receiver.class.allSlotNames:
+        if i < receiver.slots.len:
+          entries[toValue(name)] = receiver.slots[i]
+      if tableClassCache != nil:
+        return newTableInstance(tableClassCache, entries).toValue()
+      return nilValue()
+
+    of "primitiveHasProperty:":
+      # Check if object has a property/slot
+      if args.len == 0:
+        return falseValue()
+      if receiver.class == nil:
+        return falseValue()
+      let propName = args[0].toString()
+      return if propName in receiver.class.allSlotNames: trueValue() else: falseValue()
+
+    of "primitiveRespondsTo:":
+      # Check if object responds to selector
+      if args.len == 0:
+        return falseValue()
+      let selector = args[0].toString()
+      if receiver.class == nil:
+        return falseValue()
+      # Check in methods or allMethods
+      return if selector in receiver.class.allMethods: trueValue() else: falseValue()
+
+    of "primitiveMethods":
+      # Return array of method selectors
+      if receiver.class == nil:
+        return nilValue()
+      var methodNames: seq[NodeValue] = @[]
+      for selector, _ in receiver.class.allMethods:
+        methodNames.add(toValue(selector))
+      if arrayClassCache != nil:
+        return newArrayInstance(arrayClassCache, methodNames).toValue()
+      return nilValue()
+
+    of "primitiveError:":
+      # Signal an error
+      if args.len > 0:
+        let msg = args[0].toString()
+        raise newException(EvalError, msg)
+      raise newException(EvalError, "Unknown error")
+
+    of "primitiveValue":
+      # Execute a block with no arguments
+      # This requires the interpreter to execute the block's body
+      # For now, delegate to the block's value method if available
+      if receiver.class == blockClassCache and receiver.kind == ikObject:
+        # Get the block node from the class's methods or stored reference
+        # For blocks created as [:x | x + 1], the block node is the method body
+        # This is complex - for now return nil and let fallback handle it
+        return nilValue()
+      return nilValue()
+
+    of "primitiveValue:":
+      # Execute a block with one argument
+      if receiver.class == blockClassCache and receiver.kind == ikObject:
+        return nilValue()  # Let fallback handle
+      return nilValue()
+
+    of "primitiveValue:value:":
+      # Execute a block with two arguments
+      if receiver.class == blockClassCache and receiver.kind == ikObject:
+        return nilValue()  # Let fallback handle
+      return nilValue()
+
+    of "primitiveValue:value:value:":
+      # Execute a block with three arguments
+      if receiver.class == blockClassCache and receiver.kind == ikObject:
+        return nilValue()  # Let fallback handle
+      return nilValue()
+
+    else:
+      # Unknown primitive - return nil to let the interpreted fallback run
+      debug("JS: Unknown primitive: ", selector)
+      return nilValue()
+
 else:
-  template writeStderr*(msg: string) =
-    stderr.write(msg)
+  template writeStderr*(s: string) =
+    stderr.write(s)
   template nativeImplIsSet*(meth: BlockNode): bool =
     meth.nativeImpl != nil
 
@@ -59,6 +254,8 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
 proc installGlobalTableMethods*(globalTableClass: Class)
 proc installLibraryMethods*()
 proc initHardingGlobal*(interp: var Interpreter)
+when defined(js):
+  proc dispatchPrimitive(interp: var Interpreter, receiver: Instance, selector: string, args: seq[NodeValue]): NodeValue
 
 # ============================================================================
 # Stack Trace Printing
@@ -740,20 +937,47 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   debug("Executing method with ", arguments.len, " arguments")
 
   # Check for native implementation first
-  if nativeImplIsSet(currentMethod):
-    debug("Calling native implementation")
-    let savedReceiver = interp.currentReceiver
-    try:
-      if currentMethod.hasInterpreterParam:
-        type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
-        let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-        return nativeProc(interp, receiver, arguments)
-      else:
-        type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
-        let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
-        return nativeProc(receiver, arguments)
-    finally:
-      interp.currentReceiver = savedReceiver
+  when defined(js):
+    # JS builds: use selector-based dispatch for primitives
+    if currentMethod.selector.startsWith("primitive"):
+      debug("JS: Calling primitive via dispatcher: ", currentMethod.selector)
+      let savedReceiver = interp.currentReceiver
+      try:
+        let result = dispatchPrimitive(interp, receiver, currentMethod.selector, arguments)
+        if result.kind != vkNil or currentMethod.selector == "primitiveClone":  # Some primitives return nil legitimately
+          return result
+      except:
+        debug("JS: Primitive dispatcher failed, falling through")
+    elif nativeImplIsSet(currentMethod):
+      debug("Calling native implementation")
+      let savedReceiver = interp.currentReceiver
+      try:
+        if currentMethod.hasInterpreterParam:
+          type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+          let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
+          return nativeProc(interp, receiver, arguments)
+        else:
+          type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+          let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
+          return nativeProc(receiver, arguments)
+      finally:
+        interp.currentReceiver = savedReceiver
+  else:
+    # Native builds: use nativeImpl pointer
+    if nativeImplIsSet(currentMethod):
+      debug("Calling native implementation")
+      let savedReceiver = interp.currentReceiver
+      try:
+        if currentMethod.hasInterpreterParam:
+          type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+          let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
+          return nativeProc(interp, receiver, arguments)
+        else:
+          type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+          let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
+          return nativeProc(receiver, arguments)
+      finally:
+        interp.currentReceiver = savedReceiver
 
   # Create activation and execute via evalWithVM
   debug("Executing interpreted method with ", currentMethod.parameters.len, " parameters")

@@ -101,18 +101,8 @@ Workspace>>onDestroy [
 ].
 
 Workspace>>doIt: codeString [
-    | result |
-    result := Object eval: codeString.
-    Transcript showCr: result printString.
-    ^result
-].
-
-Workspace>>printIt: codeString [
-    | result |
-    # Evaluate but don't print to Transcript - result will be inserted in editor
-    result := Object eval: codeString.
-    ^result
-].
+    ^Object eval: codeString
+]
 
 Workspace>>doItSelection [
     # Do It - evaluate selected text or current line
@@ -129,7 +119,7 @@ Workspace>>printItSelection [
     | code result resultString insertPos |
     code := sourceView selectedText.
     code isEmpty not ifTrue: [
-        result := self printIt: code
+        result := self doIt: code
         resultString := result printString
 
         # Insert the result after the selection (or after the line if no selection)
@@ -145,9 +135,7 @@ Workspace>>printItSelection [
 
 Workspace>>evalAll [
     # Evaluate all code in the workspace
-    | code |
-    code := sourceView text.
-    ^self doIt: code
+    ^self doIt: sourceView text
 ].
 
 # Accessor methods
