@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Bonadventure IDE
+Comment=A prototype-based Smalltalk dialect IDE
+Exec=/home/gokr/tankfeud/nemo/bona
+Path=/home/gokr/tankfeud/nemo
+Icon=harding
+Terminal=false
+Type=Application
+Categories=Development;IDE;Programming;
+StartupWMClass=org.harding-lang.bona
+Keywords=smalltalk;ide;programming;harding;
+MimeType=text/x-harding;
