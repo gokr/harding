@@ -1,4 +1,17 @@
 import std/[tables, logging, hashes, strutils]
+import ./tagged  # Tagged value support for VM performance
+
+# ============================================================================
+# Debug Logging Template
+# Completely eliminated in release builds (-d:release)
+# ============================================================================
+
+template debug*(args: varargs[untyped]) =
+  ## Debug logging that compiles to nothing in release mode
+  ## Use: debug("Message: ", value)
+  when not defined(release):
+    let msg = "DEBUG: " & concat(args)
+    debugEcho(msg)
 
 # ============================================================================
 # Core Types for Harding
@@ -123,6 +136,7 @@ type
     # For wfSendMessage
     selector*: string
     argCount*: int
+    msgNode*: MessageNode  # Reference to AST node for inline cache
     # For wfApplyBlock
     blockVal*: BlockNode
     # For wfAfterReceiver/wfAfterArg - what message to send
@@ -224,11 +238,20 @@ type
   LiteralNode* = ref object of Node
     value*: NodeValue
 
+  PICEntry* = tuple[cls: Class, meth: BlockNode]  # 'meth' to avoid 'method' keyword
+
   MessageNode* = ref object of Node
     receiver*: Node          # nil for implicit self
     selector*: string
     arguments*: seq[Node]
     isCascade*: bool
+    # Monomorphic Inline Cache (MIC) fields
+    cachedClass*: Class      # Last receiver class seen at this call site
+    cachedMethod*: BlockNode # Cached method for cachedClass
+    callCount*: int          # Number of times this call site has been executed
+    # Polymorphic Inline Cache (PIC) fields
+    picEntries*: array[3, PICEntry]  # Additional cache entries (total 4 with MIC)
+    picCount*: int                   # Number of valid PIC entries (0-3)
 
   CascadeNode* = ref object of Node
     receiver*: Node
@@ -1020,3 +1043,58 @@ proc valueToInstance*(val: NodeValue): Instance =
 
 # Note: SchedulerContext is defined earlier in this file (line ~382)
 # to avoid circular dependencies between scheduler and evaluator
+
+# ============================================================================
+# Tagged Value Conversions (for VM performance)
+# ============================================================================
+
+proc toTagged*(val: NodeValue): tagged.Value =
+  ## Convert NodeValue to tagged Value (fast path for primitives)
+  case val.kind
+  of vkInt:
+    tagged.toValue(val.intVal)
+  of vkBool:
+    tagged.toValue(val.boolVal)
+  of vkNil:
+    tagged.nilValue()
+  of vkInstance:
+    # Convert Instance to HeapObject pointer
+    tagged.toValue(cast[tagged.HeapObject](val.instVal))
+  else:
+    # Other types not yet supported for tagged values
+    raise newException(ValueError, "Cannot convert " & $val.kind & " to tagged Value")
+
+proc toNodeValue*(val: tagged.Value): NodeValue =
+  ## Convert tagged Value to NodeValue
+  if tagged.isInt(val):
+    NodeValue(kind: vkInt, intVal: tagged.asInt(val))
+  elif tagged.isBool(val):
+    NodeValue(kind: vkBool, boolVal: tagged.asBool(val))
+  elif tagged.isNil(val):
+    nilValue()
+  elif tagged.isHeapObject(val):
+    let heapObj = tagged.asHeapObject(val)
+    if heapObj == nil:
+      nilValue()
+    else:
+      # Cast HeapObject back to Instance
+      NodeValue(kind: vkInstance, instVal: cast[Instance](heapObj))
+  else:
+    raise newException(ValueError, "Unknown tagged value type")
+
+# Re-export tagged Value type for convenience
+type TaggedValue* = tagged.Value
+
+# Wrapper procs for tagged value operations (avoiding ambiguity with stdlib)
+proc add*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.add(a, b)
+proc sub*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.sub(a, b)
+proc mul*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.mul(a, b)
+proc divInt*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.divInt(a, b)
+proc modInt*(a, b: TaggedValue): TaggedValue {.inline.} = tagged.modInt(a, b)
+
+# Wrapper procs for comparison operations
+proc intEquals*(a, b: TaggedValue): bool {.inline.} = tagged.equals(a, b)
+proc lessThan*(a, b: TaggedValue): bool {.inline.} = tagged.lessThan(a, b)
+proc lessOrEqual*(a, b: TaggedValue): bool {.inline.} = tagged.lessOrEqual(a, b)
+proc greaterThan*(a, b: TaggedValue): bool {.inline.} = tagged.greaterThan(a, b)
+proc greaterOrEqual*(a, b: TaggedValue): bool {.inline.} = tagged.greaterOrEqual(a, b)

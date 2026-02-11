@@ -36,7 +36,7 @@ Exception>>stackTrace [
 Exception>>printString [
   # String representation including message
   | msg |
-  msg := self getSlot: "message"
+  msg := message
   msg isNil ifTrue: [ msg := "Unknown error" ]
   ^ "Exception: " , msg
 ]

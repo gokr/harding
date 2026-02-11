@@ -3201,8 +3201,8 @@ type
 proc newEvalFrame*(node: Node): WorkFrame =
   WorkFrame(kind: wfEvalNode, node: node)
 
-proc newSendMessageFrame*(selector: string, argCount: int): WorkFrame =
-  WorkFrame(kind: wfSendMessage, selector: selector, argCount: argCount)
+proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil): WorkFrame =
+  WorkFrame(kind: wfSendMessage, selector: selector, argCount: argCount, msgNode: msgNode)
 
 proc newAfterReceiverFrame*(selector: string, args: seq[Node]): WorkFrame =
   WorkFrame(kind: wfAfterReceiver, pendingSelector: selector, pendingArgs: args, currentArgIndex: 0)
@@ -3391,7 +3391,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(interp.currentReceiver.toValue().unwrap())
       # Now handle arguments
       if msg.arguments.len == 0:
-        interp.pushWorkFrame(newSendMessageFrame(msg.selector, 0))
+        interp.pushWorkFrame(newSendMessageFrame(msg.selector, 0, msg))
       else:
         interp.pushWorkFrame(newAfterArgFrame(msg.selector, msg.arguments, 0))
         interp.pushWorkFrame(newEvalFrame(msg.arguments[0]))
@@ -3639,6 +3639,56 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         return true
       else:
         discard  # Fall through to regular dispatch
+
+    # ============================================================================
+    # FAST PATH: Tagged Integer Operations
+    # Skip Instance allocation for primitive integer operations
+    # ============================================================================
+    if receiverVal.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      let a = toTagged(receiverVal)
+      let b = toTagged(args[0])
+      var taggedResult: TaggedValue
+      var boolResult: bool
+      var isPrimitive = true
+      var isComparison = false
+
+      case frame.selector
+      of "+":
+        taggedResult = add(a, b)
+      of "-":
+        taggedResult = sub(a, b)
+      of "*":
+        taggedResult = mul(a, b)
+      of "//":
+        taggedResult = divInt(a, b)
+      of "%":
+        taggedResult = modInt(a, b)
+      of "=":
+        boolResult = intEquals(a, b)
+        isComparison = true
+      of "<":
+        boolResult = lessThan(a, b)
+        isComparison = true
+      of "<=":
+        boolResult = lessOrEqual(a, b)
+        isComparison = true
+      of ">":
+        boolResult = greaterThan(a, b)
+        isComparison = true
+      of ">=":
+        boolResult = greaterOrEqual(a, b)
+        isComparison = true
+      else:
+        isPrimitive = false  # Not a primitive integer operation
+
+      if isPrimitive:
+        if isComparison:
+          # Comparison returns boolean
+          interp.pushValue(NodeValue(kind: vkBool, boolVal: boolResult))
+        else:
+          # Arithmetic returns integer
+          interp.pushValue(toNodeValue(taggedResult))
+        return true
 
     # Convert receiver to Instance for method lookup
     var receiver: Instance
@@ -3937,25 +3987,85 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       printStackTrace(interp)
       raise newException(ValueError, "Cannot send message to nil receiver for message: " & frame.selector)
 
-    # Look up method
-    debug("VM: Looking up method '", frame.selector, "' on ", (if receiver.class != nil: receiver.class.name else: "nil"))
-    let lookup = lookupMethod(interp, receiver, frame.selector)
-    if not lookup.found:
-      # Try doesNotUnderstand: before raising error
-      let dnuLookup = lookupMethod(interp, receiver, "doesNotUnderstand:")
-      if dnuLookup.found:
-        let selectorVal = NodeValue(kind: vkSymbol, symVal: frame.selector)
-        let dnuResult = executeMethod(interp, dnuLookup.currentMethod, receiver, @[selectorVal], dnuLookup.definingClass)
-        interp.pushValue(dnuResult)
-        return true
-      printStackTrace(interp)
-      raise newException(ValueError, "Method not found: " & frame.selector & " on " &
-        (if receiver.class != nil: receiver.class.name else: "unknown"))
+    # ============================================================================
+    # POLYMORPHIC INLINE CACHE (PIC) CHECK
+    # Fast path: check MIC first, then PIC entries
+    # ============================================================================
+    var currentMethod: BlockNode = nil
+    var definingClass: Class = nil
+    var cacheHit = false
+
+    if frame.msgNode != nil:
+      # Check Monomorphic Inline Cache (MIC) first
+      if frame.msgNode.cachedClass != nil and receiver.class == frame.msgNode.cachedClass:
+        # MIC hit! Use cached method
+        currentMethod = frame.msgNode.cachedMethod
+        definingClass = frame.msgNode.cachedClass
+        cacheHit = true
+        debug("VM: MIC cache hit for '", frame.selector, "' on ", receiver.class.name)
+      else:
+        # MIC miss - check Polymorphic Inline Cache (PIC)
+        for i in 0..<frame.msgNode.picCount:
+          if receiver.class == frame.msgNode.picEntries[i].cls:
+            # PIC hit!
+            currentMethod = frame.msgNode.picEntries[i].meth
+            definingClass = frame.msgNode.picEntries[i].cls
+            cacheHit = true
+            debug("VM: PIC cache hit for '", frame.selector, "' on ", receiver.class.name, " at index ", $i)
+            break
+
+        if not cacheHit and frame.msgNode.cachedClass != nil:
+          # Cache miss - will update cache after lookup
+          debug("VM: PIC cache miss for '", frame.selector, "' expected ",
+                frame.msgNode.cachedClass.name, " got ", receiver.class.name)
+
+    if not cacheHit:
+      # ============================================================================
+      # SLOW PATH: Full method lookup
+      # ============================================================================
+      debug("VM: Looking up method '", frame.selector, "' on ", (if receiver.class != nil: receiver.class.name else: "nil"))
+      let lookup = lookupMethod(interp, receiver, frame.selector)
+      if not lookup.found:
+        # Try doesNotUnderstand: before raising error
+        let dnuLookup = lookupMethod(interp, receiver, "doesNotUnderstand:")
+        if dnuLookup.found:
+          let selectorVal = NodeValue(kind: vkSymbol, symVal: frame.selector)
+          let dnuResult = executeMethod(interp, dnuLookup.currentMethod, receiver, @[selectorVal], dnuLookup.definingClass)
+          interp.pushValue(dnuResult)
+          return true
+        printStackTrace(interp)
+        raise newException(ValueError, "Method not found: " & frame.selector & " on " &
+          (if receiver.class != nil: receiver.class.name else: "unknown"))
+
+      currentMethod = lookup.currentMethod
+      definingClass = lookup.definingClass
+
+      # Update inline cache for future calls
+      if frame.msgNode != nil:
+        # If MIC already has a different class, move it to PIC (polymorphic cache)
+        if frame.msgNode.cachedClass != nil and frame.msgNode.cachedClass != receiver.class:
+          if frame.msgNode.picCount < frame.msgNode.picEntries.len:
+            # Add old MIC entry to PIC
+            frame.msgNode.picEntries[frame.msgNode.picCount] = (
+              cls: frame.msgNode.cachedClass,
+              meth: frame.msgNode.cachedMethod
+            )
+            frame.msgNode.picCount += 1
+            debug("VM: Added to PIC for '", frame.selector, "' ", frame.msgNode.cachedClass.name,
+                  " (PIC count: ", $frame.msgNode.picCount, ")")
+          else:
+            # PIC is full - this becomes megamorphic, just keep MIC
+            debug("VM: PIC full for '", frame.selector, "', keeping MIC only")
+
+        # Update MIC with new class/method
+        frame.msgNode.cachedClass = receiver.class
+        frame.msgNode.cachedMethod = currentMethod
+        debug("VM: Updated MIC cache for '", frame.selector, "' with ", receiver.class.name)
 
     # Check for native implementation
-    let currentMethod = lookup.currentMethod
-    debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod))
-    if nativeImplIsSet(currentMethod):
+    # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
+    debug("VM: Found method '", frame.selector, "', native=", currentMethod.nativeImpl != nil)
+    if currentMethod.nativeImpl != nil:
       # Call native method
       debug("VM: Calling native method '", frame.selector, "'")
       let savedReceiver = interp.currentReceiver
@@ -4004,7 +4114,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         ", got " & $args.len)
 
     # Create activation
-    let activation = newActivation(currentMethod, receiver, interp.currentActivation, lookup.definingClass)
+    let activation = newActivation(currentMethod, receiver, interp.currentActivation, definingClass)
 
     # Bind parameters
     for i in 0..<currentMethod.parameters.len:
@@ -4511,6 +4621,7 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
   ## - Processor yields (vmYielded)
   ## - Error occurs (vmError)
 
+  {.computedGoto.}  # Optimize case statement dispatch
   while interp.hasWorkFrames():
     # Check for yield
     if interp.shouldYield:
