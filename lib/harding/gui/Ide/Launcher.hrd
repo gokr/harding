@@ -22,6 +22,9 @@ Launcher>>openInstance [
   # Set window icon (works in both GTK3 and GTK4)
   self iconName: "harding".
 
+  # Set WM_CLASS for proper window manager identification (dock/Alt-Tab)
+  self setWmClass: "bona".
+
   # Create main layout box (vertical)
   mainBox := GtkBox vertical.
   mainBox setSpacing: 0.
@@ -40,7 +43,7 @@ Launcher>>openInstance [
 Launcher>>createHeaderBar [
   # Create a header bar with menu buttons in a horizontal box
   # GTK4 style: buttons in header area instead of traditional menu bar
-  | headerBar fileMenuButton workspaceButton transcriptButton quitButton spacer |
+  | headerBar fileMenuButton workspaceButton transcriptButton browserButton quitButton spacer |
 
   headerBar := GtkBox horizontal.
   headerBar setSpacing: 0.
@@ -69,6 +72,12 @@ Launcher>>createHeaderBar [
   transcriptButton hexpand: false.
   transcriptButton clicked: [ self openTranscript ].
   headerBar append: transcriptButton.
+
+  browserButton := GtkButton newLabel: "Browser".
+  browserButton vexpand: false.
+  browserButton hexpand: false.
+  browserButton clicked: [ self openBrowser ].
+  headerBar append: browserButton.
 
   # Right-aligned section with spacer
   spacer := GtkLabel new: "  ".
@@ -109,6 +118,12 @@ Launcher>>openWorkspace [
 
 Launcher>>openTranscript [
   Transcript openFor: self.
+  ^ self
+].
+
+Launcher>>openBrowser [
+  Transcript showCr: "Opening system browser...".
+  SystemBrowser openFor: self.
   ^ self
 ].
 
