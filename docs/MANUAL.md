@@ -1187,6 +1187,148 @@ a | b            # Logical OR
 
 ---
 
+## Built-in Types
+
+Harding provides several built-in types that form the foundation of the object system:
+
+### Number Hierarchy
+
+The number hierarchy follows Smalltalk conventions with a common base class:
+
+```
+Object
+  └─ Number         # Base class for all numeric types
+      ├─ Integer     # Whole numbers
+      └─ Float       # Floating-point numbers
+```
+
+Both `Integer` and `Float` inherit common methods from `Number`:
+
+```smalltalk
+# Common Number methods (available on both Integer and Float)
+abs              # Absolute value
+negated          # Negation (0 - self)
+squared          # Square (self * self)
+between:and:     # Check if value is in range
+isZero           # Self equals 0?
+isPositive       # Self > 0?
+isNegative       # Self < 0?
+sign             # -1, 0, or 1
+```
+
+### Integer Methods
+
+```smalltalk
+# Arithmetic
+i + j
+i - j
+i * j
+i / j            # Regular division
+i // j           # Integer division
+i * 1.0          # Automatic promotion to Float
+
+# Modulo
+i % j            # Modulo operator
+i \ j            # Alternative modulo
+
+# Comparison
+i = j
+i < j
+i > j
+i <= j
+i >= j
+i <> j           # Not equal
+
+# Parity
+i even           # Is even?
+i odd            # Is odd?
+
+# Iteration
+i timesRepeat: [ :k | k printString ]   # Execute block i times
+i to: 10 do: [ :k | k printString ]    # Iterate from i to 10
+1 to: 10 by: 2 do: [ :k | k printString ]  # Step iteration
+
+# Special methods
+i factorial       # i!
+i gcd: j          # Greatest common divisor
+i lcm: j          # Least common multiple
+i sqrt            # Square root (returns Float)
+```
+
+### Float Methods
+
+```smalltalk
+# Arithmetic (same operators as Integer)
+f + g
+f - g
+f * g
+f / g
+f // g           # Integer division of float values
+
+# Comparison
+f = g
+f < g
+f > g
+f <= g
+f >= g
+f <> g
+
+# Special methods
+f abs
+f negated
+f sqrt            # Square root
+```
+
+### Boolean Hierarchy
+
+```
+Object
+  └─ True
+  └─ False
+```
+
+Note: There is no explicit `Boolean` base class for `True` and `False`, but both support common boolean operations:
+
+```smalltalk
+b ifTrue: [ ... ]
+b ifFalse: [ ... ]
+b ifTrue: [ ... ] ifFalse: [ ... ]
+b ifFalse: [ ... ] ifTrue: [ ... ]
+b and: [ ... ]           # Logical AND with short-circuit
+b or: [ ... ]            # Logical OR with short-circuit
+b not                    # Negation
+```
+
+### Other Built-in Types
+
+```smalltalk
+# Strings (double quotes only)
+"hello"             # String literal
+str size            # Length
+str at: 1           # Character at index
+str1 , str2         # Concatenation
+
+# Arrays (1-based indexing)
+#(1 2 3)            # Array literal
+arr at: 1           # First element
+arr at: 1 put: 99   # Set element
+arr size
+arr add: 42
+
+# Tables (dictionaries)
+#{"a" -> 1, "b" -> 2}
+dict at: "key"
+dict at: "new" put: value
+dict keys
+
+# Blocks
+[ :x | x + 1 ]      # Block with parameter
+block value: 10     # Invoke block
+[ 1 + 2 ] value     # Block with no args
+```
+
+---
+
 ## Collections
 
 ### Arrays
