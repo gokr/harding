@@ -7,15 +7,24 @@
 Workspace := Object derive: #(window box scrolledWindow sourceView owner)
 
 Workspace class>>open [
-    ^self openFor: nil
+    ^self new openWindow
 ].
 
 Workspace class>>openFor: anOwner [
-    | workspace window box scrolledWindow sourceView buttonBox doItButton printItButton |
+    ^self new openWindowFor: anOwner
+].
+
+Workspace>>openWindow [
+    ^self openWindowFor: nil
+].
+
+Workspace>>openWindowFor: anOwner [
+    | buttonBox doItButton printItButton |
 
     # Create main window
     window := GtkWindow new.
     window title: "Harding Workspace".
+    window iconName: "harding".
     window setDefaultSize: 800 height: 600.
 
     # Create vertical box layout
@@ -40,21 +49,16 @@ Workspace class>>openFor: anOwner [
 
     # Create Do It button
     doItButton := GtkButton newLabel: "Do It (Ctrl+D)".
-    doItButton clicked: [ workspace doItSelection ].
+    doItButton clicked: [ self doItSelection ].
     buttonBox append: doItButton.
 
     # Create Print It button
     printItButton := GtkButton newLabel: "Print It (Ctrl+P)".
-    printItButton clicked: [ workspace printItSelection ].
+    printItButton clicked: [ self printItSelection ].
     buttonBox append: printItButton.
 
-    # Create workspace instance
-    workspace := self new.
-    workspace window: window.
-    workspace box: box.
-    workspace scrolledWindow: scrolledWindow.
-    workspace sourceView: sourceView.
-    workspace owner: anOwner.
+    # Set owner
+    owner := anOwner.
 
     # Assemble the UI
     window setChild: box.
@@ -63,18 +67,18 @@ Workspace class>>openFor: anOwner [
     box append: buttonBox.
 
     # Install keyboard shortcuts
-    workspace installKeyboardShortcuts.
+    self installKeyboardShortcuts.
 
     # Connect destroy signal to notify owner
-    window destroyed: [ workspace onDestroy ].
+    window destroyed: [ self onDestroy ].
 
     # Register with owner
-    anOwner notNil ifTrue: [ anOwner addWindow: workspace ].
+    anOwner notNil ifTrue: [ anOwner addWindow: self ].
 
     window present.
 
     Transcript showCr: "Harding Workspace opened (with syntax highlighting)".
-    ^workspace
+    ^self
 ].
 
 Workspace>>installKeyboardShortcuts [

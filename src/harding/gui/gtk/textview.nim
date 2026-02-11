@@ -197,7 +197,18 @@ proc textViewInsertTextAtEndImpl*(interp: var Interpreter, self: Instance, args:
   gtkTextBufferGetEndIter(buffer, endIter)
   gtkTextBufferInsert(buffer, endIter, args[0].strVal.cstring, -1)
 
-  debug("insertTextAtEnd: Inserted text '", args[0].strVal, "' into widget ", repr(cast[int](widget)))
+  # Get some buffer content to identify which widget this is
+  var startIterStorage: array[256, byte]
+  let startIter = cast[GtkTextIter](addr(startIterStorage[0]))
+  gtkTextBufferGetStartIter(buffer, startIter)
+  let firstChars = gtkTextBufferGetText(buffer, startIter, endIter, 1)
+  var contentPreview = ""
+  if firstChars != nil:
+    contentPreview = $firstChars
+    if contentPreview.len > 30:
+      contentPreview = contentPreview[0..<30] & "..."
+
+  debug("insertTextAtEnd: Inserted '", args[0].strVal, "' into widget ", repr(cast[int](widget)), " buffer now: '", contentPreview, "'")
 
   nilValue()
 

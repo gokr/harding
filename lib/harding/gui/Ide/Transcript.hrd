@@ -87,7 +87,9 @@ Transcript>>openWindowFor: anOwner [
 
   window := GtkWindow new.
   window title: "Transcript".
+  window iconName: "harding".
   owner := anOwner.
+
 
   # Create vertical box layout
   mainBox := GtkBox vertical.
