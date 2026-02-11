@@ -222,9 +222,11 @@ suite "Multi-Process: SharedQueue":
           Done := Done + 1.
         ].
         Consumer := Processor fork: [
-          3 timesRepeat: [
+          Counter := 0.
+          [Counter < 3] whileTrue: [
             Item := Q next.
             Sum := Sum + Item.
+            Counter := Counter + 1.
           ].
           Done := Done + 1.
         ].
@@ -249,24 +251,30 @@ suite "Multi-Process: SharedQueue":
         TotalSum := 0.
         Done := 0.
         P1 := Processor fork: [
-          5 timesRepeat: [Q nextPut: 1].
+          Counter := 0.
+          [Counter < 5] whileTrue: [Q nextPut: 1. Counter := Counter + 1].
           Done := Done + 1.
         ].
         P2 := Processor fork: [
-          5 timesRepeat: [Q nextPut: 1].
+          Counter := 0.
+          [Counter < 5] whileTrue: [Q nextPut: 1. Counter := Counter + 1].
           Done := Done + 1.
         ].
         C1 := Processor fork: [
-          5 timesRepeat: [
+          Counter := 0.
+          [Counter < 5] whileTrue: [
             Item := Q next.
             TotalSum := TotalSum + Item.
+            Counter := Counter + 1.
           ].
           Done := Done + 1.
         ].
         C2 := Processor fork: [
-          5 timesRepeat: [
+          Counter := 0.
+          [Counter < 5] whileTrue: [
             Item := Q next.
             TotalSum := TotalSum + Item.
+            Counter := Counter + 1.
           ].
           Done := Done + 1.
         ].
@@ -299,7 +307,8 @@ suite "Multi-Process: SharedQueue":
           Done := Done + 1.
         ].
         Consumer := Processor fork: [
-          5 timesRepeat: [Q next].
+          Counter := 0.
+          [Counter < 5] whileTrue: [Q next. Counter := Counter + 1].
           Done := Done + 1.
         ].
         [Done >= 2] whileFalse: [Processor yield].
