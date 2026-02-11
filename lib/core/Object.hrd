@@ -95,7 +95,7 @@ Object>>printHierarchyIndent: level [
   # Recursively print superclasses with increased indentation
   self superclassNames do: [:superclassName |
     | superclass |
-    superclass := Global at: superclassName ifAbsent: [ nil ].
+    superclass := Harding at: superclassName ifAbsent: [ nil ].
     superclass isNil ifFalse: [
       superclass printHierarchyIndent: (level + 1)
     ]
@@ -200,8 +200,8 @@ Object>>error: message <primitive primitiveError: message>
 #====================================================================
 
 Object>>inspect [
-  # Open an inspector on this object. (placeholder)
-  self printString print
+  # Open an inspector on this object.
+  Inspector openOn: self
 ]
 
 Object>>yourself [
