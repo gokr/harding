@@ -15,6 +15,28 @@ const
   AppName = "bona"
   AppDesc = "Bonadventure IDE - GTK-based graphical IDE"
 
+## Global state for GTK4 application flow
+when not defined(gtk3):
+  var
+    gAppOptions: CliOptions
+    gAppInterp: ptr Interpreter
+    gAppActivated: bool = false
+
+## Callback for GTK4 application activate signal
+when not defined(gtk3):
+  proc onAppActivate(app: GtkApplication, userData: pointer) {.cdecl.} =
+    ## Called when the application is activated (startup signal has been emitted)
+    ## This is where we can safely create windows in GTK4
+    debug("GTK4 application activated")
+    gAppActivated = true
+
+    # Launch the IDE by calling Launcher open
+    let launchCode = "Launcher open"
+    let (_, err) = gAppInterp[].evalStatements(launchCode)
+    if err.len > 0:
+      stderr.writeLine("Error launching IDE: ", err)
+      quit(1)
+
 proc runIde*(opts: CliOptions) =
   ## Main IDE entry point - initializes interpreter and launches IDE
 
@@ -95,18 +117,36 @@ proc runIde*(opts: CliOptions) =
   # Run GTK main loop
   debug("Starting GTK main loop")
 
-  # Launch the IDE by calling Launcher open
-  let launchCode = "Launcher open"
-  let (_, err) = interp.evalStatements(launchCode)
-  if err.len > 0:
-    stderr.writeLine("Error launching IDE: ", err)
-    quit(1)
-
   when not defined(gtk3):
-    # GTK4: run the GLib main loop to process events
-    while true:
-      discard gMainContextIteration(nil, 1.cint)
+    # GTK4: Create application and run it properly for desktop integration
+    let app = gtkApplicationNew("org.harding-lang.bona", GAPPLICATIONFLAGSNONE)
+    if app == nil:
+      echo "Failed to create GTK application"
+      quit(1)
+
+    # Store globals for the activate callback
+    gAppOptions = opts
+    gAppInterp = addr(interp)
+
+    # Set the global application reference so window creation can use it
+    setGtkApplication(app)
+    debug("GTK4 application created with ID: org.harding-lang.bona")
+
+    # Connect to the activate signal
+    let gObject = cast[GObject](app)
+    discard gSignalConnect(gObject, "activate",
+                           cast[GCallback](onAppActivate), nil)
+
+    # Run the application - this blocks and runs the main loop
+    # The onAppActivate callback will be called where we create the window
+    discard gApplicationRun(cast[GApplication](app), 0, nil)
   else:
+    # GTK3: Launch IDE and run main loop directly
+    let launchCode = "Launcher open"
+    let (_, err) = interp.evalStatements(launchCode)
+    if err.len > 0:
+      stderr.writeLine("Error launching IDE: ", err)
+      quit(1)
     gtkMain()
 
   debug("GTK main loop exited")
