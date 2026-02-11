@@ -167,24 +167,24 @@ when defined(js):
       let propName = args[0].toString()
       return if propName in receiver.class.allSlotNames: trueValue else: falseValue
 
-    of "primitiveRespondsTo:":
+    of "primitiveRespondsTo:", "respondsTo:":
       # Check if object responds to selector
       if args.len == 0:
         return falseValue
-      let selector = args[0].toString()
+      let sel = args[0].toString()
       if receiver.class == nil:
         return falseValue
       # Check in methods or allMethods
-      return if selector in receiver.class.allMethods: trueValue else: falseValue
+      return if sel in receiver.class.allMethods: trueValue else: falseValue
 
     # String primitives
     of ",":
       # String concatenation
       if receiver.kind == ikString:
         if args.len > 0:
-          return newStringInstance(stringClass, receiver.strVal & args[0].toString()).toValue()
+          return newStringInstance(receiver.class, receiver.strVal & args[0].toString()).toValue()
         else:
-          return newStringInstance(stringClass, receiver.strVal).toValue()
+          return newStringInstance(receiver.class, receiver.strVal).toValue()
       return nilValue()
 
     of "size":
@@ -235,25 +235,25 @@ when defined(js):
       if receiver.kind == ikString and args.len >= 2:
         let oldStr = args[0].toString()
         let newStr = args[1].toString()
-        return newStringInstance(stringClass, receiver.strVal.replace(oldStr, newStr)).toValue()
+        return newStringInstance(receiver.class, receiver.strVal.replace(oldStr, newStr)).toValue()
       return receiver.toValue()
 
     of "asUppercase":
       # Convert to uppercase
       if receiver.kind == ikString:
-        return newStringInstance(stringClass, receiver.strVal.toUpperAscii()).toValue()
+        return newStringInstance(receiver.class, receiver.strVal.toUpperAscii()).toValue()
       return receiver.toValue()
 
     of "asLowercase":
       # Convert to lowercase
       if receiver.kind == ikString:
-        return newStringInstance(stringClass, receiver.strVal.toLowerAscii()).toValue()
+        return newStringInstance(receiver.class, receiver.strVal.toLowerAscii()).toValue()
       return receiver.toValue()
 
     of "trim":
       # Trim whitespace
       if receiver.kind == ikString:
-        return newStringInstance(stringClass, strip(receiver.strVal)).toValue()
+        return newStringInstance(receiver.class, strip(receiver.strVal)).toValue()
       return receiver.toValue()
 
     of "split:":
@@ -262,18 +262,25 @@ when defined(js):
         let delim = args[0].toString()
         var parts: seq[NodeValue] = @[]
         for part in receiver.strVal.split(delim):
-          parts.add(newStringInstance(stringClass, part).toValue())
-        return newArrayInstance(arrayClass, parts).toValue()
-      return newArrayInstance(arrayClass, @[]).toValue()
+          parts.add(newStringInstance(receiver.class, part).toValue())
+        if arrayClassCache != nil:
+          return newArrayInstance(arrayClassCache, parts).toValue()
+        return NodeValue(kind: vkArray, arrayVal: parts)
+      if arrayClassCache != nil:
+        return newArrayInstance(arrayClassCache, @[]).toValue()
+      return NodeValue(kind: vkArray, arrayVal: @[])
 
     # Array primitives
     of "at:put:":
-      # Set array element at index (1-based)
+      # Set array element or table entry
       if receiver.kind == ikArray and args.len >= 2:
         let (ok, idx) = args[0].tryGetInt()
         if ok and idx >= 1 and idx <= receiver.elements.len:
           receiver.elements[idx - 1] = args[1]
           return args[1]
+      elif receiver.kind == ikTable and args.len >= 2:
+        receiver.entries[args[0]] = args[1]
+        return args[1]
       return nilValue()
 
     of "add:":
@@ -286,21 +293,18 @@ when defined(js):
     # Note: do: primitive needs forward declaration of evalBlock - skip for now
 
     # Table primitives
-    of "at:put:":
-      # Set table entry
-      if receiver.kind == ikTable and args.len >= 2:
-        receiver.entries[args[0]] = args[1]
-        return args[1]
-      return nilValue()
-
     of "keys":
       # Get table keys
       if receiver.kind == ikTable:
         var keys: seq[NodeValue] = @[]
         for key, _ in receiver.entries:
           keys.add(key)
-        return newArrayInstance(arrayClass, keys).toValue()
-      return newArrayInstance(arrayClass, @[]).toValue()
+        if arrayClassCache != nil:
+          return newArrayInstance(arrayClassCache, keys).toValue()
+        return NodeValue(kind: vkArray, arrayVal: keys)
+      if arrayClassCache != nil:
+        return newArrayInstance(arrayClassCache, @[]).toValue()
+      return NodeValue(kind: vkArray, arrayVal: @[])
 
     of "values":
       # Get table values
@@ -308,8 +312,12 @@ when defined(js):
         var vals: seq[NodeValue] = @[]
         for _, val in receiver.entries:
           vals.add(val)
-        return newArrayInstance(arrayClass, vals).toValue()
-      return newArrayInstance(arrayClass, @[]).toValue()
+        if arrayClassCache != nil:
+          return newArrayInstance(arrayClassCache, vals).toValue()
+        return NodeValue(kind: vkArray, arrayVal: vals)
+      if arrayClassCache != nil:
+        return newArrayInstance(arrayClassCache, @[]).toValue()
+      return NodeValue(kind: vkArray, arrayVal: @[])
 
     of "primitiveMethods":
       # Return array of method selectors
@@ -364,15 +372,6 @@ when defined(js):
       return geImpl(receiver, args)
     of "~=", "!=":
       return neImpl(receiver, args)
-    of ",":
-      # String concatenation - manual implementation for JS
-      if receiver.kind == ikString:
-        if args.len > 0:
-          let otherStr = args[0].toString()
-          return newStringInstance(receiver.class, receiver.strVal & otherStr).toValue()
-        else:
-          return newStringInstance(receiver.class, receiver.strVal).toValue()
-      return nilValue()
 
     of "primitiveValue:":
       # Execute a block with one argument
@@ -2646,6 +2645,12 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["Block"] = blockCls.toValue()
   interp.globals[]["UndefinedObject"] = undefinedObjCls.toValue()
   interp.globals[]["Library"] = libraryClass.toValue()
+
+  # Create Class class (metaclass) - derives from Object like all classes
+  # This allows isKindOf: Class to work properly
+  let classCls = newClass(superclasses = @[objectCls], name = "Class")
+  classCls.tags = @["Class", "Object"]
+  interp.globals[]["Class"] = classCls.toValue()
 
   # Add primitive values
   interp.globals[]["true"] = NodeValue(kind: vkBool, boolVal: true)
