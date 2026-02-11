@@ -39,6 +39,11 @@ task harding_release, "Build harding REPL (release) in repo root":
   exec "nim c -d:release -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (release)"
 
+task js, "Compile Harding interpreter to JavaScript":
+  # Build JavaScript version for browser embedding
+  exec "nim js -d:js -o:website/dist/harding.js src/harding/repl/hardingjs.nim"
+  echo "JavaScript build available at website/dist/harding.js"
+
 task bona, "Build bona IDE (debug) in repo root":
   # Build GUI IDE in debug mode with GTK4 (default), output to repo root
   exec "nim c -d:gtk4 -o:bona src/harding/gui/bona.nim"
