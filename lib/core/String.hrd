@@ -81,8 +81,8 @@ String>>notEmpty [
 
 String>>startsWith: prefix [
   # Check if string starts with prefix.
-  (self size >= prefix size) ifFalse: [ ^ false ]
-  ^ (self from: 1 to: prefix size) = prefix
+  (self size >= (prefix size)) ifFalse: [ ^ false ]
+  ^ (self from: 1 to: (prefix size)) = prefix
 ]
 
 String>>endsWith: suffix [

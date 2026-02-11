@@ -174,7 +174,7 @@ SortedCollection>>first [
 
 SortedCollection>>last [
     # Largest element (at end)
-    ^self at: self size
+    ^self at: (self size)
 ]
 
 SortedCollection>>select: aBlock [
