@@ -1023,23 +1023,27 @@ nil isNil           # Returns true
 
 ### Compiler (Granite)
 
-Harding includes a compiler infrastructure called Granite that can build Harding applications into native binaries:
+Harding includes a compiler called Granite that can build Harding applications into native binaries:
 
 ```smalltalk
 # Create an application
 MyApp := Application derive: #().
 MyApp>>main: args [
-    Transcript showCr: "Hello from compiled app!".
+    Stdout writeLine: "Hello from compiled app!".
+    Stdout writeLine: ("2 + 3 = ", (2 + 3) asString).
     ^0
 ].
 
 # Build it
-Granite build: MyApp
+app := MyApp new.
+app name: "myapp".
+Granite build: app
 ```
 
 The compiler:
 - Collects transitive class dependencies
 - Generates Nim code from Harding AST
+- Compiles method bodies to Nim procedures
 - Compiles to native binary using Nim compiler
 
 **Note:** The `main: args` method accepts an array parameter, but command-line arguments from the OS are not yet passed (currently receives empty array).
