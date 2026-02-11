@@ -1,0 +1,278 @@
+# ============================================================================
+# Inspector - Object Inspector for Harding
+# Two-pane layout: slot tree | slot values
+# Allows drilling down into object structure
+# ============================================================================
+
+Inspector := Object derive: #(window mainBox splitBox leftPane rightPane slotTree valueView inspectedObject owner)
+
+Inspector class>>openOn: anObject [
+    # Open an inspector on anObject
+    | inspector |
+    inspector := self new.
+    inspector inspect: anObject.
+    ^ inspector openWindow
+]
+
+Inspector class>>openOn: anObject for: anOwner [
+    # Open an inspector on anObject with an owner
+    | inspector |
+    inspector := self new.
+    inspector inspect: anObject.
+    ^ inspector openWindowFor: anOwner
+]
+
+Inspector>>initialize [
+    inspectedObject := nil.
+    owner := nil.
+    ^ self
+]
+
+Inspector>>inspect: anObject [
+    # Set the object to inspect
+    inspectedObject := anObject.
+    ^ self
+]
+
+Inspector>>openWindow [
+    ^ self openWindowFor: nil
+]
+
+Inspector>>openWindowFor: anOwner [
+    | buttonBox closeButton refreshButton |
+
+    owner := anOwner.
+
+    # Create main window
+    window := GtkWindow new.
+    window title: ("Inspector: " , (inspectedObject printString)).
+    window iconName: "harding".
+    window setDefaultSize: 600 height: 500.
+
+    # Create vertical box layout
+    mainBox := GtkBox vertical.
+    mainBox setSpacing: 5.
+
+    # Create horizontal split for slot tree and value view
+    splitBox := GtkBox horizontal.
+    splitBox setSpacing: 5.
+    splitBox vexpand: true.
+
+    # Left pane - slot tree
+    leftPane := self createSlotTree.
+    leftPane hexpand: true.
+    leftPane vexpand: true.
+
+    # Right pane - value view
+    rightPane := self createValueView.
+    rightPane hexpand: true.
+    rightPane vexpand: true.
+
+    splitBox append: leftPane.
+    splitBox append: rightPane.
+
+    # Create button box
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 5.
+
+    closeButton := GtkButton newLabel: "Close".
+    closeButton clicked: [ self close ].
+    buttonBox append: closeButton.
+
+    refreshButton := GtkButton newLabel: "Refresh".
+    refreshButton clicked: [ self refresh ].
+    buttonBox append: refreshButton.
+
+    # Assemble the UI
+    window setChild: mainBox.
+    mainBox append: splitBox.
+    mainBox append: buttonBox.
+
+    # Connect destroy signal
+    window destroyed: [ self onDestroy ].
+
+    # Register with owner
+    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+
+    window present.
+
+    # Populate the slot tree
+    self populateSlotTree.
+
+    Transcript showCr: ("Inspector opened on: " , (inspectedObject printString)).
+    ^ self
+]
+
+Inspector>>createSlotTree [
+    # Create a scrolled window with slot list
+    | scrolled treeBox |
+    scrolled := GtkScrolledWindow new.
+    scrolled vexpand: true.
+    scrolled hexpand: true.
+
+    treeBox := GtkBox vertical.
+    treeBox setSpacing: 1.
+
+    scrolled setChild: treeBox.
+    ^ scrolled
+]
+
+Inspector>>createValueView [
+    # Create a scrolled window for value display
+    | scrolled label |
+    scrolled := GtkScrolledWindow new.
+    scrolled vexpand: true.
+    scrolled hexpand: true.
+
+    label := GtkLabel new: "Select a slot to view its value".
+    label addCssClass: "dim-label".
+
+    scrolled setChild: label.
+    ^ scrolled
+]
+
+Inspector>>populateSlotTree [
+    # Populate the slot tree with the object's slots
+    | treeBox slotNames |
+
+    # Get the tree box from the scrolled window
+    treeBox := leftPane getChild ifNil: [ ^ self ].
+
+    # Clear existing content
+    treeBox := GtkBox vertical.
+    treeBox setSpacing: 1.
+    leftPane setChild: treeBox.
+
+    # Add header with object info
+    self addTreeHeader: (inspectedObject className) to: treeBox.
+
+    # Get slot names
+    slotNames := inspectedObject slotNames.
+
+    slotNames isEmpty ifTrue: [
+        # Object has no slots
+        self addTreeItem: "(no slots)" value: nil to: treeBox.
+    ] ifFalse: [
+        slotNames do: [:slotName |
+            | slotValue |
+            slotValue := inspectedObject at: slotName ifAbsent: [ nil ].
+            self addTreeItem: slotName value: slotValue to: treeBox.
+        ].
+    ].
+
+    # Add properties section
+    self addTreeHeader: "Properties" to: treeBox.
+    self addTreeItem: "class" value: (inspectedObject class) to: treeBox.
+    self addTreeItem: "printString" value: (inspectedObject printString) to: treeBox.
+]
+
+Inspector>>addTreeHeader: headerText to: aBox [
+    # Add a header label to the tree
+    | header |
+    header := GtkLabel new: ("[" , headerText , "]").
+    header addCssClass: "heading".
+    header hexpand: true.
+    aBox append: header.
+]
+
+Inspector>>addTreeItem: slotName value: slotValue to: aBox [
+    # Add an item to the slot tree
+    | button valueString |
+    button := GtkButton new.
+
+    # Build display string
+    valueString := self formatValue: slotValue.
+    button label: (slotName , ": " , valueString).
+
+    button hexpand: true.
+    button addCssClass: "flat".
+
+    # Connect click handler
+    button clicked: [ self showValue: slotValue name: slotName ].
+
+    aBox append: button.
+]
+
+Inspector>>formatValue: aValue [
+    # Format a value for display in the tree
+    aValue isNil ifTrue: [ ^ "nil" ].
+    (aValue isKindOf: String) ifTrue: [ ^ ("'" , aValue , "'") ].
+    (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ].
+    (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ].
+    (aValue isKindOf: Array) ifTrue: [
+        ^ ("Array(" , (aValue size printString) , ")")
+    ].
+    (aValue isKindOf: Table) ifTrue: [
+        ^ ("Table(" , (aValue size printString) , ")")
+    ].
+    ^ (aValue className , ": " , (aValue printString))
+]
+
+Inspector>>showValue: aValue name: aName [
+    # Display the selected value in the right pane
+    | scrolled textView content |
+
+    scrolled := GtkScrolledWindow new.
+    scrolled vexpand: true.
+    scrolled hexpand: true.
+
+    textView := GtkSourceView new.
+    textView showLineNumbers: false.
+    textView editable: false.
+
+    content := self buildValueDisplay: aValue name: aName.
+    textView text: content.
+
+    scrolled setChild: textView.
+
+    rightPane := scrolled.
+]
+
+Inspector>>buildValueDisplay: aValue name: aName [
+    # Build a detailed display of a value
+    | result |
+
+    result := ("Slot: " , aName , "\n==========\n\n").
+
+    aValue isNil ifTrue: [
+        result := result , "nil".
+    ] ifFalse: [
+        result := result , "Class: " , (aValue className) , "\n" , "PrintString: " , (aValue printString) , "\n\n".
+
+        # Show slots if object has them
+        (aValue respondsTo: #slotNames) ifTrue: [
+            | slotNames |
+            slotNames := aValue slotNames.
+            slotNames isEmpty not ifTrue: [
+                result := result , "Slots:\n".
+                slotNames do: [:slot |
+                    | slotVal |
+                    slotVal := aValue at: slot ifAbsent: [ nil ].
+                    result := result , "  " , slot , ": " , (self formatValue: slotVal) , "\n".
+                ].
+            ].
+        ].
+    ].
+
+    ^ result
+]
+
+Inspector>>refresh [
+    # Refresh the inspector
+    self populateSlotTree.
+    Transcript showCr: "Inspector refreshed".
+]
+
+Inspector>>close [
+    window notNil ifTrue: [
+        window close
+    ].
+]
+
+Inspector>>onDestroy [
+    owner notNil ifTrue: [
+        owner removeWindow: self.
+        owner := nil
+    ].
+    window := nil.
+]

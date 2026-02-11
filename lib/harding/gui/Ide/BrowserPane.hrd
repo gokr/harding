@@ -1,0 +1,152 @@
+# ============================================================================
+# BrowserPane - Reusable list pane component for the System Browser
+# A scrollable list of selectable items (libraries, classes, categories, methods)
+# ============================================================================
+
+BrowserPane := Object derive: #(scrolledWindow containerBox items buttons selectedItem selectionCallback headerLabel)
+
+BrowserPane>>initialize [
+    items := #().
+    buttons := #().
+    selectedItem := nil.
+    selectionCallback := nil.
+    headerLabel := nil.
+    ^ self
+]
+
+BrowserPane>>createWidgets [
+    # Create the scrolled window containing a vertical box for items
+    scrolledWindow := GtkScrolledWindow new.
+    scrolledWindow vexpand: true.
+    scrolledWindow hexpand: true.
+
+    containerBox := GtkBox vertical.
+    containerBox setSpacing: 1.
+
+    scrolledWindow setChild: containerBox.
+    ^ scrolledWindow
+]
+
+BrowserPane>>setLabel: aString [
+    # Set a header label for this pane (optional)
+    headerLabel := GtkLabel new: aString.
+    headerLabel addCssClass: "header".
+    containerBox append: headerLabel.
+]
+
+BrowserPane>>items: anArray [
+    # Set the items to display in this pane
+    items := anArray.
+    self refreshDisplay.
+]
+
+BrowserPane>>refreshDisplay [
+    # Clear existing buttons and rebuild the list, preserving header
+    self clearItemsOnly.
+    items do: [:item |
+        self addButtonFor: item
+    ].
+]
+
+BrowserPane>>clearItemsOnly [
+    # Remove only the item buttons, not the header
+    | newBox headerText |
+    newBox := GtkBox vertical.
+    newBox setSpacing: 1.
+
+    # Re-add header if present (create new label since old one has parent)
+    headerLabel notNil ifTrue: [
+        headerText := headerLabel text.
+        headerLabel := GtkLabel new: headerText.
+        headerLabel addCssClass: "header".
+        newBox append: headerLabel.
+    ].
+
+    scrolledWindow setChild: newBox.
+    containerBox := newBox.
+    buttons := #().
+]
+
+BrowserPane>>clearButtons [
+    # Remove all existing buttons by recreating the scrolled window content
+    # Preserves the header label
+    | newBox headerText |
+    newBox := GtkBox vertical.
+    newBox setSpacing: 1.
+
+    # Re-add header if present (create new label since old one has parent)
+    headerLabel notNil ifTrue: [
+        headerText := headerLabel text.
+        headerLabel := GtkLabel new: headerText.
+        headerLabel addCssClass: "header".
+        newBox append: headerLabel.
+    ].
+
+    scrolledWindow setChild: newBox.
+    containerBox := newBox.
+    buttons := #().
+]
+
+BrowserPane>>addButtonFor: anItem [
+    # Add a button representing an item
+    | button itemString |
+    button := GtkButton new.
+
+    # Get string representation of item
+    itemString := (anItem isKindOf: String)
+        ifTrue: [ anItem ]
+        ifFalse: [ anItem printString ].
+
+    button label: itemString.
+    button hexpand: true.
+
+    # Flat appearance for list items
+    button addCssClass: "flat".
+
+    # Connect click handler
+    button clicked: [ self selectItem: anItem ].
+
+    containerBox append: button.
+    buttons addLast: button.
+]
+
+BrowserPane>>selectItem: anItem [
+    # Select an item and notify callback
+    selectedItem := anItem.
+
+    # Highlight selected button (simplified - just update CSS)
+    buttons withIndexDo: [:button :index |
+        ((items at: (index - 1)) = anItem)
+            ifTrue: [ button addCssClass: "suggested-action" ]
+            ifFalse: [ button removeCssClass: "suggested-action" ]
+    ].
+
+    # Notify callback if set
+    selectionCallback notNil ifTrue: [
+        selectionCallback value: anItem
+    ].
+].
+
+BrowserPane>>onSelectionChanged: aBlock [
+    # Set the callback block for selection changes
+    # The block receives the selected item as argument
+    selectionCallback := aBlock.
+    ^ self
+]
+
+BrowserPane>>selectedItem [
+    # Return the currently selected item
+    ^ selectedItem
+]
+
+BrowserPane>>clear [
+    # Clear all items but preserve header
+    items := #().
+    selectedItem := nil.
+    self clearItemsOnly.
+]
+
+BrowserPane>>widget [
+    # Return the GTK widget for adding to containers
+    ^ scrolledWindow
+]

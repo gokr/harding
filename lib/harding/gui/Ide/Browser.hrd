@@ -1,0 +1,350 @@
+# ============================================================================
+# SystemBrowser - Smalltalk-style System Browser for Harding
+# Four-pane layout: Libraries | Classes | Categories | Methods
+# With a source pane at the bottom for viewing/editing code
+# ============================================================================
+
+SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceView currentLibrary currentClass currentCategory currentMethod owner)
+
+SystemBrowser>>initialize [
+    currentLibrary := nil.
+    currentClass := nil.
+    currentCategory := nil.
+    currentMethod := nil.
+    owner := nil.
+    ^ self
+]
+
+SystemBrowser class>>open [
+    ^ self new openWindow
+]
+
+SystemBrowser class>>openFor: anOwner [
+    ^ self new openWindowFor: anOwner
+]
+
+SystemBrowser>>openWindow [
+    ^ self openWindowFor: nil
+]
+
+SystemBrowser>>openWindowFor: anOwner [
+    | buttonBox closeButton refreshButton |
+
+    owner := anOwner.
+
+    # Create main window
+    window := GtkWindow new.
+    window title: "System Browser".
+    window iconName: "harding".
+    window setDefaultSize: 1200 height: 800.
+
+    # Create vertical box layout
+    mainBox := GtkBox vertical.
+    mainBox setSpacing: 5.
+
+    # Create horizontal box for the four panes
+    panesBox := GtkBox horizontal.
+    panesBox setSpacing: 5.
+    panesBox vexpand: true.
+    panesBox hexpand: true.
+
+    # Create the four browser panes with labels
+    libraryPane := BrowserPane new.
+    libraryPane createWidgets.
+    libraryPane setLabel: "Libraries".
+    libraryPane onSelectionChanged: [:lib | self selectLibrary: lib ].
+
+    classPane := BrowserPane new.
+    classPane createWidgets.
+    classPane setLabel: "Classes".
+    classPane onSelectionChanged: [:cls | self selectClass: cls ].
+
+    categoryPane := BrowserPane new.
+    categoryPane createWidgets.
+    categoryPane setLabel: "Categories".
+    categoryPane onSelectionChanged: [:cat | self selectCategory: cat ].
+
+    methodPane := BrowserPane new.
+    methodPane createWidgets.
+    methodPane setLabel: "Methods".
+    methodPane onSelectionChanged: [:meth | self selectMethod: meth ].
+
+    # Add panes to the panes box
+    panesBox append: (libraryPane widget).
+    panesBox append: (classPane widget).
+    panesBox append: (categoryPane widget).
+    panesBox append: (methodPane widget).
+
+    # Create source view (read-only initially)
+    sourceView := self createSourceView.
+
+    # Create button box
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 5.
+
+    closeButton := GtkButton newLabel: "Close".
+    closeButton clicked: [ self close ].
+    buttonBox append: closeButton.
+
+    refreshButton := GtkButton newLabel: "Refresh".
+    refreshButton clicked: [ self refresh ].
+    buttonBox append: refreshButton.
+
+    # Assemble the UI
+    window setChild: mainBox.
+    mainBox append: panesBox.
+    mainBox append: sourceView.
+    mainBox append: buttonBox.
+
+    # Connect destroy signal
+    window destroyed: [ self onDestroy ].
+
+    # Register with owner
+    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+
+    window present.
+
+    # Populate the first pane with libraries
+    self populateLibraries.
+
+    Transcript showCr: "System Browser opened".
+    ^ self
+]
+
+SystemBrowser>>createSourceView [
+    # Create a scrolled source view for method source display
+    | scrolled |
+    scrolled := GtkScrolledWindow new.
+    scrolled vexpand: true.
+    scrolled hexpand: true.
+    scrolled setChild: (GtkLabel new: "Select a method to view its source code").
+    ^ scrolled
+]
+
+SystemBrowser>>populateLibraries [
+    # Get all library names from Harding global
+    # For now, we use a simple heuristic: group classes by their file/library
+    | libraries |
+    libraries := #("Core" "Collections" "GUI" "IDE").
+    libraryPane items: libraries.
+]
+
+SystemBrowser>>selectLibrary: aLibrary [
+    currentLibrary := aLibrary.
+    Transcript showCr: ("Selected library: " , aLibrary).
+
+    # Clear downstream panes
+    classPane clear.
+    categoryPane clear.
+    methodPane clear.
+
+    # Populate classes based on selected library
+    self populateClassesFor: aLibrary.
+]
+
+SystemBrowser>>populateClassesFor: aLibrary [
+    # Get classes for the selected library
+    | classes classNames keys count |
+
+    # Use Harding global to find classes
+    keys := Harding keys.
+    Transcript showCr: ("Harding has " , (keys size printString) , " keys").
+
+    classNames := Array new.
+    count := 0.
+    keys do: [:key |
+        | val isClass |
+        val := Harding at: key.
+        isClass := val isKindOf: Class.
+        isClass ifTrue: [
+            classNames addLast: key.
+            count := count + 1.
+        ].
+    ].
+
+    Transcript showCr: ("Found " , (count printString) , " classes total").
+
+    # Filter by library (simple heuristic for now)
+    classes := classNames select: [:name |
+        self classInLibrary: name library: aLibrary
+    ].
+
+    Transcript showCr: ("Showing " , (classes size printString) , " classes for " , aLibrary).
+
+    classPane items: classes.
+]
+
+SystemBrowser>>classInLibrary: className library: aLibrary [
+    # Heuristic to determine which library a class belongs to
+    # This can be enhanced with explicit library metadata
+    (aLibrary = "Core") ifTrue: [
+        ^ (#("Object" "Class" "Block" "String" "Number" "Integer" "Float" "Array" "Table") indexOf: className) notNil
+    ].
+    (aLibrary = "Collections") ifTrue: [
+        ^ className endsWith: "Collection"
+    ].
+    (aLibrary = "GUI") ifTrue: [
+        ^ (className startsWith: "Gtk") or: (className endsWith: "Pane")
+    ].
+    (aLibrary = "IDE") ifTrue: [
+        ^ (className endsWith: "Browser") or: (className endsWith: "Workspace") or: (className endsWith: "Transcript")
+    ].
+    ^ false
+]
+
+SystemBrowser>>selectClass: aClassName [
+    currentClass := aClassName.
+    Transcript showCr: ("Selected class: " , aClassName).
+
+    # Clear downstream panes
+    categoryPane clear.
+    methodPane clear.
+
+    # Populate categories
+    self populateCategoriesFor: aClassName.
+]
+
+SystemBrowser>>populateCategoriesFor: aClassName [
+    # Get categories for the selected class
+    | categories |
+    categories := self inferCategoriesFor: aClassName.
+    categoryPane items: categories.
+]
+
+SystemBrowser>>inferCategoriesFor: aClassName [
+    # Infer method categories from method comments or naming conventions
+    # For now, return common categories
+    | classObj methods categories |
+
+    classObj := Harding at: aClassName ifAbsent: [ ^ #("all") ].
+    classObj isKindOf: Class ifFalse: [ ^ #("all") ].
+
+    methods := classObj methods.
+    categories := #("all").
+
+    # Categorize based on method naming conventions
+    #( "accessing" "parsing" "printing" "initialization" "testing" "private" ) do: [:cat |
+        categories := categories add: cat
+    ].
+
+    ^ categories
+]
+
+SystemBrowser>>selectCategory: aCategory [
+    currentCategory := aCategory.
+    Transcript showCr: ("Selected category: " , aCategory).
+
+    # Clear downstream panes
+    methodPane clear.
+
+    # Populate methods
+    self populateMethodsFor: currentClass category: aCategory.
+]
+
+SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
+    # Get methods for the selected class and category
+    | classObj methods methodNames |
+
+    classObj := Harding at: aClassName ifAbsent: [ ^ #() ].
+    classObj isKindOf: Class ifFalse: [ ^ #() ].
+
+    methods := classObj methods.
+
+    # Filter by category if not "all"
+    (aCategory = "all") ifTrue: [
+        methodNames := methods
+    ] ifFalse: [
+        # Simple filtering based on naming conventions
+        methodNames := methods select: [:selector |
+            self selector: selector matchesCategory: aCategory
+        ].
+    ].
+
+    methodPane items: methodNames.
+]
+
+SystemBrowser>>selector: selector matchesCategory: aCategory [
+    # Check if a selector matches a category based on naming conventions
+    (aCategory = "accessing") ifTrue: [
+        ^ (selector endsWith: ":") and: (selector size > 1)
+    ].
+    (aCategory = "testing") ifTrue: [
+        ^ (selector startsWith: "is") or: (selector startsWith: "has")
+    ].
+    (aCategory = "printing") ifTrue: [
+        ^ (selector includesSubString: "print") or: (selector includesSubString: "String")
+    ].
+    (aCategory = "parsing") ifTrue: [
+        ^ (selector includesSubString: "parse")
+    ].
+    (aCategory = "initialization") ifTrue: [
+        ^ (selector = "initialize") or: (selector = "new")
+    ].
+    ^ true
+]
+
+SystemBrowser>>selectMethod: aMethodName [
+    currentMethod := aMethodName.
+    Transcript showCr: ("Selected method: " , aMethodName).
+
+    # Show method source
+    self showMethodSource: aMethodName.
+]
+
+SystemBrowser>>showMethodSource: aMethodName [
+    # Display the source code for the selected method
+    | classObj sourceText |
+
+    classObj := Harding at: currentClass ifAbsent: [ ^ self ].
+    classObj isKindOf: Class ifFalse: [ ^ self ].
+
+    # For now, display a placeholder with method info
+    sourceText := "Method: " , currentClass , ">>" , aMethodName , "\n\nMethod source would be displayed here.\nThis requires source tracking to be implemented."
+
+    self updateSourceView: sourceText.
+]
+
+SystemBrowser>>updateSourceView: aString [
+    # Update the source view with new text
+    | scrolled |
+    scrolled := GtkScrolledWindow new.
+    scrolled vexpand: true.
+    scrolled hexpand: true.
+
+    sourceView := GtkSourceView new.
+    sourceView text: aString.
+    sourceView showLineNumbers: true.
+    sourceView editable: false.  # Read-only for now
+
+    scrolled setChild: sourceView.
+
+    # Replace old source view in main box
+    # (In a full implementation, we'd update in place)
+]
+
+SystemBrowser>>refresh [
+    # Refresh all panes
+    classPane clear.
+    categoryPane clear.
+    methodPane clear.
+    currentLibrary := nil.
+    currentClass := nil.
+    currentCategory := nil.
+    currentMethod := nil.
+    self populateLibraries.
+    Transcript showCr: "Browser refreshed".
+]
+
+SystemBrowser>>close [
+    window notNil ifTrue: [
+        window close
+    ].
+]
+
+SystemBrowser>>onDestroy [
+    owner notNil ifTrue: [
+        owner removeWindow: self.
+        owner := nil
+    ].
+    window := nil.
+]
