@@ -137,6 +137,7 @@ type
     selector*: string
     argCount*: int
     msgNode*: MessageNode  # Reference to AST node for inline cache
+    isClassMethod*: bool   # For wfSendMessage/wfAfterReceiver: look in class methods
     # For wfApplyBlock
     blockVal*: BlockNode
     # For wfAfterReceiver/wfAfterArg - what message to send
@@ -281,6 +282,7 @@ type
   PrimitiveCallNode* = ref object of Node
     selector*: string          # The primitive selector (e.g., "primitiveClone", "primitiveAt:")
     arguments*: seq[Node]      # Arguments to the primitive
+    isClassMethod*: bool       # True if this primitive should be looked up in class methods
 
   # Identifier node for variable lookup
   IdentNode* = ref object of Node

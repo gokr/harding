@@ -21,6 +21,7 @@ type
     hasError*: bool
     errorMsg*: string
     lastLine*, lastCol*: int
+    isClassMethodContext*: bool  # True when parsing a class method (for primitive dispatch)
 
 # Forward declarations
 proc parseBinaryOperators*(parser: var Parser, left: Node): Node
@@ -149,7 +150,8 @@ proc initParser*(tokens: seq[Token], filename: string = ""): Parser =
     hasError: false,
     errorMsg: "",
     lastLine: 1,
-    lastCol: 1
+    lastCol: 1,
+    isClassMethodContext: false
   )
 
 # Peek at current token without advancing
@@ -320,6 +322,7 @@ proc parsePrimary(parser: var Parser): Node =
       return PrimitiveCallNode(
         selector: selector,
         arguments: arguments,
+        isClassMethod: false,  # Inline primitives are always instance methods
         line: token.line,
         col: token.col
       )
@@ -956,6 +959,9 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
       actualReceiver = msg.receiver
       isClassMethod = true
 
+  # Set parser context for class method (used by primitive dispatch)
+  parser.isClassMethodContext = isClassMethod
+
   # Consume >> token
   discard parser.next()
 
@@ -1060,6 +1066,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
         body: @[cast[Node](ReturnNode(expression: PrimitiveCallNode(
           selector: primSelector,
           arguments: finalArguments,
+          isClassMethod: isClassMethod,  # Pass through whether this is a class method
           line: parser.lastLine,
           col: parser.lastCol
         )))],
@@ -1087,6 +1094,9 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
   # Generate appropriate message based on method type
   let arg1: Node = LiteralNode(value: NodeValue(kind: vkSymbol, symVal: selector))
   let arg2: Node = LiteralNode(value: NodeValue(kind: vkBlock, blockVal: blk))
+
+  # Clear the class method context before returning
+  parser.isClassMethodContext = false
 
   if isClassMethod:
     # Class method: Receiver classSelector: 'sel' put: [body]
@@ -1129,6 +1139,7 @@ proc parsePrimitive(parser: var Parser): Node =
     let node = PrimitiveCallNode(
       selector: selector,
       arguments: arguments,
+      isClassMethod: parser.isClassMethodContext,  # Use context from enclosing method
       line: startLine,
       col: startCol
     )
