@@ -4906,6 +4906,34 @@ proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue =
 
   return resultValue
 
+proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
+  ## Evaluate an expression with a clean activation context.
+  ## This saves and clears the activation stack before evaluation,
+  ## then restores it afterwards. Use this for external callbacks
+  ## (like GTK signals) that need isolated block execution.
+  if node == nil:
+    return nilValue()
+
+  # Save activation context
+  let savedActivationStack = interp.activationStack
+  let savedCurrentActivation = interp.currentActivation
+  let savedCurrentReceiver = interp.currentReceiver
+
+  # Clear activation context for clean evaluation
+  interp.activationStack = @[]
+  interp.currentActivation = nil
+  interp.currentReceiver = nil
+
+  # Evaluate with clean context
+  let result = interp.evalWithVM(node)
+
+  # Restore activation context
+  interp.activationStack = savedActivationStack
+  interp.currentActivation = savedCurrentActivation
+  interp.currentReceiver = savedCurrentReceiver
+
+  return result
+
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM
   let tokens = lex(source)

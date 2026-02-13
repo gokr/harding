@@ -76,19 +76,9 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
       arguments: @[],
       isCascade: false
     )
-    # Save and reset activation context to ensure clean environment for block execution
-    # This prevents stale activation context from interfering with block value: invocations
-    let savedActivationStack = interp[].activationStack
-    let savedCurrentActivation = interp[].currentActivation
-    let savedCurrentReceiver = interp[].currentReceiver
-    interp[].activationStack = @[]
-    interp[].currentActivation = nil
-    interp[].currentReceiver = nil
-    let result = evalWithVM(interp[], msgNode)
-    # Restore activation context
-    interp[].activationStack = savedActivationStack
-    interp[].currentActivation = savedCurrentActivation
-    interp[].currentReceiver = savedCurrentReceiver
+    # Use clean context evaluation to prevent stale activation from interfering
+    # with block value: invocations (e.g., detect:ifNone: using do:)
+    let result = evalWithVMCleanContext(interp[], msgNode)
     GC_unref(handler.blockNode)
     discard result  # Signal callbacks generally ignore return values
   except Exception as e:
@@ -120,18 +110,7 @@ proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
       arguments: @[],
       isCascade: false
     )
-    # Save and reset activation context for clean block execution
-    let savedActivationStack = proxy.interp[].activationStack
-    let savedCurrentActivation = proxy.interp[].currentActivation
-    let savedCurrentReceiver = proxy.interp[].currentReceiver
-    proxy.interp[].activationStack = @[]
-    proxy.interp[].currentActivation = nil
-    proxy.interp[].currentReceiver = nil
-    let result = evalWithVM(proxy.interp[], msgNode)
-    # Restore activation context
-    proxy.interp[].activationStack = savedActivationStack
-    proxy.interp[].currentActivation = savedCurrentActivation
-    proxy.interp[].currentReceiver = savedCurrentReceiver
+    let result = evalWithVMCleanContext(proxy.interp[], msgNode)
     GC_unref(handler.blockNode)
     discard result
   except Exception as e:
