@@ -1,0 +1,228 @@
+#!/usr/bin/env harding
+#
+# BarrelSortedTable.hrd - Ordered persistent key-value table
+# Similar to SortedCollection but backed by BitBarrel critbit index
+#
+
+#====================================================================
+# BarrelSortedTable class - ordered persistent storage
+# Uses critbit index for range queries and prefix matching
+#====================================================================
+
+BarrelSortedTable := Object derive: #(barrel name).
+
+#--------------------------------------------------------------------
+# Class methods
+#--------------------------------------------------------------------
+
+BarrelSortedTable class>>open: aName [
+    # Open existing barrel as a BarrelSortedTable
+    | table |
+    table := self new.
+    table name: aName.
+    table connectAndOpen: aName.
+    ^table
+].
+
+BarrelSortedTable class>>create: aName [
+    # Create new barrel-backed ordered table (always uses critbit)
+    | table barrel |
+    barrel := Barrel new.
+    barrel create: aName mode: 'critbit'.
+    barrel use: aName.
+    table := self new.
+    table barrel: barrel.
+    table name: aName.
+    ^table
+].
+
+#--------------------------------------------------------------------
+# Private helper methods
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>connectAndOpen: aName [
+    # Internal: connect and open barrel
+    | barrel |
+    barrel := Barrel new.
+    barrel use: aName.
+    self barrel: barrel.
+].
+
+#--------------------------------------------------------------------
+# Core storage operations (primitives)
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>at: key [
+    # Get value at key
+    <primitive barrelSortedTableAt: key>
+].
+
+BarrelSortedTable>>at: key put: value [
+    # Set value at key
+    <primitive barrelSortedTableAt: key put: value>
+    ^self
+].
+
+BarrelSortedTable>>keys [
+    # Get all keys as Array (in sorted order)
+    <primitive barrelSortedTableKeys>
+].
+
+BarrelSortedTable>>size [
+    # Get number of entries
+    <primitive barrelSortedTableSize>
+].
+
+#--------------------------------------------------------------------
+# Range query methods (unique to BarrelSortedTable)
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>rangeFrom: startKey to: endKey [
+    # Get entries in range [startKey, endKey), returns in-memory Table
+    ^self rangeFrom: startKey to: endKey limit: 1000
+].
+
+BarrelSortedTable>>rangeFrom: startKey to: endKey limit: limit [
+    # Get up to limit entries in range [startKey, endKey)
+    <primitive barrelSortedTableRangeFrom: startKey to: endKey limit: limit>
+].
+
+BarrelSortedTable>>prefix: prefix [
+    # Get entries with keys starting with prefix
+    ^self prefix: prefix limit: 1000
+].
+
+BarrelSortedTable>>prefix: prefix limit: limit [
+    # Get up to limit entries with keys starting with prefix
+    <primitive barrelSortedTablePrefix: prefix limit: limit>
+].
+
+#--------------------------------------------------------------------
+# Convenience accessors
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>first [
+    # Get first entry (smallest key)
+    | keys |
+    keys := self keys.
+    keys isEmpty ifTrue: [^nil].
+    ^{keys first. self at: keys first}
+].
+
+BarrelSortedTable>>last [
+    # Get last entry (largest key)
+    | keys |
+    keys := self keys.
+    keys isEmpty ifTrue: [^nil].
+    ^{keys last. self at: keys last}
+].
+
+BarrelSortedTable>>firstKey [
+    # Get first key
+    | keys |
+    keys := self keys.
+    keys isEmpty ifTrue: [^nil].
+    ^keys first
+].
+
+BarrelSortedTable>>lastKey [
+    # Get last key
+    | keys |
+    keys := self keys.
+    keys isEmpty ifTrue: [^nil].
+    ^keys last
+].
+
+#--------------------------------------------------------------------
+# High-level collection protocol
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>do: block [
+    # Iterate over all key-value pairs in sorted order
+    self keys do: [:key |
+        block value: key value: (self at: key)
+    ].
+    ^self
+].
+
+BarrelSortedTable>>collect: block [
+    # Transform each key-value pair, return in-memory Table
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        result at: key put: (block value: key value: val)
+    ].
+    ^result
+].
+
+BarrelSortedTable>>select: block [
+    # Return in-memory Table with entries where block returns true
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        (block value: key value: val) ifTrue: [
+            result at: key put: val
+        ]
+    ].
+    ^result
+].
+
+BarrelSortedTable>>reject: block [
+    # Return in-memory Table with entries where block returns false
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        (block value: key value: val) ifFalse: [
+            result at: key put: val
+        ]
+    ].
+    ^result
+].
+
+BarrelSortedTable>>detect: block [
+    # Find first entry where block returns true
+    self do: [:key :val |
+        (block value: key value: val) ifTrue: [^{key. val}]
+    ].
+    ^nil
+].
+
+BarrelSortedTable>>isEmpty [
+    # Check if table has no entries
+    ^self size = 0
+].
+
+BarrelSortedTable>>notEmpty [
+    # Check if table has entries
+    ^self size > 0
+].
+
+BarrelSortedTable>>values [
+    # Get all values as Array (in key order)
+    | result |
+    result := Array new.
+    self keys do: [:key |
+        result add: (self at: key)
+    ].
+    ^result
+].
+
+#--------------------------------------------------------------------
+# Range-based operations
+#--------------------------------------------------------------------
+
+BarrelSortedTable>>rangeDo: block from: startKey to: endKey [
+    # Iterate over range [startKey, endKey)
+    (self rangeFrom: startKey to: endKey) do: [:key :val |
+        block value: key value: val
+    ].
+    ^self
+].
+
+BarrelSortedTable>>prefixDo: block prefix: prefix [
+    # Iterate over keys with prefix
+    (self prefix: prefix) do: [:key :val |
+        block value: key value: val
+    ].
+    ^self
+].

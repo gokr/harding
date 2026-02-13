@@ -1,0 +1,11 @@
+#!/usr/bin/env harding
+#
+# BitBarrel Bootstrap - Loads all BitBarrel extensions
+#
+
+# Load core BitBarrel classes
+load: "lib/harding/bitbarrel/Barrel.hrd".
+load: "lib/harding/bitbarrel/BarrelTable.hrd".
+load: "lib/harding/bitbarrel/BarrelSortedTable.hrd".
+
+Transcript showCr: "BitBarrel library loaded".

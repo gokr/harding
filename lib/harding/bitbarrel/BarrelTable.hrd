@@ -1,0 +1,162 @@
+#!/usr/bin/env harding
+#
+# BarrelTable.hrd - Hash-based persistent key-value table
+# Similar to Table but backed by BitBarrel
+#
+
+#====================================================================
+# BarrelTable class - hash-based persistent storage
+#====================================================================
+
+BarrelTable := Object derive: #(barrel name).
+
+#--------------------------------------------------------------------
+# Class methods
+#--------------------------------------------------------------------
+
+BarrelTable class>>open: aName [
+    # Open existing barrel as a BarrelTable
+    | table |
+    table := self new.
+    table name: aName.
+    table connectAndOpen: aName mode: 'hash'.
+    ^table
+].
+
+BarrelTable class>>create: aName [
+    # Create new barrel-backed table with hash index
+    ^self create: aName mode: 'hash'
+].
+
+BarrelTable class>>create: aName mode: mode [
+    # Create new barrel-backed table
+    | table barrel |
+    barrel := Barrel new.
+    barrel create: aName mode: mode.
+    barrel use: aName.
+    table := self new.
+    table barrel: barrel.
+    table name: aName.
+    ^table
+].
+
+#--------------------------------------------------------------------
+# Private helper methods
+#--------------------------------------------------------------------
+
+BarrelTable>>connectAndOpen: aName mode: mode [
+    # Internal: connect and open barrel
+    | barrel |
+    barrel := Barrel new.
+    barrel use: aName.
+    self barrel: barrel.
+].
+
+#--------------------------------------------------------------------
+# Core storage operations (primitives)
+#--------------------------------------------------------------------
+
+BarrelTable>>at: key [
+    # Get value at key
+    <primitive barrelTableAt: key>
+].
+
+BarrelTable>>at: key put: value [
+    # Set value at key
+    <primitive barrelTableAt: key put: value>
+    ^self
+].
+
+BarrelTable>>includesKey: key [
+    # Check if key exists
+    <primitive barrelTableIncludesKey: key>
+].
+
+BarrelTable>>removeKey: key [
+    # Remove key and its value
+    <primitive barrelTableRemoveKey: key>
+].
+
+BarrelTable>>keys [
+    # Get all keys as Array
+    <primitive barrelTableKeys>
+].
+
+BarrelTable>>size [
+    # Get number of entries
+    <primitive barrelTableSize>
+].
+
+#--------------------------------------------------------------------
+# High-level collection protocol
+#--------------------------------------------------------------------
+
+BarrelTable>>do: block [
+    # Iterate over all key-value pairs
+    self keys do: [:key |
+        block value: key value: (self at: key)
+    ].
+    ^self
+].
+
+BarrelTable>>collect: block [
+    # Transform each key-value pair, return in-memory Table
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        result at: key put: (block value: key value: val)
+    ].
+    ^result
+].
+
+BarrelTable>>select: block [
+    # Return in-memory Table with entries where block returns true
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        (block value: key value: val) ifTrue: [
+            result at: key put: val
+        ]
+    ].
+    ^result
+].
+
+BarrelTable>>reject: block [
+    # Return in-memory Table with entries where block returns false
+    | result |
+    result := Table new.
+    self do: [:key :val |
+        (block value: key value: val) ifFalse: [
+            result at: key put: val
+        ]
+    ].
+    ^result
+].
+
+BarrelTable>>detect: block [
+    # Find first entry where block returns true
+    self do: [:key :val |
+        (block value: key value: val) ifTrue: [^{key. val}]
+    ].
+    ^nil
+].
+
+BarrelTable>>isEmpty [
+    # Check if table has no entries
+    ^self size = 0
+].
+
+BarrelTable>>notEmpty [
+    # Check if table has entries
+    ^self size > 0
+].
+
+BarrelTable>>values [
+    # Get all values as Array
+    | result |
+    result := Array new.
+    self keys do: [:key |
+        result add: (self at: key)
+    ].
+    ^result
+].

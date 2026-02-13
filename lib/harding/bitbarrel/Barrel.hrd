@@ -1,0 +1,65 @@
+#!/usr/bin/env harding
+#
+# Barrel.hrd - BitBarrel database connection management
+# Provides connection to BitBarrel server and barrel management
+#
+
+#====================================================================
+# Barrel class - manages connection to BitBarrel server
+#====================================================================
+
+Barrel := Object derive: #(connection).
+
+#--------------------------------------------------------------------
+# Class methods
+#--------------------------------------------------------------------
+
+Barrel class>>new [
+    # Create new Barrel instance and connect to localhost
+    ^self open: "localhost:9876"
+].
+
+Barrel class>>open: host [
+    # Connect to BitBarrel server at host:port
+    | barrel |
+    barrel := self new.
+    barrel connect: host.
+    ^barrel
+].
+
+#--------------------------------------------------------------------
+# Instance methods
+#--------------------------------------------------------------------
+
+Barrel>>connect: host [
+    # Connect to BitBarrel server
+    # host can be "hostname" or "hostname:port" (default 9876)
+    <primitive barrelConnect: host>
+    ^self
+].
+
+Barrel>>create: name [
+    # Create new barrel with hash index (default)
+    ^self create: name mode: 'hash'
+].
+
+Barrel>>create: name mode: mode [
+    # Create new barrel with specified mode
+    # mode: 'hash' or 'critbit'
+    <primitive barrelCreate: name mode: mode>
+].
+
+Barrel>>use: name [
+    # Select barrel for operations
+    <primitive barrelUse: name>
+].
+
+Barrel>>close [
+    # Close connection to server
+    <primitive barrelClose>
+].
+
+Barrel>>listBarrels [
+    # List all barrels on server
+    <primitive barrelListBarrels>
+].
