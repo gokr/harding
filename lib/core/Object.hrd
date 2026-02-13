@@ -82,6 +82,8 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
   ^ newClass
 ]
 
+Object class>>basicNew <primitive primitiveBasicNew>
+
 Object>>printHierarchy [
   # Print an indented class hierarchy with slots as Harding code
   self printHierarchyIndent: 0
@@ -170,6 +172,16 @@ Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
   # arg1, arg2: optional arguments that were passed with the message
   self error: ("Message not understood: " , (selector asString))
 ]
+
+#====================================================================
+# Dynamic message dispatch (perform:)
+#====================================================================
+
+Object>>perform: selector <primitive primitivePerform: selector>
+
+Object>>perform: selector with: arg1 <primitive primitivePerform: selector with: arg1>
+
+Object>>perform: selector with: arg1 with: arg2 <primitive primitivePerform: selector with: arg1 with: arg2>
 
 #====================================================================
 # Identity and comparison
