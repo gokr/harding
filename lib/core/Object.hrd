@@ -84,6 +84,11 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
 
 Object class>>basicNew <primitive primitiveBasicNew>
 
+Object class>>new [
+  # Create and initialize a new instance
+  ^ self basicNew initialize
+]
+
 Object>>printHierarchy [
   # Print an indented class hierarchy with slots as Harding code
   self printHierarchyIndent: 0

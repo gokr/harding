@@ -404,17 +404,22 @@ proc initCoreClasses*(): Class =
     classSelectorPutMethod.setNativeImpl(classAddClassMethodImpl)
     addMethodToClass(objectClass, "classSelector:put:", classSelectorPutMethod, isClassMethod = true)
 
-    # derive: - create class with slots and auto-generate accessors
+    # derive: - create class with slots (no accessors, use deriveWithAccessors: for that)
     let deriveWithSlotsMethod = createCoreMethod("derive:")
-    deriveWithSlotsMethod.setNativeImpl(classDeriveWithAccessorsImpl)
+    deriveWithSlotsMethod.setNativeImpl(classDeriveImpl)
     addMethodToClass(objectClass, "derive:", deriveWithSlotsMethod, isClassMethod = true)
+
+    # deriveWithAccessors: - create class with slots and auto-generate accessors
+    let deriveWithAccessorsMethod = createCoreMethod("deriveWithAccessors:")
+    deriveWithAccessorsMethod.setNativeImpl(classDeriveWithAccessorsImpl)
+    addMethodToClass(objectClass, "deriveWithAccessors:", deriveWithAccessorsMethod, isClassMethod = true)
 
     # derive - create class without slots
     let deriveMethod = createCoreMethod("derive")
     deriveMethod.setNativeImpl(classDeriveImpl)
     addMethodToClass(objectClass, "derive", deriveMethod, isClassMethod = true)
 
-    # new - create instances
+    # new - create instances (initialization is done via Harding code: ^self basicNew initialize)
     let newMethod = createCoreMethod("new")
     newMethod.setNativeImpl(classNewImpl)
     addMethodToClass(objectClass, "new", newMethod, isClassMethod = true)
