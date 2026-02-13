@@ -24,6 +24,7 @@ const
   DefaultBootstrapFile* = "lib/core/Bootstrap.hrd"
   DefaultLogLevel* = Level.lvlError
   DefaultStackDepth* = 10000
+  DefaultDebuggerPort* = 9877
 
 type
   CliOptions* = object
@@ -33,6 +34,7 @@ type
     maxStackDepth*: int
     hardingHome*: string
     bootstrapFile*: string
+    debuggerPort*: int           # Debugger server port (0 = disabled)
     positionalArgs*: seq[string]
 
 proc parseLogLevel*(levelStr: string): Level =
@@ -62,6 +64,7 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
     maxStackDepth: DefaultStackDepth,
     hardingHome: getEnv("HARDING_HOME", DefaultHardingHome),
     bootstrapFile: "",
+    debuggerPort: 0,  # Disabled by default
     positionalArgs: @[]
   )
 
@@ -105,6 +108,20 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
         quit(1)
     of "--ast":
       result.dumpAst = true
+    of "--debugger-port":
+      if i + 1 < allArgs.len:
+        try:
+          result.debuggerPort = parseInt(allArgs[i + 1])
+          if result.debuggerPort < 1 or result.debuggerPort > 65535:
+            echo "Error: --debugger-port must be between 1 and 65535"
+            quit(1)
+        except ValueError:
+          echo "Error: --debugger-port requires an integer value"
+          quit(1)
+        inc i
+      else:
+        echo "Error: --debugger-port requires a value"
+        quit(1)
     of "--help", "-h", "--version", "-v", "--test":
       result.positionalArgs.add(allArgs[i])
     else:
@@ -135,6 +152,7 @@ proc showUsage*(appName: string, appDesc: string, examples: seq[string] = @[],
   echo "  --stack-depth <n>  Set maximum stack depth (default: 10000)"
   if appName == "harding":
     echo "  --ast              Dump AST after parsing and continue execution"
+    echo "  --debugger-port <n>  Start debugger server on port (requires -d:debugger)"
   if extraOptions.len > 0:
     echo extraOptions
   echo ""

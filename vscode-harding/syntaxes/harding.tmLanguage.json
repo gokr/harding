@@ -1,0 +1,334 @@
+{
+  "name": "Harding",
+  "scopeName": "source.hrd",
+  "fileTypes": ["hrd"],
+  "patterns": [
+    {
+      "include": "#primitives"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#method-definition"
+    },
+    {
+      "include": "#block"
+    },
+    {
+      "include": "#collections"
+    },
+    {
+      "include": "#expression"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.hrd",
+          "match": "#(?![a-zA-Z_\"\\(\\{])[^\\n]*"
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.hrd",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.hrd",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "entity.name.tag.symbol.hrd",
+          "match": "#[a-zA-Z_][a-zA-Z0-9_]*(:[a-zA-Z0-9_]+)*"
+        },
+        {
+          "name": "entity.name.tag.symbol.quoted.hrd",
+          "begin": "#\"",
+          "end": "\""
+        },
+        {
+          "name": "constant.numeric.hrd",
+          "match": "(?<![\\w\\d])(-?\\d+\\.?\\d*([eE][+-]?\\d+)?|\\d*[eE][+-]?\\d+)"
+        },
+        {
+          "name": "constant.language.hrd",
+          "match": "\\b(self|super|nil|true|false)\\b"
+        }
+      ]
+    },
+    "method-definition": {
+      "patterns": [
+        {
+          "name": "keyword.operator.method-definition.hrd",
+          "match": ">>"
+        }
+      ]
+    },
+    "block": {
+      "patterns": [
+        {
+          "name": "meta.block.hrd",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.block.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.block.end.hrd" }
+          },
+          "patterns": [
+            {
+              "include": "#block-parameters"
+            },
+            {
+              "include": "#block-temps"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        }
+      ]
+    },
+    "block-parameters": {
+      "patterns": [
+        {
+          "name": "meta.block.parameters.hrd",
+          "begin": "(\\[)\\s*(:)",
+          "end": "(\\|)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.block.begin.hrd" },
+            "2": { "name": "punctuation.definition.parameter.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.separator.parameters.hrd" }
+          },
+          "patterns": [
+            {
+              "name": "variable.parameter.hrd",
+              "match": ":[a-zA-Z_][a-zA-Z0-9_]*"
+            }
+          ]
+        },
+        {
+          "name": "variable.parameter.hrd",
+          "match": "(?<=\\[|:)\\s*:[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    },
+    "block-temps": {
+      "patterns": [
+        {
+          "name": "meta.block.temporaries.hrd",
+          "begin": "(\\|)(?![^\\|]*:)",
+          "end": "(\\|)",
+          "beginCaptures": {
+            "0": { "name": "punctuation.separator.temporaries.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.separator.temporaries.hrd" }
+          },
+          "patterns": [
+            {
+              "name": "variable.other.temporary.hrd",
+              "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+            }
+          ]
+        }
+      ]
+    },
+    "collections": {
+      "patterns": [
+        {
+          "name": "meta.array.literal.hrd",
+          "begin": "#\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "0": { "name": "keyword.control.array.begin.hrd punctuation.definition.array.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "keyword.control.array.end.hrd punctuation.definition.array.end.hrd" }
+          },
+          "patterns": [
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "name": "meta.table.literal.hrd",
+          "begin": "#\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "keyword.control.table.begin.hrd punctuation.definition.table.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "keyword.control.table.end.hrd punctuation.definition.table.end.hrd" }
+          },
+          "patterns": [
+            {
+              "include": "#arrow"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "name": "meta.object.literal.hrd",
+          "begin": "\\{\\|",
+          "end": "\\|\\}",
+          "beginCaptures": {
+            "0": { "name": "keyword.control.object.begin.hrd punctuation.definition.object.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "keyword.control.object.end.hrd punctuation.definition.object.end.hrd" }
+          },
+          "patterns": [
+            {
+              "include": "$self"
+            }
+          ]
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#parenthesized"
+        },
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#cascade"
+        },
+        {
+          "include": "#identifier"
+        }
+      ]
+    },
+    "parenthesized": {
+      "patterns": [
+        {
+          "name": "meta.parens.hrd",
+          "begin": "\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.parentheses.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.parentheses.end.hrd" }
+          },
+          "patterns": [
+            {
+              "include": "$self"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.hrd",
+          "match": "(?<=[a-zA-Z_][a-zA-Z0-9_]*)(:)(?=[a-zA-Z0-9_]+:?)",
+          "captures": {
+            "1": { "name": "punctuation.definition.keyword.hrd" }
+          }
+        },
+        {
+          "name": "keyword.control.hrd",
+          "match": "(?<![a-zA-Z0-9])([a-zA-Z_][a-zA-Z0-9_]*)(:)(?![a-zA-Z0-9_:])",
+          "captures": {
+            "1": { "name": "entity.name.function.hrd" },
+            "2": { "name": "punctuation.definition.keyword.hrd" }
+          }
+        },
+        {
+          "name": "keyword.control.multi-part.hrd",
+          "match": "(?<![a-zA-Z0-9])([a-zA-Z_][a-zA-Z0-9_]*:[a-zA-Z0-9_]+:?)+(?![a-zA-Z0-9_:])"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.hrd",
+          "match": ":="
+        },
+        {
+          "name": "keyword.operator.return.hrd",
+          "match": "\\^"
+        },
+        {
+          "name": "keyword.operator.hrd",
+          "match": "\\+|-|\\*|/|//|\\\\|<>|<=|>=|=|==|===|~=|<|>|,|%|&|\\|"
+        }
+      ]
+    },
+    "arrow": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arrow.hrd",
+          "match": "->"
+        }
+      ]
+    },
+    "cascade": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.cascade.hrd",
+          "match": ";"
+        }
+      ]
+    },
+    "identifier": {
+      "patterns": [
+        {
+          "name": "constant.other.class.hrd",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        },
+        {
+          "name": "variable.other.hrd",
+          "match": "\\b[a-z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "primitives": {
+      "patterns": [
+        {
+          "name": "support.function.primitive.hrd",
+          "begin": "<primitive>",
+          "end": "</primitive>",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.primitive.begin.hrd" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.primitive.end.hrd" }
+          },
+          "patterns": [
+            {
+              "name": "source.embedded.nim",
+              "contentName": "source.nim",
+              "match": "."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

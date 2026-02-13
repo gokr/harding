@@ -8,6 +8,10 @@ import ../repl/doit
 import ../repl/cli
 import ../core/types
 
+when defined(debugger):
+  import ../debugger/server
+  import ../debugger/bridge
+
 # ============================================================================
 # Main entry point for Harding REPL
 # ============================================================================
@@ -100,6 +104,14 @@ proc main() =
 
   # Set HARDING_HOME environment for child processes
   putEnv("HARDING_HOME", opts.hardingHome)
+
+  when defined(debugger):
+    # Start debugger server if port is specified
+    if opts.debuggerPort > 0:
+      echo "Starting debugger server on port ", opts.debuggerPort
+      var config = defaultDebugServerConfig()
+      config.port = opts.debuggerPort
+      startDebuggerServerInThread(config)
 
   # Now handle commands based on positional arguments
   if opts.positionalArgs.len == 0:

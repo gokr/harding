@@ -1,0 +1,192 @@
+{
+  "name": "vscode-harding",
+  "displayName": "Harding Language Support",
+  "description": "Language support for Harding - a modern Smalltalk dialect",
+  "version": "0.4.0",
+  "publisher": "harding-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Language Packs"
+  ],
+  "keywords": [
+    "harding",
+    "smalltalk",
+    "language",
+    "debugger"
+  ],
+  "activationEvents": [
+    "onLanguage:harding",
+    "onDebugResolve:harding"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "harding",
+        "aliases": [
+          "Harding",
+          "harding"
+        ],
+        "extensions": [
+          ".hrd"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/harding-icon.svg",
+          "dark": "./images/harding-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "harding",
+        "scopeName": "source.harding",
+        "path": "./syntaxes/harding.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Harding",
+      "properties": {
+        "harding.languageServer.path": {
+          "type": "string",
+          "default": "harding-lsp",
+          "description": "Path to the Harding language server executable"
+        },
+        "harding.debugger.port": {
+          "type": "number",
+          "default": 9877,
+          "description": "Port for the Harding debug protocol server"
+        },
+        "harding.home": {
+          "type": "string",
+          "default": "",
+          "description": "HARDING_HOME directory (defaults to workspace root)"
+        }
+      }
+    },
+    "debuggers": [
+      {
+        "type": "harding",
+        "label": "Harding Debug",
+        "program": "./out/dap/adapter.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the Harding program to debug",
+                "default": "${workspaceFolder}/main.hrd"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command line arguments passed to the program",
+                "default": [],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the debug session",
+                "default": "${workspaceFolder}"
+              },
+              "hardingHome": {
+                "type": "string",
+                "description": "HARDING_HOME directory",
+                "default": "${workspaceFolder}"
+              },
+              "debuggerPort": {
+                "type": "number",
+                "description": "Port for the debug protocol server",
+                "default": 9877
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch",
+                "default": false
+              }
+            }
+          },
+          "attach": {
+            "required": [
+              "port"
+            ],
+            "properties": {
+              "port": {
+                "type": "number",
+                "description": "Port to attach to",
+                "default": 9877
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "harding",
+            "request": "launch",
+            "name": "Debug Harding Program",
+            "program": "${workspaceFolder}/main.hrd",
+            "cwd": "${workspaceFolder}",
+            "debuggerPort": 9877,
+            "stopOnEntry": false
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "harding.runFile",
+        "title": "Run Harding File",
+        "category": "Harding"
+      },
+      {
+        "command": "harding.debugFile",
+        "title": "Debug Harding File",
+        "category": "Harding"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "harding.runFile",
+          "group": "navigation@1",
+          "when": "resourceExtname == .hrd"
+        },
+        {
+          "command": "harding.debugFile",
+          "group": "navigation@2",
+          "when": "resourceExtname == .hrd"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/debugadapter": "^1.60.0",
+    "@vscode/debugprotocol": "^1.60.0",
+    "vscode-languageclient": "^9.0.0"
+  },
+  "dependencies": {}
+}

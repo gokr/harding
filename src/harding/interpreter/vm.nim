@@ -8,6 +8,9 @@ import ../interpreter/activation
 when defined(granite):
   import ../interpreter/compiler_primitives
 
+when defined(debugger):
+  import ../debugger/bridge
+
 # Class caches are defined in objects.nim and shared across the interpreter
 
 # Forward declarations - implementations are in objects.nim
@@ -4847,6 +4850,10 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
 
     let frame = interp.popWorkFrame()
     debug("VM: Processing frame kind=", frame.kind)
+
+    when defined(debugger):
+      # Check debugger hook for breakpoints and stepping
+      checkDebuggerHook(interp, frame)
 
     try:
       let shouldContinue = case frame.kind

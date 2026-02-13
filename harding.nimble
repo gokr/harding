@@ -176,3 +176,15 @@ task harding_bitbarrel_release, "Build harding with BitBarrel support (release)"
   ## Build REPL with BitBarrel support in release mode
   exec "nim c -d:bitbarrel -d:release -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (release with BitBarrel support)"
+
+task harding_debug, "Build harding with debugger support":
+  ## Build REPL with debugger support for VSCode integration
+  exec "nim c -d:debugger -o:harding_debug src/harding/repl/harding.nim"
+  echo "Binary available as ./harding_debug (with debugger support)"
+  echo "Run with: ./harding_debug --debugger-port 9877 script.hrd"
+
+task harding_lsp, "Build Harding Language Server":
+  ## Build LSP server for VSCode integration
+  exec "nim c -o:harding-lsp src/harding/lsp/main.nim"
+  echo "Binary available as ./harding-lsp"
+  echo "Usage: harding-lsp --stdio"

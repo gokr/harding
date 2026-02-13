@@ -186,6 +186,12 @@ type
     evalStack*: seq[NodeValue]  # Value stack for expression results
     # Library support
     importedLibraries*: seq[Instance]  # Stack of imported Library instances for namespace search
+    # Debugger support
+    when defined(debugger):
+      debugMode*: bool              # Whether debugger is attached
+      debuggerPaused*: bool         # Whether execution is paused
+      debuggerStepMode*: int        # 0=none, 1=stepOver, 2=stepInto, 3=stepOut
+      debuggerStepTarget*: int       # Target frame depth for step-out
 
   BlockNode* = ref object of Node
     parameters*: seq[string]              # method parameters
