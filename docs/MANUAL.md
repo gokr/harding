@@ -1415,6 +1415,62 @@ dict keys               # All keys
 dict includesKey: "key" # Check if key exists
 ```
 
+### Persistent Collections (BitBarrel)
+
+Requires building with `-d:bitbarrel` flag.
+
+**BarrelTable** - Hash-based persistent key-value storage:
+
+```smalltalk
+# Load BitBarrel library
+load: "lib/harding/bitbarrel/Bootstrap.hrd".
+
+# Create persistent table
+users := BarrelTable create: "users".
+users at: 'alice' put: 'Alice Smith'.
+name := users at: 'alice'.
+
+# Collection operations
+users keys.                    # All keys
+users size.                    # Number of entries
+users includesKey: 'alice'.    # Check existence
+users removeKey: 'alice'.    # Remove entry
+
+# Iterate
+users do: [:key :value |
+    Transcript showCr: key + " => " + value
+].
+
+# Select/Collect (returns in-memory Table)
+adults := users select: [:key :user | (user at: 'age') >= 18].
+names := users collect: [:key :user | user at: 'name'].
+```
+
+**BarrelSortedTable** - Ordered storage with range queries:
+
+```smalltalk
+# Create ordered table (uses critbit index)
+logs := BarrelSortedTable create: "logs".
+logs at: '2024-01-01:001' put: 'System started'.
+
+# Range queries (returns in-memory Table)
+janLogs := logs rangeFrom: '2024-01-01' to: '2024-02-01'.
+
+# Prefix queries
+day1Logs := logs prefix: '2024-01-01:'.
+
+# Ordered access
+logs first.    # First entry
+logs last.     # Last entry
+logs keys.     # Keys in sorted order
+```
+
+**Building with BitBarrel:**
+
+```bash
+nimble harding_bitbarrel    # Build REPL with BitBarrel
+```
+
 ---
 
 ## For More Information

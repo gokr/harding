@@ -564,6 +564,13 @@ The Standard Library provides additional collection and utility classes, auto-im
 - **FileStream** - File I/O operations
 - **Exception hierarchy** - Error, MessageNotUnderstood, etc.
 
+### BitBarrel (Optional)
+
+Build with `-d:bitbarrel` flag. See [BitBarrel Integration](../../CLAUDE.md#bitbarrel-integration).
+
+- **BarrelTable** - Persistent hash-based key-value storage
+- **BarrelSortedTable** - Persistent ordered storage with range queries
+
 ---
 
 ## Type Checking Pattern

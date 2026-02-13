@@ -104,12 +104,16 @@ This document tracks current work items and future directions for Harding develo
 - [x] SharedQueue for producer-consumer patterns
 - [x] Semaphore for counting/binary locks
 
-## Low Priority
+## Completed
 
-### BitBarrel Integration
-- [ ] First-class barrel objects
-- [ ] Transparent persistence
-- [ ] Crash recovery support
+### BitBarrel Integration (2026-02-13)
+- [x] First-class barrel objects (`Barrel`, `BarrelTable`, `BarrelSortedTable`)
+- [x] WebSocket client for BitBarrel server communication
+- [x] Hash-based persistent storage (`BarrelTable`)
+- [x] Ordered persistent storage with range queries (`BarrelSortedTable`)
+- [x] Collection protocol support (do:, select:, collect:, keys, size)
+- [x] Conditional compilation with `-d:bitbarrel` flag
+- [x] Harding-side class definitions in `lib/harding/bitbarrel/`
 
 ### Language Evolution
 - [x] Multiple inheritance syntax (implemented via `addParent:`)

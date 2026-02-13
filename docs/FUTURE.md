@@ -114,6 +114,39 @@ All GUI tools are written in Harding code, making them malleable at runtime. Onl
 
 ---
 
+## BitBarrel Integration
+
+**Status**: ✅ Implemented (2026-02-13)
+
+BitBarrel provides first-class persistent key-value storage for Harding:
+
+```smalltalk
+# Connect to BitBarrel server
+users := BarrelTable create: "users".
+users at: 'alice' put: 'Alice Smith'.
+name := users at: 'alice'.
+
+# Range queries with BarrelSortedTable
+logs := BarrelSortedTable create: "logs".
+janLogs := logs rangeFrom: '2024-01-01' to: '2024-02-01'.
+prefixLogs := logs prefix: '2024-01-'.
+```
+
+**Features:**
+- WebSocket client for BitBarrel server communication
+- Hash-based storage (`BarrelTable`) with O(1) lookups
+- Ordered storage (`BarrelSortedTable`) with critbit indexing
+- Range queries and prefix matching
+- Collection protocol support (do:, select:, collect:)
+- Conditional compilation via `-d:bitbarrel` flag
+
+**Build:**
+```bash
+nimble harding_bitbarrel  # Build with BitBarrel support
+```
+
+---
+
 ## Smalltalk-80 Compatibility Gaps
 
 ### High Priority Missing Features
@@ -224,6 +257,7 @@ pid send: #compute with: 42.
 - ✅ Complete GTK IDE tools (Workspace, Transcript, Launcher)
 - ✅ Desktop integration with proper icons
 - ✅ Granite compiler: standalone script compilation with inline control flow
+- ✅ BitBarrel integration: persistent collections with range queries
 - First-class block compilation with captures and non-local returns
 - Start test framework implementation
 

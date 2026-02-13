@@ -248,6 +248,9 @@ nimble build
 # Build and copy binaries to root directory
 nimble local
 
+# Build with BitBarrel support
+nimble harding_bitbarrel
+
 # Build GUI IDE (debug)
 nimble bona
 

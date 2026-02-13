@@ -170,6 +170,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Granite compiles standalone `.hrd` scripts to native binaries via Nim
 - Inline compilation of `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`, `whileTrue:`, `whileFalse:`, `timesRepeat:`
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
+- BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
 
 **In progress:**
 - Compiler to Nim: first-class blocks with captures, non-local returns
@@ -183,6 +184,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Implementation](docs/IMPLEMENTATION.md) - VM internals
 - [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
 - [Future Plans](docs/FUTURE.md) - Roadmap
+- [CLAUDE.md](CLAUDE.md) - Developer guide with BitBarrel integration
 - [Compilation Pipeline](docs/design/COMPILATION_PIPELINE.md) - Granite compiler architecture
 - [JavaScript Backend](docs/JAVASCRIPT.md) - Browser REPL (experimental)
 - [GTK Integration](docs/GTK.md) - GUI development
