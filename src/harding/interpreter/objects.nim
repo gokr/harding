@@ -404,9 +404,9 @@ proc initCoreClasses*(): Class =
     classSelectorPutMethod.setNativeImpl(classAddClassMethodImpl)
     addMethodToClass(objectClass, "classSelector:put:", classSelectorPutMethod, isClassMethod = true)
 
-    # derive: - create class with slots
+    # derive: - create class with slots and auto-generate accessors
     let deriveWithSlotsMethod = createCoreMethod("derive:")
-    deriveWithSlotsMethod.setNativeImpl(classDeriveImpl)
+    deriveWithSlotsMethod.setNativeImpl(classDeriveWithAccessorsImpl)
     addMethodToClass(objectClass, "derive:", deriveWithSlotsMethod, isClassMethod = true)
 
     # derive - create class without slots
