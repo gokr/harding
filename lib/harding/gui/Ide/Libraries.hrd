@@ -45,8 +45,8 @@ Library class>>allNames [
 # Instance method to get classes in a library
 Library>>classes [
     ^ bindings values select: [:obj |
-        # Check if it's a class by seeing if it responds to class methods
-        obj respondsTo: #className
+        # Check if it's a class using isKindOf: Class
+        obj isKindOf: Class
     ]
 ].
 
