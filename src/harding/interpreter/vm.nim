@@ -1994,18 +1994,22 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.classMethods["new"] = classNewMethod
   objectCls.allClassMethods["new"] = classNewMethod
 
-  # Register Object class>>newInstance - creates instance without calling initialize
-  proc objectClassNewInstanceImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  # Register Object class>>basicNew - creates instance without calling initialize
+  # This is the primitive that 'new' uses after creating the instance
+  proc objectClassBasicNewImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
     # self.class is the class receiving the message
     if self != nil and self.class != nil:
       return newInstance(self.class).toValue()
     return newInstance(objectClass).toValue()
 
-  let classNewInstanceMethod = createCoreMethod("newInstance")
-  classNewInstanceMethod.setNativeImpl(objectClassNewInstanceImpl)
-  classNewInstanceMethod.hasInterpreterParam = true
-  objectCls.classMethods["newInstance"] = classNewInstanceMethod
-  objectCls.allClassMethods["newInstance"] = classNewInstanceMethod
+  let classBasicNewMethod = createCoreMethod("basicNew")
+  classBasicNewMethod.setNativeImpl(objectClassBasicNewImpl)
+  classBasicNewMethod.hasInterpreterParam = true
+  objectCls.classMethods["basicNew"] = classBasicNewMethod
+  objectCls.allClassMethods["basicNew"] = classBasicNewMethod
+  # Also register primitiveBasicNew for <primitive> syntax
+  objectCls.classMethods["primitiveBasicNew"] = classBasicNewMethod
+  objectCls.allClassMethods["primitiveBasicNew"] = classBasicNewMethod
 
   # Add perform: methods to Object class (for primitive dispatch from Smalltalk)
   let objPerformMethod = createCoreMethod("perform:")
@@ -2025,6 +2029,14 @@ proc initGlobals*(interp: var Interpreter) =
   objPerformWithWithMethod.hasInterpreterParam = true
   objectCls.methods["perform:with:with:"] = objPerformWithWithMethod
   objectCls.allMethods["perform:with:with:"] = objPerformWithWithMethod
+
+  # Register primitivePerform: selectors for Object.hrd <primitive> syntax
+  objectCls.methods["primitivePerform:"] = objPerformMethod
+  objectCls.allMethods["primitivePerform:"] = objPerformMethod
+  objectCls.methods["primitivePerform:with:"] = objPerformWithMethod
+  objectCls.allMethods["primitivePerform:with:"] = objPerformWithMethod
+  objectCls.methods["primitivePerform:with:with:"] = objPerformWithWithMethod
+  objectCls.allMethods["primitivePerform:with:with:"] = objPerformWithWithMethod
 
   # Add primitiveIdentity: for == comparison
   let objIdentityMethod = createCoreMethod("primitiveIdentity:")
@@ -2152,6 +2164,34 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.allClassMethods["className"] = classNameMethod
   objectCls.classMethods["primitiveClassName"] = classNameMethod
   objectCls.allClassMethods["primitiveClassName"] = classNameMethod
+  # Add "name" alias for class-side (Object class>>name in Object.hrd uses primitiveClassName)
+  objectCls.classMethods["name"] = classNameMethod
+  objectCls.allClassMethods["name"] = classNameMethod
+
+  # Add isClass method to Object - returns true if self is a Class object
+  proc primitiveIsClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    # Check if self is a Class object (like String, Number, Object, etc.)
+    # In this system, class objects are instances of their metaclass.
+    # A class object's metaclass has the same name as the class itself.
+    # e.g., Object's class is the "Object" metaclass (different from Object itself)
+    # We identify classes by checking known metaclass names
+    if self.class != nil:
+      let className = self.class.name
+      # Known class/metaclass names - these are all the classes defined in initGlobals
+      if className in ["Root", "Object", "Class", "Number", "Integer", "Float",
+                       "String", "Array", "Table", "Set", "Boolean", "True", "False",
+                       "Block", "UndefinedObject", "Library", "Mixin"]:
+        return trueValue
+    return falseValue
+
+  let isClassMethod = createCoreMethod("isClass")
+  isClassMethod.setNativeImpl(primitiveIsClassImpl)
+  isClassMethod.hasInterpreterParam = true
+  objectCls.methods["isClass"] = isClassMethod
+  objectCls.allMethods["isClass"] = isClassMethod
+  # Also add primitiveIsClass for <primitive: #primitiveIsClass> syntax
+  objectCls.methods["primitiveIsClass"] = isClassMethod
+  objectCls.allMethods["primitiveIsClass"] = isClassMethod
 
   # Add print and println as native methods
   proc objPrintImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -4069,11 +4109,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           var classMethodDefiningClass: Class = nil
 
           let classMethodLookup = lookupClassMethod(cls, frame.selector)
+          debug("DEBUG: class method lookup on ", cls.name, " for ", frame.selector, ": ", $(classMethodLookup.found))
           if classMethodLookup.found:
             classMethodToRun = classMethodLookup.currentMethod
             classMethodDefiningClass = classMethodLookup.definingClass
           elif objectClass != nil:
+            debug("DEBUG: trying Object class methods, objectClass is nil: ", $(objectClass == nil))
             let objectClassMethodLookup = lookupClassMethod(objectClass, frame.selector)
+            debug("DEBUG: class method lookup on Object for ", frame.selector, ": ", $(objectClassMethodLookup.found))
             if objectClassMethodLookup.found:
               classMethodToRun = objectClassMethodLookup.currentMethod
               classMethodDefiningClass = objectClassMethodLookup.definingClass
