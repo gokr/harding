@@ -31,7 +31,12 @@ cd harding
 nimble local  # Build and copy binaries to root directory
 ```
 
-Binaries: `harding` (REPL/interpreter), `granite` (compiler), `bona` (GTK IDE)
+Binaries:
+- `harding` - REPL/interpreter
+- `harding_debug` - REPL with debugger support
+- `harding-lsp` - Language Server for IDE support
+- `granite` - Compiler to Nim
+- `bona` - GTK IDE
 
 ### IDE Desktop Integration (Ubuntu/GNOME)
 
@@ -92,11 +97,25 @@ Scripts execute with `self = nil`, following the Smalltalk workspace convention.
 
 ### VSCode Extension
 
-Syntax highlighting for `.hrd` files:
+Full IDE support for `.hrd` files with syntax highlighting, completions, and debugging:
 
 ```bash
-code --install-extension harding-lang-0.1.0.vsix
+# Build the extension
+nimble vsix
+
+# Install
+code --install-extension vscode-harding/vscode-harding-0.4.0.vsix
 ```
+
+**Features:**
+- Syntax highlighting
+- Code completions (LSP)
+- Hover information (LSP)
+- Go to definition (LSP)
+- Breakpoints and stepping (DAP)
+- Variable inspection (DAP)
+
+See [VSCODE.md](docs/VSCODE.md) for full details.
 
 ## For Smalltalkers
 
@@ -171,6 +190,9 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Inline compilation of `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`, `whileTrue:`, `whileFalse:`, `timesRepeat:`
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
 - BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
+- VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
+- Harding Debug Protocol (HDP) for VM debugging
+- Language Server Protocol (LSP) for IDE integration
 
 **In progress:**
 - Compiler to Nim: first-class blocks with captures, non-local returns

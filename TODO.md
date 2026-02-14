@@ -96,6 +96,9 @@ This document tracks current work items and future directions for Harding develo
 ### Tooling
 - [ ] REPL history and completion
 - [x] Editor syntax highlighting definitions (VSCode extension)
+- [x] Language Server Protocol (LSP) implementation
+- [x] Debug Adapter Protocol (DAP) implementation
+- [x] VSCode extension with full IDE support
 - [ ] Build system refinements
 - [ ] Better error messages
 
@@ -105,6 +108,18 @@ This document tracks current work items and future directions for Harding develo
 - [x] Semaphore for counting/binary locks
 
 ## Completed
+
+### VSCode Extension with LSP and DAP (2026-02-13)
+- [x] Harding Debug Protocol (HDP) server with TCP socket
+- [x] Breakpoint management (set, remove, clear, conditional)
+- [x] Stepping support (step over, step into, step out)
+- [x] Stack frame inspection
+- [x] Variable inspection (locals, arguments, self)
+- [x] Language Server Protocol (LSP) implementation
+- [x] LSP features: completions, hover, document symbols, workspace symbols
+- [x] Debug Adapter Protocol (DAP) TypeScript implementation
+- [x] VSCode extension packaging with `nimble vsix`
+- [x] Extension includes syntax highlighting, LSP client, and DAP adapter
 
 ### BitBarrel Integration (2026-02-13)
 - [x] First-class barrel objects (`Barrel`, `BarrelTable`, `BarrelSortedTable`)
@@ -575,4 +590,4 @@ EOF
 - Updated IDE Browser, Libraries, and Workspace components
 - Simplified blocked process handling in scheduler
 
-*Last Updated: 2026-02-13*
+*Last Updated: 2026-02-14*

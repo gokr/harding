@@ -5,6 +5,8 @@
 Harding provides several command-line tools to support development, debugging, and deployment:
 
 - `harding` - REPL and interpreter for interactive development
+- `harding_debug` - REPL with debugger support for VSCode integration
+- `harding-lsp` - Language Server for IDE support
 - `granite` - Compiler for transforming Harding to Nim code
 - `bona` - GTK-based graphical IDE (Bonadventure)
 - `nimble` - Build automation and package management
@@ -52,6 +54,7 @@ harding --ast --loglevel DEBUG -e "Object clone"
 **--test:** Run built-in tests
 **--version:** Show version information
 **--help:** Display usage information
+**--debugger-port <port>:** Start debugger server on specified port (requires `-d:debugger` build)
 
 ### Script Files
 
@@ -109,6 +112,73 @@ Inside the REPL, these commands are available:
 - `:quit` or `^D` - Exit REPL
 - `:clear` - Clear the screen
 - `:trace` - Toggle execution tracing
+
+## The Debugger: harding_debug
+
+The `harding_debug` command provides a REPL with integrated debugger support for VSCode.
+
+### Building
+
+```bash
+# Build with debugger support
+nimble harding_debug
+```
+
+### Usage
+
+```bash
+# Start with debugger server
+harding_debug --debugger-port 9877
+
+# Debug a script
+harding_debug --debugger-port 9877 script.hrd
+
+# Debug with other options
+harding_debug --debugger-port 9877 --loglevel DEBUG script.hrd
+```
+
+### Debugger Protocol
+
+The debugger communicates via TCP using the Harding Debug Protocol (HDP):
+
+- **Port**: Configurable (default 9877)
+- **Protocol**: JSON-RPC style messages
+- **Features**: Breakpoints, stepping, call stack, variables
+
+### VSCode Integration
+
+The debugger integrates with VSCode via the Debug Adapter Protocol (DAP):
+
+1. Build the extension: `nimble vsix`
+2. Install: `code --install-extension vscode-harding/vscode-harding-0.4.0.vsix`
+3. Set breakpoints in VSCode
+4. Press F5 to debug
+
+See [VSCODE.md](VSCODE.md) for full details.
+
+## The Language Server: harding-lsp
+
+The `harding-lsp` command provides IDE features via the Language Server Protocol (LSP).
+
+### Building
+
+```bash
+nimble harding_lsp
+```
+
+### Usage
+
+```bash
+harding-lsp --stdio
+```
+
+### Features
+
+- **Completions** - Context-aware selector suggestions
+- **Hover** - Documentation and type information
+- **Go to Definition** - Navigate to method definitions
+- **Document Symbols** - Outline view
+- **Workspace Symbols** - Global search
 
 ## The Compiler: granite
 
@@ -247,6 +317,15 @@ nimble build
 
 # Build and copy binaries to root directory
 nimble local
+
+# Build with debugger support
+nimble harding_debug
+
+# Build Language Server
+nimble harding_lsp
+
+# Build VSCode extension
+nimble vsix
 
 # Build with BitBarrel support
 nimble harding_bitbarrel
