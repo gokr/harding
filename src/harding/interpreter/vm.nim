@@ -4528,19 +4528,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         # Methods without explicit ^ return self
         # Pop any leftover values from the stack (expressions that were evaluated)
-        debug("VM: method return - evalStack.len=", interp.evalStack.len, " savedDepth=", frame.savedEvalStackDepth)
         if interp.evalStack.len > frame.savedEvalStackDepth:
-          let discarded = interp.popValue()
-          debug("VM: discarded last expression: ", discarded.toString())
+          discard interp.popValue()
         # Return self (the receiver of the method being popped)
         # Must get this BEFORE popping the activation
         if interp.currentActivation != nil and interp.currentActivation.receiver != nil:
           resultValue = interp.currentActivation.receiver.toValue().unwrap()
-          debug("VM: returning self (receiver): ", resultValue.toString())
         else:
           resultValue = nilValue()
-          debug("VM: returning nil (no receiver)")
-      debug("VM: wfPopActivation resultValue=", resultValue.toString())
 
       # Now pop the activation
       discard interp.activationStack.pop()
