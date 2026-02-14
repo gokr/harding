@@ -154,13 +154,27 @@ task clean, "Clean build artifacts using build.nims":
 
 
 task vsix, "Build the VS Code extension (vsix file)":
-  ## Build the Harding VS Code extension package
+  ## Build the Harding VS Code extension package with LSP and DAP support
   ## Requires vsce to be installed: npm install -g vsce
-  if not "package.json".fileExists:
-    echo "Error: package.json not found in current directory"
+  let extDir = "vscode-harding"
+  if not (extDir / "package.json").fileExists:
+    echo "Error: package.json not found in " & extDir
     system.quit(1)
-  exec "vsce package"
-  echo "VSIX file built successfully"
+
+  # Build harding-lsp first
+  echo "Building Harding Language Server..."
+  exec "nim c -o:harding-lsp src/harding/lsp/main.nim"
+
+  # Install npm dependencies and compile TypeScript
+  echo "Installing extension dependencies..."
+  exec "cd " & extDir & " && npm install"
+  echo "Compiling TypeScript..."
+  exec "cd " & extDir & " && npm run compile"
+
+  # Package the extension
+  echo "Packaging extension..."
+  exec "cd " & extDir & " && vsce package"
+  echo "VSIX file built successfully in " & extDir
 
 task jsrelease, "Compile optimized JS for production":
   ## Build optimized JavaScript for production

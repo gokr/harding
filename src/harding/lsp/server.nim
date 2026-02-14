@@ -139,11 +139,11 @@ proc sendResponse*(server: LspServer, id: JsonNode, result: JsonNode = nil, erro
     response["error"] = error
   server.sendMessage(response)
 
-proc sendNotification*(server: LspServer, method: string, params: JsonNode) =
+proc sendNotification*(server: LspServer, methodName: string, params: JsonNode) =
   ## Send a JSON-RPC notification
   let notification = %*{
     "jsonrpc": "2.0",
-    "method": method,
+    "method": methodName,
     "params": params
   }
   server.sendMessage(notification)
@@ -167,28 +167,13 @@ proc parseDocument*(server: LspServer, uri: string, text: string): Document =
   result.ast = parser.parseStatements()
 
   # Extract symbols from AST
+  # TODO: Add more symbol types when parser supports class definition nodes
   for node in result.ast:
     case node.kind:
-      of nkAssignment:
-        let assign = cast[AssignmentNode](node)
-        if assign.target.kind == nkIdentifier:
-          let ident = cast[IdentNode](assign.target)
-          result.symbols.add(DocumentSymbol(
-            name: ident.name,
-            kind: skVariable,
-            line: node.line,
-            col: node.col,
-            containerName: ""
-          ))
-      of nkClassDefinition:
-        let classDef = cast[ClassDefinitionNode](node)
-        result.symbols.add(DocumentSymbol(
-          name: classDef.className,
-          kind: skClass,
-          line: node.line,
-          col: node.col,
-          containerName: ""
-        ))
+      of nkAssign:
+        # Assignment - could be a variable or class definition
+        # For now, just note that something is being assigned
+        discard
       else:
         discard
 
