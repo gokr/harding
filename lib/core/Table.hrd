@@ -8,9 +8,9 @@
 # Table primitives
 #====================================================================
 
-Table>>at: key <primitive primitiveAt: key>
+Table>>at: key <primitive primitiveTableAt: key>
 
-Table>>at: key put: value <primitive primitiveAt: key put: value>
+Table>>at: key put: value <primitive primitiveTableAt:put: key put: value>
 
 Table>>keys <primitive primitiveKeys>
 
