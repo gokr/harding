@@ -15,22 +15,29 @@ Harding is a prototype-based Smalltalk dialect that compiles to Nim. It provides
 ## Build Commands
 
 ```bash
-nimble local             # Build and copy binaries to root directory (PREFERRED)
-nimble build             # Build the REPL and compiler (binaries in subdirectories only)
+nimble harding           # Build harding REPL in repo root (debug)
+nimble harding_release   # Build harding REPL in repo root (release)
+nimble bona              # Build bona IDE in repo root (debug)
+nimble bona_release      # Build bona IDE in repo root (release)
+nimble build             # Build all binaries (in subdirectories only)
 nimble test              # Run all tests (automatic discovery via testament)
 nimble clean             # Clean build artifacts and binaries
 nimble install_harding   # Install harding binary to ~/.local/bin/
 ```
 
-**IMPORTANT**: Always use `nimble local` when developing. This is the only command that updates the `./harding` and `./granite` binaries in the root directory. Using `nimble build` alone will NOT update the root directory binaries.
+**IMPORTANT**: Use `nimble harding` to build the REPL and `nimble bona` to build the IDE. These commands place binaries in the root directory for easy access. Using `nimble build` alone will NOT update the root directory binaries.
 
 ### Convenience Tasks
 
 The following nimble tasks provide convenient shortcuts for common development tasks:
 
-- **`nimble local`**: Builds the project using `nimble build` and copies the `harding` and `granite` binaries to the root directory for easy access. **Always use this when developing.**
+- **`nimble harding`**: Build the `harding` REPL binary in the root directory
+- **`nimble harding_release`**: Build the `harding` REPL with release optimizations
+- **`nimble bona`**: Build the `bona` IDE binary in the root directory
+- **`nimble bona_release`**: Build the `bona` IDE with release optimizations
 - **`nimble clean`**: Removes build artifacts including nimcache, build directories, and binaries from all locations
 - **`nimble install_harding`**: Copies the `harding` binary to `~/.local/bin` (Unix/Linux/macOS) or appropriate Windows location
+- **`nimble install_bona`**: Installs the `bona` binary and desktop integration (.desktop file and icon)
 - **`nimble harding_bitbarrel`**: Build REPL with BitBarrel database support (requires BitBarrel server)
 
 These tasks match the functionality previously only available through `nim e build.nims <task>`.
@@ -747,11 +754,57 @@ window title: "Hello"  # Set the window title
 
 **Important**: Do NOT use `"..."` (double quotes) for comments in Harding - these are strings. Always use `#` for comments.
 
+### Literals
+
+**Strings**: Double quotes only
+```harding
+"Hello, World!"
+"String with #{interpolation}"    # Variable interpolation
+"Line 1\nLine 2"                  # Escape sequences
+```
+
+**Symbols**: Hash followed by identifier or string
+```harding
+#mySymbol        # Simple symbol
+#"a symbol"      # Symbol with spaces or special chars
+#'another'      # Alternative quote style
+```
+
+**Numbers**:
+```harding
+42          # Integer
+3.14        # Float
+0xFF        # Hexadecimal (integer only)
+```
+
+**Booleans and nil**:
+```harding
+true
+false
+nil
+```
+
+**Arrays**: Literal syntax with `#(...)`
+```harding
+#(1 2 3)                    # Array of integers
+#("a" "b" "c")             # Array of strings
+#(1 'two' 3.0)              # Mixed types
+```
+
+**Tables** (dictionaries): Literal syntax with `#{...}`
+```harding
+#{#key -> "value"}          # Table with symbol key
+#{"name" -> "Alice"}        # Table with string key
+```
+
 ### Common Syntax Patterns
 
 **Class definition with slots:**
 ```harding
 MyClass := Object derive: #(slot1 slot2 slot3)
+
+# With automatic accessors (getters and setters)
+Point := Object deriveWithAccessors: #(x y)
 ```
 
 **Method definition:**
@@ -760,6 +813,11 @@ MyClass>>methodName: arg1 with: arg2 [
     | localVar |
     localVar := arg1 + arg2.
     ^localVar    # Return value using ^
+]
+
+# Class method
+MyClass class>>new [
+    ^ super new initialize
 ]
 ```
 
@@ -773,6 +831,12 @@ MyClass>>methodName: arg1 with: arg2 [
 
 # Block with no parameters
 [Transcript showCr: "Hello"]
+
+# Block with early return
+[:val |
+    val < 0 ifTrue: [^ 0].    # Early return from block
+    val * 2
+]
 ```
 
 **Conditionals:**
@@ -786,13 +850,81 @@ condition ifFalse: [
 ].
 
 condition ifTrue: [...] ifFalse: [...]
+
+# While loops
+[condition] whileTrue: [body].
+[condition] whileFalse: [body].
+
+# Times repeat
+5 timesRepeat: [Transcript showCr: "Hello!"].
 ```
+
+### Primitive Syntax
+
+Primitives declare methods implemented in Nim. They provide access to low-level operations and VM functionality.
+
+**Declarative syntax** (recommended for simple methods):
+```harding
+# Method that directly calls a primitive
+Class>>method: arg <primitive primitiveSelector: arg>
+
+# Examples from core library
+Table>>at: key <primitive primitiveTableAt: key>
+Table>>at: key put: value <primitive primitiveTableAt: key put: value>
+Array>>size <primitive primitiveArraySize>
+```
+
+**Inline syntax** (for use inside method bodies):
+```harding
+Class>>method [
+    | temp |
+    temp := self setup.
+    ^ <primitive primitiveDoSomething: temp>
+]
+
+# Examples
+MyClass>>clone [
+    ^ <primitive primitiveClone>
+]
+```
+
+**Primitive syntax rules:**
+1. **Declarative form**: `Class>>selector <primitive primName: arg1 ...>`
+   - Placed directly after the method signature
+   - Arguments must match the method parameter names
+   - No method body (brackets) when using declarative form
+
+2. **Inline form**: `^ <primitive primName: expr>`
+   - Used inside method body with brackets `[...]`
+   - Arguments can be any expression
+   - Typically used with `^` (return) to return the primitive result
+
+3. **Argument matching**: In declarative form, primitive argument names must match method parameters:
+   ```harding
+   # Correct: 'key' in primitive matches 'key' parameter
+   Table>>at: key <primitive primitiveTableAt: key>
+
+   # Error: 'x' does not match parameter 'key'
+   Table>>at: key <primitive primitiveTableAt: x>
+   ```
+
+4. **Colon count**: The number of colons in the primitive selector must match the number of arguments:
+   ```harding
+   # Correct: 2 colons, 2 arguments
+   Table>>at: key put: value <primitive primitiveTableAt: key put: value>
+
+   # Error: primitiveTableAt: takes 1 argument, but 2 provided
+   Table>>at: key put: value <primitive primitiveTableAt: key put: value>
+   ```
 
 **Common methods:**
 - `isEmpty` / `isEmpty not` - Check if string/collection is empty (use `isEmpty not` instead of `notEmpty`)
 - `notNil` - Check if object is not nil
 - `class` - Get the class of an object
 - `derive:` - Create a new class with slots
+- `at:` / `at:put:` - Dictionary-style property access
+- `clone` - Create a shallow copy of an object
+- `perform:` / `perform:with:` - Dynamic message sending
 
 ## BitBarrel Integration
 
