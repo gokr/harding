@@ -2,9 +2,10 @@
 # server.nim - Harding Debug Protocol (HDP) TCP server
 #
 # Accepts connections from VSCode debugger client and dispatches requests.
+# Uses synchronous sockets with threading for concurrent connections.
 #
 
-import std/[net, json, strutils, tables, locks, os, streams]
+import std/[net, json, strutils, tables, locks, os, streams, threadpool, sequtils]
 import ../core/types
 import ./protocol
 import ./breakpoints
@@ -32,7 +33,7 @@ proc defaultDebugServerConfig*(): DebugServerConfig =
 
 type
   DebugServer* = ref object
-    socket*: AsyncSocket
+    socket*: Socket
     config*: DebugServerConfig
     running*: bool
     bridge*: DebuggerBridge
@@ -40,57 +41,6 @@ type
     nextRequestSeq*: int
 
 var globalDebugServer*: DebugServer = nil
-
-# ============================================================================
-# Message Queue for Thread-Safe Communication
-# ============================================================================
-
-type
-  MessageQueue* = ref object
-    lock*: Lock
-    condition*: Cond
-    messages*: seq[string]
-
-var globalMessageQueue*: MessageQueue = nil
-
-proc initMessageQueue*() =
-  ## Initialize global message queue
-  if globalMessageQueue == nil:
-    globalMessageQueue = MessageQueue()
-    globalMessageQueue.lock = Lock()
-    globalMessageQueue.condition = Cond()
-    globalMessageQueue.messages = @[]
-    initLock(globalMessageQueue.lock)
-    initCond(globalMessageQueue.condition)
-
-proc sendMessage*(msg: string) =
-  ## Send a message to the debug client (thread-safe)
-  if globalMessageQueue == nil:
-    return
-  withLock(globalMessageQueue.lock):
-    globalMessageQueue.messages.add(msg)
-  signal(globalMessageQueue.condition)
-
-proc popMessage*(): string =
-  ## Pop a message from the queue (blocking)
-  if globalMessageQueue == nil:
-    return ""
-  withLock(globalMessageQueue.lock):
-    while globalMessageQueue.messages.len == 0:
-      wait(globalMessageQueue.condition, globalMessageQueue.lock)
-    result = globalMessageQueue.messages[0]
-    globalMessageQueue.messages.delete(0)
-
-proc tryPopMessage*(): string =
-  ## Try to pop a message (non-blocking)
-  if globalMessageQueue == nil:
-    return ""
-  withLock(globalMessageQueue.lock):
-    if globalMessageQueue.messages.len > 0:
-      result = globalMessageQueue.messages[0]
-      globalMessageQueue.messages.delete(0)
-    else:
-      result = ""
 
 # ============================================================================
 # Request Handlers
@@ -248,26 +198,27 @@ proc processClientMessage(server: DebugServer, msg: string): string =
   except Exception as e:
     result = formatResponse(createErrorResponse(0, "Parse error: " & e.msg))
 
-proc handleClient*(server: DebugServer, client: AsyncSocket) {.async.} =
+proc handleClient*(server: DebugServer, client: Socket) =
   ## Handle a connected client
   server.clientConnected = true
   echo "HDP client connected"
 
   var lineBuf = ""
+  var recvBuf = ""
 
   try:
     while server.running and server.clientConnected:
-      let data = await client.recv(1024)
-      if data.len == 0:
+      recvBuf = client.recv(1)
+      if recvBuf.len == 0:
         break
 
-      for c in data:
-        if c == '\n':
-          let response = processClientMessage(server, lineBuf)
-          await client.send(response & "\n")
-          lineBuf = ""
-        else:
-          lineBuf.add(c)
+      let c = recvBuf[0]
+      if c == '\n':
+        let response = processClientMessage(server, lineBuf)
+        client.send(response & "\n")
+        lineBuf = ""
+      else:
+        lineBuf.add(c)
 
   except Exception as e:
     echo "Client error: ", e.msg
@@ -288,9 +239,9 @@ proc newDebugServer*(config: DebugServerConfig): DebugServer =
   result.clientConnected = false
   result.nextRequestSeq = 1
 
-proc startServer*(server: DebugServer) {.async.} =
-  ## Start the debug server and accept connections
-  server.socket = newAsyncSocket()
+proc startServer*(server: DebugServer) =
+  ## Start the debug server and accept connections (blocking)
+  server.socket = newSocket()
   server.socket.setSockOpt(OptReuseAddr, true)
   server.socket.bindAddr(Port(server.config.port), server.config.host)
   server.socket.listen()
@@ -307,8 +258,10 @@ proc startServer*(server: DebugServer) {.async.} =
   server.running = true
 
   while server.running:
-    let client = await server.socket.accept()
-    asyncCheck handleClient(server, client)
+    var client: Socket
+    new(client)
+    server.socket.accept(client)
+    spawn handleClient(server, client)
 
 proc stopServer*(server: DebugServer) =
   ## Stop the debug server
@@ -321,23 +274,18 @@ proc runServerBlocking*(config: DebugServerConfig = defaultDebugServerConfig()) 
   ## Run the debug server in a blocking manner (for use in thread)
   let server = newDebugServer(config)
   globalDebugServer = server
-  initMessageQueue()
-  waitFor startServer(server)
+  startServer(server)
 
 # ============================================================================
 # Thread Entry Point
 # ============================================================================
 
-proc debuggerServerThread*(param: pointer) {.gcsafe.} =
-  ## Thread entry point for the debug server
+proc runServerThreaded*(config: DebugServerConfig) {.gcsafe, thread.} =
+  ## Run the debug server in a thread
   {.gcsafe.}:
-    var config = cast[ptr DebugServerConfig](param)[]
     runServerBlocking(config)
 
 proc startDebuggerServerInThread*(config: DebugServerConfig = defaultDebugServerConfig()) =
   ## Start the debug server in a background thread
-  var thread: Thread[ptr DebugServerConfig]
-  var configPtr = cast[ptr DebugServerConfig](alloc0(sizeof(DebugServerConfig)))
-  configPtr[] = config
-  initMessageQueue()
-  createThread(thread, debuggerServerThread, configPtr)
+  var thread: Thread[DebugServerConfig]
+  createThread(thread, runServerThreaded, config)

@@ -4,8 +4,7 @@
 # Handles breakpoint table, resolution, and conditional breakpoints.
 #
 
-import std/[tables, strutils, hashes]
-import ../core/types
+import std/[tables, hashes]
 import ./protocol
 
 # ============================================================================

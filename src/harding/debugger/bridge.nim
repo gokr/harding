@@ -100,23 +100,21 @@ proc checkDebuggerHook*(interp: var Interpreter, frame: WorkFrame) =
       # TODO: Signal paused state to debug server
       return
 
-    # Get source location from frame
-    var file = ""
+    # Get source location from frame (line only - nodes don't store filename)
     var line = 0
 
     if frame.kind == wfSendMessage and frame.msgNode != nil:
-      file = frame.msgNode.filename
       line = frame.msgNode.line
     elif frame.kind == wfEvalNode and frame.node != nil:
-      file = frame.node.filename
       line = frame.node.line
 
-    if file.len == 0 or line == 0:
+    if line == 0:
       return
 
-    # Check for breakpoint
-    if bridge.manager.shouldBreakAt(file, line):
-      bridge.lastHitBreakpoint = (file, line)
+    # Check for breakpoint (using empty filename for now since nodes don't track it)
+    # TODO: Add filename tracking to nodes
+    if bridge.manager.shouldBreakAt("", line):
+      bridge.lastHitBreakpoint = ("", line)
       bridge.isPaused = true
       # TODO: Signal breakpoint hit to debug server
 
@@ -132,20 +130,18 @@ proc buildStackFrame*(interp: Interpreter, depth: int): StackFrame =
     raise newException(ValueError, "Stack depth out of range: " & $depth)
 
   let activation = interp.activationStack[interp.activationStack.len - 1 - depth]
-  let methodBlock = activation.methodBlock
+  let currentMethod = activation.currentMethod
 
-  var file = ""
   var line = 0
   var col = 0
 
-  if methodBlock != nil:
-    file = methodBlock.filename
-    line = methodBlock.line
-    col = methodBlock.col
+  if currentMethod != nil:
+    line = currentMethod.line
+    col = currentMethod.col
 
   var className = ""
-  if activation.definingClass != nil:
-    className = activation.definingClass.name
+  if activation.definingObject != nil:
+    className = activation.definingObject.name
 
   var receiverClass = ""
   if activation.receiver != nil and activation.receiver.class != nil:
@@ -153,8 +149,8 @@ proc buildStackFrame*(interp: Interpreter, depth: int): StackFrame =
 
   result = StackFrame(
     id: depth,
-    name: if methodBlock != nil: methodBlock.selector else: "<unknown>",
-    file: file,
+    name: if currentMethod != nil: currentMethod.selector else: "<unknown>",
+    file: "",  # Nodes don't store filename currently
     line: line,
     column: col,
     className: className,
@@ -190,6 +186,7 @@ proc valueToString*(val: NodeValue): string =
     of vkFloat: return $val.floatVal
     of vkString: return "\"" & val.strVal & "\""
     of vkSymbol: return "'" & val.symVal
+    of vkBool: return $val.boolVal
     of vkInstance:
       if val.instVal == nil:
         return "nil"
@@ -203,6 +200,8 @@ proc valueToString*(val: NodeValue): string =
         of ikString: return "\"" & inst.strVal & "\""
     of vkBlock: return "[:" & val.blockVal.parameters.join(":") & " | ...]"
     of vkClass: return val.classVal.name
+    of vkArray: return "Array(" & $val.arrayVal.len & " items)"
+    of vkTable: return "Table(" & $val.tableVal.len & " items)"
 
 proc getVariables*(interp: Interpreter, frameId: int): seq[Variable] =
   ## Get variables visible at a stack frame
@@ -213,11 +212,12 @@ proc getVariables*(interp: Interpreter, frameId: int): seq[Variable] =
 
   let activation = interp.activationStack[interp.activationStack.len - 1 - frameId]
 
-  # Add parameters
-  if activation.methodBlock != nil:
-    for i, param in activation.methodBlock.parameters:
-      if i < activation.arguments.len:
-        let val = activation.arguments[i]
+  # Add parameters (from current method)
+  if activation.currentMethod != nil:
+    for i, param in activation.currentMethod.parameters:
+      # Parameters are stored in locals with their names
+      if activation.locals.hasKey(param):
+        let val = activation.locals[param]
         result.add(Variable(
           name: param,
           value: valueToString(val),

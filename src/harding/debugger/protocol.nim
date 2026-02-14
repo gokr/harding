@@ -5,8 +5,7 @@
 # Communicates between the VSCode debugger and the Harding VM.
 #
 
-import std/[json, tables, strutils, sequtils]
-import ../core/types
+import std/[json, tables, sequtils]
 
 # ============================================================================
 # Protocol Constants
