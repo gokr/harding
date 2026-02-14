@@ -110,12 +110,6 @@ task install_bona, "Install bona binary and desktop integration (.desktop file a
   echo "Bona desktop integration installed successfully!"
   echo "You may need to log out and back in for the icon to appear in the applications menu."
 
-task local, "Build and copy binaries to root directory (legacy, use 'harding' instead)":
-  # Build REPL and granite compiler directly
-  exec "nim c -o:harding src/harding/repl/harding.nim"
-  exec "nim c -o:granite src/harding/compiler/granite.nim"
-  echo "Binaries available in root directory as harding and granite"
-
 task bona_gtk3, "Build the GUI IDE with GTK3 (legacy, use 'bona' instead)":
   # Build the GUI IDE with GTK3
   exec "nim c -o:bona src/harding/gui/bona.nim"
