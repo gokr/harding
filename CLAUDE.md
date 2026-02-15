@@ -433,6 +433,50 @@ proc someThreadedProc*() {.gcsafe.} =
 
 Use `{.gcsafe.}:` blocks only when certain the code is actually thread-safe (e.g., lock-protected access).
 
+## Stackless VM Design
+
+Harding uses a **stackless virtual machine** design where execution is driven by a work queue rather than the native call stack. This is critical for supporting green threads and continuations.
+
+### Key Principles
+
+**All control flow must go through the work queue.** The VM maintains:
+- `workQueue`: A queue of `WorkFrame` objects representing pending work
+- `evalStack`: A stack for expression evaluation results
+- `activationStack`: The logical activation record stack
+
+**Never use Nim's try/finally or exception handling** in VM primitives. This would break the stackless design because:
+- Nim's try/finally unwinds the native call stack
+- But the VM's work queue state would be inconsistent
+- Green thread switching happens at the VM level, not the native level
+
+### Correct Pattern: Work Queue Integration
+
+Instead of:
+```nim
+# WRONG - breaks stackless design
+try:
+  result = evalBlock(...)  # May suspend and resume!
+finally:
+  cleanup()  # Runs at wrong time!
+```
+
+Use:
+```nim
+# CORRECT - maintains stackless design
+interp.pushWorkFrame(newCleanupFrame())  # Schedule cleanup
+interp.pushWorkFrame(newEvalFrame(block))  # Schedule evaluation
+# Return and let VM process work queue
+```
+
+### When Writing VM Primitives
+
+- Primitives schedule work frames, they don't execute directly
+- The VM loop (`processWorkFrame`) processes frames from the queue
+- Green threads yield by returning control to the VM loop
+- Exception handling uses the `exceptionHandlers` stack, not Nim exceptions
+
+See `src/harding/interpreter/vm.nim` for the work queue implementation.
+
 ## Documentation Guidelines
 
 ### Nim Doc Comment Guidelines
