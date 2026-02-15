@@ -170,12 +170,18 @@ Object>>allInstanceMethods <primitive primitiveAllInstanceMethods>
 
 Object>>allClassMethods <primitive primitiveAllClassMethods>
 
+Object>>doesNotUnderstand: selector [
+  # Default handler for unrecognized messages with just the selector.
+  # Subclasses can override to provide custom behavior.
+  self error: ("Message not understood: " , (selector asString))
+]
+
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
   # Default handler for unrecognized messages.
   # Subclasses can override to provide custom behavior.
   # selector: the message selector that was not understood
   # arg1, arg2: optional arguments that were passed with the message
-  self error: ("Message not understood: " , (selector asString))
+  self doesNotUnderstand: selector
 ]
 
 #====================================================================

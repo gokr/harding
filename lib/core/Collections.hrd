@@ -231,13 +231,12 @@ Array>>removeAll [
 ]
 
 Table>>printString [
-  # Return a string representation showing key-value pairs.
-  # Uses Smalltalk-style arrow syntax with dot separators: #{key -> value . ...}
+  # Return a string representation in literal syntax: #{key -> value, ...}
   | result isFirst |
   result := "#{".
   isFirst := true.
   self keys do: [ :key |
-    isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , " . " ].
+    isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ].
     result := result , (key printString) , " -> " , ((self at: key) printString)
   ].
   ^ result , "}"

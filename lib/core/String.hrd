@@ -56,8 +56,8 @@ String>>repeat: count <primitive primitiveRepeat: count>
 #====================================================================
 
 String>>printString [
-  # Return the string itself as its string representation.
-  ^ self
+  # Return the string quoted with double quotes.
+  ^ "\"" , self , "\""
 ]
 
 String>>asString [
@@ -93,4 +93,30 @@ String>>endsWith: suffix [
   (selfSize >= suffixSize) ifFalse: [ ^ false ]
   start := selfSize - suffixSize + 1
   ^ (self from: start to: selfSize) = suffix
+]
+
+#====================================================================
+# Symbol class - Immutable interned string
+#====================================================================
+
+Symbol := String derive.
+
+Symbol>>printString [
+  # Symbols print with # prefix and without quotes.
+  ^ "#" , self
+]
+
+Symbol>>asString [
+  # Return the symbol's string representation.
+  ^ self
+]
+
+Symbol>>= other [
+  # Symbols are equal if they are the same object (identity).
+  ^ self == other
+]
+
+Symbol>><> other [
+  # Not equal comparison.
+  ^ (self = other) not
 ]

@@ -103,6 +103,5 @@ Library>>removeKey: key ifAbsent: block [
 
 Library>>bindings [
     # Access the bindings slot (slot 0)
-    # Uses primitiveAt: to access slot by name
-    <primitive primitiveAt: "bindings">
+    <primitive primitiveLibraryBindings>
 ]
