@@ -425,20 +425,9 @@ proc initCoreClasses*(): Class =
     newMethod.setNativeImpl(classNewImpl)
     addMethodToClass(objectClass, "new", newMethod, isClassMethod = true)
 
-    # Instance methods for slot access - needed by tests and core functionality
-    # These are also defined in Object.hrd with <primitive> syntax, but we
-    # register them directly here so they're always available
-    let cloneMethod = createCoreMethod("clone")
-    cloneMethod.setNativeImpl(instanceCloneImpl)
-    addMethodToClass(objectClass, "clone", cloneMethod)
-
-    let atMethod = createCoreMethod("at:")
-    atMethod.setNativeImpl(primitiveAtImpl)
-    addMethodToClass(objectClass, "at:", atMethod)
-
-    let atPutMethod = createCoreMethod("at:put:")
-    atPutMethod.setNativeImpl(primitiveAtPutImpl)
-    addMethodToClass(objectClass, "at:put:", atPutMethod)
+    # Note: Instance methods (clone, at:, at:put:) are now defined in lib/core/Object.hrd
+    # using <primitive> syntax. The primitive selectors are registered by
+    # registerPrimitivesOnObjectClass() at the end of initCoreClasses().
 
     addGlobal("Object", NodeValue(kind: vkClass, classVal: objectClass))
 
@@ -1804,10 +1793,5 @@ proc registerPrimitivesOnObjectClass*(objCls: Class) =
   primClone.setNativeImpl(primitiveCloneImpl)
   addMethodToClass(objCls, "primitiveClone", primClone)
 
-  let primAt = createCoreMethod("primitiveAt:")
-  primAt.setNativeImpl(primitiveAtImpl)
-  addMethodToClass(objCls, "primitiveAt:", primAt)
-
-  let primAtPut = createCoreMethod("primitiveAt:put:")
-  primAtPut.setNativeImpl(primitiveAtPutImpl)
-  addMethodToClass(objCls, "primitiveAt:put:", primAtPut)
+  # Note: primitiveAt: and primitiveAt:put: are registered on Table class in vm.nim
+  # (not on Object as that would be inappropriate)
