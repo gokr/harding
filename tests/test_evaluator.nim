@@ -26,6 +26,7 @@ suite "Evaluator: Basic Message Dispatch":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "evaluates simple property access via messages":
     # Use Table instance with at:/at:put: for key-value storage
@@ -74,6 +75,7 @@ suite "Evaluator: Method Execution with Parameters":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "executes methods with keyword parameters":
     let result = interp.evalStatements("""
@@ -163,6 +165,7 @@ suite "Evaluator: Control Flow":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "ifTrue: executes block when receiver is true":
     let result = interp.evalStatements("""
@@ -250,6 +253,7 @@ suite "Evaluator: Block Evaluation":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "blocks can be stored and evaluated later":
     let result = interp.evalStatements("""
@@ -268,7 +272,7 @@ suite "Evaluator: Block Evaluation":
     let result = interp.evalStatements("""
       # Use new class-based model
       MyClass := Object derive.
-      MyClass selector: #apply:to: put: [ :block :arg | block value: arg ].
+      MyClass selector: #apply:to: put: [ :block :arg | ^block value: arg ].
 
       Obj := MyClass new.
       Doubler := [ :x | x * 2 ].
@@ -341,6 +345,7 @@ suite "Evaluator: Lexical Closures":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "closures capture and isolate variables" :
     let result = interp.evalStatements("""
@@ -475,11 +480,19 @@ suite "Evaluator: Lexical Closures":
     for i, r in result[0]:
       echo "  [", i, "] = ", r.toString()
     # Closure captures self and sees current balance at time of call
-    # Result array: ..., 100 (balance:), <block>, 100 (Result1), 50 (Result2), 50 (Result3)
-    check(result[0][^4].intVal == 100)  # First call to closure
-    check(result[0][^3].intVal == 50)   # Second call (Closure re-evaluates self.balance)
-    check(result[0][^2].intVal == 50)   # Direct access after balance change
-    check(result[0][^1].intVal == 50)   # Another direct access
+    # With Smalltalk semantics: balance: returns self, not the value
+    # Result array: [0]=Account class, [1]=nil, [2]=nil, [3]=Acc, [4]=Acc (balance:100), [5]=<block>, [6]=100, [7]=Acc (balance:50), [8]=50, [9]=50
+    # The positions have shifted due to balance: returning Acc instead of the value
+    check(result[0][^4].kind == vkInt)
+    check(result[0][^4].intVal == 50)   # Second call (Closure re-evaluates self.balance)
+    check(result[0][^3].kind == vkInt)
+    check(result[0][^3].intVal == 50)   # Direct access after balance change
+    check(result[0][^2].kind == vkInt)
+    check(result[0][^2].intVal == 50)   # Another direct access
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 50)   # Final getBalance
+    check(result[0][^5].kind == vkInt)
+    check(result[0][^5].intVal == 100)  # First call to closure
 
   test "closures outlive their defining scope" :
     let result = interp.evalStatements("""
@@ -566,6 +579,7 @@ suite "Evaluator: Global Variables":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "variables persist across evaluations":
     let result1 = interp.evalStatements("""
@@ -608,6 +622,7 @@ suite "Evaluator: Collections":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "arrays can be created and accessed" :  # Requires array iteration protocol
     let result = interp.evalStatements("""
@@ -683,6 +698,7 @@ suite "Evaluator: Error Handling":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "undefined message raises error" :  # Requires better error reporting
     expect ValueError:
@@ -728,6 +744,7 @@ suite "Evaluator: Complex Expressions":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "nested message sends":
     let result = interp.evalStatements("""
@@ -803,6 +820,7 @@ suite "Evaluator: Call Stack and Returns":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "non-local return from block exits multiple frames" :
     let result = interp.evalStatements("""
@@ -853,6 +871,7 @@ suite "Evaluator: Special Features":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "nil is a valid value" :
     let result = interp.evalStatements("""

@@ -18,6 +18,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)
 
   test "unary has higher precedence than binary":
     # obj foo + bar should parse as (obj foo) + bar, not obj (foo + bar)
