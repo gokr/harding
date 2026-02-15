@@ -69,3 +69,23 @@ real 0.09
 |-------|-------------|--------------|
 | Original Release | ~0.4s | ~0.14s |
 | With Float Fast Path | ~0.4s | ~0.14s |
+
+## With Frame Pooling ($(date))
+
+### Sieve (n=500)
+Run 1: real 0.25
+Run 2: real 0.25
+Run 3: real 0.31
+
+### Queens
+Run 1: real 0.14
+Run 2: real 0.10
+Run 3: real 0.11
+
+## Final Summary
+
+| Build | Sieve (avg) | Queens (avg) | Improvement |
+|-------|-------------|--------------|-------------|
+| Debug | ~3.0s | ~1.0s | - |
+| Original Release | ~0.4s | ~0.14s | baseline |
+| With Frame Pooling | ~0.27s | ~0.12s | 32% / 14% |
