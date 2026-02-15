@@ -4,6 +4,7 @@ import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
+import ../interpreter/frame_pool
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -2937,48 +2938,92 @@ type
 
 # Work frame constructors
 proc newEvalFrame*(node: Node): WorkFrame =
-  WorkFrame(kind: wfEvalNode, node: node)
+  result = acquireFrame()
+  result.kind = wfEvalNode
+  result.node = node
 
 proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil, isClassMethod: bool = false): WorkFrame =
-  WorkFrame(kind: wfSendMessage, selector: selector, argCount: argCount, msgNode: msgNode, isClassMethod: isClassMethod)
+  result = acquireFrame()
+  result.kind = wfSendMessage
+  result.selector = selector
+  result.argCount = argCount
+  result.msgNode = msgNode
+  result.isClassMethod = isClassMethod
 
 proc newAfterReceiverFrame*(selector: string, args: seq[Node], isClassMethod: bool = false): WorkFrame =
-  WorkFrame(kind: wfAfterReceiver, pendingSelector: selector, pendingArgs: args, currentArgIndex: 0, isClassMethod: isClassMethod)
+  result = acquireFrame()
+  result.kind = wfAfterReceiver
+  result.pendingSelector = selector
+  result.pendingArgs = args
+  result.currentArgIndex = 0
+  result.isClassMethod = isClassMethod
 
 proc newAfterArgFrame*(selector: string, args: seq[Node], currentIndex: int, isClassMethod: bool = false): WorkFrame =
-  WorkFrame(kind: wfAfterArg, pendingSelector: selector, pendingArgs: args, currentArgIndex: currentIndex, isClassMethod: isClassMethod)
+  result = acquireFrame()
+  result.kind = wfAfterArg
+  result.pendingSelector = selector
+  result.pendingArgs = args
+  result.currentArgIndex = currentIndex
+  result.isClassMethod = isClassMethod
 
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame =
-  WorkFrame(kind: wfApplyBlock, blockVal: blockVal, argCount: argCount)
+  result = acquireFrame()
+  result.kind = wfApplyBlock
+  result.blockVal = blockVal
+  result.argCount = argCount
 
 proc newReturnValueFrame*(value: NodeValue): WorkFrame =
-  WorkFrame(kind: wfReturnValue, returnValue: value)
+  result = acquireFrame()
+  result.kind = wfReturnValue
+  result.returnValue = value
 
 proc newCascadeFrame*(messages: seq[MessageNode], receiver: NodeValue): WorkFrame =
-  WorkFrame(kind: wfCascade, cascadeMessages: messages, cascadeReceiver: receiver)
+  result = acquireFrame()
+  result.kind = wfCascade
+  result.cascadeMessages = messages
+  result.cascadeReceiver = receiver
 
 proc newPopActivationFrame*(savedReceiver: Instance, isBlock: bool = false, evalStackDepth: int = 0): WorkFrame =
-  WorkFrame(kind: wfPopActivation, savedReceiver: savedReceiver, isBlockActivation: isBlock, savedEvalStackDepth: evalStackDepth)
+  result = acquireFrame()
+  result.kind = wfPopActivation
+  result.savedReceiver = savedReceiver
+  result.isBlockActivation = isBlock
+  result.savedEvalStackDepth = evalStackDepth
 
 proc newIfBranchFrame*(condResult: bool, thenBlock, elseBlock: BlockNode): WorkFrame =
   ## Create a work frame for conditional branch (ifTrue:, ifFalse:)
-  WorkFrame(kind: wfIfBranch, conditionResult: condResult, thenBlock: thenBlock, elseBlock: elseBlock)
+  result = acquireFrame()
+  result.kind = wfIfBranch
+  result.conditionResult = condResult
+  result.thenBlock = thenBlock
+  result.elseBlock = elseBlock
 
 proc newWhileLoopFrame*(loopKind: bool, conditionBlock, bodyBlock: BlockNode, loopState: LoopState): WorkFrame =
   ## Create a work frame for while loop (whileTrue:, whileFalse:)
-  WorkFrame(kind: wfWhileLoop, loopKind: loopKind, conditionBlock: conditionBlock, bodyBlock: bodyBlock, loopState: loopState)
+  result = acquireFrame()
+  result.kind = wfWhileLoop
+  result.loopKind = loopKind
+  result.conditionBlock = conditionBlock
+  result.bodyBlock = bodyBlock
+  result.loopState = loopState
 
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame =
   ## Create a work frame to push an exception handler
-  WorkFrame(kind: wfPushHandler, exceptionClass: exceptionClass, handlerBlock: handlerBlock)
+  result = acquireFrame()
+  result.kind = wfPushHandler
+  result.exceptionClass = exceptionClass
+  result.handlerBlock = handlerBlock
 
 proc newPopHandlerFrame*(): WorkFrame =
   ## Create a work frame to pop an exception handler
-  WorkFrame(kind: wfPopHandler)
+  result = acquireFrame()
+  result.kind = wfPopHandler
 
 proc newSignalExceptionFrame*(exceptionInstance: Instance): WorkFrame =
   ## Create a work frame to signal an exception
-  WorkFrame(kind: wfSignalException, exceptionInstance: exceptionInstance)
+  result = acquireFrame()
+  result.kind = wfSignalException
+  result.exceptionInstance = exceptionInstance
 
 # Stack operations
 proc pushWorkFrame*(interp: var Interpreter, frame: WorkFrame) =
@@ -4498,11 +4543,16 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
         else:
           handleContinuation(interp, frame)
 
+      # Release frame back to pool for reuse
+      releaseFrame(frame)
+
       if not shouldContinue:
         break
     except ValueError as e:
+      releaseFrame(frame)
       return VMResult(status: vmError, error: e.msg)
     except Exception as e:
+      releaseFrame(frame)
       return VMResult(status: vmError, error: "VM error: " & e.msg)
 
   # Execution complete

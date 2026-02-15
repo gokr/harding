@@ -1,34 +1,35 @@
 ## Frame Pool for WorkFrame Recycling
 ## Reduces GC pressure by reusing WorkFrame objects
 
-import std/logging
+import std/[logging, strutils]
 import ../core/types
 
 const
   InitialPoolSize = 256  # Initial number of frames to pre-allocate
-  MaxPoolSize = 1024     # Maximum frames to keep in pool
+  MaxPoolSize = 4096     # Maximum frames to keep in pool
 
 type
   WorkFramePool* = object
     ## Pool of reusable WorkFrame objects
-    ## When a frame is needed, we acquire from pool (or allocate if empty)
-    ## When done, we release back to pool (up to MaxPoolSize)
     frames: seq[WorkFrame]  # Available frames in pool
-    acquiredCount: int      # Number of frames currently in use (for debugging)
-    totalAllocations: int   # Total allocations since start (for stats)
+    acquiredCount: int      # Number of frames currently in use
+    totalAllocations: int   # Total allocations since start
+    totalReleases: int      # Total releases back to pool
 
-var globalFramePool: WorkFramePool  # Global pool instance
+var globalFramePool: WorkFramePool
 
 proc initFramePool*() =
   ## Initialize the global frame pool with pre-allocated frames
-  globalFramePool.frames = newSeq[WorkFrame](InitialPoolSize)
+  globalFramePool.frames = newSeqOfCap[WorkFrame](MaxPoolSize)
   for i in 0..<InitialPoolSize:
-    globalFramePool.frames[i] = WorkFrame()
+    globalFramePool.frames.add(WorkFrame())
   globalFramePool.acquiredCount = 0
   globalFramePool.totalAllocations = InitialPoolSize
+  globalFramePool.totalReleases = 0
+  debug("Frame pool initialized with ", $InitialPoolSize, " frames")
 
 proc clearFrame*(frame: WorkFrame) =
-  ## Clear all fields of a frame
+  ## Clear all fields of a frame to prevent stale data
   if frame == nil:
     return
   frame.node = nil
@@ -41,9 +42,9 @@ proc clearFrame*(frame: WorkFrame) =
   frame.pendingSelector = ""
   frame.pendingArgs = @[]
   frame.currentArgIndex = 0
-  frame.returnValue = nilValue()
+  frame.returnValue = NodeValue(kind: vkNil)
   frame.cascadeMessages = @[]
-  frame.cascadeReceiver = nilValue()
+  frame.cascadeReceiver = NodeValue(kind: vkNil)
   frame.savedReceiver = nil
   frame.isBlockActivation = false
   frame.savedEvalStackDepth = 0
@@ -62,35 +63,32 @@ proc acquireFrame*(): WorkFrame =
   ## Acquire a frame from the pool, or allocate new if pool is empty
   if globalFramePool.frames.len > 0:
     result = globalFramePool.frames.pop()
-    # Clear stale data from previous use
     clearFrame(result)
     globalFramePool.acquiredCount += 1
   else:
     # Pool is empty, allocate new frame
     result = WorkFrame()
     globalFramePool.totalAllocations += 1
+    globalFramePool.acquiredCount += 1
 
 proc releaseFrame*(frame: WorkFrame) =
   ## Release a frame back to the pool for reuse
   if frame == nil:
     return
-
-  # Note: We don't clear fields here because the frame is passed by reference
-  # to handler functions and may still be accessed after release.
-  # The acquireFrame function will clear fields when the frame is reused.
+  globalFramePool.acquiredCount -= 1
+  globalFramePool.totalReleases += 1
 
   # Return to pool if not at max size
   if globalFramePool.frames.len < MaxPoolSize:
     globalFramePool.frames.add(frame)
 
-  globalFramePool.acquiredCount -= 1
-
-proc getFramePoolStats*(): tuple[available: int, inUse: int, totalAllocated: int] =
+proc getFramePoolStats*(): tuple[available: int, inUse: int, totalAllocated: int, totalReleases: int] =
   ## Get current frame pool statistics
   result = (
     available: globalFramePool.frames.len,
     inUse: globalFramePool.acquiredCount,
-    totalAllocated: globalFramePool.totalAllocations
+    totalAllocated: globalFramePool.totalAllocations,
+    totalReleases: globalFramePool.totalReleases
   )
 
 # Initialize pool on module load
