@@ -195,6 +195,7 @@ var falseClassCache*: Class = nil
 var numberClassCache*: Class = nil
 var integerClassCache*: Class = nil
 var stringClassCache*: Class = nil
+var symbolClassCache*: Class = nil
 var arrayClassCache*: Class = nil
 var tableClassCache*: Class = nil
 var blockClassCache*: Class = nil
@@ -1181,6 +1182,7 @@ proc classNewImpl*(self: Class, args: seq[NodeValue]): NodeValue =
 
 proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Add an instance method to this class
+  ## Returns self (the class) for method chaining
   if args.len >= 2:
     let selector = if args[0].kind == vkString: args[0].strVal
                    elif args[0].kind == vkSymbol: args[0].symVal
@@ -1188,10 +1190,11 @@ proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
     let meth: BlockNode = if args[1].kind == vkBlock: args[1].blockVal else: nil
     if selector.len > 0 and meth != nil:
       addMethodToClass(self, selector, meth)
-  return nilValue()
+  return self.toValue()
 
 proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Add a class method to this class
+  ## Returns self (the class) for method chaining
   if args.len >= 2:
     let selector = if args[0].kind == vkString: args[0].strVal
                    elif args[0].kind == vkSymbol: args[0].symVal
@@ -1199,7 +1202,7 @@ proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
     let meth: BlockNode = if args[1].kind == vkBlock: args[1].blockVal else: nil
     if selector.len > 0 and meth != nil:
       addMethodToClass(self, selector, meth, isClassMethod = true)
-  return nilValue()
+  return self.toValue()
 
 proc sizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get size of collections
@@ -1249,9 +1252,11 @@ proc atCollectionPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     # Convert 1-based to 0-based
     if ok and val >= 1 and val <= self.elements.len:
       self.elements[val - 1] = args[1]
+    return args[1]
   of ikTable:
     let key = args[0]
     self.entries[key] = args[1]
+    return args[1]
   of ikObject:
     # Slot set for class-based objects
     if self.class != nil:
