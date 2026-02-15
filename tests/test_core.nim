@@ -197,6 +197,7 @@ suite "Interpreter":
     var interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)  # Load stdlib for printString method
 
     # Test simple unary message send
     let code = "3 printString"
@@ -212,6 +213,7 @@ suite "Interpreter":
     var interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)  # Load stdlib for + operator
 
     # Test basic arithmetic addition
     let code = "3 + 4"

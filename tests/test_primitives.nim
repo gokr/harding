@@ -17,6 +17,7 @@ suite "Primitive Syntax: Declarative Form":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)  # Load stdlib to access methods defined in .hrd files
 
   test "declarative primitive without arguments works (clone)":
     let result = interp.evalStatements("""
@@ -124,6 +125,7 @@ suite "Primitive Syntax: Error Handling":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)  # Load stdlib for Object derive and selector:put:
 
   test "primitive with wrong arity should report error":
     let tokens = lex("Object>>bad [ ^<primitive primitiveAt:> ]")
@@ -152,10 +154,11 @@ suite "Primitive Syntax: Integration Tests":
     interp = newInterpreter()
     initGlobals(interp)
     initSymbolTable()
+    loadStdlib(interp)  # Load stdlib for Object derive and primitive methods
 
   test "primitive works with cascades":
     let result = interp.evalStatements("""
-    obj := Object derive.
+    obj := Table new.
     obj at: #a put: 1; at: #b put: 2; at: #c put: 3.
     result1 := obj at: #a.
     result2 := obj at: #b.
