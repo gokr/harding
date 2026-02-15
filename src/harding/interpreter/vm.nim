@@ -96,7 +96,6 @@ when defined(js):
 
     of "primitiveClass", "class":
       # Return the class of the receiver
-      debug("primitiveClass: receiver.class = ", if receiver.class == nil: "nil" else: receiver.class.name)
       if receiver.class != nil:
         return receiver.class.toValue()
       return nilValue()
@@ -1247,7 +1246,7 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
   let savedActivation = interp.currentActivation
   let savedReceiver = interp.currentReceiver
   interp.currentActivation = activation
-  interp.currentReceiver = receiver
+  interp.currentReceiver = blockReceiver
 
   var blockResult = nilValue()
   try:
@@ -1282,7 +1281,7 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
   let savedActivation = interp.currentActivation
   let savedReceiver = interp.currentReceiver
   interp.currentActivation = activation
-  interp.currentReceiver = receiver
+  interp.currentReceiver = blockReceiver
 
   var blockResult = nilValue()
   var nonLocalReturn = false
@@ -1320,7 +1319,7 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
   let savedActivation = interp.currentActivation
   let savedReceiver = interp.currentReceiver
   interp.currentActivation = activation
-  interp.currentReceiver = receiver
+  interp.currentReceiver = blockReceiver
 
   var blockResult = nilValue()
   try:
@@ -1647,6 +1646,8 @@ proc newPopHandlerFrame*(): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
 proc newEvalFrame*(node: Node): WorkFrame
 proc pushWorkFrame*(interp: var Interpreter, frame: WorkFrame)
+proc popValue*(interp: var Interpreter): NodeValue
+proc pushValue*(interp: var Interpreter, value: NodeValue)
 
 proc isKindOf(cls: Class, parentClass: Class): bool =
   ## Check if cls is the same as or a subclass of parentClass
@@ -1716,6 +1717,7 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
   # Get message from exception instance if available
   var message = "Exception"
+  debug("primitiveSignal: self.class=", if self.class != nil: self.class.name else: "nil", " self.kind=", $self.kind)
   if self != nil and self.kind == ikObject and self.class != nil:
     # Try to get message from the exception instance
     let messageSlotIdx = self.class.allSlotNames.find("message")
@@ -1736,9 +1738,16 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
       # Found matching handler - schedule handler block execution
       # The handler block receives the exception as argument
+      # Note: The primitive return value (nil) is already on the eval stack.
+      # We need to replace it with the exception value for the handler.
       let exValue = self.toValue()
+      debug("primitiveSignal: scheduling handler with exception class=", self.class.name, " value kind=", $exValue.kind)
+
+      # Pop the nil return value and push the exception value
+      # The handler block will then pop the exception as its argument
+      discard interp.popValue()  # Remove the primitive's nil return
+      interp.pushValue(exValue)  # Push the exception value
       interp.pushWorkFrame(newApplyBlockFrame(handler.handlerBlock, 1))
-      interp.pushWorkFrame(newEvalFrame(LiteralNode(value: exValue)))
 
       # Return nil - the handler block will push its result
       return nilValue()
@@ -3192,6 +3201,14 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     primitiveSignalMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveSignal"] = primitiveSignalMethod
     exceptionCls.allMethods["primitiveSignal"] = primitiveSignalMethod
+
+    # Propagate to all subclasses (since allMethods was already copied)
+    proc propagateToSubclasses(cls: Class, methodName: string, meth: BlockNode) =
+      for sub in cls.subclasses:
+        sub.allMethods[methodName] = meth
+        propagateToSubclasses(sub, methodName, meth)
+    propagateToSubclasses(exceptionCls, "primitiveSignal", primitiveSignalMethod)
+
     debug("Registered native Exception>>primitiveSignal method")
   else:
     debug("Exception class not found, cannot register primitiveSignal")
@@ -4342,13 +4359,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         blockInst.nimValue = cast[pointer](receiverVal.blockVal)
       receiver = blockInst
     of vkSymbol:
-      debug("Creating symbol instance with class: ", if symbolClassCache == nil: "nil" else: symbolClassCache.name)
-      if symbolClassCache == nil:
-        debug("WARNING: symbolClassCache is nil, falling back to stringClass")
-        receiver = newStringInstance(stringClass, receiverVal.symVal)
-      else:
-        receiver = newStringInstance(symbolClassCache, receiverVal.symVal)
-      debug("Created symbol instance, receiver.class = ", if receiver.class == nil: "nil" else: receiver.class.name)
+      receiver = newStringInstance(symbolClassCache, receiverVal.symVal)
 
     # Special stackless handling for control flow primitives
     when not defined(js):
@@ -4439,12 +4450,17 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       var lookup: MethodResult
       if frame.isClassMethod:
         # For class method primitives, look in the receiver's class methods
+        if receiver.class == nil:
+          debug("VM: ERROR - receiver.class is nil for class method lookup")
+          raise newException(ValueError, "Cannot lookup class method on receiver with nil class")
         lookup = lookupClassMethod(receiver.class, frame.selector)
       else:
         lookup = lookupMethod(interp, receiver, frame.selector)
       if not lookup.found:
         # Try doesNotUnderstand: before raising error
+        debug("VM: Method not found, trying DNU for ", frame.selector)
         let dnuLookup = lookupMethod(interp, receiver, "doesNotUnderstand:")
+        debug("VM: DNU lookup result: found=", $dnuLookup.found, " class=", (if dnuLookup.definingClass != nil: dnuLookup.definingClass.name else: "nil"))
         if dnuLookup.found:
           let selectorVal = NodeValue(kind: vkSymbol, symVal: frame.selector)
           let dnuResult = executeMethod(interp, dnuLookup.currentMethod, receiver, @[selectorVal], dnuLookup.definingClass)
