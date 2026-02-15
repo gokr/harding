@@ -141,10 +141,6 @@ Object>>printClassIndent: level [
 # Property access
 #====================================================================
 
-Object>>at: key <primitive primitiveAt: key>
-
-Object>>at: key put: value <primitive primitiveAt: key put: value>
-
 Object>>hasProperty: key <primitive primitiveHasProperty: key>
 
 Object>>properties <primitive primitiveProperties>
