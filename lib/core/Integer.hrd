@@ -18,6 +18,8 @@ Integer>>/ other <primitive primitiveDivide: other>
 
 Integer>>// other <primitive primitiveIntDiv: other>
 
+Integer>>\\ other <primitive primitiveBackslashModulo: other>
+
 #====================================================================
 # Integer comparison primitives
 #====================================================================

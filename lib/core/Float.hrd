@@ -16,6 +16,8 @@ Float>>* other <primitive primitiveTimes: other>
 
 Float>>/ other <primitive primitiveDivide: other>
 
+Float>>\\ other <primitive primitiveBackslashModulo: other>
+
 #====================================================================
 # Float comparison primitives
 #====================================================================
