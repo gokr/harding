@@ -125,7 +125,6 @@ This document tracks current work items and future directions for Harding develo
 
 - Memory management for circular references
 - Error handling improvements needed
-- `SortedCollection>>last` has test failures in stdlib
 
 ## Documentation Needs
 
@@ -575,4 +574,4 @@ EOF
 - Updated IDE Browser, Libraries, and Workspace components
 - Simplified blocked process handling in scheduler
 
-*Last Updated: 2026-02-13*
+*Last Updated: 2026-02-16*
