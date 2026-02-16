@@ -319,6 +319,9 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
     if cls.allSlotNames.len > 0:
       rewriteMethodForSlotAccess(meth, cls)
 
+  # Bump version to invalidate inline caches referencing this class
+  cls.version += 1
+
   # Mark as dirty for lazy rebuilding, or rebuild immediately
   if deferRebuild:
     cls.methodsDirty = true
@@ -590,6 +593,11 @@ proc initCoreClasses*(): Class =
     let deriveWithAccessorsMethod = createCoreMethod("deriveWithAccessors:")
     deriveWithAccessorsMethod.setNativeImpl(classDeriveWithAccessorsImpl)
     addMethodToClass(objectClass, "deriveWithAccessors:", deriveWithAccessorsMethod, isClassMethod = true)
+
+    # derive:getters:setters: - create class with slots and selective accessor generation
+    let deriveGettersSettersMethod = createCoreMethod("derive:getters:setters:")
+    deriveGettersSettersMethod.setNativeImpl(classDeriveGettersSettersImpl)
+    addMethodToClass(objectClass, "derive:getters:setters:", deriveGettersSettersMethod, isClassMethod = true)
 
     # derive - create class without slots
     let deriveMethod = createCoreMethod("derive")
@@ -1854,8 +1862,8 @@ proc primitiveSetKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 proc invalidateSubclasses*(cls: Class) =
   ## Invalidate cached method tables for all subclasses
   for subclass in cls.subclasses:
-    subclass.allMethods = cls.allMethods
-    subclass.allClassMethods = cls.allClassMethods
+    subclass.methodsDirty = true
+    subclass.version += 1
     invalidateSubclasses(subclass)
 
 proc rebuildAllTables*(cls: Class) =
@@ -1891,6 +1899,9 @@ proc rebuildAllTables*(cls: Class) =
 
   cls.allMethods = allMethods
   cls.allClassMethods = allClassMethods
+
+  # Bump version so inline caches see the rebuilt tables
+  cls.version += 1
 
 # ============================================================================
 # Instance clone implementation (for new class-based system)

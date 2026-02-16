@@ -65,6 +65,9 @@ type
     # Lazy rebuilding flag
     methodsDirty*: bool                     # True if method tables need rebuilding
 
+    # Version counter for inline cache invalidation
+    version*: int                           # Incremented when methods change
+
   Instance* = ref object of RootObj
     ## Instance object - pure data with reference to its class
     ## Using case object variant for memory efficiency - only allocate fields needed
@@ -97,7 +100,9 @@ type
     exceptionClass*: Class    # The exception class to catch
     handlerBlock*: BlockNode        # Block to execute when caught
     activation*: Activation         # Activation where handler was installed
-    stackDepth*: int                # Stack depth when handler installed
+    stackDepth*: int                # Activation stack depth when handler installed
+    workQueueDepth*: int            # Work queue depth to restore on exception (before wfPopHandler)
+    evalStackDepth*: int            # Eval stack depth to restore on exception
     consumed*: bool                 # True if handler was already used to catch an exception
 
   # Exception thrown when Processor yield is called for immediate context switch
@@ -243,7 +248,7 @@ type
   LiteralNode* = ref object of Node
     value*: NodeValue
 
-  PICEntry* = tuple[cls: Class, meth: BlockNode]  # 'meth' to avoid 'method' keyword
+  PICEntry* = tuple[cls: Class, meth: BlockNode, version: int]
 
   MessageNode* = ref object of Node
     receiver*: Node          # nil for implicit self
@@ -253,10 +258,11 @@ type
     # Monomorphic Inline Cache (MIC) fields
     cachedClass*: Class      # Last receiver class seen at this call site
     cachedMethod*: BlockNode # Cached method for cachedClass
-    callCount*: int          # Number of times this call site has been executed
+    cachedVersion*: int      # Class version when MIC was populated
     # Polymorphic Inline Cache (PIC) fields
     picEntries*: array[3, PICEntry]  # Additional cache entries (total 4 with MIC)
     picCount*: int                   # Number of valid PIC entries (0-3)
+    megamorphic*: bool               # True when PIC overflows; skip caching
 
   CascadeNode* = ref object of Node
     receiver*: Node
@@ -896,6 +902,7 @@ proc newInstance*(cls: Class): Instance =
     result.slots[i] = nilValue()
   result.isNimProxy = false
   result.nimValue = NimValueDefault
+  debug("newInstance: created ", cls.name, " with ", result.slots.len, " slots")
 
 proc newIntInstance*(cls: Class, value: int): Instance =
   ## Create a new Integer instance with direct value storage

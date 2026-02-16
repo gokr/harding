@@ -1181,7 +1181,6 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
   # Get message from exception instance if available
   var message = "Exception"
-  debug("primitiveSignal: self.class=", if self.class != nil: self.class.name else: "nil", " self.kind=", $self.kind)
   if self != nil and self.kind == ikObject and self.class != nil:
     # Try to get message from the exception instance
     let messageSlotIdx = self.class.allSlotNames.find("message")
@@ -1189,8 +1188,6 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       let msgValue = self.slots[messageSlotIdx]
       if msgValue.kind == vkString:
         message = msgValue.strVal
-
-  debug("primitiveSignal: signaling exception: ", message)
 
   # Walk exceptionHandlers stack from top (newest) to bottom
   for i in countdown(interp.exceptionHandlers.len - 1, 0):
@@ -1200,18 +1197,34 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
     if isKindOf(self.class, handler.exceptionClass):
       debug("primitiveSignal: found matching handler at index ", i)
 
-      # Mark handler as consumed - wfPopHandler will check this and not pop it
-      interp.exceptionHandlers[i].consumed = true
-      debug("primitiveSignal: marked handler as consumed at index ", i)
+      # Unwind VM state to the point where the handler was installed:
+      # 1. Truncate work queue - removes all frames from protected block and signal chain
+      interp.workQueue.setLen(handler.workQueueDepth)
+      debug("primitiveSignal: truncated workQueue to depth ", handler.workQueueDepth)
 
-      # Found matching handler - schedule handler block execution
-      # The handler block receives the exception as argument
+      # 2. Truncate eval stack - removes intermediate values from protected block
+      interp.evalStack.setLen(handler.evalStackDepth)
+
+      # 3. Unwind activation stack to handler's depth
+      while interp.activationStack.len > handler.stackDepth:
+        discard interp.activationStack.pop()
+      if interp.activationStack.len > 0:
+        interp.currentActivation = interp.activationStack[^1]
+        interp.currentReceiver = interp.currentActivation.receiver
+
+      # 4. Remove the consumed handler (and any handlers above it)
+      interp.exceptionHandlers.setLen(i)
+
+      # 5. Schedule handler block with exception as argument
       let exValue = self.toValue()
       debug("primitiveSignal: scheduling handler with exception class=", self.class.name, " value kind=", $exValue.kind)
 
-      # Schedule handler block - it will receive exception as its argument
-      var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
-      applyFrame.blockArgs = @[exValue]  # Pre-bind the exception argument
+      var applyFrame = WorkFrame(
+        kind: wfApplyBlock,
+        blockVal: handler.handlerBlock,
+        argCount: 1,
+        blockArgs: @[exValue]
+      )
       interp.pushWorkFrame(applyFrame)
 
       # Return nil - the handler block will push its result
@@ -2949,7 +2962,7 @@ proc newAfterArgFrame*(selector: string, args: seq[Node], currentIndex: int, isC
   WorkFrame(kind: wfAfterArg, pendingSelector: selector, pendingArgs: args, currentArgIndex: currentIndex, isClassMethod: isClassMethod)
 
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame =
-  WorkFrame(kind: wfApplyBlock, blockVal: blockVal, argCount: argCount)
+  WorkFrame(kind: wfApplyBlock, blockVal: blockVal, argCount: argCount, blockArgs: @[])
 
 proc newReturnValueFrame*(value: NodeValue): WorkFrame =
   WorkFrame(kind: wfReturnValue, returnValue: value)
@@ -3768,9 +3781,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     var definingClass: Class = nil
     var cacheHit = false
 
-    if frame.msgNode != nil:
+    if frame.msgNode != nil and not frame.msgNode.megamorphic:
       # Check Monomorphic Inline Cache (MIC) first
-      if frame.msgNode.cachedClass != nil and receiver.class == frame.msgNode.cachedClass:
+      if frame.msgNode.cachedClass != nil and
+         receiver.class == frame.msgNode.cachedClass and
+         receiver.class.version == frame.msgNode.cachedVersion:
         # MIC hit! Use cached method
         currentMethod = frame.msgNode.cachedMethod
         definingClass = frame.msgNode.cachedClass
@@ -3779,12 +3794,25 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         # MIC miss - check Polymorphic Inline Cache (PIC)
         for i in 0..<frame.msgNode.picCount:
-          if receiver.class == frame.msgNode.picEntries[i].cls:
-            # PIC hit!
+          if receiver.class == frame.msgNode.picEntries[i].cls and
+             receiver.class.version == frame.msgNode.picEntries[i].version:
+            # PIC hit - promote to MIC (swap for LRU behavior)
+            let oldMIC = (
+              cls: frame.msgNode.cachedClass,
+              meth: frame.msgNode.cachedMethod,
+              version: frame.msgNode.cachedVersion
+            )
             currentMethod = frame.msgNode.picEntries[i].meth
             definingClass = frame.msgNode.picEntries[i].cls
+            # Promote PIC entry to MIC
+            frame.msgNode.cachedClass = frame.msgNode.picEntries[i].cls
+            frame.msgNode.cachedMethod = frame.msgNode.picEntries[i].meth
+            frame.msgNode.cachedVersion = frame.msgNode.picEntries[i].version
+            # Move old MIC to vacated PIC slot
+            if oldMIC.cls != nil:
+              frame.msgNode.picEntries[i] = oldMIC
             cacheHit = true
-            debug("VM: PIC cache hit for '", frame.selector, "' on ", receiver.class.name, " at index ", $i)
+            debug("VM: PIC cache hit for '", frame.selector, "' on ", receiver.class.name, " at index ", $i, " (promoted to MIC)")
             break
 
         if not cacheHit and frame.msgNode.cachedClass != nil:
@@ -3824,27 +3852,31 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       currentMethod = lookup.currentMethod
       definingClass = lookup.definingClass
 
-      # Update inline cache for future calls
-      if frame.msgNode != nil:
+      # Update inline cache for future calls (skip for megamorphic sites)
+      if frame.msgNode != nil and not frame.msgNode.megamorphic:
         # If MIC already has a different class, move it to PIC (polymorphic cache)
         if frame.msgNode.cachedClass != nil and frame.msgNode.cachedClass != receiver.class:
           if frame.msgNode.picCount < frame.msgNode.picEntries.len:
             # Add old MIC entry to PIC
             frame.msgNode.picEntries[frame.msgNode.picCount] = (
               cls: frame.msgNode.cachedClass,
-              meth: frame.msgNode.cachedMethod
+              meth: frame.msgNode.cachedMethod,
+              version: frame.msgNode.cachedVersion
             )
             frame.msgNode.picCount += 1
             debug("VM: Added to PIC for '", frame.selector, "' ", frame.msgNode.cachedClass.name,
                   " (PIC count: ", $frame.msgNode.picCount, ")")
           else:
-            # PIC is full - this becomes megamorphic, just keep MIC
-            debug("VM: PIC full for '", frame.selector, "', keeping MIC only")
+            # PIC is full - mark as megamorphic, skip all caching
+            frame.msgNode.megamorphic = true
+            debug("VM: PIC full for '", frame.selector, "', marked megamorphic")
 
         # Update MIC with new class/method
-        frame.msgNode.cachedClass = receiver.class
-        frame.msgNode.cachedMethod = currentMethod
-        debug("VM: Updated MIC cache for '", frame.selector, "' with ", receiver.class.name)
+        if not frame.msgNode.megamorphic:
+          frame.msgNode.cachedClass = receiver.class
+          frame.msgNode.cachedMethod = currentMethod
+          frame.msgNode.cachedVersion = receiver.class.version
+          debug("VM: Updated MIC cache for '", frame.selector, "' with ", receiver.class.name)
 
     # Check for native implementation
     # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
@@ -4382,11 +4414,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfPushHandler:
     # Push exception handler onto handler stack
+    # At this point, work queue has [...][wfPopHandler][wfApplyBlock(protected)]
+    # We save depth excluding wfPopHandler+wfApplyBlock so we can unwind on exception
     let handler = ExceptionHandler(
       exceptionClass: frame.exceptionClass,
       handlerBlock: frame.handlerBlock,
       activation: interp.currentActivation,
-      stackDepth: interp.activationStack.len
+      stackDepth: interp.activationStack.len,
+      workQueueDepth: interp.workQueue.len - 2,  # Depth before wfPopHandler and wfApplyBlock
+      evalStackDepth: interp.evalStack.len
     )
     interp.exceptionHandlers.add(handler)
     debug("VM: wfPushHandler pushed handler for ", frame.exceptionClass.name)
