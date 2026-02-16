@@ -24,9 +24,7 @@ Library>>name: value <primitive primitiveLibraryName: value>
 # Library class methods
 #====================================================================
 
-Library class>>new [
-    <primitive primitiveLibraryNew>
-]
+Library class>>new <primitive primitiveLibraryNew>
 
 #====================================================================
 # Library iteration
@@ -101,7 +99,4 @@ Library>>removeKey: key ifAbsent: block [
 # Library slot accessors
 #====================================================================
 
-Library>>bindings [
-    # Access the bindings slot (slot 0)
-    <primitive primitiveLibraryBindings>
-]
+Library>>bindings <primitive primitiveLibraryBindings>

@@ -8,7 +8,7 @@ SortedCollection := Object derive: #(sortBlock elements).
 
 SortedCollection class>>new [
     | sc |
-    sc := self newInstance.
+    sc := self basicNew.
     sc setSortBlock: [:a :b | a < b].
     sc initElements.
     ^sc
@@ -16,7 +16,7 @@ SortedCollection class>>new [
 
 SortedCollection class>>new: items sortBlock: aBlock [
     | sc |
-    sc := self newInstance.
+    sc := self basicNew.
     sc setSortBlock: aBlock.
     sc initElements.
     items do: [:item | sc add: item].
