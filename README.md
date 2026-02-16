@@ -189,7 +189,6 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Future Plans](docs/FUTURE.md) - Roadmap
 - [CLAUDE.md](CLAUDE.md) - Developer guide with BitBarrel integration
 - [Compilation Pipeline](docs/design/COMPILATION_PIPELINE.md) - Granite compiler architecture
-- [JavaScript Backend](docs/JAVASCRIPT.md) - Browser REPL (experimental)
 - [GTK Integration](docs/GTK.md) - GUI development
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
 - [GtkSourceView](docs/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting

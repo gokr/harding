@@ -115,6 +115,17 @@ This document tracks current work items and future directions for Harding develo
 - [x] Conditional compilation with `-d:bitbarrel` flag
 - [x] Harding-side class definitions in `lib/harding/bitbarrel/`
 
+### Code Cleanup - JS Support Removal (2026-02-16)
+- [x] Removed all 9 `when defined(js)` conditionals from core files
+- [x] types.nim: Removed JS conditional from `CompiledMethod.nativeAddr`
+- [x] types.nim: Removed JS conditional from `NimValueDefault` helper
+- [x] types.nim: Removed JS conditional from Boolean instance creation
+- [x] parser.nim: Removed JS conditional from `BlockNode.nativeImpl`
+- [x] objects.nim: Removed JS conditional from `writeImpl` and `writelineImpl`
+- [x] objects.nim: Removed JS conditional from `createGetterMethod` and `createSetterMethod`
+- [x] Moved `docs/JAVASCRIPT.md` to `docs/research/` as historical documentation
+- [x] Updated documentation references (README.md, docs/README.md)
+
 ### Language Evolution
 - [x] Multiple inheritance syntax (implemented via `addParent:`)
 - [ ] Optional static type checking
@@ -574,4 +585,4 @@ EOF
 - Updated IDE Browser, Libraries, and Workspace components
 - Simplified blocked process handling in scheduler
 
-*Last Updated: 2026-02-16*
+*Last Updated: 2026-02-16 - Added JS support removal note*

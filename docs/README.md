@@ -15,7 +15,6 @@ These are the primary documents for learning and using Harding:
 | [bootstrap.md](bootstrap.md) | Foundation and architecture of the VM bootstrap | Contributors |
 | [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | Tool usage (`harding`, `granite`) and debugging | All users |
 | [FUTURE.md](FUTURE.md) | Future plans and roadmap | Contributors |
-| [JAVASCRIPT.md](JAVASCRIPT.md) | JavaScript/browser compilation (experimental) | Contributors |
 | [VSCODE.md](VSCODE.md) | VSCode syntax highlighting extension | VSCode users |
 
 ## Getting Started
