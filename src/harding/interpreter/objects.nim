@@ -907,25 +907,15 @@ proc writeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Write output without newline
   if args.len > 0:
     let s = args[0].toString()
-    when defined(js):
-      {.emit: "if (typeof process !== 'undefined' && process.stdout) { process.stdout.write(`s`); } else { console.log(`s`); }".}
-    else:
-      stdout.write(s)
+    stdout.write(s)
   return nilValue()
 
 proc writelineImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Write output with newline
   if args.len > 0:
-    let s = args[0].toString()
-    when defined(js):
-      {.emit: "console.log(`s`);".}
-    else:
-      echo(s)
+    echo(args[0].toString())
   else:
-    when defined(js):
-      {.emit: "console.log();".}
-    else:
-      echo()
+    echo()
   return nilValue()
 
 proc printStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -985,7 +975,7 @@ proc createGetterMethod*(cls: Class, slotName: string): BlockNode =
   meth.temporaries = @[]
   meth.body = @[cast[Node](returnNode)]
   meth.isMethod = true
-  meth.nativeImpl = (when defined(js): 0 else: nil)
+  meth.nativeImpl = nil
   meth.capturedEnv = initTable[string, MutableCell]()
   meth.capturedEnvInitialized = true
 
@@ -1018,7 +1008,7 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
   meth.temporaries = @[]
   meth.body = @[cast[Node](slotAccess)]
   meth.isMethod = true
-  meth.nativeImpl = (when defined(js): 0 else: nil)
+  meth.nativeImpl = nil
   meth.capturedEnv = initTable[string, MutableCell]()
   meth.capturedEnvInitialized = true
 
