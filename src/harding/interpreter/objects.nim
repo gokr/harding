@@ -164,8 +164,8 @@ proc classDeriveImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classNewImpl*(self: Class, args: seq[NodeValue]): NodeValue
-proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue
-proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classAddMethodImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
+proc classAddClassMethodImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc classParentsImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc classSlotsImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc classGettersImpl*(self: Instance, args: seq[NodeValue]): NodeValue
@@ -576,11 +576,13 @@ proc initCoreClasses*(): Class =
     # Bootstrap methods needed for .hrd files to define other methods
     # selector:put: - for defining instance methods (used by >> syntax)
     let selectorPutMethod = createCoreMethod("selector:put:")
+    selectorPutMethod.hasInterpreterParam = true
     selectorPutMethod.setNativeImpl(classAddMethodImpl)
     addMethodToClass(objectClass, "selector:put:", selectorPutMethod, isClassMethod = true)
 
     # classSelector:put: - for defining class methods (used by class>> syntax)
     let classSelectorPutMethod = createCoreMethod("classSelector:put:")
+    classSelectorPutMethod.hasInterpreterParam = true
     classSelectorPutMethod.setNativeImpl(classAddClassMethodImpl)
     addMethodToClass(objectClass, "classSelector:put:", classSelectorPutMethod, isClassMethod = true)
 
@@ -1343,7 +1345,7 @@ proc classNewImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   let inst = self.newInstance()
   return NodeValue(kind: vkInstance, instVal: inst)
 
-proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+proc classAddMethodImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Add an instance method to this class
   ## Returns self (the class) for method chaining
   if args.len >= 2:
@@ -1352,10 +1354,10 @@ proc classAddMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
                    else: ""
     let meth: BlockNode = if args[1].kind == vkBlock: args[1].blockVal else: nil
     if selector.len > 0 and meth != nil:
-      addMethodToClass(self, selector, meth)
-  return self.toValue()
+      addMethodToClass(self.class, selector, meth, deferRebuild=interp.methodTableDeferRebuild)
+  return self.class.toValue()
 
-proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+proc classAddClassMethodImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Add a class method to this class
   ## Returns self (the class) for method chaining
   if args.len >= 2:
@@ -1364,8 +1366,8 @@ proc classAddClassMethodImpl*(self: Class, args: seq[NodeValue]): NodeValue =
                    else: ""
     let meth: BlockNode = if args[1].kind == vkBlock: args[1].blockVal else: nil
     if selector.len > 0 and meth != nil:
-      addMethodToClass(self, selector, meth, isClassMethod = true)
-  return self.toValue()
+      addMethodToClass(self.class, selector, meth, isClassMethod = true, deferRebuild=interp.methodTableDeferRebuild)
+  return self.class.toValue()
 
 proc sizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get size of collections
