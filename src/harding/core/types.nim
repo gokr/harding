@@ -96,7 +96,8 @@ type
   Activation* = ref ActivationObj
 
   # Exception handler record for on:do: mechanism
-  ExceptionHandler* = object
+  # Using ref object for proper ARC memory management with contained ref fields
+  ExceptionHandler* = ref object
     exceptionClass*: Class    # The exception class to catch
     handlerBlock*: BlockNode        # Block to execute when caught
     activation*: Activation         # Activation where handler was installed
@@ -1050,8 +1051,8 @@ proc valueToInstance*(val: NodeValue): Instance =
     else:
       return Instance(kind: ikTable, class: nil, entries: val.tableVal, isNimProxy: false, nimValue: NimValueDefault)
   of vkBool:
-    # Boolean values - store in nimValue for compatibility
-    let p = cast[pointer](alloc(sizeof(bool)))
+    # Boolean values - allocate on GC heap for ARC compatibility
+    let p = cast[pointer](new(bool))
     cast[ptr bool](p)[] = val.boolVal
     return Instance(kind: ikObject, class: booleanClass, slots: @[], isNimProxy: true, nimValue: p)
   of vkBlock:
@@ -1121,3 +1122,30 @@ proc lessThan*(a, b: TaggedValue): bool {.inline.} = tagged.lessThan(a, b)
 proc lessOrEqual*(a, b: TaggedValue): bool {.inline.} = tagged.lessOrEqual(a, b)
 proc greaterThan*(a, b: TaggedValue): bool {.inline.} = tagged.greaterThan(a, b)
 proc greaterOrEqual*(a, b: TaggedValue): bool {.inline.} = tagged.greaterOrEqual(a, b)
+
+# ============================================================================
+# BlockNode Registry for ARC Compatibility
+# ============================================================================
+# When storing BlockNodes in Instance.nimValue (as raw pointers), ARC doesn't
+# know about these references and may collect the BlockNodes prematurely.
+# This registry keeps BlockNodes alive by storing them in a global seq that
+# ARC can track.
+
+var blockNodeRegistry*: seq[BlockNode] = @[]
+  ## Global registry of BlockNodes to prevent ARC from collecting them
+
+proc registerBlockNode*(blk: BlockNode) =
+  ## Register a BlockNode to keep it alive for ARC
+  if blk != nil and blk notin blockNodeRegistry:
+    blockNodeRegistry.add(blk)
+
+proc unregisterBlockNode*(blk: BlockNode) =
+  ## Unregister a BlockNode (if it was explicitly registered)
+  for i in 0..<blockNodeRegistry.len:
+    if blockNodeRegistry[i] == blk:
+      blockNodeRegistry.delete(i)
+      break
+
+proc initBlockNodeRegistry*() =
+  ## Initialize the BlockNode registry (called at startup)
+  blockNodeRegistry = @[]

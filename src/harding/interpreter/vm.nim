@@ -3779,7 +3779,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkString:
       receiver = newStringInstance(stringClass, receiverVal.strVal)
     of vkBool:
-      let p = cast[pointer](alloc(sizeof(bool)))
+      let p = cast[pointer](new(bool))
       cast[ptr bool](p)[] = receiverVal.boolVal
       receiver = Instance(
         kind: ikObject,
@@ -4013,6 +4013,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           else:
             raise newException(ValueError, "Method not found: " & frame.selector)
     of vkBlock:
+      # Register BlockNode to keep it alive for ARC
+      registerBlockNode(receiverVal.blockVal)
       receiver = Instance(
         kind: ikObject,
         class: blockClass,
@@ -4304,7 +4306,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     else:
       # Empty body returns nil
       interp.pushValue(nilValue())
-
     return true
 
   of wfPopActivation:
@@ -4472,7 +4473,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      let p = cast[pointer](alloc(sizeof(bool)))
+      let p = cast[pointer](new(bool))
       cast[ptr bool](p)[] = receiverVal.boolVal
       receiver = Instance(
         kind: ikObject,
@@ -4482,6 +4483,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         nimValue: p
       )
     of vkBlock:
+      # Register BlockNode to keep it alive for ARC
+      registerBlockNode(receiverVal.blockVal)
       receiver = Instance(
         kind: ikObject,
         class: blockClass,
@@ -4580,7 +4583,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      let p = cast[pointer](alloc(sizeof(bool)))
+      let p = cast[pointer](new(bool))
       cast[ptr bool](p)[] = receiverVal.boolVal
       receiver = Instance(
         kind: ikObject,
@@ -4590,6 +4593,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         nimValue: p
       )
     of vkBlock:
+      # Register BlockNode to keep it alive for ARC
+      registerBlockNode(receiverVal.blockVal)
       receiver = Instance(
         kind: ikObject,
         class: blockClass,

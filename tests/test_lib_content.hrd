@@ -1,3 +1,0 @@
-"A simple class definition for testing Library load:"
-LibTestClass := Object deriveWithAccessors: #(value).
-LibTestConstant := 42.

@@ -517,9 +517,13 @@ type
     theScheduler*: Scheduler  # 'theScheduler' to avoid naming conflict
     context*: SchedulerContext
 
+# Keep SchedulerProxy references alive for ARC
+var schedulerProxies: seq[SchedulerProxy] = @[]
+
 proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue =
   ## Create a proxy object that wraps a Nim Scheduler
   let proxy = SchedulerProxy(theScheduler: ctx.theScheduler, context: ctx)
+  schedulerProxies.add(proxy)  # Keep reference alive for GC
   let obj = Instance(kind: ikObject, class: schedulerClass, slots: @[])
   obj.isNimProxy = true
   obj.nimValue = cast[pointer](proxy)
