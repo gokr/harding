@@ -2995,7 +2995,7 @@ proc newReturnValueFrame*(value: NodeValue): WorkFrame =
   result.kind = wfReturnValue
   result.returnValue = value
 
-proc newCascadeFrame*(messages: seq[MessageNode], receiver: NodeValue): WorkFrame =
+proc newCascadeFrame*(messages: seq[Node], receiver: NodeValue): WorkFrame =
   result = acquireFrame()
   result.kind = wfCascade
   result.cascadeMessages = messages
@@ -4503,7 +4503,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
     if messages.len == 1:
       # Single message - just send it
-      let msg = messages[0]
+      let msg = cast[MessageNode](messages[0])
       interp.pushWorkFrame(WorkFrame(
         kind: wfAfterReceiver,
         pendingSelector: msg.selector,
@@ -4518,7 +4518,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
       # Push all message frames in reverse order
       for i in countdown(messages.len - 1, 0):
-        let msg = messages[i]
+        let msg = cast[MessageNode](messages[i])
         if i == messages.len - 1:
           # Last message - keep its result
           interp.pushWorkFrame(WorkFrame(

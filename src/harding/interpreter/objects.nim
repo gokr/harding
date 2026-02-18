@@ -433,7 +433,7 @@ proc rewriteNodeForSlotAccess(node: Node, cls: Class, shadowedNames: seq[string]
     if cascade.receiver != nil:
       cascade.receiver = rewriteNodeForSlotAccess(cascade.receiver, cls, shadowedNames)
     for i in 0..<cascade.messages.len:
-      let msg = cascade.messages[i]
+      let msg = cast[MessageNode](cascade.messages[i])
       for j in 0..<msg.arguments.len:
         msg.arguments[j] = rewriteNodeForSlotAccess(msg.arguments[j], cls, shadowedNames)
     return cascade
