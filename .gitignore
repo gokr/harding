@@ -105,3 +105,15 @@ tests/test_bitbarrel
 tests/test_website_core
 tests/test_website_docs
 tests/test_website_features
+tests/test_exception_handling
+tests/test_extend
+tests/test_harding_processes_and_globals
+tests/test_interpreter_basic
+tests/test_interpreter_closures
+tests/test_interpreter_controlflow
+tests/test_interpreter_errors
+tests/test_interpreter_returns
+tests/test_message_precedence
+tests/test_perform
+tests/test_sync_primitives
+tests/test_tagged
