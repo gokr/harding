@@ -1181,11 +1181,13 @@ proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
   return nilValue()
 
 proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Signal an exception - immediate unwind with recorded signal context
+  ## Signal an exception - Smalltalk-style with signal point preservation
   ## Called from Exception>>signal - usage: Exception signal: "message"
   ##
-  ## Unwinds VM state to handler install point, records signal context on
-  ## the handler for return:/pass/retry, then schedules handler block.
+  ## NEW BEHAVIOR (Smalltalk-style):
+  ## - Preserves full activation stack at signal point
+  ## - Saves work queue state for potential resume
+  ## - Does NOT truncate until handler decides fate
   ## self is the Exception instance (not the class)
 
   # Get message from exception instance if available
@@ -1205,21 +1207,32 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
     if isKindOf(self.class, handler.exceptionClass):
       debug("primitiveSignal: found matching handler at index ", i)
 
-      # Record signal context on the handler before unwinding
-      # (used by return:, pass, retry)
+      # Create ExceptionContext with full signal point state
+      let ctx = ExceptionContext(
+        signalActivation: interp.currentActivation,
+        handlerActivation: handler.activation,
+        signaler: interp.currentReceiver,
+        signalerContext: interp.currentActivation,  # TODO: walk sender chain
+        signalWorkQueue: interp.workQueue,  # Copy full work queue
+        signalEvalStack: interp.evalStack,  # Copy full eval stack
+        signalActivationDepth: interp.activationStack.len,
+        isResumable: true,  # TODO: check exception class
+        hasBeenResumed: false,
+        exceptionInstance: self
+      )
+      registerExceptionContext(ctx)
+
+      # Store context in handler
       interp.exceptionHandlers[i].exceptionInstance = self
       interp.exceptionHandlers[i].signalWorkQueueDepth = interp.workQueue.len
       interp.exceptionHandlers[i].signalEvalStackDepth = interp.evalStack.len
       interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
+      interp.exceptionHandlers[i].exceptionContext = ctx
 
-      # Unwind VM state to the point where the handler was installed:
-      # 1. Truncate work queue
+      # For now, still truncate to handler for compatibility
+      # TODO: This will be changed to preserve stacks for resume
       interp.truncateWorkQueue(handler.workQueueDepth)
-
-      # 2. Truncate eval stack
       interp.evalStack.setLen(handler.evalStackDepth)
-
-      # 3. Unwind activation stack to handler's depth
       while interp.activationStack.len > handler.stackDepth:
         discard interp.activationStack.pop()
       if interp.activationStack.len > 0:
@@ -1239,6 +1252,11 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       # Return nil - the handler block will push its result
       return nilValue()
 
+  # No handler found - TODO: call defaultAction, raise UnhandledError
+  debug("primitiveSignal: no handler found for exception")
+  writeStderr("Uncaught exception: " & message)
+  return nilValue()
+
   # No handler found
   debug("primitiveSignal: no handler found for exception")
   writeStderr("Uncaught exception: " & message)
@@ -1250,6 +1268,42 @@ proc findHandlerForException(interp: var Interpreter, self: Instance): int =
     if interp.exceptionHandlers[i].exceptionInstance == self:
       return i
   return -1
+
+proc primitiveExceptionSignalContextImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Exception>>signalContext - return the signal point context
+  ## Returns the ExceptionContext instance capturing signal point state
+  let handlerIdx = interp.findHandlerForException(self)
+  if handlerIdx < 0:
+    return nilValue()
+  
+  let handler = interp.exceptionHandlers[handlerIdx]
+  if handler.exceptionContext == nil:
+    return nilValue()
+  
+  # TODO: Create a Harding-side SignalContext wrapper class
+  # For now, just return true if context exists
+  return trueValue
+
+proc primitiveExceptionSignalerImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Exception>>signaler - return the object that signaled this exception
+  let handlerIdx = interp.findHandlerForException(self)
+  if handlerIdx < 0:
+    return nilValue()
+  
+  let handler = interp.exceptionHandlers[handlerIdx]
+  if handler.exceptionContext == nil or handler.exceptionContext.signaler == nil:
+    return nilValue()
+  
+  return handler.exceptionContext.signaler.toValue()
+
+proc primitiveExceptionSignalActivationDepthImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Exception>>signalActivationDepth - return activation stack depth at signal point
+  let handlerIdx = interp.findHandlerForException(self)
+  if handlerIdx < 0:
+    return NodeValue(kind: vkInt, intVal: 0)
+  
+  let handler = interp.exceptionHandlers[handlerIdx]
+  return NodeValue(kind: vkInt, intVal: handler.signalActivationDepth)
 
 proc primitiveExceptionReturnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>return: value - explicit unwind, providing value to on:do:
@@ -2736,6 +2790,30 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     exceptionCls.methods["primitiveExceptionRetry"] = retryMethod
     exceptionCls.allMethods["primitiveExceptionRetry"] = retryMethod
     propagateToSubclasses(exceptionCls, "primitiveExceptionRetry", retryMethod)
+
+    # Register Exception>>signalContext primitive (for debugging)
+    let signalContextMethod = createCoreMethod("primitiveExceptionSignalContext")
+    signalContextMethod.setNativeImpl(primitiveExceptionSignalContextImpl)
+    signalContextMethod.hasInterpreterParam = true
+    exceptionCls.methods["primitiveExceptionSignalContext"] = signalContextMethod
+    exceptionCls.allMethods["primitiveExceptionSignalContext"] = signalContextMethod
+    propagateToSubclasses(exceptionCls, "primitiveExceptionSignalContext", signalContextMethod)
+
+    # Register Exception>>signaler primitive
+    let signalerMethod = createCoreMethod("primitiveExceptionSignaler")
+    signalerMethod.setNativeImpl(primitiveExceptionSignalerImpl)
+    signalerMethod.hasInterpreterParam = true
+    exceptionCls.methods["primitiveExceptionSignaler"] = signalerMethod
+    exceptionCls.allMethods["primitiveExceptionSignaler"] = signalerMethod
+    propagateToSubclasses(exceptionCls, "primitiveExceptionSignaler", signalerMethod)
+
+    # Register Exception>>signalActivationDepth primitive
+    let signalDepthMethod = createCoreMethod("primitiveExceptionSignalActivationDepth")
+    signalDepthMethod.setNativeImpl(primitiveExceptionSignalActivationDepthImpl)
+    signalDepthMethod.hasInterpreterParam = true
+    exceptionCls.methods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
+    exceptionCls.allMethods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
+    propagateToSubclasses(exceptionCls, "primitiveExceptionSignalActivationDepth", signalDepthMethod)
 
     debug("Registered native Exception>>primitiveSignal method")
   else:

@@ -95,6 +95,26 @@ type
   # Forward declarations to break circular dependency
   Activation* = ref ActivationObj
 
+  # ============================================================================
+  # Exception Context for Smalltalk-Style Debugging
+  # Preserves full signal point state for debugging and resumption
+  # ============================================================================
+
+  ExceptionContext* = ref object
+    ## Captures complete VM state at exception signal point
+    ## Enables Smalltalk-style debugging with stack preservation
+    signalActivation*: Activation       # Activation where signal was sent
+    handlerActivation*: Activation      # Activation where handler is installed
+    signaler*: Instance                 # self at signal point
+    signalerContext*: Activation        # First non-Exception sender (for debugging)
+    signalWorkQueue*: seq[WorkFrame]    # Work queue snapshot at signal
+    signalEvalStack*: seq[NodeValue]    # Eval stack snapshot at signal
+    signalActivationDepth*: int         # Activation stack depth at signal
+    isResumable*: bool                  # Can this exception be resumed?
+    hasBeenResumed*: bool               # Track if already resumed
+    outerContext*: ExceptionContext     # For #outer message support
+    exceptionInstance*: Instance        # The exception instance
+
   # Exception handler record for on:do: mechanism
   # Using ref object for proper ARC memory management with contained ref fields
   ExceptionHandler* = ref object
@@ -110,6 +130,7 @@ type
     signalWorkQueueDepth*: int     # WQ depth at signal point
     signalEvalStackDepth*: int     # ES depth at signal point
     signalActivationDepth*: int    # AS depth at signal point
+    exceptionContext*: ExceptionContext  # Full context for debugging
 
   # Exception thrown when Processor yield is called for immediate context switch
   YieldException* = object of CatchableError
@@ -1150,3 +1171,22 @@ proc unregisterBlockNode*(blk: BlockNode) =
 proc initBlockNodeRegistry*() =
   ## Initialize the BlockNode registry (called at startup)
   blockNodeRegistry = @[]
+
+# ============================================================================
+# ExceptionContext Registry for ARC Compatibility
+# ============================================================================
+
+var exceptionContextRegistry*: seq[ExceptionContext] = @[]
+  ## Global registry of ExceptionContext to prevent ARC from collecting them
+
+proc registerExceptionContext*(ctx: ExceptionContext) =
+  ## Register an ExceptionContext to keep it alive for ARC
+  if ctx != nil and ctx notin exceptionContextRegistry:
+    exceptionContextRegistry.add(ctx)
+
+proc unregisterExceptionContext*(ctx: ExceptionContext) =
+  ## Unregister an ExceptionContext
+  for i in 0..<exceptionContextRegistry.len:
+    if exceptionContextRegistry[i] == ctx:
+      exceptionContextRegistry.delete(i)
+      break

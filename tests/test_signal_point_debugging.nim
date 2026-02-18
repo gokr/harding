@@ -55,10 +55,27 @@ suite "Existing Exception Handling":
 suite "Signal Point Preservation (TODO)":
   
   test "signal context accessible from exception":
-    skip() # TODO: Implement Exception>>signalContext
+    ## The exception should have access to its signal context
+    let result = sharedInterp.evalStatements("""
+      Result := [ Error signal: "test" ] on: Error do: [ :ex | 
+        ex signalContext
+      ]
+    """)
+    
+    # Should return true (signalContext exists)
+    check(result[0].len > 0)
+    check(result[0][^1].boolVal == true)
 
   test "activation stack depth recorded at signal":
-    skip() # TODO: Record stack depth in ExceptionContext
+    ## The exception should record the stack depth at signal point
+    let result = sharedInterp.evalStatements("""
+      Result := [ Error signal: "test" ] on: Error do: [ :ex | 
+        ex signalActivationDepth
+      ]
+    """)
+    
+    check(result[0].len > 0)
+    check(result[0][^1].intVal > 0)  # Should have at least 1 activation
 
   test "full activation stack accessible from handler":
     skip() # TODO: Don't truncate activation stack

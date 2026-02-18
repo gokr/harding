@@ -37,6 +37,18 @@ Exception>>retry <primitive primitiveExceptionRetry>
 
 Exception>>isResumable [ ^ true ]
 
+Exception>>signalContext <primitive primitiveExceptionSignalContext>
+  # Return the signal point context for debugging
+  # This provides access to the full call stack at signal point
+
+Exception>>signaler <primitive primitiveExceptionSignaler>
+  # Return the object that signaled this exception
+  # This is the receiver of the method that called signal
+
+Exception>>signalActivationDepth <primitive primitiveExceptionSignalActivationDepth>
+  # Return the activation stack depth at signal point
+  # Useful for debugging and stack inspection
+
 Exception>>message [
   # Get exception message
   ^ message
