@@ -44,11 +44,60 @@ These tasks match the functionality previously only available through `nim e bui
 
 ## Testing
 
-Tests use Nim's built-in unittest framework. Run tests with:
+Tests use Nim's built-in unittest framework. Run all tests with:
+
+```bash
+nimble test              # Run all tests
+```
+
+Or run individual test files:
 
 ```bash
 nim c -r tests/test_core.nim
+nim c -r tests/test_exception_handling.nim
 ```
+
+### Test Coverage
+
+The test suite includes 25+ test files covering:
+
+**Core Interpreter:**
+- `test_interpreter_basic.nim` - Message dispatch, method execution, globals
+- `test_interpreter_closures.nim` - Block closures and variable capture
+- `test_interpreter_controlflow.nim` - Conditionals and loops
+- `test_interpreter_errors.nim` - Error handling scenarios
+- `test_interpreter_returns.nim` - Non-local returns
+
+**Object Model:**
+- `test_class_model.nim` - Class creation, inheritance, slots
+- `test_slot_ivars.nim` - Instance variables and accessors
+- `test_super_and_syntax.nim` - Super sends and method syntax
+- `test_extend.nim` - Method batching with extend:
+
+**Parser & Syntax:**
+- `test_cascade.nim` - Message cascading (obj msg1; msg2)
+- `test_message_precedence.nim` - Unary/binary/keyword precedence
+
+**Exception Handling:**
+- `test_exception_handling.nim` - on:do:, signal, return:, pass
+
+**Concurrency:**
+- `test_process.nim` - Green threads and Process management
+- `test_scheduler.nim` - Scheduler context and forking
+- `test_sync_primitives.nim` - Monitor, Semaphore, SharedQueue
+- `test_harding_processes_and_globals.nim` - Harding-side Process/Scheduler
+
+**Standard Library:**
+- `test_stdlib.nim` - Comprehensive library tests
+- `test_primitives.nim` - Primitive method declarations
+- `test_perform.nim` - Dynamic message sending
+
+**Integration:**
+- `test_tagged.nim` - Tagged values (NaN boxing)
+- `test_bitbarrel.nim` - BitBarrel database (conditional)
+- `test_website_*.nim` - Documentation examples
+
+All tests pass with ARC (ORC) memory management enabled.
 
 ## Logging and Debugging
 
