@@ -2935,14 +2935,24 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
   # Read and evaluate the file
   try:
+    # Defer method table rebuilds during batch loading
+    interp.methodTableDeferRebuild = true
+
     let source = readFile(resolvedPath)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
       writeStderr("Error loading " & resolvedPath & ": " & err)
+      interp.methodTableDeferRebuild = false
       return nilValue()
+
+    # Rebuild all method tables after batch loading
+    rebuildAllMethodTables()
+    interp.methodTableDeferRebuild = false
+
     debug("Successfully loaded: ", resolvedPath)
     return toValue(true)
   except Exception as e:
+    interp.methodTableDeferRebuild = false
     writeStderr("Error reading " & resolvedPath & ": " & e.msg)
     return nilValue()
 
@@ -2983,11 +2993,15 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   interp.globals = tempGlobals
 
   try:
+    # Defer method table rebuilds during batch loading
+    interp.methodTableDeferRebuild = true
+
     let source = readFile(resolvedPath)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
       writeStderr("Error loading " & resolvedPath & ": " & err)
       interp.globals = originalGlobals
+      interp.methodTableDeferRebuild = false
       return nilValue()
 
     # Restore original globals
@@ -3001,10 +3015,15 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
           setTableValue(bindings, toValue(key), val)
           debug("Library captured: ", key)
 
+    # Rebuild all method tables after batch loading
+    rebuildAllMethodTables()
+    interp.methodTableDeferRebuild = false
+
     debug("Successfully loaded into library: ", resolvedPath)
     return toValue(true)
   except Exception as e:
     interp.globals = originalGlobals
+    interp.methodTableDeferRebuild = false
     writeStderr("Error reading " & resolvedPath & ": " & e.msg)
     return nilValue()
 
