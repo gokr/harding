@@ -158,7 +158,7 @@ type
     # For wfReturnValue
     returnValue*: NodeValue
     # For wfCascade
-    cascadeMessages*: seq[MessageNode]
+    cascadeMessages*: seq[Node]
     cascadeReceiver*: NodeValue
     # For wfPopActivation
     savedReceiver*: Instance
@@ -273,7 +273,7 @@ type
 
   CascadeNode* = ref object of Node
     receiver*: Node
-    messages*: seq[MessageNode]
+    messages*: seq[Node]
 
   AssignNode* = ref object of Node
     variable*: string
