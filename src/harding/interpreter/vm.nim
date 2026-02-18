@@ -3191,6 +3191,64 @@ proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame =
   result.kind = wfExceptionReturn
   result.handlerIndex = handlerIndex
 
+proc newBuildArrayFrame*(count: int): WorkFrame =
+  ## Create a work frame for building an array from stack values
+  result = acquireFrame()
+  result.kind = wfBuildArray
+  result.argCount = count
+
+proc newBuildTableFrame*(count: int): WorkFrame =
+  ## Create a work frame for building a table from stack key-value pairs
+  result = acquireFrame()
+  result.kind = wfBuildTable
+  result.argCount = count
+
+proc newRestoreReceiverFrame*(savedReceiver: Instance): WorkFrame =
+  ## Create a work frame to restore the original receiver after cascade
+  result = acquireFrame()
+  result.kind = wfRestoreReceiver
+  result.savedReceiver = savedReceiver
+
+proc newDiscardFrame*(): WorkFrame =
+  ## Create a work frame that discards the result of the previous expression
+  result = acquireFrame()
+  result.kind = wfAfterArg
+  result.pendingSelector = "discard"
+
+proc newAssignFrame*(variable: string): WorkFrame =
+  ## Create a work frame for variable assignment continuation
+  result = acquireFrame()
+  result.kind = wfAfterArg
+  result.pendingSelector = "__assign__"
+  result.selector = variable
+  result.pendingArgs = @[]
+  result.currentArgIndex = 0
+
+proc newSlotAssignFrame*(slotIndex: int): WorkFrame =
+  ## Create a work frame for slot assignment continuation
+  result = acquireFrame()
+  result.kind = wfAfterArg
+  result.pendingSelector = ":="
+  result.currentArgIndex = slotIndex
+
+proc newCascadeMessageFrame*(selector: string, args: seq[Node], receiver: NodeValue): WorkFrame =
+  ## Create a work frame for cascade message (keeps result)
+  result = acquireFrame()
+  result.kind = wfCascadeMessage
+  result.pendingSelector = selector
+  result.pendingArgs = args
+  result.currentArgIndex = 0
+  result.cascadeReceiver = receiver
+
+proc newCascadeMessageDiscardFrame*(selector: string, args: seq[Node], receiver: NodeValue): WorkFrame =
+  ## Create a work frame for cascade message (discards result)
+  result = acquireFrame()
+  result.kind = wfCascadeMessageDiscard
+  result.pendingSelector = selector
+  result.pendingArgs = args
+  result.currentArgIndex = 0
+  result.cascadeReceiver = receiver
+
 # Stack operations
 proc truncateWorkQueue*(interp: var Interpreter, depth: int) =
   ## Truncate work queue to given depth, properly releasing frames to pool
@@ -3313,14 +3371,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     # Variable assignment: evaluate expression, then assign
     let assign = cast[AssignNode](node)
     # Push continuation frame to handle assignment after expression is evaluated
-    interp.pushWorkFrame(WorkFrame(
-      kind: wfAfterArg,  # Reuse for assignment continuation
-      pendingSelector: "__assign__",  # Internal marker for assignment (not a valid selector)
-      pendingArgs: @[],
-      currentArgIndex: 0
-    ))
-    # Extend frame with variable name (store in selector field)
-    interp.workQueue[^1].selector = assign.variable
+    interp.pushWorkFrame(newAssignFrame(assign.variable))
     # Evaluate expression
     interp.pushWorkFrame(newEvalFrame(assign.expression))
     return true
@@ -3335,11 +3386,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           # Assignment: need to evaluate valueExpr first
           if slotNode.valueExpr != nil:
             # Push continuation to handle slot assignment
-            interp.pushWorkFrame(WorkFrame(
-              kind: wfAfterArg,
-              pendingSelector: ":=",
-              currentArgIndex: slotNode.slotIndex
-            ))
+            interp.pushWorkFrame(newSlotAssignFrame(slotNode.slotIndex))
             interp.pushWorkFrame(newEvalFrame(slotNode.valueExpr))
             return true
           else:
@@ -3381,14 +3428,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     if ret.expression != nil:
       # Push placeholder with vkNil (NOT nilValue() which may be vkInstance)
       # This signals to wfReturnValue to pop the value from the stack
-      interp.pushWorkFrame(WorkFrame(kind: wfReturnValue, returnValue: NodeValue(kind: vkNil)))
+      interp.pushWorkFrame(newReturnValueFrame(NodeValue(kind: vkNil)))
       interp.pushWorkFrame(newEvalFrame(ret.expression))
     else:
       # Return self
       if interp.currentReceiver != nil:
         interp.pushWorkFrame(newReturnValueFrame(interp.currentReceiver.toValue().unwrap()))
       else:
-        interp.pushWorkFrame(WorkFrame(kind: wfReturnValue, returnValue: NodeValue(kind: vkNil)))
+        interp.pushWorkFrame(newReturnValueFrame(NodeValue(kind: vkNil)))
     return true
 
   of nkArray:
@@ -3401,7 +3448,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(NodeValue(kind: vkArray, arrayVal: @[]))
     else:
       # Push build-array frame first (will execute last)
-      interp.pushWorkFrame(WorkFrame(kind: wfBuildArray, argCount: arr.elements.len))
+      interp.pushWorkFrame(newBuildArrayFrame(arr.elements.len))
       # Push element evaluation frames in reverse order
       for i in countdown(arr.elements.len - 1, 0):
         let elem = arr.elements[i]
@@ -3410,14 +3457,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           let ident = cast[IdentNode](elem)
           case ident.name
           of "true":
-            interp.pushWorkFrame(WorkFrame(kind: wfEvalNode, node: PseudoVarNode(name: "true")))
+            interp.pushWorkFrame(newEvalFrame(PseudoVarNode(name: "true")))
           of "false":
-            interp.pushWorkFrame(WorkFrame(kind: wfEvalNode, node: PseudoVarNode(name: "false")))
+            interp.pushWorkFrame(newEvalFrame(PseudoVarNode(name: "false")))
           of "nil":
-            interp.pushWorkFrame(WorkFrame(kind: wfEvalNode, node: PseudoVarNode(name: "nil")))
+            interp.pushWorkFrame(newEvalFrame(PseudoVarNode(name: "nil")))
           else:
             # Bare identifier in array literal is treated as symbol
-            interp.pushWorkFrame(WorkFrame(kind: wfEvalNode, node: LiteralNode(value: getSymbol(ident.name))))
+            interp.pushWorkFrame(newEvalFrame(LiteralNode(value: getSymbol(ident.name))))
         else:
           interp.pushWorkFrame(newEvalFrame(elem))
     return true
@@ -3432,7 +3479,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]()))
     else:
       # Push build-table frame first (will execute last)
-      interp.pushWorkFrame(WorkFrame(kind: wfBuildTable, argCount: tab.entries.len * 2))
+      interp.pushWorkFrame(newBuildTableFrame(tab.entries.len * 2))
       # Push key-value evaluation frames in reverse order (values first, then keys)
       for i in countdown(tab.entries.len - 1, 0):
         let entry = tab.entries[i]
@@ -3512,12 +3559,12 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]()))
     else:
       # Push build-object-literal frame (reuses wfBuildTable with string keys)
-      interp.pushWorkFrame(WorkFrame(kind: wfBuildTable, argCount: objLit.properties.len * 2))
+      interp.pushWorkFrame(newBuildTableFrame(objLit.properties.len * 2))
       # Push property value evaluations in reverse order
       for i in countdown(objLit.properties.len - 1, 0):
         let prop = objLit.properties[i]
         # Property name as string value
-        interp.pushWorkFrame(WorkFrame(kind: wfEvalNode, node: LiteralNode(value: toValue(prop.name))))
+        interp.pushWorkFrame(newEvalFrame(LiteralNode(value: toValue(prop.name))))
         interp.pushWorkFrame(newEvalFrame(prop.value))
     return true
 
@@ -3529,7 +3576,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       for i in countdown(prim.fallback.len - 1, 0):
         if i < prim.fallback.len - 1:
           # Pop intermediate results (only keep last)
-          interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+          interp.pushWorkFrame(newDiscardFrame())
         interp.pushWorkFrame(newEvalFrame(prim.fallback[i]))
     else:
       interp.pushValue(nilValue())
@@ -3732,17 +3779,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkString:
       receiver = newStringInstance(stringClass, receiverVal.strVal)
     of vkBool:
-      # Boolean - create ikObject instance with nimValue
-      var boolInst: Instance
-      new(boolInst)
-      boolInst.kind = ikObject
-      boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
-      boolInst.slots = @[]
       let p = cast[pointer](alloc(sizeof(bool)))
       cast[ptr bool](p)[] = receiverVal.boolVal
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
-      receiver = boolInst
+      receiver = Instance(
+        kind: ikObject,
+        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
+        slots: @[],
+        isNimProxy: true,
+        nimValue: p
+      )
     of vkNil:
       receiver = nilInstance
     of vkArray:
@@ -3820,7 +3865,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         if currentMethod.body.len > 0:
           for i in countdown(currentMethod.body.len - 1, 0):
             if i < currentMethod.body.len - 1:
-              interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+              interp.pushWorkFrame(newDiscardFrame())
             interp.pushWorkFrame(newEvalFrame(currentMethod.body[i]))
         else:
           interp.pushValue(nilValue())
@@ -3883,7 +3928,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           if currentMethod.body.len > 0:
             for i in countdown(currentMethod.body.len - 1, 0):
               if i < currentMethod.body.len - 1:
-                interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+                interp.pushWorkFrame(newDiscardFrame())
               interp.pushWorkFrame(newEvalFrame(currentMethod.body[i]))
           else:
             interp.pushValue(nilValue())
@@ -3959,7 +4004,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             if classMethodToRun.body.len > 0:
               for i in countdown(classMethodToRun.body.len - 1, 0):
                 if i < classMethodToRun.body.len - 1:
-                  interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+                  interp.pushWorkFrame(newDiscardFrame())
                 interp.pushWorkFrame(newEvalFrame(classMethodToRun.body[i]))
             else:
               interp.pushValue(nilValue())
@@ -3968,15 +4013,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           else:
             raise newException(ValueError, "Method not found: " & frame.selector)
     of vkBlock:
-      # Create Block instance with the BlockNode stored in nimValue
-      var blockInst: Instance
-      new(blockInst)
-      blockInst.kind = ikObject
-      blockInst.class = blockClass
-      blockInst.slots = @[]
-      blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
-      receiver = blockInst
+      receiver = Instance(
+        kind: ikObject,
+        class: blockClass,
+        slots: @[],
+        isNimProxy: false,
+        nimValue: cast[pointer](receiverVal.blockVal)
+      )
     of vkSymbol:
       receiver = newStringInstance(symbolClassCache, receiverVal.symVal)
 
@@ -4193,7 +4236,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       for i in countdown(currentMethod.body.len - 1, 0):
         if i < currentMethod.body.len - 1:
           # Pop intermediate results (keep only last statement's result)
-          interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+          interp.pushWorkFrame(newDiscardFrame())
         interp.pushWorkFrame(newEvalFrame(currentMethod.body[i]))
     else:
       # Empty body returns nil
@@ -4256,7 +4299,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if blockNode.body.len > 0:
       for i in countdown(blockNode.body.len - 1, 0):
         if i < blockNode.body.len - 1:
-          interp.pushWorkFrame(WorkFrame(kind: wfAfterArg, pendingSelector: "discard"))
+          interp.pushWorkFrame(newDiscardFrame())
         interp.pushWorkFrame(newEvalFrame(blockNode.body[i]))
     else:
       # Empty body returns nil
@@ -4429,34 +4472,31 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      var boolInst: Instance
-      new(boolInst)
-      boolInst.kind = ikObject
-      boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
-      boolInst.slots = @[]
       let p = cast[pointer](alloc(sizeof(bool)))
       cast[ptr bool](p)[] = receiverVal.boolVal
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
-      receiver = boolInst
+      receiver = Instance(
+        kind: ikObject,
+        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
+        slots: @[],
+        isNimProxy: true,
+        nimValue: p
+      )
     of vkBlock:
-      var blockInst: Instance
-      new(blockInst)
-      blockInst.kind = ikObject
-      blockInst.class = blockClass
-      blockInst.slots = @[]
-      blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
-      receiver = blockInst
+      receiver = Instance(
+        kind: ikObject,
+        class: blockClass,
+        slots: @[],
+        isNimProxy: false,
+        nimValue: cast[pointer](receiverVal.blockVal)
+      )
     of vkClass:
-      var classInst: Instance
-      new(classInst)
-      classInst.kind = ikObject
-      classInst.class = objectClass
-      classInst.slots = @[]
-      classInst.isNimProxy = false
-      classInst.nimValue = cast[pointer](receiverVal.classVal)
-      receiver = classInst
+      receiver = Instance(
+        kind: ikObject,
+        class: objectClass,
+        slots: @[],
+        isNimProxy: false,
+        nimValue: cast[pointer](receiverVal.classVal)
+      )
     else:
       raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)
 
@@ -4472,39 +4512,22 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if messages.len == 1:
       # Single message - just send it
       let msg = messages[0]
-      interp.pushWorkFrame(WorkFrame(
-        kind: wfAfterReceiver,
-        pendingSelector: msg.selector,
-        pendingArgs: msg.arguments,
-        currentArgIndex: 0
-      ))
+      interp.pushWorkFrame(newAfterReceiverFrame(msg.selector, msg.arguments))
       interp.pushValue(receiverVal)  # Push receiver back for the message send
     else:
       # Multiple messages - push them in reverse order with cascade continuation
       # Push a final frame to restore receiver and keep only last result
-      interp.pushWorkFrame(WorkFrame(kind: wfRestoreReceiver, savedReceiver: savedReceiver))
+      interp.pushWorkFrame(newRestoreReceiverFrame(savedReceiver))
 
       # Push all message frames in reverse order
       for i in countdown(messages.len - 1, 0):
         let msg = messages[i]
         if i == messages.len - 1:
           # Last message - keep its result
-          interp.pushWorkFrame(WorkFrame(
-            kind: wfCascadeMessage,
-            pendingSelector: msg.selector,
-            pendingArgs: msg.arguments,
-            currentArgIndex: 0,
-            cascadeReceiver: receiverVal  # Store receiver for this message
-          ))
+          interp.pushWorkFrame(newCascadeMessageFrame(msg.selector, msg.arguments, receiverVal))
         else:
           # Intermediate message - discard result, keep receiver
-          interp.pushWorkFrame(WorkFrame(
-            kind: wfCascadeMessageDiscard,
-            pendingSelector: msg.selector,
-            pendingArgs: msg.arguments,
-            currentArgIndex: 0,
-            cascadeReceiver: receiverVal
-          ))
+          interp.pushWorkFrame(newCascadeMessageDiscardFrame(msg.selector, msg.arguments, receiverVal))
 
     return true
 
@@ -4557,34 +4580,31 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
     of vkBool:
-      var boolInst: Instance
-      new(boolInst)
-      boolInst.kind = ikObject
-      boolInst.class = if receiverVal.boolVal: trueClassCache else: falseClassCache
-      boolInst.slots = @[]
       let p = cast[pointer](alloc(sizeof(bool)))
       cast[ptr bool](p)[] = receiverVal.boolVal
-      boolInst.isNimProxy = true
-      boolInst.nimValue = p
-      receiver = boolInst
+      receiver = Instance(
+        kind: ikObject,
+        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
+        slots: @[],
+        isNimProxy: true,
+        nimValue: p
+      )
     of vkBlock:
-      var blockInst: Instance
-      new(blockInst)
-      blockInst.kind = ikObject
-      blockInst.class = blockClass
-      blockInst.slots = @[]
-      blockInst.isNimProxy = false
-      blockInst.nimValue = cast[pointer](receiverVal.blockVal)
-      receiver = blockInst
+      receiver = Instance(
+        kind: ikObject,
+        class: blockClass,
+        slots: @[],
+        isNimProxy: false,
+        nimValue: cast[pointer](receiverVal.blockVal)
+      )
     of vkClass:
-      var classInst: Instance
-      new(classInst)
-      classInst.kind = ikObject
-      classInst.class = objectClass
-      classInst.slots = @[]
-      classInst.isNimProxy = false
-      classInst.nimValue = cast[pointer](receiverVal.classVal)
-      receiver = classInst
+      receiver = Instance(
+        kind: ikObject,
+        class: objectClass,
+        slots: @[],
+        isNimProxy: false,
+        nimValue: cast[pointer](receiverVal.classVal)
+      )
     else:
       raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)
 
@@ -4625,10 +4645,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     case frame.loopState
     of lsEvaluateCondition:
       # Push frame to check condition after it's evaluated
-      interp.pushWorkFrame(WorkFrame(kind: wfWhileLoop, loopKind: frame.loopKind,
-                                      conditionBlock: frame.conditionBlock,
-                                      bodyBlock: frame.bodyBlock,
-                                      loopState: lsCheckCondition))
+      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsCheckCondition))
       interp.pushWorkFrame(newApplyBlockFrame(frame.conditionBlock, 0))
       return true
     of lsCheckCondition:
@@ -4639,10 +4656,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       discard interp.popValue()  # Clean up condition result
       if shouldContinue:
         # Continue loop - execute body
-        interp.pushWorkFrame(WorkFrame(kind: wfWhileLoop, loopKind: frame.loopKind,
-                                        conditionBlock: frame.conditionBlock,
-                                        bodyBlock: frame.bodyBlock,
-                                        loopState: lsExecuteBody))
+        interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
         # Loop done - push nil result
@@ -4650,18 +4664,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       return true
     of lsExecuteBody:
       # Transition to lsLoopBody state (will be used after body completes)
-      interp.pushWorkFrame(WorkFrame(kind: wfWhileLoop, loopKind: frame.loopKind,
-                                      conditionBlock: frame.conditionBlock,
-                                      bodyBlock: frame.bodyBlock,
-                                      loopState: lsLoopBody))
+      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsLoopBody))
       return true
     of lsLoopBody:
       # Body completed - discard body result and loop back to condition
       discard interp.popValue()
-      interp.pushWorkFrame(WorkFrame(kind: wfWhileLoop, loopKind: frame.loopKind,
-                                      conditionBlock: frame.conditionBlock,
-                                      bodyBlock: frame.bodyBlock,
-                                      loopState: lsEvaluateCondition))
+      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsEvaluateCondition))
       return true
     of lsDone:
       return true
@@ -4815,14 +4823,14 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
   interp.currentReceiver = nil
 
   # Evaluate with clean context
-  let result = interp.evalWithVM(node)
+  let evalResult = interp.evalWithVM(node)
 
   # Restore activation context
   interp.activationStack = savedActivationStack
   interp.currentActivation = savedCurrentActivation
   interp.currentReceiver = savedCurrentReceiver
 
-  return result
+  return evalResult
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM

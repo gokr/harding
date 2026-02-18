@@ -29,7 +29,7 @@ proc initFramePool*() =
   debug("Frame pool initialized with ", $InitialPoolSize, " frames")
 
 proc clearFrame*(frame: WorkFrame) =
-  ## Clear all fields of a frame to prevent stale data
+  ## Clear all fields of a frame to prevent stale data and ARC leaks
   if frame == nil:
     return
   frame.node = nil
@@ -38,12 +38,12 @@ proc clearFrame*(frame: WorkFrame) =
   frame.msgNode = nil
   frame.isClassMethod = false
   frame.blockVal = nil
-  frame.blockArgs = @[]
+  frame.blockArgs.setLen(0)
   frame.pendingSelector = ""
-  frame.pendingArgs = @[]
+  frame.pendingArgs.setLen(0)
   frame.currentArgIndex = 0
   frame.returnValue = NodeValue(kind: vkNil)
-  frame.cascadeMessages = @[]
+  frame.cascadeMessages.setLen(0)
   frame.cascadeReceiver = NodeValue(kind: vkNil)
   frame.savedReceiver = nil
   frame.isBlockActivation = false

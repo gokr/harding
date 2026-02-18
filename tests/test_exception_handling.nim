@@ -12,6 +12,12 @@ suite "Exception Handling":
   setup:
     interp = sharedInterp
 
+  teardown:
+    # Only clear exception handlers and eval stack to prevent state leakage
+    # Don't clear activation stack, workqueue, or current values as they're needed for parsing
+    interp.exceptionHandlers.setLen(0)
+    interp.evalStack.setLen(0)
+
   test "basic on:do: catches exception":
     let result = interp.evalStatements("""
       Result := [ Error signal: "test" ] on: Error do: [ :ex | "caught" ]

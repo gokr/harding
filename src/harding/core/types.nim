@@ -96,7 +96,7 @@ type
   Activation* = ref ActivationObj
 
   # Exception handler record for on:do: mechanism
-  ExceptionHandler* {.acyclic.} = object
+  ExceptionHandler* = object
     exceptionClass*: Class    # The exception class to catch
     handlerBlock*: BlockNode        # Block to execute when caught
     activation*: Activation         # Activation where handler was installed
@@ -144,7 +144,7 @@ type
     wfExceptionReturn     # Barrier: when handler completes, unwind to on:do: point
 
   # Work frame for explicit stack VM execution
-  WorkFrame* {.acyclic.} = ref object
+  WorkFrame* = ref object
     kind*: WorkFrameKind
     # For wfEvalNode
     node*: Node
@@ -189,7 +189,7 @@ type
     protectedBlockForHandler*: BlockNode
 
   # Interpreter type defined here to avoid circular dependency between scheduler and evaluator
-  Interpreter* {.acyclic.} = ref object
+  Interpreter* = ref object
     globals*: ref Table[string, NodeValue]
     activationStack*: seq[Activation]
     currentActivation*: Activation
@@ -228,7 +228,7 @@ type
     homeActivation*: Activation           # for non-local returns: method that created this block
 
   # Activation records for method execution (defined after BlockNode)
-  ActivationObj* {.acyclic.} = object of RootObj
+  ActivationObj* = object of RootObj
     sender*: Activation               # calling context
     receiver*: Instance               # 'self' (Instance type)
     currentMethod*: BlockNode         # current method
