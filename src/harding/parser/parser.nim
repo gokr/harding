@@ -122,7 +122,7 @@ proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
 proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parseMethod(parser: var Parser): BlockNode
 proc parsePrimitive(parser: var Parser): Node
-proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node
+proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
 
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
@@ -449,7 +449,7 @@ proc transformControlFlow(msg: MessageNode): Node =
   return msg
 
 # Parse binary/unary messages
-proc parseBinaryMessage(parser: var Parser, receiver: Node): MessageNode =
+proc parseBinaryMessage(parser: var Parser, receiver: Node): Node =
   # If there are no unary messages, return the receiver wrapped as a message
   # This should not happen in practice as we only call this when we detect messages
   if not (parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii()):
@@ -602,7 +602,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
     return primary
 
 # Parse cascade messages
-proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): Node =
+proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
   ## Check for cascade and collect all messages separated by ;
   var messages = @[firstMsg]
 
@@ -610,7 +610,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
   let cascadeReceiver = if primary != nil:
                           primary
                         else:
-                          firstMsg.receiver
+                          cast[MessageNode](firstMsg).receiver
 
   # Check if we have a cascade
   var safetyCounter = 0
@@ -630,7 +630,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: MessageNode): 
 
     # Parse next message (could be unary, binary, or keyword)
     let next = parser.peek()
-    var nextMsg: MessageNode
+    var nextMsg: Node
 
     case next.kind
     of tkKeyword:
