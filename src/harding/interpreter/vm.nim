@@ -1564,9 +1564,13 @@ proc primitiveSetDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
       if args.len == 0:
         return nilValue()
       let blockVal = args[0]
-      if blockVal.kind != vkInstance or blockVal.instVal.class != blockClass:
+      var theBlock: BlockNode
+      if blockVal.kind == vkBlock:
+        theBlock = blockVal.blockVal
+      elif blockVal.kind == vkInstance and blockVal.instVal != nil and nimValueIsSet(blockVal.instVal.nimValue):
+        theBlock = cast[BlockNode](blockVal.instVal.nimValue)
+      else:
         return nilValue()
-      let theBlock = cast[BlockNode](blockVal.instVal.nimValue)
       for key in elementsVal.instVal.entries.keys():
         discard evalBlockWithArg(interp, interp.currentReceiver, theBlock, key)
       return nilValue()
@@ -1980,10 +1984,10 @@ proc initGlobals*(interp: var Interpreter) =
   stringCls.methods["primitiveTrim"] = stringTrimMethod
   stringCls.allMethods["primitiveTrim"] = stringTrimMethod
 
-  let stringFromToMethod = createCoreMethod("primitiveFromTo:")
+  let stringFromToMethod = createCoreMethod("primitiveFromTo:to:")
   stringFromToMethod.setNativeImpl(instStringFromToImpl)
-  stringCls.methods["primitiveFromTo:"] = stringFromToMethod
-  stringCls.allMethods["primitiveFromTo:"] = stringFromToMethod
+  stringCls.methods["primitiveFromTo:to:"] = stringFromToMethod
+  stringCls.allMethods["primitiveFromTo:to:"] = stringFromToMethod
 
   let stringIndexOfMethod = createCoreMethod("primitiveIndexOf:")
   stringIndexOfMethod.setNativeImpl(instStringIndexOfImpl)
@@ -1995,10 +1999,10 @@ proc initGlobals*(interp: var Interpreter) =
   stringCls.methods["primitiveIncludesSubString:"] = stringIncludesSubStringMethod
   stringCls.allMethods["primitiveIncludesSubString:"] = stringIncludesSubStringMethod
 
-  let stringReplaceWithMethod = createCoreMethod("primitiveReplaceWith:")
+  let stringReplaceWithMethod = createCoreMethod("primitiveReplaceWith:with:")
   stringReplaceWithMethod.setNativeImpl(instStringReplaceWithImpl)
-  stringCls.methods["primitiveReplaceWith:"] = stringReplaceWithMethod
-  stringCls.allMethods["primitiveReplaceWith:"] = stringReplaceWithMethod
+  stringCls.methods["primitiveReplaceWith:with:"] = stringReplaceWithMethod
+  stringCls.allMethods["primitiveReplaceWith:with:"] = stringReplaceWithMethod
 
   let stringAsIntegerMethod = createCoreMethod("primitiveAsInteger")
   stringAsIntegerMethod.setNativeImpl(instStringAsIntegerImpl)
@@ -2442,14 +2446,61 @@ proc initGlobals*(interp: var Interpreter) =
   blockCls.methods["primitiveOnDo:do:"] = primitiveOnDoMethod
   blockCls.allMethods["primitiveOnDo:do:"] = primitiveOnDoMethod
 
-  # Register Set iteration method (primitiveSetDo: requires interpreter for block evaluation)
+  # Register Set primitive selectors (used by lib/core/Collections.hrd)
   # The Set class itself was created in initCoreClasses (objects.nim)
   if types.setClass != nil:
+    let setCls = types.setClass
+
+    let setNewMethod = createCoreMethod("primitiveSetNew")
+    setNewMethod.setNativeImpl(primitiveSetNewImpl)
+    setCls.classMethods["primitiveSetNew"] = setNewMethod
+    setCls.allClassMethods["primitiveSetNew"] = setNewMethod
+    setCls.methods["primitiveSetNew"] = setNewMethod
+    setCls.allMethods["primitiveSetNew"] = setNewMethod
+    # Register as class method "new" so Set new creates instance with elements table
+    setCls.classMethods["new"] = setNewMethod
+    setCls.allClassMethods["new"] = setNewMethod
+
+    let setAddMethod = createCoreMethod("primitiveSetAdd:")
+    setAddMethod.setNativeImpl(primitiveSetAddImpl)
+    setCls.methods["primitiveSetAdd:"] = setAddMethod
+    setCls.allMethods["primitiveSetAdd:"] = setAddMethod
+
+    let setRemoveMethod = createCoreMethod("primitiveSetRemove:")
+    setRemoveMethod.setNativeImpl(primitiveSetRemoveImpl)
+    setCls.methods["primitiveSetRemove:"] = setRemoveMethod
+    setCls.allMethods["primitiveSetRemove:"] = setRemoveMethod
+
+    let setIncludesMethod = createCoreMethod("primitiveSetIncludes:")
+    setIncludesMethod.setNativeImpl(primitiveSetIncludesImpl)
+    setCls.methods["primitiveSetIncludes:"] = setIncludesMethod
+    setCls.allMethods["primitiveSetIncludes:"] = setIncludesMethod
+
+    let setSizeMethod = createCoreMethod("primitiveSetSize")
+    setSizeMethod.setNativeImpl(primitiveSetSizeImpl)
+    setCls.methods["primitiveSetSize"] = setSizeMethod
+    setCls.allMethods["primitiveSetSize"] = setSizeMethod
+
+    let setUnionMethod = createCoreMethod("primitiveSetUnion:")
+    setUnionMethod.setNativeImpl(primitiveSetUnionImpl)
+    setCls.methods["primitiveSetUnion:"] = setUnionMethod
+    setCls.allMethods["primitiveSetUnion:"] = setUnionMethod
+
+    let setIntersectionMethod = createCoreMethod("primitiveSetIntersection:")
+    setIntersectionMethod.setNativeImpl(primitiveSetIntersectionImpl)
+    setCls.methods["primitiveSetIntersection:"] = setIntersectionMethod
+    setCls.allMethods["primitiveSetIntersection:"] = setIntersectionMethod
+
+    let setDifferenceMethod = createCoreMethod("primitiveSetDifference:")
+    setDifferenceMethod.setNativeImpl(primitiveSetDifferenceImpl)
+    setCls.methods["primitiveSetDifference:"] = setDifferenceMethod
+    setCls.allMethods["primitiveSetDifference:"] = setDifferenceMethod
+
     let setDoMethod = createCoreMethod("primitiveSetDo:")
     setDoMethod.setNativeImpl(primitiveSetDoImpl)
     setDoMethod.hasInterpreterParam = true
-    types.setClass.methods["primitiveSetDo:"] = setDoMethod
-    types.setClass.allMethods["primitiveSetDo:"] = setDoMethod
+    setCls.methods["primitiveSetDo:"] = setDoMethod
+    setCls.allMethods["primitiveSetDo:"] = setDoMethod
 
   # Create UndefinedObject class (derives from Object) - the class of nil
   let undefinedObjCls = newClass(superclasses = @[objectCls], name = "UndefinedObject")

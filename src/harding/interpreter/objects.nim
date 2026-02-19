@@ -896,8 +896,12 @@ proc classImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
 proc instIdentityImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Identity comparison - returns true only if same instance
-  if args.len > 0 and args[0].kind == vkInstance:
-    return toValue(self == args[0].instVal)
+  if args.len > 0:
+    if args[0].kind == vkInstance:
+      return toValue(self == args[0].instVal)
+    # Symbols: two symbols with the same name are identical (value equality for same-class symbols)
+    if args[0].kind == vkSymbol and self.kind == ikString and self.class == symbolClassCache:
+      return toValue(self.strVal == args[0].symVal)
   return toValue(false)
 
 proc doesNotUnderstandImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1473,12 +1477,14 @@ proc concatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal))
 
 proc instStringFromToImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Substring from:to: (0-based, inclusive)
+  ## Substring from:to: (1-based, inclusive)
   if self.kind == ikString and args.len >= 2:
     let (ok1, fromIdx) = args[0].tryGetInt()
     let (ok2, toIdx) = args[1].tryGetInt()
-    if ok1 and ok2 and fromIdx >= 0 and toIdx < self.strVal.len and fromIdx <= toIdx:
-      return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal[fromIdx..toIdx]))
+    let startIdx = fromIdx - 1
+    let endIdx = toIdx - 1
+    if ok1 and ok2 and startIdx >= 0 and endIdx < self.strVal.len and startIdx <= endIdx:
+      return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal[startIdx..endIdx]))
   return toValue("")
 
 proc instStringIndexOfImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
