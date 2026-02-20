@@ -388,8 +388,8 @@ Parent2 >> bar [ ^ "bar2" ]
 
 # Create a child that inherits from both
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 # Child now has access to both foo and bar
 c := Child new
@@ -399,7 +399,7 @@ c bar  # Returns "bar2"
 
 ### Conflict Detection
 
-When adding multiple parents (via `derive:` with multiple parents or `addParent:`), Harding checks for:
+When adding multiple parents (via `derive:` with multiple parents or `addSuperclass:`), Harding checks for:
 
 **Slot name conflicts**: If any slot name exists in multiple parent hierarchies, an error is raised.
 
@@ -408,8 +408,8 @@ Parent1 := Object derive: #(shared)
 Parent2 := Object derive: #(shared)
 
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2  # Error: Slot name conflict
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2  # Error: Slot name conflict
 ```
 
 **Method selector conflicts**: If directly-defined method selectors conflict between parents, an error is raised.
@@ -422,13 +422,13 @@ Parent2 := Object derive: #(b)
 Parent2 >> foo [ ^ "foo2" ]
 
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2  # Error: Method selector conflict
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2  # Error: Method selector conflict
 ```
 
 ### Resolving Conflicts
 
-To work with conflicting parent methods, override the method in the child class first, then use `addParent:`:
+To work with conflicting parent methods, override the method in the child class first, then use `addSuperclass:`:
 
 ```smalltalk
 Parent1 := Object derive: #(a)
@@ -442,8 +442,8 @@ Child := Object derive: #(x)
 Child >> foo [ ^ "child" ]
 
 # Add conflicting parents - works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 (Child new foo)  # Returns "child"
 ```
@@ -1138,8 +1138,8 @@ Harding supports multiple inheritance with conflict detection, unlike Smalltalk'
 
 ```smalltalk
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 ```
 
 #### Primitives

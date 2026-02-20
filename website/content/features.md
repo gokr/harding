@@ -80,8 +80,8 @@ Harding supports multiple inheritance with conflict detection:
 ```harding
 # Inherit from multiple parents
 ColoredPoint := Point derive: #(color)
-ColoredPoint addParent: Comparable
-ColoredPoint addParent: Printable
+ColoredPoint addSuperclass: Comparable
+ColoredPoint addSuperclass: Printable
 ```
 
 **Full Constructor Syntax:**
@@ -136,6 +136,74 @@ C := Object derive: #() parents: #(A B)  # Conflict detected on #foo
 ```
 
 ## Advanced Features
+
+### Smalltalk-Style Exception Handling
+
+Harding implements **Smalltalk-style resumable exceptions** with full signal point preservation. Unlike traditional exception handling that unwinds the stack, Harding's exceptions can be resumed, retried, or delegated.
+
+**Basic Exception Handling:**
+
+```harding
+# Catch and handle exceptions
+result := [
+    riskyOperation value
+] on: Error do: [:ex |
+    Transcript showCr: "Caught: " + ex messageText.
+    ex resume: 42  # Resume with a value
+]
+```
+
+**Exception Actions:**
+
+From within a handler block, you can:
+
+| Message | Effect |
+|---------|--------|
+| `ex resume` | Resume execution at the signal point, `signal` returns nil |
+| `ex resume: value` | Resume execution, `signal` returns the given value |
+| `ex retry` | Re-execute the protected block from the beginning |
+| `ex pass` | Delegate to the next outer matching handler |
+| `ex return: value` | Return value from the `on:do:` expression |
+
+**Signaling Exceptions:**
+
+```harding
+# Signal an exception
+MyError signal: "Something went wrong"
+
+# Signal with resume capability
+result := MyError signal: "Need input"
+
+# Check if resumed with value
+result ifNotNil: [
+    Transcript showCr: "Resumed with: " + result
+]
+```
+
+**Stackless Design:**
+
+The exception system is built on Harding's stackless VM design:
+- No native stack unwinding - works seamlessly with green threads
+- Signal point preserved in `ExceptionContext` for resumption
+- VM state explicitly restored to handler checkpoint
+- Multiple handlers can be nested naturally
+
+**Exception Hierarchy:**
+
+```harding
+# Custom exception classes
+MyDomainError := Error derive: #()
+MySpecificError := MyDomainError derive: #()
+
+# Catch specific or general exceptions
+[
+    operation value
+] on: MySpecificError do: [:ex |
+    # Handle specific error
+] on: Error do: [:ex |
+    # Handle any error
+]
+```
 
 ### Primitives
 
@@ -479,21 +547,58 @@ ten := numbers detect: [:n | n = 10]  # nil if not found
 
 ## Compilation Pipeline
 
+Harding offers two execution models: a stackless interpreter VM and the Granite compiler for native binaries.
+
+### Interpreter (Current)
+
+The default execution model - a stackless VM written in Nim:
+
 ```
 Harding source (.hrd)
        ↓
    Parser (AST)
        ↓
-   Interpreter (now)
+   Interpreter VM (Nim)
        ↓
-   Nim source (.nim) (coming)
+   Execution
+```
+
+### Granite Compiler (Available)
+
+Compile Harding code to native binaries via Nim → C:
+
+```
+Harding source (.hrd)
        ↓
-   C source (.c)
+   Parser (AST)
        ↓
-   Machine code
+   Granite Compiler
+       ↓
+   Nim source (.nim)
+       ↓
+   C Compiler
        ↓
    Native binary
 ```
+
+**Using Granite:**
+
+```bash
+# Compile to native binary
+granite compile myprogram.hrd -o myprogram
+
+# Build with release optimizations
+granite build myprogram.hrd --release
+
+# Run directly
+granite run myprogram.hrd
+```
+
+**Benefits:**
+- True native performance
+- Single distributable binary
+- No runtime dependencies
+- Full Nim ecosystem access
 
 ## Interoperability
 
@@ -599,8 +704,23 @@ harding> :quit        # Exit REPL
 
 ## What's Next
 
-See [Future Plans](/docs/FUTURE.md) for:
-- Compiler to Nim
-- Actor-based concurrency
-- GTK GUI bindings
+See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for:
+- True parallelism with actor-based concurrency
+- Enhanced GTK GUI bindings
 - AI integration hooks
+- Package manager and ecosystem
+
+## Current Status: v0.6.0
+
+**Implemented:**
+- Functional interpreter with green threads
+- MIC/PIC method caching for performance
+- Smalltalk-style resumable exceptions
+- GTK IDE (Bona) for graphical development
+- VSCode extension with syntax highlighting
+- Granite compiler for native binary compilation
+- BitBarrel integration for persistent storage (optional)
+
+**In Progress:**
+- Actor-based shared-nothing concurrency
+- Enhanced standard library

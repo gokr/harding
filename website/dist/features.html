@@ -153,7 +153,7 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
                     <p>Inherit from multiple parents with conflict detection:</p>
                     <ul>
                         <li>Use <code>derive:</code> to create a subclass</li>
-                        <li>Use <code>addParent:</code> to add additional parents</li>
+                        <li>Use <code>addSuperclass:</code> to add additional parents</li>
                         <li>Automatic conflict detection</li>
                         <li>Flexible mixin patterns</li>
                     </ul>
@@ -163,8 +163,8 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
                         <div class="code-header">Multiple Inheritance</div>
                         <pre><code><span class="comment"># Inherit from multiple parents</span>
 <span class="type">ColoredPoint</span> := <span class="type">Point</span> derive: <span class="keyword">#</span>(color)
-<span class="type">ColoredPoint</span> addParent: <span class="type">Comparable</span>
-<span class="type">ColoredPoint</span> addParent: <span class="type">Printable</span>
+<span class="type">ColoredPoint</span> addSuperclass: <span class="type">Comparable</span>
+<span class="type">ColoredPoint</span> addSuperclass: <span class="type">Printable</span>
 
 <span class="comment"># ColoredPoint now has methods from:</span>
 <span class="comment"># - Point (distanceFromOrigin, etc)</span>
@@ -235,6 +235,49 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
             <h2 class="section-title">Advanced Features</h2>
 
             <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Smalltalk-Style Exception Handling</h3>
+                    <p>Resumable exceptions with full signal point preservation:</p>
+                    <ul>
+                        <li><code>on:do:</code> - Exception handler installation</li>
+                        <li><code>signal</code> - Raise an exception</li>
+                        <li><code>resume</code> / <code>resume:</code> - Resume execution</li>
+                        <li><code>retry</code> - Re-execute protected block</li>
+                        <li><code>pass</code> - Delegate to outer handler</li>
+                        <li><code>return:</code> - Return from on:do: expression</li>
+                    </ul>
+                    <p>Unlike traditional exceptions, Harding preserves the signal point, allowing execution to continue from where the exception was raised.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Exception Handling</div>
+                        <pre><code><span class="comment"># Basic exception handling</span>
+result := [
+    riskyOperation value
+] on: Error do: [:ex |
+    Transcript showCr: "Caught!".
+    ex resume: 42
+]
+
+<span class="comment"># Resume execution</span>
+[
+    10 / 0
+] on: ZeroDivideError do: [:ex |
+    ex resume: 0
+]
+
+<span class="comment"># Retry the operation</span>
+[
+    attemptOperation
+] on: RetryableError do: [:ex |
+    fixTheIssue.
+    ex retry
+]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse" style="margin-top: 3rem;">
                 <div class="feature-text">
                     <h3>Primitives</h3>
                     <p>Direct access to VM-level operations and Nim interop:</p>
@@ -498,8 +541,56 @@ obj nimValue        <span class="comment"># Access Nim value</span>
         </div>
     </section>
 
-    <!-- Debugging Tools -->
+    <!-- Compilation -->
     <section class="content-section alt">
+        <div class="container">
+            <h2 class="section-title">Compilation</h2>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Granite Compiler</h3>
+                    <p>Compile Harding code to native binaries via Nim → C:</p>
+                    <ul>
+                        <li><strong>Standalone binaries</strong> - No runtime dependencies</li>
+                        <li><strong>Native performance</strong> - True compiled speed</li>
+                        <li><strong>Full Nim ecosystem</strong> - Access all Nim libraries</li>
+                        <li><strong>Cross-platform</strong> - Leverage Nim's cross-compilation</li>
+                    </ul>
+                    <h4>Usage</h4>
+                    <pre style="background: #1a1f2e; padding: 1rem; border-radius: 8px; margin-top: 1rem;"><code>granite compile program.hrd -o program
+granite build program.hrd --release
+granite run program.hrd</code></pre>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Compilation Pipeline</div>
+                        <pre><code>Harding source (.hrd)
+       ↓
+   Parser (AST)
+       ↓
+   Granite Compiler
+       ↓
+   Nim source (.nim)
+       ↓
+   C Compiler
+       ↓
+   Machine code
+       ↓
+   Native binary
+
+<span class="comment"># Compile to native binary</span>
+$ granite compile app.hrd -o myapp
+
+<span class="comment"># Result: standalone executable</span>
+$ ./myapp</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Debugging Tools -->
+    <section class="content-section">
         <div class="container">
             <h2 class="section-title">Debugging Tools</h2>
 
@@ -527,6 +618,36 @@ process state      # ready, running, etc.
 process pid        # Unique process ID
 process name       # Process name
 process priority   # Scheduling priority</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Current Status -->
+    <section class="content-section alt">
+        <div class="container">
+            <h2 class="section-title">Current Status: v0.6.0</h2>
+            <div class="feature-cards">
+                <div class="feature-card-large">
+                    <h3>Implemented</h3>
+                    <ul>
+                        <li>Functional interpreter with green threads</li>
+                        <li>MIC/PIC method caching for performance</li>
+                        <li>Smalltalk-style resumable exceptions</li>
+                        <li>GTK IDE (Bona) for graphical development</li>
+                        <li>VSCode extension with syntax highlighting</li>
+                        <li>Granite compiler for native binaries</li>
+                        <li>BitBarrel integration for persistent storage</li>
+                    </ul>
+                </div>
+                <div class="feature-card-large">
+                    <h3>In Progress</h3>
+                    <ul>
+                        <li>Actor-based shared-nothing concurrency</li>
+                        <li>Enhanced standard library</li>
+                        <li>Package manager and ecosystem</li>
+                        <li>AI integration hooks</li>
+                    </ul>
                 </div>
             </div>
         </div>

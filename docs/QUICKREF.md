@@ -52,7 +52,7 @@ x ~= y                           # Inequality
 x <= y                           # Less than or equal
 x >= y                           # Greater than or equal
 a // b                           # Integer division
-a \\ b                           # Modulo (remainder)
+a \\ b                           # Modulo - not yet implemented
 a ~~ b                           # Not identity
 "a" , "b"                        # String concatenation
 a & b                            # Logical AND
@@ -273,8 +273,8 @@ obj properties                     # Get all properties
 
 ```smalltalk
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 ```
 
 ## Green Processes

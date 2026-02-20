@@ -238,7 +238,7 @@ TSynchronizable>>release [
 #
 # # Adding comparability to a custom class:
 # Point := Object derive: #(x y).
-# Point addParent: TComparable.
+# Point addSuperclass: TComparable.
 #
 # Point>>compareTo: other [
 #   # Compare by distance from origin
@@ -252,7 +252,7 @@ TSynchronizable>>release [
 #
 # # Adding iterability:
 # LinkedList := Object derive: #(head tail).
-# LinkedList addParent: TIterable.
+# LinkedList addSuperclass: TIterable.
 #
 # LinkedList>>do: block [
 #   | current |

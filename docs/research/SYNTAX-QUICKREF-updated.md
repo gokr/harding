@@ -34,18 +34,18 @@ Employee := Person derive: #(#salary) withParents: #(Enumerable)
 
 **Note**: The first parent defines the "kind" of class (Object, Array, Number, etc.) and determines instance representation. Additional parents act as mixins/traits constrained by compatibility with the primary parent. The `withParents:` syntax is not yet implemented - currently only single inheritance works.
 
-### Adding Parents After Creation (addParent:)
+### Adding Parents After Creation (addSuperclass:)
 
 ```smalltalk
 # Create child class
 Child := Object derive: #(#x))
 
 # Add parent classes
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 ```
 
-Use `addParent:` to add parents after class creation. This is particularly useful for resolving method conflicts by overriding the conflict first:
+Use `addSuperclass:` to add parents after class creation. This is particularly useful for resolving method conflicts by overriding the conflict first:
 
 ```smalltalk
 # Parents with conflicting methods
@@ -60,8 +60,8 @@ Child := Object derive: #(#x))
 Child >> foo [ ^ "child" ]
 
 # Add conflicting parents - works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 (Child new foo)  # Returns "child"
 ```

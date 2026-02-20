@@ -16,8 +16,8 @@ Parent2 >> bar [ ^ "bar2" ]
 
 # Create a child that inherits from both
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 # Child now has access to both foo and bar
 c := Child new
@@ -27,7 +27,7 @@ c bar  # Returns "bar2"
 
 ## Conflict Detection
 
-When adding multiple parents (via `derive:` with multiple parents or `addParent:`), Harding checks for two types of conflicts:
+When adding multiple parents (via `derive:` with multiple parents or `addSuperclass:`), Harding checks for two types of conflicts:
 
 ### Slot Name Conflicts
 
@@ -38,8 +38,8 @@ Parent1 := Object derive: #(shared)
 Parent2 := Object derive: #(shared)
 
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2  # Error: Slot name conflict: 'shared' exists in multiple parents
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2  # Error: Slot name conflict: 'shared' exists in multiple parents
 ```
 
 ### Method Selector Conflicts
@@ -54,15 +54,15 @@ Parent2 := Object derive: #(b)
 Parent2 >> foo [ ^ "foo2" ]
 
 Child := Object derive: #(x)
-Child addParent: Parent1
-Child addParent: Parent2  # Error: Method selector conflict: 'foo' exists in existing parent
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2  # Error: Method selector conflict: 'foo' exists in existing parent
 ```
 
 **Important**: Only directly-defined methods on parents are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause false conflicts.
 
-## Resolving Conflicts with addParent:
+## Resolving Conflicts with addSuperclass:
 
-The `addParent:` message allows adding a parent to an existing class. This is useful for resolving conflicts by overriding the conflicting method first:
+The `addSuperclass:` message allows adding a parent to an existing class. This is useful for resolving conflicts by overriding the conflicting method first:
 
 ```smalltalk
 # Define two classes with conflicting methods
@@ -77,15 +77,15 @@ Child := Object derive: #(x)
 Child >> foo [ ^ "child" ]
 
 # Add the conflicting parents - this works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 result := Child new foo  # Returns "child" (child's override takes precedence)
 ```
 
-## addParent: Behavior
+## addSuperclass: Behavior
 
-The `addParent:` message:
+The `addSuperclass:` message:
 
 1. Checks if the parent is already added (if so, does nothing)
 2. Checks for slot name conflicts (only directly-defined slots on the new parent)
@@ -106,7 +106,7 @@ However, a method defined directly on the child class always takes precedence ov
 
 ## Example Program
 
-See `examples/test_conflict_detection.harding` for a complete example demonstrating conflict detection and the use of `addParent:` for resolution.
+See `examples/test_conflict_detection.harding` for a complete example demonstrating conflict detection and the use of `addSuperclass:` for resolution.
 
 ## See Also
 

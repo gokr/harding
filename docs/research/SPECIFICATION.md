@@ -192,9 +192,9 @@ try (
 ) catch (:err | err printString)
 ```
 
-### Adding Parents After Creation (addParent:)
+### Adding Parents After Creation (addSuperclass:)
 
-The `addParent:` message allows adding a parent to an existing class. This is useful for resolving method conflicts by overriding the conflicting method first, then adding the parent:
+The `addSuperclass:` message allows adding a parent to an existing class. This is useful for resolving method conflicts by overriding the conflicting method first, then adding the parent:
 
 ```smalltalk
 Parent1 := Object derive: #(a)
@@ -208,13 +208,13 @@ Child := Object derive: #(x)
 Child >> foo [ ^ "child" ]
 
 # Add conflicting parents - this works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 (Child new foo)  # Returns "child"
 ```
 
-The `addParent:` message checks for conflicts but allows them if the child class overrides the conflicting method.
+The `addSuperclass:` message checks for conflicts but allows them if the child class overrides the conflicting method.
 
 **Note**: Only directly-defined methods on each parent are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause conflicts.
 
@@ -464,14 +464,14 @@ obj := Object derive
 - `derive: #(ivar1 ivar2)` - Create with declared instance variables
 - `at: #key` - Get property
 - `at: #key put: value` - Set property
-- `addParent: parentClass` - Add a parent to an existing class (useful for resolving conflicts by overriding first)
+- `addSuperclass: parentClass` - Add a parent to an existing class (useful for resolving conflicts by overriding first)
 
 ### Class Methods
 
 - `new` - Create a new instance of the class
 - `selector:put:block` - Add an instance method to the class
 - `classSelector:put:block` - Add a class method to the class
-- `addParent:parentClass` - Add a parent to this class (allows conflict resolution with overrides)
+- `addSuperclass:parentClass` - Add a parent to this class (allows conflict resolution with overrides)
 
 ### Boolean
 

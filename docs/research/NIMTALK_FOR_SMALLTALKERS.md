@@ -227,7 +227,7 @@ The internal class model stores `parents: seq[Class]`. The first parent defines 
 
 ### Conflict Detection for Multiple Inheritance
 
-When creating a class with multiple parents (or adding parents via `addParent:`), Harding checks for conflicts:
+When creating a class with multiple parents (or adding parents via `addSuperclass:`), Harding checks for conflicts:
 
 - **Slot name conflicts**: If any slot name exists in multiple parent hierarchies, an error is raised
 - **Method selector conflicts**: If directly-defined method selectors conflict between parents, an error is raised
@@ -237,13 +237,13 @@ When creating a class with multiple parents (or adding parents via `addParent:`)
 Parent1 := Object derive: #(shared)
 Parent2 := Object derive: #(shared)
 Child := Object derive: #(x)
-  addParent: Parent1
-  addParent: Parent2  # Error: Slot name conflict: 'shared' exists in multiple parents
+  addSuperclass: Parent1
+  addSuperclass: Parent2  # Error: Slot name conflict: 'shared' exists in multiple parents
 ```
 
-### Resolving Conflicts with addParent:
+### Resolving Conflicts with addSuperclass:
 
-To work with conflicting parent methods, override the method in the child class first, then use `addParent:`:
+To work with conflicting parent methods, override the method in the child class first, then use `addSuperclass:`:
 
 ```harding
 Parent1 := Object derive: #(a)
@@ -257,8 +257,8 @@ Child := Object derive: #(x)
 Child >> foo [ ^ "child" ]
 
 # Add conflicting parents - works because child overrides
-Child addParent: Parent1
-Child addParent: Parent2
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 
 (Child new foo)  # Returns "child"
 ```
@@ -520,7 +520,7 @@ Harding preserves the essence of Smalltalk (message passing, blocks, live progra
 
 1. No metaclasses - classes are just objects
 2. No class variables - use globals or closures
-3. Multiple inheritance with conflict detection - use `addParent:` for conflict resolution
+3. Multiple inheritance with conflict detection - use `addSuperclass:` for conflict resolution
 4. Nim primitives - embed native code directly
 5. Use double quotes for strings - hash `#` for comments
 

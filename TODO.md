@@ -8,7 +8,7 @@ This document tracks current work items and future directions for Harding develo
 - Lexer, parser, stackless AST interpreter (recursive evaluator removed)
 - **Class-based object system with inheritance and merged method tables** ✅
 - **Multiple inheritance with conflict detection** ✅
-- **addParent: for adding parents after class creation** ✅
+- **addSuperclass: for adding parents after class creation** ✅
 - REPL with file execution
 - **Block closures with full lexical scoping, environment capture, and non-local returns** ✅
 - **Closure variable isolation and sibling block sharing** ✅
