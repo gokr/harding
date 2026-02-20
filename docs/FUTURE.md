@@ -304,8 +304,9 @@ pid send: #compute with: 42.
 - ✅ BitBarrel integration: persistent collections with range queries
 - ✅ VSCode extension with LSP and DAP
 - ✅ Phase 1 & 2 VM optimizations (MIC/PIC, Work Frame pooling, Quick Primitives)
+- ✅ Smalltalk-style resumable exceptions (resume, resume:, retry, pass, return:)
 - First-class block compilation with captures and non-local returns
-- Start test framework implementation (all 26 tests passing)
+- Start test framework implementation (all 28 tests passing)
 
 ### Medium Term (3-6 months)
 

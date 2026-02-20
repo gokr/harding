@@ -373,6 +373,19 @@ chmod +x script.hrd  # For shebang: #!/usr/bin/env harding
 [riskyOperation] on: Error do: [:ex |
     Transcript showCr: "Error: " + ex message
 ]
+
+# Handler actions
+ex resume          # Resume execution from signal point (signal returns nil)
+ex resume: value   # Resume from signal point (signal returns value)
+ex retry           # Re-execute protected block
+ex pass            # Delegate to next outer handler
+ex return: value   # Return value from on:do: expression
+
+# Resumable notifications (not errors)
+[Notification signal: "info"] on: Notification do: [:ex | ex resume]
+
+# Ensure cleanup always runs
+[riskyOperation] ensure: [cleanup]
 ```
 
 ## Primitives

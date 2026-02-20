@@ -613,4 +613,19 @@ EOF
 - Lazy method table rebuilding with methodsDirty flag
 - Enabled 15 previously skipped tests; all 26 test files pass
 
-*Last Updated: 2026-02-16*
+### Smalltalk-style Resumable Exceptions (2026-02-20)
+
+- [x] ExceptionContext preserves full activation stack and work queue at signal point
+- [x] Exception>>signal no longer truncates activation stack (proper Smalltalk-style)
+- [x] Exception>>resume - resume execution from signal point (signal returns nil)
+- [x] Exception>>resume: - resume from signal point returning a value
+- [x] Exception>>retry - re-execute the protected block
+- [x] Exception>>pass - delegate to next outer matching handler
+- [x] Exception>>return: - return value from the on:do: expression
+- [x] Exception>>signalContext - access full call stack at signal point
+- [x] Exception>>signaler - the object that signaled the exception
+- [x] Exception>>signalActivationDepth - activation stack depth at signal point
+- [x] Notification class as resumable exception subclass
+- [x] Comprehensive test suite in test_signal_point_debugging.nim
+
+*Last Updated: 2026-02-20*

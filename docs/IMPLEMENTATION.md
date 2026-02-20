@@ -311,9 +311,9 @@ Harding is compatible with Nim's ARC (Automatic Reference Counting) and ORC (ARC
 - `semaphoreProxies` in `scheduler.nim` - for SemaphoreProxy
 - `globalTableProxies` in `vm.nim` - for GlobalTableProxy
 
-### Non-Unwinding Exception Handling
+### Exception Handling with Signal Point Preservation
 
-Harding uses a non-unwinding exception handling mechanism based on work queue truncation rather than traditional stack unwinding.
+Harding uses Smalltalk-style exception handling that preserves the signal point for resumable exceptions (introduced in v0.6.0).
 
 #### How It Works
 
@@ -323,8 +323,10 @@ Harding uses a non-unwinding exception handling mechanism based on work queue tr
    - `stackDepth`: Activation stack depth
    - `workQueueDepth`: Work queue depth
    - `evalStackDepth`: Evaluation stack depth
+   - `protectedBlock`: Reference to the protected block (for `retry`)
 
-3. **Exception Signaling**: `primitiveSignalImpl` finds matching handler and truncates VM state:
+3. **Exception Signaling**: `primitiveSignalImpl` creates an `ExceptionContext` capturing the full signal point state, then truncates VM state to the handler's checkpoint:
+   - Creates `ExceptionContext` with activation stack snapshot, work queue depth, eval stack depth
    - Truncates work queue to handler's saved depth
    - Truncates eval stack to handler's saved depth
    - Pops activation stack to handler's saved depth
@@ -332,6 +334,15 @@ Harding uses a non-unwinding exception handling mechanism based on work queue tr
 4. **Handler Execution**: Schedules handler block with exception as argument
 
 5. **Cleanup**: `wfPopHandler` removes handler when block completes normally
+
+#### Resumable Exception Actions
+
+The preserved `ExceptionContext` enables Smalltalk-style handler actions:
+
+- **`resume`** / **`resume: value`**: Restores the signal point work queue and activation stack from the ExceptionContext, then continues execution. The `signal` expression returns nil or the provided value.
+- **`retry`**: Rewinds to the handler install point and re-executes the protected block.
+- **`pass`**: Delegates to the next outer matching handler.
+- **`return: value`**: Returns value from the `on:do:` expression, unwinding the handler.
 
 #### Key Characteristics
 
@@ -342,9 +353,9 @@ Harding uses a non-unwinding exception handling mechanism based on work queue tr
 - **Composable**: Multiple handlers can be nested
 
 **Trade-offs:**
-- Frames above the handler are truncated, not preserved
-- Cannot inspect "dead" frames after exception is caught
-- Stack traces show handler installation point, not full history
+- Frames above the handler are truncated, but preserved in ExceptionContext for resume
+- Non-resumable handlers discard the ExceptionContext after use
+- Stack traces show handler installation point for non-resumed exceptions
 
 #### Example: Exception Handling Flow
 

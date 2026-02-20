@@ -10,7 +10,7 @@ Harding is a prototype-based Smalltalk dialect that compiles to Nim. It provides
 - REPL for interactive development
 - FFI integration for calling Nim code
 
-**Current Status**: Early prototype with basic parsing, evaluation, and object system.
+**Current Status**: v0.6.0 - Functional interpreter with green threads, MIC/PIC caching, Smalltalk-style resumable exceptions, GTK IDE, VSCode extension, and Granite compiler for native binary compilation.
 
 ## Build Commands
 
@@ -597,61 +597,60 @@ See `src/harding/interpreter/vm.nim` for the work queue implementation.
 
 ## Exception Handling and Debugging
 
-### Non-Unwinding Exception Design
+### Smalltalk-Style Exception Design (v0.6.0+)
 
-Harding uses a **non-unwinding exception handling** mechanism based on work queue truncation rather than traditional stack unwinding. This design is crucial for supporting features like green threads and debugging.
+Harding uses **Smalltalk-style exception handling** with signal point preservation for resumable exceptions. This is implemented on top of a stackless work queue VM that supports green threads.
 
 #### How It Works
 
 1. **`on:do:` Primitive**: Schedules three work frames: `[pushHandler][evalBlock][popHandler]`
 2. **Handler Installation**: `wfPushHandler` creates an `ExceptionHandler` record with saved depths:
    - `stackDepth`: Activation stack depth
-   - `workQueueDepth`: Work queue depth  
+   - `workQueueDepth`: Work queue depth
    - `evalStackDepth`: Evaluation stack depth
-3. **Exception Signaling**: `primitiveSignalImpl` finds matching handler and **truncates** VM state:
+   - `protectedBlock`: Reference to the protected block (for `retry`)
+3. **Exception Signaling**: `primitiveSignalImpl` creates an `ExceptionContext` preserving the signal point, then truncates VM state to the handler checkpoint:
+   - Creates `ExceptionContext` with full activation stack snapshot + work queue state
    - Truncates work queue to handler's saved depth
    - Truncates eval stack to handler's saved depth
    - Pops activation stack to handler's saved depth
 4. **Handler Execution**: Schedules handler block with exception as argument
 5. **Cleanup**: `wfPopHandler` removes handler when block completes normally
 
+#### Handler Actions
+
+From a handler block, the exception object supports:
+
+| Message | Effect |
+|---------|--------|
+| `ex resume` | Restore signal point from ExceptionContext; `signal` returns nil |
+| `ex resume: value` | Restore signal point; `signal` returns the given value |
+| `ex retry` | Re-execute the protected block from the beginning |
+| `ex pass` | Delegate to the next outer matching handler |
+| `ex return: value` | Return value from the `on:do:` expression |
+
 #### Key Characteristics
 
 **Advantages:**
 - **Stackless**: No native stack unwinding - exceptions work with green threads
-- **Predictable**: VM state is explicitly restored to known checkpoint
-- **Debuggable**: Original activation records still exist (not destroyed)
+- **Resumable**: Signal point preserved in ExceptionContext for `resume`/`retry`
+- **Predictable**: VM state explicitly restored to known checkpoint
 - **Composable**: Multiple handlers can be nested
 
 **Trade-offs:**
-- Frames above the handler are **truncated**, not preserved
-- Cannot inspect "dead" frames after exception is caught
-- Stack traces show handler installation point, not full history
-
-#### Debugger Implications
-
-**What works:**
-- Single-stepping through code before exceptions
-- Inspecting local variables in active frames
-- Setting breakpoints in handler blocks
-- Examining exception instance when caught
-
-**Limitations:**
-- **No post-mortem debugging**: Frames above handler are truncated and lost
-- **Limited stack history**: Stack trace shows checkpoint, not full unwind
-- **No re-execution**: Cannot "rewind" and retry from exception point
+- Signal point is captured as a snapshot (ExceptionContext), not live frames
+- Non-resumed exceptions discard the ExceptionContext after the handler completes
+- Stack traces show handler installation point for non-resumed exceptions
 
 #### Comparison with Traditional Unwinding
 
-| Feature | Traditional Unwinding | Harding Truncation |
-|---------|----------------------|-------------------|
-| Stack preservation | Frames destroyed | Frames truncated |
+| Feature | Traditional Unwinding | Harding |
+|---------|----------------------|---------|
+| Stack preservation | Frames destroyed | Preserved in ExceptionContext |
 | Green thread safe | No | Yes |
-| Post-mortem debug | Possible | Limited |
-| Stack traces | Full history | To handler only |
-| Performance | Fast unwind | Truncation cost |
-
-**Recommendation**: For full Smalltalk-style debugging with persistent stack frames, consider adding an optional "preservation mode" that copies frames before truncation instead of discarding them.
+| Resume capability | Depends on VM | Yes (`resume`, `resume:`) |
+| Retry capability | No | Yes (`retry`) |
+| Stack traces | Full history | To handler (ExceptionContext for signal) |
 
 ## Documentation Guidelines
 

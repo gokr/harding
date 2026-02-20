@@ -755,6 +755,46 @@ someCondition ifTrue: [
 ]
 ```
 
+### Resumable Exceptions
+
+Harding supports Smalltalk-style resumable exceptions. When an exception is signaled, the signal point is preserved so execution can be resumed from the handler:
+
+```smalltalk
+[ Error signal: "recoverable" ] on: Error do: [ :ex |
+    ex resume          # Resume from signal point, signal returns nil
+]
+
+[ Error signal: "recoverable" ] on: Error do: [ :ex |
+    ex resume: 42      # Resume from signal point, signal returns 42
+]
+```
+
+Additional handler methods:
+- `ex retry` - Re-execute the protected block from the beginning
+- `ex return: value` - Return value from the `on:do:` expression
+- `ex pass` - Delegate to the next matching outer handler
+- `ex isResumable` - Returns true for resumable exceptions
+
+### Signal Point Inspection
+
+For debugging, exception handlers can inspect the signal point:
+
+```smalltalk
+[ Error signal: "oops" ] on: Error do: [ :ex |
+    ex signaler                   # The object that signaled the exception
+    ex signalContext              # The activation context at signal point
+    ex signalActivationDepth      # Activation stack depth at signal point
+]
+```
+
+### Ensure (Finally)
+
+Use `ensure:` to guarantee cleanup code runs regardless of exceptions:
+
+```smalltalk
+[ riskyOperation ] ensure: [ cleanup ]
+```
+
 ### Convenience Methods
 
 ```smalltalk
@@ -767,6 +807,7 @@ someCondition ifTrue: [
 ```
 Exception
   ├── Error
+  ├── Notification          # Resumable notification (not an error)
   ├── MessageNotUnderstood
   ├── SubscriptOutOfBounds
   └── DivisionByZero
@@ -774,13 +815,15 @@ Exception
 
 Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 
+`Notification` is used for resumable signals that represent notifications rather than errors. Handlers can resume from a Notification to continue normal execution.
+
 ### Differences from Smalltalk
 
 | Feature | Harding | Smalltalk |
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
-| Stack unwinding | Immediate via work queue truncation | Immediate |
-| Resume capability | No | Yes |
+| Stack unwinding | Signal point preserved via ExceptionContext | Immediate |
+| Resume capability | Yes (`resume`, `resume:`) | Yes |
 
 ---
 

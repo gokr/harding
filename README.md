@@ -165,7 +165,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Define method | `Point>>move: dx [ ... ]` |
 | Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
 
-## Current Status
+## Current Status (v0.6.0)
 
 **Working:**
 - Lexer, parser, stackless AST interpreter
@@ -185,14 +185,14 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - String concatenation with auto-conversion using `,`
 - GTK-based IDE (`bona`) with Workspace (code editor with Do It/Print It/Inspect It), Transcript (output console), System Browser (class/method browser), and Inspector (object viewer)
 - Smalltalk-style Print It - insert results in editor with selection
-- Exception handling via `on:do:` with proper stack unwinding
+- Exception handling via `on:do:` with Smalltalk-style resumable exceptions (`resume`, `resume:`, `retry`, `pass`, `return:`)
 - Compiler infrastructure (`granite`) with inline control flow compilation
 - Granite compiles standalone `.hrd` scripts to native binaries via Nim
 - Inline compilation of `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`, `whileTrue:`, `whileFalse:`, `timesRepeat:`
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
 - BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
 - Version-based MIC/PIC caching for improved message send performance
-- All 26 test files passing with zero failures
+- All 28 test files passing with zero failures
 - VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
 - Harding Debug Protocol (HDP) for VM debugging
 
