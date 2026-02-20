@@ -29,8 +29,11 @@ harding --ast 05_classes.hrd
 | `08_collections.hrd` | Arrays and Tables |
 | `09_control_flow.hrd` | Conditionals and loops |
 | `10_blocks.hrd` | Blocks and closures |
-| `11_fibonacci.hrd` | Fibonacci calculation (recursive and iterative) |
+| `11_fibonacci.hrd` | Fibonacci calculation (iterative) |
 | `12_stdlib.hrd` | Complete standard library demonstration |
+| `13_inheritance.hrd` | Single inheritance with proper slot declaration |
+| `13_multiple_inheritance.hrd` | Multiple inheritance using addSuperclass: |
+| `bitbarrel_demo.hrd` | BitBarrel database (requires -d:bitbarrel build) |
 | `process_demo.hrd` | Green threads and process forking |
 
 ## Quick Start
