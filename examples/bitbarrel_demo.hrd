@@ -2,9 +2,16 @@
 #
 # BitBarrel Demo - Example usage of BitBarrel persistent storage
 #
-
-# Load BitBarrel library
-load: "lib/harding/bitbarrel/Bootstrap.hrd".
+# NOTE: This example requires Harding to be built with BitBarrel support:
+#   nimble harding_bitbarrel
+# Or:
+#   nim c -d:bitbarrel -o:harding src/harding/repl/harding.nim
+#
+# Then run in the REPL and use 'load: "lib/harding/bitbarrel/Bootstrap.hrd"'
+# to load the BitBarrel classes.
+#
+# This script cannot be run directly because BitBarrel requires special
+# initialization at startup that is only available when compiled with -d:bitbarrel.
 
 #============================================================
 # Example 1: Basic BarrelTable (Hash-based storage)
@@ -14,27 +21,27 @@ load: "lib/harding/bitbarrel/Bootstrap.hrd".
 users := BarrelTable create: "users".
 
 # Add some data
-users at: 'user:1' put: 'Alice'.
-users at: 'user:2' put: 'Bob'.
-users at: 'user:3' put: 'Charlie'.
+users at: "user:1" put: "Alice".
+users at: "user:2" put: "Bob".
+users at: "user:3" put: "Charlie".
 
 # Retrieve data
-Transcript showCr: "User 1: " + (users at: 'user:1').
-Transcript showCr: "User 2: " + (users at: 'user:2').
+Transcript showCr: ("User 1: " , (users at: "user:1")).
+Transcript showCr: ("User 2: " , (users at: "user:2")).
 
 # Check if key exists
-(users includesKey: 'user:1') ifTrue: [
+(users includesKey: "user:1") ifTrue: [
     Transcript showCr: "user:1 exists"
 ].
 
 # Iterate over all entries
 Transcript showCr: "All users:".
 users do: [:key :value |
-    Transcript showCr: "  " + key + " => " + value
+    Transcript showCr: (("  " , key) , " => " , value)
 ].
 
 # Get all keys
-Transcript showCr: "Keys: " + users keys printString.
+Transcript showCr: ("Keys: " , (users keys printString)).
 
 #============================================================
 # Example 2: BarrelSortedTable (Ordered storage)
@@ -44,32 +51,32 @@ Transcript showCr: "Keys: " + users keys printString.
 logs := BarrelSortedTable create: "logs".
 
 # Add log entries with timestamp keys
-logs at: '2024-01-01:001' put: 'System started'.
-logs at: '2024-01-01:002' put: 'User login: admin'.
-logs at: '2024-01-01:003' put: 'Database connected'.
-logs at: '2024-01-02:001' put: 'Backup completed'.
+logs at: "2024-01-01:001" put: "System started".
+logs at: "2024-01-01:002" put: "User login: admin".
+logs at: "2024-01-01:003" put: "Database connected".
+logs at: "2024-01-02:001" put: "Backup completed".
 
 # Range query - get logs from Jan 1
-jan1Logs := logs rangeFrom: '2024-01-01:' to: '2024-01-02:'.
-Transcript showCr: "Jan 1 logs: " + jan1Logs printString.
+jan1Logs := logs rangeFrom: "2024-01-01:" to: "2024-01-02:".
+Transcript showCr: ("Jan 1 logs: " , (jan1Logs printString)).
 
 # Prefix query - get all logs from Jan 1
-jan1Logs2 := logs prefix: '2024-01-01:'.
-Transcript showCr: "Jan 1 logs (prefix): " + jan1Logs2 printString.
+jan1Logs2 := logs prefix: "2024-01-01:".
+Transcript showCr: ("Jan 1 logs (prefix): " , (jan1Logs2 printString)).
 
 # Get first and last entries
-Transcript showCr: "First log: " + logs first printString.
-Transcript showCr: "Last log: " + logs last printString.
+Transcript showCr: ("First log: " , (logs first printString)).
+Transcript showCr: ("Last log: " , (logs last printString)).
 
 #============================================================
 # Example 3: Using select: for filtering
 #============================================================
 
-# Select users with names starting with 'A'
+# Select users with names starting with "A"
 aUsers := users select: [:key :value |
-    (value at: 1) = 'A'
+    (value at: 1) = "A"
 ].
-Transcript showCr: "A users: " + aUsers printString.
+Transcript showCr: ("A users: " , (aUsers printString)).
 
 #============================================================
 # Cleanup (optional)
