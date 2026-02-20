@@ -1,0 +1,52 @@
+#!/usr/bin/env harding
+#
+# Multiple Inheritance Example
+#
+# Harding supports multiple inheritance via addSuperclass:
+
+"=== Multiple Inheritance ===" println
+
+# Define parent classes
+Animal := Object deriveWithAccessors: #(name)
+Animal>>speak [
+  ^ "Some generic animal sound"
+]
+
+Pet := Object deriveWithAccessors: #(owner)
+Pet>>greet [
+  ^ "Hello, " , self owner , "!"
+]
+
+# Create a class with multiple parents using addSuperclass:
+# Note: Define all slots in the child class to avoid conflicts
+Dog := Object deriveWithAccessors: #(name owner breed)
+
+# Override any conflicting methods before adding parents
+Dog>>speak [
+  ^ "Woof!"
+]
+
+Dog addSuperclass: Animal
+Dog addSuperclass: Pet
+
+# Create an instance
+MyDog := Dog new
+MyDog name: "Buddy"
+MyDog owner: "Alice"
+MyDog breed: "Golden Retriever"
+
+"" println
+"=== Testing inherited methods ===" println
+
+("Name: " , MyDog name) println
+("Owner: " , MyDog owner) println
+("Breed: " , MyDog breed) println
+
+"" println
+("Speak: " , MyDog speak) println
+("Greet: " , MyDog greet) println
+
+"" println
+"=== Method lookup order ===" println
+"When methods conflict, the first parent's version is used." println
+"In this case: Dog -> Animal -> Pet -> Object" println

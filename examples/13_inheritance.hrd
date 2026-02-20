@@ -1,0 +1,62 @@
+#!/usr/bin/env harding
+#
+# Inheritance Example - Single Inheritance Chain
+#
+
+"=== Single Inheritance ===" println
+
+# Define base class with slots
+Animal := Object deriveWithAccessors: #(name)
+Animal>>speak [
+  ^ "Some generic animal sound"
+]
+Animal>>describe [
+  ^ "I am an animal named " , self name
+]
+
+# Define subclass with its own slots
+# Note: Harding's slot-based system requires slots to be declared in each class
+Dog := Object deriveWithAccessors: #(name breed)
+Dog>>speak [
+  ^ "Woof!"
+]
+Dog>>describe [
+  ^ "I am a " , self breed , " named " , self name
+]
+
+# Define another subclass
+Cat := Object deriveWithAccessors: #(name color)
+Cat>>speak [
+  ^ "Meow!"
+]
+Cat>>describe [
+  ^ "I am a " , self color , " cat named " , self name
+]
+
+# Create instances
+Dog := Dog new
+Dog name: "Buddy"
+Dog breed: "Golden Retriever"
+
+Cat := Cat new
+Cat name: "Whiskers"
+Cat color: "orange"
+
+"" println
+"=== Testing inheritance ===" println
+
+("Dog name: " , Dog name) println
+("Dog breed: " , Dog breed) println
+("Dog speaks: " , Dog speak) println
+("Dog describes: " , Dog describe) println
+
+"" println
+("Cat name: " , Cat name) println
+("Cat color: " , Cat color) println
+("Cat speaks: " , Cat speak) println
+("Cat describes: " , Cat describe) println
+
+"" println
+"=== Method lookup ===" println
+"Methods are found by searching up the inheritance chain:" println
+"Each class has its own slots, accessible via auto-generated accessors" println
