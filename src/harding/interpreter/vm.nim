@@ -3682,9 +3682,15 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       if lit.value.kind == vkBool:
         let condResult = lit.value.boolVal
         if condResult and ifNode.thenBranch != nil:
-          interp.pushWorkFrame(newApplyBlockFrame(cast[BlockNode](ifNode.thenBranch), 0))
+          let blk = cast[BlockNode](ifNode.thenBranch)
+          if blk.homeActivation == nil:
+            blk.homeActivation = interp.currentActivation
+          interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         elif not condResult and ifNode.elseBranch != nil:
-          interp.pushWorkFrame(newApplyBlockFrame(cast[BlockNode](ifNode.elseBranch), 0))
+          let blk = cast[BlockNode](ifNode.elseBranch)
+          if blk.homeActivation == nil:
+            blk.homeActivation = interp.currentActivation
+          interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         else:
           interp.pushValue(nilValue())
         return true
@@ -4907,8 +4913,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     let condValue = interp.popValue()
     let condResult = condValue.isTruthy()
     if condResult and frame.thenBlock != nil:
+      if frame.thenBlock.homeActivation == nil:
+        frame.thenBlock.homeActivation = interp.currentActivation
       interp.pushWorkFrame(newApplyBlockFrame(frame.thenBlock, 0))
     elif not condResult and frame.elseBlock != nil:
+      if frame.elseBlock.homeActivation == nil:
+        frame.elseBlock.homeActivation = interp.currentActivation
       interp.pushWorkFrame(newApplyBlockFrame(frame.elseBlock, 0))
     else:
       interp.pushValue(nilValue())
@@ -4933,6 +4943,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of lsEvaluateCondition:
       # Push frame to check condition after it's evaluated
       interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsCheckCondition))
+      if frame.conditionBlock.homeActivation == nil:
+        frame.conditionBlock.homeActivation = interp.currentActivation
       interp.pushWorkFrame(newApplyBlockFrame(frame.conditionBlock, 0))
       return true
     of lsCheckCondition:
@@ -4944,6 +4956,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       if shouldContinue:
         # Continue loop - execute body
         interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
+        if frame.bodyBlock.homeActivation == nil:
+          frame.bodyBlock.homeActivation = interp.currentActivation
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
         # Loop done - push nil result
