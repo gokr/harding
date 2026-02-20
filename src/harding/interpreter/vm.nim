@@ -557,11 +557,9 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
   ## Look up method in receiver's class using O(1) class lookup
   ## Lazily rebuilds method tables if class is marked dirty
   if receiver == nil or receiver.class == nil:
-    debug("Method not found: ", selector, " (receiver or class is nil)")
     return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
   let cls = receiver.class
-  debug("Looking up method: '", selector, "' in class: ", cls.name)
 
   # Lazy rebuild: check if method tables are dirty and rebuild if needed
   if cls.methodsDirty:
@@ -570,7 +568,6 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
 
   # Fast O(1) lookup in allMethods table (already flattened from parents)
   if selector in cls.allMethods:
-    debug("Found method ", selector, " in class ", cls.name)
     return MethodResult(
       currentMethod: cls.allMethods[selector],
       receiver: receiver,
@@ -578,7 +575,6 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
       found: true
     )
 
-  debug("Method not found: ", selector)
   return MethodResult(currentMethod: nil, receiver: receiver, definingClass: nil, found: false)
 
 proc lookupClassMethod*(cls: Class, selector: string): MethodResult =

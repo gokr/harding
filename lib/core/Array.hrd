@@ -30,6 +30,8 @@ Array class>>new <primitive primitiveArrayNew>
 
 Array class>>new: size <primitive primitiveArrayNew: size>
 
+Array class>>new: size withAll: value <primitive primitiveArrayNew: size withAll: value>
+
 #====================================================================
 # Array iteration
 #====================================================================
@@ -40,62 +42,62 @@ Array>>do: block <primitive primitiveDo: block>
 # Array higher-order methods (defined in Harding code)
 #====================================================================
 
-Array>>collect: block [
+Array>>collect: aBlock [
     # Transform each element using block, return new Array
     | result |
     result := Array new.
     self do: [:elem |
-        result add: (block value: elem)
+        result add: (aBlock value: elem)
     ].
     ^ result
 ]
 
-Array>>select: block [
+Array>>select: aBlock [
     # Return new Array with elements where block returns true
     | result |
     result := Array new.
     self do: [:elem |
-        (block value: elem) ifTrue: [
+        (aBlock value: elem) ifTrue: [
             result add: elem
         ]
     ].
     ^ result
 ]
 
-Array>>reject: block [
+Array>>reject: aBlock [
     # Return new Array with elements where block returns false
     | result |
     result := Array new.
     self do: [:elem |
-        (block value: elem) ifFalse: [
+        (aBlock value: elem) ifFalse: [
             result add: elem
         ]
     ].
     ^ result
 ]
 
-Array>>detect: block [
+Array>>detect: aBlock [
     # Return first element where block returns true, or nil
     self do: [:elem |
-        (block value: elem) ifTrue: [ ^ elem ]
+        (aBlock value: elem) ifTrue: [ ^ elem ]
     ].
     ^ nil
 ]
 
-Array>>detect: block ifNone: noneBlock [
+Array>>detect: aBlock ifNone: noneBlock [
     # Return first element where block returns true, or evaluate noneBlock
     self do: [:elem |
-        (block value: elem) ifTrue: [ ^ elem ]
+        (aBlock value: elem) ifTrue: [ ^ elem ]
     ].
     ^ noneBlock value
 ]
 
-Array>>inject: initial into: block [
+Array>>inject: initial into: aBlock [
     # Fold/reduce: accumulate value starting with initial
     | result |
     result := initial.
     self do: [:elem |
-        result := block value: result value: elem
+        result := aBlock value: result value: elem
     ].
     ^ result
 ]
@@ -125,18 +127,77 @@ Array>>notEmpty [
     ^ self size > 0
 ]
 
-Array>>anySatisfy: block [
+Array>>anySatisfy: aBlock [
     # Return true if any element satisfies block
     self do: [:elem |
-        (block value: elem) ifTrue: [ ^ true ]
+        (aBlock value: elem) ifTrue: [ ^ true ]
     ].
     ^ false
 ]
 
-Array>>allSatisfy: block [
+Array>>allSatisfy: aBlock [
     # Return true if all elements satisfy block
     self do: [:elem |
-        (block value: elem) ifFalse: [ ^ false ]
+        (aBlock value: elem) ifFalse: [ ^ false ]
     ].
     ^ true
+]
+
+#====================================================================
+# Array element access
+#====================================================================
+
+Array>>first [
+    # Return first element (1-based indexing)
+    ^ self at: 1
+]
+
+Array>>last [
+    # Return last element
+    ^ self at: (self size)
+]
+
+Array>>indexOf: element [
+    # Return 1-based index of element, or nil if not found
+    | index size |
+    index := 1.
+    size := self size.
+    [ index <= size ] whileTrue: [
+        (self at: index) = element ifTrue: [ ^ index ].
+        index := index + 1
+    ].
+    ^ nil
+]
+
+#====================================================================
+# Array sorting
+#====================================================================
+
+Array>>sorted [
+    # Return a new Array sorted in ascending order
+    ^ self sorted: [ :a :b | a < b ]
+]
+
+Array>>sorted: sortBlock [
+    # Return a new Array sorted using the provided sort block
+    # Uses simple insertion sort for simplicity
+    | result size i j temp |
+    result := Array new.
+    self do: [:each | result add: each].
+    size := result size.
+    
+    # Insertion sort
+    i := 2.
+    [ i <= size ] whileTrue: [
+        j := i.
+        [ j > 1 and: [ sortBlock value: (result at: j) value: (result at: (j - 1)) not ] ] whileTrue: [
+            # Swap elements
+            temp := result at: j.
+            result at: j put: (result at: (j - 1)).
+            result at: (j - 1) put: temp.
+            j := j - 1
+        ].
+        i := i + 1
+    ].
+    ^ result
 ]

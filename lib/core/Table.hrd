@@ -29,9 +29,9 @@ Table class>>new <primitive primitiveTableNew>
 #====================================================================
 
 Table>>do: block [
-    # Iterate over values in the table
+    # Iterate over key-value pairs in the table
     self keys do: [:key |
-        block value: (self at: key)
+        block value: key value: (self at: key)
     ]
 ]
 

@@ -7,17 +7,8 @@
 # Array (seq) extensions
 #====================================================================
 
-Array>>do: block [
-  # Iterate over each element, evaluating the block.
-  | index size |
-  index := 1
-  size := self size
-  [ index <= size ] whileTrue: [
-    block value: (self at: index)
-    index := index + 1
-  ]
-  ^ self
-]
+# Note: Array>>do: is defined as a primitive in Array.hrd
+# The primitive implementation correctly handles self scoping
 
 # Native Array methods (defined in objects.nim):
 # add:, size, removeAt:, includes:, reverse, join:, sort, sorted

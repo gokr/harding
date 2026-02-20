@@ -138,6 +138,16 @@ Integer >> lcm: other [
   ^ (self * other) abs // gcd
 ].
 
+Integer >> to: end [
+  # Create Interval from self to end
+  ^ Interval from: self to: end
+].
+
+Integer >> to: end by: step [
+  # Create Interval from self to end with step
+  ^ Interval from: self to: end by: step
+].
+
 #====================================================================
 # Float class extensions
 #====================================================================

@@ -35,7 +35,7 @@ Exception>>pass <primitive primitiveExceptionPass>
 Exception>>retry <primitive primitiveExceptionRetry>
   # Re-execute the protected block
 
-Exception>>isResumable [ ^ true ]
+Exception>>isResumable [ ^ false ]
 
 Exception>>resume <primitive primitiveExceptionResume>
   # Resume execution from signal point, returning nil from signal

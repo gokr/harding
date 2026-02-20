@@ -98,6 +98,22 @@ SortedCollection>>asArray [
   ^ result
 ]
 
+SortedCollection>>includes: anObject [
+  # Check if object is in collection using binary search
+  | low high mid |
+  low := 1.
+  high := self size.
+  
+  [ low <= high ] whileTrue: [
+    mid := (low + high) // 2.
+    (self at: mid) = anObject ifTrue: [ ^ true ].
+    (sortBlock value: anObject value: (self at: mid))
+      ifTrue: [ high := mid - 1 ]
+      ifFalse: [ low := mid + 1 ]
+  ].
+  ^ false
+]
+
 # ============================================================================
 # Class methods
 # ============================================================================

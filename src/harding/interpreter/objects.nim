@@ -1651,12 +1651,8 @@ proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
 proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Add element to array
-  let elemCount = if self.kind == ikArray: self.elements.len else: 0
-  debug("arrayAddImpl: self.kind=", $self.kind, " ikArray=", $(self.kind == ikArray),
-        " args.len=", $args.len, " elements.len=", $elemCount)
   if self.kind == ikArray and args.len > 0:
     self.elements.add(args[0])
-    debug("arrayAddImpl: after add, elements.len=", $self.elements.len)
   return self.toValue()
 
 proc arrayRemoveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
