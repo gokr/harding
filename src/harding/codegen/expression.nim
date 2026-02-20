@@ -416,7 +416,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
         initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
       let envInit = fmt("var {blockInfo.envStructName}_inst = {blockInfo.envStructName}({initFields.join(\", \")})")
       # Wrap in a block expression to declare the env var and create the block
-      return fmt("(block: {envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
+      return fmt("({envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
     else:
       return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
 

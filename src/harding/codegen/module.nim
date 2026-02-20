@@ -185,39 +185,6 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
 
-  # Generate block procedure definitions
-  output.add("\n")
-  output.add("# Block Procedures\n")
-  output.add("##################\n\n")
-
-  # Create a block registry and collect blocks
-  # Note: top-level variables are NOT passed as knownGlobals because they are
-  # locals of main() and need to be captured by block procs at module level.
-  # Only true globals (class names) would be excluded from captures.
-  var blockReg = newBlockRegistry()
-  for node in topLevel:
-    collectBlocks(blockReg, node)
-
-  # Generate environment structs for blocks with captures
-  for blockInfo in blockReg.getAllBlocks():
-    let structDef = generateEnvStructDef(blockInfo)
-    if structDef.len > 0:
-      output.add(structDef)
-      output.add("\n\n")
-
-  # Generate block procedure signatures and bodies using real code generation
-  var blockGenCtx = newGenContext(nil)
-  for blockInfo in blockReg.getAllBlocks():
-    output.add(generateBlockProcSignature(blockInfo))
-    output.add(" =\n")
-    let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            blockInfo.hasNonLocalReturn)
-    if body.len > 0:
-      output.add(body)
-    else:
-      output.add("  return NodeValue(kind: vkNil)\n")
-    output.add("\n\n")
-
   # Generate control flow methods
   output.add("\n")
   output.add("# Control Flow Methods\n")
@@ -252,6 +219,39 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBinaryOpMethod("//"))
   output.add(genBinaryOpMethod("\\"))
   output.add(genBinaryOpMethod("%"))
+
+  # Generate block procedure definitions (AFTER runtime helpers so they can use nt_* functions)
+  output.add("\n")
+  output.add("# Block Procedures\n")
+  output.add("##################\n\n")
+
+  # Create a block registry and collect blocks
+  # Note: top-level variables are NOT passed as knownGlobals because they are
+  # locals of main() and need to be captured by block procs at module level.
+  # Only true globals (class names) would be excluded from captures.
+  var blockReg = newBlockRegistry()
+  for node in topLevel:
+    collectBlocks(blockReg, node)
+
+  # Generate environment structs for blocks with captures
+  for blockInfo in blockReg.getAllBlocks():
+    let structDef = generateEnvStructDef(blockInfo)
+    if structDef.len > 0:
+      output.add(structDef)
+      output.add("\n\n")
+
+  # Generate block procedure signatures and bodies using real code generation
+  var blockGenCtx = newGenContext(nil)
+  for blockInfo in blockReg.getAllBlocks():
+    output.add(generateBlockProcSignature(blockInfo))
+    output.add(" =\n")
+    let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
+                            blockInfo.hasNonLocalReturn)
+    if body.len > 0:
+      output.add(body)
+    else:
+      output.add("  return NodeValue(kind: vkNil)\n")
+    output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, topLevel, moduleName, blockReg))
