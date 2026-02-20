@@ -652,6 +652,27 @@ From a handler block, the exception object supports:
 | Retry capability | No | Yes (`retry`) |
 | Stack traces | Full history | To handler (ExceptionContext for signal) |
 
+#### Arithmetic Exceptions (DivisionByZero)
+
+Division by zero operations signal `DivisionByZero` exceptions:
+
+**Integer division (`//`) and modulo (`%`)**:
+- Catches Nim `DivByZeroDefect` in the fast-path primitive operations
+- Converts to Harding `DivisionByZero` exception via `signalExceptionByName`
+
+**Float division (`/`)**:
+- Checks for `b == 0.0` before performing division
+- Signals `DivisionByZero` exception if divisor is zero
+
+**Native methods** (`intDivImpl`):
+- Raises `DivByZeroDefect` when dividing by zero
+- VM catches this and converts to Harding exception
+
+**Key implementation points**:
+1. Lookup exception class in imported libraries, not just globals
+2. Work queue processing after each statement in `evalStatements`
+3. Work queue merging in `evalWithVM` to preserve scheduled frames
+
 ## Documentation Guidelines
 
 ### Nim Doc Comment Guidelines

@@ -81,3 +81,15 @@ suite "Exception Handling":
       Result := [ "normal" ] on: Error do: [ :ex | "caught" ]
     """)
     check(result[0][^1].strVal == "normal")
+
+  test "DivisionByZero catches integer division by zero":
+    let result = interp.evalStatements("""
+      Result := [ 10 // 0 ] on: DivisionByZero do: [ :ex | ex resume: 42 ]
+    """)
+    check(result[0][^1].intVal == 42)
+
+  test "DivisionByZero catches float division by zero":
+    let result = interp.evalStatements("""
+      Result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex | ex resume: 99 ]
+    """)
+    check(result[0][^1].intVal == 99)

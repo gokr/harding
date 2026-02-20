@@ -205,6 +205,23 @@ MySpecificError := MyDomainError derive: #()
 ]
 ```
 
+**Arithmetic Exceptions:**
+
+Division by zero signals a `DivisionByZero` exception:
+
+```harding
+# Integer division
+result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
+    ex resume: 0  # Return 0 instead of error
+]
+
+# Float division
+result := [ 10.0 / 0.0 ] on: DivisionByZero do: [:ex |
+    "Cannot divide by zero!" println
+    ex resume: 42
+]
+```
+
 ### Primitives
 
 Primitives provide direct access to VM-level operations and Nim interop. They use a declarative syntax:

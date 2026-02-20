@@ -262,7 +262,7 @@ result := [
 <span class="comment"># Resume execution</span>
 [
     10 / 0
-] on: ZeroDivideError do: [:ex |
+] on: DivisionByZero do: [:ex |
     ex resume: 0
 ]
 
@@ -272,7 +272,42 @@ result := [
 ] on: RetryableError do: [:ex |
     fixTheIssue.
     ex retry
+]
+
+<span class="comment"># Arithmetic exceptions</span>
+result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
+    ex resume: 0  <span class="comment"># Return 0 instead</span>
 ]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Arithmetic Exceptions</h3>
+                    <p>Division by zero signals a <code>DivisionByZero</code> exception that can be caught and resumed:</p>
+                    <ul>
+                        <li><code>//</code> (integer division) - Signals on zero divisor</li>
+                        <li><code>/</code> (float division) - Signals on zero divisor</li>
+                        <li><code>%</code> (modulo) - Signals on zero divisor</li>
+                    </ul>
+                    <p>Handlers can resume with a default value to continue execution.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">DivisionByZero</div>
+                        <pre><code><span class="comment"># Integer division by zero</span>
+result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
+    ex resume: 0
+]
+<span class="comment"># result is 0</span>
+
+<span class="comment"># Float division by zero</span>
+result := [ 10.0 / 0.0 ] on: DivisionByZero do: [:ex |
+    "Cannot divide!" println.
+    ex resume: 42
+]
+<span class="comment"># result is 42</span></code></pre>
                     </div>
                 </div>
             </div>

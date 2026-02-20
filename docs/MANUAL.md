@@ -755,6 +755,23 @@ someCondition ifTrue: [
 ]
 ```
 
+### Arithmetic Exceptions
+
+Division by zero signals a `DivisionByZero` exception:
+
+```smalltalk
+# Integer division
+result := [ 10 // 0 ] on: DivisionByZero do: [ :ex |
+    ex resume: 0  # Return 0 instead
+]
+
+# Float division
+result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex |
+    "Cannot divide by zero!" println
+    ex resume: 42
+]
+```
+
 ### Resumable Exceptions
 
 Harding supports Smalltalk-style resumable exceptions. When an exception is signaled, the signal point is preserved so execution can be resumed from the handler:

@@ -62,6 +62,14 @@ harding --ast script.hrd  # Show AST then execute
 harding --loglevel DEBUG script.hrd  # Debug output</code></pre>
                     <p>Use <code>--loglevel DEBUG</code> for verbose output</p>
                 </div>
+
+                <div class="doc-card">
+                    <h3>Granite Compiler</h3>
+                    <pre><code>granite compile myapp.hrd -o myapp
+granite build myapp.hrd --release
+granite run myapp.hrd</code></pre>
+                    <p>Compile to native binaries with no runtime dependencies</p>
+                </div>
             </div>
         </div>
     </section>
@@ -79,13 +87,14 @@ harding --loglevel DEBUG script.hrd  # Debug output</code></pre>
 
                 <div class="example-item">
                     <h4>Factorial</h4>
-                    <pre><code>| factorial |
-factorial := [:n |
-    (n <= 1) ifTrue: [^ 1].
-    ^ n * (factorial value: (n - 1))
+                    <pre><code># Extend Number with a factorial method
+Number >> factorial [
+    (self <= 1) ifTrue: [^ 1].
+    ^ self * ((self - 1) factorial)
 ]
 
-(factorial value: 5) println   # 120</code></pre>
+5 factorial println   # 120
+10 factorial println  # 3628800</code></pre>
                 </div>
 
                 <div class="example-item">
@@ -108,6 +117,18 @@ c value println   # 1</code></pre>
 squares := numbers collect: [:n | n * n]
 evens := numbers select: [:n | (n % 2) = 0]
 sum := numbers inject: 0 into: [:a :n | a + n]</code></pre>
+                </div>
+
+                <div class="example-item">
+                    <h4>Exception Handling</h4>
+                    <pre><code>[
+    10 / 0
+] on: DivisionByZero do: [:ex |
+    Transcript showCr: "Cannot divide by zero!".
+    ex resume: 0
+]
+
+result println   # 0</code></pre>
                 </div>
             </div>
         </div>
