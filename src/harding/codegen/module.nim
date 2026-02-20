@@ -144,18 +144,40 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
+  # Check if any blocks have non-local returns - if so, wrap in try/except
+  var hasNonLocalReturn = false
+  if blockReg != nil:
+    for blockInfo in blockReg.getAllBlocks():
+      if blockInfo.hasNonLocalReturn:
+        hasNonLocalReturn = true
+        break
+
+  if hasNonLocalReturn:
+    output.add("  try:\n")
+
   # Generate code for each top-level statement
   for node in topLevel:
     let stmtCode = genTopLevelStatement(genCtx, node)
     if stmtCode.len > 0:
-      # Indent the statement
+      # Indent the statement (extra level if wrapped in try)
       for line in stmtCode.splitLines():
-        output.add("  ")
+        if hasNonLocalReturn:
+          output.add("    ")
+        else:
+          output.add("  ")
         output.add(line)
         output.add("\n")
 
-  # Return exit code 0
-  output.add("\n  return 0\n")
+  if hasNonLocalReturn:
+    # Return exit code 0 in normal case
+    output.add("    return 0\n")
+    output.add("  except NonLocalReturnException as nlr:\n")
+    output.add("    ## Non-local return from block - return the value\n")
+    output.add("    discard nlr.value\n")
+    output.add("    return 0\n")
+  else:
+    # Return exit code 0
+    output.add("\n  return 0\n")
 
   return output
 
