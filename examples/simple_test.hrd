@@ -1,0 +1,4 @@
+# Simple test
+b := [:x | x + 1].
+r := b value: 5.
+r println.

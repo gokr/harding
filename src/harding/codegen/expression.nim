@@ -1,4 +1,4 @@
-import std/[strutils, sequtils, strformat]
+import std/[strutils, sequtils, strformat, sets]
 import ../core/types
 import ../compiler/context
 import ../compiler/symbols
@@ -727,10 +727,23 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
 
+  # Determine which captured variables are assigned in the block body
+  var assignedCaptures = initHashSet[string]()
+  for stmt in blkNode.body:
+    collectAssignedVars(stmt, assignedCaptures)
+
   # Extract captured variables from environment struct
+  # Variables that are assigned need special handling (write-back to env)
+  var mutableCaptures: seq[string] = @[]
   if captures.len > 0:
     for capture in captures:
-      output.add(fmt("  let {capture} = env.{capture}\n"))
+      if capture in assignedCaptures:
+        # Mutable capture: extract as var and track for write-back
+        output.add(fmt("  var {capture} = env.{capture}\n"))
+        mutableCaptures.add(capture)
+      else:
+        # Immutable capture: extract as let
+        output.add(fmt("  let {capture} = env.{capture}\n"))
       bodyCtx.locals.add(capture)
 
   # Handle empty block body
@@ -758,6 +771,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
         for line in stmtCode.splitLines():
           if line.len > 0:
             output.add("  " & line & "\n")
+
+  # Write back mutable captures to environment before returning
+  for capture in mutableCaptures:
+    output.add(fmt("  env.{capture} = {capture}\n"))
+
+  # If no explicit return statement, return nil
+  if blkNode.body.len == 0 or blkNode.body[^1].kind notin {nkReturn}:
+    output.add("  return NodeValue(kind: vkNil)\n")
 
   return output
 

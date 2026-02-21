@@ -177,12 +177,16 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
   for temp in blockNode.temporaries:
     locals.incl(temp)
   
-  # Add variables assigned in the block body (they're local, not captures)
+  # Collect variables assigned in the block body
   var assigned = initHashSet[string]()
   for stmt in blockNode.body:
     collectAssignedVars(stmt, assigned)
+  
+  # Variables that are assigned but NOT referenced are local (not captures)
+  # Variables that are referenced (even if also assigned) need capture
   for name in assigned:
-    locals.incl(name)
+    if name notin allRefs:
+      locals.incl(name)
 
   # Subtract locals, pseudo-variables, and known globals
   var captures: seq[string] = @[]

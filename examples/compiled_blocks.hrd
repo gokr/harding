@@ -1,0 +1,24 @@
+# Compiled Blocks Examples
+# These examples demonstrate the Granite compiler's block support
+
+# Example 1: Simple block
+"=== Example 1: Simple Block ===" println.
+adder := [:a :b | a + b].
+result := adder value: 3 value: 4.
+("3 + 4 = " + result asString) println.
+
+# Example 2: Block with capture
+"=== Example 2: Block with Capture ===" println.
+multiplier := 10.
+timesTen := [:n | n * multiplier].
+("5 * 10 = " + (timesTen value: 5) asString) println.
+
+# Example 3: Nested blocks
+"=== Example 3: Nested Blocks ===" println.
+makeAdder := [:x |
+  [:y | x + y]
+].
+addFive := makeAdder value: 5.
+("addFive value: 3 = " + (addFive value: 3) asString) println.
+
+"=== All examples completed! ===" println.

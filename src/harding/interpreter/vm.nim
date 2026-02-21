@@ -5,6 +5,7 @@ import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/frame_pool
+import ../codegen/blocks
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -812,6 +813,7 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
 # Invoke a block with arguments using the stackless VM
 proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeValue]): NodeValue =
   ## Invoke a block with the given arguments using the stackless VM
+  ## Supports both interpreted blocks (AST body) and compiled blocks (nativeImpl)
 
   debug("Invoking block with ", args.len, " arguments")
 
@@ -820,6 +822,54 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       "Wrong number of arguments to block: expected " & $blockNode.parameters.len &
       ", got " & $args.len)
 
+  # Check if this is a compiled block with native implementation
+  if blockNode.nativeImpl != nil:
+    debug("Block has native implementation - calling compiled code")
+    # Get environment pointer if block has captured variables
+    var envPtr: pointer = nil
+    if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+      # Environment pointer is stored in capturedEnv under __env_ptr__ key
+      if "__env_ptr__" in blockNode.capturedEnv:
+        envPtr = cast[pointer](blockNode.capturedEnv["__env_ptr__"].value.intVal)
+    
+    # Call the compiled block based on parameter count and environment
+    let paramCount = blockNode.parameters.len
+    if envPtr != nil:
+      # Block with environment
+      case paramCount
+      of 0:
+        let fn = cast[BlockEnvProc0](blockNode.nativeImpl)
+        return fn(envPtr)
+      of 1:
+        let fn = cast[BlockEnvProc1](blockNode.nativeImpl)
+        return fn(envPtr, args[0])
+      of 2:
+        let fn = cast[BlockEnvProc2](blockNode.nativeImpl)
+        return fn(envPtr, args[0], args[1])
+      of 3:
+        let fn = cast[BlockEnvProc3](blockNode.nativeImpl)
+        return fn(envPtr, args[0], args[1], args[2])
+      else:
+        raise newException(EvalError, "Compiled block with " & $paramCount & " parameters not supported")
+    else:
+      # Block without environment
+      case paramCount
+      of 0:
+        let fn = cast[BlockProc0](blockNode.nativeImpl)
+        return fn()
+      of 1:
+        let fn = cast[BlockProc1](blockNode.nativeImpl)
+        return fn(args[0])
+      of 2:
+        let fn = cast[BlockProc2](blockNode.nativeImpl)
+        return fn(args[0], args[1])
+      of 3:
+        let fn = cast[BlockProc3](blockNode.nativeImpl)
+        return fn(args[0], args[1], args[2])
+      else:
+        raise newException(EvalError, "Compiled block with " & $paramCount & " parameters not supported")
+
+  # Fall back to interpretation for blocks without native implementation
   let blockHome = blockNode.homeActivation
   let blockReceiver = if blockHome != nil and blockHome.receiver != nil:
                         blockHome.receiver
