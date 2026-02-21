@@ -400,6 +400,24 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       entries.add(fmt("{keyCode}: {valCode}"))
     return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
 
+  of nkIf:
+    ## Inline ifTrue:/ifFalse: control flow as expression
+    ## Note: This should ideally not be called - nkIf should be handled in statement context
+    ## But if it is, generate an expression that returns nil in both branches
+    let ifNode = node.IfNode
+    let condCode = genExpression(ctx, ifNode.condition)
+    var code = "(if isTruthy(" & condCode & "):\n"
+    # Generate then branch returning nil
+    code.add("  NodeValue(kind: vkNil)\n")
+    # Generate else branch if present
+    if ifNode.elseBranch != nil:
+      code.add("else:\n")
+      code.add("  NodeValue(kind: vkNil))")
+    else:
+      code.add("else:\n")
+      code.add("  NodeValue(kind: vkNil))")
+    return code
+
   of nkBlock:
     ## Look up or register the block for compilation and return creation code
     let blockNode = node.BlockNode
@@ -604,6 +622,84 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
     return "discard callPrimitive(\"" & primCall.selector & "\", @[" & args & "])"
 
+  of nkIf:
+    ## Inline ifTrue:/ifFalse: control flow in statement context
+    let ifNode = node.IfNode
+    let condCode = genExpression(ctx, ifNode.condition)
+    var code = "if isTruthy(" & condCode & "):\n"
+    # Generate then branch with proper indentation
+    if ifNode.thenBranch != nil:
+      # If thenBranch is a block, inline its body (don't create the block)
+      var thenStmts: seq[Node] = @[]
+      var thenHasNonLocalReturn = false
+      if ifNode.thenBranch.kind == nkBlock:
+        let blk = ifNode.thenBranch.BlockNode
+        thenStmts = blk.body
+        # Check if block has non-local returns
+        for stmt in blk.body:
+          if stmt.kind == nkReturn:
+            thenHasNonLocalReturn = true
+            break
+      else:
+        thenStmts = @[ifNode.thenBranch]
+      for stmt in thenStmts:
+        var stmtCode: string
+        if stmt.kind == nkReturn and thenHasNonLocalReturn:
+          # Non-local return from inlined block: raise exception
+          let ret = stmt.ReturnNode
+          let exprCode = if ret.expression != nil:
+                           genExpression(ctx, ret.expression)
+                         else:
+                           "NodeValue(kind: vkNil)"
+          stmtCode = fmt("raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)")
+        else:
+          stmtCode = genStatement(ctx, stmt)
+        if stmtCode.len > 0:
+          # Indent each line
+          for line in stmtCode.splitLines():
+            if line.len > 0:
+              code.add("  " & line & "\n")
+        else:
+          code.add("  discard\n")
+    else:
+      code.add("  discard\n")
+    # Generate else branch if present
+    if ifNode.elseBranch != nil:
+      code.add("else:\n")
+      # If elseBranch is a block, inline its body
+      var elseStmts: seq[Node] = @[]
+      var elseHasNonLocalReturn = false
+      if ifNode.elseBranch.kind == nkBlock:
+        let blk = ifNode.elseBranch.BlockNode
+        elseStmts = blk.body
+        # Check if block has non-local returns
+        for stmt in blk.body:
+          if stmt.kind == nkReturn:
+            elseHasNonLocalReturn = true
+            break
+      else:
+        elseStmts = @[ifNode.elseBranch]
+      for stmt in elseStmts:
+        var stmtCode: string
+        if stmt.kind == nkReturn and elseHasNonLocalReturn:
+          # Non-local return from inlined block: raise exception
+          let ret = stmt.ReturnNode
+          let exprCode = if ret.expression != nil:
+                           genExpression(ctx, ret.expression)
+                         else:
+                           "NodeValue(kind: vkNil)"
+          stmtCode = fmt("raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)")
+        else:
+          stmtCode = genStatement(ctx, stmt)
+        if stmtCode.len > 0:
+          # Indent each line
+          for line in stmtCode.splitLines():
+            if line.len > 0:
+              code.add("  " & line & "\n")
+        else:
+          code.add("  discard\n")
+    return code
+
   else:
     # For other nodes, just generate the expression
     let exprCode = genExpression(ctx, node)
@@ -619,14 +715,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   var output = ""
 
   # Create new context for block body with its parameters
-  # Use a fresh blockRegistry to avoid double-registration of nested blocks
+  # Share the blockRegistry so nested blocks can be found
   var bodyCtx = GenContext(
     cls: ctx.cls,
     inBlock: true,
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
-    blockRegistry: newBlockRegistry()
+    blockRegistry: ctx.blockRegistry
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
@@ -651,14 +747,17 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                      else:
                        "NodeValue(kind: vkNil)"
       output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)\n"))
-    elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign}:
-      # Last statement is the return value
+    elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign, nkIf}:
+      # Last statement is the return value (but not if it's nkIf which needs special handling)
       let exprCode = genExpression(bodyCtx, stmt)
       output.add("  return " & exprCode & "\n")
     else:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
-        output.add("  " & stmtCode & "\n")
+        # Indent each line of the statement
+        for line in stmtCode.splitLines():
+          if line.len > 0:
+            output.add("  " & line & "\n")
 
   return output
 

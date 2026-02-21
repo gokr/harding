@@ -57,8 +57,8 @@ proc collectIdentRefs(node: Node, refs: var HashSet[string]) =
 
   of nkAssign:
     let assign = node.AssignNode
-    # The variable being assigned to is also a reference (it may be a capture)
-    refs.incl(assign.variable)
+    # Only process the expression side - the assigned variable is a new binding
+    # not a reference to an outer variable (it may shadow, but that's handled elsewhere)
     collectIdentRefs(assign.expression, refs)
 
   of nkReturn:
@@ -123,6 +123,44 @@ proc collectIdentRefs(node: Node, refs: var HashSet[string]) =
 
 const pseudoVars = ["self", "nil", "true", "false", "super", "thisContext"]
 
+proc collectAssignedVars*(node: Node, assigned: var HashSet[string]) =
+  ## Recursively collect all variables that are assigned to in the AST
+  if node == nil:
+    return
+  
+  case node.kind
+  of nkAssign:
+    let assign = node.AssignNode
+    assigned.incl(assign.variable)
+    collectAssignedVars(assign.expression, assigned)
+  of nkBlock:
+    for stmt in node.BlockNode.body:
+      collectAssignedVars(stmt, assigned)
+  of nkMessage:
+    let msg = node.MessageNode
+    if msg.receiver != nil:
+      collectAssignedVars(msg.receiver, assigned)
+    for arg in msg.arguments:
+      collectAssignedVars(arg, assigned)
+  of nkReturn:
+    if node.ReturnNode.expression != nil:
+      collectAssignedVars(node.ReturnNode.expression, assigned)
+  of nkArray:
+    for elem in node.ArrayNode.elements:
+      collectAssignedVars(elem, assigned)
+  of nkTable:
+    for (key, val) in node.TableNode.entries:
+      collectAssignedVars(key, assigned)
+      collectAssignedVars(val, assigned)
+  of nkCascade:
+    let cascade = node.CascadeNode
+    if cascade.receiver != nil:
+      collectAssignedVars(cascade.receiver, assigned)
+    for msg in cascade.messages:
+      collectAssignedVars(msg, assigned)
+  else:
+    discard
+
 proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): seq[string] =
   ## Analyze a block to find free variables that need capture
   ## Returns list of variable names that need to be captured from enclosing scope
@@ -138,6 +176,13 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
     locals.incl(param)
   for temp in blockNode.temporaries:
     locals.incl(temp)
+  
+  # Add variables assigned in the block body (they're local, not captures)
+  var assigned = initHashSet[string]()
+  for stmt in blockNode.body:
+    collectAssignedVars(stmt, assigned)
+  for name in assigned:
+    locals.incl(name)
 
   # Subtract locals, pseudo-variables, and known globals
   var captures: seq[string] = @[]
@@ -189,6 +234,10 @@ proc findBlock*(reg: BlockRegistry, blockNode: BlockNode): int =
     if info.blockNode == blockNode:
       return i
   return -1
+
+proc dumpBlockRegistry*(reg: BlockRegistry) =
+  ## Debug: dump all blocks in registry
+  discard
 
 proc generateEnvStructDef*(info: BlockProcInfo): string =
   ## Generate the environment struct definition for a block
@@ -331,6 +380,22 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
     for (key, val) in tbl.entries:
       collectBlocks(registry, key, knownGlobals)
       collectBlocks(registry, val, knownGlobals)
+
+  of nkIf:
+    let ifNode = node.IfNode
+    if ifNode.condition != nil:
+      collectBlocks(registry, ifNode.condition, knownGlobals)
+    if ifNode.thenBranch != nil:
+      collectBlocks(registry, ifNode.thenBranch, knownGlobals)
+    if ifNode.elseBranch != nil:
+      collectBlocks(registry, ifNode.elseBranch, knownGlobals)
+
+  of nkWhile:
+    let whileNode = node.WhileNode
+    if whileNode.condition != nil:
+      collectBlocks(registry, whileNode.condition, knownGlobals)
+    if whileNode.body != nil:
+      collectBlocks(registry, whileNode.body, knownGlobals)
 
   else:
     # Other node types don't contain blocks

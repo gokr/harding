@@ -172,8 +172,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     # Return exit code 0 in normal case
     output.add("    return 0\n")
     output.add("  except NonLocalReturnException as nlr:\n")
-    output.add("    ## Non-local return from block - return the value\n")
-    output.add("    discard nlr.value\n")
+    output.add("    ## Non-local return from block - print and return the value\n")
+    output.add("    echo nlr.value.toString()\n")
     output.add("    return 0\n")
   else:
     # Return exit code 0
@@ -262,8 +262,16 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add(structDef)
       output.add("\n\n")
 
-  # Generate block procedure signatures and bodies using real code generation
+  # Generate forward declarations for all block procedures first
+  # This allows blocks to reference each other regardless of definition order
+  for blockInfo in blockReg.getAllBlocks():
+    output.add(generateBlockProcSignature(blockInfo))
+    output.add("\n")
+  output.add("\n")
+
+  # Generate block procedure bodies using real code generation
   var blockGenCtx = newGenContext(nil)
+  blockGenCtx.blockRegistry = blockReg  # Share the registry with collected blocks
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
