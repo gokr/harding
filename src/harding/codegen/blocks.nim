@@ -8,12 +8,10 @@ import ../core/types
 
 type
   # Block procedure types for compiled code
-  # These are used both in code generation and at runtime
   BlockProc0* = proc(): NodeValue {.cdecl.}
   BlockProc1* = proc(a: NodeValue): NodeValue {.cdecl.}
   BlockProc2* = proc(a, b: NodeValue): NodeValue {.cdecl.}
   BlockProc3* = proc(a, b, c: NodeValue): NodeValue {.cdecl.}
-  # Block procs with environment pointer
   BlockEnvProc0* = proc(env: pointer): NodeValue {.cdecl.}
   BlockEnvProc1* = proc(env: pointer, a: NodeValue): NodeValue {.cdecl.}
   BlockEnvProc2* = proc(env: pointer, a, b: NodeValue): NodeValue {.cdecl.}
