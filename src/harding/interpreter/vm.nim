@@ -4919,9 +4919,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     debug("VM: wfPopActivation, evalStack.len=", interp.evalStack.len, " isBlock=", $frame.isBlockActivation, " activationStack.len=", interp.activationStack.len)
 
     # Check for non-local return first
-    if interp.currentActivation != nil and interp.currentActivation.hasReturned:
+    # Walk up the activation chain to find if any activation has returned
+    var nonLocalReturnActivation: Activation = nil
+    var act = interp.currentActivation
+    while act != nil:
+      if act.hasReturned:
+        nonLocalReturnActivation = act
+        break
+      act = act.sender
+    
+    if nonLocalReturnActivation != nil:
       # Non-local return - propagate the return value
-      let returnVal = interp.currentActivation.returnValue
+      let returnVal = nonLocalReturnActivation.returnValue
 
       # Pop the activation
       discard interp.activationStack.pop()
@@ -4984,11 +4993,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # For blocks, target is homeActivation (the enclosing method)
     # For methods, target is the current activation
     var targetActivation: Activation = nil
+    var isNonLocalReturn = false  # Track if this is a non-local return from a block
     if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
       let currentMethod = interp.currentActivation.currentMethod
       if not currentMethod.isMethod and currentMethod.homeActivation != nil:
-        targetActivation = currentMethod.homeActivation
+        # This is a non-local return from a block - walk up to find the method activation
+        isNonLocalReturn = true
+        var homeAct = currentMethod.homeActivation
+        while homeAct != nil and homeAct.currentMethod != nil and not homeAct.currentMethod.isMethod:
+          homeAct = homeAct.currentMethod.homeActivation
+        targetActivation = if homeAct != nil: homeAct else: currentMethod.homeActivation
       else:
+        # Normal return from a method - target is the current method itself
         targetActivation = interp.currentActivation
 
     if targetActivation == nil:
@@ -5020,6 +5036,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # pop the corresponding activation from the activation stack.
     # Also unwind past continuation frames (wfIfNodeContinuation, wfWhileLoop)
     # that may have been set up by control flow specialization.
+    debug("wfReturnValue: targetActivation nil?=", $(targetActivation == nil), " targetOnStack=", $targetOnStack)
     var found = false
     var targetEvalStackDepth = 0
     while interp.workQueue.len > 0 and not found:
@@ -5037,9 +5054,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         continue
       if wf.kind == wfPopActivation:
         # Check if the current activation is the target
+        debug("wfReturnValue: checking wfPopActivation, currentActivation==targetActivation? ", $(interp.currentActivation == targetActivation))
         if interp.currentActivation == targetActivation:
           # Save the eval stack depth to restore to
           targetEvalStackDepth = wf.savedEvalStackDepth
+
+          # Mark target as having returned with the return value
+          debug("wfReturnValue: marking target activation as returned")
+          targetActivation.hasReturned = true
+          targetActivation.returnValue = returnVal
 
           # Pop the target activation
           discard interp.activationStack.pop()
@@ -5052,15 +5075,35 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           found = true
         else:
           # Pop intermediate activation (block)
+          # Also mark it as returned so nested loops can detect the non-local return
           if interp.activationStack.len > 0:
+            let intermediateAct = interp.activationStack[^1]
+            intermediateAct.hasReturned = true
+            intermediateAct.returnValue = returnVal
+            debug("wfReturnValue: marked intermediate activation as returned, kind=", $intermediateAct.currentMethod.kind)
             discard interp.activationStack.pop()
             if interp.activationStack.len > 0:
               interp.currentActivation = interp.activationStack[^1]
               interp.currentReceiver = interp.currentActivation.receiver
 
-    # Restore eval stack to the depth before the target activation was pushed
-    if interp.evalStack.len > targetEvalStackDepth:
-      interp.evalStack.setLen(targetEvalStackDepth)
+    # After handling a non-local return, we need to clear any remaining work frames
+    # that were scheduled after the return point. These frames are no longer
+    # valid since we've unwound to the target activation.
+    # For normal method returns, we don't clear the queue - the remaining frames
+    # (like wfPopActivation) need to execute to properly clean up.
+    if found and isNonLocalReturn:
+      # Clear remaining work frames for non-local returns only
+      while interp.workQueue.len > 0:
+        let wf = interp.workQueue.pop()
+        # For continuation frames, clean up any values they would have consumed
+        if wf.kind == wfIfNodeContinuation or wf.kind == wfWhileLoop:
+          if interp.evalStack.len > 0:
+            discard interp.evalStack.pop()
+    
+    # Note: We don't truncate the eval stack here because:
+    # 1. If target was found, wfPopActivation will handle cleanup
+    # 2. If target wasn't found (escaped block), the caller handles cleanup
+    # Just push the return value - the stack will be cleaned up by wfPopActivation
     interp.pushValue(returnVal)
     return true
 
@@ -5304,6 +5347,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
         if frame.bodyBlock.homeActivation == nil:
           frame.bodyBlock.homeActivation = interp.currentActivation
+          debug("lsCheckCondition: set bodyBlock.homeActivation=", $cast[int](interp.currentActivation), " currentMethod.isMethod=", if interp.currentActivation.currentMethod != nil: $interp.currentActivation.currentMethod.isMethod else: "nil")
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
         # Loop done - push nil result
@@ -5316,6 +5360,16 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of lsLoopBody:
       # Body completed - discard body result and loop back to condition
       discard interp.popValue()
+      
+      # Check if the body's home activation (the method) has returned
+      # This handles the case where a nested block did a non-local return
+      debug("lsLoopBody: bodyBlock.homeActivation=", if frame.bodyBlock.homeActivation != nil: $cast[int](frame.bodyBlock.homeActivation) else: "nil")
+      if frame.bodyBlock.homeActivation != nil:
+        debug("lsLoopBody: bodyBlock.homeActivation.hasReturned=", $frame.bodyBlock.homeActivation.hasReturned)
+        if frame.bodyBlock.homeActivation.hasReturned:
+          debug("lsLoopBody: non-local return detected in home activation, exiting loop")
+          return true
+      
       interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsEvaluateCondition))
       return true
     of lsDone:
