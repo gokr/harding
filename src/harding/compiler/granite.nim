@@ -3,12 +3,18 @@
 # Harding Compiler - Standalone compiler binary
 #
 # Compiles Harding source (.hrd) to Nim code (.nim)
+#
+# NOTE: This compiler initializes the full Harding VM to ensure access to
+# the complete class model, enabling accurate compilation with type information.
 
 import std/[os, strutils, parseopt, strformat, logging]
 import ../parser/parser
 import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
+import ../core/scheduler
+import ../interpreter/vm
+import ../repl/cli
 
 proc mangleModuleName(name: string): string =
   ## Convert module name to valid Nim identifier
@@ -41,6 +47,9 @@ type
     version: bool
     logLevel: Level
     dumpAst: bool
+    hardingHome: string
+    bootstrapFile: string
+    maxStackDepth: int
 
 proc newConfig(): Config =
   Config(
@@ -54,7 +63,10 @@ proc newConfig(): Config =
     help: false,
     version: false,
     logLevel: lvlError,  # Default to ERROR level
-    dumpAst: false
+    dumpAst: false,
+    hardingHome: getEnv("HARDING_HOME", "."),
+    bootstrapFile: "",
+    maxStackDepth: 10000
   )
 
 proc showUsage() =
@@ -74,10 +86,15 @@ proc showUsage() =
   echo "  -o, --output <file>   Output Nim file path (compile only)"
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
+  echo "  --home <path>         Set HARDING_HOME directory (default: current directory)"
+  echo "  --bootstrap <file>    Use custom bootstrap file (default: lib/core/Bootstrap.hrd)"
   echo "  --ast                 Dump AST after parsing and before compiling"
   echo "  --loglevel <level>    Set log level: DEBUG, INFO, WARN, ERROR (default: ERROR)"
   echo "  -h, --help            Show this help"
   echo "  -v, --version         Show version"
+  echo ""
+  echo "Environment Variables:"
+  echo "  HARDING_HOME          Default home directory for loading libraries"
   echo ""
   echo "Examples:"
   echo "  granite compile examples/demo.hrd -o demo.nim"
@@ -128,6 +145,10 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.help = true
       of "v", "version":
         result.version = true
+      of "home":
+        result.hardingHome = p.val
+      of "bootstrap":
+        result.bootstrapFile = p.val
       of "loglevel":
         result.logLevel = parseLogLevel(p.val)
       of "ast":
@@ -144,12 +165,25 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         quit(1)
 
 proc compileFile(config: Config): bool =
-  ## Compile Harding source to Nim
+  ## Compile Harding source to Nim using the unified VM-based pipeline
   if not fileExists(config.inputFile):
     echo "Error: Input file not found: ", config.inputFile
     return false
 
   echo "Compiling: ", config.inputFile
+
+  # Initialize the Harding VM with full stdlib (unified pipeline)
+  # This gives us access to the complete class model for accurate compilation
+  let schedCtx = newSchedulerContext()
+  let interp = schedCtx.mainProcess.getInterpreter()
+  interp.hardingHome = config.hardingHome
+  
+  # Load standard library
+  let bootstrapFile = if config.bootstrapFile.len > 0: 
+                        config.bootstrapFile 
+                      else: 
+                        config.hardingHome / "lib" / "core" / "Bootstrap.hrd"
+  loadStdlib(interp, bootstrapFile)
 
   let source = readFile(config.inputFile)
   let tokens = lex(source)
@@ -278,6 +312,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.compileFile()
@@ -296,6 +333,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.buildFile()
@@ -314,6 +354,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.runFile()
@@ -334,6 +377,9 @@ proc main() =
         showUsage()
         quit(0)
 
+      # Set HARDING_HOME environment for child processes
+      putEnv("HARDING_HOME", config.hardingHome)
+      
       setupLogging(config)
 
       let success = config.compileFile()

@@ -7,6 +7,18 @@ import ../core/types
 # ============================================================================
 
 type
+  # Block procedure types for compiled code
+  # These are used both in code generation and at runtime
+  BlockProc0* = proc(): NodeValue {.cdecl.}
+  BlockProc1* = proc(a: NodeValue): NodeValue {.cdecl.}
+  BlockProc2* = proc(a, b: NodeValue): NodeValue {.cdecl.}
+  BlockProc3* = proc(a, b, c: NodeValue): NodeValue {.cdecl.}
+  # Block procs with environment pointer
+  BlockEnvProc0* = proc(env: pointer): NodeValue {.cdecl.}
+  BlockEnvProc1* = proc(env: pointer, a: NodeValue): NodeValue {.cdecl.}
+  BlockEnvProc2* = proc(env: pointer, a, b: NodeValue): NodeValue {.cdecl.}
+  BlockEnvProc3* = proc(env: pointer, a, b, c: NodeValue): NodeValue {.cdecl.}
+
   BlockProcInfo* = object
     ## Metadata for a compiled block procedure
     nimName*: string                    # Unique Nim procedure name
@@ -411,24 +423,13 @@ proc genBlockRuntimeHelpers*(): string =
 # Block Runtime Support
 # =====================
 
+# Note: Block procedure types (BlockProc0-3, BlockEnvProc0-3) are defined at module level
+# NonLocalReturnException* = object of CatchableError
+#   value*: NodeValue
+#   targetId*: int
+
+# Wrapper to hold environment pointer alongside the block
 type
-  NonLocalReturnException* = object of CatchableError
-    ## Exception for non-local return (^) from blocks
-    value*: NodeValue
-    targetId*: int
-
-  # Block procs without environment
-  BlockProc0* = proc(): NodeValue {.cdecl.}
-  BlockProc1* = proc(a: NodeValue): NodeValue {.cdecl.}
-  BlockProc2* = proc(a, b: NodeValue): NodeValue {.cdecl.}
-  BlockProc3* = proc(a, b, c: NodeValue): NodeValue {.cdecl.}
-  # Block procs with environment pointer as first arg
-  BlockEnvProc0* = proc(env: pointer): NodeValue {.cdecl.}
-  BlockEnvProc1* = proc(env: pointer, a: NodeValue): NodeValue {.cdecl.}
-  BlockEnvProc2* = proc(env: pointer, a, b: NodeValue): NodeValue {.cdecl.}
-  BlockEnvProc3* = proc(env: pointer, a, b, c: NodeValue): NodeValue {.cdecl.}
-
-  # Wrapper to hold environment pointer alongside the block
   BlockEnvHolder* = object
     env*: pointer
 

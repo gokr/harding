@@ -40,6 +40,21 @@ harding --ast script.hrd
 harding --loglevel DEBUG script.hrd
 ```
 
+### Granite Compiler
+
+Compile to native binaries:
+
+```bash
+# Compile to standalone binary
+granite compile myprogram.hrd -o myprogram
+
+# Build with optimizations
+granite build myprogram.hrd --release
+
+# Run directly
+granite run myprogram.hrd
+```
+
 ## Learning Harding
 
 ### For Smalltalk Programmers
@@ -82,13 +97,14 @@ Hello World:
 
 Factorial:
 ```harding
-| factorial |
-factorial := [:n |
-    (n <= 1) ifTrue: [^ 1].
-    ^ n * (factorial value: (n - 1))
+# Extend Number with a factorial method
+Number >> factorial [
+    (self <= 1) ifTrue: [^ 1].
+    ^ self * ((self - 1) factorial)
 ]
 
-(factorial value: 5) println   # 120
+5 factorial println   # 120
+10 factorial println  # 3628800
 ```
 
 Counter Class:
@@ -104,6 +120,19 @@ c := Counter new
 c initialize
 c increment
 c value println   # 1
+```
+
+Exception Handling:
+```harding
+# Resumable exceptions
+result := [
+    10 / 0
+] on: ZeroDivideError do: [:ex |
+    Transcript showCr: "Cannot divide by zero!".
+    ex resume: 0  # Return 0 instead
+].
+
+result println   # 0
 ```
 
 ## Reference Documentation

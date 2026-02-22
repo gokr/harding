@@ -11,6 +11,7 @@ Harding is a class-based Smalltalk dialect that compiles to Nim. It preserves Sm
 | Object model | Classes + metaclasses | Classes only (no metaclasses) |
 | Statement separator | Period (`.`) only | Period or newline |
 | String quotes | Single quote (`'`) | Double quote (`"`) only |
+| Array indexing | 1-based | 0-based (like Nim/JavaScript) |
 | Class methods | Metaclass methods | Methods on class object |
 | Class variables | Shared class state | Not implemented |
 | Pool dictionaries | Shared constants | Not implemented |
@@ -60,7 +61,41 @@ z := x + y.
 
 **Note**: Single quotes are reserved for future use. Use double quotes for all strings.
 
-### 3. Comments
+### 3. Array Indexing
+
+**Smalltalk:**
+```smalltalk
+# Arrays are 1-based (first element at index 1)
+arr := Array new: 5.
+arr at: 1 put: 'first'.     "First element"
+arr at: 5 put: 'last'.      "Last element"
+arr first                   "Equivalent to (arr at: 1)"
+arr last                    "Equivalent to (arr at: (arr size))"
+```
+
+**Harding:**
+```harding
+# Arrays are 0-based (first element at index 0)
+arr := Array new: 5.
+arr at: 0 put: 'first'.     # First element
+arr at: 4 put: 'last'.      # Last element (size - 1)
+arr first                   # Returns first element (index 0)
+arr last                    # Returns last element (index size - 1)
+```
+
+**Important**: This is a significant difference from Smalltalk-80. Harding uses 0-based indexing like Nim, JavaScript, C, and most modern programming languages. The `first` and `last` methods are provided for portability, but direct index access must account for the 0-based convention.
+
+When porting Smalltalk code, adjust all array indices by subtracting 1:
+```harding
+# Smalltalk: arr at: 1   (first element)
+# Harding:   arr at: 0   (first element)
+
+# Smalltalk: 1 to: (arr size) do: [:i | ... ]
+# Harding:   0 to: (arr size - 1) do: [:i | ... ]
+#    or use: arr do: [:elem | ... ]
+```
+
+### 4. Comments
 
 **Smalltalk:**
 ```smalltalk
@@ -75,7 +110,7 @@ z := x + y.
 
 **Note**: Hash-style comments are the only comment syntax. Double quotes are for strings.
 
-### 4. Block Syntax
+### 5. Block Syntax
 
 **Smalltalk:**
 ```smalltalk
@@ -110,7 +145,7 @@ z := x + y.
 
 The vertical bar `|` is optional after parameters if there are no temporaries.
 
-### 5. Method Definition Syntax
+### 6. Method Definition Syntax
 
 **Smalltalk:**
 ```smalltalk
@@ -142,7 +177,7 @@ Person at: #name: put: [ :aName |
 ].
 ```
 
-### 6. Multiline Keyword Messages
+### 7. Multiline Keyword Messages
 
 **Smalltalk:**
 ```smalltalk

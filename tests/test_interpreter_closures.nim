@@ -120,11 +120,11 @@ suite "Interpreter: Lexical Closures":
 
       Maker2 := Maker new.
       Pair := Maker2 makePair.
-      Result1 := (Pair at: 1) value.
-      Dummy1 := (Pair at: 2) value.
-      Result2 := (Pair at: 1) value.
-      Dummy2 := (Pair at: 3) value.
-      Result3 := (Pair at: 1) value
+      Result1 := (Pair at: 0) value.
+      Dummy1 := (Pair at: 1) value.
+      Result2 := (Pair at: 0) value.
+      Dummy2 := (Pair at: 2) value.
+      Result3 := (Pair at: 0) value
     """)
 
     if result[1].len > 0:
@@ -208,9 +208,9 @@ suite "Interpreter: Lexical Closures":
     let result = interp.evalStatements("""
       Finder := Object derive.
       Finder >> search: arr [ | elem1 elem2 elem3 |
-        elem1 := arr at: 1.
-        elem2 := arr at: 2.
-        elem3 := arr at: 3.
+        elem1 := arr at: 0.
+        elem2 := arr at: 1.
+        elem3 := arr at: 2.
         elem1 = 2 ifTrue: [ ^elem1 ].
         elem2 = 2 ifTrue: [ ^elem2 ].
         elem3 = 2 ifTrue: [ ^elem3 ].

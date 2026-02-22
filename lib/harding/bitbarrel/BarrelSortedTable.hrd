@@ -28,7 +28,7 @@ BarrelSortedTable class>>create: aName [
     # Create new barrel-backed ordered table (always uses critbit)
     | table barrel |
     barrel := Barrel new.
-    barrel create: aName mode: 'critbit'.
+    barrel create: aName mode: "critbit".
     barrel use: aName.
     table := self new.
     table barrel: barrel.
@@ -103,18 +103,24 @@ BarrelSortedTable>>prefix: prefix limit: limit [
 
 BarrelSortedTable>>first [
     # Get first entry (smallest key)
-    | keys |
+    | keys result |
     keys := self keys.
     keys isEmpty ifTrue: [^nil].
-    ^{keys first. self at: keys first}
+    result := Array new.
+    result add: keys first.
+    result add: (self at: keys first).
+    ^result
 ].
 
 BarrelSortedTable>>last [
     # Get last entry (largest key)
-    | keys |
+    | keys result |
     keys := self keys.
     keys isEmpty ifTrue: [^nil].
-    ^{keys last. self at: keys last}
+    result := Array new.
+    result add: keys last.
+    result add: (self at: keys last).
+    ^result
 ].
 
 BarrelSortedTable>>firstKey [

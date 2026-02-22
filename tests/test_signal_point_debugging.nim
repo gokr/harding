@@ -1,4 +1,5 @@
 import std/unittest
+import std/strutils
 import ../src/harding/core/types
 import ../src/harding/interpreter/[vm]
 
@@ -113,33 +114,52 @@ suite "Handler Actions":
     check(result[0][^1].intVal == 42)
 
   test "retry re-executes protected block":
-    skip() # TODO: Implement Exception>>retry
+    ## Exception>>retry causes the protected block to re-execute from the start
+    ## Use an outer block to properly scope the attempts variable
+    let result = sharedInterp.evalStatements("""
+      Result := [
+        | attempts |
+        attempts := 0.
+        [
+          attempts := attempts + 1.
+          attempts < 3 ifTrue: [ Error signal: "not yet" ].
+          attempts
+        ] on: Error do: [ :ex | ex retry ]
+      ] value
+    """)
+
+    check(result[1].len == 0)
+    check(result[0].len > 0)
+    check(result[0][^1].intVal == 3)
 
   test "outer evaluates in outer handler context":
-    skip() # TODO: Implement Exception>>outer
+    skip() # outer is not yet implemented
 
-suite "Resumption Semantics (TODO)":
-  
+suite "Resumption Semantics":
+
   test "Error is not resumable":
-    skip() # TODO: Implement Exception>>isResumable
+    let result = sharedInterp.evalStatements("""
+      Result := Error new isResumable
+    """)
+    check(result[0].len > 0)
+    check(result[0][^1].boolVal == false)
 
   test "Notification is resumable":
-    skip() # TODO: Create Notification class
+    let result = sharedInterp.evalStatements("""
+      Result := Notification new isResumable
+    """)
+    check(result[0].len > 0)
+    check(result[0][^1].boolVal == true)
 
-suite "Uncaught Exception Handling (TODO)":
-  
-  test "defaultAction raises UnhandledError":
-    skip() # TODO: Implement UnhandledError
+suite "Uncaught Exception Handling":
 
-  test "UnhandledError calls handleError:":
-    skip() # TODO: Implement Harding>>handleError:
+  test "uncaught exception propagates as error":
+    ## When no handler matches, signal raises EvalError so CLI can report and exit
+    let (results, err) = sharedInterp.evalStatements("""
+      Error signal: "no handler here"
+    """)
+    check(err.len > 0)
+    check("Error" in err or "no handler here" in err)
 
   test "process suspended for debugger":
-    skip() # TODO: Suspend process on uncaught error
-
-## Run the tests
-when isMainModule:
-  echo "=== Exception Handling Tests ==="
-  echo "Phase 1: Verify existing functionality"
-  echo "Phases 2+: Implement new features (skipped for now)"
-  echo ""
+    skip() # Requires debugger infrastructure

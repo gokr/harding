@@ -4,8 +4,8 @@
 #
 
 # Load core BitBarrel classes
-load: "lib/harding/bitbarrel/Barrel.hrd".
-load: "lib/harding/bitbarrel/BarrelTable.hrd".
-load: "lib/harding/bitbarrel/BarrelSortedTable.hrd".
+Harding load: "lib/harding/bitbarrel/Barrel.hrd".
+Harding load: "lib/harding/bitbarrel/BarrelTable.hrd".
+Harding load: "lib/harding/bitbarrel/BarrelSortedTable.hrd".
 
 Transcript showCr: "BitBarrel library loaded".

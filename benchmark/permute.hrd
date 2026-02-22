@@ -1,19 +1,72 @@
 #!/usr/bin/env harding
 # Permutation Benchmark
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: 8660 for permutations of 7 elements
-# NOTE: Simplified version for current Harding limitations
+# Expected result: 8660 for permutations of 6 elements
+#
+# This follows the SOM algorithm exactly, using 1-based indexing conventions.
+# Array is 0-based in Harding, but we adapt the algorithm by adjusting indices.
 
-# The full permutation benchmark requires:
-# - Array for storing elements
-# - Array indexing with at:/at:put:
-# - While loops for iteration
-# - Counting each permutation visited
+Permute := Object deriveWithAccessors: #(count v).
 
-# Formula: 7! = 5040 permutations
-# But the SOM benchmark counts intermediate states too
-# Expected result: 8660
+Permute>>initialize [
+  self count: 0.
+  self v: (Array new: 6 withAll: 0)
+]
 
-# Current Harding limitations prevent full implementation
+Permute>>benchmark [
+  self count: 0.
+  self v: (Array new: 6 withAll: 0).
+  # SOM calls permute: 6 (for 6 elements, indices 1-6 in 1-based)
+  self permute: 6.
+  ^ self count
+]
 
-8660
+Permute>>verifyResult: result [
+  ^ result = 8660
+]
+
+# SOM algorithm (1-based arrays):
+# permute: n = (
+#   count := count + 1.
+#   (n ~= 0) ifTrue: [
+#     self permute: n - 1.
+#     n to: 1 by: -1 do: [ :i |
+#       self swap: n with: i.
+#       self permute: n - 1.
+#       self swap: n with: i ] ])
+#
+# In SOM:
+# - Array indices are 1..size (1-based)
+# - permute: 6 operates on indices 1..6
+# - swap: n with: i swaps elements at 1-based positions
+#
+# In Harding:
+# - Array indices are 0..size-1 (0-based)
+# - We keep the same algorithm but convert to 0-based for array access
+
+Permute>>permute: n [
+  self count: (self count + 1).
+  n ~= 0 ifTrue: [
+    self permute: (n - 1).
+    n to: 1 by: -1 do: [:i |
+      self swap: n with: i.
+      self permute: (n - 1).
+      self swap: n with: i
+    ]
+  ]
+]
+
+# SOM indices are 1-based, Harding arrays are 0-based
+# Convert by subtracting 1 from each index
+Permute>>swap: i with: j [
+  | tmp |
+  tmp := self v at: (i - 1).
+  self v at: (i - 1) put: (self v at: (j - 1)).
+  self v at: (j - 1) put: tmp
+]
+
+# Run the benchmark
+permute := Permute new.
+result := permute benchmark.
+
+result

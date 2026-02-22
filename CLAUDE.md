@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Harding is a prototype-based Smalltalk dialect that compiles to Nim. It provides:
-- Smalltalk-like object system with prototype inheritance
+Harding is a class-based Smalltalk dialect that compiles to Nim. It provides:
+- Smalltalk-like class-based object system
 - Nim compilation backend
 - REPL for interactive development
 - FFI integration for calling Nim code

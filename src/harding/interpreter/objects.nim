@@ -1444,18 +1444,16 @@ proc sizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   else: toValue(0)
 
 proc atCollectionImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Get element at index (1-based for Smalltalk compatibility)
+  ## Get element at index (0-based indexing)
   case self.kind
   of ikString:
     let (ok, val) = args[0].tryGetInt()
-    # Convert 1-based to 0-based
-    if ok and val >= 1 and val <= self.strVal.len:
-      return toValue($self.strVal[val - 1])
+    if ok and val >= 0 and val < self.strVal.len:
+      return toValue($self.strVal[val])
   of ikArray:
     let (ok, val) = args[0].tryGetInt()
-    # Convert 1-based to 0-based
-    if ok and val >= 1 and val <= self.elements.len:
-      return self.elements[val - 1]
+    if ok and val >= 0 and val < self.elements.len:
+      return self.elements[val]
   of ikTable:
     let key = args[0]
     if key in self.entries:
@@ -1475,14 +1473,13 @@ proc atCollectionImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return nilValue()
 
 proc atCollectionPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Set element at index (1-based for Smalltalk compatibility)
+  ## Set element at index (0-based indexing)
   if args.len < 2: return nilValue()
   case self.kind
   of ikArray:
     let (ok, val) = args[0].tryGetInt()
-    # Convert 1-based to 0-based
-    if ok and val >= 1 and val <= self.elements.len:
-      self.elements[val - 1] = args[1]
+    if ok and val >= 0 and val < self.elements.len:
+      self.elements[val] = args[1]
     return args[1]
   of ikTable:
     let key = args[0]

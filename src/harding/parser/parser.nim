@@ -376,7 +376,7 @@ proc parseKeywordMessage(parser: var Parser, receiver: Node): Node =
     let token = parser.next()
     selector.add(token.value)  # Includes colon
 
-    let arg = parser.parseExpression(parseMessages = false)
+    let arg = parser.parsePrimaryUnaryOnly()
     if arg == nil:
       parser.parseError("Expected argument after keyword")
       return nil

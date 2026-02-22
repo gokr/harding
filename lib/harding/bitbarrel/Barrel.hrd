@@ -40,12 +40,12 @@ Barrel>>connect: host [
 
 Barrel>>create: name [
     # Create new barrel with hash index (default)
-    ^self create: name mode: 'hash'
+    ^self create: name mode: "hash"
 ].
 
 Barrel>>create: name mode: mode [
     # Create new barrel with specified mode
-    # mode: 'hash' or 'critbit'
+    # mode: "hash" or "critbit"
     <primitive barrelCreate: name mode: mode>
 ].
 

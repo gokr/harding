@@ -2,16 +2,60 @@
 # Storage/Tree Benchmark
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
 # Expected result: 5461 nodes for tree depth 7
-# NOTE: Simplified version for current Harding limitations
+#
+# This benchmark creates a tree structure and counts node visits.
 
-# The full Storage benchmark creates a tree structure:
-# - Each node has child arrays
-# - Count is incremented for each node created
-# - Tree depth 7 results in nodes = 4^0 + 4^1 + 4^2 + 4^3 + 4^4 + 4^5 + 4^6 + 4^7
-# = 1 + 4 + 16 + 64 + 256 + 1024 + 4096 + 16384 = 21845?
-# Actually the algorithm counts each node visit, not just creation
-# Expected result: 5461
+SomRandom := Object deriveWithAccessors: #(seed).
 
-# Current Harding limitations prevent full implementation
+SomRandom>>initialize [
+  self seed: 74755
+]
 
-5461
+SomRandom>>next [
+  | newSeed |
+  newSeed := (self seed * 16807) % 2147483647.
+  self seed: newSeed.
+  ^ newSeed
+]
+
+SomRandom>>next: max [
+  ^ (self next) % max
+]
+
+Storage := Object deriveWithAccessors: #(count).
+
+Storage>>initialize [
+  self count: 0
+]
+
+Storage>>benchmark [
+  | random |
+  self count: 0.
+  random := SomRandom new.
+  self buildTreeDepth: 7 with: random.
+  ^ self count
+]
+
+Storage>>verifyResult: result [
+  ^ result = 5461
+]
+
+Storage>>buildTreeDepth: depth with: random [
+  self count: (self count + 1).
+  depth = 0 ifTrue: [
+    ^ Array new: ((random next) % 10 + 1) withAll: 0
+  ] ifFalse: [
+    | arr |
+    arr := Array new: 4.
+    1 to: 4 do: [:i |
+      arr at: i put: (self buildTreeDepth: (depth - 1) with: random)
+    ].
+    ^ arr
+  ]
+]
+
+# Run the benchmark
+storage := Storage new.
+result := storage benchmark.
+
+result
