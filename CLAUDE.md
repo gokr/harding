@@ -1031,6 +1031,14 @@ nil
 #(1 'two' 3.0)              # Mixed types
 ```
 
+**Note**: Harding uses **0-based indexing** for arrays (unlike traditional Smalltalk which uses 1-based). This is more consistent with modern languages.
+```harding
+Arr := #(10 20 30)
+Arr at: 0                    # Returns 10 (first element)
+Arr at: 2                    # Returns 30 (last element)
+Arr at: (Arr size - 1)       # Returns 30 (last element)
+```
+
 **Tables** (dictionaries): Literal syntax with `#{...}`
 ```harding
 #{#key -> "value"}          # Table with symbol key
