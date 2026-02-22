@@ -433,14 +433,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       for capture in blockInfo.captures:
         initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
       let envInit = fmt("var {blockInfo.envStructName}_inst = {blockInfo.envStructName}({initFields.join(\", \")})")
-<<<<<<< Updated upstream
-      # Wrap in a block expression to declare the env var and create the block
-||||||| Stash base
-      # Wrap in a block expression to declare the env var and create the block
-      return fmt("(block: {envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
-=======
       # Wrap in a statement list expression to declare the env var and create the block
->>>>>>> Stashed changes
       return fmt("({envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
     else:
       return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")

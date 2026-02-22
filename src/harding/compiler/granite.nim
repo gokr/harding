@@ -175,7 +175,7 @@ proc compileFile(config: Config): bool =
   # Initialize the Harding VM with full stdlib (unified pipeline)
   # This gives us access to the complete class model for accurate compilation
   let schedCtx = newSchedulerContext()
-  let interp = schedCtx.mainProcess.getInterpreter()
+  var interp = schedCtx.mainProcess.getInterpreter()
   interp.hardingHome = config.hardingHome
   
   # Load standard library
