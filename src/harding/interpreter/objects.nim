@@ -9,6 +9,26 @@ template setNativeImpl*(meth: BlockNode, impl: untyped) =
   ## Set native implementation for native builds
   meth.nativeImpl = cast[pointer](impl)
 
+template registerMethod*(cls: Class, selector: string, impl: untyped, needsInterp: bool = true) =
+  ## Register a native instance method on a class (both methods and allMethods)
+  block:
+    let meth = createCoreMethod(selector)
+    meth.setNativeImpl(impl)
+    if needsInterp:
+      meth.hasInterpreterParam = true
+    cls.methods[selector] = meth
+    cls.allMethods[selector] = meth
+
+template registerClassMethod*(cls: Class, selector: string, impl: untyped, needsInterp: bool = true) =
+  ## Register a native class-side method on a class (both classMethods and allClassMethods)
+  block:
+    let meth = createCoreMethod(selector)
+    meth.setNativeImpl(impl)
+    if needsInterp:
+      meth.hasInterpreterParam = true
+    cls.classMethods[selector] = meth
+    cls.allClassMethods[selector] = meth
+
 # ============================================================================
 # Object System for Harding
 # Class-based objects with delegation/inheritance
