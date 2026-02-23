@@ -421,10 +421,12 @@ proc genBlockRuntimeHelpers*(): string =
 # Block Runtime Support
 # =====================
 
-# Note: Block procedure types (BlockProc0-3, BlockEnvProc0-3) are defined at module level
-# NonLocalReturnException* = object of CatchableError
-#   value*: NodeValue
-#   targetId*: int
+# Exception type for non-local returns from blocks
+type
+  NonLocalReturnException* = object of CatchableError
+    ## Exception for non-local return (^) from blocks
+    value*: NodeValue
+    targetId*: int
 
 # Wrapper to hold environment pointer alongside the block
 type
