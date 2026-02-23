@@ -43,6 +43,7 @@ type
     build: bool
     run: bool
     release: bool
+    mixed: bool
     help: bool
     version: bool
     logLevel: Level
@@ -60,6 +61,7 @@ proc newConfig(): Config =
     build: false,
     run: false,
     release: false,
+    mixed: false,
     help: false,
     version: false,
     logLevel: lvlError,  # Default to ERROR level
@@ -86,6 +88,7 @@ proc showUsage() =
   echo "  -o, --output <file>   Output Nim file path (compile only)"
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
+  echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
   echo "  --home <path>         Set HARDING_HOME directory (default: current directory)"
   echo "  --bootstrap <file>    Use custom bootstrap file (default: lib/core/Bootstrap.hrd)"
   echo "  --ast                 Dump AST after parsing and before compiling"
@@ -153,6 +156,8 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.logLevel = parseLogLevel(p.val)
       of "ast":
         result.dumpAst = true
+      of "mixed":
+        result.mixed = true
       else:
         echo "Unknown option: ", p.key
         quit(1)
@@ -215,7 +220,7 @@ proc compileFile(config: Config): bool =
   let outputPath = outputDir / moduleName & ".nim"
 
   var ctx = newCompiler(outputDir, moduleName)
-  let nimCode = genModule(ctx, nodes, moduleName)
+  let nimCode = genModule(ctx, nodes, moduleName, config.mixed)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

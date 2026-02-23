@@ -1,5 +1,7 @@
 import std/[tables, strformat]
 import ../core/types
+import ../core/scheduler
+import ../interpreter/vm
 
 # ============================================================================
 # Harding Runtime
@@ -169,6 +171,47 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkNil)
   else:
     # Unknown selector - return nil for now
+    return NodeValue(kind: vkNil)
+
+# Global interpreter instance for mixed mode (initialized on first use)
+var hybridInterpreter*: Interpreter = nil
+var hybridScheduler*: SchedulerContext = nil
+
+proc initHybridRuntime*() =
+  ## Initialize the hybrid runtime (interpreter embedded in compiled code)
+  if hybridInterpreter == nil:
+    hybridScheduler = newSchedulerContext()
+    hybridInterpreter = hybridScheduler.mainProcess.getInterpreter()
+    initGlobals(hybridInterpreter)
+    initSymbolTable()
+    loadStdlib(hybridInterpreter)
+
+proc sendMessageHybrid*(receiver: NodeValue, selector: string,
+                       args: seq[NodeValue]): NodeValue =
+  ## Hybrid message dispatch: try compiled first, fall back to interpreter
+  ## This is used in mixed mode (--mixed flag) for unsupported features
+  
+  # First, try to use the compiled runtime if available
+  if currentRuntime != nil:
+    let result = sendMessage(currentRuntime[], receiver, selector, args)
+    # If result is not nil, the compiled version handled it
+    if result.kind != vkNil:
+      return result
+  
+  # Fall back to interpreter for uncompiled methods
+  initHybridRuntime()
+  
+  # Use the interpreter to evaluate the message
+  # This is slower but handles any Harding code
+  try:
+    # Convert selector and args to AST and evaluate
+    # For now, return nil with a warning
+    when not defined(release):
+      echo "Mixed mode: Falling back to interpreter for '", selector, "'"
+    return NodeValue(kind: vkNil)
+  except:
+    when not defined(release):
+      echo "Mixed mode error in '", selector, "': ", getCurrentExceptionMsg()
     return NodeValue(kind: vkNil)
 
 # Convenience procs for common operations

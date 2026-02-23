@@ -13,6 +13,7 @@ type
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
+    mixed*: bool                   ## Mixed mode: embed interpreter for fallback
     locals*: seq[string]          ## Local variable names (temporaries)
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
@@ -22,11 +23,12 @@ type
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 
-proc newGenContext*(cls: ClassInfo = nil): GenContext =
+proc newGenContext*(cls: ClassInfo = nil, mixed: bool = false): GenContext =
   ## Create new generation context
   result = GenContext(
     cls: cls,
     inBlock: false,
+    mixed: mixed,
     locals: @[],
     parameters: @[],
     globals: @[],
@@ -339,12 +341,18 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    if ctx.mixed:
+      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    if ctx.mixed:
+      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
