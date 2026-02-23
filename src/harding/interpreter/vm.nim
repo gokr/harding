@@ -686,6 +686,11 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
+
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
   let savedReceiver = interp.currentReceiver
@@ -714,6 +719,11 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg
@@ -747,6 +757,11 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
@@ -783,6 +798,11 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
