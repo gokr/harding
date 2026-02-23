@@ -820,11 +820,27 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       "Wrong number of arguments to block: expected " & $blockNode.parameters.len &
       ", got " & $args.len)
 
+  # Update homeActivation if needed: if it points to a block (not a method),
+  # find the nearest method activation in the current chain
+  if blockNode.homeActivation != nil and blockNode.homeActivation.currentMethod != nil and
+     not blockNode.homeActivation.currentMethod.isMethod:
+    var act = interp.currentActivation
+    while act != nil:
+      if act.currentMethod != nil and act.currentMethod.isMethod:
+        blockNode.homeActivation = act
+        break
+      act = act.sender
+  
   let blockHome = blockNode.homeActivation
   let blockReceiver = if blockHome != nil and blockHome.receiver != nil:
                         blockHome.receiver
                       else:
                         interp.currentReceiver
+  
+  # Save reference to home activation to detect non-local returns
+  # The home activation may be popped from stack during non-local return unwind
+  let savedHomeActivation = blockHome
+  
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   var capturedVarNames: seq[string] = @[]
@@ -850,12 +866,18 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
   var blockResult = nilValue()
   try:
     for stmt in blockNode.body:
-      if activation.hasReturned:
-        blockResult = activation.returnValue
+      
+      # Check for non-local return: if home activation has returned, stop iteration
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+        echo "DEBUG: savedHomeActivation.hasReturned=true, value=", savedHomeActivation.returnValue.toString()
+        blockResult = savedHomeActivation.returnValue
         break
+      
       blockResult = interp.evalWithVM(stmt)
-      if activation.hasReturned:
-        blockResult = activation.returnValue
+      
+      # Check again after evalWithVM in case non-local return happened
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+        blockResult = savedHomeActivation.returnValue
         break
 
     # Save back captured variables to their shared cells
@@ -1807,11 +1829,19 @@ proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
 
   let blockNode = args[0].blockVal
   var lastResult = nilValue()
+  
+  # Save reference to home activation to detect non-local returns
+  let savedHomeActivation = blockNode.homeActivation
 
   # Iterate over array elements
   for elem in self.elements:
     # Invoke block with element as argument
     lastResult = interp.invokeBlock(blockNode, @[elem])
+    
+    # Check for non-local return: if home activation has returned, stop iteration
+    if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+      lastResult = savedHomeActivation.returnValue
+      break
 
   return lastResult
 
