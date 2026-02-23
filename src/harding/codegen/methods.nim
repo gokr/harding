@@ -377,6 +377,27 @@ proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
   let bStr = b.toString()
   return NodeValue(kind: vkString, strVal: aStr & bStr)
 
+# Collection access primitives
+
+proc nt_at_k*(arr: NodeValue, index: NodeValue): NodeValue =
+  ## Array/Collection access: arr at: index
+  if arr.kind == vkArray and index.kind == vkInt:
+    let idx = index.intVal
+    if idx >= 0 and idx < arr.arrayVal.len:
+      return arr.arrayVal[idx]
+  return NodeValue(kind: vkNil)
+
+proc nt_at_kput_k*(arr: NodeValue, index: NodeValue, value: NodeValue): NodeValue =
+  ## Array/Collection assignment: arr at: index put: value
+  ## Returns the modified array (since NodeValue is a value type)
+  if arr.kind == vkArray and index.kind == vkInt:
+    let idx = index.intVal
+    if idx >= 0 and idx < arr.arrayVal.len:
+      var newArr = arr
+      newArr.arrayVal[idx] = value
+      return newArr
+  return arr
+
 # Global variable support
 
 var globals*: Table[string, NodeValue]
