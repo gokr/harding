@@ -11,8 +11,8 @@
 | Status | Count | Description |
 |--------|-------|-------------|
 | ✅ Works Pure | 14 | Compiles without --mixed, runs correctly |
-| 🔶 Compiles | 3 | Compiles but has runtime issues (missing primitives) |
-| ❌ Compilation Fails | 2 | Fails to compile even with --mixed |
+| 🔶 Works with Limitations | 3 | Compiles but some features need Array/Table objects vs literals |
+| ❌ Compilation Fails | 2 | Require extensions (BitBarrel, green threads) |
 
 ### Detailed Matrix
 
@@ -30,30 +30,76 @@
 | fibonacci | ✅ PASS | ✅ PASS | `do:` now compiled inline | - |
 | benchmark_blocks | ✅ PASS | ✅ PASS | - | - |
 | simple_test | ✅ PASS | ✅ PASS | - | - |
-| compiler_examples | ✅ PASS | ✅ PASS | Nested blocks return 0 | MEDIUM |
+| compiler_examples | ✅ PASS | ✅ PASS | - | - |
 | compiled_blocks | ✅ PASS | ✅ PASS | - | - |
-| **blocks** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! Missing runtime primitives | MEDIUM |
-| **collections** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! `collect:` works. Missing Array/Table primitives | MEDIUM |
-| **stdlib** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! Missing runtime primitives | MEDIUM |
+| **blocks** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! Some Array methods need object support | MEDIUM |
+| **collections** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! Array literals work; `Array new` needs object support | MEDIUM |
+| **stdlib** | 🔶 PARTIAL | 🔶 PARTIAL | Compiles! Most features work | MEDIUM |
 | **bitbarrel_demo** | ❌ FAIL | ❌ FAIL | `BarrelTable` class undefined | LOW |
 | **process_demo** | ❌ FAIL | ❌ FAIL | Green threads not supported | LOW |
 
+### Recent Fixes
+
+#### ✅ Comparison Operators Fixed
+- `==` now returns `true` for equal values (was returning `false`)
+- Both `=` and `==` map to Nim's `==` operator
+
+#### ✅ Number Primitives Added
+All number methods now work correctly:
+- `abs` - returns absolute value ✅
+- `even` - returns true for even numbers ✅
+- `odd` - returns true for odd numbers ✅
+- `negated` - returns negated value ✅
+
+#### ✅ Array Primitives Added (for Array Literals)
+Array primitives work with literal syntax `#(1 2 3)`:
+- `size` - returns array length ✅
+- `at:` - returns element at 1-based index ✅
+- `last` - returns last element ✅
+- `do:` - iterates over elements ✅
+- `collect:` - transforms and collects ✅
+- `select:` - filters based on condition ✅
+
+#### ✅ Table Primitives Added
+- `at:` - works with string keys ✅
+- `at:put:` - stores values ✅
+- `keys` - returns array of keys ✅
+- `size` - returns number of entries ✅
+
+### Known Limitations
+
+#### Array Objects vs Array Literals
+**Issue:** `Array new` creates an object, not a native array.
+
+**Works:**
+```harding
+numbers := #(1 2 3 4 5)  # Array literal - creates vkArray
+numbers at: 1             # Returns 1 ✅
+numbers size              # Returns 5 ✅
+```
+
+**Needs Object Support:**
+```harding
+arr := Array new          # Creates Array object
+arr add: 10               # Works at runtime via interpreter
+arr at: 1                 # Returns nil (needs Array object support)
+```
+
+**Workaround:** Use array literals `#(...)` instead of `Array new` in compiled code.
+
 ### Compilation Errors
 
-#### 1. Missing Runtime Primitives (3 examples)
-**Examples:** blocks, collections, stdlib
+#### 1. Runtime Primitives - MOSTLY FIXED ✅
+**Status:** Core primitives implemented.
 
-**Status:** ✅ FIXED - All three examples now compile successfully!
+**Working:**
+- ✅ Number: abs, even, odd, negated
+- ✅ Array literals: size, at:, last, do:, collect:, select:
+- ✅ Table: at:, at:put:, keys, size
+- ✅ Comparison: =, ==, ~=, <, <=, >, >=
 
-**Remaining Issues:**
-- Array methods (`size`, `at:`, `last`) return `nil` - need runtime primitives
-- Table methods return `nil` - need runtime primitives  
-- Some block methods fall back to interpreter
-
-**Fix:** Add runtime primitives for:
-- `Array>>size`, `Array>>at:`, `Array>>last`
-- `Table>>at:`, `Table>>at:put:`, `Table>>keys`
-- `Integer>>even`, `Integer>>odd`
+**Needs Object Support:**
+- Array objects created with `Array new` and `add:`
 
 #### 2. Missing Classes (2 examples)
 
@@ -69,76 +115,43 @@
 ### Runtime Behavior
 
 #### Working Examples Output
-All 14 passing examples produce correct output matching the interpreter.
+All 14 passing examples produce correct output.
 
 #### Collections Example
-**Status:** ✅ Compiles and runs
+**Status:** 🔶 Compiles and runs with limitations
 
 **Working:**
 - Array literals: `#(1 2 3 4 5)` ✅
-- `collect:`: `#(1 4 9 16 25)` ✅ (now works with inline compilation!)
-- `select:`: Framework works, but `even` method needs primitive
+- `collect:`: `#(1 4 9 16 25)` ✅
+- `select:`: `#(2 4)` ✅
+- `at:` with literals: Returns correct value ✅
+- `size` with literals: Returns correct size ✅
+- `last` with literals: Returns correct value ✅
 
-**Needs Primitives:**
-- `Array>>size` returns `nil`
-- `Array>>at:` returns `nil` 
-- `Array>>last` returns `nil`
-- `Table` methods return `nil`
+**Needs Object Support:**
+- `Array new` created arrays: `at:`, `size`, `last` return nil
 
-### Binary Size Comparison
+### Recommendations
 
-| Mode | Example | Size |
-|------|---------|------|
-| Pure | hello | ~350KB |
-| Mixed | fibonacci | ~2.1MB |
+### Completed ✅
+1. ✅ Fix `==` operator
+2. ✅ Add Number primitives (abs, even, odd, negated)
+3. ✅ Add Array primitives for literals
+4. ✅ Add Table primitives
+5. ✅ Fix inline collection iteration (do:, collect:, select:)
 
-**Overhead:** ~1.7MB for embedded interpreter
-
-## Recent Fixes
-
-### ✅ Task 1: Rename Example Files
-All examples renamed from `01_hello.hrd` to `hello.hrd` etc.
-
-### ✅ Task 2: Mixed Mode Compilation  
-`--mixed` flag implemented to embed interpreter for fallback.
-
-### ✅ Task 3: Fix Forward Declaration Issues
-Block procedures now compile with proper forward declarations using `harding_block_N` naming.
-
-### ✅ Task 4: Inline Collection Iteration
-Implemented inline compilation for:
-- `do:` - Iterates and executes block for each element ✅
-- `collect:` - Transforms elements, collects results ✅  
-- `select:` - Filters elements based on condition ✅
-
-**Fix Details:**
-- Added context cloning in inline handlers to include loop variable in `locals`
-- Fixed `collect:` to properly add computed values to result array
-- Reordered module generation so primitives are defined before block procedures
-
-## Recommendations
-
-### Immediate (HIGH Priority) - COMPLETED ✅
-1. ~~Fix NonLocalReturnException~~ - ✅ Added to runtime helpers
-2. ~~Inline `do:` compilation~~ - ✅ Implemented
-3. ~~Fix forward declarations~~ - ✅ Fixed
-
-### Short Term (MEDIUM Priority)
-4. Add runtime primitives for Array/Table methods
-5. Add runtime primitives for Integer methods (`even`, `odd`)
-6. Test all examples end-to-end
-
-### Long Term (LOW Priority)
-7. BitBarrel support in compiled mode
-8. Process/green thread support
+### Next Steps
+6. Add Array object support (Array new, add:)
+7. Test all examples with array literals
+8. Document use of literals vs objects in compiled mode
 
 ## Next Steps
 
-The compiler is in great shape! 
+**Current Status:** 17/19 examples compile (up from 14)
 
-**17/19 examples now compile** (up from 14):
-- 14 work perfectly
-- 3 compile but need runtime primitives
-- 2 require extensions (BitBarrel, processes)
+The compiler is working well! The main remaining work is:
+1. Supporting Array objects (not just literals) - MEDIUM priority
+2. BitBarrel support - LOW priority
+3. Green thread support - LOW priority
 
-Once runtime primitives are added for Array/Table methods, we should have **17/19 examples working correctly**.
+For practical use, recommend using array literals `#(...)` instead of `Array new` in compiled code.
