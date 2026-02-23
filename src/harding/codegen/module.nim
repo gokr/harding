@@ -291,7 +291,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            blockInfo.hasNonLocalReturn)
+                            blockInfo.hasNonLocalReturn, blockInfo.envStructName)
     if body.len > 0:
       output.add(body)
     else:

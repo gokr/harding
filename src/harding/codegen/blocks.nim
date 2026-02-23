@@ -42,7 +42,8 @@ proc newBlockRegistry*(): BlockRegistry =
 
 proc generateBlockName*(reg: BlockRegistry): string =
   ## Generate a unique Nim procedure name for a block
-  result = fmt("block_{reg.blockCounter}")
+  ## Use "harding_block_" prefix to avoid conflicts with user variables
+  result = fmt("harding_block_{reg.blockCounter}")
   reg.blockCounter += 1
 
 proc generateEnvStructName*(reg: BlockRegistry): string =
@@ -266,11 +267,12 @@ proc generateEnvStructDef*(info: BlockProcInfo): string =
 
 proc generateBlockProcSignature*(info: BlockProcInfo): string =
   ## Generate the procedure signature for a block
+  ## Uses 'pointer' for env to match template expectations
   var params: seq[string] = @[]
 
   # Add environment pointer if there are captures
   if info.captures.len > 0:
-    params.add(fmt("env: ptr {info.envStructName}"))
+    params.add("env: pointer")
 
   # Add block parameters using actual names from the BlockNode
   for i in 0..<info.paramCount:
@@ -293,10 +295,11 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
   ## - Handle implicit returns for last expression
   var output = ""
 
-  # If we have captures, extract them from environment
+  # If we have captures, cast env pointer and extract values
   if info.captures.len > 0:
+    output.add(fmt("  let envTyped = cast[ptr {info.envStructName}](env)\n"))
     for capture in info.captures:
-      output.add(fmt("  let {capture} = env.{capture}\n"))
+      output.add(fmt("  let {capture} = envTyped.{capture}\n"))
 
   # For now, use runtime dispatch for block body
   # Full compilation would generate Nim code here
@@ -437,6 +440,7 @@ var blockEnvs*: seq[BlockEnvHolder] = @[]
 
 proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): NodeValue =
   ## Create a block value wrapping a compiled procedure pointer
+  ## Note: procPtr is cast to pointer inside this proc to avoid cast issues at call site
   var blk = BlockNode()
   blk.nativeImpl = procPtr
   blk.parameters = newSeq[string](paramCount)
@@ -446,6 +450,32 @@ proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): Nod
     blk.capturedEnv["__env_ptr__"] = MutableCell(value: NodeValue(kind: vkInt, intVal: cast[int](envPtr)))
     blk.capturedEnvInitialized = true
   return NodeValue(kind: vkBlock, blockVal: blk)
+
+# Template versions that handle the cast internally
+template createBlock0*(procPtr: proc(): NodeValue {.cdecl.}, paramCount: int): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount)
+
+template createBlock1*(procPtr: proc(a: NodeValue): NodeValue {.cdecl.}, paramCount: int): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount)
+
+template createBlock2*(procPtr: proc(a, b: NodeValue): NodeValue {.cdecl.}, paramCount: int): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount)
+
+template createBlock3*(procPtr: proc(a, b, c: NodeValue): NodeValue {.cdecl.}, paramCount: int): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount)
+
+# Template versions with environment
+template createBlockEnv0*(procPtr: proc(env: pointer): NodeValue {.cdecl.}, paramCount: int, envPtr: pointer): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount, envPtr)
+
+template createBlockEnv1*(procPtr: proc(env: pointer, a: NodeValue): NodeValue {.cdecl.}, paramCount: int, envPtr: pointer): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount, envPtr)
+
+template createBlockEnv2*(procPtr: proc(env: pointer, a, b: NodeValue): NodeValue {.cdecl.}, paramCount: int, envPtr: pointer): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount, envPtr)
+
+template createBlockEnv3*(procPtr: proc(env: pointer, a, b, c: NodeValue): NodeValue {.cdecl.}, paramCount: int, envPtr: pointer): NodeValue =
+  createBlock(cast[pointer](procPtr), paramCount, envPtr)
 
 proc getBlockEnvPtr*(blk: BlockNode): pointer =
   ## Retrieve the environment pointer from a block

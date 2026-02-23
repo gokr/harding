@@ -435,16 +435,27 @@ proc genExpression*(ctx: GenContext, node: Node): string =
                     else:
                       registerBlock(ctx.blockRegistry, blockNode, ctx.globals)
 
-    if blockInfo.captures.len > 0:
+    # Determine which createBlock template to use based on captures and param count
+    let hasEnv = blockInfo.captures.len > 0
+    let paramCount = blockInfo.paramCount
+    
+    # Build template name: createBlock or createBlockEnv + param count
+    var createBlockCall: string
+    if hasEnv:
+      createBlockCall = fmt("createBlockEnv{paramCount}({blockInfo.nimName}, {paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst))")
+    else:
+      createBlockCall = fmt("createBlock{paramCount}({blockInfo.nimName}, {paramCount})")
+    
+    if hasEnv:
       # Create environment struct with captured values and pass to createBlock
       var initFields: seq[string] = @[]
       for capture in blockInfo.captures:
         initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
       let envInit = fmt("var {blockInfo.envStructName}_inst = {blockInfo.envStructName}({initFields.join(\", \")})")
       # Wrap in a statement list expression to declare the env var and create the block
-      return fmt("({envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
+      return fmt("({envInit}; {createBlockCall})")
     else:
-      return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
+      return createBlockCall
 
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)
@@ -716,10 +727,11 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     return ""
 
 proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = @[],
-                   hasNonLocalReturn: bool = false): string =
+                   hasNonLocalReturn: bool = false, envStructName: string = ""): string =
   ## Generate code for block body (sequence of statements)
   ## captures: list of captured variable names (from BlockProcInfo)
   ## hasNonLocalReturn: if true, ^ generates NonLocalReturnException
+  ## envStructName: name of environment struct for typed access
   var output = ""
 
   # Create new context for block body with its parameters
@@ -743,15 +755,17 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   # Extract captured variables from environment struct
   # Variables that are assigned need special handling (write-back to env)
   var mutableCaptures: seq[string] = @[]
-  if captures.len > 0:
+  if captures.len > 0 and envStructName.len > 0:
+    # Cast env pointer to typed struct pointer
+    output.add(fmt("  let envPtr = cast[ptr {envStructName}](env)\n"))
     for capture in captures:
       if capture in assignedCaptures:
         # Mutable capture: extract as var and track for write-back
-        output.add(fmt("  var {capture} = env.{capture}\n"))
+        output.add(fmt("  var {capture} = envPtr.{capture}\n"))
         mutableCaptures.add(capture)
       else:
         # Immutable capture: extract as let
-        output.add(fmt("  let {capture} = env.{capture}\n"))
+        output.add(fmt("  let {capture} = envPtr.{capture}\n"))
       bodyCtx.locals.add(capture)
 
   # Handle empty block body
@@ -781,8 +795,9 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
             output.add("  " & line & "\n")
 
   # Write back mutable captures to environment before returning
-  for capture in mutableCaptures:
-    output.add(fmt("  env.{capture} = {capture}\n"))
+  if captures.len > 0 and envStructName.len > 0:
+    for capture in mutableCaptures:
+      output.add(fmt("  envPtr.{capture} = {capture}\n"))
 
   # If no explicit return statement, return nil
   if blkNode.body.len == 0 or blkNode.body[^1].kind notin {nkReturn}:
