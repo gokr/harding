@@ -5,6 +5,7 @@ import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/frame_pool
+import ../interpreter/activation_pool
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -396,6 +397,13 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     if name in interp.currentActivation.locals:
       debug("setVariable: storing ", name, " in locals")
       interp.currentActivation.locals[name] = value
+      # Also update the capturedEnv cell if this variable is captured
+      # This is crucial for closure variable sharing between blocks
+      let currentMethod = interp.currentActivation.currentMethod
+      if currentMethod != nil and currentMethod.capturedEnvInitialized and 
+         currentMethod.capturedEnv.len > 0 and name in currentMethod.capturedEnv:
+        currentMethod.capturedEnv[name].value = value
+        debug("setVariable: updated capturedEnv cell for ", name)
       return
 
     # Walk up the sender chain to find existing variable in outer scopes
@@ -534,16 +542,20 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
     while act != nil:
       if act.currentMethod != nil and act.currentMethod.isMethod:
         blockNode.homeActivation = act
+        act.wasCaptured = true
         break
       # If the current block already has a homeActivation pointing to a method,
       # inherit it (nested blocks should all return to the same method)
       if act.currentMethod != nil and not act.currentMethod.isMethod and act.currentMethod.homeActivation != nil:
         blockNode.homeActivation = act.currentMethod.homeActivation
+        act.currentMethod.homeActivation.wasCaptured = true
         break
       act = act.sender
     if blockNode.homeActivation == nil:
       # Fallback: use current activation (e.g., in top-level scripts)
       blockNode.homeActivation = interp.currentActivation
+      if interp.currentActivation != nil:
+        interp.currentActivation.wasCaptured = true
 
 # Method lookup and dispatch
 type
@@ -629,6 +641,8 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 
   if currentMethod.isMethod:
     currentMethod.homeActivation = interp.currentActivation
+    if interp.currentActivation != nil:
+      interp.currentActivation.wasCaptured = true
 
   let activation = newActivation(currentMethod, receiver, interp.currentActivation, definingClass, isClassMethod)
 
@@ -662,13 +676,14 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
         retVal = activation.returnValue
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedLegacy = interp.activationStack.pop()
     if interp.activationStack.len > 0:
       interp.currentActivation = interp.activationStack[^1]
       interp.currentReceiver = interp.currentActivation.receiver
     else:
       interp.currentActivation = nil
       interp.currentReceiver = savedReceiver
+    releaseActivation(poppedLegacy)
 
   if activation.hasReturned:
     return activation.returnValue.unwrap()
@@ -705,9 +720,10 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock)
 
   return blockResult.unwrap()
 
@@ -742,9 +758,10 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlockArg = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlockArg)
 
   return blockResult
 
@@ -784,9 +801,10 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
         nonLocalReturn = true
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock2 = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock2)
 
   return (blockResult, nonLocalReturn)
 
@@ -825,9 +843,10 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock3 = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock3)
 
   return blockResult
 
@@ -850,9 +869,10 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
     while act != nil:
       if act.currentMethod != nil and act.currentMethod.isMethod:
         blockNode.homeActivation = act
+        act.wasCaptured = true
         break
       act = act.sender
-  
+
   let blockHome = blockNode.homeActivation
   let blockReceiver = if blockHome != nil and blockHome.receiver != nil:
                         blockHome.receiver
@@ -917,9 +937,10 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
         parent = parent.sender
 
   finally:
-    discard interp.activationStack.pop()
+    let poppedWhile = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedWhile)
 
   return blockResult.unwrap()
 
@@ -1272,6 +1293,11 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
         debug("  AS[", idx, "] = ", methSelector)
 
       # Create ExceptionContext with full signal point state
+      # Mark captured activations so they are not returned to the pool
+      if interp.currentActivation != nil:
+        interp.currentActivation.wasCaptured = true
+      if handler.activation != nil:
+        handler.activation.wasCaptured = true
       let ctx = ExceptionContext(
         signalActivation: interp.currentActivation,
         handlerActivation: handler.activation,
@@ -4076,11 +4102,15 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           let blk = cast[BlockNode](ifNode.thenBranch)
           if blk.homeActivation == nil:
             blk.homeActivation = interp.currentActivation
+            if interp.currentActivation != nil:
+              interp.currentActivation.wasCaptured = true
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         elif not condResult and ifNode.elseBranch != nil:
           let blk = cast[BlockNode](ifNode.elseBranch)
           if blk.homeActivation == nil:
             blk.homeActivation = interp.currentActivation
+            if interp.currentActivation != nil:
+              interp.currentActivation.wasCaptured = true
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         else:
           interp.pushValue(nilValue())
@@ -4512,6 +4542,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Set home activation for methods
         if currentMethod.isMethod:
           currentMethod.homeActivation = activation
+          activation.wasCaptured = true
 
         # Push pop-activation frame (save eval stack depth for return unwinding)
         interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
@@ -4577,6 +4608,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           if currentMethod.isMethod:
             currentMethod.homeActivation = activation
+            activation.wasCaptured = true
 
           interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
 
@@ -4653,6 +4685,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
             if classMethodToRun.isMethod:
               classMethodToRun.homeActivation = activation
+              activation.wasCaptured = true
 
             interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
 
@@ -4884,6 +4917,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Set home activation for methods
     if currentMethod.isMethod:
       currentMethod.homeActivation = activation
+      activation.wasCaptured = true
 
     # Push pop-activation frame FIRST (will execute LAST after body completes)
     interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
@@ -5018,7 +5052,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
       # Now pop the activation
       debug("VM: wfPopActivation popping activation, len before=", interp.activationStack.len)
-      discard interp.activationStack.pop()
+      let poppedAct = interp.activationStack.pop()
+      releaseActivation(poppedAct)
       debug("VM: wfPopActivation popping activation, len after=", interp.activationStack.len)
       if interp.activationStack.len > 0:
         interp.currentActivation = interp.activationStack[^1]
@@ -5370,10 +5405,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if condResult and frame.thenBlock != nil:
       if frame.thenBlock.homeActivation == nil:
         frame.thenBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.thenBlock, 0))
     elif not condResult and frame.elseBlock != nil:
       if frame.elseBlock.homeActivation == nil:
         frame.elseBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.elseBlock, 0))
     else:
       interp.pushValue(nilValue())
@@ -5400,6 +5439,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsCheckCondition))
       if frame.conditionBlock.homeActivation == nil:
         frame.conditionBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.conditionBlock, 0))
       return true
     of lsCheckCondition:
@@ -5413,6 +5454,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
         if frame.bodyBlock.homeActivation == nil:
           frame.bodyBlock.homeActivation = interp.currentActivation
+          if interp.currentActivation != nil:
+            interp.currentActivation.wasCaptured = true
           debug("lsCheckCondition: set bodyBlock.homeActivation=", $cast[int](interp.currentActivation), " currentMethod.isMethod=", if interp.currentActivation.currentMethod != nil: $interp.currentActivation.currentMethod.isMethod else: "nil")
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
@@ -5446,6 +5489,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # At this point, work queue has [...][wfPopHandler][wfApplyBlock(protected)]
     # We save depth excluding wfPopHandler+wfApplyBlock so we can unwind on exception
     debug("wfPushHandler: activationStack.len=", interp.activationStack.len, " workQueue.len=", interp.workQueue.len)
+    if interp.currentActivation != nil:
+      interp.currentActivation.wasCaptured = true
     let handler = ExceptionHandler(
       exceptionClass: frame.exceptionClass,
       handlerBlock: frame.handlerBlock,
