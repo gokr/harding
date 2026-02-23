@@ -655,9 +655,11 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   try:
     for stmt in currentMethod.body:
       if activation.hasReturned:
+        retVal = activation.returnValue
         break
       retVal = interp.evalWithVM(stmt)
       if activation.hasReturned:
+        retVal = activation.returnValue
         break
   finally:
     discard interp.activationStack.pop()
@@ -869,7 +871,6 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       
       # Check for non-local return: if home activation has returned, stop iteration
       if savedHomeActivation != nil and savedHomeActivation.hasReturned:
-        echo "DEBUG: savedHomeActivation.hasReturned=true, value=", savedHomeActivation.returnValue.toString()
         blockResult = savedHomeActivation.returnValue
         break
       
@@ -5061,14 +5062,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushValue(returnVal)
       return true
 
-    # Unwind: pop work frames until we find and process the wfPopActivation
-    # for the target activation. For each intermediate wfPopActivation (blocks),
-    # pop the corresponding activation from the activation stack.
-    # Also unwind past continuation frames (wfIfNodeContinuation, wfWhileLoop)
-    # that may have been set up by control flow specialization.
+    # Unwind: pop work frames and activations until we find the target
+    # For non-local returns, we need to unwind both the work queue AND the activation stack
     debug("wfReturnValue: targetActivation nil?=", $(targetActivation == nil), " targetOnStack=", $targetOnStack)
     var found = false
     var targetEvalStackDepth = 0
+    
+    # First, unwind the work queue
     while interp.workQueue.len > 0 and not found:
       let wf = interp.workQueue.pop()
       # Skip continuation frames from control flow specialization
@@ -5085,7 +5085,9 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       if wf.kind == wfPopActivation:
         # Check if the current activation is the target
         debug("wfReturnValue: checking wfPopActivation, currentActivation==targetActivation? ", $(interp.currentActivation == targetActivation))
-        if interp.currentActivation == targetActivation:
+        
+        # First, check if top of activation stack is the target
+        if interp.activationStack.len > 0 and interp.activationStack[^1] == targetActivation:
           # Save the eval stack depth to restore to
           targetEvalStackDepth = wf.savedEvalStackDepth
 
@@ -5094,14 +5096,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           targetActivation.hasReturned = true
           targetActivation.returnValue = returnVal
 
-          # Pop the target activation
-          discard interp.activationStack.pop()
-          if interp.activationStack.len > 0:
-            interp.currentActivation = interp.activationStack[^1]
-            interp.currentReceiver = interp.currentActivation.receiver
-          else:
-            interp.currentActivation = nil
-            interp.currentReceiver = wf.savedReceiver
+          # DON'T pop the target activation - let wfPopActivation or executeMethod handle it
           found = true
         else:
           # Pop intermediate activation (block)
@@ -5116,6 +5111,27 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
               interp.currentActivation = interp.activationStack[^1]
               interp.currentReceiver = interp.currentActivation.receiver
 
+    # If we haven't found the target yet, continue unwinding the activation stack
+    # This handles the case where the target's wfPopActivation frame wasn't on the work queue
+    if isNonLocalReturn and not found:
+      while interp.activationStack.len > 0 and not found:
+        let act = interp.activationStack[^1]
+        if act == targetActivation:
+          # Mark target as returned but DON'T pop it - let wfPopActivation handle that
+          targetActivation.hasReturned = true
+          targetActivation.returnValue = returnVal
+          interp.currentActivation = targetActivation
+          interp.currentReceiver = targetActivation.receiver
+          found = true
+        else:
+          # Mark intermediate activation as returned
+          act.hasReturned = true
+          act.returnValue = returnVal
+          discard interp.activationStack.pop()
+          if interp.activationStack.len > 0:
+            interp.currentActivation = interp.activationStack[^1]
+            interp.currentReceiver = interp.currentActivation.receiver
+    
     # After handling a non-local return, we need to clear any remaining work frames
     # that were scheduled after the return point. These frames are no longer
     # valid since we've unwound to the target activation.
@@ -5603,7 +5619,12 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
 
 proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], string) =
   ## Parse and evaluate multiple statements using the stackless VM
-  ## Creates a top-level activation so lowercase variables work as locals
+  ## 
+  ## Smalltalk-style: Compiles source as #doIt method on UndefinedObject (nil)
+  ## This ensures non-local returns (^) have a proper method activation to return from,
+  ## just like in Smalltalk workspaces where code is compiled as #doIt method.
+  ##
+  ## Usage: evalStatements(source) -> executes as "nil doIt" where doIt contains the source
   let tokens = lex(source)
   var parser = initParser(tokens)
   let nodes = parser.parseStatements()
@@ -5611,44 +5632,41 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   if parser.hasError:
     return (@[], "Parse error: " & parser.errorMsg)
 
+  if nodes.len == 0:
+    return (@[], "")
+
+  # Create the #doIt method on UndefinedObject with source as its body
+  # This is the Smalltalk convention: top-level code is compiled as #doIt
+  let doItMethod = BlockNode(
+    parameters: @[],
+    temporaries: @[],
+    body: nodes,
+    isMethod: true,  # It's a real method
+    capturedEnv: initTable[string, MutableCell](),
+    capturedEnvInitialized: true,
+    selector: "doIt"
+  )
+  
+  # Add the method to UndefinedObject's method table
+  undefinedObjectClass.methods["doIt"] = doItMethod
+  undefinedObjectClass.allMethods["doIt"] = doItMethod
+  
+  # Execute: nil doIt
+  # This creates a proper method activation that blocks can return from
   var results = newSeq[NodeValue]()
-
-  if nodes.len > 0:
-    # Create a top-level block activation to hold local variables
-    # This matches the old evalStatements behavior where lowercase names
-    # are locals (not globals)
-    let topLevelBlock = BlockNode(
-      parameters: @[],
-      temporaries: @[],
-      body: nodes,
-      isMethod: true,  # Mark as method so non-local returns work correctly
-      capturedEnv: initTable[string, MutableCell](),
-      capturedEnvInitialized: true
-    )
-    let activation = newActivation(topLevelBlock, interp.currentReceiver, interp.currentActivation)
-    interp.activationStack.add(activation)
-    let savedActivation = interp.currentActivation
-    interp.currentActivation = activation
-
-    try:
-      for node in nodes:
-        let evalResult = interp.evalWithVM(node)
-        results.add(evalResult)
-    except ValueError as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Error: " & e.msg)
-    except EvalError as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Runtime error: " & e.msg)
-    except Exception as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Error: " & e.msg)
-
-    discard interp.activationStack.pop()
-    interp.currentActivation = savedActivation
+  try:
+    let result = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
+    results.add(result)
+  except ValueError as e:
+    return (@[], "Error: " & e.msg)
+  except EvalError as e:
+    return (@[], "Runtime error: " & e.msg)
+  except Exception as e:
+    return (@[], "Error: " & e.msg & "\n" & e.getStackTrace())
+  finally:
+    # Clean up: remove the temporary doIt method
+    undefinedObjectClass.methods.del("doIt")
+    undefinedObjectClass.allMethods.del("doIt")
 
   return (results, "")
 
