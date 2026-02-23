@@ -434,6 +434,34 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("nt_comma({receiverCode}, {argCode})")
     return receiverCode
 
+  of "size":
+    # Array/Table size
+    return fmt("nt_size({receiverCode})")
+
+  of "last":
+    # Array last element
+    return fmt("nt_last({receiverCode})")
+
+  of "keys":
+    # Table keys
+    return fmt("nt_table_keys({receiverCode})")
+
+  of "abs":
+    # Absolute value
+    return fmt("nt_abs({receiverCode})")
+
+  of "even":
+    # Is even
+    return fmt("nt_even({receiverCode})")
+
+  of "odd":
+    # Is odd
+    return fmt("nt_odd({receiverCode})")
+
+  of "negated":
+    # Negated value
+    return fmt("nt_negated({receiverCode})")
+
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
