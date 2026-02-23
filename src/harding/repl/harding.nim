@@ -12,6 +12,9 @@ when defined(debugger):
   import ../debugger/server
   import ../debugger/bridge
 
+when compileOption("profiler"):
+  import nimprof
+
 # ============================================================================
 # Main entry point for Harding REPL
 # ============================================================================

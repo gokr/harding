@@ -196,3 +196,37 @@ task harding_lsp, "Build Harding Language Server":
   exec "nim c -o:harding-lsp src/harding/lsp/main.nim"
   echo "Binary available as ./harding-lsp"
   echo "Usage: harding-lsp --stdio"
+
+task harding_perf, "Build harding optimized for perf profiling":
+  ## Build REPL with release optimizations and debug info for perf/FlameGraph profiling
+  exec "nim c -d:release --debuginfo --lineDir:on -o:harding_perf src/harding/repl/harding.nim"
+  echo "Binary: ./harding_perf"
+  echo "Usage: perf record -F 99 --call-graph dwarf ./harding_perf script.hrd"
+  echo "       perf report --stdio"
+  echo "FlameGraph: perf script | /tmp/FlameGraph/stackcollapse-perf.pl | /tmp/FlameGraph/flamegraph.pl > flame.svg"
+
+task harding_nimprof, "Build harding with built-in Nim profiler":
+  ## Build REPL with Nim's embedded stack trace profiler (outputs profile_results.txt on exit)
+  exec "nim c --profiler:on --stacktrace:on --lineDir:on -o:harding_nimprof src/harding/repl/harding.nim"
+  echo "Binary: ./harding_nimprof"
+  echo "Usage: ./harding_nimprof script.hrd"
+  echo "       cat profile_results.txt"
+
+task profile_nimprof, "Build and run nimprof on the sieve benchmark":
+  ## Build with nimprof and run benchmark/sieve.hrd, then print profile_results.txt
+  exec "nim c --profiler:on --stacktrace:on --lineDir:on -o:harding_nimprof src/harding/repl/harding.nim"
+  exec "./harding_nimprof benchmark/sieve.hrd"
+  exec "cat profile_results.txt"
+
+task profile_perf, "Build and run perf on the sieve benchmark (outputs perf.data)":
+  ## Build release+debuginfo binary and record a perf profile of benchmark/sieve.hrd
+  ## Results are in perf.data; view with: perf report --stdio   or   perf report (TUI)
+  exec "nim c -d:release --debuginfo --lineDir:on -o:harding_perf src/harding/repl/harding.nim"
+  exec "perf record -F 99 --call-graph dwarf -o perf.data ./harding_perf benchmark/sieve.hrd"
+  exec "perf report --stdio --no-children -n | head -60"
+  echo ""
+  echo "Full report: perf report --stdio"
+  echo "Interactive: perf report"
+  echo "FlameGraph:"
+  echo "  git clone https://github.com/brendangregg/FlameGraph /tmp/FlameGraph"
+  echo "  perf script | /tmp/FlameGraph/stackcollapse-perf.pl | /tmp/FlameGraph/flamegraph.pl > flame.svg"
