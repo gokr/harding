@@ -235,6 +235,21 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       code.add("    nilValue())")
       return code
 
+  of "do:":
+    # Inline do: for Arrays when block is literal
+    # Compiles to: for i, elem in arr.arrayVal: block(elem)
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+      let bodyBlock = node.arguments[0].BlockNode
+      if bodyBlock.parameters.len >= 1:
+        let elemName = bodyBlock.parameters[0]
+        var code = "(block:\n"
+        code.add("    for hardingDoIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        for stmt in bodyBlock.body:
+          let stmtCode = genStatement(ctx, stmt)
+          code.add(indentBlock(stmtCode, 6))
+        code.add("    nilValue())")
+        return code
+
   of "timesRepeat:":
     # Inline timesRepeat when body is a literal block (expression context - needs value)
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
