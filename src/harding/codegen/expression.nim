@@ -242,12 +242,93 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
+        # Create a new context with the loop variable as a local
+        var doCtx = GenContext(
+          cls: ctx.cls,
+          inBlock: ctx.inBlock,
+          mixed: ctx.mixed,
+          locals: ctx.locals & @[elemName],
+          parameters: ctx.parameters,
+          globals: ctx.globals,
+          blockRegistry: ctx.blockRegistry
+        )
         var code = "(block:\n"
         code.add("    for hardingDoIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
         for stmt in bodyBlock.body:
-          let stmtCode = genStatement(ctx, stmt)
+          let stmtCode = genStatement(doCtx, stmt)
           code.add(indentBlock(stmtCode, 6))
         code.add("    nilValue())")
+        return code
+
+  of "collect:":
+    # Inline collect: for Arrays when block is literal
+    # Compiles to: result = @[]; for elem in arr: result.add(block(elem)); return result
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+      let bodyBlock = node.arguments[0].BlockNode
+      if bodyBlock.parameters.len >= 1:
+        let elemName = bodyBlock.parameters[0]
+        # Create a new context with the loop variable as a local
+        var collectCtx = GenContext(
+          cls: ctx.cls,
+          inBlock: ctx.inBlock,
+          mixed: ctx.mixed,
+          locals: ctx.locals & @[elemName],
+          parameters: ctx.parameters,
+          globals: ctx.globals,
+          blockRegistry: ctx.blockRegistry
+        )
+        var code = "(block:\n"
+        code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
+        code.add("    for hardingCollectIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        # Generate all statements except the last one
+        for i in 0..<bodyBlock.body.len-1:
+          let stmtCode = genStatement(collectCtx, bodyBlock.body[i])
+          code.add(indentBlock(stmtCode, 6))
+        # The last statement's value is what we collect
+        if bodyBlock.body.len > 0:
+          let lastStmt = bodyBlock.body[^1]
+          let valueCode = genExpression(collectCtx, lastStmt)
+          code.add("      hardingCollectResult.add(" & valueCode & ")\n")
+        code.add("    NodeValue(kind: vkArray, arrayVal: hardingCollectResult))")
+        return code
+
+  of "select:":
+    # Inline select: for Arrays when block is literal
+    # Compiles to: result = @[]; for elem in arr: if block(elem): result.add(elem); return result
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+      let bodyBlock = node.arguments[0].BlockNode
+      if bodyBlock.parameters.len >= 1:
+        let elemName = bodyBlock.parameters[0]
+        # Create a new context with the loop variable as a local
+        var selectCtx = GenContext(
+          cls: ctx.cls,
+          inBlock: ctx.inBlock,
+          mixed: ctx.mixed,
+          locals: ctx.locals & @[elemName],
+          parameters: ctx.parameters,
+          globals: ctx.globals,
+          blockRegistry: ctx.blockRegistry
+        )
+        var code = "(block:\n"
+        code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
+        code.add("    for hardingSelectIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        # Generate the block body to get the condition value
+        var bodyCode = ""
+        for stmt in bodyBlock.body:
+          let stmtCode = genStatement(selectCtx, stmt)
+          if stmtCode.len > 0:
+            bodyCode.add(stmtCode)
+            bodyCode.add("\n")
+        if bodyCode.len > 0:
+          code.add("      if isTruthy(")
+          # For simple expressions, use the last statement's expression
+          # For now, assume the last statement is the condition
+          let lastStmt = bodyBlock.body[^1]
+          let condCode = genExpression(selectCtx, lastStmt)
+          code.add(condCode)
+          code.add("):\n")
+          code.add("        hardingSelectResult.add(" & elemName & ")\n")
+        code.add("    NodeValue(kind: vkArray, arrayVal: hardingSelectResult))")
         return code
 
   of "timesRepeat:":
