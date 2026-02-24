@@ -121,6 +121,7 @@ proc main() =
     # Start REPL
     var ctx = newDoitContext(maxStackDepth = opts.maxStackDepth, hardingHome = opts.hardingHome,
                              bootstrapFile = opts.bootstrapFile)
+    ctx.showResults = opts.showResults
     runREPL(ctx)
   elif opts.positionalArgs.len == 1:
     # Check if it's a file
