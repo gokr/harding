@@ -51,67 +51,67 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string, mixed: bool 
   return output
 
 proc genClassConstants*(cls: ClassInfo): string =
-  ## Generate class constant declarations
+  ## Generate Nim type definition for a class
   let clsName = mangleClass(cls.name)
-
+  var parentName = "HardingObject"
+  if cls.parent != nil:
+    parentName = mangleClass(cls.parent.name) & "Obj"
+  let slots = cls.getAllSlots()
+  
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
-
-  # Slot count constant
-  let slots = cls.getAllSlots()
-  output.add(fmt("const {clsName}_slotCount* = {slots.len}\n"))
-
-  # Slot name array
-  if slots.len > 0:
-    let slotNames = slots.mapIt(fmt("\"{it.name}\"")).join(", ")
-    output.add(fmt("\nconst {clsName}_slotNames*: array[{slots.len}, string] = [\n"))
-    output.add("  " & slotNames & "\n")
-    output.add("]\n")
-
-  # Method count
-  output.add(fmt("\nconst {clsName}_methodCount = {cls.methods.len}\n"))
-
+  
+  # Generate Nim object type with slots as fields
+  output.add("type\n")
+  output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
+  
+  # Slot fields - use NodeValue for flexibility in Harding
+  for slot in slots:
+    if not slot.isInherited:
+      let slotName = mangleSlot(slot.name)
+      output.add(fmt("    {slotName}*: NodeValue\n"))
+  
+  output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
+  
+  # Constructor
+  output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
+  output.add(fmt("  ## Create new {cls.name} instance\n"))
+  output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  for slot in slots:
+    if not slot.isInherited:
+      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
-
+  
   return output
 
 proc genClassInit*(cls: ClassInfo): string =
-  ## Generate class initialization procedure
+  ## Generate class initialization procedure (legacy - kept for compatibility)
   let clsName = mangleClass(cls.name)
-
+  
   return fmt("""
-proc init_{clsName}*(parent: ref RuntimeObject = nil): ref RuntimeObject {{.cdecl, exportc.}} =
-  ## Initialize {cls.name} class
-  ##
-  var obj = if parent != nil:
-              parent.clone()
-            else:
-              rootObject.clone()
-
-  obj.tags.add("{cls.name}")
-
-  # Initialize slots
-  obj.slots.setLen({cls.getAllSlots().len()})
-
-  # Register methods
-  for meth in obj.methods.values:
-    meth.nativeImpl = nil  # No native implementation yet
-
-  return obj
+# Legacy class init - use new{clsName}() constructor instead
+# proc init_{clsName}*(): {clsName} = new{clsName}()
 
 """)
 
 proc isClassDefinition(node: Node): bool =
-  ## Check if a node is a class definition (derive: chain)
-  if node.kind != nkMessage:
-    return false
-  let msg = node.MessageNode
-  # Check for Class := Parent derive: ... pattern
-  if msg.selector == "at:put:":
-    if msg.arguments.len >= 2 and msg.arguments[1].kind == nkMessage:
-      let valMsg = msg.arguments[1].MessageNode
-      if valMsg.selector == "derive:" or valMsg.selector == "derive":
+  ## Check if a node is a class definition (derive: or deriveWithAccessors: chain)
+  # Check for Class := Parent derive: ... pattern (nkAssign from :=)
+  if node.kind == nkAssign:
+    let assign = node.AssignNode
+    if assign.expression != nil and assign.expression.kind == nkMessage:
+      let valMsg = assign.expression.MessageNode
+      if valMsg.selector in ["derive:", "derive", "deriveWithAccessors:", "deriveWithAccessors"]:
         return true
+    return false
+  # Check for at:put: message pattern
+  elif node.kind == nkMessage:
+    let msg = node.MessageNode
+    if msg.selector == "at:put:":
+      if msg.arguments.len >= 2 and msg.arguments[1].kind == nkMessage:
+        let valMsg = msg.arguments[1].MessageNode
+        if valMsg.selector in ["derive:", "derive", "deriveWithAccessors:", "deriveWithAccessors"]:
+          return true
   return false
 
 proc isMethodDefinition(node: Node): bool =
@@ -215,6 +215,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
+
+  # Generate base HardingObject type first
+  output.add("# Base Object Type\n")
+  output.add("##################\n\n")
+  output.add("type\n")
+  output.add("  HardingObject* {.inheritable.} = object\n")
+  output.add("    className*: string\n")
+  output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
   # Generate for each class
   for cls in analysis.classes.values:
