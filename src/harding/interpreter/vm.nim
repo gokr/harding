@@ -397,13 +397,6 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     if name in interp.currentActivation.locals:
       debug("setVariable: storing ", name, " in locals")
       interp.currentActivation.locals[name] = value
-      # Also update the capturedEnv cell if this variable is captured
-      # This is crucial for closure variable sharing between blocks
-      let currentMethod = interp.currentActivation.currentMethod
-      if currentMethod != nil and currentMethod.capturedEnvInitialized and 
-         currentMethod.capturedEnv.len > 0 and name in currentMethod.capturedEnv:
-        currentMethod.capturedEnv[name].value = value
-        debug("setVariable: updated capturedEnv cell for ", name)
       return
 
     # Walk up the sender chain to find existing variable in outer scopes

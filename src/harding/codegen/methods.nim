@@ -96,9 +96,9 @@ proc genComparisonFastPath*(op: string): string =
   of "<=": nimOp = "<="
   of ">": nimOp = ">"
   of ">=": nimOp = ">="
-  of "=": nimOp = "=="
+  of "=", "==": nimOp = "=="
   of "~=": nimOp = "!="
-  else: nimOp = "!="
+  else: nimOp = "=="
 
   var output = "\n  # Fast path: integer comparison\n"
   output.add("  if a.kind == vkInt and b.kind == vkInt:\n")
@@ -376,6 +376,111 @@ proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
   let aStr = a.toString()
   let bStr = b.toString()
   return NodeValue(kind: vkString, strVal: aStr & bStr)
+
+# Collection access primitives
+
+proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
+  ## Collection access: receiver at: key
+  ## Works for both Arrays (1-based indexing) and Tables
+  if receiver.kind == vkArray and key.kind == vkInt:
+    let idx = key.intVal - 1  # Convert to 0-based
+    if idx >= 0 and idx < receiver.arrayVal.len:
+      return receiver.arrayVal[idx]
+  elif receiver.kind == vkTable:
+    if receiver.tableVal.hasKey(key):
+      return receiver.tableVal[key]
+  return NodeValue(kind: vkNil)
+
+proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
+  ## Collection assignment: receiver at: key put: value
+  ## Works for both Arrays (1-based indexing) and Tables
+  if receiver.kind == vkArray and key.kind == vkInt:
+    let idx = key.intVal - 1  # Convert to 0-based
+    if idx >= 0 and idx < receiver.arrayVal.len:
+      var newArr = receiver
+      newArr.arrayVal[idx] = value
+      return newArr
+  elif receiver.kind == vkTable:
+    var newTbl = receiver
+    newTbl.tableVal[key] = value
+    return newTbl
+  return receiver
+
+# Array primitives
+
+proc nt_size*(arr: NodeValue): NodeValue =
+  ## Array size
+  if arr.kind == vkArray:
+    return NodeValue(kind: vkInt, intVal: arr.arrayVal.len)
+  return NodeValue(kind: vkNil)
+
+proc nt_last*(arr: NodeValue): NodeValue =
+  ## Array last element
+  if arr.kind == vkArray and arr.arrayVal.len > 0:
+    return arr.arrayVal[^1]
+  return NodeValue(kind: vkNil)
+
+# Table primitives
+
+proc nt_table_at*(tbl: NodeValue, key: NodeValue): NodeValue =
+  ## Table access: table at: key
+  if tbl.kind == vkTable:
+    if tbl.tableVal.hasKey(key):
+      return tbl.tableVal[key]
+  return NodeValue(kind: vkNil)
+
+proc nt_table_atput*(tbl: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
+  ## Table assignment: table at: key put: value
+  if tbl.kind == vkTable:
+    var newTbl = tbl
+    newTbl.tableVal[key] = value
+    return newTbl
+  return tbl
+
+proc nt_table_keys*(tbl: NodeValue): NodeValue =
+  ## Table keys
+  if tbl.kind == vkTable:
+    var keys: seq[NodeValue] = @[]
+    for key in tbl.tableVal.keys:
+      keys.add(key)
+    return NodeValue(kind: vkArray, arrayVal: keys)
+  return NodeValue(kind: vkNil)
+
+proc nt_table_size*(tbl: NodeValue): NodeValue =
+  ## Table size
+  if tbl.kind == vkTable:
+    return NodeValue(kind: vkInt, intVal: tbl.tableVal.len)
+  return NodeValue(kind: vkNil)
+
+# Number primitives
+
+proc nt_abs*(n: NodeValue): NodeValue =
+  ## Absolute value
+  if n.kind == vkInt:
+    return NodeValue(kind: vkInt, intVal: abs(n.intVal))
+  if n.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: abs(n.floatVal))
+  return NodeValue(kind: vkNil)
+
+proc nt_even*(n: NodeValue): NodeValue =
+  ## Is even
+  if n.kind == vkInt:
+    return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 == 0)
+  return NodeValue(kind: vkNil)
+
+proc nt_odd*(n: NodeValue): NodeValue =
+  ## Is odd
+  if n.kind == vkInt:
+    return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 != 0)
+  return NodeValue(kind: vkNil)
+
+proc nt_negated*(n: NodeValue): NodeValue =
+  ## Negated value
+  if n.kind == vkInt:
+    return NodeValue(kind: vkInt, intVal: -n.intVal)
+  if n.kind == vkFloat:
+    return NodeValue(kind: vkFloat, floatVal: -n.floatVal)
+  return NodeValue(kind: vkNil)
 
 # Global variable support
 
