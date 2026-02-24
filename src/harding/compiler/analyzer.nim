@@ -38,14 +38,11 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
     if pos >= remaining.len:
       break
 
-    # Extract slot name up to colon or comma or end
+    # Extract slot name up to colon, comma, whitespace, or end
     var nameStart = pos
-    while pos < remaining.len and remaining[pos] notin {':', ',', ')'}:
+    while pos < remaining.len and remaining[pos] notin {':', ',', ')', ' ', '\t'}:
       inc pos
     let slotName = remaining[nameStart..<pos].strip()
-    
-    if slotName.len > 0:
-      result.add((slotName, tcNone))
 
     # Skip past the slot name
     while pos < remaining.len and remaining[pos] in {':', ',', ' ', '\t'}:
@@ -53,25 +50,25 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
     if pos < remaining.len and remaining[pos] == ')':
       break
 
-    # Extract type hint after colon
-    while pos < remaining.len and remaining[pos].isSpaceAscii():
-      inc pos
-
-    var typeStart = pos
-    var typeEnd = pos
-    while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
-      inc pos
-      typeEnd = pos
-
-    let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
-    let constraint = if typeHint.len > 0: parseTypeHint(typeHint) else: tcNone
+    # Extract type hint after colon (only if we hit a colon)
+    var constraint = tcNone
+    if pos < remaining.len and remaining[pos] == ':':
+      inc pos  # skip the colon
+      while pos < remaining.len and remaining[pos].isSpaceAscii():
+        inc pos
+      var typeStart = pos
+      var typeEnd = pos
+      while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
+        inc pos
+        typeEnd = pos
+      let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
+      if typeHint.len > 0:
+        constraint = parseTypeHint(typeHint)
 
     result.add((slotName, constraint))
 
-    # Skip to next slot or end
-    while pos < remaining.len and remaining[pos] notin {',', ')'}:
-      inc pos
-    if pos < remaining.len and remaining[pos] == ',':
+    # Skip whitespace and commas to get to next slot name
+    while pos < remaining.len and remaining[pos] in {',', ' ', '\t'}:
       inc pos
 
 proc extractDeriveChain*(node: Node): (string, string, string) =

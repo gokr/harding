@@ -135,7 +135,8 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
   return (defs, topLevel)
 
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
-                  blockReg: BlockRegistry = nil, mixed: bool = false): string =
+                  blockReg: BlockRegistry = nil, mixed: bool = false,
+                  analysis: AnalysisResult = nil): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -154,7 +155,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("\n")
 
   # Create generation context for top-level code, sharing block registry if provided
-  var genCtx = newGenContext(nil, mixed)
+  var classReg: TableRef[string, ClassInfo] = nil
+  if analysis != nil:
+    classReg = newTable[string, ClassInfo]()
+    for name, cls in analysis.classes:
+      classReg[name] = cls
+  var genCtx = newGenContext(nil, mixed, classReg)
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -307,7 +313,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, mixed))
+  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, mixed, analysis))
 
   # Module initialization
   output.add("\n")
