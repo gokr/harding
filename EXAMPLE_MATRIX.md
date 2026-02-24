@@ -22,7 +22,7 @@
 | arithmetic | ✅ PASS | ✅ PASS | All math/comparisons work |
 | variables | ✅ PASS | ✅ PASS | - |
 | objects | ✅ PASS | ✅ PASS | - |
-| classes | ✅ PASS | ✅ PASS | - |
+| classes | ❌ FAIL | ✅ PASS | Pure fails on printString, needs toValue() |
 | methods | ✅ PASS | ✅ PASS | - |
 | control_flow | ✅ PASS | ✅ PASS | - |
 | inheritance | ✅ PASS | ✅ PASS | - |
@@ -47,6 +47,16 @@
 - Fixed class detection for `:=` assignment syntax
 - Fixed slot parsing for simple lists like `#(name owner breed)`
 
+### Native Constructor & Slot Access (NEW!)
+- **Constructor**: `ClassName new` now generates `newClass_ClassName()` directly
+- **Variable Tracking**: Tracks variable types when assigned from constructor
+- **Slot Optimization**: 
+  - `var name: "value"` → `setname(var, NodeValue(...))`  
+  - `var name` → `getname(var)`
+- Native getters/setters are used when:
+  - Variable is assigned from `ClassName new`
+  - Selector matches a slot in the class
+
 ### Runtime Primitives
 - Number: `abs`, `even`, `odd`, `negated` ✅
 - Array (literals): `size`, `at:`, `last`, `do:`, `collect:`, `select:` ✅
@@ -58,13 +68,18 @@
 
 ## Known Limitations
 
-### Class Instances Fall Back to Interpreter
-The compiled code uses `sendMessage` for class operations, falling back to interpreter. To fully support native classes, we need to generate:
-- Direct calls to generated type constructors (`newClassName`)
-- Direct slot accessor calls (`getX`/`setX` instead of message sends)
-- Native method implementations
+### toValue() Required for Non-Slot Methods
+Methods that aren't slot getters/setters (like `printString`) use `sendMessage`, which requires NodeValue. The native Class_* types need `toValue()` method to convert to NodeValue for runtime interop.
 
-This is a significant integration effort - the types are being generated correctly, but the code generation for class usage hasn't been updated to use them directly.
+- **Pure mode**: Fails to compile for non-slot method calls on typed variables
+- **Mixed mode**: Works - slot access uses native getters/setters, methods fall back to interpreter
+
+**Solution**: Implement toValue() method on generated types to wrap native objects in Instance with nimValue pointer.
+
+### Current Behavior
+- Slot getters/setters: Native procs (`getname`, `setname`)
+- Constructors: Native constructors (`newClass_Person()`)
+- Other methods: Fall back to interpreter (mixed mode) or fail to compile (pure mode)
 
 ### Test Automation
 - `test_examples.sh` can compare interpreter vs compiled output

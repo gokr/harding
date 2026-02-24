@@ -81,7 +81,7 @@ proc genClassConstants*(cls: ClassInfo): string =
     if not slot.isInherited:
       output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
-  
+
   return output
 
 proc genClassInit*(cls: ClassInfo): string =

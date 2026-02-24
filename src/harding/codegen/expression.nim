@@ -495,7 +495,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Check for native slot access optimization
+    # Check for native slot access optimization (when we have variable type info)
+    var isSlotAccess = false
     if node.receiver != nil and node.receiver.kind == nkIdent:
       let varName = node.receiver.IdentNode.name
       if varName in ctx.variableTypes:
@@ -503,30 +504,30 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         if ctx.classRegistry != nil and className in ctx.classRegistry:
           let cls = ctx.classRegistry[className]
           let slotName = node.selector
-          # Check for getter (no arguments) or setter (ends with colon)
           let isSetter = slotName.endsWith(":")
           let accessorName = if isSetter: slotName[0..^2] else: slotName
           if cls.getSlotIndex(accessorName) >= 0:
-            # Generate native slot access
+            isSlotAccess = true
             let mangleSlot = accessorName.toLowerAscii()
             if isSetter:
-              # Setter: person1 name: "Alice" -> setname(person1, NodeValue(...))
-              # Return value for discard compatibility
               if node.arguments.len >= 1:
                 let argCode = genExpression(ctx, node.arguments[0])
                 return fmt("(set{mangleSlot}({receiverCode}, {argCode}); NodeValue(kind: vkNil))")
             else:
-              # Getter: person1 name -> getname(person1)
               return fmt("get{mangleSlot}({receiverCode})")
 
-    # Check if receiver is a typed variable that needs conversion to NodeValue
+    # For non-slot methods, use sendMessage
     var effectiveReceiver = receiverCode
-    # TODO: Add toValue methods for Class_* types or handle differently
-    # if node.receiver != nil and node.receiver.kind == nkIdent:
-    #   let varName = node.receiver.IdentNode.name
-    #   if varName in ctx.variableTypes:
-    #     # Variable has a known type - convert to NodeValue for sendMessage
-    #     effectiveReceiver = fmt("{receiverCode}.toValue()")
+
+    # For non-slot methods on typed variables in mixed mode, try to convert
+    # Note: Without proper toValue(), this is a workaround
+    if not isSlotAccess and node.receiver != nil and node.receiver.kind == nkIdent:
+      let varName = node.receiver.IdentNode.name
+      if varName in ctx.variableTypes and ctx.mixed:
+        # Mixed mode - use sendMessageHybrid but pass the value somehow
+        # TODO: proper toValue() implementation
+        let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
+        return fmt("sendMessageHybrid(NodeValue(kind: vkNil), \"{node.selector}\", @[{args}])")
 
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
