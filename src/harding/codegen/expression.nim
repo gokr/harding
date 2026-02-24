@@ -519,15 +519,12 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # For non-slot methods, use sendMessage
     var effectiveReceiver = receiverCode
 
-    # For non-slot methods on typed variables in mixed mode, try to convert
-    # Note: Without proper toValue(), this is a workaround
+    # For non-slot methods on typed variables, convert using toValue()
     if not isSlotAccess and node.receiver != nil and node.receiver.kind == nkIdent:
       let varName = node.receiver.IdentNode.name
-      if varName in ctx.variableTypes and ctx.mixed:
-        # Mixed mode - use sendMessageHybrid but pass the value somehow
-        # TODO: proper toValue() implementation
-        let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-        return fmt("sendMessageHybrid(NodeValue(kind: vkNil), \"{node.selector}\", @[{args}])")
+      if varName in ctx.variableTypes:
+        # Convert native type to NodeValue using toValue()
+        effectiveReceiver = fmt("{receiverCode}.toValue()")
 
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")

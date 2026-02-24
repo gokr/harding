@@ -82,6 +82,22 @@ proc genClassConstants*(cls: ClassInfo): string =
       output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
+  # toValue - convert native type to NodeValue for runtime interop
+  # Note: Class registration in runtime is complex - for now, create basic Instance
+  # This allows sendMessage to be called, but method lookup needs proper class registration
+  output.add(fmt("proc toValue*(self: {clsName}): NodeValue =\n"))
+  output.add(fmt("  ## Convert {cls.name} to NodeValue for sendMessage interop\n"))
+  output.add(fmt("  # Try to find class in hybridInterpreter globals\n"))
+  output.add(fmt("  var clsRef: Class = nil\n"))
+  output.add(fmt("  if hybridInterpreter != nil and \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("    let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
+  output.add(fmt("    if clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
+  output.add(fmt("      clsRef = clsVal.instVal.class\n"))
+  output.add(fmt("  # Create instance wrapper\n"))
+  output.add(fmt("  let inst = Instance(kind: ikObject, class: clsRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
+  output.add(fmt("  return NodeValue(kind: vkInstance, instVal: inst)\n"))
+  output.add("\n")
+
   return output
 
 proc genClassInit*(cls: ClassInfo): string =
@@ -150,8 +166,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 
   # Initialize runtime
   output.add("  initRuntime()\n")
-  if mixed:
-    output.add("  initHybridRuntime()\n")
+  output.add("  initHybridRuntime()\n")
   output.add("\n")
 
   # Create generation context for top-level code, sharing block registry if provided
@@ -324,6 +339,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 proc init_{moduleName}*() =
   ## Initialize {moduleName} module
   initRuntime()
+  initHybridRuntime()
   echo "Module loaded: {moduleName}"
 
 when isMainModule:
