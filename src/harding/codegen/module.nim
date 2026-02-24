@@ -62,8 +62,11 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add("###################\n\n")
   
   # Generate Nim object type with slots as fields
+  # TODO: Eventually when we generate native methods directly, we can remove
+  # classRef and toValue() - methods will be called directly instead of via sendMessage
   output.add("type\n")
   output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
+  output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
   
   # Slot fields - use NodeValue for flexibility in Harding
   for slot in slots:
@@ -77,24 +80,27 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
   output.add(fmt("  ## Create new {cls.name} instance\n"))
   output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  # TODO: User-defined classes aren't automatically in globals. This is a fundamental
+  # limitation - we'd need interpreter changes to register classes. For now, use Object.
+  output.add(fmt("  if hybridInterpreter != nil:\n"))
+  output.add(fmt("    if \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
+  output.add(fmt("      if clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = clsVal.instVal.class\n"))
+  output.add(fmt("    elif \"Object\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let objVal = hybridInterpreter.globals[][\"Object\"]\n"))
+  output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = objVal.instVal.class\n"))
   for slot in slots:
     if not slot.isInherited:
       output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
-  # toValue - convert native type to NodeValue for runtime interop
-  # Note: Class registration in runtime is complex - for now, create basic Instance
-  # This allows sendMessage to be called, but method lookup needs proper class registration
+  # toValue - convert native type to NodeValue using stored classRef
+  # TODO: Remove when native method generation is complete
   output.add(fmt("proc toValue*(self: {clsName}): NodeValue =\n"))
   output.add(fmt("  ## Convert {cls.name} to NodeValue for sendMessage interop\n"))
-  output.add(fmt("  # Try to find class in hybridInterpreter globals\n"))
-  output.add(fmt("  var clsRef: Class = nil\n"))
-  output.add(fmt("  if hybridInterpreter != nil and \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
-  output.add(fmt("    let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
-  output.add(fmt("    if clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
-  output.add(fmt("      clsRef = clsVal.instVal.class\n"))
-  output.add(fmt("  # Create instance wrapper\n"))
-  output.add(fmt("  let inst = Instance(kind: ikObject, class: clsRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
+  output.add(fmt("  let inst = Instance(kind: ikObject, class: self.classRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
   output.add(fmt("  return NodeValue(kind: vkInstance, instVal: inst)\n"))
   output.add("\n")
 
