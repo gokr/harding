@@ -1,4 +1,4 @@
-import std/[tables, strformat]
+import std/[tables, strformat, os, logging]
 import ../core/types
 import ../core/scheduler
 import ../interpreter/vm
@@ -177,14 +177,22 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 var hybridInterpreter*: Interpreter = nil
 var hybridScheduler*: SchedulerContext = nil
 
-proc initHybridRuntime*() =
+proc initHybridRuntime*(sourceFiles: seq[string] = @[]) =
   ## Initialize the hybrid runtime (interpreter embedded in compiled code)
+  ## sourceFiles: optional list of .hrd files to load (creates classes in interpreter)
   if hybridInterpreter == nil:
     hybridScheduler = newSchedulerContext()
     hybridInterpreter = hybridScheduler.mainProcess.getInterpreter()
     initGlobals(hybridInterpreter)
     initSymbolTable()
     loadStdlib(hybridInterpreter)
+    # Load user source files to register classes
+    for srcFile in sourceFiles:
+      if fileExists(srcFile):
+        let source = readFile(srcFile)
+        let (_, err) = hybridInterpreter.evalStatements(source)
+        if err.len > 0:
+          warn("Failed to load source file ", srcFile, ": ", err)
 
 proc sendMessageHybrid*(receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =

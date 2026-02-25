@@ -220,7 +220,7 @@ proc compileFile(config: Config): bool =
   let outputPath = outputDir / moduleName & ".nim"
 
   var ctx = newCompiler(outputDir, moduleName)
-  let nimCode = genModule(ctx, nodes, moduleName, config.mixed)
+  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

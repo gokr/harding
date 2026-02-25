@@ -80,12 +80,14 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
   output.add(fmt("  ## Create new {cls.name} instance\n"))
   output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
-  # TODO: User-defined classes aren't automatically in globals. This is a fundamental
-  # limitation - we'd need interpreter changes to register classes. For now, use Object.
+  # TODO: Get class reference from globals (temporary workaround - see above)
+  # This registers the class so toValue() can create proper Instance wrapper
   output.add(fmt("  if hybridInterpreter != nil:\n"))
   output.add(fmt("    if \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
   output.add(fmt("      let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
-  output.add(fmt("      if clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
+  output.add(fmt("      if clsVal.kind == vkClass:\n"))
+  output.add(fmt("        result.classRef = clsVal.classVal\n"))
+  output.add(fmt("      elif clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
   output.add(fmt("        result.classRef = clsVal.instVal.class\n"))
   output.add(fmt("    elif \"Object\" in hybridInterpreter.globals[]:\n"))
   output.add(fmt("      let objVal = hybridInterpreter.globals[][\"Object\"]\n"))
@@ -158,7 +160,7 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
                   blockReg: BlockRegistry = nil, mixed: bool = false,
-                  analysis: AnalysisResult = nil): string =
+                  analysis: AnalysisResult = nil, sourceFile: string = ""): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -172,7 +174,10 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 
   # Initialize runtime
   output.add("  initRuntime()\n")
-  output.add("  initHybridRuntime()\n")
+  if sourceFile.len > 0:
+    output.add(fmt("  initHybridRuntime(@[\"{sourceFile}\"])\n"))
+  else:
+    output.add("  initHybridRuntime()\n")
   output.add("\n")
 
   # Create generation context for top-level code, sharing block registry if provided
@@ -223,9 +228,10 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   return output
 
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
-                moduleName: string, mixed: bool = false): string =
+                moduleName: string, mixed: bool = false, sourceFile: string = ""): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
+  ## sourceFile: path to source .hrd file for class registration in interpreter
   var output = ""
 
   output.add(genModuleHeader(ctx, moduleName, mixed))
@@ -334,7 +340,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, mixed, analysis))
+  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, mixed, analysis, sourceFile))
 
   # Module initialization
   output.add("\n")
