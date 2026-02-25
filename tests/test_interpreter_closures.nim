@@ -156,26 +156,27 @@ suite "Interpreter: Lexical Closures":
     check(result[0][^1].intVal == 200)
 
   test "nested closures capture multiple levels":
-    let result = interp.evalStatements("""
-    Maker := Object derive.
-    Maker selector: #makeAdder: put: [ :x |
-      ^[ :y |
-        ^[ :z |
-          ^x + y + z
-        ]
-      ]
-    ].
+    let code = """
+Maker := Object derive.
+Maker selector: #makeAdder: put: [ :x |
+  ^[ :y |
+    ^[ :z |
+      ^x + y + z
+    ]
+  ]
+].
 
-    Maker2 := Maker new.
-    Add5 := Maker2 makeAdder: 5.
-    Add5and10 := Add5 value: 10.
-    Result := Add5and10 value: 15
-    """)
+Maker2 := Maker new.
+Add5 := Maker2 makeAdder: 5.
+Add5and10 := Add5 value: 10.
+Add5and10 value: 15
+"""
+    let (result, err) = interp.doit(code)
 
-    if result[1].len > 0:
-      echo "Error: ", result[1]
-    check(result[1].len == 0)
-    check(result[0][^1].intVal == 30)
+    if err.len > 0:
+      echo "Error: ", err
+    check(err.len == 0)
+    check(result.intVal == 30)
 
   test "closures as object methods capture instance variables":
     skip()  # Complex closure behavior needs review
