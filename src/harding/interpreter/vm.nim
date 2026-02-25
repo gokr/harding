@@ -1292,7 +1292,7 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
                              "(unknown)"
         debug("  AS[", idx, "] = ", methSelector)
 
-      # Create ExceptionContext with full signal point state
+          # Create ExceptionContext with full signal point state
       # Mark captured activations so they are not returned to the pool
       if interp.currentActivation != nil:
         interp.currentActivation.wasCaptured = true
@@ -1331,12 +1331,10 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
           newWorkQueue.add(interp.workQueue[j])
         else:
           debug("primitiveSignal: removing frame ", frameKind, " at index ", j)
-      # Also keep wfPopHandler if present (for cleanup when handler completes)
+      # Keep remaining frames after handler.workQueueDepth (includes code after signal for resume)
       for j in handler.workQueueDepth..<interp.workQueue.len:
-        if interp.workQueue[j].kind == wfPopHandler:
-          newWorkQueue.add(interp.workQueue[j])
-          debug("primitiveSignal: keeping wfPopHandler at index ", j)
-          break
+        newWorkQueue.add(interp.workQueue[j])
+        debug("primitiveSignal: keeping frame ", interp.workQueue[j].kind, " at index ", j)
       interp.workQueue = newWorkQueue
       debug("primitiveSignal: workQueue.len after filter=", interp.workQueue.len)
       interp.evalStack.setLen(handler.evalStackDepth)
@@ -1492,6 +1490,8 @@ proc primitiveExceptionResumeImpl(interp: var Interpreter, self: Instance, args:
   # the activation stack is at the signal point's depth.
   var popHandlerIdx = -1
   let savedWQ = ctx.signalWorkQueue
+  
+  debug("RESUME: savedWQ.len=", savedWQ.len)
 
   # Find wfPopHandler
   for i in 0..<savedWQ.len:
@@ -1500,11 +1500,19 @@ proc primitiveExceptionResumeImpl(interp: var Interpreter, self: Instance, args:
       break
 
   if popHandlerIdx >= 0 and popHandlerIdx + 1 < savedWQ.len:
-    interp.workQueue = savedWQ[popHandlerIdx + 1..^1]
-    debug("resume: restored work queue from index ", popHandlerIdx + 1, " len = ", interp.workQueue.len)
+    # Skip wfPopActivation/wfReturnValue frames that were for activations we already popped
+    var startIdx = popHandlerIdx + 1
+    while startIdx < savedWQ.len and (savedWQ[startIdx].kind == wfPopActivation or savedWQ[startIdx].kind == wfReturnValue):
+      startIdx += 1
+    if startIdx < savedWQ.len:
+      interp.workQueue = savedWQ[startIdx..^1]
+      debug("resume: restored work queue from index ", startIdx, " len = ", interp.workQueue.len)
+    else:
+      interp.workQueue = @[]
+      debug("resume: no executable frames after wfPopHandler")
   else:
     interp.workQueue = @[]
-    debug("resume: no wfPopHandler found, empty queue")
+    debug("resume: no wfPopHandler found at popHandlerIdx=", popHandlerIdx, ", savedWQ.len=", savedWQ.len)
 
   # Restore eval stack from signal point
   interp.evalStack = ctx.signalEvalStack
