@@ -67,11 +67,11 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
 
     result.add((slotName, constraint))
 
-    # Skip past any trailing characters to next slot
-    while pos < remaining.len and remaining[pos] notin {',', ')'}:
+    # Skip past any trailing whitespace and commas to next slot
+    while pos < remaining.len and remaining[pos] in {' ', '\t', ','}:
       inc pos
-    if pos < remaining.len and remaining[pos] == ',':
-      inc pos
+
+  return result
 
 proc extractDeriveChain*(node: Node): (string, string, string) =
   ## Extract (name, parent, typeList) from derive: message
