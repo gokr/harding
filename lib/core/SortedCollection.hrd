@@ -52,10 +52,10 @@ SortedCollection>>add: anObject [
         ^anObject
     ].
 
-    # Binary search for insertion point
-    low := 1.
-    high := self size.
-    insertIndex := high + 1.  # Default to end
+    # Binary search for insertion point (0-based)
+    low := 0.
+    high := self size - 1.
+    insertIndex := self size.  # Default to end (insert after last element)
 
     [ low <= high ] whileTrue: [
         mid := (low + high) // 2.
@@ -67,15 +67,15 @@ SortedCollection>>add: anObject [
             ].
     ].
 
-    # Insert at insertIndex (1-based)
+    # Insert at insertIndex (0-based)
     self insert: anObject at: insertIndex.
     ^anObject
 ]
 
 SortedCollection>>insert: anObject at: index [
-    # Insert object at specific index, shifting elements
+    # Insert object at specific index (0-based), shifting elements
     | i idx |
-    i := self size.
+    i := self size - 1.
     elements add: nil.  # Expand array by 1
     idx := index.
     [ i >= idx ] whileTrue: [
@@ -168,13 +168,13 @@ SortedCollection>>indexOf: anObject [
 ]
 
 SortedCollection>>first [
-    # Smallest element (at index 1)
-    ^self at: 1
+    # Smallest element (at index 0)
+    ^self at: 0
 ]
 
 SortedCollection>>last [
     # Largest element (at end)
-    ^self at: (self size)
+    ^self at: (self size - 1)
 ]
 
 SortedCollection>>select: aBlock [

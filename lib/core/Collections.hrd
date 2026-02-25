@@ -159,14 +159,14 @@ Array>>removeFirst [
   # Remove and return first element.
   | first |
   first := self first.
-  self removeAt: 1.  # 1-based indexing for Harding arrays
+  self removeAt: 0.  # 0-based indexing
   ^ first
 ]
 
 Array>>removeLast [
   # Remove and return last element.
   | last index |
-  index := self size.
+  index := self size - 1.
   last := self at: index.
   self removeAt: index.
   ^ last
