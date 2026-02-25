@@ -828,11 +828,13 @@ proc isMixin*(cls: Class): bool =
 
 proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class =
   ## Create a new Class with given superclasses and slot names
+  ## Pre-size method tables to avoid enlargement overhead
+  let expectedMethods = max(superclasses.len * 4, 8)  # Expect at least 8 methods for typical classes
   result = Class()
-  result.methods = initTable[string, BlockNode]()
-  result.allMethods = initTable[string, BlockNode]()
-  result.classMethods = initTable[string, BlockNode]()
-  result.allClassMethods = initTable[string, BlockNode]()
+  result.methods = initTable[string, BlockNode](expectedMethods)
+  result.allMethods = initTable[string, BlockNode](expectedMethods)
+  result.classMethods = initTable[string, BlockNode](expectedMethods)
+  result.allClassMethods = initTable[string, BlockNode](expectedMethods)
   result.slotNames = slotNames
   result.allSlotNames = @[]
   result.superclasses = superclasses

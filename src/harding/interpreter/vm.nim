@@ -1213,8 +1213,8 @@ proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode 
 proc truncateWorkQueue*(interp: var Interpreter, depth: int)
 proc newEvalFrame*(node: Node): WorkFrame
 proc pushWorkFrame*(interp: var Interpreter, frame: WorkFrame)
-proc popValue*(interp: var Interpreter): NodeValue
-proc pushValue*(interp: var Interpreter, value: NodeValue)
+proc popValue*(interp: var Interpreter): NodeValue {.inline.}
+proc pushValue*(interp: var Interpreter, value: NodeValue) {.inline.}
 
 proc isKindOf(cls: Class, parentClass: Class): bool =
   ## Check if cls is the same as or a subclass of parentClass
@@ -3913,17 +3913,19 @@ proc popWorkFrame*(interp: var Interpreter): WorkFrame =
 proc hasWorkFrames*(interp: Interpreter): bool =
   interp.workQueue.len > 0
 
-proc pushValue*(interp: var Interpreter, value: NodeValue) =
-  debug("VM: pushValue ", value.toString(), " (stack len will be ", interp.evalStack.len + 1, ")")
+proc pushValue*(interp: var Interpreter, value: NodeValue) {.inline.} =
+  when defined(debug):
+    debug("VM: pushValue ", value.toString(), " (stack len will be ", interp.evalStack.len + 1, ")")
   interp.evalStack.add(value)
 
-proc popValue*(interp: var Interpreter): NodeValue =
+proc popValue*(interp: var Interpreter): NodeValue {.inline.} =
   if interp.evalStack.len == 0:
     raise newException(ValueError, "Eval stack underflow")
   result = interp.evalStack.pop()
-  debug("VM: popValue ", result.toString(), " (stack len now ", interp.evalStack.len, ")")
+  when defined(debug):
+    debug("VM: popValue ", result.toString(), " (stack len now ", interp.evalStack.len, ")")
 
-proc peekValue*(interp: Interpreter): NodeValue =
+proc peekValue*(interp: Interpreter): NodeValue {.inline.} =
   if interp.evalStack.len == 0:
     raise newException(ValueError, "Eval stack empty")
   interp.evalStack[^1]

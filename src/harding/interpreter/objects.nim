@@ -1939,8 +1939,13 @@ proc invalidateSubclasses*(cls: Class) =
 
 proc rebuildAllTables*(cls: Class) =
   ## Rebuild inherited method tables
-  var allMethods = initTable[string, BlockNode]()
-  var allClassMethods = initTable[string, BlockNode]()
+  ## Pre-size tables to avoid enlargement overhead
+  let ownMethodCount = cls.methods.len
+  let parentMethodCount = if cls.superclasses.len > 0 and cls.superclasses[0].allMethods.len > 0: cls.superclasses[0].allMethods.len else: 0
+  let expectedSize = max(ownMethodCount + parentMethodCount, 16)  # At least 16 to avoid tiny tables
+  
+  var allMethods = initTable[string, BlockNode](expectedSize)
+  var allClassMethods = initTable[string, BlockNode](expectedSize)
 
   # For the class itself, use directly-defined methods only
   for sel, m in cls.methods:
