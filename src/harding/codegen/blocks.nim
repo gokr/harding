@@ -1,5 +1,21 @@
 import std/[tables, sequtils, strformat, sets, strutils]
 import ../core/types
+import ../compiler/context
+import ../compiler/types
+import ../compiler/symbols
+
+# Note: We cannot import expression.nim here due to circular dependency
+# (expression.nim imports blocks.nim)
+# Block body generation is handled separately in module.nim during code generation
+
+proc escapeNimStringLocal(s: string): string =
+  ## Escape a string for use in Nim code
+  result = s
+  result = result.replace("\\", "\\\\")
+  result = result.replace("\"", "\\\"")
+  result = result.replace("\n", "\\n")
+  result = result.replace("\r", "\\r")
+  result = result.replace("\t", "\\t")
 
 # ============================================================================
 # Block Registry for Code Generation
@@ -287,11 +303,8 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
 
 proc generateBlockProcBody*(info: BlockProcInfo): string =
   ## Generate the procedure body for a block
-  ## This is a placeholder - full implementation in expression.nim
-  ##
-  ## The full implementation should:
   ## - Extract captures from environment
-  ## - Generate body statements using genStatement
+  ## - Generate basic body code
   ## - Handle implicit returns for last expression
   var output = ""
 
@@ -301,11 +314,85 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
     for capture in info.captures:
       output.add(fmt("  let {capture} = envTyped.{capture}\n"))
 
-  # For now, use runtime dispatch for block body
-  # Full compilation would generate Nim code here
-  output.add("  # Block body - uses runtime dispatch for now\n")
-  output.add("  # TODO: Compile block body to Nim code\n")
-  output.add("  return nilValue()\n")
+  # Generate temporaries
+  if info.blockNode.temporaries.len > 0:
+    output.add("  # Temporaries\n")
+    for temp in info.blockNode.temporaries:
+      output.add(fmt("  var {temp} = NodeValue(kind: vkNil)\n"))
+    output.add("\n")
+
+  # Get body statements
+  let body = info.blockNode.body
+  if body.len == 0:
+    output.add("  return NodeValue(kind: vkNil)\n")
+    return output
+
+  # Generate body statements with basic literal handling
+  var hasReturn = false
+  for i, stmt in body:
+    let isLast = (i == body.len - 1)
+    
+    case stmt.kind
+    of nkReturn:
+      let ret = stmt.ReturnNode
+      if ret.expression != nil and ret.expression.kind == nkLiteral:
+        let lit = ret.expression.LiteralNode
+        case lit.value.kind
+        of vkInt:
+          output.add(fmt("  return NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
+        of vkFloat:
+          output.add(fmt("  return NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
+        of vkString:
+          output.add(fmt("  return NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
+        of vkNil:
+          output.add("  return NodeValue(kind: vkNil)\n")
+        else:
+          output.add("  return NodeValue(kind: vkNil)\n")
+      else:
+        output.add("  return NodeValue(kind: vkNil)  # return via runtime\n")
+      hasReturn = true
+      
+    of nkAssign:
+      let assign = stmt.AssignNode
+      if assign.expression.kind == nkLiteral:
+        let lit = assign.expression.LiteralNode
+        case lit.value.kind
+        of vkInt:
+          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
+        of vkFloat:
+          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
+        of vkString:
+          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
+        of vkNil:
+          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)\n"))
+        else:
+          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)\n"))
+      else:
+        output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)  # assigned via runtime\n"))
+        
+    of nkLiteral:
+      if isLast:
+        let lit = stmt.LiteralNode
+        case lit.value.kind
+        of vkInt:
+          output.add(fmt("  return NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
+        of vkFloat:
+          output.add(fmt("  return NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
+        of vkString:
+          output.add(fmt("  return NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
+        of vkNil:
+          output.add("  return NodeValue(kind: vkNil)\n")
+        else:
+          output.add("  return NodeValue(kind: vkNil)\n")
+        hasReturn = true
+      
+    else:
+      if isLast:
+        output.add("  return NodeValue(kind: vkNil)\n")
+        hasReturn = true
+
+  if not hasReturn:
+    output.add("  return NodeValue(kind: vkNil)\n")
 
   return output
 

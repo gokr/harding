@@ -133,9 +133,10 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("  return self[].{slotName}\n\n"))
     
     # Setter  
-    output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue) =\n"))
+    output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue): NodeValue =\n"))
     output.add(fmt("  ## Set slot '{slot.name}' on {cls.name}\n"))
-    output.add(fmt("  self[].{slotName} = value\n\n"))
+    output.add(fmt("  self[].{slotName} = value\n"))
+    output.add(fmt("  return value\n\n"))
   
   return output
 
@@ -173,7 +174,7 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
   return (defs, topLevel)
 
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
-                  blockReg: BlockRegistry = nil): string =
+                  blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[]): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -189,7 +190,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("  initRuntime()\n\n")
 
   # Create generation context for top-level code, sharing block registry if provided
-  var genCtx = newGenContext(nil)
+  var genCtx = newGenContext(nil, compiledClasses)
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -229,6 +230,11 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
+  
+  # Collect compiled class names for native instantiation
+  var compiledClassNames: seq[string] = @[]
+  for cls in analysis.classes.values:
+    compiledClassNames.add(cls.name)
 
   # Generate base HardingObject type first
   output.add("# Base Object Type\n")
@@ -300,7 +306,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add("\n\n")
 
   # Generate block procedure signatures and bodies using real code generation
-  var blockGenCtx = newGenContext(nil)
+  var blockGenCtx = newGenContext(nil, compiledClassNames)
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
@@ -313,7 +319,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, topLevel, moduleName, blockReg))
+  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, compiledClassNames))
 
   # Module initialization
   output.add("\n")
