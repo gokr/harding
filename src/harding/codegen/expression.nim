@@ -19,6 +19,7 @@ type
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
+    inMethod*: bool              ## Whether we're generating code inside a method body
     locals*: seq[string]          ## Local variable names (temporaries)
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
@@ -39,6 +40,7 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
   result = GenContext(
     cls: cls,
     inBlock: false,
+    inMethod: false,
     locals: @[],
     parameters: @[],
     globals: @[],
@@ -162,7 +164,10 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Priority: parameters > locals > slots > globals
 
   if name == "self":
-    return "self.toValue()"
+    if ctx.inMethod:
+      return "self"
+    else:
+      return "self.toValue()"
 
   if name == "nil":
     return "NodeValue(kind: vkNil)"
@@ -279,7 +284,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   if node.receiver != nil:
     receiverCode = genExpression(ctx, node.receiver)
   else:
-    receiverCode = "self.toValue()"
+    # Implicit self - in method context use self directly, otherwise convert to value
+    if ctx.inMethod:
+      receiverCode = "self"
+    else:
+      receiverCode = "self.toValue()"
 
   # Check for native class instantiation: "ClassName new" where ClassName is compiled
   if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
@@ -613,8 +622,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
-    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed or ctx.inMethod:
+      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
     # Try to generate direct slot accessor call
@@ -624,8 +636,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
-    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed or ctx.inMethod:
+      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
@@ -1021,4 +1036,52 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     let exprCode = genExpression(ctx, node)
     if exprCode.len > 0:
       return "discard " & exprCode
+    return ""
+
+proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string =
+  ## Generate code for a method body statement
+  ## Returns code that can be executed in a compiled method proc
+  ## isLast: true if this is the last statement (implicit return)
+
+  if node == nil:
+    return ""
+
+  case node.kind
+  of nkAssign:
+    let assign = node.AssignNode
+    let varName = assign.variable
+    
+    # Infer type from the expression being assigned
+    let exprType = ctx.inferTypeFromExpression(assign.expression)
+    if exprType.className.len > 0:
+      ctx.setVariableType(varName, exprType.className, exprType.isNativeClass)
+    
+    let exprCode = genExpression(ctx, assign.expression)
+
+    # Check if it's a reassignment of an existing variable
+    if varName in ctx.locals or varName in ctx.globals:
+      return fmt"{varName} = {exprCode}"
+
+    # New local variable
+    ctx.locals.add(varName)
+    return fmt"var {varName} = {exprCode}"
+
+  of nkMessage:
+    return genStatement(ctx, node)
+
+  of nkReturn:
+    # Return in method body - return NodeValue directly
+    let ret = node.ReturnNode
+    if ret.expression != nil:
+      return "return " & genExpression(ctx, ret.expression)
+    return "return NodeValue(kind: vkNil)"
+
+  else:
+    # Other expressions - if last statement, implicit return
+    let exprCode = genExpression(ctx, node)
+    if exprCode.len > 0:
+      if isLast:
+        return "return " & exprCode
+      else:
+        return "discard " & exprCode
     return ""

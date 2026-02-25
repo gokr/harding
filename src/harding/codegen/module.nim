@@ -172,6 +172,84 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, body: seq[Node]]] =
+  ## Extract method definitions from AST nodes
+  ## Returns (className, selector, body) for each method
+  result = @[]
+  
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "selector:put:" and msg.arguments.len >= 2:
+        var bodyBlock: BlockNode = nil
+        if msg.arguments[1].kind == nkBlock:
+          bodyBlock = msg.arguments[1].BlockNode
+        elif msg.arguments[1].kind == nkLiteral:
+          let litVal = msg.arguments[1].LiteralNode.value
+          if litVal.kind == vkBlock:
+            bodyBlock = litVal.blockVal
+        
+        if msg.arguments[0].kind == nkLiteral and bodyBlock != nil:
+          let litVal = msg.arguments[0].LiteralNode.value
+          let selectorName = if litVal.kind == vkSymbol: litVal.symVal 
+                             elif litVal.kind == vkString: litVal.strVal
+                             else: ""
+          
+          var className = ""
+          if msg.receiver != nil and msg.receiver.kind == nkIdent:
+            className = msg.receiver.IdentNode.name
+          
+          if className.len > 0 and selectorName.len > 0:
+            result.add((className, selectorName, bodyBlock.body))
+
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body: seq[Node]]],
+                         compiledClasses: seq[string], classInfo: Table[string, ClassInfo]): string =
+  ## Generate compiled method procs from extracted method definitions
+  var output = ""
+  
+  if methodDefs.len == 0:
+    return output
+  
+  output.add("\n# Compiled Methods\n")
+  output.add("##################\n\n")
+  
+  for md in methodDefs:
+    let clsName = md.className
+    let selector = md.selector
+    let body = md.body
+    
+    # Skip if class not in compiled classes
+    if clsName notin compiledClasses:
+      continue
+    
+    let mangledClass = mangleClass(clsName)
+    let mangledSelector = mangleSelector(selector)
+    let procName = fmt("{mangledClass}_{mangledSelector}")
+    
+    output.add(fmt("proc {procName}*(self: NodeValue): NodeValue =\n"))
+    
+    if body.len > 0:
+      # Generate code for each statement in method body
+      var genCtx = newGenContext(nil, compiledClasses, classInfo)
+      genCtx.inMethod = true
+      
+      # Add 'self' as receiver
+      genCtx.globals.add("self")
+      
+      let bodyLen = body.len
+      for i, stmt in body:
+        let isLast = (i == bodyLen - 1)
+        let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
+        if stmtCode.len > 0:
+          for line in stmtCode.splitLines():
+            output.add("  ")
+            output.add(line)
+            output.add("\n")
+    
+    output.add("\n\n")
+  
+  return output
+
 proc isHardingCompileBlock(node: Node): bool =
   ## Check if node is "Harding compile: [block]"
   if node.kind != nkMessage:
@@ -307,6 +385,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(genClassConstants(cls))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
+
+  # Generate compiled methods from user definitions
+  let methodDefs = extractMethodDefs(classDefs)
+  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
 
   # Generate control flow methods (must come before block procedures that may use them)
   output.add("\n")
