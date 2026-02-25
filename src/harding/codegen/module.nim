@@ -70,6 +70,8 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
   output.add(fmt("  ## Create new {cls.name} instance\n"))
   output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  output.add(fmt("  result.className = \"{cls.name}\"\n"))
+  output.add(fmt("  registerNimProxyClassName(cast[pointer](result), \"{cls.name}\")\n"))
   # Get class reference from interpreter globals (temporary workaround)
   # This registers the class so toValue() can create proper Instance wrapper
   output.add(fmt("  if hybridInterpreter != nil:\n"))
@@ -206,6 +208,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
+  var registrationCode = ""
   
   if methodDefs.len == 0:
     return output
@@ -229,12 +232,14 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
     output.add(fmt("proc {procName}*(self: NodeValue): NodeValue =\n"))
     
     if body.len > 0:
-      # Generate code for each statement in method body
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
       genCtx.inMethod = true
       
-      # Add 'self' as receiver
+      if clsName in classInfo:
+        genCtx.cls = classInfo[clsName]
+      
       genCtx.globals.add("self")
+      genCtx.setVariableType("self", clsName, true)
       
       let bodyLen = body.len
       for i, stmt in body:
@@ -247,6 +252,17 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
             output.add("\n")
     
     output.add("\n\n")
+    
+    # Add registration call
+    registrationCode.add(fmt("  registerCompiledMethod(\"{clsName}\", \"{selector}\", {procName})\n"))
+  
+  # Add registration proc
+  if registrationCode.len > 0:
+    output.add("# Method Registration\n")
+    output.add("#####################\n\n")
+    output.add("proc registerCompiledMethods*() =\n")
+    output.add(registrationCode)
+    output.add("\n")
   
   return output
 
@@ -302,7 +318,9 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("\n")
 
   # Initialize runtime
-  output.add("  initRuntime()\n\n")
+  output.add("  initRuntime()\n")
+  output.add("  registerCompiledMethods()\n")
+  output.add("  registerSuperclassHierarchy()\n\n")
 
   # If mixed mode, initialize hybrid runtime with source file
   if mixed and sourceFile.len > 0:
@@ -390,6 +408,26 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   let methodDefs = extractMethodDefs(classDefs)
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
 
+  # Generate superclass hierarchy registration
+  output.add("\n")
+  output.add("# Superclass Hierarchy\n")
+  output.add("######################\n\n")
+  output.add("proc registerSuperclassHierarchy*() =\n")
+  
+  # Extract addSuperclass: calls from top-level code
+  for node in mainBodyNodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "addSuperclass:" and msg.arguments.len >= 1:
+        # Receiver is the class (e.g., Dog addSuperclass: Pet)
+        if msg.receiver != nil and msg.receiver.kind == nkIdent:
+          let subclassName = msg.receiver.IdentNode.name
+          # Get superclass name from argument (which should be an identifier)
+          if msg.arguments[0].kind == nkIdent:
+            let superclassName = msg.arguments[0].IdentNode.name
+            output.add(fmt("  registerSuperclass(\"{subclassName}\", \"{superclassName}\")\n"))
+  output.add("\n")
+
   # Generate control flow methods (must come before block procedures that may use them)
   output.add("\n")
   output.add("# Control Flow Methods\n")
@@ -470,6 +508,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 proc init_{moduleName}*() =
   ## Initialize {moduleName} module
   initRuntime()
+  registerCompiledMethods()
   echo "Module loaded: {moduleName}"
 
 when isMainModule:

@@ -212,21 +212,23 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
   if node.receiver != nil and node.receiver.kind == nkIdent:
     let varName = node.receiver.IdentNode.name
     receiverType = ctx.getVariableType(varName)
+  elif node.receiver != nil and node.receiver.kind == nkPseudoVar:
+    let varName = node.receiver.PseudoVarNode.name
+    if varName == "self":
+      if ctx.cls != nil:
+        receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
+      else:
+        receiverType = ctx.getVariableType("self")
   elif node.receiver == nil:
-    # Implicit self - use current class context
     if ctx.cls != nil:
       receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
   
-  # If we don't know the receiver's class, can't optimize
   if receiverType.className.len == 0:
     return ""
   
-  # Only optimize for native class instances
-  # In mixed mode, always use sendMessage to ensure interpreter can handle methods
   if ctx.mixed:
     return ""
   
-  # For now, we require isNativeClass to be true AND the class must be defined in the compiled code
   if not receiverType.isNativeClass:
     return ""
   
@@ -629,7 +631,6 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Try to generate direct slot accessor call
     let slotAccessorCode = tryGenerateSlotAccessor(ctx, node, receiverCode)
     if slotAccessorCode.len > 0:
       return slotAccessorCode

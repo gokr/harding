@@ -69,6 +69,43 @@ proc registerMethod*(runtime: var Runtime, selector: string,
   )
   runtime.methodCache[selector] = meth
 
+var compiledMethodProcs*: Table[string, proc(self: NodeValue): NodeValue] = initTable[string, proc(self: NodeValue): NodeValue]()
+var nimProxyClassNames*: Table[pointer, string] = initTable[pointer, string]()
+
+proc registerCompiledMethod*(className: string, selector: string, 
+                              fn: proc(self: NodeValue): NodeValue) =
+  let key = className & ">>" & selector
+  compiledMethodProcs[key] = fn
+
+proc registerNimProxyClassName*(nimValue: pointer, className: string) =
+  ## Register the class name for a Nim proxy object
+  nimProxyClassNames[nimValue] = className
+
+proc getNimProxyClassName*(nimValue: pointer): string =
+  ## Get the class name for a Nim proxy object
+  if nimValue in nimProxyClassNames:
+    return nimProxyClassNames[nimValue]
+  return ""
+
+var superclassNames*: Table[string, string] = initTable[string, string]()
+
+proc registerSuperclass*(className: string, superclassName: string) =
+  ## Register the superclass for a class
+  superclassNames[className] = superclassName
+
+proc getSuperclassName*(className: string): string =
+  ## Get the superclass name for a class
+  if className in superclassNames:
+    return superclassNames[className]
+  return ""
+
+proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue): NodeValue =
+  ## Look up a compiled method by class name and selector
+  let key = className & ">>" & selector
+  if key in compiledMethodProcs:
+    return compiledMethodProcs[key]
+  return nil
+
 proc evalBlock*(runtime: Runtime, blk: BlockNode,
                 args: seq[NodeValue] = @[]): NodeValue =
   ## Evaluate a block (placeholder - needs full evaluator integration)
@@ -170,7 +207,24 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
     return NodeValue(kind: vkNil)
   else:
-    # Unknown selector - return nil for now
+    # Check for compiled method on Nim proxy objects
+    if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.isNimProxy:
+      var className = ""
+      # First check if we have a class reference
+      if receiver.instVal.class != nil:
+        className = receiver.instVal.class.name
+      if className.len == 0 and receiver.instVal.nimValue != nil:
+        className = getNimProxyClassName(receiver.instVal.nimValue)
+      if className.len > 0:
+        let compiledFn = findCompiledMethod(className, selector)
+        if compiledFn != nil:
+          return compiledFn(receiver)
+        else:
+          let parentClassName = getSuperclassName(className)
+          if parentClassName.len > 0:
+            let parentFn = findCompiledMethod(parentClassName, selector)
+            if parentFn != nil:
+              return parentFn(receiver)
     return NodeValue(kind: vkNil)
 
 # Global interpreter instance for mixed mode (initialized on first use)
