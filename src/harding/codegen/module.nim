@@ -40,55 +40,104 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string): string =
   return output
 
 proc genClassConstants*(cls: ClassInfo): string =
-  ## Generate class constant declarations
+  ## Generate native Nim type for Harding class with slot accessors
   let clsName = mangleClass(cls.name)
-
+  let slots = cls.getAllSlots()
+  
+  # Determine parent class name
+  var parentName = "HardingObject"
+  if cls.parent != nil:
+    parentName = "Class_" & cls.parent.name
+  
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
-
-  # Slot count constant
-  let slots = cls.getAllSlots()
-  output.add(fmt("const {clsName}_slotCount* = {slots.len}\n"))
-
-  # Slot name array
-  if slots.len > 0:
-    let slotNames = slots.mapIt(fmt("\"{it.name}\"")).join(", ")
-    output.add(fmt("\nconst {clsName}_slotNames*: array[{slots.len}, string] = [\n"))
-    output.add("  " & slotNames & "\n")
-    output.add("]\n")
-
-  # Method count
-  output.add(fmt("\nconst {clsName}_methodCount = {cls.methods.len}\n"))
-
+  
+  # Generate Nim object type with slots as fields
+  # TODO: Eventually when we generate native methods directly, we can remove
+  # classRef and toValue() - methods will be called directly instead of via sendMessage
+  output.add("type\n")
+  output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
+  output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
+  
+  # Slot fields - use NodeValue for flexibility in Harding
+  for slot in slots:
+    if not slot.isInherited:
+      let slotName = mangleSlot(slot.name)
+      output.add(fmt("    {slotName}*: NodeValue\n"))
+  
+  output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
+  
+  # Constructor
+  output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
+  output.add(fmt("  ## Create new {cls.name} instance\n"))
+  output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  # Get class reference from interpreter globals (temporary workaround)
+  # This registers the class so toValue() can create proper Instance wrapper
+  output.add(fmt("  if hybridInterpreter != nil:\n"))
+  output.add(fmt("    if \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
+  output.add(fmt("      if clsVal.kind == vkClass:\n"))
+  output.add(fmt("        result.classRef = clsVal.classVal\n"))
+  output.add(fmt("      elif clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = clsVal.instVal.class\n"))
+  output.add(fmt("    elif \"Object\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let objVal = hybridInterpreter.globals[][\"Object\"]\n"))
+  output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = objVal.instVal.class\n"))
+  for slot in slots:
+    if not slot.isInherited:
+      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
+  # toValue - convert native type to NodeValue using stored classRef
+  # TODO: Remove when native method generation is complete
+  output.add(fmt("proc toValue*(self: {clsName}): NodeValue =\n"))
+  output.add(fmt("  ## Convert {cls.name} to NodeValue for sendMessage interop\n"))
+  output.add(fmt("  let inst = Instance(kind: ikObject, class: self.classRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
+  output.add(fmt("  return NodeValue(kind: vkInstance, instVal: inst)\n"))
+  output.add("\n")
+  
   return output
 
 proc genClassInit*(cls: ClassInfo): string =
-  ## Generate class initialization procedure
+  ## Generate class initialization procedure (legacy - kept for compatibility)
   let clsName = mangleClass(cls.name)
-
+  
   return fmt("""
-proc init_{clsName}*(parent: ref RuntimeObject = nil): ref RuntimeObject {{.cdecl, exportc.}} =
-  ## Initialize {cls.name} class
-  ##
-  var obj = if parent != nil:
-              parent.clone()
-            else:
-              rootObject.clone()
-
-  obj.tags.add("{cls.name}")
-
-  # Initialize slots
-  obj.slots.setLen({cls.getAllSlots().len()})
-
-  # Register methods
-  for meth in obj.methods.values:
-    meth.nativeImpl = nil  # No native implementation yet
-
-  return obj
+# Legacy class init - use new{clsName}() constructor instead
+# proc init_{clsName}*(): {clsName} = new{clsName}()
 
 """)
+
+proc genSlotAccessors*(cls: ClassInfo): string =
+  ## Generate native Nim slot accessor procs for a class
+  let clsName = mangleClass(cls.name)
+  let slots = cls.getAllSlots()
+  
+  var output = ""
+  if slots.len == 0:
+    return output
+  
+  output.add("# Slot accessors\n")
+  output.add("################################\n\n")
+  
+  for slot in slots:
+    if slot.isInherited:
+      continue
+    let slotName = mangleSlot(slot.name)
+    let capitalizedSlot = slot.name[0].toUpperAscii() & slot.name[1..^1]
+    
+    # Getter
+    output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
+    output.add(fmt("  ## Get slot '{slot.name}' from {cls.name}\n"))
+    output.add(fmt("  return self[].{slotName}\n\n"))
+    
+    # Setter  
+    output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue) =\n"))
+    output.add(fmt("  ## Set slot '{slot.name}' on {cls.name}\n"))
+    output.add(fmt("  self[].{slotName} = value\n\n"))
+  
+  return output
 
 proc isClassDefinition(node: Node): bool =
   ## Check if a node is a class definition (derive: chain)
@@ -180,6 +229,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
+
+  # Generate base HardingObject type first
+  output.add("# Base Object Type\n")
+  output.add("##################\n\n")
+  output.add("type\n")
+  output.add("  HardingObject* {.inheritable.} = object\n")
+  output.add("    className*: string\n")
+  output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
   # Generate for each class
   for cls in analysis.classes.values:
