@@ -160,8 +160,10 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   return output
 
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
-                moduleName: string): string =
+                moduleName: string, mixed: bool = false, sourceFile: string = ""): string =
   ## Generate complete Nim module from parsed nodes
+  ## mixed: if true, embed interpreter for fallback on unsupported features
+  ## sourceFile: path to source .hrd file for class registration in interpreter
   var output = ""
 
   output.add(genModuleHeader(ctx, moduleName))
