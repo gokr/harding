@@ -18,6 +18,16 @@ type
 
 var globalFramePool: WorkFramePool
 
+proc initFramePool*() =
+  ## Initialize the global frame pool with pre-allocated frames
+  globalFramePool.frames = newSeqOfCap[WorkFrame](MaxPoolSize)
+  for i in 0..<InitialPoolSize:
+    globalFramePool.frames.add(WorkFrame())
+  globalFramePool.acquiredCount = 0
+  globalFramePool.totalAllocations = InitialPoolSize
+  globalFramePool.totalReleases = 0
+  debug("Frame pool initialized with ", $InitialPoolSize, " frames")
+
 proc clearFrame*(frame: WorkFrame) =
   ## Clear all fields of a frame to prevent stale data and ARC leaks
   if frame == nil:
@@ -51,18 +61,6 @@ proc clearFrame*(frame: WorkFrame) =
   frame.handlerIndex = 0
   frame.protectedBlockForHandler = nil
 
-proc initFramePool*() =
-  ## Initialize the global frame pool with pre-allocated frames
-  globalFramePool.frames = newSeqOfCap[WorkFrame](MaxPoolSize)
-  for i in 0..<InitialPoolSize:
-    let frame = WorkFrame()
-    clearFrame(frame)  # Initialize all fields to nil
-    globalFramePool.frames.add(frame)
-  globalFramePool.acquiredCount = 0
-  globalFramePool.totalAllocations = InitialPoolSize
-  globalFramePool.totalReleases = 0
-  debug("Frame pool initialized with ", $InitialPoolSize, " frames")
-
 proc acquireFrame*(): WorkFrame =
   ## Acquire a frame from the pool, or allocate new if pool is empty
   if globalFramePool.frames.len > 0:
@@ -72,7 +70,6 @@ proc acquireFrame*(): WorkFrame =
   else:
     # Pool is empty, allocate new frame
     result = WorkFrame()
-    clearFrame(result)  # Initialize all to nil to avoid crashes in optimized builds
     globalFramePool.totalAllocations += 1
     globalFramePool.acquiredCount += 1
 

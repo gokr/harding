@@ -1,0 +1,6 @@
+| count |
+count := 0.
+10000 timesRepeat: [
+  count := count + 1
+]
+count

@@ -5625,11 +5625,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       if shouldContinue:
         # Continue loop - execute body
         interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
-        if frame.bodyBlock.homeActivation == nil:
-          frame.bodyBlock.homeActivation = interp.currentActivation
-          if interp.currentActivation != nil:
+        # Safety check: only set homeActivation if currentActivation is valid
+        if interp.currentActivation != nil and not interp.currentActivation.hasReturned:
+          if frame.bodyBlock.homeActivation == nil:
+            frame.bodyBlock.homeActivation = interp.currentActivation
             interp.currentActivation.wasCaptured = true
-          debug("lsCheckCondition: set bodyBlock.homeActivation=", $cast[int](interp.currentActivation), " currentMethod.isMethod=", if interp.currentActivation.currentMethod != nil: $interp.currentActivation.currentMethod.isMethod else: "nil")
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
         # Loop done - push nil result

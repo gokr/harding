@@ -1,0 +1,5 @@
+count := 0
+100 timesRepeat: [
+  count := count + 1
+]
+count
