@@ -1,78 +1,65 @@
 # Example Compilation Test Matrix
 
-## Summary (After Merge from Main - 2025-02-25)
+## Summary (After Merge and Fixes - 2025-02-25)
 
-**Branch:** compiler-next (merged with main)  
-**Status:** Basic examples work, classes need native type support
+**Branch:** compiler-next  
+**Status:** Basic examples work, slots are now detected and generated
 
 ### Overall Results
 
 | Category | Count | Description |
 |----------|-------|-------------|
 | ✅ Works | 10 | Basic examples compile and run |
-| 🔶 Needs Work | 3 | Classes/objects need native type support |
+| 🔶 Partial | 3 | Classes compile but slot accessors not yet connected |
 
-### Detailed Matrix
+### Current Status
 
-| Example | Compiles | Runs | Matches Interpreter | Notes |
-|---------|----------|------|---------------------|-------|
-| hello | ✅ | ✅ | ✅ | Basic I/O works perfectly |
-| arithmetic | ✅ | ✅ | ✅ | All math/comparisons work |
-| variables | ✅ | ✅ | ✅ | Variable assignment works |
-| objects | ✅ | ✅ | ✅ | Object creation and messaging |
-| methods | ✅ | ✅ | ✅ | Method definitions work |
-| control_flow | ✅ | ✅ | ✅ | Conditionals and loops |
-| inheritance | ✅ | ✅ | ✅ | Class inheritance |
-| fibonacci | ✅ | ✅ | ✅ | Recursion works |
-| benchmark_blocks | ✅ | ✅ | ✅ | Block closures |
-| simple_test | ✅ | ✅ | ✅ | Basic assertions |
-| **classes** | ❌ | - | - | Needs native type generation |
-| **multiple_inheritance** | ❌ | - | - | Needs native type generation |
-| **compiled_blocks** | ❌ | - | - | Needs native type generation |
+**Working (10 examples):**
+- hello ✅ - Basic I/O
+- arithmetic ✅ - Math operations
+- variables ✅ - Variable assignment
+- objects ✅ - Object creation
+- methods ✅ - Method definitions
+- control_flow ✅ - Conditionals/loops
+- inheritance ✅ - Class inheritance
+- fibonacci ✅ - Recursion
+- benchmark_blocks ✅ - Block closures
+- simple_test ✅ - Assertions
 
-## Key Findings
+**Needs Expression Generator Update (3 examples):**
+- classes 🔶 - Slots generated but not accessed natively
+- multiple_inheritance 🔶 - Same issue
+- compiled_blocks 🔶 - Same issue
 
-### What's Working After Merge:
-- ✅ **Quote formatting fixed** - Interpreter and compiler outputs match
-- ✅ **Basic examples** - All compile and run correctly
-- ✅ **Output comparison** - Normalized outputs match between interpreter and compiled
+## Recent Fixes
 
-### What's Broken:
-- ❌ **Classes with slots** - Generated code uses `RuntimeObject` which doesn't exist
-- ❌ **Native type generation** - Our native `ref object` types were replaced with old approach
+### Slot Detection Fixed
+- parseTypeList now correctly parses `#(name age)` with multiple slots
+- extractDeriveChain now handles nkArray nodes (direct array literals)
+- Handles nkIdent nodes in array elements (identifiers like 'name')
 
-### Merge Impact:
-The merge from main brought:
-1. ✅ Fixed quote formatting in interpreter output
-2. ❌ Reverted our native class generation (needs to be re-applied)
-3. ✅ Updated exception handling and activation management
-4. ✅ New test files for stdlib and collections
+### Native Type Generation Restored
+- genClassConstants generates native ref object types
+- genSlotAccessors generates getX/setX procs
+- Slots initialized to nil in constructor
 
-## Recommendation
+## Next Steps
 
-We need to re-apply our native class generation changes on top of the merged main:
-1. Generate `ref object` types instead of `RuntimeObject`
-2. Add `classRef` field and `toValue()` method
-3. Generate native slot accessors (`getX`/`setX`)
-4. Update `initHybridRuntime` to load source files
+To fully support classes, need to:
+1. Add variable type tracking to GenContext
+2. Detect when receiver is a known class instance
+3. Generate direct slot accessor calls instead of sendMessage
+4. Connect native constructor calls (ClassName new → newClassName())
 
 ## Running Tests
 
 ```bash
-# Compile an example
+# Compile a working example
 ./granite compile examples/hello.hrd
-
-# Build and run
 nim c --outdir:build --app:console build/hello.nim
 ./build/hello
 
-# Compare with interpreter
-./harding examples/hello.hrd
-```
-
-## Test Script
-
-```bash
-# Run full test matrix (requires interpreter)
-INTERPRETER_DIR=/home/gokr/tankfeud/nemo ./test_examples.sh
+# Check classes (compiles but slots show nil)
+./granite compile examples/classes.hrd
+./build/classes
 ```
