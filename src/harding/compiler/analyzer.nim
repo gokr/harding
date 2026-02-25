@@ -38,37 +38,39 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
     if pos >= remaining.len:
       break
 
-    # Extract slot name up to colon, comma, whitespace, or end
+    # Extract slot name up to colon
     var nameStart = pos
-    while pos < remaining.len and remaining[pos] notin {':', ',', ')', ' ', '\t'}:
+    while pos < remaining.len and remaining[pos] != ':' and not remaining[pos].isSpaceAscii():
       inc pos
     let slotName = remaining[nameStart..<pos].strip()
 
-    # Skip past the slot name
-    while pos < remaining.len and remaining[pos] in {':', ',', ' ', '\t'}:
+    # Skip to colon
+    while pos < remaining.len and remaining[pos] != ':':
       inc pos
-    if pos < remaining.len and remaining[pos] == ')':
-      break
 
-    # Extract type hint after colon (only if we hit a colon)
-    var constraint = tcNone
-    if pos < remaining.len and remaining[pos] == ':':
-      inc pos  # skip the colon
-      while pos < remaining.len and remaining[pos].isSpaceAscii():
-        inc pos
-      var typeStart = pos
-      var typeEnd = pos
-      while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
-        inc pos
-        typeEnd = pos
-      let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
-      if typeHint.len > 0:
-        constraint = parseTypeHint(typeHint)
+    if pos >= remaining.len:
+      break
+    inc pos  # Skip colon
+
+    # Extract type hint after colon
+    while pos < remaining.len and remaining[pos].isSpaceAscii():
+      inc pos
+
+    var typeStart = pos
+    var typeEnd = pos
+    while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
+      inc pos
+      typeEnd = pos
+
+    let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
+    let constraint = if typeHint.len > 0: parseTypeHint(typeHint) else: tcNone
 
     result.add((slotName, constraint))
 
-    # Skip whitespace and commas to get to next slot name
-    while pos < remaining.len and remaining[pos] in {',', ' ', '\t'}:
+    # Skip to next slot or end
+    while pos < remaining.len and remaining[pos] notin {',', ')'}:
+      inc pos
+    if pos < remaining.len and remaining[pos] == ',':
       inc pos
 
 proc extractDeriveChain*(node: Node): (string, string, string) =
@@ -118,30 +120,16 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
                    nil
   
   var typeList = ""
-  if typeArg != nil:
-    if typeArg.kind == nkLiteral:
-      let val = typeArg.LiteralNode.value
-      if val.kind == vkString:
-        typeList = val.strVal
-      elif val.kind == vkArray:
-        # Handle #(name: Type) or #(name owner breed) array syntax
-        var parts: seq[string] = @[]
-        for elem in typeArg.LiteralNode.value.arrayVal:
-          if elem.kind == vkString:
-            parts.add(elem.strVal)
-          elif elem.kind == vkSymbol:
-            parts.add(elem.symVal)
-        typeList = "#(" & parts.join(" ") & ")"
-    elif typeArg.kind == nkArray:
-      # Direct array argument without literal wrapper
+  if typeArg != nil and typeArg.kind == nkLiteral:
+    let val = typeArg.LiteralNode.value
+    if val.kind == vkString:
+      typeList = val.strVal
+    elif val.kind == vkArray:
+      # Handle #(name: Type) array syntax
       var parts: seq[string] = @[]
-      for elem in typeArg.ArrayNode.elements:
-        if elem.kind == nkLiteral and elem.LiteralNode.value.kind == vkSymbol:
-          parts.add(elem.LiteralNode.value.symVal)
-        elif elem.kind == nkLiteral and elem.LiteralNode.value.kind == vkString:
-          parts.add(elem.LiteralNode.value.strVal)
-        elif elem.kind == nkIdent:
-          parts.add(elem.IdentNode.name)
+      for elem in typeArg.LiteralNode.value.arrayVal:
+        if elem.kind == vkString:
+          parts.add(elem.strVal)
       typeList = "#(" & parts.join(" ") & ")"
 
   return (className, parent, typeList)

@@ -9,6 +9,26 @@ template setNativeImpl*(meth: BlockNode, impl: untyped) =
   ## Set native implementation for native builds
   meth.nativeImpl = cast[pointer](impl)
 
+template registerMethod*(cls: Class, selector: string, impl: untyped, needsInterp: bool = true) =
+  ## Register a native instance method on a class (both methods and allMethods)
+  block:
+    let meth = createCoreMethod(selector)
+    meth.setNativeImpl(impl)
+    if needsInterp:
+      meth.hasInterpreterParam = true
+    cls.methods[selector] = meth
+    cls.allMethods[selector] = meth
+
+template registerClassMethod*(cls: Class, selector: string, impl: untyped, needsInterp: bool = true) =
+  ## Register a native class-side method on a class (both classMethods and allClassMethods)
+  block:
+    let meth = createCoreMethod(selector)
+    meth.setNativeImpl(impl)
+    if needsInterp:
+      meth.hasInterpreterParam = true
+    cls.classMethods[selector] = meth
+    cls.allClassMethods[selector] = meth
+
 # ============================================================================
 # Object System for Harding
 # Class-based objects with delegation/inheritance
@@ -1518,12 +1538,11 @@ proc instStringSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return toValue(0)
 
 proc instStringAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## String character at index (1-based)
+  ## String character at index (0-based)
   if self.kind == ikString and args.len > 0:
     let (ok, val) = args[0].tryGetInt()
-    # Convert 1-based to 0-based
-    if ok and val >= 1 and val <= self.strVal.len:
-      return toValue($self.strVal[val - 1])
+    if ok and val >= 0 and val < self.strVal.len:
+      return toValue($self.strVal[val])
   return toValue("")
 
 proc concatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1536,26 +1555,26 @@ proc concatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal))
 
 proc instStringFromToImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Substring from:to: (1-based, inclusive)
+  ## Substring from:to: (0-based, inclusive)
   if self.kind == ikString and args.len >= 2:
     let (ok1, fromIdx) = args[0].tryGetInt()
     let (ok2, toIdx) = args[1].tryGetInt()
-    let startIdx = fromIdx - 1
-    let endIdx = toIdx - 1
+    let startIdx = fromIdx
+    let endIdx = toIdx
     if ok1 and ok2 and startIdx >= 0 and endIdx < self.strVal.len and startIdx <= endIdx:
       return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal[startIdx..endIdx]))
   return toValue("")
 
 proc instStringIndexOfImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Index of substring
+  ## Index of substring (0-based, returns -1 if not found)
   if self.kind == ikString and args.len > 0:
     let sub = if args[0].kind == vkString: args[0].strVal
               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
               else: ""
     if sub.len > 0:
-      let idx = self.strVal.find(sub) + 1  # 1-indexed
+      let idx = self.strVal.find(sub)
       return toValue(idx)
-  return toValue(0)
+  return toValue(-1)
 
 proc instStringIncludesSubStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if includes substring

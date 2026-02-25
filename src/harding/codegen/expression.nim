@@ -1,4 +1,4 @@
-import std/[strutils, sequtils, strformat, sets, tables]
+import std/[strutils, sequtils, strformat]
 import ../core/types
 import ../compiler/context
 import ../compiler/symbols
@@ -13,30 +13,24 @@ type
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
-    mixed*: bool                   ## Mixed mode: embed interpreter for fallback
     locals*: seq[string]          ## Local variable names (temporaries)
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
     blockRegistry*: BlockRegistry ## Registry for blocks to compile
-    variableTypes*: Table[string, string]  ## Variable name -> class name (for native type optimization)
-    classRegistry*: TableRef[string, ClassInfo]  ## Reference to class registry for slot lookup
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 
-proc newGenContext*(cls: ClassInfo = nil, mixed: bool = false, classRegistry: TableRef[string, ClassInfo] = nil): GenContext =
+proc newGenContext*(cls: ClassInfo = nil): GenContext =
   ## Create new generation context
   result = GenContext(
     cls: cls,
     inBlock: false,
-    mixed: mixed,
     locals: @[],
     parameters: @[],
     globals: @[],
-    blockRegistry: newBlockRegistry(),
-    variableTypes: initTable[string, string](),
-    classRegistry: classRegistry
+    blockRegistry: newBlockRegistry()
   )
 
 proc indentBlock*(code: string, spaces: int = 2): string =
@@ -250,7 +244,6 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var doCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
-          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -275,7 +268,6 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var collectCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
-          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -307,7 +299,6 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var selectCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
-          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -466,72 +457,15 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # Negated value
     return fmt("nt_negated({receiverCode})")
 
-  of "new":
-    # Constructor call - check if we can use native constructor
-    var className = ""
-    if node.receiver != nil and node.receiver.kind == nkIdent:
-      className = node.receiver.IdentNode.name
-    elif node.receiver != nil and node.receiver.kind == nkLiteral:
-      let lit = node.receiver.LiteralNode
-      if lit.value.kind == vkSymbol:
-        className = lit.value.symVal
-    # Use native constructor if we found a class name
-    if className.len > 0:
-      let mangleClass = "Class_" & className
-      return fmt("new{mangleClass}()")
-    # Fall back to sendMessage
-    let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    if ctx.mixed:
-      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
-    else:
-      return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
-
-  of "derive:", "derive", "selector:put:", "classSelector:put:":
+  of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    if ctx.mixed:
-      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
-    else:
-      return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Check for native slot access optimization (when we have variable type info)
-    var isSlotAccess = false
-    if node.receiver != nil and node.receiver.kind == nkIdent:
-      let varName = node.receiver.IdentNode.name
-      if varName in ctx.variableTypes:
-        let className = ctx.variableTypes[varName]
-        if ctx.classRegistry != nil and className in ctx.classRegistry:
-          let cls = ctx.classRegistry[className]
-          let slotName = node.selector
-          let isSetter = slotName.endsWith(":")
-          let accessorName = if isSetter: slotName[0..^2] else: slotName
-          if cls.getSlotIndex(accessorName) >= 0:
-            isSlotAccess = true
-            let mangleSlot = accessorName.toLowerAscii()
-            if isSetter:
-              if node.arguments.len >= 1:
-                let argCode = genExpression(ctx, node.arguments[0])
-                return fmt("(set{mangleSlot}({receiverCode}, {argCode}); NodeValue(kind: vkNil))")
-            else:
-              return fmt("get{mangleSlot}({receiverCode})")
-
-    # For non-slot methods, use sendMessage
-    var effectiveReceiver = receiverCode
-
-    # For non-slot methods on typed variables, convert using toValue()
-    if not isSlotAccess and node.receiver != nil and node.receiver.kind == nkIdent:
-      let varName = node.receiver.IdentNode.name
-      if varName in ctx.variableTypes:
-        # Convert native type to NodeValue using toValue()
-        effectiveReceiver = fmt("{receiverCode}.toValue()")
-
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    if ctx.mixed:
-      return fmt("sendMessageHybrid({effectiveReceiver}, \"{node.selector}\", @[{args}])")
-    else:
-      return fmt("sendMessage(currentRuntime[], {effectiveReceiver}, \"{node.selector}\", @[{args}])")
+    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
@@ -553,27 +487,6 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let assign = node.AssignNode
     let varName = assign.variable
     let exprCode = genExpression(ctx, assign.expression)
-
-    # Track variable type for native optimization
-    # Pattern 1: varName := ClassName new (nkMessage with Ident or Symbol receiver)
-    if assign.expression != nil and assign.expression.kind == nkMessage:
-      let msg = assign.expression.MessageNode
-      if msg.selector == "new" and msg.receiver != nil:
-        if msg.receiver.kind == nkIdent:
-          let className = msg.receiver.IdentNode.name
-          echo "DEBUG TRACK: Pattern1 Ident: var=\"", varName, "\" class=\"", className, "\""
-          ctx.variableTypes[varName] = className
-        elif msg.receiver.kind == nkLiteral:
-          let lit = msg.receiver.LiteralNode
-          if lit.value.kind == vkSymbol:
-            let className = lit.value.symVal
-            echo "DEBUG TRACK: Pattern1 Literal: var=\"", varName, "\" class=\"", className, "\""
-            ctx.variableTypes[varName] = className
-    # Pattern 2: Native constructor (exprCode starts with newClass_)
-    if exprCode.startsWith("newClass_"):
-      let className = exprCode[7..<exprCode.find("(")]
-      echo "DEBUG TRACK: Pattern2: var=\"", varName, "\" class=\"", className, "\""
-      ctx.variableTypes[varName] = className
 
     # Check if variable is a slot
     if ctx.isSlot(varName):
@@ -608,24 +521,6 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       entries.add(fmt("{keyCode}: {valCode}"))
     return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
 
-  of nkIf:
-    ## Inline ifTrue:/ifFalse: control flow as expression
-    ## Note: This should ideally not be called - nkIf should be handled in statement context
-    ## But if it is, generate an expression that returns nil in both branches
-    let ifNode = node.IfNode
-    let condCode = genExpression(ctx, ifNode.condition)
-    var code = "(if isTruthy(" & condCode & "):\n"
-    # Generate then branch returning nil
-    code.add("  NodeValue(kind: vkNil)\n")
-    # Generate else branch if present
-    if ifNode.elseBranch != nil:
-      code.add("else:\n")
-      code.add("  NodeValue(kind: vkNil))")
-    else:
-      code.add("else:\n")
-      code.add("  NodeValue(kind: vkNil))")
-    return code
-
   of nkBlock:
     ## Look up or register the block for compilation and return creation code
     let blockNode = node.BlockNode
@@ -635,27 +530,16 @@ proc genExpression*(ctx: GenContext, node: Node): string =
                     else:
                       registerBlock(ctx.blockRegistry, blockNode, ctx.globals)
 
-    # Determine which createBlock template to use based on captures and param count
-    let hasEnv = blockInfo.captures.len > 0
-    let paramCount = blockInfo.paramCount
-    
-    # Build template name: createBlock or createBlockEnv + param count
-    var createBlockCall: string
-    if hasEnv:
-      createBlockCall = fmt("createBlockEnv{paramCount}({blockInfo.nimName}, {paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst))")
-    else:
-      createBlockCall = fmt("createBlock{paramCount}({blockInfo.nimName}, {paramCount})")
-    
-    if hasEnv:
+    if blockInfo.captures.len > 0:
       # Create environment struct with captured values and pass to createBlock
       var initFields: seq[string] = @[]
       for capture in blockInfo.captures:
         initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
       let envInit = fmt("var {blockInfo.envStructName}_inst = {blockInfo.envStructName}({initFields.join(\", \")})")
-      # Wrap in a statement list expression to declare the env var and create the block
-      return fmt("({envInit}; {createBlockCall})")
+      # Wrap in a block expression to declare the env var and create the block
+      return fmt("(block: {envInit}; createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount}, cast[pointer](addr {blockInfo.envStructName}_inst)))")
     else:
-      return createBlockCall
+      return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
 
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)
@@ -841,84 +725,6 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
     return "discard callPrimitive(\"" & primCall.selector & "\", @[" & args & "])"
 
-  of nkIf:
-    ## Inline ifTrue:/ifFalse: control flow in statement context
-    let ifNode = node.IfNode
-    let condCode = genExpression(ctx, ifNode.condition)
-    var code = "if isTruthy(" & condCode & "):\n"
-    # Generate then branch with proper indentation
-    if ifNode.thenBranch != nil:
-      # If thenBranch is a block, inline its body (don't create the block)
-      var thenStmts: seq[Node] = @[]
-      var thenHasNonLocalReturn = false
-      if ifNode.thenBranch.kind == nkBlock:
-        let blk = ifNode.thenBranch.BlockNode
-        thenStmts = blk.body
-        # Check if block has non-local returns
-        for stmt in blk.body:
-          if stmt.kind == nkReturn:
-            thenHasNonLocalReturn = true
-            break
-      else:
-        thenStmts = @[ifNode.thenBranch]
-      for stmt in thenStmts:
-        var stmtCode: string
-        if stmt.kind == nkReturn and thenHasNonLocalReturn:
-          # Non-local return from inlined block: raise exception
-          let ret = stmt.ReturnNode
-          let exprCode = if ret.expression != nil:
-                           genExpression(ctx, ret.expression)
-                         else:
-                           "NodeValue(kind: vkNil)"
-          stmtCode = fmt("raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)")
-        else:
-          stmtCode = genStatement(ctx, stmt)
-        if stmtCode.len > 0:
-          # Indent each line
-          for line in stmtCode.splitLines():
-            if line.len > 0:
-              code.add("  " & line & "\n")
-        else:
-          code.add("  discard\n")
-    else:
-      code.add("  discard\n")
-    # Generate else branch if present
-    if ifNode.elseBranch != nil:
-      code.add("else:\n")
-      # If elseBranch is a block, inline its body
-      var elseStmts: seq[Node] = @[]
-      var elseHasNonLocalReturn = false
-      if ifNode.elseBranch.kind == nkBlock:
-        let blk = ifNode.elseBranch.BlockNode
-        elseStmts = blk.body
-        # Check if block has non-local returns
-        for stmt in blk.body:
-          if stmt.kind == nkReturn:
-            elseHasNonLocalReturn = true
-            break
-      else:
-        elseStmts = @[ifNode.elseBranch]
-      for stmt in elseStmts:
-        var stmtCode: string
-        if stmt.kind == nkReturn and elseHasNonLocalReturn:
-          # Non-local return from inlined block: raise exception
-          let ret = stmt.ReturnNode
-          let exprCode = if ret.expression != nil:
-                           genExpression(ctx, ret.expression)
-                         else:
-                           "NodeValue(kind: vkNil)"
-          stmtCode = fmt("raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)")
-        else:
-          stmtCode = genStatement(ctx, stmt)
-        if stmtCode.len > 0:
-          # Indent each line
-          for line in stmtCode.splitLines():
-            if line.len > 0:
-              code.add("  " & line & "\n")
-        else:
-          code.add("  discard\n")
-    return code
-
   else:
     # For other nodes, just generate the expression
     let exprCode = genExpression(ctx, node)
@@ -927,45 +733,29 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     return ""
 
 proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = @[],
-                   hasNonLocalReturn: bool = false, envStructName: string = ""): string =
+                   hasNonLocalReturn: bool = false): string =
   ## Generate code for block body (sequence of statements)
   ## captures: list of captured variable names (from BlockProcInfo)
   ## hasNonLocalReturn: if true, ^ generates NonLocalReturnException
-  ## envStructName: name of environment struct for typed access
   var output = ""
 
   # Create new context for block body with its parameters
-  # Share the blockRegistry so nested blocks can be found
+  # Use a fresh blockRegistry to avoid double-registration of nested blocks
   var bodyCtx = GenContext(
     cls: ctx.cls,
     inBlock: true,
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
-    blockRegistry: ctx.blockRegistry
+    blockRegistry: newBlockRegistry()
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
 
-  # Determine which captured variables are assigned in the block body
-  var assignedCaptures = initHashSet[string]()
-  for stmt in blkNode.body:
-    collectAssignedVars(stmt, assignedCaptures)
-
   # Extract captured variables from environment struct
-  # Variables that are assigned need special handling (write-back to env)
-  var mutableCaptures: seq[string] = @[]
-  if captures.len > 0 and envStructName.len > 0:
-    # Cast env pointer to typed struct pointer
-    output.add(fmt("  let envPtr = cast[ptr {envStructName}](env)\n"))
+  if captures.len > 0:
     for capture in captures:
-      if capture in assignedCaptures:
-        # Mutable capture: extract as var and track for write-back
-        output.add(fmt("  var {capture} = envPtr.{capture}\n"))
-        mutableCaptures.add(capture)
-      else:
-        # Immutable capture: extract as let
-        output.add(fmt("  let {capture} = envPtr.{capture}\n"))
+      output.add(fmt("  let {capture} = env.{capture}\n"))
       bodyCtx.locals.add(capture)
 
   # Handle empty block body
@@ -982,26 +772,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                      else:
                        "NodeValue(kind: vkNil)"
       output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)\n"))
-    elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign, nkIf}:
-      # Last statement is the return value (but not if it's nkIf which needs special handling)
+    elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign}:
+      # Last statement is the return value
       let exprCode = genExpression(bodyCtx, stmt)
       output.add("  return " & exprCode & "\n")
     else:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
-        # Indent each line of the statement
-        for line in stmtCode.splitLines():
-          if line.len > 0:
-            output.add("  " & line & "\n")
-
-  # Write back mutable captures to environment before returning
-  if captures.len > 0 and envStructName.len > 0:
-    for capture in mutableCaptures:
-      output.add(fmt("  envPtr.{capture} = {capture}\n"))
-
-  # If no explicit return statement, return nil
-  if blkNode.body.len == 0 or blkNode.body[^1].kind notin {nkReturn}:
-    output.add("  return NodeValue(kind: vkNil)\n")
+        output.add("  " & stmtCode & "\n")
 
   return output
 
@@ -1038,26 +816,6 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     let assign = node.AssignNode
     let varName = assign.variable
     let exprCode = genExpression(ctx, assign.expression)
-
-    # Track variable type for native optimization
-    # Pattern 1: varName := ClassName new (nkMessage with Ident or Symbol receiver)
-    # Only set if not already set by a previous pattern
-    if not (varName in ctx.variableTypes):
-      if assign.expression != nil and assign.expression.kind == nkMessage:
-        let msg = assign.expression.MessageNode
-        if msg.selector == "new" and msg.receiver != nil:
-          if msg.receiver.kind == nkIdent:
-            let className = msg.receiver.IdentNode.name
-            ctx.variableTypes[varName] = className
-          elif msg.receiver.kind == nkLiteral:
-            let lit = msg.receiver.LiteralNode
-            if lit.value.kind == vkSymbol:
-              let className = lit.value.symVal
-              ctx.variableTypes[varName] = className
-      # Pattern 2: Native constructor (exprCode starts with newClass_) - only if Pattern1 didn't match
-      if not (varName in ctx.variableTypes) and exprCode.startsWith("newClass_"):
-        let className = exprCode[7..<exprCode.find("(")]
-        ctx.variableTypes[varName] = className
 
     # Check if it's a reassignment of an existing variable
     if varName in ctx.locals or varName in ctx.globals:

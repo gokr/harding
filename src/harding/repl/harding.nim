@@ -12,6 +12,9 @@ when defined(debugger):
   import ../debugger/server
   import ../debugger/bridge
 
+when compileOption("profiler"):
+  import nimprof
+
 # ============================================================================
 # Main entry point for Harding REPL
 # ============================================================================
@@ -118,6 +121,7 @@ proc main() =
     # Start REPL
     var ctx = newDoitContext(maxStackDepth = opts.maxStackDepth, hardingHome = opts.hardingHome,
                              bootstrapFile = opts.bootstrapFile)
+    ctx.showResults = opts.showResults
     runREPL(ctx)
   elif opts.positionalArgs.len == 1:
     # Check if it's a file

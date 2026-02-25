@@ -80,19 +80,21 @@ String>>notEmpty [
 ]
 
 String>>startsWith: prefix [
-  # Check if string starts with prefix.
-  (self size >= (prefix size)) ifFalse: [ ^ false ]
-  ^ (self from: 1 to: (prefix size)) = prefix
+  # Check if string starts with prefix (0-based indexing).
+  | prefixSize |
+  prefixSize := prefix size.
+  (self size >= prefixSize) ifFalse: [ ^ false ].
+  ^ (self from: 0 to: (prefixSize - 1)) = prefix
 ]
 
 String>>endsWith: suffix [
-  # Check if string ends with suffix.
+  # Check if string ends with suffix (0-based indexing).
   | selfSize suffixSize start |
-  selfSize := self size
-  suffixSize := suffix size
-  (selfSize >= suffixSize) ifFalse: [ ^ false ]
-  start := selfSize - suffixSize + 1
-  ^ (self from: start to: selfSize) = suffix
+  selfSize := self size.
+  suffixSize := suffix size.
+  (selfSize >= suffixSize) ifFalse: [ ^ false ].
+  start := selfSize - suffixSize.
+  ^ (self from: start to: (selfSize - 1)) = suffix
 ]
 
 #====================================================================

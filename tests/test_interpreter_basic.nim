@@ -76,7 +76,7 @@ suite "Interpreter: Method Execution with Parameters":
     if result[1].len > 0:
       echo "Multiple keyword params error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^2].intVal == 10)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 20)
 
   test "methods can access self and instance variables":

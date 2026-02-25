@@ -114,8 +114,7 @@ suite "Interpreter: Special Values":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^2].kind == vkBool)
-    check(result[0][^2].boolVal == true)
+    check(result[0].len == 1)
     check(result[0][^1].kind == vkBool)
     check(result[0][^1].boolVal == false)
 

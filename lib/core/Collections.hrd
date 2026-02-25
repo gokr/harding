@@ -25,13 +25,13 @@ Array>>notEmpty [
 ]
 
 Array>>first [
-  # Return first element.
-  ^ self at: 1
+  # Return first element (0-based).
+  ^ self at: 0
 ]
 
 Array>>last [
-  # Return last element.
-  ^ self at: (self size)
+  # Return last element (0-based).
+  ^ self at: (self size - 1)
 ]
 
 #====================================================================
@@ -101,11 +101,11 @@ Array>>allSatisfy: block [
 ]
 
 Array>>withIndexDo: block [
-  # Iterate over each element with its 1-based index, evaluating the block.
+  # Iterate over each element with its 0-based index, evaluating the block.
   | index size |
-  index := 1
+  index := 0
   size := self size
-  [ index <= size ] whileTrue: [
+  [ index < size ] whileTrue: [
     block value: (self at: index) value: index
     index := index + 1
   ]
@@ -113,7 +113,7 @@ Array>>withIndexDo: block [
 ]
 
 Array>>copyFrom: start to: end [
-  # Return new array with elements from start to end (inclusive, 1-based).
+  # Return new array with elements from start to end (inclusive, 0-based).
   | result index |
   result := Array new
   index := start
@@ -127,10 +127,10 @@ Array>>copyFrom: start to: end [
 Array>>with: otherArray do: block [
   # Iterate over two collections in parallel, evaluating block with elements from both.
   | index size |
-  index := 1
+  index := 0
   size := self size
   (size = otherArray size) ifFalse: [ self error: "Collections must be same size for with:do:" ]
-  [ index <= size ] whileTrue: [
+  [ index < size ] whileTrue: [
     block value: (self at: index) value: (otherArray at: index)
     index := index + 1
   ]
@@ -159,14 +159,14 @@ Array>>removeFirst [
   # Remove and return first element.
   | first |
   first := self first.
-  self removeAt: 1.  # 1-based indexing for Harding arrays
+  self removeAt: 0.  # 0-based indexing
   ^ first
 ]
 
 Array>>removeLast [
   # Remove and return last element.
   | last index |
-  index := self size.
+  index := self size - 1.
   last := self at: index.
   self removeAt: index.
   ^ last
@@ -359,13 +359,13 @@ Array>>sorted: sortBlock [
   # Copy all elements to result
   self do: [ :each | result add: each ].
 
-  # Sort using insertion sort (positions 1 to size)
-  i := 2.
-  [ i <= size ] whileTrue: [
+  # Sort using insertion sort (positions 0 to size-1)
+  i := 1.
+  [ i < size ] whileTrue: [
     j := i.
     key := result at: i.
     done := false.
-    [ (j > 1) and: [ done not ] ] whileTrue: [
+    [ (j > 0) and: [ done not ] ] whileTrue: [
       temp := result at: (j - 1).
       (sortBlock value: key value: temp) ifTrue: [
         result at: j put: temp.

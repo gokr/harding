@@ -288,12 +288,12 @@ Object class>>name <primitive primitiveClassName>
 
 Object>>print [
   # Print to stdout without newline
-  Stdout write: self printString
+  Stdout write: self asString
 ]
 
 Object>>println [
   # Print to stdout with newline
-  Stdout writeline: self printString
+  Stdout writeline: self asString
 ]
 
 #====================================================================

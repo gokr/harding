@@ -1,6 +1,7 @@
 import std/[tables, strutils]
 import ../core/types
 import ../parser/[lexer, parser]
+import ../interpreter/activation_pool
 
 # ============================================================================
 # Activation Records (Call Stack Frames)
@@ -12,20 +13,21 @@ proc newActivation*(blk: BlockNode,
                    sender: Activation,
                    definingClass: Class = nil,
                    isClassMethod: bool = false): Activation =
-  ## Create a new activation record
+  ## Create a new activation record using the pool for efficiency.
   ## isClassMethod: true if this activation is for a class method
-  result = Activation(
-    sender: sender,
-    receiver: receiver,
-    currentMethod: blk,
-    definingObject: definingClass,  # Store as Class now
-    pc: 0,
-    locals: initTable[string, NodeValue](),
-    capturedVars: initTable[string, MutableCell](),
-    returnValue: nilValue(),
-    hasReturned: false,
-    isClassMethod: isClassMethod
-  )
+  result = acquireActivation()
+  result.sender = sender
+  result.receiver = receiver
+  result.currentMethod = blk
+  result.definingObject = definingClass
+  result.pc = 0
+  # Tables are already cleared by acquireActivation; just ensure they're empty
+  result.locals.clear()
+  result.capturedVars.clear()
+  result.returnValue = nilValue()
+  result.hasReturned = false
+  result.isClassMethod = isClassMethod
+  # wasCaptured already false from pool
 
   # Initialize 'self' for all activations (blocks invoked as methods need self)
   # For class methods, self should return the Class object, not the wrapper Instance

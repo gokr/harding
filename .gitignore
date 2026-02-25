@@ -38,14 +38,16 @@ Thumbs.db
 *.out
 testresults/
 
-# Harding binaries
+# Harding binaries (specific names and all variants)
 /harding
-/harding_debug
-/harding_release
+/harding_*
 /hardingf
 /harding-lsp
 /granite
 /bona
+
+# Profiling and benchmark output
+/profile_results.txt
 
 # Binary patterns from source directories
 # Ignore compiled binaries (no extension) but keep source files

@@ -1162,12 +1162,12 @@ suite "Stdlib: Arrays - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 6)
+    check(result[0][^1].intVal == 3)  # 0+1+2 = 3 for 0-based indexing
 
   test "copyFrom:to: extracts subarray":
     let result = interp.evalStatements("""
       Arr := #(10 20 30 40 50).
-      Sub := Arr copyFrom: 2 to: 4.
+      Sub := Arr copyFrom: 1 to: 3.
       Result := Sub size
     """)
     check(result[1].len == 0)
@@ -1177,21 +1177,21 @@ suite "Stdlib: Arrays - Advanced":
   test "copyFrom:to: contains correct elements":
     let result = interp.evalStatements("""
       Arr := #(10 20 30 40 50).
-      Sub := Arr copyFrom: 2 to: 4.
-      Result := Sub at: 1
+      Sub := Arr copyFrom: 1 to: 3.
+      Result := Sub at: 0
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 20)
 
-  test "indexOf: returns 1-based index of element":
+  test "indexOf: returns 0-based index of element":
     let result = interp.evalStatements("""
       Arr := #(10 20 30).
       Result := Arr indexOf: 20
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 2)
+    check(result[0][^1].intVal == 1)  # 0-based index
 
   test "indexOf: returns nil when not found":
     let result = interp.evalStatements("""

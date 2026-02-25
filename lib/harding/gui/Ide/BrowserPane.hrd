@@ -116,7 +116,7 @@ BrowserPane>>selectItem: anItem [
 
     # Highlight selected button (simplified - just update CSS)
     buttons withIndexDo: [:button :index |
-        ((items at: (index - 1)) = anItem)
+        ((items at: index) = anItem)
             ifTrue: [ button addCssClass: "suggested-action" ]
             ifFalse: [ button removeCssClass: "suggested-action" ]
     ].

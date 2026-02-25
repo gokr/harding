@@ -65,9 +65,9 @@ suite "Interpreter: Block Evaluation":
     if result[1].len > 0:
       echo "Error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^3].kind == vkInt)
-    check(result[0][^2].kind == vkInt)
+    check(result[0].len == 1)
     check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
 
 suite "Interpreter: Lexical Closures":
   var interp: Interpreter
@@ -99,8 +99,7 @@ suite "Interpreter: Lexical Closures":
     if result[1].len > 0:
       echo "Closure capture error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^3].intVal == 1)
-    check(result[0][^2].intVal == 2)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 1)
 
   test "multiple closures share same captured variable":
@@ -130,8 +129,7 @@ suite "Interpreter: Lexical Closures":
     if result[1].len > 0:
       echo "Shared capture error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^5].intVal == 10)
-    check(result[0][^3].intVal == 11)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 10)
 
   test "closures capture different variables from same scope":
@@ -153,8 +151,7 @@ suite "Interpreter: Lexical Closures":
     if result[1].len > 0:
       echo "Multi-variable capture error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^3].intVal == 30)
-    check(result[0][^2].intVal == -10)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 200)
 
   test "nested closures capture multiple levels":
@@ -201,7 +198,7 @@ suite "Interpreter: Lexical Closures":
     if result[1].len > 0:
       echo "Closure outlive scope error: ", result[1]
     check(result[1].len == 0)
-    check(result[0][^2].intVal == 20)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 40)
 
   test "closure with non-local return from captured scope":

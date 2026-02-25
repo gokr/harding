@@ -29,8 +29,7 @@ suite "Method Batching (extend:":
       Result2 := obj method2
     """)
     check(result[1].len == 0)
-    check(result[0][^2].kind == vkInt)
-    check(result[0][^2].intVal == 1)
+    check(result[0].len == 1)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
 
@@ -73,7 +72,7 @@ suite "Method Batching (extend:":
       Result2 := obj methodB
     """)
     check(result[1].len == 0)
-    check(result[0][^2].strVal == "A")
+    check(result[0].len == 1)
     check(result[0][^1].strVal == "B")
 
   test "extend: can reference self":

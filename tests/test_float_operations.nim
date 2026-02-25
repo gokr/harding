@@ -173,8 +173,8 @@ suite "Float: Mixed Integer-Float":
 
   test "float in ifTrue: condition":
     let results = interp.evalStatements("""
-      x := 3.5.
-      (x > 3.0) ifTrue: [ Result := "yes" ] ifFalse: [ Result := "no" ]
+      X := 3.5.
+      (X > 3.0) ifTrue: [ Result := "yes" ] ifFalse: [ Result := "no" ]
     """)
     check(results[1].len == 0)
     check(results[0][^1].strVal == "yes")

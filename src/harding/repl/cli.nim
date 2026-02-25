@@ -31,6 +31,7 @@ type
     ## Common CLI options shared between REPL and IDE
     logLevel*: Level
     dumpAst*: bool
+    showResults*: bool           # Print result of last expression
     maxStackDepth*: int
     hardingHome*: string
     bootstrapFile*: string
@@ -61,6 +62,7 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
   result = CliOptions(
     logLevel: DefaultLogLevel,
     dumpAst: false,
+    showResults: false,
     maxStackDepth: DefaultStackDepth,
     hardingHome: getEnv("HARDING_HOME", DefaultHardingHome),
     bootstrapFile: "",
@@ -108,6 +110,8 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
         quit(1)
     of "--ast":
       result.dumpAst = true
+    of "--result":
+      result.showResults = true
     of "--debugger-port":
       if i + 1 < allArgs.len:
         try:
@@ -152,6 +156,7 @@ proc showUsage*(appName: string, appDesc: string, examples: seq[string] = @[],
   echo "  --stack-depth <n>  Set maximum stack depth (default: 10000)"
   if appName == "harding":
     echo "  --ast              Dump AST after parsing and continue execution"
+    echo "  --result           Print result of each evaluated expression"
     echo "  --debugger-port <n>  Start debugger server on port (requires -d:debugger)"
   if extraOptions.len > 0:
     echo extraOptions

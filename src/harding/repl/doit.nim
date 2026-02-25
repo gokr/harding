@@ -31,7 +31,7 @@ proc newDoitContext*(trace: bool = false, maxStackDepth: int = 10000,
     globals: schedCtx.mainProcess.getInterpreter().globals,
     history: @["-- Harding REPL History --"],
     prompt: "harding> ",
-    showResults: true
+    showResults: false
   )
 
   # Set hardingHome on the interpreter
@@ -196,21 +196,16 @@ proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxSt
   if err.len > 0:
     return ("", "Script error: " & err)
   else:
-    # Return result as string
-    return (result.toString(), "")
+    return ("", "")
 
-# Convenience function to run script and print result
 proc execScript*(filename: string, dumpAst = false, maxStackDepth: int = 10000,
                  hardingHome: string = ".", bootstrapFile: string = "") =
-  ## Execute script and print result
-  let (output, err) = runScript(filename, dumpAst = dumpAst, maxStackDepth = maxStackDepth,
-                                hardingHome = hardingHome, bootstrapFile = bootstrapFile)
+  ## Execute a script file
+  let (_, err) = runScript(filename, dumpAst = dumpAst, maxStackDepth = maxStackDepth,
+                           hardingHome = hardingHome, bootstrapFile = bootstrapFile)
   if err.len > 0:
     stderr.writeLine(err)
     quit(1)
-  else:
-    if output.len > 0:
-      echo output
 
 # Simple test harness for REPL
 proc testREPL*(): (bool, string) =

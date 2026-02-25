@@ -5,7 +5,7 @@ import ../parser/parser
 import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/frame_pool
-import ../codegen/blocks
+import ../interpreter/activation_pool
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -535,16 +535,20 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
     while act != nil:
       if act.currentMethod != nil and act.currentMethod.isMethod:
         blockNode.homeActivation = act
+        act.wasCaptured = true
         break
       # If the current block already has a homeActivation pointing to a method,
       # inherit it (nested blocks should all return to the same method)
       if act.currentMethod != nil and not act.currentMethod.isMethod and act.currentMethod.homeActivation != nil:
         blockNode.homeActivation = act.currentMethod.homeActivation
+        act.currentMethod.homeActivation.wasCaptured = true
         break
       act = act.sender
     if blockNode.homeActivation == nil:
       # Fallback: use current activation (e.g., in top-level scripts)
       blockNode.homeActivation = interp.currentActivation
+      if interp.currentActivation != nil:
+        interp.currentActivation.wasCaptured = true
 
 # Method lookup and dispatch
 type
@@ -630,6 +634,8 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 
   if currentMethod.isMethod:
     currentMethod.homeActivation = interp.currentActivation
+    if interp.currentActivation != nil:
+      interp.currentActivation.wasCaptured = true
 
   let activation = newActivation(currentMethod, receiver, interp.currentActivation, definingClass, isClassMethod)
 
@@ -656,18 +662,21 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   try:
     for stmt in currentMethod.body:
       if activation.hasReturned:
+        retVal = activation.returnValue
         break
       retVal = interp.evalWithVM(stmt)
       if activation.hasReturned:
+        retVal = activation.returnValue
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedLegacy = interp.activationStack.pop()
     if interp.activationStack.len > 0:
       interp.currentActivation = interp.activationStack[^1]
       interp.currentReceiver = interp.currentActivation.receiver
     else:
       interp.currentActivation = nil
       interp.currentReceiver = savedReceiver
+    releaseActivation(poppedLegacy)
 
   if activation.hasReturned:
     return activation.returnValue.unwrap()
@@ -685,6 +694,11 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
+
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
   let savedReceiver = interp.currentReceiver
@@ -699,11 +713,12 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock)
 
-  return blockResult.unwrap().unwrap()
+  return blockResult.unwrap()
 
 proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg: NodeValue): NodeValue =
   ## Evaluate a block with one argument using the stackless VM
@@ -713,6 +728,11 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg
@@ -731,9 +751,10 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlockArg = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlockArg)
 
   return blockResult
 
@@ -746,6 +767,11 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
@@ -768,9 +794,10 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
         nonLocalReturn = true
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock2 = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock2)
 
   return (blockResult, nonLocalReturn)
 
@@ -782,6 +809,11 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
                       else:
                         receiver
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+  # Copy captured environment to activation locals
+  if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
+    for name, cell in blockNode.capturedEnv:
+      activation.locals[name] = cell.value
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
@@ -804,16 +836,16 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    discard interp.activationStack.pop()
+    let poppedBlock3 = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedBlock3)
 
   return blockResult
 
 # Invoke a block with arguments using the stackless VM
 proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeValue]): NodeValue =
   ## Invoke a block with the given arguments using the stackless VM
-  ## Supports both interpreted blocks (AST body) and compiled blocks (nativeImpl)
 
   debug("Invoking block with ", args.len, " arguments")
 
@@ -822,59 +854,28 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       "Wrong number of arguments to block: expected " & $blockNode.parameters.len &
       ", got " & $args.len)
 
-  # Check if this is a compiled block with native implementation
-  if blockNode.nativeImpl != nil:
-    debug("Block has native implementation - calling compiled code")
-    # Get environment pointer if block has captured variables
-    var envPtr: pointer = nil
-    if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
-      # Environment pointer is stored in capturedEnv under __env_ptr__ key
-      if "__env_ptr__" in blockNode.capturedEnv:
-        envPtr = cast[pointer](blockNode.capturedEnv["__env_ptr__"].value.intVal)
-    
-    # Call the compiled block based on parameter count and environment
-    let paramCount = blockNode.parameters.len
-    if envPtr != nil:
-      # Block with environment
-      case paramCount
-      of 0:
-        let fn = cast[BlockEnvProc0](blockNode.nativeImpl)
-        return fn(envPtr)
-      of 1:
-        let fn = cast[BlockEnvProc1](blockNode.nativeImpl)
-        return fn(envPtr, args[0])
-      of 2:
-        let fn = cast[BlockEnvProc2](blockNode.nativeImpl)
-        return fn(envPtr, args[0], args[1])
-      of 3:
-        let fn = cast[BlockEnvProc3](blockNode.nativeImpl)
-        return fn(envPtr, args[0], args[1], args[2])
-      else:
-        raise newException(EvalError, "Compiled block with " & $paramCount & " parameters not supported")
-    else:
-      # Block without environment
-      case paramCount
-      of 0:
-        let fn = cast[BlockProc0](blockNode.nativeImpl)
-        return fn()
-      of 1:
-        let fn = cast[BlockProc1](blockNode.nativeImpl)
-        return fn(args[0])
-      of 2:
-        let fn = cast[BlockProc2](blockNode.nativeImpl)
-        return fn(args[0], args[1])
-      of 3:
-        let fn = cast[BlockProc3](blockNode.nativeImpl)
-        return fn(args[0], args[1], args[2])
-      else:
-        raise newException(EvalError, "Compiled block with " & $paramCount & " parameters not supported")
+  # Update homeActivation if needed: if it points to a block (not a method),
+  # find the nearest method activation in the current chain
+  if blockNode.homeActivation != nil and blockNode.homeActivation.currentMethod != nil and
+     not blockNode.homeActivation.currentMethod.isMethod:
+    var act = interp.currentActivation
+    while act != nil:
+      if act.currentMethod != nil and act.currentMethod.isMethod:
+        blockNode.homeActivation = act
+        act.wasCaptured = true
+        break
+      act = act.sender
 
-  # Fall back to interpretation for blocks without native implementation
   let blockHome = blockNode.homeActivation
   let blockReceiver = if blockHome != nil and blockHome.receiver != nil:
                         blockHome.receiver
                       else:
                         interp.currentReceiver
+  
+  # Save reference to home activation to detect non-local returns
+  # The home activation may be popped from stack during non-local return unwind
+  let savedHomeActivation = blockHome
+  
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   var capturedVarNames: seq[string] = @[]
@@ -900,12 +901,17 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
   var blockResult = nilValue()
   try:
     for stmt in blockNode.body:
-      if activation.hasReturned:
-        blockResult = activation.returnValue
+      
+      # Check for non-local return: if home activation has returned, stop iteration
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+        blockResult = savedHomeActivation.returnValue
         break
+      
       blockResult = interp.evalWithVM(stmt)
-      if activation.hasReturned:
-        blockResult = activation.returnValue
+      
+      # Check again after evalWithVM in case non-local return happened
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+        blockResult = savedHomeActivation.returnValue
         break
 
     # Save back captured variables to their shared cells
@@ -924,9 +930,10 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
         parent = parent.sender
 
   finally:
-    discard interp.activationStack.pop()
+    let poppedWhile = interp.activationStack.pop()
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
+    releaseActivation(poppedWhile)
 
   return blockResult.unwrap()
 
@@ -989,8 +996,8 @@ proc ifTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): 
                             interp.currentReceiver
       let blockResult = evalBlock(interp, blockReceiver, blockNode)
 
-      # Check if a non-local return was triggered (nonLocalReturnTarget set)
-      if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+      # Check if a non-local return was triggered (hasReturned on caller)
+      if callerActivation != nil and callerActivation.hasReturned:
         return callerActivation.returnValue
 
       return blockResult
@@ -1022,8 +1029,8 @@ proc ifFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
                             interp.currentReceiver
       let blockResult = evalBlock(interp, blockReceiver, blockNode)
 
-      # Check if a non-local return was triggered (nonLocalReturnTarget set)
-      if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+      # Check if a non-local return was triggered (hasReturned on caller)
+      if callerActivation != nil and callerActivation.hasReturned:
         return callerActivation.returnValue
 
       return blockResult
@@ -1060,8 +1067,8 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
 
-    # Check if a non-local return was triggered (nonLocalReturnTarget set)
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    # Check if a non-local return was triggered (target activation hasReturned)
+    if callerActivation != nil and callerActivation.hasReturned:
       debug("whileTrueImpl: detected non-local return after condition")
       return callerActivation.returnValue
 
@@ -1080,7 +1087,7 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    if callerActivation != nil and callerActivation.hasReturned:
       debug("whileTrueImpl: detected non-local return after body")
       return callerActivation.returnValue
 
@@ -1116,8 +1123,8 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
     # Evaluate condition block
     let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
 
-    # Check if a non-local return was triggered (nonLocalReturnTarget set)
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    # Check if a non-local return was triggered (hasReturned on caller)
+    if callerActivation != nil and callerActivation.hasReturned:
       return callerActivation.returnValue
 
     # Check if condition is false
@@ -1135,7 +1142,7 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
     lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    if callerActivation != nil and callerActivation.hasReturned:
       return callerActivation.returnValue
 
   return lastResult
@@ -1151,18 +1158,22 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
   let blockNode = args[0].blockVal
   debug("primitiveAsSelfDo called, evaluating block with self = ", self.class.name)
 
-  # Save current receiver
+  # Save current receiver and block's homeActivation
   let savedReceiver = interp.currentReceiver
+  let savedHomeActivation = blockNode.homeActivation
 
-  # Temporarily set receiver to self
+  # Temporarily set receiver to self and clear homeActivation
+  # so the block uses the passed receiver instead of homeActivation.receiver
   interp.currentReceiver = self
+  blockNode.homeActivation = nil
 
   try:
     # Evaluate the block with new self
     return evalBlock(interp, self, blockNode)
   finally:
-    # Restore original receiver
+    # Restore original receiver and homeActivation
     interp.currentReceiver = savedReceiver
+    blockNode.homeActivation = savedHomeActivation
 
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame
@@ -1279,6 +1290,11 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
         debug("  AS[", idx, "] = ", methSelector)
 
       # Create ExceptionContext with full signal point state
+      # Mark captured activations so they are not returned to the pool
+      if interp.currentActivation != nil:
+        interp.currentActivation.wasCaptured = true
+      if handler.activation != nil:
+        handler.activation.wasCaptured = true
       let ctx = ExceptionContext(
         signalActivation: interp.currentActivation,
         handlerActivation: handler.activation,
@@ -1752,8 +1768,8 @@ proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
 
     let blockResult = evalBlock(interp, interp.currentReceiver, blockNode)
 
-    # Check if a non-local return was triggered (nonLocalReturnTarget set)
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    # Check if a non-local return was triggered (hasReturned on caller)
+    if callerActivation != nil and callerActivation.hasReturned:
       return callerActivation.returnValue
 
     return blockResult
@@ -1774,8 +1790,8 @@ proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: se
 
     let blockResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, args[0])
 
-    # Check if a non-local return was triggered (nonLocalReturnTarget set)
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    # Check if a non-local return was triggered (hasReturned on caller)
+    if callerActivation != nil and callerActivation.hasReturned:
       return callerActivation.returnValue
 
     return blockResult
@@ -1796,8 +1812,8 @@ proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args
 
     let (blockResult, _) = evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
 
-    # Check if a non-local return was triggered (nonLocalReturnTarget set)
-    if callerActivation != nil and callerActivation.nonLocalReturnTarget != nil:
+    # Check if a non-local return was triggered (hasReturned on caller)
+    if callerActivation != nil and callerActivation.hasReturned:
       return callerActivation.returnValue
 
     return blockResult
@@ -1857,11 +1873,19 @@ proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
 
   let blockNode = args[0].blockVal
   var lastResult = nilValue()
+  
+  # Save reference to home activation to detect non-local returns
+  let savedHomeActivation = blockNode.homeActivation
 
   # Iterate over array elements
   for elem in self.elements:
     # Invoke block with element as argument
     lastResult = interp.invokeBlock(blockNode, @[elem])
+    
+    # Check for non-local return: if home activation has returned, stop iteration
+    if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+      lastResult = savedHomeActivation.returnValue
+      break
 
   return lastResult
 
@@ -4075,11 +4099,15 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           let blk = cast[BlockNode](ifNode.thenBranch)
           if blk.homeActivation == nil:
             blk.homeActivation = interp.currentActivation
+            if interp.currentActivation != nil:
+              interp.currentActivation.wasCaptured = true
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         elif not condResult and ifNode.elseBranch != nil:
           let blk = cast[BlockNode](ifNode.elseBranch)
           if blk.homeActivation == nil:
             blk.homeActivation = interp.currentActivation
+            if interp.currentActivation != nil:
+              interp.currentActivation.wasCaptured = true
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         else:
           interp.pushValue(nilValue())
@@ -4511,6 +4539,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Set home activation for methods
         if currentMethod.isMethod:
           currentMethod.homeActivation = activation
+          activation.wasCaptured = true
 
         # Push pop-activation frame (save eval stack depth for return unwinding)
         interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
@@ -4576,6 +4605,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           if currentMethod.isMethod:
             currentMethod.homeActivation = activation
+            activation.wasCaptured = true
 
           interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
 
@@ -4652,6 +4682,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
             if classMethodToRun.isMethod:
               classMethodToRun.homeActivation = activation
+              activation.wasCaptured = true
 
             interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
 
@@ -4883,6 +4914,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Set home activation for methods
     if currentMethod.isMethod:
       currentMethod.homeActivation = activation
+      activation.wasCaptured = true
 
     # Push pop-activation frame FIRST (will execute LAST after body completes)
     interp.pushWorkFrame(newPopActivationFrame(savedReceiver, isBlock = false, evalStackDepth = interp.evalStack.len))
@@ -4969,9 +5001,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     debug("VM: wfPopActivation, evalStack.len=", interp.evalStack.len, " isBlock=", $frame.isBlockActivation, " activationStack.len=", interp.activationStack.len)
 
     # Check for non-local return first
-    if interp.currentActivation != nil and interp.currentActivation.hasReturned:
+    # Walk up the activation chain to find if any activation has returned
+    var nonLocalReturnActivation: Activation = nil
+    var act = interp.currentActivation
+    while act != nil:
+      if act.hasReturned:
+        nonLocalReturnActivation = act
+        break
+      act = act.sender
+    
+    if nonLocalReturnActivation != nil:
       # Non-local return - propagate the return value
-      let returnVal = interp.currentActivation.returnValue
+      let returnVal = nonLocalReturnActivation.returnValue
 
       # Pop the activation
       discard interp.activationStack.pop()
@@ -5008,7 +5049,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
       # Now pop the activation
       debug("VM: wfPopActivation popping activation, len before=", interp.activationStack.len)
-      discard interp.activationStack.pop()
+      let poppedAct = interp.activationStack.pop()
+      releaseActivation(poppedAct)
       debug("VM: wfPopActivation popping activation, len after=", interp.activationStack.len)
       if interp.activationStack.len > 0:
         interp.currentActivation = interp.activationStack[^1]
@@ -5034,11 +5076,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # For blocks, target is homeActivation (the enclosing method)
     # For methods, target is the current activation
     var targetActivation: Activation = nil
+    var isNonLocalReturn = false  # Track if this is a non-local return from a block
     if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
       let currentMethod = interp.currentActivation.currentMethod
       if not currentMethod.isMethod and currentMethod.homeActivation != nil:
-        targetActivation = currentMethod.homeActivation
+        # This is a non-local return from a block - walk up to find the method activation
+        isNonLocalReturn = true
+        var homeAct = currentMethod.homeActivation
+        while homeAct != nil and homeAct.currentMethod != nil and not homeAct.currentMethod.isMethod:
+          homeAct = homeAct.currentMethod.homeActivation
+        targetActivation = if homeAct != nil: homeAct else: currentMethod.homeActivation
       else:
+        # Normal return from a method - target is the current method itself
         targetActivation = interp.currentActivation
 
     if targetActivation == nil:
@@ -5065,13 +5114,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushValue(returnVal)
       return true
 
-    # Unwind: pop work frames until we find and process the wfPopActivation
-    # for the target activation. For each intermediate wfPopActivation (blocks),
-    # pop the corresponding activation from the activation stack.
-    # Also unwind past continuation frames (wfIfNodeContinuation, wfWhileLoop)
-    # that may have been set up by control flow specialization.
+    # Unwind: pop work frames and activations until we find the target
+    # For non-local returns, we need to unwind both the work queue AND the activation stack
+    debug("wfReturnValue: targetActivation nil?=", $(targetActivation == nil), " targetOnStack=", $targetOnStack)
     var found = false
     var targetEvalStackDepth = 0
+    
+    # First, unwind the work queue
     while interp.workQueue.len > 0 and not found:
       let wf = interp.workQueue.pop()
       # Skip continuation frames from control flow specialization
@@ -5087,30 +5136,72 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         continue
       if wf.kind == wfPopActivation:
         # Check if the current activation is the target
-        if interp.currentActivation == targetActivation:
+        debug("wfReturnValue: checking wfPopActivation, currentActivation==targetActivation? ", $(interp.currentActivation == targetActivation))
+        
+        # First, check if top of activation stack is the target
+        if interp.activationStack.len > 0 and interp.activationStack[^1] == targetActivation:
           # Save the eval stack depth to restore to
           targetEvalStackDepth = wf.savedEvalStackDepth
 
-          # Pop the target activation
-          discard interp.activationStack.pop()
-          if interp.activationStack.len > 0:
-            interp.currentActivation = interp.activationStack[^1]
-            interp.currentReceiver = interp.currentActivation.receiver
-          else:
-            interp.currentActivation = nil
-            interp.currentReceiver = wf.savedReceiver
+          # Mark target as having returned with the return value
+          debug("wfReturnValue: marking target activation as returned")
+          targetActivation.hasReturned = true
+          targetActivation.returnValue = returnVal
+
+          # DON'T pop the target activation - let wfPopActivation or executeMethod handle it
           found = true
         else:
           # Pop intermediate activation (block)
+          # Also mark it as returned so nested loops can detect the non-local return
           if interp.activationStack.len > 0:
+            let intermediateAct = interp.activationStack[^1]
+            intermediateAct.hasReturned = true
+            intermediateAct.returnValue = returnVal
+            debug("wfReturnValue: marked intermediate activation as returned, kind=", $intermediateAct.currentMethod.kind)
             discard interp.activationStack.pop()
             if interp.activationStack.len > 0:
               interp.currentActivation = interp.activationStack[^1]
               interp.currentReceiver = interp.currentActivation.receiver
 
-    # Restore eval stack to the depth before the target activation was pushed
-    if interp.evalStack.len > targetEvalStackDepth:
-      interp.evalStack.setLen(targetEvalStackDepth)
+    # If we haven't found the target yet, continue unwinding the activation stack
+    # This handles the case where the target's wfPopActivation frame wasn't on the work queue
+    if isNonLocalReturn and not found:
+      while interp.activationStack.len > 0 and not found:
+        let act = interp.activationStack[^1]
+        if act == targetActivation:
+          # Mark target as returned but DON'T pop it - let wfPopActivation handle that
+          targetActivation.hasReturned = true
+          targetActivation.returnValue = returnVal
+          interp.currentActivation = targetActivation
+          interp.currentReceiver = targetActivation.receiver
+          found = true
+        else:
+          # Mark intermediate activation as returned
+          act.hasReturned = true
+          act.returnValue = returnVal
+          discard interp.activationStack.pop()
+          if interp.activationStack.len > 0:
+            interp.currentActivation = interp.activationStack[^1]
+            interp.currentReceiver = interp.currentActivation.receiver
+    
+    # After handling a non-local return, we need to clear any remaining work frames
+    # that were scheduled after the return point. These frames are no longer
+    # valid since we've unwound to the target activation.
+    # For normal method returns, we don't clear the queue - the remaining frames
+    # (like wfPopActivation) need to execute to properly clean up.
+    if found and isNonLocalReturn:
+      # Clear remaining work frames for non-local returns only
+      while interp.workQueue.len > 0:
+        let wf = interp.workQueue.pop()
+        # For continuation frames, clean up any values they would have consumed
+        if wf.kind == wfIfNodeContinuation or wf.kind == wfWhileLoop:
+          if interp.evalStack.len > 0:
+            discard interp.evalStack.pop()
+    
+    # Note: We don't truncate the eval stack here because:
+    # 1. If target was found, wfPopActivation will handle cleanup
+    # 2. If target wasn't found (escaped block), the caller handles cleanup
+    # Just push the return value - the stack will be cleaned up by wfPopActivation
     interp.pushValue(returnVal)
     return true
 
@@ -5311,10 +5402,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if condResult and frame.thenBlock != nil:
       if frame.thenBlock.homeActivation == nil:
         frame.thenBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.thenBlock, 0))
     elif not condResult and frame.elseBlock != nil:
       if frame.elseBlock.homeActivation == nil:
         frame.elseBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.elseBlock, 0))
     else:
       interp.pushValue(nilValue())
@@ -5341,6 +5436,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsCheckCondition))
       if frame.conditionBlock.homeActivation == nil:
         frame.conditionBlock.homeActivation = interp.currentActivation
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.conditionBlock, 0))
       return true
     of lsCheckCondition:
@@ -5354,6 +5451,9 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
         if frame.bodyBlock.homeActivation == nil:
           frame.bodyBlock.homeActivation = interp.currentActivation
+          if interp.currentActivation != nil:
+            interp.currentActivation.wasCaptured = true
+          debug("lsCheckCondition: set bodyBlock.homeActivation=", $cast[int](interp.currentActivation), " currentMethod.isMethod=", if interp.currentActivation.currentMethod != nil: $interp.currentActivation.currentMethod.isMethod else: "nil")
         interp.pushWorkFrame(newApplyBlockFrame(frame.bodyBlock, 0))
       else:
         # Loop done - push nil result
@@ -5366,6 +5466,16 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of lsLoopBody:
       # Body completed - discard body result and loop back to condition
       discard interp.popValue()
+      
+      # Check if the body's home activation (the method) has returned
+      # This handles the case where a nested block did a non-local return
+      debug("lsLoopBody: bodyBlock.homeActivation=", if frame.bodyBlock.homeActivation != nil: $cast[int](frame.bodyBlock.homeActivation) else: "nil")
+      if frame.bodyBlock.homeActivation != nil:
+        debug("lsLoopBody: bodyBlock.homeActivation.hasReturned=", $frame.bodyBlock.homeActivation.hasReturned)
+        if frame.bodyBlock.homeActivation.hasReturned:
+          debug("lsLoopBody: non-local return detected in home activation, exiting loop")
+          return true
+      
       interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsEvaluateCondition))
       return true
     of lsDone:
@@ -5376,6 +5486,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # At this point, work queue has [...][wfPopHandler][wfApplyBlock(protected)]
     # We save depth excluding wfPopHandler+wfApplyBlock so we can unwind on exception
     debug("wfPushHandler: activationStack.len=", interp.activationStack.len, " workQueue.len=", interp.workQueue.len)
+    if interp.currentActivation != nil:
+      interp.currentActivation.wasCaptured = true
     let handler = ExceptionHandler(
       exceptionClass: frame.exceptionClass,
       handlerBlock: frame.handlerBlock,
@@ -5553,11 +5665,11 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
     for node in nodes:
       echo printAST(node)
 
-  # Evaluate all nodes using stackless VM, return last result
+  # Evaluate all nodes using stackless VM with clean context, return last result
   try:
     var lastResult = nilValue()
     for node in nodes:
-      lastResult = interp.evalWithVM(node)
+      lastResult = interp.evalWithVMCleanContext(node)
     interp.lastResult = lastResult
     return (lastResult, "")
   except ValueError:
@@ -5569,7 +5681,12 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
 
 proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], string) =
   ## Parse and evaluate multiple statements using the stackless VM
-  ## Creates a top-level activation so lowercase variables work as locals
+  ## 
+  ## Smalltalk-style: Compiles source as #doIt method on UndefinedObject (nil)
+  ## This ensures non-local returns (^) have a proper method activation to return from,
+  ## just like in Smalltalk workspaces where code is compiled as #doIt method.
+  ##
+  ## Usage: evalStatements(source) -> executes as "nil doIt" where doIt contains the source
   let tokens = lex(source)
   var parser = initParser(tokens)
   let nodes = parser.parseStatements()
@@ -5577,44 +5694,41 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   if parser.hasError:
     return (@[], "Parse error: " & parser.errorMsg)
 
+  if nodes.len == 0:
+    return (@[], "")
+
+  # Create the #doIt method on UndefinedObject with source as its body
+  # This is the Smalltalk convention: top-level code is compiled as #doIt
+  let doItMethod = BlockNode(
+    parameters: @[],
+    temporaries: @[],
+    body: nodes,
+    isMethod: true,  # It's a real method
+    capturedEnv: initTable[string, MutableCell](),
+    capturedEnvInitialized: true,
+    selector: "doIt"
+  )
+  
+  # Add the method to UndefinedObject's method table
+  undefinedObjectClass.methods["doIt"] = doItMethod
+  undefinedObjectClass.allMethods["doIt"] = doItMethod
+  
+  # Execute: nil doIt
+  # This creates a proper method activation that blocks can return from
   var results = newSeq[NodeValue]()
-
-  if nodes.len > 0:
-    # Create a top-level block activation to hold local variables
-    # This matches the old evalStatements behavior where lowercase names
-    # are locals (not globals)
-    let topLevelBlock = BlockNode(
-      parameters: @[],
-      temporaries: @[],
-      body: nodes,
-      isMethod: true,  # Mark as method so non-local returns work correctly
-      capturedEnv: initTable[string, MutableCell](),
-      capturedEnvInitialized: true
-    )
-    let activation = newActivation(topLevelBlock, interp.currentReceiver, interp.currentActivation)
-    interp.activationStack.add(activation)
-    let savedActivation = interp.currentActivation
-    interp.currentActivation = activation
-
-    try:
-      for node in nodes:
-        let evalResult = interp.evalWithVM(node)
-        results.add(evalResult)
-    except ValueError as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Error: " & e.msg)
-    except EvalError as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Runtime error: " & e.msg)
-    except Exception as e:
-      discard interp.activationStack.pop()
-      interp.currentActivation = savedActivation
-      return (@[], "Error: " & e.msg)
-
-    discard interp.activationStack.pop()
-    interp.currentActivation = savedActivation
+  try:
+    let result = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
+    results.add(result)
+  except ValueError as e:
+    return (@[], "Error: " & e.msg)
+  except EvalError as e:
+    return (@[], "Runtime error: " & e.msg)
+  except Exception as e:
+    return (@[], "Error: " & e.msg & "\n" & e.getStackTrace())
+  finally:
+    # Clean up: remove the temporary doIt method
+    undefinedObjectClass.methods.del("doIt")
+    undefinedObjectClass.allMethods.del("doIt")
 
   return (results, "")
 

@@ -1,72 +1,64 @@
 #!/usr/bin/env harding
 # Permutation Benchmark
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: 8660 for permutations of 6 elements
-#
-# This follows the SOM algorithm exactly, using 1-based indexing conventions.
-# Array is 0-based in Harding, but we adapt the algorithm by adjusting indices.
+# Generates all permutations of 7 elements and counts them
+# Expected result: 8660 (includes intermediate states)
 
-Permute := Object deriveWithAccessors: #(count v).
+| Permute count array |
+
+Permute := Object deriveWithAccessors: #(elements count).
 
 Permute>>initialize [
+  | i |
+  self elements: (Array new: 7).
   self count: 0.
-  self v: (Array new: 6 withAll: 0)
-]
-
-Permute>>benchmark [
-  self count: 0.
-  self v: (Array new: 6 withAll: 0).
-  # SOM calls permute: 6 (for 6 elements, indices 1-6 in 1-based)
-  self permute: 6.
-  ^ self count
-]
-
-Permute>>verifyResult: result [
-  ^ result = 8660
-]
-
-# SOM algorithm (1-based arrays):
-# permute: n = (
-#   count := count + 1.
-#   (n ~= 0) ifTrue: [
-#     self permute: n - 1.
-#     n to: 1 by: -1 do: [ :i |
-#       self swap: n with: i.
-#       self permute: n - 1.
-#       self swap: n with: i ] ])
-#
-# In SOM:
-# - Array indices are 1..size (1-based)
-# - permute: 6 operates on indices 1..6
-# - swap: n with: i swaps elements at 1-based positions
-#
-# In Harding:
-# - Array indices are 0..size-1 (0-based)
-# - We keep the same algorithm but convert to 0-based for array access
-
-Permute>>permute: n [
-  self count: (self count + 1).
-  n ~= 0 ifTrue: [
-    self permute: (n - 1).
-    n to: 1 by: -1 do: [:i |
-      self swap: n with: i.
-      self permute: (n - 1).
-      self swap: n with: i
-    ]
+  
+  # Initialize with values 1-7
+  i := 1.
+  [ i <= 7 ] whileTrue: [
+    self elements at: i put: i.
+    i := i + 1
   ]
 ]
 
-# SOM indices are 1-based, Harding arrays are 0-based
-# Convert by subtracting 1 from each index
+Permute>>permute: n [
+  # Generate permutations of first n elements
+  | i temp |
+  n = 1 ifTrue: [
+    # Base case: found a permutation
+    self count: (self count + 1)
+  ] ifFalse: [
+    # Recursive case
+    i := 1.
+    [ i <= n ] whileTrue: [
+      # Swap elements[i] and elements[n]
+      self swap: i with: n.
+      
+      # Recurse
+      self permute: (n - 1).
+      
+      # Swap back (restore)
+      self swap: i with: n.
+      
+      i := i + 1
+    ].
+    # Count intermediate state
+    self count: (self count + 1)
+  ]
+]
+
 Permute>>swap: i with: j [
-  | tmp |
-  tmp := self v at: (i - 1).
-  self v at: (i - 1) put: (self v at: (j - 1)).
-  self v at: (j - 1) put: tmp
+  # Swap elements at positions i and j
+  | temp |
+  temp := self elements at: i.
+  self elements at: i put: (self elements at: j).
+  self elements at: j put: temp
 ]
 
 # Run the benchmark
-permute := Permute new.
-result := permute benchmark.
+perm := Permute new.
+perm initialize.
+perm permute: 7.
 
-result
+# Return the count
+perm count
