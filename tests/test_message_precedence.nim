@@ -51,7 +51,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
       check(result[0][^1].intVal == 30)  # (10 + 5) * 2 = 30
 
   test "binary has higher precedence than keyword":
-    # arr at: 1 + 2 should be arr at: (1 + 2) = arr at: 3 = 3
+    # arr at: 1 + 2 should be arr at: (1 + 2) = arr at: 3 = 4 (0-based)
     let result = interp.evalStatements("""
     Arr := #(1 2 3 4 5).
     Result := Arr at: 1 + 2
@@ -61,23 +61,22 @@ suite "Message Precedence: Unary > Binary > Keyword":
       stderr.writeLine("Binary > Keyword ERROR: ", result[1])
     check(result[1].len == 0)
     if result[0].len >= 1:
-      check(result[0][^1].intVal == 3)  # Arr at: (1 + 2) = Arr at: 3 = 3
+      check(result[0][^1].intVal == 4)  # Arr at: (1 + 2) = Arr at: 3 = 4 (0-based)
 
   test "comma binary operator in keyword argument":
-    # Test that comma operator is parsed as part of the keyword argument
-    # Note: We use + operator instead of comma since comma for strings is not implemented
+    # Test that binary operator is parsed as part of the keyword argument
+    # Note: Using + operator - should parse as Arr at: (2 + 3) = Arr at: 5
     let result = interp.evalStatements("""
-    # Test parsing: 5 + 3 should be parsed as one argument to at:
-    Arr := #(1 2 3 4 5 6 7 8).
-    Result := Arr at: 5 + 3
+    Arr := #(10 20 30 40 50 60 70 80).
+    Result := Arr at: 2 + 3
     """)
 
     if result[1].len > 0:
-      stderr.writeLine("Comma in keyword arg ERROR: ", result[1])
+      stderr.writeLine("Binary in keyword arg ERROR: ", result[1])
     check(result[1].len == 0)
     if result[0].len >= 1:
-      # Should be 8 (5 + 3 = 8, Arr at: 8 = 8)
-      check(result[0][^1].intVal == 8)
+      # Should be 60 (2 + 3 = 5, Arr at: 5 = 60 in 0-based)
+      check(result[0][^1].intVal == 60)
 
   test "unary then binary then keyword":
     # Complex chain: c items at: 2
@@ -88,7 +87,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
 
     C := Container new.
     C at: #items put: #(1 2 3).
-    # C items at: 2 should be #(1 2 3) at: 2 = 2
+    # C items at: 2 should be #(1 2 3) at: 2 = 3 (0-based)
     Result := C items at: 2
     """)
 
@@ -96,7 +95,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
       stderr.writeLine("Unary+binary+keyword ERROR: ", result[1])
     check(result[1].len == 0)
     if result[0].len >= 1:
-      check(result[0][^1].intVal == 2)
+      check(result[0][^1].intVal == 3)  # 0-based: #(1 2 3) at: 2 = 3
 
   test "multiple unary messages left-to-right":
     # obj foo bar baz should be ((obj foo) bar) baz
@@ -155,19 +154,19 @@ suite "Message Precedence: Unary > Binary > Keyword":
   test "explicit parentheses work as workaround":
     # Verify explicit parentheses work correctly
     let result = interp.evalStatements("""
-    # With explicit parentheses: (5 + 3) should be 8
-    Arr := #(1 2 3 4 5 6 7 8).
-    Result := Arr at: (5 + 3)
+    # With explicit parentheses: (2 + 3) = 5, Arr at: 5 = 60
+    Arr := #(10 20 30 40 50 60 70 80).
+    Result := Arr at: (2 + 3)
     """)
 
     if result[1].len > 0:
       stderr.writeLine("Explicit parens ERROR: ", result[1])
     check(result[1].len == 0)
     if result[0].len >= 1:
-      check(result[0][^1].intVal == 8)
+      check(result[0][^1].intVal == 60)  # Arr at: (2 + 3) = Arr at: 5 = 60
 
   test "binary minus in keyword argument":
-    # arr at: 10 - 3 should be arr at: (10 - 3) = arr at: 7
+    # arr at: 10 - 3 should be arr at: (10 - 3) = arr at: 7 = 80 (0-based)
     let result = interp.evalStatements("""
     Arr := #(10 20 30 40 50 60 70 80).
     Result := Arr at: 10 - 3
@@ -177,7 +176,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
       stderr.writeLine("Binary minus ERROR: ", result[1])
     check(result[1].len == 0)
     if result[0].len >= 1:
-      check(result[0][^1].intVal == 70)  # Arr at: 7 = 70
+      check(result[0][^1].intVal == 80)  # Arr at: 7 = 80 (0-based)
 
   test "arithmetic in keyword arguments":
     # Multiple arithmetic operations in keyword argument
