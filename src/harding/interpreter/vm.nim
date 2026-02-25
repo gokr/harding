@@ -565,12 +565,10 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
     return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
   let cls = receiver.class
-  debug("lookupMethod: class=", cls.name, " selector=", selector, " methodsDirty=", cls.methodsDirty, " allMethods.len=", cls.allMethods.len)
 
   # Fast O(1) lookup in allMethods table first (common case - no rebuild needed)
   if selector in cls.allMethods:
     let meth = cls.allMethods[selector]
-    debug("lookupMethod: found in allMethods, nativeImpl=", cast[int](meth.nativeImpl), " hasInterpreterParam=", meth.hasInterpreterParam)
     return MethodResult(
       currentMethod: meth,
       receiver: receiver,
@@ -580,14 +578,12 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
 
   # Cache miss: rebuild method tables if dirty, then retry lookup
   if cls.methodsDirty:
-    debug("lookupMethod: methodsDirty=true, rebuilding")
     rebuildAllTables(cls)  # Only rebuild this class, not all descendants
     cls.methodsDirty = false
     
     # Retry lookup after rebuild
     if selector in cls.allMethods:
       let meth = cls.allMethods[selector]
-      debug("lookupMethod: found after rebuild, nativeImpl=", cast[int](meth.nativeImpl))
       return MethodResult(
         currentMethod: meth,
         receiver: receiver,
@@ -595,7 +591,6 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
         found: true
       )
 
-  debug("lookupMethod: NOT FOUND, returning nil")
   return MethodResult(currentMethod: nil, receiver: receiver, definingClass: nil, found: false)
 
 proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
@@ -641,7 +636,6 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   debug("Executing method with ", arguments.len, " arguments")
 
   # Check for native implementation first
-  debug("executeMethod: currentMethod nil? ", currentMethod == nil, " selector=", if currentMethod != nil: currentMethod.selector else: "N/A")
   if nativeImplIsSet(currentMethod):
       debug("Calling native implementation: ", currentMethod.selector, " receiver=", $receiver.class.name, " receiver.kind=", $receiver.kind, " hasInterpreterParam=", currentMethod.hasInterpreterParam)
       let savedReceiver = interp.currentReceiver
@@ -2206,18 +2200,32 @@ proc initGlobals*(interp: var Interpreter) =
   # Add print and println as native methods
   proc objPrintImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
     # Print self to stdout without newline
-    let s = self.toValue().toString()
-    stdout.write(s)
+    if self == nil:
+      return nilValue()
+    case self.kind
+    of ikString:
+      stdout.write(self.strVal)
+    of ikInt:
+      stdout.write($self.intVal)
+    of ikFloat:
+      stdout.write($self.floatVal)
+    of ikObject, ikArray, ikTable:
+      stdout.write("instance")
     return self.toValue()
 
   proc objPrintlnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
     # Print self to stdout with newline
-    debug("objPrintlnImpl: self=nil? ", self == nil, " self.kind=", $self.kind)
     if self == nil:
-      raise newException(ValueError, "println called on nil")
-    let s = self.toValue().toString()
-    debug("objPrintlnImpl: about to echo: ", s)
-    echo(s)
+      return nilValue()
+    case self.kind
+    of ikString:
+      echo(self.strVal)
+    of ikInt:
+      echo($self.intVal)
+    of ikFloat:
+      echo($self.floatVal)
+    of ikObject, ikArray, ikTable:
+      echo("instance")
     return self.toValue()
 
   let printMethod = createCoreMethod("print")
@@ -4930,18 +4938,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
     # Check for native implementation
     # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
-    debug("VM: currentMethod ptr=", cast[int](currentMethod), " selector=", if currentMethod != nil: currentMethod.selector else: "NIL")
     debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod))
     if nativeImplIsSet(currentMethod):
       # Call native method
-      debug("VM: Calling native method '", frame.selector, "'")
-      debug("VM: currentMethod.nativeImpl ptr=", cast[int](currentMethod.nativeImpl), " hasInterpreterParam=", currentMethod.hasInterpreterParam)
       debug("VM: receiver ptr=", cast[int](receiver), " receiver class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
       let savedReceiver = interp.currentReceiver
       try:
         var resultVal: NodeValue
-        debug("VM: Checking hasInterpreterParam=", currentMethod.hasInterpreterParam)
-        stderr.flushFile()
         if currentMethod.hasInterpreterParam:
           debug("VM: Native method has interpreter param, nativeImpl=", cast[int](currentMethod.nativeImpl))
           type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
@@ -4953,7 +4956,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
           debug("VM: About to call nativeProc (no interp), receiver=", (if receiver != nil: receiver.class.name else: "nil"), " receiver ptr=", cast[int](receiver))
-          stderr.flushFile()
           resultVal = nativeProc(receiver, args)
         interp.pushValue(resultVal)
       finally:

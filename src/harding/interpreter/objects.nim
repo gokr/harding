@@ -1936,13 +1936,11 @@ proc invalidateSubclasses*(cls: Class) =
 
 proc rebuildAllTables*(cls: Class) =
   ## Rebuild inherited method tables
-  debug("rebuildAllTables: class=", cls.name, " methodsDirty=", cls.methodsDirty, " superclasses.len=", cls.superclasses.len)
   var allMethods = initTable[string, BlockNode]()
   var allClassMethods = initTable[string, BlockNode]()
 
   # For the class itself, use directly-defined methods only
   for sel, m in cls.methods:
-    debug("rebuildAllTables: adding own method ", sel, " nativeImpl=", cast[int](m.nativeImpl))
     allMethods[sel] = m
   for sel, m in cls.classMethods:
     allClassMethods[sel] = m
@@ -1950,12 +1948,9 @@ proc rebuildAllTables*(cls: Class) =
   # For parent classes, use allMethods (includes what they inherited)
   # This ensures we pick up manually-added methods from tests
   for parent in cls.superclasses:
-    debug("rebuildAllTables: processing parent ", parent.name)
     for c in parent.inheritanceChain():
-      debug("rebuildAllTables: processing inheritance chain class ", c.name, " allMethods.len=", c.allMethods.len)
       for sel, m in c.allMethods:
         if sel notin allMethods:
-          debug("rebuildAllTables: inheriting method ", sel, " from ", c.name, " nativeImpl=", cast[int](m.nativeImpl))
           allMethods[sel] = m
       for sel, m in c.allClassMethods:
         if sel notin allClassMethods:
@@ -1971,9 +1966,6 @@ proc rebuildAllTables*(cls: Class) =
   cls.hasSlots = allSlotNames.len > 0
 
   # Rebuild tables
-  debug("rebuildAllTables: final allMethods.len=", allMethods.len, " has println? ", "println" in allMethods)
-  if "println" in allMethods:
-    debug("rebuildAllTables: println nativeImpl=", cast[int](allMethods["println"].nativeImpl))
   cls.allMethods = allMethods
   cls.allClassMethods = allClassMethods
 
