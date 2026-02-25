@@ -3,30 +3,67 @@
 # Harding Compiler - Standalone compiler binary
 #
 # Compiles Harding source (.hrd) to Nim code (.nim)
+#
+# NOTE: This compiler initializes the full Harding VM to ensure access to
+# the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, logging]
+import std/[os, strutils, parseopt, strformat, logging, tables]
+import ../core/types
 import ../parser/parser
 import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
+import ../compiler/types
+import ../core/scheduler
+import ../interpreter/vm
+import ../repl/cli
 
 proc mangleModuleName(name: string): string =
   ## Convert module name to valid Nim identifier
   ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
   return name
 
-const VERSION* = block:
-  const nimblePath = currentSourcePath().parentDir().parentDir().parentDir().parentDir() / "harding.nimble"
-  const nimbleContent = staticRead(nimblePath)
-  var versionStr = "unknown"
-  for line in nimbleContent.splitLines():
-    let trimmed = line.strip()
-    if trimmed.startsWith("version"):
-      let parts = trimmed.split("=")
-      if parts.len >= 2:
-        versionStr = parts[1].strip().strip(chars={'\"', '\''})
-        break
-  versionStr
+proc showErrorContext*(source: string, filename: string, lineNum: int, colNum: int) =
+  let lines = source.splitLines()
+  if lineNum > 0 and lineNum <= lines.len:
+    let line = lines[lineNum - 1]
+    echo ""
+    echo "  --> ", filename, ":", lineNum, ":", colNum
+    echo "   |"
+    echo " ", lineNum, " | ", line
+    let indicator = " ".repeat(colNum + len($lineNum) + 3) & "^"
+    echo "   | ", indicator
+    echo "   |" 
+    echo " Hint: Check for missing brackets, parentheses, or quotes"
+
+proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassInfo] =
+  ## Extract class information from interpreter's live class objects
+  result = initTable[string, ClassInfo]()
+  if interp.globals == nil:
+    return
+  for name, val in interp.globals[].pairs:
+    if val.kind == vkClass:
+      let cls = val.classVal
+      if cls != nil and cls.allSlotNames.len > 0:
+        let classInfo = newClassInfo(cls.name)
+        for slotName in cls.allSlotNames:
+          discard classInfo.addSlot(slotName, tcObject)
+        result[cls.name] = classInfo
+
+proc extractHardingCompileSource(nodes: seq[Node]): string =
+  ## Extract source code from Harding compile: block if present
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "compile:" and msg.receiver != nil and 
+         msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
+        if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
+          let blk = msg.arguments[0].BlockNode
+          var lines: seq[string] = @[]
+          for stmt in blk.body:
+            lines.add(printAST(stmt))
+          return lines.join("\n")
+  return ""
 
 type
   Config = ref object
@@ -37,10 +74,14 @@ type
     build: bool
     run: bool
     release: bool
+    mixed: bool
     help: bool
     version: bool
     logLevel: Level
     dumpAst: bool
+    hardingHome: string
+    bootstrapFile: string
+    maxStackDepth: int
 
 proc newConfig(): Config =
   Config(
@@ -51,10 +92,14 @@ proc newConfig(): Config =
     build: false,
     run: false,
     release: false,
+    mixed: false,
     help: false,
     version: false,
     logLevel: lvlError,  # Default to ERROR level
-    dumpAst: false
+    dumpAst: false,
+    hardingHome: getEnv("HARDING_HOME", "."),
+    bootstrapFile: "",
+    maxStackDepth: 10000
   )
 
 proc showUsage() =
@@ -74,10 +119,16 @@ proc showUsage() =
   echo "  -o, --output <file>   Output Nim file path (compile only)"
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
+  echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
+  echo "  --home <path>         Set HARDING_HOME directory (default: current directory)"
+  echo "  --bootstrap <file>    Use custom bootstrap file (default: lib/core/Bootstrap.hrd)"
   echo "  --ast                 Dump AST after parsing and before compiling"
   echo "  --loglevel <level>    Set log level: DEBUG, INFO, WARN, ERROR (default: ERROR)"
   echo "  -h, --help            Show this help"
   echo "  -v, --version         Show version"
+  echo ""
+  echo "Environment Variables:"
+  echo "  HARDING_HOME          Default home directory for loading libraries"
   echo ""
   echo "Examples:"
   echo "  granite compile examples/demo.hrd -o demo.nim"
@@ -128,10 +179,16 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.help = true
       of "v", "version":
         result.version = true
+      of "home":
+        result.hardingHome = p.val
+      of "bootstrap":
+        result.bootstrapFile = p.val
       of "loglevel":
         result.logLevel = parseLogLevel(p.val)
       of "ast":
         result.dumpAst = true
+      of "mixed":
+        result.mixed = true
       else:
         echo "Unknown option: ", p.key
         quit(1)
@@ -144,12 +201,25 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         quit(1)
 
 proc compileFile(config: Config): bool =
-  ## Compile Harding source to Nim
+  ## Compile Harding source to Nim using the unified VM-based pipeline
   if not fileExists(config.inputFile):
     echo "Error: Input file not found: ", config.inputFile
     return false
 
   echo "Compiling: ", config.inputFile
+
+  # Initialize the Harding VM with full stdlib (unified pipeline)
+  # This gives us access to the complete class model for accurate compilation
+  let schedCtx = newSchedulerContext()
+  var interp = schedCtx.mainProcess.getInterpreter()
+  interp.hardingHome = config.hardingHome
+  
+  # Load standard library
+  let bootstrapFile = if config.bootstrapFile.len > 0: 
+                        config.bootstrapFile 
+                      else: 
+                        config.hardingHome / "lib" / "core" / "Bootstrap.hrd"
+  loadStdlib(interp, bootstrapFile)
 
   let source = readFile(config.inputFile)
   let tokens = lex(source)
@@ -160,7 +230,31 @@ proc compileFile(config: Config): bool =
 
   if parser.hasError:
     echo "Parse error: ", parser.errorMsg
+    showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
+
+  # Execute code in interpreter to construct classes
+  # If there's a Harding compile: block, execute its body directly in interpreter
+  var compiledNodes: seq[Node] = @[]
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "compile:" and msg.receiver != nil and 
+         msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
+        if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
+          let blk = msg.arguments[0].BlockNode
+          compiledNodes = blk.body
+          break
+  
+  if compiledNodes.len > 0:
+    # Execute compile block nodes directly
+    for node in compiledNodes:
+      discard evalWithVM(interp, node)
+  elif source.len > 0:
+    # Backward compatibility: execute full source
+    let (execResults, execError) = evalStatements(interp, source)
+    if execError.len > 0:
+      echo "Execution error: ", execError
 
   # Dump AST if requested
   if config.dumpAst:
@@ -181,7 +275,8 @@ proc compileFile(config: Config): bool =
   let outputPath = outputDir / moduleName & ".nim"
 
   var ctx = newCompiler(outputDir, moduleName)
-  let nimCode = genModule(ctx, nodes, moduleName)
+  let reflectedClasses = extractClassInfoFromInterpreter(interp)
+  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)
@@ -278,6 +373,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.compileFile()
@@ -296,6 +394,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.buildFile()
@@ -314,6 +415,9 @@ proc main() =
       showUsage()
       quit(0)
 
+    # Set HARDING_HOME environment for child processes
+    putEnv("HARDING_HOME", config.hardingHome)
+    
     setupLogging(config)
 
     let success = config.runFile()
@@ -334,6 +438,9 @@ proc main() =
         showUsage()
         quit(0)
 
+      # Set HARDING_HOME environment for child processes
+      putEnv("HARDING_HOME", config.hardingHome)
+      
       setupLogging(config)
 
       let success = config.compileFile()

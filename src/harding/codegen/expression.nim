@@ -1,4 +1,4 @@
-import std/[strutils, sequtils, strformat]
+import std/[strutils, sequtils, strformat, tables]
 import ../core/types
 import ../compiler/context
 import ../compiler/symbols
@@ -10,6 +10,12 @@ import ./blocks
 # ============================================================================
 
 type
+  VarTypeInfo* = object
+    ## Type information for a variable
+    name*: string          ## Variable name
+    className*: string     ## Class name (e.g., "Person", "Array", etc.)
+    isNativeClass*: bool   ## Whether this is a native compiled class
+
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
@@ -17,12 +23,18 @@ type
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
     blockRegistry*: BlockRegistry ## Registry for blocks to compile
+    varTypes*: Table[string, VarTypeInfo]  ## Variable name -> type info
+    compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
+    classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
+    mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 
-proc newGenContext*(cls: ClassInfo = nil): GenContext =
+proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
+                    classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                    mixed: bool = false): GenContext =
   ## Create new generation context
   result = GenContext(
     cls: cls,
@@ -30,7 +42,11 @@ proc newGenContext*(cls: ClassInfo = nil): GenContext =
     locals: @[],
     parameters: @[],
     globals: @[],
-    blockRegistry: newBlockRegistry()
+    blockRegistry: newBlockRegistry(),
+    varTypes: initTable[string, VarTypeInfo](),
+    compiledClasses: compiledClasses,
+    classInfo: classInfo,
+    mixed: mixed
   )
 
 proc indentBlock*(code: string, spaces: int = 2): string =
@@ -55,6 +71,52 @@ proc getSlotIndex*(ctx: GenContext, name: string): int =
   if ctx.cls == nil:
     return -1
   return ctx.cls.getSlotIndex(name)
+
+proc setVariableType*(ctx: GenContext, varName: string, className: string, isNative = true) =
+  ## Set the type of a variable to a specific class
+  ctx.varTypes[varName] = VarTypeInfo(
+    name: varName,
+    className: className,
+    isNativeClass: isNative
+  )
+
+proc getVariableType*(ctx: GenContext, varName: string): VarTypeInfo =
+  ## Get the type info for a variable
+  if varName in ctx.varTypes:
+    return ctx.varTypes[varName]
+  return VarTypeInfo(name: varName, className: "", isNativeClass: false)
+
+proc inferTypeFromExpression*(ctx: GenContext, node: Node): VarTypeInfo =
+  ## Infer the type of an expression
+  ## Returns VarTypeInfo with isNativeClass=true only for native constructors
+  if node == nil:
+    return VarTypeInfo(name: "", className: "", isNativeClass: false)
+  
+  case node.kind
+  of nkMessage:
+    let msg = node.MessageNode
+    # Check for "Class new" pattern where Class is a compiled class
+    # In this case we generate a native constructor call
+    if msg.selector == "new" and msg.receiver != nil and msg.receiver.kind == nkIdent:
+      let className = msg.receiver.IdentNode.name
+      # Check if this class is being compiled (will use native constructor)
+      let isNative = className in ctx.compiledClasses
+      return VarTypeInfo(name: "", className: className, isNativeClass: isNative)
+    
+    # Check for other patterns that might indicate type
+    elif msg.receiver != nil:
+      let receiverType = ctx.inferTypeFromExpression(msg.receiver)
+      if receiverType.className.len > 0:
+        # Inherit native status from receiver for cascade patterns
+        return receiverType
+  of nkIdent:
+    let varName = node.IdentNode.name
+    if varName in ctx.varTypes:
+      return ctx.varTypes[varName]
+  else:
+    discard
+  
+  return VarTypeInfo(name: "", className: "", isNativeClass: false)
 
 proc escapeNimString*(s: string): string =
   ## Escape a string for use in Nim code
@@ -133,6 +195,82 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   # Fallback: treat as symbol
   return fmt("NodeValue(kind: vkSymbol, symVal: \"{name}\")")
 
+proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: string): string =
+  ## Try to generate direct slot accessor call instead of sendMessage
+  ## Returns empty string if not a slot accessor (fallback to sendMessage)
+  ## 
+  ## NOTE: This optimization only works for native objects created via native constructors.
+  ## Runtime objects created through sendMessage use a different representation.
+  
+  # Get receiver type info
+  var receiverType: VarTypeInfo
+  if node.receiver != nil and node.receiver.kind == nkIdent:
+    let varName = node.receiver.IdentNode.name
+    receiverType = ctx.getVariableType(varName)
+  elif node.receiver == nil:
+    # Implicit self - use current class context
+    if ctx.cls != nil:
+      receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
+  
+  # If we don't know the receiver's class, can't optimize
+  if receiverType.className.len == 0:
+    return ""
+  
+  # Only optimize for native class instances
+  # In mixed mode, always use sendMessage to ensure interpreter can handle methods
+  if ctx.mixed:
+    return ""
+  
+  # For now, we require isNativeClass to be true AND the class must be defined in the compiled code
+  if not receiverType.isNativeClass:
+    return ""
+  
+  let selector = node.selector
+  let className = receiverType.className
+  
+  # Verify selector is actually a slot name in this class
+  # Handle both getter "name" and setter "name:" patterns
+  if className notin ctx.classInfo:
+    return ""
+  
+  let classDef = ctx.classInfo[className]
+  let checkSelector = if selector.endsWith(":") and node.arguments.len == 1:
+                        selector[0..^2]  # Remove trailing colon for setter
+                      else:
+                        selector
+  let selectorIsSlot = block:
+    var found = false
+    for slot in classDef.slots:
+      if slot.name == checkSelector:
+        found = true
+        break
+    found
+  
+  if not selectorIsSlot:
+    return ""
+  
+  let classType = mangleClass(className)
+  
+  # Generate code to extract native pointer from NodeValue
+  # receiverCode is a NodeValue, we need to extract instVal.nimValue and cast it
+  let nativeReceiver = fmt("cast[{classType}]({receiverCode}.instVal.nimValue)")
+  
+  # Check for setter pattern: "slotName:" (one arg, ends with colon)
+  if selector.endsWith(":") and node.arguments.len == 1:
+    let slotName = selector[0..^2]  # Remove trailing colon
+    let mangledSlot = mangleSlot(slotName)
+    let argCode = genExpression(ctx, node.arguments[0])
+    return fmt("set{mangledSlot}({nativeReceiver}, {argCode})")
+  
+  # Check for getter pattern: "slotName" (no args, no colon)
+  elif not selector.contains(":") and node.arguments.len == 0:
+    let slotName = selector
+    let mangledSlot = mangleSlot(slotName)
+    return fmt("get{mangledSlot}({nativeReceiver})")
+  
+  # Not a slot accessor
+  return ""
+
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
 
@@ -142,6 +280,18 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     receiverCode = genExpression(ctx, node.receiver)
   else:
     receiverCode = "self.toValue()"
+
+  # Check for native class instantiation: "ClassName new" where ClassName is compiled
+  if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
+    let className = node.receiver.IdentNode.name
+    if className in ctx.compiledClasses:
+      # In mixed mode, use interpreter to create instances (ensures interpreter can call methods)
+      if ctx.mixed:
+        return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
+      else:
+        # Generate native constructor call: newClass_ClassName().toValue()
+        let mangledClass = mangleClass(className)
+        return fmt("new{mangledClass}().toValue()")
 
   # Check for inline control flow with literal blocks
   case node.selector
@@ -247,7 +397,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry
+          blockRegistry: ctx.blockRegistry,
+          varTypes: ctx.varTypes
         )
         var code = "(block:\n"
         code.add("    for hardingDoIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
@@ -271,7 +422,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry
+          blockRegistry: ctx.blockRegistry,
+          varTypes: ctx.varTypes
         )
         var code = "(block:\n"
         code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
@@ -302,7 +454,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry
+          blockRegistry: ctx.blockRegistry,
+          varTypes: ctx.varTypes
         )
         var code = "(block:\n"
         code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
@@ -460,12 +613,19 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
+    # Try to generate direct slot accessor call
+    let slotAccessorCode = tryGenerateSlotAccessor(ctx, node, receiverCode)
+    if slotAccessorCode.len > 0:
+      return slotAccessorCode
+    
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
@@ -486,6 +646,12 @@ proc genExpression*(ctx: GenContext, node: Node): string =
   of nkAssign:
     let assign = node.AssignNode
     let varName = assign.variable
+    
+    # Infer type from the expression being assigned
+    let exprType = ctx.inferTypeFromExpression(assign.expression)
+    if exprType.className.len > 0:
+      ctx.setVariableType(varName, exprType.className, exprType.isNativeClass)
+    
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if variable is a slot
@@ -576,6 +742,12 @@ proc genStatement*(ctx: GenContext, node: Node): string =
   of nkAssign:
     let assign = node.AssignNode
     let varName = assign.variable
+    
+    # Infer type from the expression being assigned
+    let exprType = ctx.inferTypeFromExpression(assign.expression)
+    if exprType.className.len > 0:
+      ctx.setVariableType(varName, exprType.className, exprType.isNativeClass)
+    
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if variable is a slot
@@ -747,7 +919,8 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
-    blockRegistry: newBlockRegistry()
+    blockRegistry: newBlockRegistry(),
+    varTypes: ctx.varTypes
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
@@ -815,6 +988,12 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
   of nkAssign:
     let assign = node.AssignNode
     let varName = assign.variable
+    
+    # Infer type from the expression being assigned
+    let exprType = ctx.inferTypeFromExpression(assign.expression)
+    if exprType.className.len > 0:
+      ctx.setVariableType(varName, exprType.className, exprType.isNativeClass)
+    
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if it's a reassignment of an existing variable

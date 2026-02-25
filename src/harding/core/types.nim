@@ -1,4 +1,4 @@
-import std/[tables, logging, hashes, strutils]
+import std/[tables, logging, hashes, strutils, strformat]
 import ./tagged  # Tagged value support for VM performance
 
 # ============================================================================
@@ -10,7 +10,10 @@ template debug*(args: varargs[untyped]) =
   ## Debug logging that compiles to nothing in release mode
   ## Use: debug("Message: ", value)
   when not defined(release):
-    let msg = "DEBUG: " & concat(args)
+    var parts: seq[string] = @[]
+    for a in args:
+      parts.add($a)
+    let msg = "DEBUG: " & parts.join("")
     debugEcho(msg)
 
 # ============================================================================

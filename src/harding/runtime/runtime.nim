@@ -1,5 +1,7 @@
-import std/[tables, strformat]
+import std/[tables, strformat, os, logging]
 import ../core/types
+import ../core/scheduler
+import ../interpreter/vm
 
 # ============================================================================
 # Harding Runtime
@@ -170,6 +172,84 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   else:
     # Unknown selector - return nil for now
     return NodeValue(kind: vkNil)
+
+# Global interpreter instance for mixed mode (initialized on first use)
+var hybridInterpreter*: Interpreter = nil
+var hybridScheduler*: SchedulerContext = nil
+
+proc initHybridRuntime*(sourceFiles: seq[string] = @[]) =
+  ## Initialize the hybrid runtime (interpreter embedded in compiled code)
+  ## sourceFiles: optional list of .hrd files to load (creates classes in interpreter)
+  if hybridInterpreter == nil:
+    hybridScheduler = newSchedulerContext()
+    hybridInterpreter = hybridScheduler.mainProcess.getInterpreter()
+    initGlobals(hybridInterpreter)
+    initSymbolTable()
+    loadStdlib(hybridInterpreter)
+    # Load user source files to register classes
+    for srcFile in sourceFiles:
+      if fileExists(srcFile):
+        let source = readFile(srcFile)
+        let (_, err) = hybridInterpreter.evalStatements(source)
+        if err.len > 0:
+          warn("Failed to load source file ", srcFile, ": ", err)
+
+proc sendMessageHybrid*(receiver: NodeValue, selector: string,
+                       args: seq[NodeValue]): NodeValue =
+  ## Hybrid message dispatch: try compiled first, fall back to interpreter
+  ## This is used in mixed mode (--mixed flag) for unsupported features
+  
+  # First, try to use the compiled runtime if available
+  if currentRuntime != nil:
+    let result = sendMessage(currentRuntime[], receiver, selector, args)
+    # If result is not nil, the compiled version handled it
+    if result.kind != vkNil:
+      return result
+  
+  # Fall back to interpreter for uncompiled methods
+  initHybridRuntime()
+  
+  # If receiver is a Nim proxy (native object), we need to find or create interpreter instance
+  if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.isNimProxy:
+    # This is a native object - we need the interpreter to know about it
+    # For now, return nil with a warning
+    when not defined(release):
+      echo "Mixed mode: Nim proxy not yet supported for '", selector, "'"
+    return NodeValue(kind: vkNil)
+  
+  # Use interpreter to evaluate the message send
+  when not defined(release):
+    echo "Mixed mode: Falling back to interpreter for '", selector, "'"
+  
+  # Build source code to evaluate
+  var source = ""
+  if receiver.kind == vkInstance and receiver.instVal != nil:
+    # Get the class name for display
+    let className = if receiver.instVal.class != nil: receiver.instVal.class.name else: "?"
+    source = className
+  elif receiver.kind == vkClass:
+    source = "Class"
+  else:
+    source = receiver.toString()
+  
+  if args.len == 0:
+    source.add(" " & selector)
+  else:
+    source.add(" " & selector & " ")
+    for i, arg in args:
+      source.add(arg.toString())
+      if i < args.len - 1:
+        source.add(" ")
+  
+  let (results, err) = hybridInterpreter.evalStatements(source)
+  if err.len > 0:
+    when not defined(release):
+      echo "Mixed mode error: ", err
+    return NodeValue(kind: vkNil)
+  
+  if results.len > 0:
+    return results[results.len - 1]  # Return last result
+  return NodeValue(kind: vkNil)
 
 # Convenience procs for common operations
 

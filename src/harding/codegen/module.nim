@@ -1,11 +1,10 @@
-import std/[strutils, tables, sequtils, os, strformat]
+import std/[strutils, tables, os, strformat]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
 import ../compiler/context
 import ../compiler/analyzer
 import ../compiler/symbols
-import ./slots
 import ./methods
 import ./control
 import ./expression
@@ -40,55 +39,105 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string): string =
   return output
 
 proc genClassConstants*(cls: ClassInfo): string =
-  ## Generate class constant declarations
+  ## Generate native Nim type for Harding class with slot accessors
   let clsName = mangleClass(cls.name)
-
+  let slots = cls.getAllSlots()
+  
+  # Determine parent class name
+  var parentName = "HardingObject"
+  if cls.parent != nil:
+    parentName = "Class_" & cls.parent.name
+  
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
-
-  # Slot count constant
-  let slots = cls.getAllSlots()
-  output.add(fmt("const {clsName}_slotCount* = {slots.len}\n"))
-
-  # Slot name array
-  if slots.len > 0:
-    let slotNames = slots.mapIt(fmt("\"{it.name}\"")).join(", ")
-    output.add(fmt("\nconst {clsName}_slotNames*: array[{slots.len}, string] = [\n"))
-    output.add("  " & slotNames & "\n")
-    output.add("]\n")
-
-  # Method count
-  output.add(fmt("\nconst {clsName}_methodCount = {cls.methods.len}\n"))
-
+  
+  # Generate Nim object type with slots as fields
+  # TODO: Eventually when we generate native methods directly, we can remove
+  # classRef and toValue() - methods will be called directly instead of via sendMessage
+  output.add("type\n")
+  output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
+  output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
+  
+  # Slot fields - use NodeValue for flexibility in Harding
+  for slot in slots:
+    if not slot.isInherited:
+      let slotName = mangleSlot(slot.name)
+      output.add(fmt("    {slotName}*: NodeValue\n"))
+  
+  output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
+  
+  # Constructor
+  output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
+  output.add(fmt("  ## Create new {cls.name} instance\n"))
+  output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  # Get class reference from interpreter globals (temporary workaround)
+  # This registers the class so toValue() can create proper Instance wrapper
+  output.add(fmt("  if hybridInterpreter != nil:\n"))
+  output.add(fmt("    if \"{cls.name}\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let clsVal = hybridInterpreter.globals[][\"{cls.name}\"]\n"))
+  output.add(fmt("      if clsVal.kind == vkClass:\n"))
+  output.add(fmt("        result.classRef = clsVal.classVal\n"))
+  output.add(fmt("      elif clsVal.kind == vkInstance and clsVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = clsVal.instVal.class\n"))
+  output.add(fmt("    elif \"Object\" in hybridInterpreter.globals[]:\n"))
+  output.add(fmt("      let objVal = hybridInterpreter.globals[][\"Object\"]\n"))
+  output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
+  output.add(fmt("        result.classRef = objVal.instVal.class\n"))
+  for slot in slots:
+    if not slot.isInherited:
+      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
+  # toValue - convert native type to NodeValue using stored classRef
+  # TODO: Remove when native method generation is complete
+  output.add(fmt("proc toValue*(self: {clsName}): NodeValue =\n"))
+  output.add(fmt("  ## Convert {cls.name} to NodeValue for sendMessage interop\n"))
+  output.add(fmt("  let inst = Instance(kind: ikObject, class: self.classRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
+  output.add(fmt("  return NodeValue(kind: vkInstance, instVal: inst)\n"))
+  output.add("\n")
+  
   return output
 
 proc genClassInit*(cls: ClassInfo): string =
-  ## Generate class initialization procedure
+  ## Generate class initialization procedure (legacy - kept for compatibility)
   let clsName = mangleClass(cls.name)
-
+  
   return fmt("""
-proc init_{clsName}*(parent: ref RuntimeObject = nil): ref RuntimeObject {{.cdecl, exportc.}} =
-  ## Initialize {cls.name} class
-  ##
-  var obj = if parent != nil:
-              parent.clone()
-            else:
-              rootObject.clone()
-
-  obj.tags.add("{cls.name}")
-
-  # Initialize slots
-  obj.slots.setLen({cls.getAllSlots().len()})
-
-  # Register methods
-  for meth in obj.methods.values:
-    meth.nativeImpl = nil  # No native implementation yet
-
-  return obj
+# Legacy class init - use new{clsName}() constructor instead
+# proc init_{clsName}*(): {clsName} = new{clsName}()
 
 """)
+
+proc genSlotAccessors*(cls: ClassInfo): string =
+  ## Generate native Nim slot accessor procs for a class
+  let clsName = mangleClass(cls.name)
+  let slots = cls.getAllSlots()
+  
+  var output = ""
+  if slots.len == 0:
+    return output
+  
+  output.add("# Slot accessors\n")
+  output.add("################################\n\n")
+  
+  for slot in slots:
+    if slot.isInherited:
+      continue
+    let slotName = mangleSlot(slot.name)
+    let capitalizedSlot = slot.name[0].toUpperAscii() & slot.name[1..^1]
+    
+    # Getter
+    output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
+    output.add(fmt("  ## Get slot '{slot.name}' from {cls.name}\n"))
+    output.add(fmt("  return self[].{slotName}\n\n"))
+    
+    # Setter  
+    output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue): NodeValue =\n"))
+    output.add(fmt("  ## Set slot '{slot.name}' on {cls.name}\n"))
+    output.add(fmt("  self[].{slotName} = value\n"))
+    output.add(fmt("  return value\n\n"))
+  
+  return output
 
 proc isClassDefinition(node: Node): bool =
   ## Check if a node is a class definition (derive: chain)
@@ -123,8 +172,46 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
+proc isHardingCompileBlock(node: Node): bool =
+  ## Check if node is "Harding compile: [block]"
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  if msg.selector != "compile:":
+    return false
+  if msg.receiver == nil or msg.receiver.kind != nkIdent:
+    return false
+  return msg.receiver.IdentNode.name == "Harding"
+
+proc isHardingMainBlock(node: Node): bool =
+  ## Check if node is "Harding main: [block]"
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  if msg.selector != "main:":
+    return false
+  if msg.receiver == nil or msg.receiver.kind != nkIdent:
+    return false
+  return msg.receiver.IdentNode.name == "Harding"
+
+proc extractHardingBlocks(nodes: seq[Node]): tuple[compileBlock, mainBlock: BlockNode, other: seq[Node]] =
+  ## Extract Harding compile: and main: blocks from nodes
+  result = (nil, nil, @[])
+  
+  for node in nodes:
+    if node.isHardingCompileBlock:
+      if node.MessageNode.arguments.len > 0 and node.MessageNode.arguments[0].kind == nkBlock:
+        result.compileBlock = node.MessageNode.arguments[0].BlockNode
+    elif node.isHardingMainBlock:
+      if node.MessageNode.arguments.len > 0 and node.MessageNode.arguments[0].kind == nkBlock:
+        result.mainBlock = node.MessageNode.arguments[0].BlockNode
+    else:
+      result.other.add(node)
+
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
-                  blockReg: BlockRegistry = nil): string =
+                  blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
+                  classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                  mixed: bool = false, sourceFile: string = ""): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -139,8 +226,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   # Initialize runtime
   output.add("  initRuntime()\n\n")
 
+  # If mixed mode, initialize hybrid runtime with source file
+  if mixed and sourceFile.len > 0:
+    output.add(fmt("  initHybridRuntime(@[\"{sourceFile}\"])\n\n"))
+
   # Create generation context for top-level code, sharing block registry if provided
-  var genCtx = newGenContext(nil)
+  var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -160,8 +251,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   return output
 
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
-                moduleName: string): string =
+                moduleName: string, mixed: bool = false, sourceFile: string = "",
+                reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
   ## Generate complete Nim module from parsed nodes
+  ## mixed: if true, embed interpreter for fallback on unsupported features
+  ## sourceFile: path to source .hrd file for class registration in interpreter
+  ## reflectedClasses: optional class info from interpreter execution (for dynamic classes)
   var output = ""
 
   output.add(genModuleHeader(ctx, moduleName))
@@ -173,11 +268,39 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Separate class/method definitions from top-level statements
   let (classDefs, topLevel) = extractClassAndMethodDefs(nodes)
 
-  # Analyze classes
-  let analysis = buildClassGraph(nodes)
+  # Extract Harding compile: and main: blocks
+  let hardingBlocks = nodes.extractHardingBlocks()
+  
+  # Determine what to compile as main:
+  # If there's a Harding main: block, use its body; otherwise use topLevel
+  let mainBodyNodes = if hardingBlocks.mainBlock != nil:
+                         hardingBlocks.mainBlock.body
+                       else:
+                         topLevel
+
+  # Analyze classes - use reflected classes if provided, otherwise build from AST
+  let analysis = if reflectedClasses.len > 0:
+                   let result = newAnalysisResult()
+                   result.classes = reflectedClasses
+                   result
+                 else:
+                   buildClassGraph(nodes)
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
+  
+  # Collect compiled class names for native instantiation
+  var compiledClassNames: seq[string] = @[]
+  for cls in analysis.classes.values:
+    compiledClassNames.add(cls.name)
+
+  # Generate base HardingObject type first
+  output.add("# Base Object Type\n")
+  output.add("##################\n\n")
+  output.add("type\n")
+  output.add("  HardingObject* {.inheritable.} = object\n")
+  output.add("    className*: string\n")
+  output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
   # Generate for each class
   for cls in analysis.classes.values:
@@ -225,7 +348,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # locals of main() and need to be captured by block procs at module level.
   # Only true globals (class names) would be excluded from captures.
   var blockReg = newBlockRegistry()
-  for node in topLevel:
+  for node in mainBodyNodes:
     collectBlocks(blockReg, node)
 
   # Generate block procedure definitions (after primitives so they can reference them)
@@ -241,7 +364,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add("\n\n")
 
   # Generate block procedure signatures and bodies using real code generation
-  var blockGenCtx = newGenContext(nil)
+  var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
@@ -254,7 +377,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, topLevel, moduleName, blockReg))
+  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
 
   # Module initialization
   output.add("\n")

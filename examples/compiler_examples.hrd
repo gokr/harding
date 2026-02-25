@@ -1,0 +1,35 @@
+# Granite Compiler Examples
+# These examples demonstrate block compilation features
+
+"=== Block Compilation Examples ===" println.
+"" println.
+
+# Example 1: Simple block with parameters
+"Example 1: Addition Block" println.
+add := [:x :y | x + y].
+result1 := add value: 10 value: 20.
+result1 println.
+
+# Example 2: Single parameter block
+"Example 2: Double Block" println.
+double := [:n | n * 2].
+result2 := double value: 21.
+result2 println.
+
+# Example 3: Block with capture
+"Example 3: Capture" println.
+offset := 100.
+addOffset := [:n | n + offset].
+result3 := addOffset value: 50.
+result3 println.
+
+# Example 4: Nested blocks
+"Example 4: Nested Blocks" println.
+makeMultiplier := [:factor |
+  [:n | n * factor]
+].
+times3 := makeMultiplier value: 3.
+result4 := times3 value: 7.
+result4 println.
+
+"=== All examples completed! ===" println.

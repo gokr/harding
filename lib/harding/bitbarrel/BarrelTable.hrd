@@ -19,13 +19,13 @@ BarrelTable class>>open: aName [
     | table |
     table := self new.
     table name: aName.
-    table connectAndOpen: aName mode: 'hash'.
+    table connectAndOpen: aName mode: "hash".
     ^table
 ].
 
 BarrelTable class>>create: aName [
     # Create new barrel-backed table with hash index
-    ^self create: aName mode: 'hash'
+    ^self create: aName mode: "hash"
 ].
 
 BarrelTable class>>create: aName mode: mode [
@@ -135,8 +135,14 @@ BarrelTable>>reject: block [
 
 BarrelTable>>detect: block [
     # Find first entry where block returns true
+    | result |
     self do: [:key :val |
-        (block value: key value: val) ifTrue: [^{key. val}]
+        (block value: key value: val) ifTrue: [
+            result := Array new.
+            result add: key.
+            result add: val.
+            ^result
+        ]
     ].
     ^nil
 ].

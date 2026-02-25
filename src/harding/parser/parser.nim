@@ -13,6 +13,30 @@ const BinaryOpTokens* = {
   tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe
 }
 
+proc suggestHelp*(token: string): string =
+  ## Suggest helpful hints for common mistakes
+  if token == "(":
+    return "\n  Did you forget to close with ')'?"
+  if token == ")":
+    return "\n  Extra ')' found - check for matching '('"
+  if token == "[":
+    return "\n  Did you forget to close with ']'?"
+  if token == "]":
+    return "\n  Extra ']' found - check for matching '['"
+  if token == "{":
+    return "\n  Did you forget to close with '}'?"
+  if token == "}":
+    return "\n  Extra '}' found - check for matching '{'"
+  if token == ":":
+    return "\n  Colon without keyword - did you mean ':' for keyword?"
+  if token == "->":
+    return "\n  In table literal, use '#{\"key\" -> \"value\"}' syntax"
+  if token == "=":
+    return "\n  For assignment, use ':=' (e.g., 'x := 10')"
+  if token == "==":
+    return "\n  For comparison, use '=' (e.g., 'x = y')"
+  return ""
+
 type
   Parser* = ref object
     tokens*: seq[Token]
@@ -333,7 +357,9 @@ proc parsePrimary(parser: var Parser): Node =
 
   else:
     debug("parsePrimary: unexpected token ", token.value)
-    parser.parseError("Unexpected token: " & token.value)
+    let msg = "Unexpected token: '" & token.value & "'"
+    let hint = suggestHelp(token.value)
+    parser.parseError(msg & hint)
     return nil
 
 # Parse primary expression with optional unary messages only
@@ -980,7 +1006,7 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
 
       return AssignNode(variable: varName, expression: finalExpr)
     else:
-      parser.parseError("Can only assign to variable name")
+      parser.parseError("Can only assign to variable name (e.g., 'x := 10')")
       return nil
   else:
     # Consume optional trailing period (statement separator)

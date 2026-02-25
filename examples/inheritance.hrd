@@ -1,10 +1,11 @@
 #!/usr/bin/env harding
 #
-# Inheritance and super
+# Inheritance Examples - Single Inheritance and Super
 #
 
-"=== Single Inheritance ===" println
+"=== Basic Single Inheritance ===" println
 
+# Define base class with slots
 Animal := Object deriveWithAccessors: #(name)
 
 Animal>>initialize [
@@ -19,6 +20,7 @@ Animal>>describe [
   ^ "Animal: " , (self name)
 ]
 
+# Define subclass with super support
 Dog := Animal deriveWithAccessors: #(breed)
 
 Dog>>initialize [
@@ -57,3 +59,38 @@ dog breed: "Labrador"
 ("Dog is kind of Animal: " , (dog isKindOf: Animal) asString) println
 ("Dog is kind of Object: " , (dog isKindOf: Object) asString) println
 ("Animal is kind of Dog: " , (animal isKindOf: Dog) asString) println
+
+"" println
+"=== Inheritance Chain ===" println
+
+# Define another subclass
+Cat := Animal deriveWithAccessors: #(color)
+
+Cat>>initialize [
+  super initialize
+  color := "unknown"
+]
+
+Cat>>speak [
+  ^ "Meow!"
+]
+
+Cat>>describe [
+  ^ super describe , " (Color: " , (self color) , ")"
+]
+
+# Create instances
+myCat := Cat new initialize
+myCat name: "Whiskers"
+myCat color: "orange"
+
+"" println
+("Cat name: " , myCat name) println
+("Cat color: " , myCat color) println
+("Cat speaks: " , myCat speak) println
+("Cat describes: " , myCat describe) println
+
+"" println
+"=== Method Lookup ===" println
+"Methods are found by searching up the inheritance chain." println
+"Use 'super' to call the parent class implementation." println
