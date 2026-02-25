@@ -86,7 +86,6 @@ proc findSelectorForMethod(classObj: Class, methodBlk: BlockNode, isClassMethod:
 
 proc printStackTrace*(interp: var Interpreter) =
   ## Print the current activation stack for debugging
-  writeStderr("\n=== Stack Trace ===")
   if interp.activationStack.len == 0:
     writeStderr("  (empty activation stack)")
   else:
@@ -109,8 +108,7 @@ proc printStackTrace*(interp: var Interpreter) =
                      else:
                        ""
       let methodDisplay = if selector.len > 0: selector else: methodType
-      writeStderr(fmt("  {interp.activationStack.len - 1 - i}: {className}>>{methodDisplay}(self={receiverClass})"))
-  writeStderr("===================\n")
+      writeStderr(fmt("  {interp.activationStack.len - 1 - i}: {className}>>{methodDisplay} (self: {receiverClass})"))
 
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpreter =
@@ -1179,6 +1177,7 @@ proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedW
 proc newPopHandlerFrame*(): WorkFrame
 proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
+proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil, isClassMethod: bool = false): WorkFrame
 proc truncateWorkQueue*(interp: var Interpreter, depth: int)
 proc newEvalFrame*(node: Node): WorkFrame
 proc pushWorkFrame*(interp: var Interpreter, frame: WorkFrame)
@@ -1359,10 +1358,29 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       # Return nil - the handler block will push its result
       return nilValue()
 
-  # No handler found - raise as a Nim exception so the CLI can print and exit
-  debug("primitiveSignal: no handler found for exception")
-  let className = if self != nil and self.class != nil: self.class.name else: "Exception"
-  raise newException(EvalError, className & ": " & message)
+  # No handler found - call defaultAction on the exception
+  # This allows applications (like Bona) to override defaultAction to open a debugger
+  debug("primitiveSignal: no handler found for exception, calling defaultAction")
+  
+  # Store uncaught exception info for potential debugger use
+  interp.uncaughtException = self
+  interp.uncaughtExceptionMessage = message
+  
+  # Look up and execute defaultAction method directly
+  let defaultActionLookup = lookupMethod(interp, self, "defaultAction")
+  if defaultActionLookup.found:
+    debug("primitiveSignal: found defaultAction, executing...")
+    discard executeMethod(interp, defaultActionLookup.currentMethod, self, @[], defaultActionLookup.definingClass)
+    # defaultAction should not return, but if it does, we exit
+    quit(1)
+  else:
+    # No defaultAction found - fall back to simple error
+    let className = if self != nil and self.class != nil: self.class.name else: "Exception"
+    writeStderr("\n=== Uncaught Exception ===\n")
+    writeStderr(className & ": " & message & "\n")
+    writeStderr("Stack trace:\n")
+    printStackTrace(interp)
+    raise newException(EvalError, className & ": " & message)
 
 proc findHandlerForException(interp: var Interpreter, self: Instance): int =
   ## Find handler index for a given exception instance (used by return:, pass, retry)

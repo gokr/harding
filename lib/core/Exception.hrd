@@ -78,6 +78,21 @@ Exception>>printString [
   ^ "Exception: " , msg
 ]
 
+Exception>>defaultAction [
+  # Called when no handler is found for this exception
+  # Default: print message (for CLI)
+  # Applications like Bona should override this to open a debugger
+  self printString println
+]
+
+Exception>>printStackTrace [
+  # Print stack trace if available
+  stackTrace isNil not ifTrue: [
+    "Stack trace:" println.
+    stackTrace println
+  ]
+]
+
 #====================================================================
 # Common exception types
 #====================================================================
@@ -93,6 +108,8 @@ MessageNotUnderstood := Exception derive
 SubscriptOutOfBounds := Exception derive
 
 DivisionByZero := Exception derive
+
+UnhandledError := Error derive
 
 #====================================================================
 # Block extension for exception handling
