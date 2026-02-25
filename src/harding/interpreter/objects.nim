@@ -1555,26 +1555,26 @@ proc concatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal))
 
 proc instStringFromToImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Substring from:to: (1-based, inclusive)
+  ## Substring from:to: (0-based, inclusive)
   if self.kind == ikString and args.len >= 2:
     let (ok1, fromIdx) = args[0].tryGetInt()
     let (ok2, toIdx) = args[1].tryGetInt()
-    let startIdx = fromIdx - 1
-    let endIdx = toIdx - 1
+    let startIdx = fromIdx
+    let endIdx = toIdx
     if ok1 and ok2 and startIdx >= 0 and endIdx < self.strVal.len and startIdx <= endIdx:
       return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal[startIdx..endIdx]))
   return toValue("")
 
 proc instStringIndexOfImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Index of substring
+  ## Index of substring (0-based, returns -1 if not found)
   if self.kind == ikString and args.len > 0:
     let sub = if args[0].kind == vkString: args[0].strVal
               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
               else: ""
     if sub.len > 0:
-      let idx = self.strVal.find(sub) + 1  # 1-indexed
+      let idx = self.strVal.find(sub)
       return toValue(idx)
-  return toValue(0)
+  return toValue(-1)
 
 proc instStringIncludesSubStringImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if includes substring
