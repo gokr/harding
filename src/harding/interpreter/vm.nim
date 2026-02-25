@@ -5661,11 +5661,11 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
     for node in nodes:
       echo printAST(node)
 
-  # Evaluate all nodes using stackless VM, return last result
+  # Evaluate all nodes using stackless VM with clean context, return last result
   try:
     var lastResult = nilValue()
     for node in nodes:
-      lastResult = interp.evalWithVM(node)
+      lastResult = interp.evalWithVMCleanContext(node)
     interp.lastResult = lastResult
     return (lastResult, "")
   except ValueError:
