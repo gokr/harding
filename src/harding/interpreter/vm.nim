@@ -1158,18 +1158,22 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
   let blockNode = args[0].blockVal
   debug("primitiveAsSelfDo called, evaluating block with self = ", self.class.name)
 
-  # Save current receiver
+  # Save current receiver and block's homeActivation
   let savedReceiver = interp.currentReceiver
+  let savedHomeActivation = blockNode.homeActivation
 
-  # Temporarily set receiver to self
+  # Temporarily set receiver to self and clear homeActivation
+  # so the block uses the passed receiver instead of homeActivation.receiver
   interp.currentReceiver = self
+  blockNode.homeActivation = nil
 
   try:
     # Evaluate the block with new self
     return evalBlock(interp, self, blockNode)
   finally:
-    # Restore original receiver
+    # Restore original receiver and homeActivation
     interp.currentReceiver = savedReceiver
+    blockNode.homeActivation = savedHomeActivation
 
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame
