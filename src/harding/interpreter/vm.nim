@@ -686,11 +686,14 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 # Block evaluation helpers using the stackless VM
 proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode): NodeValue =
   ## Evaluate a block in the context of the given receiver using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
 
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
@@ -722,11 +725,14 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 
 proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg: NodeValue): NodeValue =
   ## Evaluate a block with one argument using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -761,11 +767,14 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
 proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2: NodeValue): (NodeValue, bool) =
   ## Evaluate a block with two arguments using the stackless VM
   ## Returns (value, true) if a non-local return occurred, (value, false) otherwise
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -803,11 +812,14 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
 
 proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2, arg3: NodeValue): NodeValue =
   ## Evaluate a block with three arguments using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -1158,22 +1170,18 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
   let blockNode = args[0].blockVal
   debug("primitiveAsSelfDo called, evaluating block with self = ", self.class.name)
 
-  # Save current receiver and block's homeActivation
+  # Save current receiver
   let savedReceiver = interp.currentReceiver
-  let savedHomeActivation = blockNode.homeActivation
 
-  # Temporarily set receiver to self and clear homeActivation
-  # so the block uses the passed receiver instead of homeActivation.receiver
+  # Temporarily set receiver to self
   interp.currentReceiver = self
-  blockNode.homeActivation = nil
 
   try:
     # Evaluate the block with new self
     return evalBlock(interp, self, blockNode)
   finally:
-    # Restore original receiver and homeActivation
+    # Restore original receiver
     interp.currentReceiver = savedReceiver
-    blockNode.homeActivation = savedHomeActivation
 
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame
