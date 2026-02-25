@@ -217,6 +217,10 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
     return ""
   
   # Only optimize for native class instances
+  # In mixed mode, always use sendMessage to ensure interpreter can handle methods
+  if ctx.mixed:
+    return ""
+  
   # For now, we require isNativeClass to be true AND the class must be defined in the compiled code
   if not receiverType.isNativeClass:
     return ""
@@ -281,9 +285,13 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
     let className = node.receiver.IdentNode.name
     if className in ctx.compiledClasses:
-      # Generate native constructor call: newClass_ClassName().toValue()
-      let mangledClass = mangleClass(className)
-      return fmt("new{mangledClass}().toValue()")
+      # In mixed mode, use interpreter to create instances (ensures interpreter can call methods)
+      if ctx.mixed:
+        return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
+      else:
+        # Generate native constructor call: newClass_ClassName().toValue()
+        let mangledClass = mangleClass(className)
+        return fmt("new{mangledClass}().toValue()")
 
   # Check for inline control flow with literal blocks
   case node.selector

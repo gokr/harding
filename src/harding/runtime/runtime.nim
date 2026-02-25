@@ -198,9 +198,6 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
   ## Hybrid message dispatch: try compiled first, fall back to interpreter
   ## This is used in mixed mode (--mixed flag) for unsupported features
-  ## 
-  ## TODO: Full implementation requires method compilation (option 1)
-  ## Currently just returns nil for uncompiled methods
   
   # First, try to use the compiled runtime if available
   if currentRuntime != nil:
@@ -212,10 +209,46 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
   # Fall back to interpreter for uncompiled methods
   initHybridRuntime()
   
-  # For now, just warn and return nil - full method compilation is needed
-  when not defined(release):
-    echo "Mixed mode: Falling back to interpreter for '", selector, "' (not yet implemented)"
+  # If receiver is a Nim proxy (native object), we need to find or create interpreter instance
+  if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.isNimProxy:
+    # This is a native object - we need the interpreter to know about it
+    # For now, return nil with a warning
+    when not defined(release):
+      echo "Mixed mode: Nim proxy not yet supported for '", selector, "'"
+    return NodeValue(kind: vkNil)
   
+  # Use interpreter to evaluate the message send
+  when not defined(release):
+    echo "Mixed mode: Falling back to interpreter for '", selector, "'"
+  
+  # Build source code to evaluate
+  var source = ""
+  if receiver.kind == vkInstance and receiver.instVal != nil:
+    # Get the class name for display
+    let className = if receiver.instVal.class != nil: receiver.instVal.class.name else: "?"
+    source = className
+  elif receiver.kind == vkClass:
+    source = "Class"
+  else:
+    source = receiver.toString()
+  
+  if args.len == 0:
+    source.add(" " & selector)
+  else:
+    source.add(" " & selector & " ")
+    for i, arg in args:
+      source.add(arg.toString())
+      if i < args.len - 1:
+        source.add(" ")
+  
+  let (results, err) = hybridInterpreter.evalStatements(source)
+  if err.len > 0:
+    when not defined(release):
+      echo "Mixed mode error: ", err
+    return NodeValue(kind: vkNil)
+  
+  if results.len > 0:
+    return results[results.len - 1]  # Return last result
   return NodeValue(kind: vkNil)
 
 # Convenience procs for common operations
