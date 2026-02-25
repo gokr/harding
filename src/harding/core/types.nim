@@ -204,6 +204,7 @@ type
     # For wfPushHandler/wfPopHandler
     exceptionClass*: Class     # The exception class to catch
     handlerBlock*: BlockNode   # Block to execute when exception is caught
+    savedWorkQueueDepth*: int  # Work queue depth at handler installation point
     # For wfSignalException
     exceptionInstance*: Instance  # The exception instance being signaled
     # For wfExceptionReturn
@@ -238,6 +239,9 @@ type
       debuggerPaused*: bool         # Whether execution is paused
       debuggerStepMode*: int        # 0=none, 1=stepOver, 2=stepInto, 3=stepOut
       debuggerStepTarget*: int       # Target frame depth for step-out
+    # Uncaught exception info (for debugger)
+    uncaughtException*: Instance     # The uncaught exception instance
+    uncaughtExceptionMessage*: string  # The exception message
 
   BlockNode* = ref object of Node
     parameters*: seq[string]              # method parameters
