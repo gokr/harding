@@ -59,7 +59,7 @@ nim c -r tests/test_exception_handling.nim
 
 ### Test Coverage
 
-The test suite includes 25+ test files covering:
+The test suite includes 32 test files and 2 benchmark files covering:
 
 **Core Interpreter:**
 - `test_interpreter_basic.nim` - Message dispatch, method execution, globals
@@ -77,25 +77,41 @@ The test suite includes 25+ test files covering:
 **Parser & Syntax:**
 - `test_cascade.nim` - Message cascading (obj msg1; msg2)
 - `test_message_precedence.nim` - Unary/binary/keyword precedence
+- `test_parser_precedence.nim` - Parser precedence handling
 
-**Exception Handling:**
+**Exception Handling & Reflection:**
 - `test_exception_handling.nim` - on:do:, signal, return:, pass
+- `test_signal_point_debugging.nim` - Signal point testing
+- `test_reflection.nim` - Reflection APIs
 
 **Concurrency:**
 - `test_process.nim` - Green threads and Process management
 - `test_scheduler.nim` - Scheduler context and forking
 - `test_sync_primitives.nim` - Monitor, Semaphore, SharedQueue
 - `test_harding_processes_and_globals.nim` - Harding-side Process/Scheduler
+- `test_stdlib_concurrency.nim` - Concurrency tests
 
 **Standard Library:**
 - `test_stdlib.nim` - Comprehensive library tests
+- `test_stdlib_basics.nim` - Basic library functionality
+- `test_stdlib_collections.nim` - Collection library
+- `test_stdlib_strings.nim` - String library
+- `test_stdlib_intervals.nim` - Interval operations
+- `test_stdlib_utilities.nim` - Utility functions
 - `test_primitives.nim` - Primitive method declarations
 - `test_perform.nim` - Dynamic message sending
+- `test_set_operations.nim` - Set operations
 
 **Integration:**
 - `test_tagged.nim` - Tagged values (NaN boxing)
 - `test_bitbarrel.nim` - BitBarrel database (conditional)
-- `test_website_*.nim` - Documentation examples
+- `test_float_operations.nim` - Float handling
+- `test_nil_conditionals.nim` - Nil handling in conditionals
+- `test_website_examples.nim` - Documentation examples
+
+**Benchmarks (not counted in test suite):**
+- `benchmark_simple.nim` - Simple benchmarks
+- `benchmark_slots.nim` - Slot access benchmarking
 
 All tests pass with ARC (ORC) memory management enabled.
 

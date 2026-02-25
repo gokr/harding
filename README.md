@@ -217,10 +217,13 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 ## Examples
 
 ```bash
-harding examples/01_hello.hrd
-harding examples/05_classes.hrd
-harding examples/10_blocks.hrd
+harding examples/hello.hrd
+harding examples/classes.hrd
+harding examples/blocks.hrd
 harding examples/process_demo.hrd
+harding examples/inheritance.hrd
+harding examples/collections.hrd
+harding examples/control_flow.hrd
 
 # Launch the GTK IDE
 bona

@@ -21,7 +21,7 @@ proc newAnalysisResult*(): AnalysisResult =
   )
 
 proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeConstraint]] =
-  ## Parse type list from derive: #(name: Type age: Int name2:)
+  ## Parse type list from derive: #(name: Type age: Int name2:) or #(name age)
   ## Returns (name, constraint) tuples, constraint = tcNone for untyped
   result = @[]
 
@@ -32,42 +32,42 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
 
   var pos = 0
   while pos < remaining.len:
-    # Skip whitespace
-    while pos < remaining.len and remaining[pos].isSpaceAscii():
+    # Skip whitespace and commas
+    while pos < remaining.len and remaining[pos] in {' ', '\t', ','}:
       inc pos
-    if pos >= remaining.len:
+    if pos >= remaining.len or remaining[pos] == ')':
       break
 
-    # Extract slot name up to colon
+    # Extract slot name up to colon, whitespace, comma, or end
     var nameStart = pos
-    while pos < remaining.len and remaining[pos] != ':' and not remaining[pos].isSpaceAscii():
+    while pos < remaining.len and remaining[pos] notin {':', ',', ')', ' ', '\t'}:
       inc pos
     let slotName = remaining[nameStart..<pos].strip()
+    
+    if slotName.len == 0:
+      # Skip past any separator and continue
+      while pos < remaining.len and remaining[pos] in {':', ',', ' ', '\t'}:
+        inc pos
+      continue
 
-    # Skip to colon
-    while pos < remaining.len and remaining[pos] != ':':
-      inc pos
-
-    if pos >= remaining.len:
-      break
-    inc pos  # Skip colon
-
-    # Extract type hint after colon
-    while pos < remaining.len and remaining[pos].isSpaceAscii():
-      inc pos
-
-    var typeStart = pos
-    var typeEnd = pos
-    while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
-      inc pos
-      typeEnd = pos
-
-    let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
-    let constraint = if typeHint.len > 0: parseTypeHint(typeHint) else: tcNone
+    # Check for type hint after colon
+    var constraint = tcNone
+    if pos < remaining.len and remaining[pos] == ':':
+      inc pos  # Skip colon
+      while pos < remaining.len and remaining[pos].isSpaceAscii():
+        inc pos
+      var typeStart = pos
+      var typeEnd = pos
+      while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
+        inc pos
+        typeEnd = pos
+      let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
+      if typeHint.len > 0:
+        constraint = parseTypeHint(typeHint)
 
     result.add((slotName, constraint))
 
-    # Skip to next slot or end
+    # Skip past any trailing characters to next slot
     while pos < remaining.len and remaining[pos] notin {',', ')'}:
       inc pos
     if pos < remaining.len and remaining[pos] == ',':
@@ -120,16 +120,33 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
                    nil
   
   var typeList = ""
-  if typeArg != nil and typeArg.kind == nkLiteral:
-    let val = typeArg.LiteralNode.value
-    if val.kind == vkString:
-      typeList = val.strVal
-    elif val.kind == vkArray:
-      # Handle #(name: Type) array syntax
+  if typeArg != nil:
+    if typeArg.kind == nkLiteral:
+      let val = typeArg.LiteralNode.value
+      if val.kind == vkString:
+        typeList = val.strVal
+      elif val.kind == vkArray:
+        # Handle #(name: Type) array syntax
+        var parts: seq[string] = @[]
+        for elem in typeArg.LiteralNode.value.arrayVal:
+          if elem.kind == vkString:
+            parts.add(elem.strVal)
+          elif elem.kind == vkSymbol:
+            parts.add(elem.symVal)
+        typeList = "#(" & parts.join(" ") & ")"
+    elif typeArg.kind == nkArray:
+      # Handle direct array literal like #(name age)
       var parts: seq[string] = @[]
-      for elem in typeArg.LiteralNode.value.arrayVal:
-        if elem.kind == vkString:
-          parts.add(elem.strVal)
+      for elem in typeArg.ArrayNode.elements:
+        if elem.kind == nkLiteral:
+          let val = elem.LiteralNode.value
+          if val.kind == vkSymbol:
+            parts.add(val.symVal)
+          elif val.kind == vkString:
+            parts.add(val.strVal)
+        elif elem.kind == nkIdent:
+          # Handle identifiers like 'name' in #(name age)
+          parts.add(elem.IdentNode.name)
       typeList = "#(" & parts.join(" ") & ")"
 
   return (className, parent, typeList)

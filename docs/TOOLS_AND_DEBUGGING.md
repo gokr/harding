@@ -22,16 +22,16 @@ The `harding` command provides both interactive REPL and script execution capabi
 harding
 
 # Run a script file
-harding script.harding
+harding script.hrd
 
 # Evaluate an expression
 harding -e "3 + 4"
 
 # Show AST without executing (parse only)
-harding --ast script.harding
+harding --ast script.hrd
 
 # Run with debug logging
-harding --loglevel DEBUG script.harding
+harding --loglevel DEBUG script.hrd
 
 # Combine flags
 harding --ast --loglevel DEBUG -e "Object clone"
@@ -409,13 +409,13 @@ nt> obj at: #test
 Create test files to isolate and reproduce issues:
 
 ```smalltalk
-# test_debug.harding
+# test_debug.hrd
 test := Object derive.
 test at: #value put: 3 + 4.
 test at: #value  "Should be 7"
 ```
 
-Then run: `harding --ast --loglevel DEBUG test_debug.harding`
+Then run: `harding --ast --loglevel DEBUG test_debug.hrd`
 
 ## Common Issues and Solutions
 
@@ -425,7 +425,7 @@ This means the method doesn't exist on the receiver:
 
 ```bash
 # Debug with --loglevel DEBUG
-harding --loglevel DEBUG script.harding
+harding --loglevel DEBUG script.hrd
 
 # Check what the receiver actually is
 harding -e "obj := Object clone. obj unknownMessage"
@@ -443,10 +443,10 @@ Use `--ast` to see if code is parsed correctly:
 
 ```bash
 # See parse error details
-harding --ast script_with_error.harding
+harding --ast script_with_error.hrd
 
 # Compare with working code
-harding --ast working_script.harding
+harding --ast working_script.hrd
 ```
 
 ### Execution Differences

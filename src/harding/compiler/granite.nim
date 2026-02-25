@@ -21,19 +21,6 @@ proc mangleModuleName(name: string): string =
   ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
   return name
 
-const VERSION* = block:
-  const nimblePath = currentSourcePath().parentDir().parentDir().parentDir().parentDir() / "harding.nimble"
-  const nimbleContent = staticRead(nimblePath)
-  var versionStr = "unknown"
-  for line in nimbleContent.splitLines():
-    let trimmed = line.strip()
-    if trimmed.startsWith("version"):
-      let parts = trimmed.split("=")
-      if parts.len >= 2:
-        versionStr = parts[1].strip().strip(chars={'\"', '\''})
-        break
-  versionStr
-
 type
   Config = ref object
     inputFile: string

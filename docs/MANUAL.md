@@ -1237,14 +1237,14 @@ The compiler generates Nim code with:
 For building applications from within the Harding VM:
 
 ```smalltalk
-MyApp := Application derive: #().
+MyApp := Application derive: #()
 MyApp>>main: args [
-    Stdout writeLine: "Hello from compiled app!".
+    Stdout writeline: "Hello from compiled app!"
     ^0
-].
+]
 
-app := MyApp new.
-app name: "myapp".
+app := MyApp new
+app name: "myapp"
 Granite build: app
 ```
 
