@@ -278,8 +278,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     # Then check locals (temporaries defined in this activation)
     if name in activation.locals:
       let val = activation.locals[name]
-      let ptrStr = if val.kind == vkInstance and val.instVal != nil: $cast[int](val.instVal) else: "n/a"
-      debug("lookupVariable: found ", name, " in locals kind=", $val.kind, " ptr=", ptrStr)
+      debug("lookupVariable: found ", name, " in locals kind=", $val.kind)
       return (true, val)
 
     # If this is a block activation and variable not found yet, check globals BEFORE
@@ -499,17 +498,17 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
     # Check if capturedEnv is initialized before accessing
     if currentMethod.capturedEnvInitialized and currentMethod.capturedEnv.len > 0:
       for name, cell in currentMethod.capturedEnv.pairs:
-        blockNode.capturedEnv[name] = cell
-        debug("Inherited captured variable from outer block: ", name)
+        # Don't inherit if this block has a parameter with the same name
+        if name notin blockNode.parameters:
+          blockNode.capturedEnv[name] = cell
+          debug("Inherited captured variable from outer block: ", name)
 
   # Walk up the activation chain and capture all local variables
   var activation = interp.currentActivation
   while activation != nil:
-    # Capture all locals from this activation (except 'self' and 'super')
+    # Capture all locals from this activation (except 'self', 'super', and block parameters)
     for name, value in activation.locals:
-      if name != "self" and name != "super":
-        # Only capture if not already captured (inner scope shadows outer)
-        if not blockNode.capturedEnv.hasKey(name):
+      if name != "self" and name != "super" and name notin blockNode.parameters:
           # Check if this activation already has a captured cell for this variable
           # (from a sibling block created earlier in the same activation)
           var cell: MutableCell
@@ -1176,7 +1175,7 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
     blockNode.homeActivation = savedHomeActivation
 
 # Forward declarations for work frame constructors (defined later in the file)
-proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame
+proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
 proc newPopHandlerFrame*(): WorkFrame
 proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
@@ -1224,6 +1223,10 @@ proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
 
     debug("primitiveOnDo: installing handler for ", exceptionClass.name)
 
+    # Capture work queue depth BEFORE pushing any handler frames
+    # This is the depth we need to restore when unwinding on exception
+    let savedWorkQueueDepth = interp.workQueue.len
+
     # Schedule work frames: [pushHandler] -> [evalBlock] -> [popHandler]
     # We push in reverse order (LIFO) so they execute in correct order
 
@@ -1237,7 +1240,7 @@ proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
 
     # 1. Push handler onto stack (pushed last, runs first)
     # This schedules the handler push before block execution
-    var pushFrame = newPushHandlerFrame(exceptionClass, handlerBlock)
+    var pushFrame = newPushHandlerFrame(exceptionClass, handlerBlock, savedWorkQueueDepth)
     pushFrame.protectedBlockForHandler = blockNode
     interp.pushWorkFrame(pushFrame)
 
@@ -1316,12 +1319,34 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
       interp.exceptionHandlers[i].exceptionContext = ctx
 
-      # SMALLTALK-STYLE: Don't truncate activation stack!
-      # Just clear work queue to run handler
-      # Activation stack remains intact for debugging/resume
-      interp.workQueue.setLen(handler.workQueueDepth)
+      # SMALLTALK-STYLE: Preserve full activation stack for debugging/resume
+      # Capture snapshot in ExceptionContext for resume/debugger access
+      # Filter work queue to remove wfPopActivation/wfReturnValue frames from signal path
+      # while preserving the activation stack itself for debugging
+      debug("primitiveSignal: handler.workQueueDepth=", handler.workQueueDepth, " workQueue.len=", interp.workQueue.len)
+      var newWorkQueue: seq[WorkFrame] = @[]
+      for j in 0..<handler.workQueueDepth:
+        let frameKind = interp.workQueue[j].kind
+        if frameKind != wfPopActivation and frameKind != wfReturnValue:
+          newWorkQueue.add(interp.workQueue[j])
+        else:
+          debug("primitiveSignal: removing frame ", frameKind, " at index ", j)
+      # Also keep wfPopHandler if present (for cleanup when handler completes)
+      for j in handler.workQueueDepth..<interp.workQueue.len:
+        if interp.workQueue[j].kind == wfPopHandler:
+          newWorkQueue.add(interp.workQueue[j])
+          debug("primitiveSignal: keeping wfPopHandler at index ", j)
+          break
+      interp.workQueue = newWorkQueue
+      debug("primitiveSignal: workQueue.len after filter=", interp.workQueue.len)
       interp.evalStack.setLen(handler.evalStackDepth)
-      # NOTE: We do NOT pop activation stack anymore!
+      # NOTE: We do NOT pop the activation stack - it remains intact
+      # The ExceptionContext snapshot captures the signal point state for resume/debugging
+      
+      # Clear hasReturned flag on activations above the handler to prevent
+      # non-local return propagation from interfering with handler execution
+      for j in (handler.stackDepth + 1)..<interp.activationStack.len:
+        interp.activationStack[j].hasReturned = false
 
       # DON'T remove the handler yet - keep it for return:/pass/retry/resume
       # Push wfExceptionReturn barrier, then handler block on top
@@ -1347,6 +1372,48 @@ proc findHandlerForException(interp: var Interpreter, self: Instance): int =
     if interp.exceptionHandlers[i].exceptionInstance == self:
       return i
   return -1
+
+proc findClassInLibraries(interp: Interpreter, name: string): Class =
+  ## Find a class by name in imported libraries
+  for lib in interp.importedLibraries:
+    if lib.kind == ikObject and lib.class == libraryClass:
+      let bindingsVal = lib.slots[0]
+      if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
+        let classVal = bindingsVal.instVal.entries[toValue(name)]
+        if classVal.kind == vkClass:
+          return classVal.classVal
+  return nil
+
+proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string) =
+  ## Signal an exception by class name (used by primitives to signal Harding exceptions)
+  ## Looks up the exception class and creates an instance, then signals it
+  var exceptionClass: Class = nil
+  
+  # First try to find in globals
+  if interp.globals != nil and exceptionClassName in interp.globals[]:
+    let classVal = interp.globals[][exceptionClassName]
+    if classVal.kind == vkClass:
+      exceptionClass = classVal.classVal
+    elif classVal.kind == vkInstance and classVal.instVal != nil:
+      exceptionClass = classVal.instVal.class
+  
+  # If not found, look in imported libraries
+  if exceptionClass == nil:
+    exceptionClass = findClassInLibraries(interp, exceptionClassName)
+  
+  if exceptionClass == nil:
+    raise newException(EvalError, exceptionClassName & ": " & message & " (exception class not found)")
+  
+  # Create exception instance
+  let ex = newInstance(exceptionClass)
+  
+  # Set message slot if it exists
+  let messageSlotIdx = exceptionClass.allSlotNames.find("message")
+  if messageSlotIdx >= 0 and messageSlotIdx < ex.slots.len:
+    ex.slots[messageSlotIdx] = NodeValue(kind: vkString, strVal: message)
+  
+  # Signal the exception
+  discard primitiveSignalImpl(interp, ex, @[])
 
 proc primitiveExceptionSignalContextImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>signalContext - return the signal point context
@@ -1624,9 +1691,12 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
   interp.exceptionHandlers.setLen(handlerIdx)
 
   # Re-schedule same structure as on:do:: popHandler, evalBlock, pushHandler
+  # Capture work queue depth before pushing frames
+  let savedWorkQueueDepth = interp.workQueue.len
+  
   interp.pushWorkFrame(newPopHandlerFrame())
   interp.pushWorkFrame(newApplyBlockFrame(protectedBlock, 0))
-  var pushFrame = newPushHandlerFrame(handler.exceptionClass, handler.handlerBlock)
+  var pushFrame = newPushHandlerFrame(handler.exceptionClass, handler.handlerBlock, savedWorkQueueDepth)
   pushFrame.protectedBlockForHandler = protectedBlock
   interp.pushWorkFrame(pushFrame)
 
@@ -3652,12 +3722,13 @@ proc newWhileLoopFrame*(loopKind: bool, conditionBlock, bodyBlock: BlockNode, lo
   result.bodyBlock = bodyBlock
   result.loopState = loopState
 
-proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode): WorkFrame =
+proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame =
   ## Create a work frame to push an exception handler
   result = acquireFrame()
   result.kind = wfPushHandler
   result.exceptionClass = exceptionClass
   result.handlerBlock = handlerBlock
+  result.savedWorkQueueDepth = savedWorkQueueDepth
 
 proc newPopHandlerFrame*(): WorkFrame =
   ## Create a work frame to pop an exception handler
@@ -4999,6 +5070,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # In Smalltalk, methods without explicit ^ return self
     # Blocks return the value of the last expression
     debug("VM: wfPopActivation, evalStack.len=", interp.evalStack.len, " isBlock=", $frame.isBlockActivation, " activationStack.len=", interp.activationStack.len)
+    if interp.evalStack.len > 0:
+      debug("VM: wfPopActivation top of eval stack: ", interp.evalStack[^1].toString(), " kind=", interp.evalStack[^1].kind)
 
     # Check for non-local return first
     # Walk up the activation chain to find if any activation has returned
@@ -5012,6 +5085,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     
     if nonLocalReturnActivation != nil:
       # Non-local return - propagate the return value
+      debug("VM: wfPopActivation non-local return detected, selector=", (if nonLocalReturnActivation.currentMethod != nil: nonLocalReturnActivation.currentMethod.selector else: "nil"))
       let returnVal = nonLocalReturnActivation.returnValue
 
       # Pop the activation
@@ -5060,6 +5134,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         interp.currentActivation = nil
         interp.currentReceiver = frame.savedReceiver
         debug("VM: wfPopActivation no more activations, restored savedReceiver")
+
 
       interp.pushValue(resultValue.unwrap())
 
@@ -5483,8 +5558,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfPushHandler:
     # Push exception handler onto handler stack
-    # At this point, work queue has [...][wfPopHandler][wfApplyBlock(protected)]
-    # We save depth excluding wfPopHandler+wfApplyBlock so we can unwind on exception
+    # Use the saved work queue depth from before any handler frames were pushed
     debug("wfPushHandler: activationStack.len=", interp.activationStack.len, " workQueue.len=", interp.workQueue.len)
     if interp.currentActivation != nil:
       interp.currentActivation.wasCaptured = true
@@ -5493,7 +5567,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       handlerBlock: frame.handlerBlock,
       activation: interp.currentActivation,
       stackDepth: interp.activationStack.len,
-      workQueueDepth: interp.workQueue.len - 2,  # Depth before wfPopHandler and wfApplyBlock
+      workQueueDepth: frame.savedWorkQueueDepth,  # Depth before handler frames were pushed
       evalStackDepth: interp.evalStack.len,
       protectedBlock: frame.protectedBlockForHandler
     )
@@ -5571,6 +5645,12 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       # Just continue processing the restored work queue
       releaseFrame(frame)
       debug("VM: ResumeException caught, continuing with restored work queue")
+    except DivByZeroDefect as e:
+      releaseFrame(frame)
+      # Convert Nim DivByZeroDefect to Harding DivisionByZero exception
+      signalExceptionByName(interp, "DivisionByZero", e.msg)
+      # Continue processing - signalExceptionByName schedules the handler
+      continue
     except ValueError as e:
       releaseFrame(frame)
       return VMResult(status: vmError, error: e.msg)
@@ -5583,6 +5663,10 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
                       interp.evalStack[^1]
                     else:
                       nilValue()
+  
+  debug("VM completed: evalStack.len=", interp.evalStack.len, " resultValue.kind=", resultValue.kind)
+  if resultValue.kind == vkInstance:
+    debug("VM completed: result is Instance, instVal.kind=", resultValue.instVal.kind)
 
   return VMResult(status: vmCompleted, value: resultValue)
 

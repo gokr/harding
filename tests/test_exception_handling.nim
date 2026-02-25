@@ -13,10 +13,13 @@ suite "Exception Handling":
     interp = sharedInterp
 
   teardown:
-    # Only clear exception handlers and eval stack to prevent state leakage
-    # Don't clear activation stack, workqueue, or current values as they're needed for parsing
+    # Clear exception handlers and eval stack to prevent state leakage
     interp.exceptionHandlers.setLen(0)
     interp.evalStack.setLen(0)
+    # Clear work queue of any pending frames
+    interp.workQueue.setLen(0)
+    # Clear exception context registry to prevent interference
+    exceptionContextRegistry.setLen(0)
 
   test "basic on:do: catches exception":
     let result = interp.evalStatements("""

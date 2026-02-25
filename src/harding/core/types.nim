@@ -204,6 +204,7 @@ type
     # For wfPushHandler/wfPopHandler
     exceptionClass*: Class     # The exception class to catch
     handlerBlock*: BlockNode   # Block to execute when exception is caught
+    savedWorkQueueDepth*: int  # Work queue depth at handler installation point
     # For wfSignalException
     exceptionInstance*: Instance  # The exception instance being signaled
     # For wfExceptionReturn

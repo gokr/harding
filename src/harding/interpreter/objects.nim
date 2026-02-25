@@ -889,14 +889,16 @@ proc intDivImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Integer division
   let (ok, val) = args[0].tryGetInt()
   if ok and self.kind == ikInt:
-    if val == 0: return nilValue()
+    if val == 0:
+      raise newException(DivByZeroDefect, "Integer division by zero")
     return toValue(self.intVal div val)
 
 proc moduloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Modulo (backslash in Smalltalk)
   let (ok, val) = args[0].tryGetInt()
   if ok and self.kind == ikInt:
-    if val == 0: return nilValue()
+    if val == 0:
+      raise newException(DivByZeroDefect, "Integer modulo by zero")
     return toValue(self.intVal mod val)
 
 proc backslashModuloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -907,7 +909,8 @@ proc modMethod*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Modulo with % operator
   let (ok, val) = args[0].tryGetInt()
   if ok and self.kind == ikInt:
-    if val == 0: return nilValue()
+    if val == 0:
+      raise newException(DivByZeroDefect, "Integer modulo by zero")
     return toValue(self.intVal mod val)
 
 proc classImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
