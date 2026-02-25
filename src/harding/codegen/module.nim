@@ -1,11 +1,10 @@
-import std/[strutils, tables, sequtils, os, strformat]
+import std/[strutils, tables, os, strformat]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
 import ../compiler/context
 import ../compiler/analyzer
 import ../compiler/symbols
-import ./slots
 import ./methods
 import ./control
 import ./expression
@@ -173,8 +172,45 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
+proc isHardingCompileBlock(node: Node): bool =
+  ## Check if node is "Harding compile: [block]"
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  if msg.selector != "compile:":
+    return false
+  if msg.receiver == nil or msg.receiver.kind != nkIdent:
+    return false
+  return msg.receiver.IdentNode.name == "Harding"
+
+proc isHardingMainBlock(node: Node): bool =
+  ## Check if node is "Harding main: [block]"
+  if node.kind != nkMessage:
+    return false
+  let msg = node.MessageNode
+  if msg.selector != "main:":
+    return false
+  if msg.receiver == nil or msg.receiver.kind != nkIdent:
+    return false
+  return msg.receiver.IdentNode.name == "Harding"
+
+proc extractHardingBlocks(nodes: seq[Node]): tuple[compileBlock, mainBlock: BlockNode, other: seq[Node]] =
+  ## Extract Harding compile: and main: blocks from nodes
+  result = (nil, nil, @[])
+  
+  for node in nodes:
+    if node.isHardingCompileBlock:
+      if node.MessageNode.arguments.len > 0 and node.MessageNode.arguments[0].kind == nkBlock:
+        result.compileBlock = node.MessageNode.arguments[0].BlockNode
+    elif node.isHardingMainBlock:
+      if node.MessageNode.arguments.len > 0 and node.MessageNode.arguments[0].kind == nkBlock:
+        result.mainBlock = node.MessageNode.arguments[0].BlockNode
+    else:
+      result.other.add(node)
+
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
-                  blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[]): string =
+                  blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
+                  classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -190,7 +226,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("  initRuntime()\n\n")
 
   # Create generation context for top-level code, sharing block registry if provided
-  var genCtx = newGenContext(nil, compiledClasses)
+  var genCtx = newGenContext(nil, compiledClasses, classInfo)
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -210,10 +246,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   return output
 
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
-                moduleName: string, mixed: bool = false, sourceFile: string = ""): string =
+                moduleName: string, mixed: bool = false, sourceFile: string = "",
+                reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
+  ## reflectedClasses: optional class info from interpreter execution (for dynamic classes)
   var output = ""
 
   output.add(genModuleHeader(ctx, moduleName))
@@ -225,8 +263,23 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Separate class/method definitions from top-level statements
   let (classDefs, topLevel) = extractClassAndMethodDefs(nodes)
 
-  # Analyze classes
-  let analysis = buildClassGraph(nodes)
+  # Extract Harding compile: and main: blocks
+  let hardingBlocks = nodes.extractHardingBlocks()
+  
+  # Determine what to compile as main:
+  # If there's a Harding main: block, use its body; otherwise use topLevel
+  let mainBodyNodes = if hardingBlocks.mainBlock != nil:
+                         hardingBlocks.mainBlock.body
+                       else:
+                         topLevel
+
+  # Analyze classes - use reflected classes if provided, otherwise build from AST
+  let analysis = if reflectedClasses.len > 0:
+                   let result = newAnalysisResult()
+                   result.classes = reflectedClasses
+                   result
+                 else:
+                   buildClassGraph(nodes)
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
@@ -290,7 +343,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # locals of main() and need to be captured by block procs at module level.
   # Only true globals (class names) would be excluded from captures.
   var blockReg = newBlockRegistry()
-  for node in topLevel:
+  for node in mainBodyNodes:
     collectBlocks(blockReg, node)
 
   # Generate block procedure definitions (after primitives so they can reference them)
@@ -306,7 +359,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add("\n\n")
 
   # Generate block procedure signatures and bodies using real code generation
-  var blockGenCtx = newGenContext(nil, compiledClassNames)
+  var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes)
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
@@ -319,7 +372,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, topLevel, moduleName, blockReg, compiledClassNames))
+  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes))
 
   # Module initialization
   output.add("\n")

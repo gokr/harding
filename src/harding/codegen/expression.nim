@@ -25,12 +25,14 @@ type
     blockRegistry*: BlockRegistry ## Registry for blocks to compile
     varTypes*: Table[string, VarTypeInfo]  ## Variable name -> type info
     compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
+    classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 
-proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[]): GenContext =
+proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
+                    classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo]()): GenContext =
   ## Create new generation context
   result = GenContext(
     cls: cls,
@@ -40,7 +42,8 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[]): G
     globals: @[],
     blockRegistry: newBlockRegistry(),
     varTypes: initTable[string, VarTypeInfo](),
-    compiledClasses: compiledClasses
+    compiledClasses: compiledClasses,
+    classInfo: classInfo
   )
 
 proc indentBlock*(code: string, spaces: int = 2): string =
@@ -216,7 +219,30 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
     return ""
   
   let selector = node.selector
-  let classType = mangleClass(receiverType.className)
+  let className = receiverType.className
+  
+  # Verify selector is actually a slot name in this class
+  # Handle both getter "name" and setter "name:" patterns
+  if className notin ctx.classInfo:
+    return ""
+  
+  let classDef = ctx.classInfo[className]
+  let checkSelector = if selector.endsWith(":") and node.arguments.len == 1:
+                        selector[0..^2]  # Remove trailing colon for setter
+                      else:
+                        selector
+  let selectorIsSlot = block:
+    var found = false
+    for slot in classDef.slots:
+      if slot.name == checkSelector:
+        found = true
+        break
+    found
+  
+  if not selectorIsSlot:
+    return ""
+  
+  let classType = mangleClass(className)
   
   # Generate code to extract native pointer from NodeValue
   # receiverCode is a NodeValue, we need to extract instVal.nimValue and cast it

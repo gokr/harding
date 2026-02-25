@@ -1,7 +1,6 @@
 import std/strformat
 import ../compiler/context
 import ../compiler/symbols
-import ../compiler/types as compTypes
 
 # ============================================================================
 # Slot Access Code Generation - Native Nim types

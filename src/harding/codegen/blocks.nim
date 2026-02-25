@@ -1,8 +1,5 @@
 import std/[tables, sequtils, strformat, sets, strutils]
 import ../core/types
-import ../compiler/context
-import ../compiler/types
-import ../compiler/symbols
 
 # Note: We cannot import expression.nim here due to circular dependency
 # (expression.nim imports blocks.nim)
@@ -16,6 +13,64 @@ proc escapeNimStringLocal(s: string): string =
   result = result.replace("\n", "\\n")
   result = result.replace("\r", "\\r")
   result = result.replace("\t", "\\t")
+
+type
+  GenContext* = ref object
+    locals*: seq[string]
+    parameters*: seq[string]
+
+proc genBlockExpr*(ctx: GenContext, node: Node): string =
+  if node == nil:
+    return "NodeValue(kind: vkNil)"
+  
+  case node.kind
+  of nkLiteral:
+    let lit = node.LiteralNode
+    case lit.value.kind
+    of vkInt:
+      return fmt("NodeValue(kind: vkInt, intVal: {lit.value.intVal})")
+    of vkFloat:
+      return fmt("NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})")
+    of vkString:
+      return fmt("NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")")
+    of vkNil:
+      return "NodeValue(kind: vkNil)"
+    of vkBool:
+      return fmt("NodeValue(kind: vkBool, boolVal: {lit.value.boolVal})")
+    of vkSymbol:
+      return fmt("NodeValue(kind: vkSymbol, symVal: \"{lit.value.symVal}\")")
+    of vkArray:
+      return "NodeValue(kind: vkArray, arrayVal: @[])"
+    of vkTable:
+      return "NodeValue(kind: vkTable, tableVal: initTable[string, NodeValue]())"
+    else:
+      return "NodeValue(kind: vkNil)"
+  
+  of nkIdent:
+    let ident = node.IdentNode
+    # Check if it's a local or parameter
+    if ident.name in ctx.parameters:
+      return ident.name
+    if ident.name in ctx.locals:
+      return ident.name
+    # Otherwise it's a slot or global - use runtime
+    return fmt("getSlotValue(self, \"{ident.name}\")")
+  
+  of nkMessage:
+    let msg = node.MessageNode
+    let recv = genBlockExpr(ctx, msg.receiver)
+    var args: seq[string] = @[]
+    for arg in msg.arguments:
+      args.add(genBlockExpr(ctx, arg))
+    return fmt("sendMessageBlock({recv}, \"{msg.selector}\", @[{args.join(\", \")}])")
+  
+  of nkAssign:
+    let assign = node.AssignNode
+    let expr = genBlockExpr(ctx, assign.expression)
+    return fmt("({assign.variable} = {expr}; {assign.variable})")
+  
+  else:
+    return "NodeValue(kind: vkNil)"
 
 # ============================================================================
 # Block Registry for Code Generation
@@ -307,6 +362,7 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
   ## - Generate basic body code
   ## - Handle implicit returns for last expression
   var output = ""
+  let ctx = GenContext(locals: @[], parameters: @[])
 
   # If we have captures, cast env pointer and extract values
   if info.captures.len > 0:
@@ -369,6 +425,43 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
           output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)\n"))
       else:
         output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)  # assigned via runtime\n"))
+        
+    of nkMessage:
+      # Generate message send code
+      let msg = stmt.MessageNode
+      let recvCode = genBlockExpr(ctx, msg.receiver)
+      var code = recvCode
+      
+      # Handle different message types
+      case msg.selector
+      of "+", "-", "*", "/", "//", "%":
+        # Binary arithmetic
+        if msg.arguments.len > 0:
+          let argCode = genBlockExpr(ctx, msg.arguments[0])
+          code = fmt("binaryOp_{msg.selector}({recvCode}, {argCode})")
+      of "at:":
+        if msg.arguments.len > 0:
+          let argCode = genBlockExpr(ctx, msg.arguments[0])
+          code = fmt("collectionAt({recvCode}, {argCode})")
+      of "at:put:":
+        if msg.arguments.len > 1:
+          let keyCode = genBlockExpr(ctx, msg.arguments[0])
+          let valCode = genBlockExpr(ctx, msg.arguments[1])
+          code = fmt("collectionAtPut({recvCode}, {keyCode}, {valCode})")
+      else:
+        # Generic message - use runtime
+        var args = "@["
+        for j, arg in msg.arguments:
+          if j > 0: args.add(", ")
+          args.add(genBlockExpr(ctx, arg))
+        args.add("]")
+        code = fmt("sendMessageBlock({recvCode}, \"{msg.selector}\", {args})")
+      
+      if isLast:
+        output.add("  return " & code & "\n")
+      else:
+        output.add("  discard " & code & "\n")
+      hasReturn = isLast
         
     of nkLiteral:
       if isLast:

@@ -1,0 +1,35 @@
+#!/usr/bin/env harding
+#
+# Test Harding main: and compile: blocks
+#
+
+Harding compile: [
+  # Class definitions executed at compile time
+  Animal := Object deriveWithAccessors: #(name)
+  Pet := Object deriveWithAccessors: #(owner)
+  
+  Dog := Object deriveWithAccessors: #(breed)
+  Dog addSuperclass: Animal
+  Dog addSuperclass: Pet
+  
+  Dog>>speak [
+    ^ "Woof!"
+  ]
+  
+  Pet>>greet [
+    ^ "Hello, " , self owner , "!"
+  ]
+]
+
+Harding main: [
+  MyDog := Dog new
+  MyDog name: "Buddy"
+  MyDog owner: "Alice"
+  MyDog breed: "Golden Retriever"
+  
+  ("Name: " , MyDog name) println
+  ("Owner: " , MyDog owner) println
+  ("Breed: " , MyDog breed) println
+  ("Speak: " , MyDog speak) println
+  ("Greet: " , MyDog greet) println
+]

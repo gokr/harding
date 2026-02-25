@@ -7,11 +7,13 @@
 # NOTE: This compiler initializes the full Harding VM to ensure access to
 # the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, logging]
+import std/[os, strutils, parseopt, strformat, logging, tables]
+import ../core/types
 import ../parser/parser
 import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
+import ../compiler/types
 import ../core/scheduler
 import ../interpreter/vm
 import ../repl/cli
@@ -20,6 +22,48 @@ proc mangleModuleName(name: string): string =
   ## Convert module name to valid Nim identifier
   ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
   return name
+
+proc showErrorContext*(source: string, filename: string, lineNum: int, colNum: int) =
+  let lines = source.splitLines()
+  if lineNum > 0 and lineNum <= lines.len:
+    let line = lines[lineNum - 1]
+    echo ""
+    echo "  --> ", filename, ":", lineNum, ":", colNum
+    echo "   |"
+    echo " ", lineNum, " | ", line
+    let indicator = " ".repeat(colNum + len($lineNum) + 3) & "^"
+    echo "   | ", indicator
+    echo "   |" 
+    echo " Hint: Check for missing brackets, parentheses, or quotes"
+
+proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassInfo] =
+  ## Extract class information from interpreter's live class objects
+  result = initTable[string, ClassInfo]()
+  if interp.globals == nil:
+    return
+  for name, val in interp.globals[].pairs:
+    if val.kind == vkClass:
+      let cls = val.classVal
+      if cls != nil and cls.allSlotNames.len > 0:
+        let classInfo = newClassInfo(cls.name)
+        for slotName in cls.allSlotNames:
+          discard classInfo.addSlot(slotName, tcObject)
+        result[cls.name] = classInfo
+
+proc extractHardingCompileSource(nodes: seq[Node]): string =
+  ## Extract source code from Harding compile: block if present
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "compile:" and msg.receiver != nil and 
+         msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
+        if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
+          let blk = msg.arguments[0].BlockNode
+          var lines: seq[string] = @[]
+          for stmt in blk.body:
+            lines.add(printAST(stmt))
+          return lines.join("\n")
+  return ""
 
 type
   Config = ref object
@@ -186,7 +230,31 @@ proc compileFile(config: Config): bool =
 
   if parser.hasError:
     echo "Parse error: ", parser.errorMsg
+    showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
+
+  # Execute code in interpreter to construct classes
+  # If there's a Harding compile: block, execute its body directly in interpreter
+  var compiledNodes: seq[Node] = @[]
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "compile:" and msg.receiver != nil and 
+         msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
+        if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
+          let blk = msg.arguments[0].BlockNode
+          compiledNodes = blk.body
+          break
+  
+  if compiledNodes.len > 0:
+    # Execute compile block nodes directly
+    for node in compiledNodes:
+      discard evalWithVM(interp, node)
+  elif source.len > 0:
+    # Backward compatibility: execute full source
+    let (execResults, execError) = evalStatements(interp, source)
+    if execError.len > 0:
+      echo "Execution error: ", execError
 
   # Dump AST if requested
   if config.dumpAst:
@@ -207,7 +275,8 @@ proc compileFile(config: Config): bool =
   let outputPath = outputDir / moduleName & ".nim"
 
   var ctx = newCompiler(outputDir, moduleName)
-  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile)
+  let reflectedClasses = extractClassInfoFromInterpreter(interp)
+  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)
