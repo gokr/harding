@@ -26,13 +26,15 @@ type
     varTypes*: Table[string, VarTypeInfo]  ## Variable name -> type info
     compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
+    mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 
 proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
-                    classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo]()): GenContext =
+                    classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                    mixed: bool = false): GenContext =
   ## Create new generation context
   result = GenContext(
     cls: cls,
@@ -43,7 +45,8 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
     blockRegistry: newBlockRegistry(),
     varTypes: initTable[string, VarTypeInfo](),
     compiledClasses: compiledClasses,
-    classInfo: classInfo
+    classInfo: classInfo,
+    mixed: mixed
   )
 
 proc indentBlock*(code: string, spaces: int = 2): string =
@@ -602,7 +605,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
     # Try to generate direct slot accessor call
@@ -612,7 +616,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("sendMessage(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator

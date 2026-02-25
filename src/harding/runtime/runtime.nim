@@ -198,6 +198,9 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
   ## Hybrid message dispatch: try compiled first, fall back to interpreter
   ## This is used in mixed mode (--mixed flag) for unsupported features
+  ## 
+  ## TODO: Full implementation requires method compilation (option 1)
+  ## Currently just returns nil for uncompiled methods
   
   # First, try to use the compiled runtime if available
   if currentRuntime != nil:
@@ -209,18 +212,11 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
   # Fall back to interpreter for uncompiled methods
   initHybridRuntime()
   
-  # Use the interpreter to evaluate the message
-  # This is slower but handles any Harding code
-  try:
-    # Convert selector and args to AST and evaluate
-    # For now, return nil with a warning
-    when not defined(release):
-      echo "Mixed mode: Falling back to interpreter for '", selector, "'"
-    return NodeValue(kind: vkNil)
-  except:
-    when not defined(release):
-      echo "Mixed mode error in '", selector, "': ", getCurrentExceptionMsg()
-    return NodeValue(kind: vkNil)
+  # For now, just warn and return nil - full method compilation is needed
+  when not defined(release):
+    echo "Mixed mode: Falling back to interpreter for '", selector, "' (not yet implemented)"
+  
+  return NodeValue(kind: vkNil)
 
 # Convenience procs for common operations
 

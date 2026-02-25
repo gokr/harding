@@ -210,7 +210,8 @@ proc extractHardingBlocks(nodes: seq[Node]): tuple[compileBlock, mainBlock: Bloc
 
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
                   blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
-                  classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
+                  classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                  mixed: bool = false, sourceFile: string = ""): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -225,8 +226,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   # Initialize runtime
   output.add("  initRuntime()\n\n")
 
+  # If mixed mode, initialize hybrid runtime with source file
+  if mixed and sourceFile.len > 0:
+    output.add(fmt("  initHybridRuntime(@[\"{sourceFile}\"])\n\n"))
+
   # Create generation context for top-level code, sharing block registry if provided
-  var genCtx = newGenContext(nil, compiledClasses, classInfo)
+  var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -359,7 +364,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add("\n\n")
 
   # Generate block procedure signatures and bodies using real code generation
-  var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes)
+  var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
@@ -372,7 +377,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes))
+  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
 
   # Module initialization
   output.add("\n")
