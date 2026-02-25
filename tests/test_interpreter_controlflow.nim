@@ -59,7 +59,7 @@ suite "Interpreter: Conditionals":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^2].intVal == 1)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 0)
 
 suite "Interpreter: Loops":

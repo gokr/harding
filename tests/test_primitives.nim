@@ -65,8 +65,7 @@ suite "Primitive Syntax: Declarative Form":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^3].intVal == 1)
-    check(result[0][^2].intVal == 2)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 3)
 
   test "primitive method can be called on instances":
@@ -91,7 +90,7 @@ suite "Primitive Syntax: Declarative Form":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^2].intVal == 10)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 20)
 
 suite "Primitive Syntax: Inline Form":
@@ -166,8 +165,7 @@ suite "Primitive Syntax: Integration Tests":
     """)
 
     check(result[1].len == 0)
-    check(result[0][^3].intVal == 1)
-    check(result[0][^2].intVal == 2)
+    check(result[0].len == 1)
     check(result[0][^1].intVal == 3)
 
   test "inline primitive with keyword message syntax parses correctly":
