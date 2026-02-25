@@ -1,19 +1,64 @@
 #!/usr/bin/env harding
 # Permutation Benchmark
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: 8660 for permutations of 7 elements
-# NOTE: Simplified version for current Harding limitations
+# Generates all permutations of 7 elements and counts them
+# Expected result: 8660 (includes intermediate states)
 
-# The full permutation benchmark requires:
-# - Array for storing elements
-# - Array indexing with at:/at:put:
-# - While loops for iteration
-# - Counting each permutation visited
+| Permute count array |
 
-# Formula: 7! = 5040 permutations
-# But the SOM benchmark counts intermediate states too
-# Expected result: 8660
+Permute := Object deriveWithAccessors: #(elements count).
 
-# Current Harding limitations prevent full implementation
+Permute>>initialize [
+  | i |
+  self elements: (Array new: 7).
+  self count: 0.
+  
+  # Initialize with values 1-7
+  i := 1.
+  [ i <= 7 ] whileTrue: [
+    self elements at: i put: i.
+    i := i + 1
+  ]
+]
 
-8660
+Permute>>permute: n [
+  # Generate permutations of first n elements
+  | i temp |
+  n = 1 ifTrue: [
+    # Base case: found a permutation
+    self count: (self count + 1)
+  ] ifFalse: [
+    # Recursive case
+    i := 1.
+    [ i <= n ] whileTrue: [
+      # Swap elements[i] and elements[n]
+      self swap: i with: n.
+      
+      # Recurse
+      self permute: (n - 1).
+      
+      # Swap back (restore)
+      self swap: i with: n.
+      
+      i := i + 1
+    ].
+    # Count intermediate state
+    self count: (self count + 1)
+  ]
+]
+
+Permute>>swap: i with: j [
+  # Swap elements at positions i and j
+  | temp |
+  temp := self elements at: i.
+  self elements at: i put: (self elements at: j).
+  self elements at: j put: temp
+]
+
+# Run the benchmark
+perm := Permute new.
+perm initialize.
+perm permute: 7.
+
+# Return the count
+perm count

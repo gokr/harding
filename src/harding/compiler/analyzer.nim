@@ -79,41 +79,46 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
   ## Returns ("", "", "") if not a derive: chain
   result = ("", "", "")
 
-  if node.kind != nkMessage:
+  var className = ""
+  var deriveMsg: MessageNode = nil
+  
+  # Check for assignment syntax: ClassName := Parent derive: ...
+  if node.kind == nkAssign:
+    let assign = node.AssignNode
+    className = assign.variable
+    if assign.expression != nil and assign.expression.kind == nkMessage:
+      deriveMsg = assign.expression.MessageNode
+  # Check for message syntax (at:put:)
+  elif node.kind == nkMessage:
+    let msg = node.MessageNode
+    if msg.selector == "at:put:":
+      if msg.arguments.len >= 2:
+        # Check for derive: inside the value
+        if msg.arguments[1].kind == nkMessage:
+          deriveMsg = msg.arguments[1].MessageNode
+          if msg.receiver.kind == nkLiteral:
+            className = msg.receiver.LiteralNode.value.symVal
+  
+  if deriveMsg == nil:
     return
-
-  let msg = node.MessageNode
-  if msg.selector != "at:put:":
+  
+  # Handle derive: and deriveWithAccessors:
+  if deriveMsg.selector notin ["derive:", "derive", "deriveWithAccessors:", "deriveWithAccessors"]:
     return
-
-  # Check for derive: inside the value
-  if msg.arguments.len < 2:
-    return
-
-  let receiver = if msg.receiver.kind == nkLiteral:
-                   msg.receiver.LiteralNode.value.symVal
-                 else:
-                   ""
-
-  let deriveMsg = if msg.arguments[1].kind == nkMessage:
-                    msg.arguments[1].MessageNode
-                  else:
-                    nil
-
-  if deriveMsg == nil or deriveMsg.selector != "derive:":
-    return
-
+  
+  # Extract parent from receiver of derive message
   let parent = if deriveMsg.receiver.kind == nkLiteral and
                   deriveMsg.receiver.LiteralNode.value.kind == vkSymbol:
                   deriveMsg.receiver.LiteralNode.value.symVal
                 else:
                   "Object"
-
+  
+  # Extract type list from arguments
   let typeArg = if deriveMsg.arguments.len > 0:
                    deriveMsg.arguments[0]
                  else:
                    nil
-
+  
   var typeList = ""
   if typeArg != nil and typeArg.kind == nkLiteral:
     let val = typeArg.LiteralNode.value
@@ -121,14 +126,13 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
       typeList = val.strVal
     elif val.kind == vkArray:
       # Handle #(name: Type) array syntax
-      # Convert array to type list string
       var parts: seq[string] = @[]
       for elem in typeArg.LiteralNode.value.arrayVal:
         if elem.kind == vkString:
           parts.add(elem.strVal)
       typeList = "#(" & parts.join(" ") & ")"
 
-  return (receiver, parent, typeList)
+  return (className, parent, typeList)
 
 proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
                       parentClass: ClassInfo): ClassInfo =
@@ -154,7 +158,7 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
 
   # First pass: collect all class declarations
   for node in nodes:
-    if node.kind == nkMessage:
+    if node.kind in [nkMessage, nkAssign]:
       let chain = extractDeriveChain(node)
       let className = chain[0]
       if className.len > 0 and className notin classMap:
@@ -162,7 +166,7 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
 
   # Second pass: create ClassInfo with parent links
   for node in nodes:
-    if node.kind == nkMessage:
+    if node.kind in [nkMessage, nkAssign]:
       let chain = extractDeriveChain(node)
       let className = chain[0]
       let parentName = chain[1]
