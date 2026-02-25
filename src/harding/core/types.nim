@@ -880,6 +880,18 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   # Add to superclasses' subclasses lists and inherit methods
   for parent in superclasses:
     parent.subclasses.add(result)
+    # If parent is dirty, trigger rebuild to get latest methods before inheriting
+    # This ensures new subclasses pick up methods added after parent was marked dirty
+    if parent.methodsDirty:
+      # Rebuild parent's method tables by re-inheriting from its parents
+      # Use a simple approach: copy parent's allMethods to ensure we have latest
+      var updatedMethods = parent.methods
+      for superParent in parent.superclasses:
+        for sel, meth in superParent.allMethods:
+          if sel notin updatedMethods:
+            updatedMethods[sel] = meth
+      parent.allMethods = updatedMethods
+      parent.methodsDirty = false
     # Inherit instance methods (unless child overrides)
     for selector, methodBlock in parent.allMethods:
       if selector notin result.methods:  # Only inherit if not overridden

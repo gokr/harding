@@ -286,15 +286,8 @@ Object class>>extendClass: aBlock [
 
 Object class>>name <primitive primitiveClassName>
 
-Object>>print [
-  # Print to stdout without newline
-  Stdout write: self asString
-]
-
-Object>>println [
-  # Print to stdout with newline
-  Stdout writeline: self asString
-]
+# Note: Object>>print and Object>>println are registered as native methods
+# in the interpreter, so they don't need to be defined here
 
 #====================================================================
 # Comparison

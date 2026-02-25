@@ -557,39 +557,51 @@ type
 
 proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): MethodResult =
   ## Look up method in receiver's class using O(1) class lookup
-  ## Lazily rebuilds method tables if class is marked dirty
+  ## Only rebuilds method tables on actual cache miss, not every lookup
   if receiver == nil or receiver.class == nil:
     return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
   let cls = receiver.class
+  debug("lookupMethod: class=", cls.name, " selector=", selector, " methodsDirty=", cls.methodsDirty, " allMethods.len=", cls.allMethods.len)
 
-  # Lazy rebuild: check if method tables are dirty and rebuild if needed
-  if cls.methodsDirty:
-    rebuildAllDescendants(cls)
-    cls.methodsDirty = false
-
-  # Fast O(1) lookup in allMethods table (already flattened from parents)
+  # Fast O(1) lookup in allMethods table first (common case - no rebuild needed)
   if selector in cls.allMethods:
+    let meth = cls.allMethods[selector]
+    debug("lookupMethod: found in allMethods, nativeImpl=", cast[int](meth.nativeImpl), " hasInterpreterParam=", meth.hasInterpreterParam)
     return MethodResult(
-      currentMethod: cls.allMethods[selector],
+      currentMethod: meth,
       receiver: receiver,
       definingClass: cls,
       found: true
     )
 
+  # Cache miss: rebuild method tables if dirty, then retry lookup
+  if cls.methodsDirty:
+    debug("lookupMethod: methodsDirty=true, rebuilding")
+    rebuildAllTables(cls)  # Only rebuild this class, not all descendants
+    cls.methodsDirty = false
+    
+    # Retry lookup after rebuild
+    if selector in cls.allMethods:
+      let meth = cls.allMethods[selector]
+      debug("lookupMethod: found after rebuild, nativeImpl=", cast[int](meth.nativeImpl))
+      return MethodResult(
+        currentMethod: meth,
+        receiver: receiver,
+        definingClass: cls,
+        found: true
+      )
+
+  debug("lookupMethod: NOT FOUND, returning nil")
   return MethodResult(currentMethod: nil, receiver: receiver, definingClass: nil, found: false)
 
 proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
   ## Look up class method in class (fast O(1) lookup)
-  ## Lazily rebuilds method tables if class is marked dirty
+  ## Only rebuilds method tables on actual cache miss, not every lookup
   if cls == nil:
     return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
-  # Lazy rebuild: check if method tables are dirty and rebuild if needed
-  if cls.methodsDirty:
-    rebuildAllDescendants(cls)
-    cls.methodsDirty = false
-
+  # Fast O(1) lookup in allClassMethods table first (common case)
   if selector in cls.allClassMethods:
     return MethodResult(
       currentMethod: cls.allClassMethods[selector],
@@ -597,6 +609,21 @@ proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
       definingClass: cls,
       found: true
     )
+  
+  # Cache miss: rebuild method tables if dirty, then retry lookup
+  if cls.methodsDirty:
+    rebuildAllTables(cls)  # Only rebuild this class, not all descendants
+    cls.methodsDirty = false
+    
+    # Retry lookup after rebuild
+    if selector in cls.allClassMethods:
+      return MethodResult(
+        currentMethod: cls.allClassMethods[selector],
+        receiver: nil,
+        definingClass: cls,
+        found: true
+      )
+  
   return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
 # Execute a method using the stackless VM
@@ -611,17 +638,20 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   debug("Executing method with ", arguments.len, " arguments")
 
   # Check for native implementation first
+  debug("executeMethod: currentMethod nil? ", currentMethod == nil, " selector=", if currentMethod != nil: currentMethod.selector else: "N/A")
   if nativeImplIsSet(currentMethod):
-      debug("Calling native implementation")
+      debug("Calling native implementation: ", currentMethod.selector, " receiver=", $receiver.class.name, " receiver.kind=", $receiver.kind, " hasInterpreterParam=", currentMethod.hasInterpreterParam)
       let savedReceiver = interp.currentReceiver
       try:
         if currentMethod.hasInterpreterParam:
           type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
+          debug("About to call nativeProc with interpreter param, receiver ptr=", cast[int](receiver), " nativeImpl ptr=", cast[int](currentMethod.nativeImpl))
           return nativeProc(interp, receiver, arguments)
         else:
           type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
+          debug("About to call nativeProc without interpreter param, receiver ptr=", cast[int](receiver), " nativeImpl ptr=", cast[int](currentMethod.nativeImpl))
           return nativeProc(receiver, arguments)
       finally:
         interp.currentReceiver = savedReceiver
@@ -683,11 +713,14 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 # Block evaluation helpers using the stackless VM
 proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode): NodeValue =
   ## Evaluate a block in the context of the given receiver using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
 
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
@@ -719,11 +752,14 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 
 proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg: NodeValue): NodeValue =
   ## Evaluate a block with one argument using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -758,11 +794,14 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
 proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2: NodeValue): (NodeValue, bool) =
   ## Evaluate a block with two arguments using the stackless VM
   ## Returns (value, true) if a non-local return occurred, (value, false) otherwise
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -800,11 +839,14 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
 
 proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2, arg3: NodeValue): NodeValue =
   ## Evaluate a block with three arguments using the stackless VM
-  let blockReceiver = if blockNode.homeActivation != nil and
-                        blockNode.homeActivation.receiver != nil:
+  ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  let blockReceiver = if receiver != nil:
+                        receiver
+                      elif blockNode.homeActivation != nil and
+                           blockNode.homeActivation.receiver != nil:
                         blockNode.homeActivation.receiver
                       else:
-                        receiver
+                        nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
   # Copy captured environment to activation locals
@@ -1155,22 +1197,18 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
   let blockNode = args[0].blockVal
   debug("primitiveAsSelfDo called, evaluating block with self = ", self.class.name)
 
-  # Save current receiver and block's homeActivation
+  # Save current receiver
   let savedReceiver = interp.currentReceiver
-  let savedHomeActivation = blockNode.homeActivation
 
-  # Temporarily set receiver to self and clear homeActivation
-  # so the block uses the passed receiver instead of homeActivation.receiver
+  # Temporarily set receiver to self
   interp.currentReceiver = self
-  blockNode.homeActivation = nil
 
   try:
     # Evaluate the block with new self
     return evalBlock(interp, self, blockNode)
   finally:
-    # Restore original receiver and homeActivation
+    # Restore original receiver
     interp.currentReceiver = savedReceiver
-    blockNode.homeActivation = savedHomeActivation
 
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
@@ -2270,7 +2308,11 @@ proc initGlobals*(interp: var Interpreter) =
 
   proc objPrintlnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
     # Print self to stdout with newline
+    debug("objPrintlnImpl: self=nil? ", self == nil, " self.kind=", $self.kind)
+    if self == nil:
+      raise newException(ValueError, "println called on nil")
     let s = self.toValue().toString()
+    debug("objPrintlnImpl: about to echo: ", s)
     echo(s)
     return self.toValue()
 
@@ -2281,6 +2323,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let printlnMethod = createCoreMethod("println")
   printlnMethod.setNativeImpl(objPrintlnImpl)
+  printlnMethod.hasInterpreterParam = true
   objectCls.methods["println"] = printlnMethod
   objectCls.allMethods["println"] = printlnMethod
 
@@ -3160,6 +3203,19 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     let stdoutInstance = fileStreamCls.newInstance()
     interp.globals[]["Stdout"] = stdoutInstance.toValue()
     debug("Created Stdout instance from FileStream class")
+
+  # Force rebuild of all method tables after stdlib loading completes
+  # This ensures inherited methods are properly populated in allMethods tables
+  debug("Forced rebuild of all method tables after stdlib loading")
+  if objectClass != nil:
+    debug("Object methods before rebuild: ", objectClass.methods.len, " allMethods: ", objectClass.allMethods.len)
+    debug("println in Object.methods? ", "println" in objectClass.methods)
+    debug("println in Object.allMethods? ", "println" in objectClass.allMethods)
+  rebuildAllMethodTables()
+  if objectClass != nil:
+    debug("Object methods after rebuild: ", objectClass.methods.len, " allMethods: ", objectClass.allMethods.len)
+    debug("println in Object.methods? ", "println" in objectClass.methods)
+    debug("println in Object.allMethods? ", "println" in objectClass.allMethods)
 
   when defined(granite):
     # Register Granite compiler primitives
@@ -4548,15 +4604,21 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
     # Convert receiver to Instance for method lookup
     var receiver: Instance
+    debug("VM: Converting receiverVal.kind=", $receiverVal.kind)
     case receiverVal.kind
     of vkInstance:
       receiver = receiverVal.instVal
+      debug("VM: vkInstance receiver, class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
     of vkInt:
       receiver = newIntInstance(integerClass, receiverVal.intVal)
+      debug("VM: vkInt receiver created, class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
     of vkFloat:
       receiver = newFloatInstance(floatClass, receiverVal.floatVal)
+      debug("VM: vkFloat receiver created")
     of vkString:
+      debug("VM: vkString receiver, stringClass ptr=", cast[int](stringClass), " stringClass name=", if stringClass != nil: stringClass.name else: "NIL")
       receiver = newStringInstance(stringClass, receiverVal.strVal)
+      debug("VM: vkString receiver created, receiver ptr=", cast[int](receiver), " class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
     of vkBool:
       let p = cast[pointer](new(bool))
       cast[ptr bool](p)[] = receiverVal.boolVal
@@ -4567,12 +4629,16 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         isNimProxy: true,
         nimValue: p
       )
+      debug("VM: vkBool receiver created")
     of vkNil:
       receiver = nilInstance
+      debug("VM: vkNil receiver")
     of vkArray:
       receiver = newArrayInstance(arrayClass, receiverVal.arrayVal)
+      debug("VM: vkArray receiver created")
     of vkTable:
       receiver = newTableInstance(tableClass, receiverVal.tableVal)
+      debug("VM: vkTable receiver created")
     of vkClass:
       # Class method lookup
       let cls = receiverVal.classVal
@@ -4961,23 +5027,30 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
     # Check for native implementation
     # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
+    debug("VM: currentMethod ptr=", cast[int](currentMethod), " selector=", if currentMethod != nil: currentMethod.selector else: "NIL")
     debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod))
     if nativeImplIsSet(currentMethod):
       # Call native method
       debug("VM: Calling native method '", frame.selector, "'")
+      debug("VM: currentMethod.nativeImpl ptr=", cast[int](currentMethod.nativeImpl), " hasInterpreterParam=", currentMethod.hasInterpreterParam)
+      debug("VM: receiver ptr=", cast[int](receiver), " receiver class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
       let savedReceiver = interp.currentReceiver
       try:
         var resultVal: NodeValue
+        debug("VM: Checking hasInterpreterParam=", currentMethod.hasInterpreterParam)
+        stderr.flushFile()
         if currentMethod.hasInterpreterParam:
           debug("VM: Native method has interpreter param, nativeImpl=", cast[int](currentMethod.nativeImpl))
           type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-          debug("VM: About to call nativeProc, receiver=", (if receiver != nil: receiver.class.name else: "nil"))
+          debug("VM: About to call nativeProc, receiver=", (if receiver != nil: receiver.class.name else: "nil"), " receiver ptr=", cast[int](receiver))
           resultVal = nativeProc(interp, receiver, args)
           debug("VM: Native method returned: ", resultVal.toString())
         else:
           type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
+          debug("VM: About to call nativeProc (no interp), receiver=", (if receiver != nil: receiver.class.name else: "nil"), " receiver ptr=", cast[int](receiver))
+          stderr.flushFile()
           resultVal = nativeProc(receiver, args)
         interp.pushValue(resultVal)
       finally:

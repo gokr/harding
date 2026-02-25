@@ -22,17 +22,18 @@ suite "Interpreter: Basic Message Dispatch":
     skip()  # doesNotUnderstand: mechanism needs review
 
   test "method lookup traverses prototype chain":
-    let result = interp.evalStatements("""
-    Parent := Object derive.
-    Parent selector: #parentMethod put: [ ^"from parent" ].
+    let code = """
+Parent := Object derive.
+Parent selector: #parentMethod put: [ ^"from parent" ].
 
-    Child := Parent derive.
-    Child2 := Child new.
-    Result := Child2 parentMethod
-    """)
-    check(result[1].len == 0)
-    check(result[0][^1].kind == vkString)
-    check(result[0][^1].strVal == "from parent")
+Child := Parent derive.
+Child2 := Child new.
+Child2 parentMethod
+"""
+    let (result, err) = interp.doit(code)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == "from parent")
 
 suite "Interpreter: Method Execution with Parameters":
   var interp: Interpreter

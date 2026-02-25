@@ -324,10 +324,10 @@ proc rebuildAllDescendants*(cls: Class) =
 proc rewriteMethodForSlotAccess*(blk: BlockNode, cls: Class)
 
 # Helper to add method to class
-proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMethod: bool = false, deferRebuild: bool = false) =
+proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMethod: bool = false, deferRebuild: bool = true) =
   ## Add a method to a class (instance or class method)
-  ## If deferRebuild is true, mark class as dirty instead of immediate rebuild
-  ## Use deferRebuild=true when batch loading methods, then call finalizeClass() after
+  ## Default: deferRebuild=true for performance - rebuilds only on cache miss during lookup
+  ## Use deferRebuild=false only when immediate rebuild is required
   # Mark block as a method so return (^) has correct semantics
   meth.isMethod = true
   meth.selector = selector  # Store the selector for later lookup
@@ -342,31 +342,27 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   # Bump version to invalidate inline caches referencing this class
   cls.version += 1
 
-  # Mark as dirty for lazy rebuilding, or rebuild immediately
-  if deferRebuild:
-    cls.methodsDirty = true
-    # Propagate dirty flag to all descendants
-    for subclass in cls.subclasses:
-      subclass.methodsDirty = true
-  else:
-    # Rebuild all method tables for this class and all descendants immediately
-    rebuildAllDescendants(cls)
+  # Mark as dirty for lazy rebuilding (deferred to lookup time on cache miss)
+  cls.methodsDirty = true
+  # Propagate dirty flag to all descendants
+  for subclass in cls.subclasses:
+    subclass.methodsDirty = true
 
 proc finalizeClass*(cls: Class) =
-  ## Finalize a class after batch method loading - rebuilds method tables if dirty
-  if cls.methodsDirty:
-    rebuildAllDescendants(cls)
-    cls.methodsDirty = false
+  ## Finalize a class after batch method loading - clears dirty flag
+  ## Method tables will be rebuilt on first cache miss during lookup
+  cls.methodsDirty = false
 
 proc rebuildAllMethodTables*() =
   ## Rebuild all method tables for all known classes
-  ## Useful after batch loading or when explicit synchronization is needed
-  ## Starts from root classes and rebuilds entire hierarchies
+  ## Forces immediate rebuild - use sparingly, prefer lazy rebuilding
   if rootClass != nil:
-    rebuildAllDescendants(rootClass)
+    rebuildAllTables(rootClass)
+    rootClass.methodsDirty = false
   # Also rebuild Object hierarchy if different from Root
   if objectClass != nil and objectClass != rootClass:
-    rebuildAllDescendants(objectClass)
+    rebuildAllTables(objectClass)
+    objectClass.methodsDirty = false
 
 # ============================================================================
 # AST Rewriter for Slot Access
@@ -1943,11 +1939,13 @@ proc invalidateSubclasses*(cls: Class) =
 
 proc rebuildAllTables*(cls: Class) =
   ## Rebuild inherited method tables
+  debug("rebuildAllTables: class=", cls.name, " methodsDirty=", cls.methodsDirty, " superclasses.len=", cls.superclasses.len)
   var allMethods = initTable[string, BlockNode]()
   var allClassMethods = initTable[string, BlockNode]()
 
   # For the class itself, use directly-defined methods only
   for sel, m in cls.methods:
+    debug("rebuildAllTables: adding own method ", sel, " nativeImpl=", cast[int](m.nativeImpl))
     allMethods[sel] = m
   for sel, m in cls.classMethods:
     allClassMethods[sel] = m
@@ -1955,9 +1953,12 @@ proc rebuildAllTables*(cls: Class) =
   # For parent classes, use allMethods (includes what they inherited)
   # This ensures we pick up manually-added methods from tests
   for parent in cls.superclasses:
+    debug("rebuildAllTables: processing parent ", parent.name)
     for c in parent.inheritanceChain():
+      debug("rebuildAllTables: processing inheritance chain class ", c.name, " allMethods.len=", c.allMethods.len)
       for sel, m in c.allMethods:
-        if sel notin allMethods:  # Don't override if already defined
+        if sel notin allMethods:
+          debug("rebuildAllTables: inheriting method ", sel, " from ", c.name, " nativeImpl=", cast[int](m.nativeImpl))
           allMethods[sel] = m
       for sel, m in c.allClassMethods:
         if sel notin allClassMethods:
@@ -1972,9 +1973,17 @@ proc rebuildAllTables*(cls: Class) =
   cls.allSlotNames = allSlotNames
   cls.hasSlots = allSlotNames.len > 0
 
+  # Rebuild tables
+  debug("rebuildAllTables: final allMethods.len=", allMethods.len, " has println? ", "println" in allMethods)
+  if "println" in allMethods:
+    debug("rebuildAllTables: println nativeImpl=", cast[int](allMethods["println"].nativeImpl))
   cls.allMethods = allMethods
   cls.allClassMethods = allClassMethods
 
+  # Mark all subclasses as dirty too - they need to rebuild from new parent tables
+  for subclass in cls.subclasses:
+    subclass.methodsDirty = true
+  
   # Bump version so inline caches see the rebuilt tables
   cls.version += 1
 
