@@ -369,18 +369,24 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBlockRuntimeHelpers())
   output.add("\n")
 
-  # Separate class/method definitions from top-level statements
-  let (classDefs, topLevel) = extractClassAndMethodDefs(nodes)
-
-  # Extract Harding compile: and main: blocks
+  # Extract Harding compile: and main: blocks first
   let hardingBlocks = nodes.extractHardingBlocks()
   
   # Determine what to compile as main:
   # If there's a Harding main: block, use its body; otherwise use topLevel
-  let mainBodyNodes = if hardingBlocks.mainBlock != nil:
-                         hardingBlocks.mainBlock.body
-                       else:
-                         topLevel
+  var mainBodyNodes: seq[Node]
+  if hardingBlocks.mainBlock != nil:
+    mainBodyNodes = hardingBlocks.mainBlock.body
+  else:
+    # Use everything that's not a compile block
+    mainBodyNodes = hardingBlocks.other
+  
+  # If there's a compile block, prepend its content (classes/methods definitions)
+  if hardingBlocks.compileBlock != nil:
+    mainBodyNodes = hardingBlocks.compileBlock.body & mainBodyNodes
+  
+  # Now extract class/method definitions from the combined body
+  let (classDefs, _) = extractClassAndMethodDefs(mainBodyNodes)
 
   # Analyze classes - use reflected classes if provided, otherwise build from AST
   let analysis = if reflectedClasses.len > 0:
