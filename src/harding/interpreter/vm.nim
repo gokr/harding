@@ -499,11 +499,11 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
         # Don't inherit if this block has a parameter with the same name
         if name notin blockNode.parameters:
           blockNode.capturedEnv[name] = cell
-          debug("Inherited captured variable from outer block: ", name)
 
-  # Walk up the activation chain and capture all local variables
+  # Capture variables from the current activation only (where the block is defined)
+  # We don't capture from parent activations - blocks only capture from their defining scope
   var activation = interp.currentActivation
-  while activation != nil:
+  if activation != nil:
     # Capture all locals from this activation (except 'self', 'super', and block parameters)
     for name, value in activation.locals:
       if name != "self" and name != "super" and name notin blockNode.parameters:
@@ -513,15 +513,11 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
           if activation.capturedVars.hasKey(name):
             # Share the existing cell from a sibling block
             cell = activation.capturedVars[name]
-            debug("Sharing captured variable from sibling: ", name)
           else:
             # Create a new cell and store it in the activation for sibling blocks
             cell = MutableCell(value: value)
             activation.capturedVars[name] = cell
-            debug("Captured variable: ", name, " = ", value.toString())
           blockNode.capturedEnv[name] = cell
-
-    activation = activation.sender
 
   # Set home activation for non-local returns
   # For Smalltalk semantics, non-local return (^) should return from the
@@ -669,6 +665,9 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
     let paramName = currentMethod.parameters[i]
     let argValue = arguments[i]
     activation.locals[paramName] = argValue
+
+  if currentMethod.isMethod and currentMethod.capturedEnvInitialized:
+    currentMethod.capturedEnv.clear()
 
   for tempName in currentMethod.temporaries:
     if tempName notin activation.locals:
