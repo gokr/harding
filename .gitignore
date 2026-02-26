@@ -45,6 +45,7 @@ testresults/
 /harding-lsp
 /granite
 /bona
+/mi
 
 # Profiling and benchmark output
 /profile_results.txt
