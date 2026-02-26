@@ -22,7 +22,6 @@ Pet>>speak [
 ]
 
 # Create a class with multiple parents using addSuperclass:
-# Note: Define all slots in the child class to avoid conflicts
 Dog := Object deriveWithAccessors: #(breed)  
 
 # Override any conflicting methods before adding parents to avoid
@@ -33,7 +32,6 @@ Dog>>speak [
 
 Dog addSuperclass: Animal
 Dog addSuperclass: Pet
-
 
 # Create an instance
 MyDog := Dog new
@@ -51,8 +49,3 @@ MyDog breed: "Golden Retriever"
 "" println
 ("Speak: " , MyDog speak) println
 ("Greet: " , MyDog greet) println
-
-"" println
-"=== Method lookup order ===" println
-"When methods conflict, the first parent's version is used." println
-"In this case: Dog -> Animal -> Pet -> Object" println

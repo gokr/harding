@@ -211,6 +211,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
   var registrationCode = ""
   
   if methodDefs.len == 0:
+    # Still generate registration stub
+    output.add("# Method Registration\n")
+    output.add("#####################\n\n")
+    output.add("proc registerCompiledMethods*() =\n")
+    output.add("  discard 0\n")
+    output.add("\n")
     return output
   
   output.add("\n# Compiled Methods\n")
@@ -256,13 +262,15 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
     # Add registration call
     registrationCode.add(fmt("  registerCompiledMethod(\"{clsName}\", \"{selector}\", {procName})\n"))
   
-  # Add registration proc
+  # Add registration procs (stubs if no methods/superclasses)
+  output.add("# Method Registration\n")
+  output.add("#####################\n\n")
+  output.add("proc registerCompiledMethods*() =\n")
   if registrationCode.len > 0:
-    output.add("# Method Registration\n")
-    output.add("#####################\n\n")
-    output.add("proc registerCompiledMethods*() =\n")
     output.add(registrationCode)
-    output.add("\n")
+  else:
+    output.add("  discard 0\n")
+  output.add("\n")
   
   return output
 
@@ -409,24 +417,26 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
 
   # Generate superclass hierarchy registration
-  output.add("\n")
-  output.add("# Superclass Hierarchy\n")
-  output.add("######################\n\n")
-  output.add("proc registerSuperclassHierarchy*() =\n")
-  
-  # Extract addSuperclass: calls from top-level code
+  var superclassCalls = ""
   for node in mainBodyNodes:
     if node.kind == nkMessage:
       let msg = node.MessageNode
       if msg.selector == "addSuperclass:" and msg.arguments.len >= 1:
-        # Receiver is the class (e.g., Dog addSuperclass: Pet)
         if msg.receiver != nil and msg.receiver.kind == nkIdent:
           let subclassName = msg.receiver.IdentNode.name
-          # Get superclass name from argument (which should be an identifier)
           if msg.arguments[0].kind == nkIdent:
             let superclassName = msg.arguments[0].IdentNode.name
-            output.add(fmt("  registerSuperclass(\"{subclassName}\", \"{superclassName}\")\n"))
-  output.add("\n")
+            superclassCalls.add(fmt("  registerSuperclass(\"{subclassName}\", \"{superclassName}\")\n"))
+  
+  if superclassCalls.len > 0:
+    output.add("\n")
+    output.add("# Superclass Hierarchy\n")
+    output.add("######################\n\n")
+    output.add("proc registerSuperclassHierarchy*() =\n")
+    output.add(superclassCalls)
+    output.add("\n")
+  else:
+    output.add("proc registerSuperclassHierarchy*() = discard 0\n\n")
 
   # Generate control flow methods (must come before block procedures that may use them)
   output.add("\n")
