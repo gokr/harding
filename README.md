@@ -192,7 +192,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
 - BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
 - Version-based MIC/PIC caching for improved message send performance
-- All 28 test files passing with zero failures
+- All 35 test files passing
 - VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
 - Harding Debug Protocol (HDP) for VM debugging
 

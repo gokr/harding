@@ -30,6 +30,8 @@ New to Harding? Start with these documents in order:
 | Topic | Document |
 |-------|----------|
 | GUI Development | [GTK.md](GTK.md) |
+| Syntax Highlighting | [GTKSOURCEVIEW.md](GTKSOURCEVIEW.md) |
+| VSCode Extension | [VSCODE.md](VSCODE.md) |
 | Contributing | [IMPLEMENTATION.md](IMPLEMENTATION.md) |
 | Future Roadmap | [FUTURE.md](FUTURE.md) |
 

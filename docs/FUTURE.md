@@ -12,7 +12,7 @@ Harding aims to support multiple concurrency approaches for different use cases:
 
 ### Green Threads (Current Foundation)
 
-**Status**: Partially implemented
+**Status**: Implemented
 
 Green threads are cooperative lightweight threads managed by a VM-level scheduler:
 
@@ -306,7 +306,7 @@ pid send: #compute with: 42.
 - ✅ Phase 1 & 2 VM optimizations (MIC/PIC, Work Frame pooling, Quick Primitives)
 - ✅ Smalltalk-style resumable exceptions (resume, resume:, retry, pass, return:)
 - First-class block compilation with captures and non-local returns
-- Start test framework implementation (all 28 tests passing)
+- Start test framework implementation (all 35 tests passing)
 
 ### Medium Term (3-6 months)
 

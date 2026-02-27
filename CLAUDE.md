@@ -59,7 +59,7 @@ nim c -r tests/test_exception_handling.nim
 
 ### Test Coverage
 
-The test suite includes 32 test files and 2 benchmark files covering:
+The test suite includes 35 test files and 2 benchmark files covering:
 
 **Core Interpreter:**
 - `test_interpreter_basic.nim` - Message dispatch, method execution, globals
@@ -101,6 +101,9 @@ The test suite includes 32 test files and 2 benchmark files covering:
 - `test_primitives.nim` - Primitive method declarations
 - `test_perform.nim` - Dynamic message sending
 - `test_set_operations.nim` - Set operations
+
+**Compiler:**
+- `test_compiler_basic.nim` - Granite compiler basic tests
 
 **Integration:**
 - `test_tagged.nim` - Tagged values (NaN boxing)

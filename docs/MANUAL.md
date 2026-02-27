@@ -710,7 +710,7 @@ collection select: [:each | each > 5]
 collection detect: [:each | each > 5]
 
 # Inject:into: - fold/reduce
-[1, 2, 3, 4] inject: 0 into: [:sum :each | sum + each]
+#(1 2 3 4) inject: 0 into: [:sum :each | sum + each]
 ```
 
 ---
@@ -1274,7 +1274,7 @@ Several Smalltalk-80 features are not implemented:
 4. **Method Categories** - Methods stored in flat table
 5. **Change Sets** - File-based source with git
 6. **Refactoring Tools** - Basic text editing only
-7. **Debugger** - Basic error messages only
+7. **Debugger** - VSCode DAP support implemented; GTK IDE debugger in progress
 
 ---
 
@@ -1412,11 +1412,12 @@ f sqrt            # Square root
 
 ```
 Object
-  └─ True
-  └─ False
+  └─ Boolean
+      ├─ True
+      └─ False
 ```
 
-Note: There is no explicit `Boolean` base class for `True` and `False`, but both support common boolean operations:
+Both `True` and `False` inherit from `Boolean`, which supports common boolean operations:
 
 ```smalltalk
 b ifTrue: [ ... ]
@@ -1434,13 +1435,13 @@ b not                    # Negation
 # Strings (double quotes only)
 "hello"             # String literal
 str size            # Length
-str at: 1           # Character at index
+str at: 0           # Character at index
 str1 , str2         # Concatenation
 
-# Arrays (1-based indexing)
+# Arrays (0-based indexing)
 #(1 2 3)            # Array literal
-arr at: 1           # First element
-arr at: 1 put: 99   # Set element
+arr at: 0           # First element
+arr at: 0 put: 99   # Set element
 arr size
 arr add: 42
 
@@ -1467,9 +1468,9 @@ block value: 10     # Invoke block
 arr := #(1 2 3)
 arr := Array new: 5     # Empty array with 5 slots
 
-# Access (1-based indexing)
-arr at: 1               # First element
-arr at: 1 put: 10       # Set first element
+# Access (0-based indexing)
+arr at: 0               # First element
+arr at: 0 put: 10       # Set first element
 
 # Methods
 arr size                # Number of elements

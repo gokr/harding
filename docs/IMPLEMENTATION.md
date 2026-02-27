@@ -383,25 +383,27 @@ Execution flow:
 
 ### NodeValue
 
-Wrapper for all Harding values:
+Wrapper for all Harding values using a case variant:
 
 ```nim
 type
   ValueKind* = enum
-    vkNil, vkBool, vkInt, vkFloat, vkString, vkSymbol,
-    vkArray, vkTable, vkObject, vkBlock
+    vkInt, vkFloat, vkString, vkSymbol, vkBool, vkNil, vkBlock,
+    vkArray, vkTable, vkClass, vkInstance
 
   NodeValue* = object
-    kind*: ValueKind
-    boolVal*: bool
-    intVal*: int64
-    floatVal*: float64
-    strVal*: string
-    symVal*: string
-    arrVal*: seq[NodeValue]
-    tblVal*: Table[string, NodeValue]
-    objVal*: Instance
-    blkVal*: BlockNode
+    case kind*: ValueKind
+    of vkInt: intVal*: int64
+    of vkFloat: floatVal*: float64
+    of vkString: strVal*: string
+    of vkSymbol: symVal*: string
+    of vkBool: boolVal*: bool
+    of vkNil: discard
+    of vkBlock: blockVal*: BlockNode
+    of vkArray: arrayVal*: seq[NodeValue]
+    of vkTable: tableVal*: Table[NodeValue, NodeValue]
+    of vkClass: classVal*: Class
+    of vkInstance: instVal*: Instance
 ```
 
 ### Instance
@@ -776,10 +778,6 @@ src/harding/
 │   ├── objects.nim      # Object system, class creation
 │   ├── activation.nim   # Activation records
 │   └── process.nim      # Process and scheduler types
-├── core/                # Core type definitions
-│   ├── types.nim        # Node, Instance, Class, WorkFrame
-│   ├── process.nim      # Process type for green threads
-│   └── scheduler.nim    # Green thread scheduler implementation
 ├── repl/                # Interactive interface
 │   ├── doit.nim         # REPL context and script execution
 │   └── interact.nim     # Line editing

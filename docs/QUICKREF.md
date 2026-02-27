@@ -52,7 +52,7 @@ x ~= y                           # Inequality
 x <= y                           # Less than or equal
 x >= y                           # Greater than or equal
 a // b                           # Integer division
-a \\ b                           # Modulo - not yet implemented
+a \\ b                           # Modulo
 a ~~ b                           # Not identity
 "a" , "b"                        # String concatenation
 a & b                            # Logical AND

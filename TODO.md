@@ -534,7 +534,7 @@ EOF
 - Smalltalk-style temporaries in blocks: `[ | temp1 temp2 | ... ]`
 - Multiline keyword messages (newline-aware)
 - `#====` section header comments
-- 1-based array indexing (Smalltalk compatible)
+- 0-based array indexing
 
 ### VSCode Extension (2025-02-01)
 - Comprehensive syntax highlighting for `.harding` files
@@ -628,4 +628,18 @@ EOF
 - [x] Notification class as resumable exception subclass
 - [x] Comprehensive test suite in test_signal_point_debugging.nim
 
-*Last Updated: 2026-02-20*
+### Interpreter Cleanup and Refactoring (2026-02-27)
+- [x] Extracted `restoreActivationStackTo` helper in vm.nim (replaced 5 duplicated blocks)
+- [x] Extracted `identityEqual` helper in vm.nim (replaced 2x 22-line case statements)
+- [x] Extracted `extractStringValue` helper in objects.nim
+- [x] Cached `inheritanceChain()` in `rebuildAllTables` for O(n) method table rebuilds
+- [x] Removed dead code: 5 unused converters and 6 unused type checkers in types.nim
+- [x] Deduplicated `toString`/`formatLiteral` into shared `formatValue` in types.nim
+- [x] Fixed parser binary operator token consistency (added `tkEqEq`, `tkAmpersand`, `tkPipe`)
+- [x] Removed unused `parseMethod` proc from parser.nim
+
+### Exception Control Flow Fixes (2026-02-27)
+- [x] Fixed exception control flow and uncaught handling semantics
+- [x] Fixed closure isolation bug in interpreter
+
+*Last Updated: 2026-02-27*
