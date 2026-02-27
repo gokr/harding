@@ -43,10 +43,9 @@ proc genClassConstants*(cls: ClassInfo): string =
   let clsName = mangleClass(cls.name)
   let slots = cls.getAllSlots()
   
-  # Determine parent class name
-  var parentName = "HardingObject"
-  if cls.parent != nil:
-    parentName = "Class_" & cls.parent.name
+  # Keep generated native objects rooted at HardingObject.
+  # Language-level inheritance is handled by runtime method dispatch tables.
+  let parentName = "HardingObject"
   
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
@@ -58,11 +57,10 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
   output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
   
-  # Slot fields - use NodeValue for flexibility in Harding
+  # Slot fields - include inherited slots so each native class is self-contained
   for slot in slots:
-    if not slot.isInherited:
-      let slotName = mangleSlot(slot.name)
-      output.add(fmt("    {slotName}*: NodeValue\n"))
+    let slotName = mangleSlot(slot.name)
+    output.add(fmt("    {slotName}*: NodeValue\n"))
   
   output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
   
@@ -86,8 +84,7 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
   output.add(fmt("        result.classRef = objVal.instVal.class\n"))
   for slot in slots:
-    if not slot.isInherited:
-      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
+    output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
   # toValue - convert native type to NodeValue using stored classRef
@@ -126,7 +123,6 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     if slot.isInherited:
       continue
     let slotName = mangleSlot(slot.name)
-    let capitalizedSlot = slot.name[0].toUpperAscii() & slot.name[1..^1]
     
     # Getter
     output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
@@ -143,16 +139,8 @@ proc genSlotAccessors*(cls: ClassInfo): string =
 
 proc isClassDefinition(node: Node): bool =
   ## Check if a node is a class definition (derive: chain)
-  if node.kind != nkMessage:
-    return false
-  let msg = node.MessageNode
-  # Check for Class := Parent derive: ... pattern
-  if msg.selector == "at:put:":
-    if msg.arguments.len >= 2 and msg.arguments[1].kind == nkMessage:
-      let valMsg = msg.arguments[1].MessageNode
-      if valMsg.selector == "derive:" or valMsg.selector == "derive":
-        return true
-  return false
+  let (className, _, _) = extractDeriveChain(node)
+  return className.len > 0
 
 proc isMethodDefinition(node: Node): bool =
   ## Check if a node is a method definition (selector:put: or classSelector:put:)
@@ -174,9 +162,9 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
-proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, body: seq[Node]]] =
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]] =
   ## Extract method definitions from AST nodes
-  ## Returns (className, selector, body) for each method
+  ## Returns (className, selector, params, body) for each method
   result = @[]
   
   for node in nodes:
@@ -202,9 +190,9 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
             className = msg.receiver.IdentNode.name
           
           if className.len > 0 and selectorName.len > 0:
-            result.add((className, selectorName, bodyBlock.body))
+            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body))
 
-proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body: seq[Node]]],
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
@@ -225,6 +213,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
   for md in methodDefs:
     let clsName = md.className
     let selector = md.selector
+    let params = md.params
     let body = md.body
     
     # Skip if class not in compiled classes
@@ -235,7 +224,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
     let mangledSelector = mangleSelector(selector)
     let procName = fmt("{mangledClass}_{mangledSelector}")
     
-    output.add(fmt("proc {procName}*(self: NodeValue): NodeValue =\n"))
+    output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+
+    for i, paramName in params:
+      output.add(fmt("  let {paramName} = if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil)\n"))
     
     if body.len > 0:
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
@@ -246,16 +238,22 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, body
       
       genCtx.globals.add("self")
       genCtx.setVariableType("self", clsName, true)
+      for paramName in params:
+        genCtx.parameters.add(paramName)
       
       let bodyLen = body.len
       for i, stmt in body:
-        let isLast = (i == bodyLen - 1)
+        let isLast = (i == bodyLen - 1) and selector != "initialize"
         let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
         if stmtCode.len > 0:
           for line in stmtCode.splitLines():
             output.add("  ")
             output.add(line)
             output.add("\n")
+
+      # Smalltalk convention: initialize methods return self unless explicit ^ used
+      if selector == "initialize":
+        output.add("  return self\n")
     
     output.add("\n\n")
     
@@ -373,28 +371,47 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   let hardingBlocks = nodes.extractHardingBlocks()
   
   # Determine what to compile as main:
-  # If there's a Harding main: block, use its body; otherwise use topLevel
+  # If there's a Harding main: block, use its body; otherwise use top-level code.
   var mainBodyNodes: seq[Node]
   if hardingBlocks.mainBlock != nil:
     mainBodyNodes = hardingBlocks.mainBlock.body
   else:
     # Use everything that's not a compile block
     mainBodyNodes = hardingBlocks.other
-  
-  # If there's a compile block, prepend its content (classes/methods definitions)
-  if hardingBlocks.compileBlock != nil:
-    mainBodyNodes = hardingBlocks.compileBlock.body & mainBodyNodes
-  
-  # Now extract class/method definitions from the combined body
-  let (classDefs, _) = extractClassAndMethodDefs(mainBodyNodes)
 
-  # Analyze classes - use reflected classes if provided, otherwise build from AST
-  let analysis = if reflectedClasses.len > 0:
-                   let result = newAnalysisResult()
-                   result.classes = reflectedClasses
-                   result
-                 else:
-                   buildClassGraph(nodes)
+  # Build the definition source used for class/method extraction.
+  # compile: contributes definitions for codegen but does NOT run at runtime in generated main().
+  var defsSourceNodes = mainBodyNodes
+  if hardingBlocks.compileBlock != nil:
+    defsSourceNodes = hardingBlocks.compileBlock.body & defsSourceNodes
+
+  let (classDefs, _) = extractClassAndMethodDefs(defsSourceNodes)
+  let (_, executableMainNodes) = extractClassAndMethodDefs(mainBodyNodes)
+
+  # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
+  # This avoids pulling unrelated stdlib/internal classes into generated output.
+  let analysis = block:
+    let astAnalysis = buildClassGraph(defsSourceNodes)
+    if reflectedClasses.len == 0:
+      astAnalysis
+    else:
+      let merged = newAnalysisResult()
+      merged.classes = initTable[string, ClassInfo]()
+
+      # First pass: create class entries and slot sets
+      for className, astCls in astAnalysis.classes.pairs:
+        let mergedCls = newClassInfo(className)
+        let slotSource = if className in reflectedClasses: reflectedClasses[className] else: astCls
+        for slot in slotSource.slots:
+          discard mergedCls.addSlot(slot.name, slot.constraint)
+        merged.classes[className] = mergedCls
+
+      # Second pass: wire parent links using AST class graph names
+      for className, astCls in astAnalysis.classes.pairs:
+        if astCls.parent != nil and astCls.parent.name in merged.classes:
+          merged.classes[className].parent = merged.classes[astCls.parent.name]
+
+      merged
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
@@ -412,18 +429,30 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add("    className*: string\n")
   output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
+  # Extract method definitions from class and compile blocks
+  let methodDefs = extractMethodDefs(classDefs)
+
   # Generate for each class
   for cls in analysis.classes.values:
     output.add(genClassConstants(cls))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
 
-  # Generate compiled methods from user definitions
-  let methodDefs = extractMethodDefs(classDefs)
-  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
-
   # Generate superclass hierarchy registration
   var superclassCalls = ""
+
+  # Static inheritance from class analysis (derive:, deriveWithAccessors:)
+  for cls in analysis.classes.values:
+    if cls.parent != nil and cls.parent.name.len > 0:
+      superclassCalls.add(fmt("  registerSuperclass(\"{cls.name}\", \"{cls.parent.name}\")\n"))
+
+  # Static inheritance from derive receiver (includes parents outside compiled set, e.g. Object)
+  for node in classDefs:
+    let (className, parentName, _) = extractDeriveChain(node)
+    if className.len > 0 and parentName.len > 0 and className != parentName:
+      superclassCalls.add(fmt("  registerSuperclass(\"{className}\", \"{parentName}\")\n"))
+
+  # Dynamic inheritance from explicit addSuperclass: calls
   for node in mainBodyNodes:
     if node.kind == nkMessage:
       let msg = node.MessageNode
@@ -479,6 +508,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBinaryOpMethod("\\"))
   output.add(genBinaryOpMethod("%"))
 
+  # Generate compiled methods from user definitions after primitive operators,
+  # so compiled method bodies can call nt_* helpers without forward declarations.
+  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
+
   # Create a block registry and collect blocks
   # Note: top-level variables are NOT passed as knownGlobals because they are
   # locals of main() and need to be captured by block procs at module level.
@@ -505,7 +538,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            blockInfo.hasNonLocalReturn)
+                            blockInfo.hasNonLocalReturn, blockInfo.envStructName)
     if body.len > 0:
       output.add(body)
     else:
@@ -513,7 +546,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
+  output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
 
   # Module initialization
   output.add("\n")

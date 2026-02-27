@@ -59,11 +59,22 @@ proc mangleSelector*(selector: string): string =
 
 proc mangleClass*(name: string): string =
   ## Convert class name to valid Nim identifier
-  result = "Class_" & name.replace(":", "_")
+  var sanitized = ""
+  for ch in name:
+    if ch in {'a'..'z'} or ch in {'A'..'Z'} or ch in {'0'..'9'} or ch == '_':
+      sanitized.add(ch)
+    else:
+      sanitized.add('_')
+  result = "Class_" & sanitized
 
 proc mangleSlot*(name: string): string =
   ## Convert slot name to valid Nim identifier
-  result = name.replace(":", "_")
+  result = ""
+  for ch in name:
+    if ch in {'a'..'z'} or ch in {'A'..'Z'} or ch in {'0'..'9'} or ch == '_':
+      result.add(ch)
+    else:
+      result.add('_')
 
 proc addSymbol*(table: var SymbolTable, info: SymbolInfo) =
   ## Add symbol to table

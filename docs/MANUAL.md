@@ -1264,7 +1264,9 @@ Harding main: [
 
 **Backward compatible:** You can also write without these blocks - all top-level code becomes main().
 
-**Note:** This syntax is **compiler-only**. The interpreter does not support `Harding compile:` or `Harding main:` blocks. Use the interpreter for testing, Granite for production binaries.
+**Interpreter behavior:** In the interpreter, both `Harding compile:` and `Harding main:` evaluate their block immediately (normal block semantics).
+
+**Granite behavior:** In Granite, `Harding compile:` is executed during compilation to construct classes/methods, while `Harding main:` is compiled into generated `main()` and executed at program runtime.
 
 #### Application Class (In-VM)
 

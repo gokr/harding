@@ -152,9 +152,6 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
 const PseudoVariables* = ["self", "nil", "true", "false", "super"]
 
-# Reserved identifiers for granite-specific syntax (handled specially in interpreter)
-const GraniteReserved* = ["Harding"]
-
 # Parser errors
 proc parseError*(parser: var Parser, msg: string) =
   parser.hasError = true
@@ -298,12 +295,6 @@ proc parsePrimary(parser: var Parser): Node =
         # else: fall through to create PseudoVarNode for bare "super"
 
       # Return PseudoVarNode for all pseudo-variables
-      return PseudoVarNode(name: token.value)
-
-    # Check for granite-specific reserved identifiers
-    if token.value in GraniteReserved:
-      # Harding is a special identifier that evaluates to nil in interpreter
-      # (compile:/main: blocks are compiler-specific)
       return PseudoVarNode(name: token.value)
 
     # Regular identifier - needs variable lookup at runtime

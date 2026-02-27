@@ -30,11 +30,11 @@ math := Math new
 "" println
 "Fibonacci Numbers:" println
 
-#(0 1 2 3 4 5 6 7 8 9 10) do: [ :n |
-  NStr := n asString.
-  FibResult := math fibonacci: n.
-  FibStr := FibResult asString.
-  (")fib(" , NStr , ") = " , FibStr) println
+n := 0.
+[ n <= 10 ] whileTrue: [
+  fibResult := math fibonacci: n.
+  ("fib(" , (n asString) , ") = " , (fibResult asString)) println.
+  n := n + 1.
 ]
 
 "" println

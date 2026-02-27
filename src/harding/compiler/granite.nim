@@ -41,29 +41,47 @@ proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassI
   result = initTable[string, ClassInfo]()
   if interp.globals == nil:
     return
+
+  var liveClasses = initTable[string, Class]()
+
+  # First pass: collect classes and slots
   for name, val in interp.globals[].pairs:
     if val.kind == vkClass:
       let cls = val.classVal
-      if cls != nil and cls.allSlotNames.len > 0:
+      if cls != nil:
+        liveClasses[cls.name] = cls
         let classInfo = newClassInfo(cls.name)
         for slotName in cls.allSlotNames:
           discard classInfo.addSlot(slotName, tcObject)
         result[cls.name] = classInfo
 
-proc extractHardingCompileSource(nodes: seq[Node]): string =
-  ## Extract source code from Harding compile: block if present
-  for node in nodes:
-    if node.kind == nkMessage:
-      let msg = node.MessageNode
-      if msg.selector == "compile:" and msg.receiver != nil and 
-         msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
-        if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
-          let blk = msg.arguments[0].BlockNode
-          var lines: seq[string] = @[]
-          for stmt in blk.body:
-            lines.add(printAST(stmt))
-          return lines.join("\n")
-  return ""
+  # Second pass: wire parent links (first superclass for ClassInfo.parent)
+  for className, liveCls in liveClasses.pairs:
+    if className in result and liveCls.superclasses.len > 0:
+      let parentName = liveCls.superclasses[0].name
+      if parentName in result:
+        result[className].parent = result[parentName]
+
+proc isCompileTimeDefNode(node: Node): bool =
+  ## True for nodes that should execute at compile-time for class reflection
+  ## (class defs, method defs, and superclass wiring)
+  if node == nil:
+    return false
+
+  case node.kind
+  of nkAssign:
+    let assign = node.AssignNode
+    if assign.expression != nil and assign.expression.kind == nkMessage:
+      let msg = assign.expression.MessageNode
+      return msg.selector in ["derive", "derive:", "deriveWithAccessors", "deriveWithAccessors:"]
+    return false
+
+  of nkMessage:
+    let msg = node.MessageNode
+    return msg.selector in ["selector:put:", "classSelector:put:", "addSuperclass:"]
+
+  else:
+    return false
 
 type
   Config = ref object
@@ -233,9 +251,10 @@ proc compileFile(config: Config): bool =
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
 
-  # Execute code in interpreter to construct classes
-  # If there's a Harding compile: block, execute its body directly in interpreter
-  var compiledNodes: seq[Node] = @[]
+  # Execute compile-time definitions in interpreter to construct classes
+  # If there's a Harding compile: block, execute only that block.
+  # Otherwise, execute only definition nodes (not top-level runtime statements).
+  var compileNodes: seq[Node] = @[]
   for node in nodes:
     if node.kind == nkMessage:
       let msg = node.MessageNode
@@ -243,18 +262,17 @@ proc compileFile(config: Config): bool =
          msg.receiver.kind == nkIdent and msg.receiver.IdentNode.name == "Harding":
         if msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock:
           let blk = msg.arguments[0].BlockNode
-          compiledNodes = blk.body
+          compileNodes = blk.body
           break
-  
-  if compiledNodes.len > 0:
-    # Execute compile block nodes directly
-    for node in compiledNodes:
+
+  if compileNodes.len == 0:
+    for node in nodes:
+      if isCompileTimeDefNode(node):
+        compileNodes.add(node)
+
+  if compileNodes.len > 0:
+    for node in compileNodes:
       discard evalWithVM(interp, node)
-  elif source.len > 0:
-    # Backward compatibility: execute full source
-    let (execResults, execError) = evalStatements(interp, source)
-    if execError.len > 0:
-      echo "Execution error: ", execError
 
   # Dump AST if requested
   if config.dumpAst:

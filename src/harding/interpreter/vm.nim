@@ -3422,6 +3422,28 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     writeStderr("Error reading " & resolvedPath & ": " & e.msg)
     return nilValue()
 
+proc globalTableCompileImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable compile: - evaluate a compile block in interpreter mode
+  ## In the interpreter, compile: behaves like a normal block evaluation.
+  if args.len < 1:
+    return nilValue()
+
+  if args[0].kind == vkBlock and args[0].blockVal != nil:
+    return evalBlock(interp, self, args[0].blockVal)
+
+  return nilValue()
+
+proc globalTableMainImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## GlobalTable main: - evaluate a main block in interpreter mode
+  ## In the interpreter, main: behaves like a normal block evaluation.
+  if args.len < 1:
+    return nilValue()
+
+  if args[0].kind == vkBlock and args[0].blockVal != nil:
+    return evalBlock(interp, self, args[0].blockVal)
+
+  return nilValue()
+
 # ============================================================================
 # Library methods (need interpreter access)
 # ============================================================================
@@ -3563,6 +3585,17 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   importMethod.setNativeImpl(globalTableImportImpl)
   importMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "import:", importMethod)
+
+  # Add compile: and main: methods used by Granite-friendly scripts
+  let compileMethod = createCoreMethod("compile:")
+  compileMethod.setNativeImpl(globalTableCompileImpl)
+  compileMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "compile:", compileMethod)
+
+  let mainMethod = createCoreMethod("main:")
+  mainMethod.setNativeImpl(globalTableMainImpl)
+  mainMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "main:", mainMethod)
 
 # ============================================================================
 # Explicit Stack AST Interpreter (VM)
@@ -3832,11 +3865,6 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(interp.currentReceiver.toValue().unwrap())
       else:
         interp.pushValue(nilValue())
-    of "Harding":
-      # Harding is a granite compiler-specific pseudo-identifier
-      # In interpreter, it returns nil which makes message sends fail
-      # This is intentional - compile:/main: are compiler-only features
-      interp.pushValue(nilValue())
     else:
       interp.pushValue(nilValue())
     return true
@@ -5722,8 +5750,8 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   # This creates a proper method activation that blocks can return from
   var results = newSeq[NodeValue]()
   try:
-    let result = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
-    results.add(result)
+    let methodResult = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
+    results.add(methodResult)
   except ValueError as e:
     return (@[], "Error: " & e.msg)
   except EvalError as e:
