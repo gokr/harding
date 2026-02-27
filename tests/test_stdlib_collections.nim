@@ -5,15 +5,11 @@
 
 import std/unittest
 import ../src/harding/core/types
-import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
+import ./stdlib_test_support
 
 # Shared interpreter initialized once for all suites
-var sharedInterp: Interpreter
-sharedInterp = newInterpreter()
-initGlobals(sharedInterp)
-initProcessorGlobal(sharedInterp)
-loadStdlib(sharedInterp)
+var sharedInterp = newSharedStdlibInterpreter()
 
 suite "Stdlib: Arrays - Advanced":
   var interp {.used.}: Interpreter
