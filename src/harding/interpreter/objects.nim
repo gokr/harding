@@ -1967,7 +1967,8 @@ proc rebuildAllTables*(cls: Class) =
   # For parent classes, use allMethods (includes what they inherited)
   # This ensures we pick up manually-added methods from tests
   for parent in cls.superclasses:
-    for c in parent.inheritanceChain():
+    let chain = parent.inheritanceChain()
+    for c in chain:
       for sel, m in c.allMethods:
         if sel notin allMethods:
           allMethods[sel] = m
@@ -2021,16 +2022,20 @@ proc primitiveCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Clone primitive for Instance - delegates to instanceCloneImpl
   return instanceCloneImpl(self, args)
 
+proc extractStringValue*(val: NodeValue): string =
+  ## Extract a string from a NodeValue that may be a vkString, vkSymbol, or ikString instance
+  if val.kind == vkString: val.strVal
+  elif val.kind == vkSymbol: val.symVal
+  elif val.kind == vkInstance and val.instVal.kind == ikString: val.instVal.strVal
+  else: ""
+
 proc primitiveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get slot value by name (for ikObject instances)
   if args.len == 0:
     return nilValue()
   if self.kind != ikObject or self.class == nil:
     return nilValue()
-  let slotName = if args[0].kind == vkString: args[0].strVal
-               elif args[0].kind == vkSymbol: args[0].symVal
-               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
-               else: ""
+  let slotName = extractStringValue(args[0])
   let slotIdx = self.class.allSlotNames.find(slotName)
   if slotIdx >= 0 and slotIdx < self.slots.len:
     return self.slots[slotIdx]
@@ -2042,10 +2047,7 @@ proc primitiveAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     return self.toValue()
   if self.kind != ikObject or self.class == nil:
     return args[1]
-  let slotName = if args[0].kind == vkString: args[0].strVal
-               elif args[0].kind == vkSymbol: args[0].symVal
-               elif args[0].kind == vkInstance and args[0].instVal.kind == ikString: args[0].instVal.strVal
-               else: ""
+  let slotName = extractStringValue(args[0])
   let slotIdx = self.class.allSlotNames.find(slotName)
   if slotIdx >= 0 and slotIdx < self.slots.len:
     self.slots[slotIdx] = args[1]
