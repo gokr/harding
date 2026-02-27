@@ -68,10 +68,16 @@ Array>>reject: block [
 
 Array>>detect: block [
   # Find first element where block returns true.
-  self do: [ :each |
-    (block value: each) ifTrue: [ ^ each ]
+  | index size found each |
+  index := 0
+  size := self size
+  found := nil
+  [ (index < size) and: [ found isNil ] ] whileTrue: [
+    each := self at: index
+    (block value: each) ifTrue: [ found := each ]
+    index := index + 1
   ]
-  ^ nil
+  ^ found
 ]
 
 Array>>inject: initialValue into: block [
@@ -86,10 +92,16 @@ Array>>inject: initialValue into: block [
 
 Array>>anySatisfy: block [
   # Return true if any element satisfies the block.
-  self do: [ :each |
-    (block value: each) ifTrue: [ ^ true ]
+  | index size matched each |
+  index := 0
+  size := self size
+  matched := false
+  [ (index < size) and: [ matched not ] ] whileTrue: [
+    each := self at: index
+    (block value: each) ifTrue: [ matched := true ]
+    index := index + 1
   ]
-  ^ false
+  ^ matched
 ]
 
 Array>>allSatisfy: block [

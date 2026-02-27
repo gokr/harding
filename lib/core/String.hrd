@@ -83,7 +83,8 @@ String>>startsWith: prefix [
   # Check if string starts with prefix (0-based indexing).
   | prefixSize |
   prefixSize := prefix size.
-  (self size >= prefixSize) ifFalse: [ ^ false ].
+  (self size < prefixSize) ifTrue: [ ^ false ].
+  self size = 0 ifTrue: [ ^ prefixSize = 0 ].
   ^ (self from: 0 to: (prefixSize - 1)) = prefix
 ]
 
@@ -95,30 +96,4 @@ String>>endsWith: suffix [
   (selfSize >= suffixSize) ifFalse: [ ^ false ].
   start := selfSize - suffixSize.
   ^ (self from: start to: (selfSize - 1)) = suffix
-]
-
-#====================================================================
-# Symbol class - Immutable interned string
-#====================================================================
-
-Symbol := String derive.
-
-Symbol>>printString [
-  # Symbols print with # prefix and without quotes.
-  ^ "#" , self
-]
-
-Symbol>>asString [
-  # Return the symbol's string representation.
-  ^ self
-]
-
-Symbol>>= other [
-  # Symbols are equal if they are the same object (identity).
-  ^ self == other
-]
-
-Symbol>><> other [
-  # Not equal comparison.
-  ^ (self = other) not
 ]

@@ -15,11 +15,16 @@ SortedCollection class>>new [
 ]
 
 SortedCollection class>>new: items sortBlock: aBlock [
-    | sc |
+    | sc index size |
     sc := self basicNew.
     sc setSortBlock: aBlock.
     sc initElements.
-    items do: [:item | sc add: item].
+    index := 0.
+    size := items size.
+    [ index < size ] whileTrue: [
+        sc add: (items at: index).
+        index := index + 1.
+    ].
     ^sc
 ]
 
@@ -124,23 +129,28 @@ SortedCollection>>removeAt: index [
 
 SortedCollection>>includes: anObject [
     # Use binary search for O(log n) lookup
-    ^(self find: anObject) notNil
+    | found result |
+    found := self find: anObject.
+    result := true.
+    found isNil ifTrue: [ result := false ].
+    ^ result
 ]
 
 SortedCollection>>find: anObject [
     # Binary search for object, return it if found, nil otherwise
-    | low high mid |
-    low := 1.
-    high := self size.
+    | low high mid found |
+    low := 0.
+    high := self size - 1.
+    found := nil.
 
-    [ low <= high ] whileTrue: [
+    [ (low <= high) and: [found isNil] ] whileTrue: [
         mid := (low + high) // 2.
-        (self at: mid) = anObject ifTrue: [ ^self at: mid ].
+        (self at: mid) = anObject ifTrue: [ found := self at: mid ].
         (sortBlock value: (self at: mid) value: anObject)
             ifTrue: [ low := mid + 1 ]
             ifFalse: [ high := mid - 1 ].
     ].
-    ^nil
+    ^ found
 ]
 
 SortedCollection>>remove: anObject [
@@ -153,18 +163,19 @@ SortedCollection>>remove: anObject [
 
 SortedCollection>>indexOf: anObject [
     # Binary search for index of object
-    | low high mid |
-    low := 1.
-    high := self size.
+    | low high mid found |
+    low := 0.
+    high := self size - 1.
+    found := nil.
 
-    [ low <= high ] whileTrue: [
+    [ (low <= high) and: [found isNil] ] whileTrue: [
         mid := (low + high) // 2.
-        (self at: mid) = anObject ifTrue: [ ^mid ].
+        (self at: mid) = anObject ifTrue: [ found := mid ].
         (sortBlock value: (self at: mid) value: anObject)
             ifTrue: [ low := mid + 1 ]
             ifFalse: [ high := mid - 1 ].
     ].
-    ^nil
+    ^ found
 ]
 
 SortedCollection>>first [
@@ -221,9 +232,9 @@ SortedCollection>>printString [
 ]
 
 Array>>asSortedCollection [
-    ^SortedCollection new: self sortBlock: [:a :b | a < b]
+    ^ self sorted
 ]
 
 Array>>asSortedCollection: aBlock [
-    ^SortedCollection new: self sortBlock: aBlock
+    ^ self sorted: aBlock
 ]

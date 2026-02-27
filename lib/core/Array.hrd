@@ -78,18 +78,23 @@ Array>>reject: aBlock [
 
 Array>>detect: aBlock [
     # Return first element where block returns true, or nil
-    self do: [:elem |
-        (aBlock value: elem) ifTrue: [ ^ elem ]
+    | i elem found |
+    i := 0.
+    found := nil.
+    [ (i < self size) and: [ found isNil ] ] whileTrue: [
+        elem := self at: i.
+        (aBlock value: elem) ifTrue: [ found := elem ].
+        i := i + 1.
     ].
-    ^ nil
+    ^ found
 ]
 
 Array>>detect: aBlock ifNone: noneBlock [
     # Return first element where block returns true, or evaluate noneBlock
-    self do: [:elem |
-        (aBlock value: elem) ifTrue: [ ^ elem ]
-    ].
-    ^ noneBlock value
+    | found |
+    found := self detect: aBlock.
+    found isNil ifTrue: [ ^ noneBlock value ].
+    ^ found
 ]
 
 Array>>inject: initial into: aBlock [
@@ -129,10 +134,15 @@ Array>>notEmpty [
 
 Array>>anySatisfy: aBlock [
     # Return true if any element satisfies block
-    self do: [:elem |
-        (aBlock value: elem) ifTrue: [ ^ true ]
+    | i elem matched |
+    i := 0.
+    matched := false.
+    [ (i < self size) and: [ matched not ] ] whileTrue: [
+        elem := self at: i.
+        (aBlock value: elem) ifTrue: [ matched := true ].
+        i := i + 1.
     ].
-    ^ false
+    ^ matched
 ]
 
 Array>>allSatisfy: aBlock [

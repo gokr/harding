@@ -62,20 +62,28 @@ Interval>>isEmpty [
 
 Interval>>includes: aNumber [
     # Check if number is in the interval
-    | remainder |
-    step = 0 ifTrue: [ ^false ].
-    step > 0
-        ifTrue: [
-            (aNumber < start or: [aNumber > stop]) ifTrue: [ ^false ].
-        ]
-        ifFalse: [
-            (aNumber > start or: [aNumber < stop]) ifTrue: [ ^false ].
+    | inRange remainder result |
+    result := false.
+
+    (step = 0) ifFalse: [
+        inRange := true.
+        step > 0
+            ifTrue: [
+                (aNumber < start or: [aNumber > stop]) ifTrue: [ inRange := false ].
+            ]
+            ifFalse: [
+                (aNumber > start or: [aNumber < stop]) ifTrue: [ inRange := false ].
+            ].
+
+        inRange ifTrue: [
+            remainder := (aNumber - start) \\ step.
+            (remainder = 0) ifTrue: [ result := true ].
+            # Handle negative step
+            (remainder = step) ifTrue: [ result := true ].
         ].
-    remainder := (aNumber - start) \\ step.
-    remainder = 0 ifTrue: [ ^true ].
-    # Handle negative step
-    remainder = step ifTrue: [ ^true ].
-    ^false
+    ].
+
+    ^ result
 ]
 
 Interval>>do: aBlock [

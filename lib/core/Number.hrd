@@ -114,8 +114,14 @@ Integer >> timesRepeat: block [
 ].
 
 Integer >> factorial [
-  self <= 1 ifTrue: [ ^ 1 ].
-  ^ self * (self - 1) factorial
+  | n acc |
+  n := self.
+  acc := 1.
+  [ n > 1 ] whileTrue: [
+    acc := acc * n.
+    n := n - 1
+  ].
+  ^ acc
 ].
 
 Integer >> gcd: other [
