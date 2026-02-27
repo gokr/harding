@@ -3832,6 +3832,11 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(interp.currentReceiver.toValue().unwrap())
       else:
         interp.pushValue(nilValue())
+    of "Harding":
+      # Harding is a granite compiler-specific pseudo-identifier
+      # In interpreter, it returns nil which makes message sends fail
+      # This is intentional - compile:/main: are compiler-only features
+      interp.pushValue(nilValue())
     else:
       interp.pushValue(nilValue())
     return true
