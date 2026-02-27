@@ -281,6 +281,71 @@ ColoredPoint := Point derive: #(color)
 Shape3D := ColoredPoint derive: #(depth)
 ```
 
+### Mixins
+
+Mixin is a slotless class designed for behavior composition. It derives from Root (alongside Object) and carries no instance variables, which avoids diamond-problem conflicts when mixed into other classes.
+
+```smalltalk
+# Create a mixin
+Comparable := Mixin derive
+
+# Add methods to it
+Comparable >> < other [ ^ (self compareTo: other) < 0 ]
+Comparable >> > other [ ^ (self compareTo: other) > 0 ]
+Comparable >> between: min and: max [
+    ^ (self >= min) and: [ self <= max ]
+]
+
+# Mix into any class
+Point := Object derive: #(x y)
+Point addSuperclass: Comparable
+
+# Implement the required method
+Point >> compareTo: other [
+    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
+]
+
+# Now Point supports <, >, between:and:, etc.
+```
+
+#### Class Hierarchy
+
+```
+Root
+  ├── Object    # Base for all regular classes (has slots)
+  └── Mixin     # Base for behavior-only composition (no slots)
+```
+
+#### Built-in Mixins
+
+The standard library provides these mixins in `lib/harding/core/Mixins.hrd`:
+
+| Mixin | Requires | Provides |
+|-------|----------|----------|
+| `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:`, `clampTo:max:` |
+| `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:`, `anySatisfy:`, `allSatisfy:`, `count:`, `sum` |
+| `Printable` | `printOn:` | `printString`, `print`, `printCr`, `displayString` |
+| `Synchronizable` | — | `critical:`, `acquire`, `release` |
+
+#### Using Multiple Mixins
+
+```smalltalk
+# Combine several mixins
+MyCollection := Object derive: #(items)
+MyCollection addSuperclass: Iterable
+MyCollection addSuperclass: Printable
+
+MyCollection >> do: block [
+    items do: block
+]
+
+MyCollection >> printOn: stream [
+    stream show: "MyCollection(".
+    stream show: items size printString.
+    stream show: " items)"
+]
+```
+
 ### Direct Slot Access
 
 Inside methods, instance variables are accessed directly by name. This provides O(1) performance compared to named property access.

@@ -277,6 +277,22 @@ Child addSuperclass: Parent1
 Child addSuperclass: Parent2
 ```
 
+### Mixins (Slotless Behavior Composition)
+
+```smalltalk
+# Create a mixin (no slots)
+Comparable := Mixin derive
+
+# Add methods
+Comparable >> < other [ ^ (self compareTo: other) < 0 ]
+
+# Mix into a class
+Point := Object derive: #(x y)
+Point addSuperclass: Comparable
+```
+
+**Built-in mixins**: `Comparable`, `Iterable`, `Printable`, `Synchronizable`
+
 ## Green Processes
 
 ```smalltalk
