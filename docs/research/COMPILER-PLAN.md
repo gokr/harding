@@ -1,162 +1,51 @@
 # Granite Compiler Improvement Plan
 
-## Philosophy
+## Current Status (2026-02-27)
 
-**Incremental improvement over wholesale rewrite.** A working compiler exists with 3700 lines. The goal is to improve what exists, not redesign it into 20 new modules.
+Granite now compiles and runs inheritance and fibonacci examples with compiled methods, superclass lookup, and `super` sends working in the generated runtime path.
 
-## What GLM4.7 Got Right
+### Completed in this phase
 
-- Code duplication exists in runtime helpers
-- Large files (expression.nim at 845 lines) are hard to maintain
-- No test coverage for compiler
-- Debug echoes in production code
+- Restored `Harding` semantics as a normal global object (not a parser pseudo-var hack).
+- Added interpreter-side `Harding compile:` and `Harding main:` methods on `GlobalTable`.
+- Split Granite behavior clearly:
+  - `Harding compile:` executes at compile time for setup/definitions.
+  - `Harding main:` compiles into runtime `main()` and is not executed during compile.
+- Improved class graph and superclass registration (including `Object` chain registration).
+- Added compiled method dispatch with argument support `(self, args)` and updated runtime registration.
+- Added `sendSuperMessage` support in runtime and generated code for `nkSuperSend`.
+- Improved method slot read/write codegen in method context to use generated accessors.
+- Added direct handling for `nkWhile` and `nkIf` in statement generation.
+- Fixed generated-code ordering so compiled methods are emitted after operator helpers, avoiding undeclared `nt_*` calls.
+- Cleaned a few warnings from recent changes (`result` shadowing and unused locals).
 
-## What GLM4.7 Got Wrong
+## Verified Examples
 
-- "Runtime coupling" - Actually fine, fast paths already generate inline code
-- "Type system unused" - Actually incomplete but working for its scope
-- "VM dependency is a problem" - Intentional design, hard to avoid
-- 10-week timeline with 50+ new files - Excessive scope
+Validated with `./granite run`:
 
----
+- `examples/inheritance.hrd` ✅
+- `examples/fibonacci.hrd` ✅
+- `examples/harding_main.hrd` ✅
+- `examples/control_flow.hrd` ✅ (core control flow works; boolean logical operator behavior still partial)
+- `examples/collections.hrd` ⚠️ (builds/runs, many operations still resolve to `nil`)
 
-## Completed Items ✓
+## Remaining Work
 
-### 1.1 Remove Dead Code
+### High priority
 
-**Status**: ✓ Completed
+1. Improve collection primitives/interpreter fallback in compiled mode so `size`, `at:`, `keys`, and iteration produce values in `collections.hrd`.
+2. Complete boolean/logical operator support in compiled runtime (`and:`, `or:`, `&`, `|`, `not`) to match interpreter semantics.
 
-**Files**: `codegen/primitive.nim`
+### Medium priority
 
-**Changes**: Removed unused `genPrimitiveRuntimeHelper` function (~35 lines of dead code).
-
----
-
-### 1.2 Add Basic Compiler Tests
-
-**Status**: ✓ Completed
-
-**Files**: `tests/test_compiler_basic.nim` (new)
-
-**Tests added** (23 passing):
-- Lexer tests (4): integer, string, identifier, keyword tokens
-- Parser tests (7): literals, assignment, messages, blocks
-- Context tests (4): compiler context, class info, slots
-- Symbol tests (4): selector/class/slot name mangling
-- Analyzer tests (3): derive chain extraction, class graph, type parsing
-- Codegen tests (8): literals, block registry, captures
-
----
-
-### 1.3 Complete Block Body Generation
-
-**Status**: ✓ Completed
-
-**Files**: `codegen/blocks.nim`
-
-**Changes**: 
-- Implemented `generateBlockProcBody()` to generate actual Nim code
-- Handles literals (int, float, string, nil) directly
-- Handles assignments with literal values
-- Handles explicit returns with literal values
-- Generates proper variable declarations for temporaries
-- Handles implicit returns for last expression
-
----
-
-## Priority 2: Real Improvements (This Month)
-
-### 2.1 Improve Error Messages
-
-**Files**: `compiler/granite.nim`, `parser/`
-
-**Improvements**:
-- Show line/column for parse errors
-- Show context around error location
-- Suggest fixes for common mistakes
-
-**Estimated**: 1 day
-
----
-
-### 2.2 Fix Known Parser/Compiler Issues
-
-**Files**: Various
-
-**Quick fixes**:
-- Parser error recovery
-- Missing method warnings
-- Slot access edge cases
-
-**Estimated**: 1-2 days
-
----
-
-### 2.3 Enhance Block Compilation
-
-**Current state**: Basic literal handling works
-
-**Enhancements needed**:
-- Support message sends in block bodies
-- Support arithmetic expressions
-- Support control flow (ifTrue:, whileTrue:, etc.)
-
-**Estimated**: 2-3 days
-
----
-
-## Priority 3: Nice to Have (Someday)
-
-- Split expression.nim into sections (NOT new files)
-- Type inference improvements
-- Performance optimization
-- Better debugging output
-
----
-
-## File Changes Summary
-
-### New Files
-| File | Purpose | Status |
-|------|---------|--------|
-| `tests/test_compiler_basic.nim` | Basic compiler tests | ✓ Complete |
-
-### Modified Files
-| File | Changes | Status |
-|------|---------|--------|
-| `codegen/primitive.nim` | Removed unused genPrimitiveRuntimeHelper | ✓ Complete |
-| `codegen/blocks.nim` | Implemented block body generation | ✓ Complete |
-
-### No Changes Needed
-- `compiler/analyzer.nim` - No debug echoes found (already cleaned)
-- `codegen/control.nim` - Already generates inline fast paths
-- `compiler/granite.nim` - VM initialization is intentional
-- `codegen/expression.nim` - Works, just large
-
----
-
-## Success Metrics (Updated)
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Debug echoes in code | 0 | 0 ✓ |
-| Dead code in compiler | ~35 lines | 0 ✓ |
-| Compiler test coverage | 0 tests | 23 tests ✓ |
-| Block body generation | Stubbed | Basic working ✓ |
-
----
+1. Reduce generated-file warnings by trimming unused imports in module header.
+2. Add/expand compiler behavioral tests for:
+   - `Harding compile:`/`Harding main:` split semantics
+   - `super` dispatch in compiled methods
+   - while/if specialized AST node codegen
 
 ## Next Steps
 
-1. **Improve error messages** - Better diagnostics for users
-2. **Fix known bugs** - Parser/compiler edge cases
-3. **Enhance block compilation** - More expression types
-
----
-
-## Notes
-
-- **Don't create golden tests** - Too fragile, use behavioral tests instead
-- **Don't split files** - Better to add section headers within files
-- **Don't over-engineer type system** - Current approach is appropriate for dynamic language
-- **VM dependency is fine** - It's how the compiler accesses class information
+1. Fix `collections.hrd` behavior by tracing message fallback for Array/Table operations in compiled runtime.
+2. Implement missing boolean primitive paths and rerun `control_flow.hrd`.
+3. Run wider example sweep and refresh `EXAMPLE_MATRIX.md` with final pass/fail notes.

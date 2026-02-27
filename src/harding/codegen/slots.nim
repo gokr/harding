@@ -40,15 +40,18 @@ proc genSlotSetter*(cls: ClassInfo, slot: SlotDef): string =
 proc genSlotAccessors*(cls: ClassInfo): string =
   ## Generate all slot accessors for a class
   result = ""
-  
-  if cls.slots.len == 0:
+
+  let allSlots = cls.getAllSlots()
+  if allSlots.len == 0:
     return
   
   result.add("# Slot accessors\n")
   result.add("################################\n\n")
-  
-  for slot in cls.slots:
-    if not slot.isInherited:
+
+  var seen: seq[string] = @[]
+  for slot in allSlots:
+    if slot.name notin seen:
+      seen.add(slot.name)
       result.add(genSlotGetter(cls, slot))
       result.add(genSlotSetter(cls, slot))
   

@@ -107,11 +107,17 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
     return
   
   # Extract parent from receiver of derive message
-  let parent = if deriveMsg.receiver.kind == nkLiteral and
-                  deriveMsg.receiver.LiteralNode.value.kind == vkSymbol:
-                  deriveMsg.receiver.LiteralNode.value.symVal
-                else:
-                  "Object"
+  let parent =
+    if deriveMsg.receiver.kind == nkIdent:
+      deriveMsg.receiver.IdentNode.name
+    elif deriveMsg.receiver.kind == nkLiteral and
+         deriveMsg.receiver.LiteralNode.value.kind == vkSymbol:
+      deriveMsg.receiver.LiteralNode.value.symVal
+    elif deriveMsg.receiver.kind == nkLiteral and
+         deriveMsg.receiver.LiteralNode.value.kind == vkString:
+      deriveMsg.receiver.LiteralNode.value.strVal
+    else:
+      "Object"
   
   # Extract type list from arguments
   let typeArg = if deriveMsg.arguments.len > 0:
@@ -154,7 +160,7 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
 proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
                       parentClass: ClassInfo): ClassInfo =
   ## Analyze a class definition and create ClassInfo
-  let (className, parentName, typeList) = extractDeriveChain(node)
+  let (className, _, typeList) = extractDeriveChain(node)
 
   if className.len == 0:
     return nil
@@ -171,7 +177,8 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
   ## Build class graph from parsed nodes
   result = newAnalysisResult()
   var ctx = newCompiler()
-  var classMap: Table[string, ClassInfo]
+  var classMap = initTable[string, ClassInfo]()
+  var parentNames = initTable[string, string]()
 
   # First pass: collect all class declarations
   for node in nodes:
@@ -181,7 +188,7 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
       if className.len > 0 and className notin classMap:
         classMap[className] = nil  # Placeholder
 
-  # Second pass: create ClassInfo with parent links
+  # Second pass: create ClassInfo and record parent names
   for node in nodes:
     if node.kind in [nkMessage, nkAssign]:
       let chain = extractDeriveChain(node)
@@ -190,19 +197,24 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
       let typeList = chain[2]
 
       if className.len > 0:
-        let parent = if parentName in classMap: classMap[parentName] else: nil
-
         if className in ctx.classes:
           result.errors.add("Duplicate class definition: " & className)
           continue
 
-        let cls = newClassInfo(className, parent)
+        let cls = newClassInfo(className, nil)
         ctx.classes[className] = cls
+        classMap[className] = cls
+        parentNames[className] = parentName
 
         if typeList.len > 0:
           let slots = parseTypeList(typeList)
           for (name, constraint) in slots:
             discard cls.addSlot(name, constraint)
+
+  # Third pass: wire parent links now that all classes exist
+  for className, parentName in parentNames.pairs:
+    if className in classMap and parentName in classMap:
+      classMap[className].parent = classMap[parentName]
 
   result.classes = ctx.classes
 

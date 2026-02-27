@@ -1,65 +1,40 @@
 # Example Compilation Test Matrix
 
-## Summary (After Merge and Fixes - 2025-02-25)
+## Snapshot (2026-02-27)
 
-**Branch:** compiler-next  
-**Status:** Basic examples work, slots are now detected and generated
+Tested with `./granite run` on the current `compiler-next` worktree.
 
-### Overall Results
+## Verified Results
 
-| Category | Count | Description |
-|----------|-------|-------------|
-| ✅ Works | 10 | Basic examples compile and run |
-| 🔶 Partial | 3 | Classes compile but slot accessors not yet connected |
+| Example | Status | Notes |
+|---------|--------|-------|
+| `hello` | ✅ | Basic output path works. |
+| `control_flow` | ⚠️ | `if`/`while`/`timesRepeat:` work; boolean logical operators still return `nil` in this path. |
+| `fibonacci` | ✅ | Compiled method + loop behavior working; expected sequence prints. |
+| `inheritance` | ✅ | `super` dispatch and `isKindOf:` hierarchy checks working. |
+| `harding_main` | ✅ | `Harding compile:` + `Harding main:` split works as intended. |
+| `collections` | ⚠️ | Builds/runs, but collection operations still return many `nil` values. |
 
-### Current Status
+## Key Behavior Confirmed
 
-**Working (10 examples):**
-- hello ✅ - Basic I/O
-- arithmetic ✅ - Math operations
-- variables ✅ - Variable assignment
-- objects ✅ - Object creation
-- methods ✅ - Method definitions
-- control_flow ✅ - Conditionals/loops
-- inheritance ✅ - Class inheritance
-- fibonacci ✅ - Recursion
-- benchmark_blocks ✅ - Block closures
-- simple_test ✅ - Assertions
+- `Harding compile:` executes compile-time setup/definitions in Granite.
+- `Harding main:` becomes runtime executable code in generated `main()`.
+- Interpreter supports both `Harding compile:` and `Harding main:` as normal block evaluation on the `Harding` global.
+- Compiled method registration and argument passing are active.
+- `super` sends in compiled methods use runtime superclass lookup.
 
-**Needs Expression Generator Update (3 examples):**
-- classes 🔶 - Slots generated but not accessed natively
-- multiple_inheritance 🔶 - Same issue
-- compiled_blocks 🔶 - Same issue
+## Open Gaps
 
-## Recent Fixes
+1. Collection operations in compiled mode (`Array`/`Table` usage in `collections.hrd`).
+2. Boolean/logical operator behavior in compiled mode (`and:`, `or:`, `&`, `|`, `not`).
+3. Generated-file cleanup (remove currently unused imports in module header).
 
-### Slot Detection Fixed
-- parseTypeList now correctly parses `#(name age)` with multiple slots
-- extractDeriveChain now handles nkArray nodes (direct array literals)
-- Handles nkIdent nodes in array elements (identifiers like 'name')
-
-### Native Type Generation Restored
-- genClassConstants generates native ref object types
-- genSlotAccessors generates getX/setX procs
-- Slots initialized to nil in constructor
-
-## Next Steps
-
-To fully support classes, need to:
-1. Add variable type tracking to GenContext
-2. Detect when receiver is a known class instance
-3. Generate direct slot accessor calls instead of sendMessage
-4. Connect native constructor calls (ClassName new → newClassName())
-
-## Running Tests
+## Useful Commands
 
 ```bash
-# Compile a working example
-./granite compile examples/hello.hrd
-nim c --outdir:build --app:console build/hello.nim
-./build/hello
-
-# Check classes (compiles but slots show nil)
-./granite compile examples/classes.hrd
-./build/classes
+./granite run examples/inheritance.hrd
+./granite run examples/fibonacci.hrd
+./granite run examples/harding_main.hrd
+./granite run examples/control_flow.hrd
+./granite run examples/collections.hrd
 ```

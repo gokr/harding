@@ -19,6 +19,7 @@ type
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
+    inMethod*: bool              ## Whether we're generating code inside a method body
     locals*: seq[string]          ## Local variable names (temporaries)
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
@@ -31,6 +32,7 @@ type
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
+proc asBlockNode(node: Node): BlockNode
 
 proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
                     classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
@@ -39,6 +41,7 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
   result = GenContext(
     cls: cls,
     inBlock: false,
+    inMethod: false,
     locals: @[],
     parameters: @[],
     globals: @[],
@@ -162,7 +165,10 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Priority: parameters > locals > slots > globals
 
   if name == "self":
-    return "self.toValue()"
+    if ctx.inMethod:
+      return "self"
+    else:
+      return "self.toValue()"
 
   if name == "nil":
     return "NodeValue(kind: vkNil)"
@@ -185,6 +191,9 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   if ctx.cls != nil:
     let slotIdx = ctx.cls.getSlotIndex(name)
     if slotIdx >= 0:
+      if ctx.inMethod:
+        let slotName = mangleSlot(name)
+        return fmt("get{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue))")
       return fmt("self.slots[{slotIdx}]")
 
   # Check if it's a known global (class or global variable)
@@ -207,21 +216,23 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
   if node.receiver != nil and node.receiver.kind == nkIdent:
     let varName = node.receiver.IdentNode.name
     receiverType = ctx.getVariableType(varName)
+  elif node.receiver != nil and node.receiver.kind == nkPseudoVar:
+    let varName = node.receiver.PseudoVarNode.name
+    if varName == "self":
+      if ctx.cls != nil:
+        receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
+      else:
+        receiverType = ctx.getVariableType("self")
   elif node.receiver == nil:
-    # Implicit self - use current class context
     if ctx.cls != nil:
       receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
   
-  # If we don't know the receiver's class, can't optimize
   if receiverType.className.len == 0:
     return ""
   
-  # Only optimize for native class instances
-  # In mixed mode, always use sendMessage to ensure interpreter can handle methods
   if ctx.mixed:
     return ""
   
-  # For now, we require isNativeClass to be true AND the class must be defined in the compiled code
   if not receiverType.isNativeClass:
     return ""
   
@@ -240,7 +251,7 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
                         selector
   let selectorIsSlot = block:
     var found = false
-    for slot in classDef.slots:
+    for slot in classDef.getAllSlots():
       if slot.name == checkSelector:
         found = true
         break
@@ -279,7 +290,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   if node.receiver != nil:
     receiverCode = genExpression(ctx, node.receiver)
   else:
-    receiverCode = "self.toValue()"
+    # Implicit self - in method context use self directly, otherwise convert to value
+    if ctx.inMethod:
+      receiverCode = "self"
+    else:
+      receiverCode = "self.toValue()"
 
   # Check for native class instantiation: "ClassName new" where ClassName is compiled
   if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
@@ -613,19 +628,24 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
-    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed or ctx.inMethod:
+      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Try to generate direct slot accessor call
     let slotAccessorCode = tryGenerateSlotAccessor(ctx, node, receiverCode)
     if slotAccessorCode.len > 0:
       return slotAccessorCode
     
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
-    return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed or ctx.inMethod:
+      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+    else:
+      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
@@ -656,6 +676,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
     # Check if variable is a slot
     if ctx.isSlot(varName):
+      if ctx.inMethod and ctx.cls != nil:
+        let slotName = mangleSlot(varName)
+        return fmt("set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
       let idx = ctx.getSlotIndex(varName)
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
 
@@ -710,6 +733,19 @@ proc genExpression*(ctx: GenContext, node: Node): string =
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)
 
+  of nkSuperSend:
+    let ss = node.SuperSendNode
+    let args = ss.arguments.mapIt(genExpression(ctx, it)).join(", ")
+    let definingClass = if ctx.cls != nil: ctx.cls.name else: ""
+    if definingClass.len > 0:
+      if ss.explicitParent.len > 0:
+        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{ss.selector}\", @[{args}], \"{ss.explicitParent}\")")
+      else:
+        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{ss.selector}\", @[{args}])")
+    else:
+      # Fallback if class context is unavailable
+      return fmt("sendMessageHybrid(self, \"{ss.selector}\", @[{args}])")
+
   of nkPrimitive:
     # Primitives are handled separately
     return "NodeValue(kind: vkNil)"
@@ -722,6 +758,19 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
   of nkSlotAccess:
     let slotNode = node.SlotAccessNode
+    if ctx.inMethod and ctx.cls != nil:
+      var slotName = ""
+      for slot in ctx.cls.getAllSlots():
+        if slot.index == slotNode.slotIndex:
+          slotName = mangleSlot(slot.name)
+          break
+      if slotName.len > 0:
+        if slotNode.isAssignment and slotNode.valueExpr != nil:
+          let valCode = genExpression(ctx, slotNode.valueExpr)
+          return fmt("set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {valCode})")
+        else:
+          return fmt("get{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue))")
+
     if slotNode.isAssignment and slotNode.valueExpr != nil:
       let valCode = genExpression(ctx, slotNode.valueExpr)
       return fmt("(proc(): NodeValue = self.slots[{slotNode.slotIndex}] = {valCode}; return {valCode})()")
@@ -752,6 +801,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # Check if variable is a slot
     if ctx.isSlot(varName):
+      if ctx.inMethod and ctx.cls != nil:
+        let slotName = mangleSlot(varName)
+        return fmt("discard set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
       let idx = ctx.getSlotIndex(varName)
       return fmt"self.slots[{idx}] = {exprCode}"
 
@@ -769,97 +821,78 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       return "return " & genExpression(ctx, ret.expression)
     return "return self.toValue()"
 
-  of nkMessage:
-    let msg = node.MessageNode
-    # Inline control flow in statement context (no value needed)
-    case msg.selector
-    of "whileTrue:":
-      if msg.arguments.len >= 1 and msg.arguments[0].kind == nkBlock:
-        let bodyBlock = msg.arguments[0].BlockNode
-        var condCode: string
-        if msg.receiver != nil and msg.receiver.kind == nkBlock:
-          let condBlock = msg.receiver.BlockNode
-          if condBlock.body.len > 0:
-            condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
-          else:
-            condCode = "NodeValue(kind: vkBool, boolVal: true)"
-        else:
-          condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                     else: "NodeValue(kind: vkBool, boolVal: true)"
-        var code = "while isTruthy(" & condCode & "):\n"
+  of nkWhile:
+    let whileNode = node.WhileNode
+    var condCode: string
+
+    let condBlock = asBlockNode(whileNode.condition)
+    if condBlock != nil:
+      if condBlock.body.len > 0:
+        condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+      else:
+        condCode = if whileNode.isWhileTrue:
+                     "NodeValue(kind: vkBool, boolVal: true)"
+                   else:
+                     "NodeValue(kind: vkBool, boolVal: false)"
+    else:
+      condCode = if whileNode.condition != nil:
+                   genExpression(ctx, whileNode.condition)
+                 else:
+                   (if whileNode.isWhileTrue:
+                      "NodeValue(kind: vkBool, boolVal: true)"
+                    else:
+                      "NodeValue(kind: vkBool, boolVal: false)")
+
+    var code = if whileNode.isWhileTrue:
+                 "while isTruthy(" & condCode & "):\n"
+               else:
+                 "while not isTruthy(" & condCode & "):\n"
+
+    let bodyBlock = asBlockNode(whileNode.body)
+    if bodyBlock != nil:
+      if bodyBlock.body.len == 0:
+        code.add("  discard\n")
+      else:
         for stmt in bodyBlock.body:
           let stmtCode = genStatement(ctx, stmt)
           if stmtCode.len > 0:
             code.add(indentBlock(stmtCode))
-        return code
+    elif whileNode.body != nil:
+      let stmtCode = genStatement(ctx, whileNode.body)
+      if stmtCode.len > 0:
+        code.add(indentBlock(stmtCode))
+    else:
+      code.add("  discard\n")
+    return code
 
-    of "whileFalse:":
-      if msg.arguments.len >= 1 and msg.arguments[0].kind == nkBlock:
-        let bodyBlock = msg.arguments[0].BlockNode
-        var condCode: string
-        if msg.receiver != nil and msg.receiver.kind == nkBlock:
-          let condBlock = msg.receiver.BlockNode
-          if condBlock.body.len > 0:
-            condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
-          else:
-            condCode = "NodeValue(kind: vkBool, boolVal: false)"
-        else:
-          condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                     else: "NodeValue(kind: vkBool, boolVal: false)"
-        var code = "while not isTruthy(" & condCode & "):\n"
-        for stmt in bodyBlock.body:
+  of nkIf:
+    let ifNode = node.IfNode
+    let condCode = if ifNode.condition != nil:
+                     genExpression(ctx, ifNode.condition)
+                   else:
+                     "NodeValue(kind: vkBool, boolVal: false)"
+    var code = "if isTruthy(" & condCode & "):\n"
+
+    let thenBlock = asBlockNode(ifNode.thenBranch)
+    if thenBlock != nil:
+      if thenBlock.body.len == 0:
+        code.add("  discard\n")
+      else:
+        for stmt in thenBlock.body:
           let stmtCode = genStatement(ctx, stmt)
           if stmtCode.len > 0:
             code.add(indentBlock(stmtCode))
-        return code
+    elif ifNode.thenBranch != nil:
+      let stmtCode = genStatement(ctx, ifNode.thenBranch)
+      if stmtCode.len > 0:
+        code.add(indentBlock(stmtCode))
+    else:
+      code.add("  discard\n")
 
-    of "ifTrue:":
-      if msg.arguments.len >= 1 and msg.arguments[0].kind == nkBlock:
-        let thenBlock = msg.arguments[0].BlockNode
-        let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                       else: "NodeValue(kind: vkBool, boolVal: true)"
-        var code = "if isTruthy(" & condCode & "):\n"
-        if thenBlock.body.len == 0:
-          code.add("  discard\n")
-        else:
-          for stmt in thenBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
-        return code
-
-    of "ifFalse:":
-      if msg.arguments.len >= 1 and msg.arguments[0].kind == nkBlock:
-        let thenBlock = msg.arguments[0].BlockNode
-        let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                       else: "NodeValue(kind: vkBool, boolVal: false)"
-        var code = "if not isTruthy(" & condCode & "):\n"
-        if thenBlock.body.len == 0:
-          code.add("  discard\n")
-        else:
-          for stmt in thenBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
-        return code
-
-    of "ifTrue:ifFalse:":
-      if msg.arguments.len >= 2 and
-         msg.arguments[0].kind == nkBlock and
-         msg.arguments[1].kind == nkBlock:
-        let thenBlock = msg.arguments[0].BlockNode
-        let elseBlock = msg.arguments[1].BlockNode
-        let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                       else: "NodeValue(kind: vkBool, boolVal: true)"
-        var code = "if isTruthy(" & condCode & "):\n"
-        if thenBlock.body.len == 0:
-          code.add("  discard\n")
-        else:
-          for stmt in thenBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
-        code.add("else:\n")
+    if ifNode.elseBranch != nil:
+      code.add("else:\n")
+      let elseBlock = asBlockNode(ifNode.elseBranch)
+      if elseBlock != nil:
         if elseBlock.body.len == 0:
           code.add("  discard\n")
         else:
@@ -867,25 +900,136 @@ proc genStatement*(ctx: GenContext, node: Node): string =
             let stmtCode = genStatement(ctx, stmt)
             if stmtCode.len > 0:
               code.add(indentBlock(stmtCode))
-        return code
-
-    of "timesRepeat:":
-      if msg.arguments.len >= 1 and msg.arguments[0].kind == nkBlock:
-        let bodyBlock = msg.arguments[0].BlockNode
-        let countCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
-                        else: "NodeValue(kind: vkInt, intVal: 0)"
-        var code = "for timesRepeatI in 0..<toInt(" & countCode & "):\n"
-        if bodyBlock.body.len == 0:
-          code.add("  discard\n")
+      else:
+        let stmtCode = genStatement(ctx, ifNode.elseBranch)
+        if stmtCode.len > 0:
+          code.add(indentBlock(stmtCode))
         else:
+          code.add("  discard\n")
+
+    return code
+
+  of nkMessage:
+    let msg = node.MessageNode
+    # Inline control flow in statement context (no value needed)
+    case msg.selector
+    of "whileTrue:":
+      if msg.arguments.len >= 1:
+        let bodyBlock = asBlockNode(msg.arguments[0])
+        if bodyBlock != nil:
+          var condCode: string
+          let condBlock = asBlockNode(msg.receiver)
+          if condBlock != nil:
+            if condBlock.body.len > 0:
+              condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+            else:
+              condCode = "NodeValue(kind: vkBool, boolVal: true)"
+          else:
+            condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                       else: "NodeValue(kind: vkBool, boolVal: true)"
+          var code = "while isTruthy(" & condCode & "):\n"
           for stmt in bodyBlock.body:
             let stmtCode = genStatement(ctx, stmt)
             if stmtCode.len > 0:
               code.add(indentBlock(stmtCode))
-        return code
+          return code
+
+    of "whileFalse:":
+      if msg.arguments.len >= 1:
+        let bodyBlock = asBlockNode(msg.arguments[0])
+        if bodyBlock != nil:
+          var condCode: string
+          let condBlock = asBlockNode(msg.receiver)
+          if condBlock != nil:
+            if condBlock.body.len > 0:
+              condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+            else:
+              condCode = "NodeValue(kind: vkBool, boolVal: false)"
+          else:
+            condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                       else: "NodeValue(kind: vkBool, boolVal: false)"
+          var code = "while not isTruthy(" & condCode & "):\n"
+          for stmt in bodyBlock.body:
+            let stmtCode = genStatement(ctx, stmt)
+            if stmtCode.len > 0:
+              code.add(indentBlock(stmtCode))
+          return code
+
+    of "ifTrue:":
+      if msg.arguments.len >= 1:
+        let thenBlock = asBlockNode(msg.arguments[0])
+        if thenBlock != nil:
+          let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                         else: "NodeValue(kind: vkBool, boolVal: true)"
+          var code = "if isTruthy(" & condCode & "):\n"
+          if thenBlock.body.len == 0:
+            code.add("  discard\n")
+          else:
+            for stmt in thenBlock.body:
+              let stmtCode = genStatement(ctx, stmt)
+              if stmtCode.len > 0:
+                code.add(indentBlock(stmtCode))
+          return code
+
+    of "ifFalse:":
+      if msg.arguments.len >= 1:
+        let thenBlock = asBlockNode(msg.arguments[0])
+        if thenBlock != nil:
+          let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                         else: "NodeValue(kind: vkBool, boolVal: false)"
+          var code = "if not isTruthy(" & condCode & "):\n"
+          if thenBlock.body.len == 0:
+            code.add("  discard\n")
+          else:
+            for stmt in thenBlock.body:
+              let stmtCode = genStatement(ctx, stmt)
+              if stmtCode.len > 0:
+                code.add(indentBlock(stmtCode))
+          return code
+
+    of "ifTrue:ifFalse:":
+      if msg.arguments.len >= 2:
+        let thenBlock = asBlockNode(msg.arguments[0])
+        let elseBlock = asBlockNode(msg.arguments[1])
+        if thenBlock != nil and elseBlock != nil:
+          let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                         else: "NodeValue(kind: vkBool, boolVal: true)"
+          var code = "if isTruthy(" & condCode & "):\n"
+          if thenBlock.body.len == 0:
+            code.add("  discard\n")
+          else:
+            for stmt in thenBlock.body:
+              let stmtCode = genStatement(ctx, stmt)
+              if stmtCode.len > 0:
+                code.add(indentBlock(stmtCode))
+          code.add("else:\n")
+          if elseBlock.body.len == 0:
+            code.add("  discard\n")
+          else:
+            for stmt in elseBlock.body:
+              let stmtCode = genStatement(ctx, stmt)
+              if stmtCode.len > 0:
+                code.add(indentBlock(stmtCode))
+          return code
+
+    of "timesRepeat:":
+      if msg.arguments.len >= 1:
+        let bodyBlock = asBlockNode(msg.arguments[0])
+        if bodyBlock != nil:
+          let countCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
+                          else: "NodeValue(kind: vkInt, intVal: 0)"
+          var code = "for timesRepeatI in 0..<toInt(" & countCode & "):\n"
+          if bodyBlock.body.len == 0:
+            code.add("  discard\n")
+          else:
+            for stmt in bodyBlock.body:
+              let stmtCode = genStatement(ctx, stmt)
+              if stmtCode.len > 0:
+                code.add(indentBlock(stmtCode))
+          return code
 
     else:
-      discard  # Fall through to default message handling
+      discard
 
     # Default: message send as statement
     let msgCode = genMessage(ctx, node.MessageNode)
@@ -905,7 +1049,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     return ""
 
 proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = @[],
-                   hasNonLocalReturn: bool = false): string =
+                   hasNonLocalReturn: bool = false, envStructName: string = ""): string =
   ## Generate code for block body (sequence of statements)
   ## captures: list of captured variable names (from BlockProcInfo)
   ## hasNonLocalReturn: if true, ^ generates NonLocalReturnException
@@ -927,8 +1071,13 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
 
   # Extract captured variables from environment struct
   if captures.len > 0:
+    if envStructName.len > 0:
+      output.add(fmt("  let envTyped = cast[ptr {envStructName}](env)\n"))
     for capture in captures:
-      output.add(fmt("  let {capture} = env.{capture}\n"))
+      if envStructName.len > 0:
+        output.add(fmt("  var {capture} = envTyped[].{capture}\n"))
+      else:
+        output.add(fmt("  var {capture} = NodeValue(kind: vkNil)\n"))
       bodyCtx.locals.add(capture)
 
   # Handle empty block body
@@ -953,6 +1102,9 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
         output.add("  " & stmtCode & "\n")
+        if captures.len > 0 and envStructName.len > 0:
+          for capture in captures:
+            output.add(fmt("  envTyped[].{capture} = {capture}\n"))
 
   return output
 
@@ -966,6 +1118,21 @@ proc genTemporaries*(tmp: seq[string]): string =
     output.add(fmt("  var {t} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
   return output
+
+proc asBlockNode(node: Node): BlockNode =
+  ## Get BlockNode from either nkBlock or nkLiteral(vkBlock)
+  if node == nil:
+    return nil
+  case node.kind
+  of nkBlock:
+    return node.BlockNode
+  of nkLiteral:
+    let lit = node.LiteralNode.value
+    if lit.kind == vkBlock:
+      return lit.blockVal
+    return nil
+  else:
+    return nil
 
 proc genParameters*(params: seq[string]): string =
   ## Generate parameter declarations for method signature
@@ -1009,6 +1176,10 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     # Top-level message send - delegate to genStatement for inline control flow
     return genStatement(ctx, node)
 
+  of nkWhile, nkIf:
+    # Top-level specialized control-flow nodes
+    return genStatement(ctx, node)
+
   of nkReturn:
     # Return at top level becomes exit code
     let ret = node.ReturnNode
@@ -1021,4 +1192,61 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     let exprCode = genExpression(ctx, node)
     if exprCode.len > 0:
       return "discard " & exprCode
+    return ""
+
+proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string =
+  ## Generate code for a method body statement
+  ## Returns code that can be executed in a compiled method proc
+  ## isLast: true if this is the last statement (implicit return)
+
+  if node == nil:
+    return ""
+
+  case node.kind
+  of nkAssign:
+    let assign = node.AssignNode
+    let varName = assign.variable
+    
+    let exprCode = genExpression(ctx, assign.expression)
+
+    # Check if it's a slot assignment in method context
+    if ctx.cls != nil and ctx.inMethod:
+      let classDef = ctx.classInfo.getOrDefault(ctx.cls.name)
+      for slot in classDef.slots:
+        if slot.name == varName:
+          # It's a slot - generate setter call
+          let mangledSlot = mangleSlot(slot.name)
+          let setterCall = fmt("set{mangledSlot}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
+          if isLast:
+            return "return " & setterCall
+          else:
+            return "discard " & setterCall
+    
+    # Check if it's a reassignment of an existing variable
+    if varName in ctx.locals or varName in ctx.globals:
+      return fmt"{varName} = {exprCode}"
+
+    # New local variable
+    ctx.locals.add(varName)
+    return fmt"var {varName} = {exprCode}"
+
+  of nkMessage:
+    return genStatement(ctx, node)
+
+  of nkWhile, nkIf:
+    return genStatement(ctx, node)
+
+  of nkReturn:
+    let ret = node.ReturnNode
+    if ret.expression != nil:
+      return "return " & genExpression(ctx, ret.expression)
+    return "return NodeValue(kind: vkNil)"
+
+  else:
+    let exprCode = genExpression(ctx, node)
+    if exprCode.len > 0:
+      if isLast:
+        return "return " & exprCode
+      else:
+        return "discard " & exprCode
     return ""

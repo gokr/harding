@@ -1329,6 +1329,42 @@ The compiler generates Nim code with:
 - Runtime value boxing via `NodeValue` variant type
 - Arithmetic and comparison helper functions
 
+#### compile: and main: Blocks
+
+Granite supports a special syntax for organizing compiled code:
+
+```harding
+Harding compile: [
+    # Class and method definitions go here
+    Dog := Object deriveWithAccessors: #(name age)
+    Dog>>bark [ ^ "Woof!" ]
+]
+
+Harding main: [
+    # Runtime code goes here  
+    dog := Dog new
+    dog name: "Buddy"
+    dog bark println
+]
+```
+
+**How it works:**
+
+- `Harding compile:` - Code that runs at compile time to define classes and methods. These definitions are included in the generated Nim code.
+- `Harding main:` - Code that becomes the main() procedure (executed at runtime).
+
+**Why use this?**
+
+1. **Organization** - Separates class definitions from runtime code
+2. **Clarity** - Makes it explicit what's compile-time vs runtime
+3. **Multiple inheritance** - Shows the order of addSuperclass: calls clearly
+
+**Backward compatible:** You can also write without these blocks - all top-level code becomes main().
+
+**Interpreter behavior:** In the interpreter, both `Harding compile:` and `Harding main:` evaluate their block immediately (normal block semantics).
+
+**Granite behavior:** In Granite, `Harding compile:` is executed during compilation to construct classes/methods, while `Harding main:` is compiled into generated `main()` and executed at program runtime.
+
 #### Application Class (In-VM)
 
 For building applications from within the Harding VM:

@@ -43,10 +43,9 @@ proc genClassConstants*(cls: ClassInfo): string =
   let clsName = mangleClass(cls.name)
   let slots = cls.getAllSlots()
   
-  # Determine parent class name
-  var parentName = "HardingObject"
-  if cls.parent != nil:
-    parentName = "Class_" & cls.parent.name
+  # Keep generated native objects rooted at HardingObject.
+  # Language-level inheritance is handled by runtime method dispatch tables.
+  let parentName = "HardingObject"
   
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
@@ -58,11 +57,10 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
   output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
   
-  # Slot fields - use NodeValue for flexibility in Harding
+  # Slot fields - include inherited slots so each native class is self-contained
   for slot in slots:
-    if not slot.isInherited:
-      let slotName = mangleSlot(slot.name)
-      output.add(fmt("    {slotName}*: NodeValue\n"))
+    let slotName = mangleSlot(slot.name)
+    output.add(fmt("    {slotName}*: NodeValue\n"))
   
   output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
   
@@ -70,6 +68,8 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
   output.add(fmt("  ## Create new {cls.name} instance\n"))
   output.add(fmt("  result = {clsName}(new({clsName}Obj))\n"))
+  output.add(fmt("  result.className = \"{cls.name}\"\n"))
+  output.add(fmt("  registerNimProxyClassName(cast[pointer](result), \"{cls.name}\")\n"))
   # Get class reference from interpreter globals (temporary workaround)
   # This registers the class so toValue() can create proper Instance wrapper
   output.add(fmt("  if hybridInterpreter != nil:\n"))
@@ -84,8 +84,7 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
   output.add(fmt("        result.classRef = objVal.instVal.class\n"))
   for slot in slots:
-    if not slot.isInherited:
-      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
+    output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
   # toValue - convert native type to NodeValue using stored classRef
@@ -124,7 +123,6 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     if slot.isInherited:
       continue
     let slotName = mangleSlot(slot.name)
-    let capitalizedSlot = slot.name[0].toUpperAscii() & slot.name[1..^1]
     
     # Getter
     output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
@@ -141,16 +139,8 @@ proc genSlotAccessors*(cls: ClassInfo): string =
 
 proc isClassDefinition(node: Node): bool =
   ## Check if a node is a class definition (derive: chain)
-  if node.kind != nkMessage:
-    return false
-  let msg = node.MessageNode
-  # Check for Class := Parent derive: ... pattern
-  if msg.selector == "at:put:":
-    if msg.arguments.len >= 2 and msg.arguments[1].kind == nkMessage:
-      let valMsg = msg.arguments[1].MessageNode
-      if valMsg.selector == "derive:" or valMsg.selector == "derive":
-        return true
-  return false
+  let (className, _, _) = extractDeriveChain(node)
+  return className.len > 0
 
 proc isMethodDefinition(node: Node): bool =
   ## Check if a node is a method definition (selector:put: or classSelector:put:)
@@ -171,6 +161,116 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
       topLevel.add(node)
 
   return (defs, topLevel)
+
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]] =
+  ## Extract method definitions from AST nodes
+  ## Returns (className, selector, params, body) for each method
+  result = @[]
+  
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "selector:put:" and msg.arguments.len >= 2:
+        var bodyBlock: BlockNode = nil
+        if msg.arguments[1].kind == nkBlock:
+          bodyBlock = msg.arguments[1].BlockNode
+        elif msg.arguments[1].kind == nkLiteral:
+          let litVal = msg.arguments[1].LiteralNode.value
+          if litVal.kind == vkBlock:
+            bodyBlock = litVal.blockVal
+        
+        if msg.arguments[0].kind == nkLiteral and bodyBlock != nil:
+          let litVal = msg.arguments[0].LiteralNode.value
+          let selectorName = if litVal.kind == vkSymbol: litVal.symVal 
+                             elif litVal.kind == vkString: litVal.strVal
+                             else: ""
+          
+          var className = ""
+          if msg.receiver != nil and msg.receiver.kind == nkIdent:
+            className = msg.receiver.IdentNode.name
+          
+          if className.len > 0 and selectorName.len > 0:
+            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body))
+
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]],
+                         compiledClasses: seq[string], classInfo: Table[string, ClassInfo]): string =
+  ## Generate compiled method procs from extracted method definitions
+  var output = ""
+  var registrationCode = ""
+  
+  if methodDefs.len == 0:
+    # Still generate registration stub
+    output.add("# Method Registration\n")
+    output.add("#####################\n\n")
+    output.add("proc registerCompiledMethods*() =\n")
+    output.add("  discard 0\n")
+    output.add("\n")
+    return output
+  
+  output.add("\n# Compiled Methods\n")
+  output.add("##################\n\n")
+  
+  for md in methodDefs:
+    let clsName = md.className
+    let selector = md.selector
+    let params = md.params
+    let body = md.body
+    
+    # Skip if class not in compiled classes
+    if clsName notin compiledClasses:
+      continue
+    
+    let mangledClass = mangleClass(clsName)
+    let mangledSelector = mangleSelector(selector)
+    let procName = fmt("{mangledClass}_{mangledSelector}")
+    
+    output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+
+    for i, paramName in params:
+      output.add(fmt("  let {paramName} = if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil)\n"))
+    
+    if body.len > 0:
+      var genCtx = newGenContext(nil, compiledClasses, classInfo)
+      genCtx.inMethod = true
+      
+      if clsName in classInfo:
+        genCtx.cls = classInfo[clsName]
+      
+      genCtx.globals.add("self")
+      genCtx.setVariableType("self", clsName, true)
+      for paramName in params:
+        genCtx.parameters.add(paramName)
+      
+      let bodyLen = body.len
+      for i, stmt in body:
+        let isLast = (i == bodyLen - 1) and selector != "initialize"
+        let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
+        if stmtCode.len > 0:
+          for line in stmtCode.splitLines():
+            output.add("  ")
+            output.add(line)
+            output.add("\n")
+
+      # Smalltalk convention: initialize methods return self unless explicit ^ used
+      if selector == "initialize":
+        output.add("  return self\n")
+    
+    output.add("\n\n")
+    
+    # Add registration call
+    registrationCode.add(fmt("  registerCompiledMethod(\"{clsName}\", \"{selector}\", {procName})\n"))
+  
+  # Add registration procs (stubs if no methods/superclasses)
+  output.add("# Method Registration\n")
+  output.add("#####################\n\n")
+  output.add("proc registerCompiledMethods*() =\n")
+  if registrationCode.len > 0:
+    output.add(registrationCode)
+  else:
+    output.add("  discard 0\n")
+  output.add("\n")
+  
+  return output
 
 proc isHardingCompileBlock(node: Node): bool =
   ## Check if node is "Harding compile: [block]"
@@ -224,7 +324,9 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("\n")
 
   # Initialize runtime
-  output.add("  initRuntime()\n\n")
+  output.add("  initRuntime()\n")
+  output.add("  registerCompiledMethods()\n")
+  output.add("  registerSuperclassHierarchy()\n\n")
 
   # If mixed mode, initialize hybrid runtime with source file
   if mixed and sourceFile.len > 0:
@@ -265,26 +367,51 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBlockRuntimeHelpers())
   output.add("\n")
 
-  # Separate class/method definitions from top-level statements
-  let (classDefs, topLevel) = extractClassAndMethodDefs(nodes)
-
-  # Extract Harding compile: and main: blocks
+  # Extract Harding compile: and main: blocks first
   let hardingBlocks = nodes.extractHardingBlocks()
   
   # Determine what to compile as main:
-  # If there's a Harding main: block, use its body; otherwise use topLevel
-  let mainBodyNodes = if hardingBlocks.mainBlock != nil:
-                         hardingBlocks.mainBlock.body
-                       else:
-                         topLevel
+  # If there's a Harding main: block, use its body; otherwise use top-level code.
+  var mainBodyNodes: seq[Node]
+  if hardingBlocks.mainBlock != nil:
+    mainBodyNodes = hardingBlocks.mainBlock.body
+  else:
+    # Use everything that's not a compile block
+    mainBodyNodes = hardingBlocks.other
 
-  # Analyze classes - use reflected classes if provided, otherwise build from AST
-  let analysis = if reflectedClasses.len > 0:
-                   let result = newAnalysisResult()
-                   result.classes = reflectedClasses
-                   result
-                 else:
-                   buildClassGraph(nodes)
+  # Build the definition source used for class/method extraction.
+  # compile: contributes definitions for codegen but does NOT run at runtime in generated main().
+  var defsSourceNodes = mainBodyNodes
+  if hardingBlocks.compileBlock != nil:
+    defsSourceNodes = hardingBlocks.compileBlock.body & defsSourceNodes
+
+  let (classDefs, _) = extractClassAndMethodDefs(defsSourceNodes)
+  let (_, executableMainNodes) = extractClassAndMethodDefs(mainBodyNodes)
+
+  # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
+  # This avoids pulling unrelated stdlib/internal classes into generated output.
+  let analysis = block:
+    let astAnalysis = buildClassGraph(defsSourceNodes)
+    if reflectedClasses.len == 0:
+      astAnalysis
+    else:
+      let merged = newAnalysisResult()
+      merged.classes = initTable[string, ClassInfo]()
+
+      # First pass: create class entries and slot sets
+      for className, astCls in astAnalysis.classes.pairs:
+        let mergedCls = newClassInfo(className)
+        let slotSource = if className in reflectedClasses: reflectedClasses[className] else: astCls
+        for slot in slotSource.slots:
+          discard mergedCls.addSlot(slot.name, slot.constraint)
+        merged.classes[className] = mergedCls
+
+      # Second pass: wire parent links using AST class graph names
+      for className, astCls in astAnalysis.classes.pairs:
+        if astCls.parent != nil and astCls.parent.name in merged.classes:
+          merged.classes[className].parent = merged.classes[astCls.parent.name]
+
+      merged
 
   # Resolve slot indices
   ctx.resolveSlotIndices()
@@ -302,11 +429,49 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add("    className*: string\n")
   output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
+  # Extract method definitions from class and compile blocks
+  let methodDefs = extractMethodDefs(classDefs)
+
   # Generate for each class
   for cls in analysis.classes.values:
     output.add(genClassConstants(cls))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
+
+  # Generate superclass hierarchy registration
+  var superclassCalls = ""
+
+  # Static inheritance from class analysis (derive:, deriveWithAccessors:)
+  for cls in analysis.classes.values:
+    if cls.parent != nil and cls.parent.name.len > 0:
+      superclassCalls.add(fmt("  registerSuperclass(\"{cls.name}\", \"{cls.parent.name}\")\n"))
+
+  # Static inheritance from derive receiver (includes parents outside compiled set, e.g. Object)
+  for node in classDefs:
+    let (className, parentName, _) = extractDeriveChain(node)
+    if className.len > 0 and parentName.len > 0 and className != parentName:
+      superclassCalls.add(fmt("  registerSuperclass(\"{className}\", \"{parentName}\")\n"))
+
+  # Dynamic inheritance from explicit addSuperclass: calls
+  for node in mainBodyNodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "addSuperclass:" and msg.arguments.len >= 1:
+        if msg.receiver != nil and msg.receiver.kind == nkIdent:
+          let subclassName = msg.receiver.IdentNode.name
+          if msg.arguments[0].kind == nkIdent:
+            let superclassName = msg.arguments[0].IdentNode.name
+            superclassCalls.add(fmt("  registerSuperclass(\"{subclassName}\", \"{superclassName}\")\n"))
+  
+  if superclassCalls.len > 0:
+    output.add("\n")
+    output.add("# Superclass Hierarchy\n")
+    output.add("######################\n\n")
+    output.add("proc registerSuperclassHierarchy*() =\n")
+    output.add(superclassCalls)
+    output.add("\n")
+  else:
+    output.add("proc registerSuperclassHierarchy*() = discard 0\n\n")
 
   # Generate control flow methods (must come before block procedures that may use them)
   output.add("\n")
@@ -343,6 +508,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBinaryOpMethod("\\"))
   output.add(genBinaryOpMethod("%"))
 
+  # Generate compiled methods from user definitions after primitive operators,
+  # so compiled method bodies can call nt_* helpers without forward declarations.
+  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
+
   # Create a block registry and collect blocks
   # Note: top-level variables are NOT passed as knownGlobals because they are
   # locals of main() and need to be captured by block procs at module level.
@@ -369,7 +538,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            blockInfo.hasNonLocalReturn)
+                            blockInfo.hasNonLocalReturn, blockInfo.envStructName)
     if body.len > 0:
       output.add(body)
     else:
@@ -377,7 +546,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, mainBodyNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
+  output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
 
   # Module initialization
   output.add("\n")
@@ -388,6 +557,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 proc init_{moduleName}*() =
   ## Initialize {moduleName} module
   initRuntime()
+  registerCompiledMethods()
   echo "Module loaded: {moduleName}"
 
 when isMainModule:

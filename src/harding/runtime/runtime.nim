@@ -69,6 +69,81 @@ proc registerMethod*(runtime: var Runtime, selector: string,
   )
   runtime.methodCache[selector] = meth
 
+var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
+  initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
+var nimProxyClassNames*: Table[pointer, string] = initTable[pointer, string]()
+
+proc registerCompiledMethod*(className: string, selector: string,
+                              fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
+  let key = className & ">>" & selector
+  compiledMethodProcs[key] = fn
+
+proc registerNimProxyClassName*(nimValue: pointer, className: string) =
+  ## Register the class name for a Nim proxy object
+  nimProxyClassNames[nimValue] = className
+
+proc getNimProxyClassName*(nimValue: pointer): string =
+  ## Get the class name for a Nim proxy object
+  if nimValue in nimProxyClassNames:
+    return nimProxyClassNames[nimValue]
+  return ""
+
+var superclassNames*: Table[string, string] = initTable[string, string]()
+
+proc registerSuperclass*(className: string, superclassName: string) =
+  ## Register the superclass for a class
+  superclassNames[className] = superclassName
+
+proc getSuperclassName*(className: string): string =
+  ## Get the superclass name for a class
+  if className in superclassNames:
+    return superclassNames[className]
+  return ""
+
+proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## Look up a compiled method by class name and selector
+  let key = className & ">>" & selector
+  if key in compiledMethodProcs:
+    return compiledMethodProcs[key]
+  return nil
+
+proc getReceiverClassName*(receiver: NodeValue): string =
+  ## Resolve runtime class name for compiled Nim proxy instances
+  if receiver.kind != vkInstance or receiver.instVal == nil or not receiver.instVal.isNimProxy:
+    return ""
+
+  if receiver.instVal.class != nil:
+    return receiver.instVal.class.name
+
+  if receiver.instVal.nimValue != nil:
+    return getNimProxyClassName(receiver.instVal.nimValue)
+
+  return ""
+
+proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
+                                      selector: string, args: seq[NodeValue]): NodeValue =
+  ## Dispatch compiled method by walking class -> superclasses chain
+  var currentClass = className
+  while currentClass.len > 0:
+    let compiledFn = findCompiledMethod(currentClass, selector)
+    if compiledFn != nil:
+      return compiledFn(receiver, args)
+    currentClass = getSuperclassName(currentClass)
+  return NodeValue(kind: vkNil)
+
+proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
+                       selector: string, args: seq[NodeValue],
+                       explicitParent: string = ""): NodeValue =
+  ## Send message starting lookup from superclass of defining class
+  ## Used for compiled nkSuperSend expressions
+  discard args
+  var startClass = explicitParent
+  if startClass.len == 0:
+    startClass = getSuperclassName(definingClassName)
+  if startClass.len == 0:
+    return NodeValue(kind: vkNil)
+  return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
+
 proc evalBlock*(runtime: Runtime, blk: BlockNode,
                 args: seq[NodeValue] = @[]): NodeValue =
   ## Evaluate a block (placeholder - needs full evaluator integration)
@@ -170,7 +245,32 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
     return NodeValue(kind: vkNil)
   else:
-    # Unknown selector - return nil for now
+    # Check for compiled method on Nim proxy objects
+    if selector == "isKindOf:" and args.len > 0:
+      let receiverClass = getReceiverClassName(receiver)
+      if receiverClass.len > 0:
+        var targetClass = ""
+        case args[0].kind
+        of vkClass:
+          if args[0].classVal != nil:
+            targetClass = args[0].classVal.name
+        of vkSymbol:
+          targetClass = args[0].symVal
+        of vkString:
+          targetClass = args[0].strVal
+        else:
+          discard
+
+        var currentClass = receiverClass
+        while currentClass.len > 0:
+          if currentClass == targetClass:
+            return NodeValue(kind: vkBool, boolVal: true)
+          currentClass = getSuperclassName(currentClass)
+        return NodeValue(kind: vkBool, boolVal: false)
+
+    let className = getReceiverClassName(receiver)
+    if className.len > 0:
+      return dispatchCompiledMethodFromClass(receiver, className, selector, args)
     return NodeValue(kind: vkNil)
 
 # Global interpreter instance for mixed mode (initialized on first use)
@@ -201,10 +301,10 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
   
   # First, try to use the compiled runtime if available
   if currentRuntime != nil:
-    let result = sendMessage(currentRuntime[], receiver, selector, args)
+    let dispatchResult = sendMessage(currentRuntime[], receiver, selector, args)
     # If result is not nil, the compiled version handled it
-    if result.kind != vkNil:
-      return result
+    if dispatchResult.kind != vkNil:
+      return dispatchResult
   
   # Fall back to interpreter for uncompiled methods
   initHybridRuntime()

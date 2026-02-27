@@ -1,35 +1,51 @@
 #!/usr/bin/env harding
 #
-# Test Harding main: and compile: blocks
+# Test method conflict resolution - methods MUST be overridden BEFORE addSuperclass:
 #
+# In multiple inheritance, if both parent classes have the same method selector,
+# the child class MUST define its own version to avoid ambiguity.
+#
+# This example demonstrates:
+# 1. Animal has a greet method
+# 2. Pet has the SAME greet method
+# 3. Dog MUST define greet before addSuperclass: to resolve the conflict
 
 Harding compile: [
-  # Class definitions executed at compile time
-  Animal := Object deriveWithAccessors: #(name)
-  Pet := Object deriveWithAccessors: #(owner)
-  
-  Dog := Object deriveWithAccessors: #(breed)
-  Dog addSuperclass: Animal
-  Dog addSuperclass: Pet
-  
-  Dog>>speak [
-    ^ "Woof!"
-  ]
-  
-  Pet>>greet [
-    ^ "Hello, " , self owner , "!"
-  ]
+    # Base class with a greet method
+    Animal := Object deriveWithAccessors: #(name)
+    
+    Animal>>greet [
+        ^ "Hello from Animal"
+    ]
+    
+    # Another base with the SAME greet method
+    Pet := Object deriveWithAccessors: #(owner)
+    
+    Pet>>greet [
+        ^ "Hello from Pet"
+    ]
+    
+    # Dog inherits from BOTH - must have its OWN greet to resolve conflict!
+    Dog := Object deriveWithAccessors: #(breed)
+    
+    # This override is REQUIRED when inheriting from multiple parents with same method
+    Dog>>greet [
+        ^ "Woof! Hello!"
+    ]
+    
+    # Now we can safely add superclasses
+    Dog addSuperclass: Animal
+    Dog addSuperclass: Pet
 ]
 
 Harding main: [
-  MyDog := Dog new
-  MyDog name: "Buddy"
-  MyDog owner: "Alice"
-  MyDog breed: "Golden Retriever"
-  
-  ("Name: " , MyDog name) println
-  ("Owner: " , MyDog owner) println
-  ("Breed: " , MyDog breed) println
-  ("Speak: " , MyDog speak) println
-  ("Greet: " , MyDog greet) println
+    MyDog := Dog new
+    MyDog name: "Buddy"
+    MyDog owner: "Alice"
+    MyDog breed: "Golden Retriever"
+    
+    ("Name: " , MyDog name) println
+    ("Owner: " , MyDog owner) println
+    ("Breed: " , MyDog breed) println
+    ("Greet: " , MyDog greet) println
 ]

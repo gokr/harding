@@ -7,7 +7,7 @@
 primeCount := 0
 
 i := 2
-[ i <= 5000 ] whileTrue: [
+[ i <= 500 ] whileTrue: [
   isPrime := true
 
   # Test divisibility by checking divisors up to sqrt(i)
@@ -27,4 +27,4 @@ i := 2
   i := i + 1
 ]
 
-primeCount
+Stdout writeline: primeCount
