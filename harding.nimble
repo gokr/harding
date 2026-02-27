@@ -1,5 +1,5 @@
 # Harding - Modern Smalltalk dialect
-version = "0.6.0"
+version = "0.7.0"
 author = "Göran Krampe"
 description = "Modern Smalltalk dialect written in Nim"
 license = "MIT"
