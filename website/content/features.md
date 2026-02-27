@@ -777,7 +777,7 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 - Functional interpreter with green threads and synchronization primitives
 - MIC/PIC method caching for performance
 - Smalltalk-style resumable exceptions with signal point preservation
-- GTK IDE (Bona) with Workspace, Transcript, System Browser, and Inspector
+- GTK IDE (Bona) with Launcher, Workspace, and Transcript
 - VSCode extension with full LSP and DAP support
 - Granite compiler for native binary compilation
 - BitBarrel integration for persistent storage (optional)
@@ -787,3 +787,5 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 **In Progress:**
 - Actor-based shared-nothing concurrency
 - Enhanced standard library
+- Bona System Browser and Inspector
+- Bona Debugger

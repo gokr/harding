@@ -65,7 +65,7 @@ Granite compiler produces standalone native binaries. No runtime dependencies, t
 Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.
 
 ### IDE Tooling
-VSCode extension with full LSP and DAP support. GTK-based Bona IDE with Workspace, System Browser, and Inspector - all written in Harding.
+VSCode extension with full LSP and DAP support. GTK-based Bona IDE currently includes Launcher, Workspace, and Transcript; Browser and Inspector are in progress, with Debugger planned.
 
 ## Get Started
 

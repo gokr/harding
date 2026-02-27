@@ -100,11 +100,11 @@ z := x + y              <span class="comment"># But periods work too</span>
             <div class="feature-detail">
                 <div class="feature-text">
                     <h3>Class-Based with Multiple Inheritance</h3>
-                    <p>Create classes dynamically with slots and methods:</p>
+                    <p>Create classes dynamically with slots (instance variables) and methods:</p>
                     <ul>
-                        <li><code>derive:</code> for class creation with slots</li>
+                        <li><code>derive:</code> for class creation with slots (instance variables)</li>
                         <li><code>deriveWithAccessors:</code> for automatic getter/setter generation</li>
-                        <li>Direct slot access for O(1) performance</li>
+                        <li>Direct instance-variable access in methods</li>
                         <li>Multiple inheritance with automatic conflict detection</li>
                         <li>Qualified and unqualified super sends</li>
                     </ul>
@@ -115,7 +115,7 @@ z := x + y              <span class="comment"># But periods work too</span>
                         <pre><code><span class="comment"># Declare a temporary variable to hold an instance</span>
 <span class="keyword">| p |</span>
 
-<span class="comment"># Create a new class with two instance variables</span>
+<span class="comment"># Create a new class with two slots (instance variables)</span>
 <span class="type">Point</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x y)
 
 <span class="comment"># Add methods using >> syntax and direct slot access</span>
@@ -180,13 +180,13 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
                     <h3>Automatic Accessors</h3>
                     <p>Create classes with auto-generated getters and setters:</p>
                     <ul>
-                        <li><code>deriveWithAccessors:</code> - Generate getters and setters for all slots</li>
-                        <li>Getter: <code>slotName</code> returns the value</li>
-                        <li>Setter: <code>slotName:</code> sets the value</li>
+                        <li><code>deriveWithAccessors:</code> - Generate getters and setters for all slots (instance variables)</li>
+                        <li>Getter: <code>variableName</code> returns the current value</li>
+                        <li>Setter: <code>variableName:</code> updates the value</li>
                     </ul>
 
                     <h3>Selective Accessors</h3>
-                    <p>For complete control over which slots get accessors:</p>
+                    <p>For complete control over which slots (instance variables) get accessors:</p>
                     <ul>
                         <li><code>derive:getters:setters:</code> - Specify which slots get getters/setters</li>
                         <li>Generate getters for both, setter only for specific slots</li>
@@ -229,7 +229,7 @@ p name             <span class="comment"># Auto-generated getter</span>
             <div class="feature-detail" style="margin-top: 3rem;">
                 <div class="feature-text">
                     <h3>Mixins</h3>
-                    <p>Mixin is a slotless class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots:</p>
+                    <p>Mixin is a state-free class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots (instance variables):</p>
 
                     <h4>Built-in Mixins</h4>
                     <table class="comparison-table" style="margin-top: 1rem;">
@@ -777,7 +777,7 @@ process priority   # Scheduling priority</code></pre>
                         <li>Functional interpreter with green threads and synchronization primitives</li>
                         <li>MIC/PIC method caching for performance</li>
                         <li>Smalltalk-style resumable exceptions with signal point preservation</li>
-                        <li>GTK IDE (Bona) with Workspace, System Browser, and Inspector</li>
+                        <li>GTK IDE (Bona) with Launcher, Workspace, and Transcript</li>
                         <li>VSCode extension with full LSP and DAP support</li>
                         <li>Granite compiler for native binary compilation</li>
                         <li>BitBarrel integration for persistent storage (optional)</li>
@@ -790,6 +790,8 @@ process priority   # Scheduling priority</code></pre>
                     <ul>
                         <li>Actor-based shared-nothing concurrency</li>
                         <li>Enhanced standard library</li>
+                        <li>Bona System Browser and Inspector</li>
+                        <li>Bona Debugger</li>
                     </ul>
                 </div>
             </div>

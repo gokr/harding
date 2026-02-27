@@ -220,14 +220,15 @@ nimble bona    # Build the IDE
 ```
 
 Features:
+- **Launcher** - Start tools and workflows from one place
 - **Workspace** - Code editor with Do It / Print It / Inspect It
 - **Transcript** - Output console
-- **System Browser** - Four-pane class/method browser
-- **Inspector** - Object slot and property viewer
 
-## Environment Variables
+Next up: **System Browser** and **Inspector** (in progress), with a **Debugger** planned.
 
-- `HARDING_HOME` - Default directory for loading libraries
+![Bona GTK IDE screenshot with Launcher, Workspace, and Transcript](images/bona.png)
+
+_Current Bona build with Launcher, Workspace, and Transcript. Browser and Inspector are next, with Debugger planned._
 
 ## Getting Help
 

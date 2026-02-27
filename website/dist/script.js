@@ -258,7 +258,9 @@ function highlightShell(source) {
 }
 
 function detectSnippetLanguage(source) {
-    if (/\b(:=|ifTrue:|ifFalse:|derive|extend:|on:do:|perform:|super|self|Object)\b/.test(source) || />>|#\(|\[:/.test(source)) {
+    if (/:=/.test(source)
+        || /\b(ifTrue:|ifFalse:|whileTrue:|whileFalse:|derive|deriveWithAccessors:|extend:|on:do:|perform:|super|self|Object|Processor|Monitor|SharedQueue|Semaphore|Transcript)\b/.test(source)
+        || />>|#\(|#\{|\[:/.test(source)) {
         return 'harding';
     }
 
