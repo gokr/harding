@@ -1,16 +1,17 @@
 # Example Compilation Test Matrix
 
-## Summary (After compile: block fix - 2025-02-27)
+## Summary (After slot assignment fix - 2025-02-27)
 
 **Branch:** compiler-next  
-**Status:** compile: and main: blocks now work correctly. Method compilation functional.
+**Status:** Most examples work! Method compilation with slots and inheritance functional.
 
 ### Overall Results
 
 | Category | Count | Description |
 |----------|-------|-------------|
 | ✅ Works | 14 | Examples compile and run correctly |
-| ❌ Broken | 3 | Runtime errors or missing features |
+| ⚠️ Partial | 2 | Works with some issues |
+| ❌ Broken | 1 | Needs super call fix |
 
 ### Working Examples (14)
 
@@ -31,24 +32,24 @@
 | blocks | ✅ | Block literals |
 | harding_main | ✅ | compile:/main: blocks work! |
 
-### Broken Examples (3)
+### Broken/Partial Examples (3)
 
-1. **inheritance** - Crashes because `initialize` method returns nil
-2. **fibonacci** - Methods defined with `>>` return nil in compiled code  
+1. **inheritance** - Uses `super` calls incorrectly in method chains (super describe , "...")
+2. **fibonacci** - Methods defined with `>>` return nil in compiled code
 3. **collections** - Timeout issues
 
 ### What's Working
 
-- ✅ **compile:/main: blocks** - Class/method definitions in compile: are now included in compilation
-- ✅ **Method compilation** - Methods extracted and compiled to Nim procs
-- ✅ **Method dispatch** - Compiled methods called via `compiledMethodProcs` table  
-- ✅ **Slot accessor optimization** - Direct `getSlot()` calls in method bodies
-- ✅ **Inheritance** - Methods inherited from superclasses work
+- ✅ **compile:/main: blocks** - Class/method definitions work
+- ✅ **Method compilation** - Methods compile to Nim procs
+- ✅ **Slot assignments in methods** - `name := value` generates setter call
+- ✅ **Return self** - Last statement returns self for Smalltalk semantics
+- ✅ **super calls** - Basic super method calls work (but not in chains)
 
 ### What Needs Work
 
-- Initialize method handling - returns nil causing crashes
-- Method returns in fibonacci example (different pattern than harding_main)
+- Super calls in expression chains (e.g., `super describe , "text"`)
+- Method return value handling for different patterns
 - collections example timeout
 
 ## Syntax Examples
@@ -74,7 +75,7 @@ dog := Dog new
 dog speak println
 ```
 
-Both styles now work identically!
+Both styles work identically now!
 
 ## Running Tests
 
