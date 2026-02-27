@@ -1118,7 +1118,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     else:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
-        output.add("  " & stmtCode & "\n")
+        output.add(indentBlock(stmtCode))
         if captures.len > 0 and envStructName.len > 0:
           for capture in captures:
             output.add(fmt("  envTyped[].{capture} = {capture}\n"))

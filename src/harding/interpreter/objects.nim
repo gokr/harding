@@ -333,8 +333,10 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   meth.selector = selector  # Store the selector for later lookup
   if isClassMethod:
     cls.classMethods[selector] = meth
+    cls.allClassMethods[selector] = meth
   else:
     cls.methods[selector] = meth
+    cls.allMethods[selector] = meth
     # Rewrite slot accesses to use O(1) index instead of string lookup
     if cls.allSlotNames.len > 0:
       rewriteMethodForSlotAccess(meth, cls)
@@ -345,8 +347,7 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   # Mark as dirty for lazy rebuilding (deferred to lookup time on cache miss)
   cls.methodsDirty = true
   # Propagate dirty flag to all descendants
-  for subclass in cls.subclasses:
-    subclass.methodsDirty = true
+  invalidateSubclasses(cls)
 
 proc finalizeClass*(cls: Class) =
   ## Finalize a class after batch method loading - clears dirty flag
