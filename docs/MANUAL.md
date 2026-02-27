@@ -3,18 +3,19 @@
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [Lexical Structure](#lexical-structure)
-3. [Object System](#object-system)
-4. [Multiple Inheritance](#multiple-inheritance)
-5. [Methods and Message Sending](#methods-and-message-sending)
-6. [Blocks and Closures](#blocks-and-closures)
-7. [Control Flow](#control-flow)
-8. [Exception Handling](#exception-handling)
-9. [Libraries and Namespaces](#libraries-and-namespaces)
-10. [Green Threads and Processes](#green-threads-and-processes)
-11. [Primitives](#primitives)
-12. [Smalltalk Compatibility](#smalltalk-compatibility)
-13. [Grammar Reference](#grammar-reference)
+2. [Tooling and Execution](#tooling-and-execution)
+3. [Lexical Structure](#lexical-structure)
+4. [Object System](#object-system)
+5. [Multiple Inheritance](#multiple-inheritance)
+6. [Methods and Message Sending](#methods-and-message-sending)
+7. [Blocks and Closures](#blocks-and-closures)
+8. [Control Flow](#control-flow)
+9. [Exception Handling](#exception-handling)
+10. [Libraries and Namespaces](#libraries-and-namespaces)
+11. [Green Threads and Processes](#green-threads-and-processes)
+12. [Primitives](#primitives)
+13. [Smalltalk Compatibility](#smalltalk-compatibility)
+14. [Grammar Reference](#grammar-reference)
 
 ---
 
@@ -46,6 +47,33 @@ Harding is a class-based Smalltalk dialect that compiles to Nim. It preserves Sm
 | Multiple inheritance | Single only | Multiple with conflict detection |
 | Primitives | VM-specific | Nim code embedding |
 | nil | Primitive value | Instance of UndefinedObject class |
+
+---
+
+## Tooling and Execution
+
+Harding includes multiple tools for different workflows:
+
+- `harding` - REPL and script execution
+- `granite` - compile Harding source to Nim/native binaries
+- `harding_debug` - interpreter build with debugger server support
+- `harding-lsp` - Language Server Protocol support
+- `bona` - GTK-based IDE
+
+Typical workflows:
+
+```bash
+# Interactive REPL
+harding
+
+# Run a script
+harding script.hrd
+
+# Compile and run natively
+granite run script.hrd --release
+```
+
+For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md).
 
 ---
 
@@ -81,14 +109,7 @@ Harding is a class-based Smalltalk dialect that compiles to Nim. It preserves Sm
 
 ### Shebang Support
 
-Harding scripts can include shebang lines at the beginning:
-
-```smalltalk
-#!/usr/bin/env harding
-# This script can be made executable and run directly
-```
-
-When the kernel executes the script, the shebang line is automatically skipped by the lexer.
+Shebang lines are supported for executable scripts. See [Script Files](#script-files) for details.
 
 ### Statement Separation
 
@@ -857,6 +878,17 @@ Additional handler methods:
 - `ex pass` - Delegate to the next matching outer handler
 - `ex isResumable` - Returns true for resumable exceptions
 
+### Uncaught Exceptions
+
+If no handler matches, Harding runs the exception's default action, prints an uncaught-exception header and stack trace, and exits with a non-zero status.
+
+`pass` follows the same behavior when there is no outer matching handler.
+
+### Resumability Defaults
+
+- `Error` and its subclasses are treated as non-resumable by default.
+- `Notification` is intended for resumable signals.
+
 ### Signal Point Inspection
 
 For debugging, exception handlers can inspect the signal point:
@@ -1619,9 +1651,13 @@ nimble harding_bitbarrel    # Build REPL with BitBarrel
 ## For More Information
 
 - [QUICKREF.md](QUICKREF.md) - Quick syntax reference
+- [BOOTSTRAP.md](BOOTSTRAP.md) - Bootstrap architecture and core loading
 - [GTK.md](GTK.md) - GTK integration and GUI development
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) - VM internals and architecture
 - [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Tool usage and debugging
+- [COMPILATION_PIPELINE.md](COMPILATION_PIPELINE.md) - Granite pipeline architecture
+- [ROADMAP.md](ROADMAP.md) - Active development roadmap
+- [PERFORMANCE.md](PERFORMANCE.md) - Performance workflow and priorities
 - [FUTURE.md](FUTURE.md) - Future plans and roadmap
 - [VSCODE.md](VSCODE.md) - VSCode extension
 - [research/](research/) - Historical design documents

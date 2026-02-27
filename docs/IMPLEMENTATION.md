@@ -141,7 +141,7 @@ This provides a clean separation:
 
 ### For More Information
 
-See [bootstrap.md](bootstrap.md) for complete details on the bootstrap architecture, including:
+See [BOOTSTRAP.md](BOOTSTRAP.md) for complete details on the bootstrap architecture, including:
 - Complete list of bootstrap methods
 - Stdlib loading order
 - Extending Harding with new features

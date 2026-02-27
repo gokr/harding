@@ -165,7 +165,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Define method | `Point>>move: dx [ ... ]` |
 | Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
 
-## Current Status (v0.6.0)
+## Current Status (v0.7.0)
 
 **Working:**
 - Lexer, parser, stackless AST interpreter
@@ -192,7 +192,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
 - BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
 - Version-based MIC/PIC caching for improved message send performance
-- All 35 test files passing
+- All 34 test files passing
 - VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
 - Harding Debug Protocol (HDP) for VM debugging
 
@@ -206,10 +206,13 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Quick Reference](docs/QUICKREF.md) - Syntax quick reference
 - [Language Manual](docs/MANUAL.md) - Complete language manual
 - [Implementation](docs/IMPLEMENTATION.md) - VM internals
+- [Bootstrap](docs/BOOTSTRAP.md) - Bootstrap architecture and stdlib loading
 - [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
-- [Future Plans](docs/FUTURE.md) - Roadmap
+- [Compilation Pipeline](docs/COMPILATION_PIPELINE.md) - Granite compiler architecture
+- [Roadmap](docs/ROADMAP.md) - Active priorities and milestones
+- [Performance](docs/PERFORMANCE.md) - Performance workflow and priorities
+- [Future Plans](docs/FUTURE.md) - Long-term roadmap
 - [CLAUDE.md](CLAUDE.md) - Developer guide with BitBarrel integration
-- [Compilation Pipeline](docs/design/COMPILATION_PIPELINE.md) - Granite compiler architecture
 - [GTK Integration](docs/GTK.md) - GUI development
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
 - [GtkSourceView](docs/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting

@@ -2,20 +2,24 @@
 
 This directory contains documentation for the Harding programming language.
 
-## User Documentation
+## Canonical Documents
 
-These are the primary documents for learning and using Harding:
+These are the active, maintained documents:
 
-| Document | Description | Audience |
-|----------|-------------|----------|
-| [MANUAL.md](MANUAL.md) | Complete language reference manual | All users |
-| [QUICKREF.md](QUICKREF.md) | Quick syntax cheat sheet | Quick lookup |
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [MANUAL.md](MANUAL.md) | Complete language and runtime reference | All users |
+| [QUICKREF.md](QUICKREF.md) | Syntax and common idioms cheat sheet | Daily reference |
+| [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | CLI tools, workflows, and debugging | Users and contributors |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM/runtime architecture details | Contributors |
+| [BOOTSTRAP.md](BOOTSTRAP.md) | Bootstrap architecture and stdlib loading | Contributors |
+| [COMPILATION_PIPELINE.md](COMPILATION_PIPELINE.md) | Granite compiler pipeline | Contributors |
+| [ROADMAP.md](ROADMAP.md) | Active development priorities | Contributors |
+| [PERFORMANCE.md](PERFORMANCE.md) | Performance workflow and current priorities | Contributors |
+| [VSCODE.md](VSCODE.md) | VSCode extension usage | VSCode users |
 | [GTK.md](GTK.md) | GTK bridge and GUI development | GUI developers |
-| [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM internals and architecture | Contributors |
-| [bootstrap.md](bootstrap.md) | Foundation and architecture of the VM bootstrap | Contributors |
-| [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | Tool usage (`harding`, `granite`) and debugging | All users |
-| [FUTURE.md](FUTURE.md) | Future plans and roadmap | Contributors |
-| [VSCODE.md](VSCODE.md) | VSCode syntax highlighting extension | VSCode users |
+| [GTKSOURCEVIEW.md](GTKSOURCEVIEW.md) | GtkSourceView syntax highlighting | GNOME/GtkSourceView users |
+| [FUTURE.md](FUTURE.md) | Longer-term plans and directions | Contributors |
 
 ## Getting Started
 
@@ -25,29 +29,13 @@ New to Harding? Start with these documents in order:
 2. [QUICKREF.md](QUICKREF.md) - Quick reference when you're coding
 3. [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - How to use `harding` and `granite`
 
-## Specialized Topics
-
-| Topic | Document |
-|-------|----------|
-| GUI Development | [GTK.md](GTK.md) |
-| Syntax Highlighting | [GTKSOURCEVIEW.md](GTKSOURCEVIEW.md) |
-| VSCode Extension | [VSCODE.md](VSCODE.md) |
-| Contributing | [IMPLEMENTATION.md](IMPLEMENTATION.md) |
-| Future Roadmap | [FUTURE.md](FUTURE.md) |
-
-## Design Documents
-
-The [`design/`](design/) directory contains architecture documents for major subsystems:
-
-| Document | Description |
-|----------|-------------|
-| [COMPILATION_PIPELINE.md](design/COMPILATION_PIPELINE.md) | Granite compiler architecture and pipeline |
-
 ## Historical and Research Documents
 
-The [`research/`](research/) directory contains historical design documents, implementation plans, and proposals. These documents are kept for reference but may not reflect the current implementation.
+The [`research/`](research/) directory contains historical design notes, implementation plans, archived optimization proposals, and earlier roadmap material.
 
-When in doubt, consult the user documentation above rather than research documents.
+These files are preserved for context and traceability, but may not match current behavior.
+
+When in doubt, prefer the canonical documents listed above.
 
 ## Contributing to Documentation
 
