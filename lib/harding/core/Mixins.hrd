@@ -3,17 +3,16 @@
 # Mixin is a class with no slots, designed to be added as a parent
 # for behavior composition without the diamond problem
 #
-# Naming convention: Mixin classes start with "T" (Trait/Type)
-# Example: TComparable, TIterable, TPrintable
+# Naming convention: Use -able suffix (Comparable, Iterable, Printable)
 # ============================================================================
 
 # ============================================================================
-# TComparable - Provides comparison operators based on compareTo:
+# Comparable - Provides comparison operators based on compareTo:
 # ============================================================================
 
-TComparable := Mixin derive.
+Comparable := Mixin derive.
 
-TComparable>>compareTo: anObject [
+Comparable>>compareTo: anObject [
   # Subclasses must implement this to return:
   # - negative if self < anObject
   # - zero if self = anObject
@@ -22,54 +21,54 @@ TComparable>>compareTo: anObject [
   ^ self identityHash - anObject identityHash
 ]
 
-TComparable>>= anObject [
+Comparable>>= anObject [
   ^ (self compareTo: anObject) = 0
 ]
 
-TComparable>>~= anObject [
+Comparable>>~= anObject [
   ^ (self compareTo: anObject) ~= 0
 ]
 
-TComparable>>< anObject [
+Comparable>>< anObject [
   ^ (self compareTo: anObject) < 0
 ]
 
-TComparable>><= anObject [
+Comparable>><= anObject [
   ^ (self compareTo: anObject) <= 0
 ]
 
-TComparable>> anObject [
+Comparable>> anObject [
   ^ (self compareTo: anObject) > 0
 ]
 
-TComparable>>>= anObject [
+Comparable>>>= anObject [
   ^ (self compareTo: anObject) >= 0
 ]
 
-TComparable>>between: min and: max [
+Comparable>>between: min and: max [
   ^ (self >= min) and: [ self <= max ]
 ]
 
-TComparable>>min: anObject [
+Comparable>>min: anObject [
   ^ (self < anObject) ifTrue: [ self ] ifFalse: [ anObject ]
 ]
 
-TComparable>>max: anObject [
+Comparable>>max: anObject [
   ^ (self > anObject) ifTrue: [ self ] ifFalse: [ anObject ]
 ]
 
-TComparable>>clampTo: min max: max [
+Comparable>>clampTo: min max: max [
   ^ (self min: max) max: min
 ]
 
 # ============================================================================
-# TIterable - Provides collection methods based on do:
+# Iterable - Provides collection methods based on do:
 # Subclasses must implement do:
 # ============================================================================
 
-TIterable := Mixin derive.
+Iterable := Mixin derive.
 
-TIterable>>collect: block [
+Iterable>>collect: block [
   # Transform each element with the block, return new array
   | result |
   result := Array new.
@@ -77,7 +76,7 @@ TIterable>>collect: block [
   ^ result
 ]
 
-TIterable>>select: block [
+Iterable>>select: block [
   # Return new array with elements where block returns true
   | result |
   result := Array new.
@@ -87,7 +86,7 @@ TIterable>>select: block [
   ^ result
 ]
 
-TIterable>>reject: block [
+Iterable>>reject: block [
   # Return new array with elements where block returns false
   | result |
   result := Array new.
@@ -97,7 +96,7 @@ TIterable>>reject: block [
   ^ result
 ]
 
-TIterable>>detect: block [
+Iterable>>detect: block [
   # Find first element where block returns true
   self do: [ :each |
     (block value: each) ifTrue: [ ^ each ]
@@ -105,7 +104,7 @@ TIterable>>detect: block [
   ^ nil
 ]
 
-TIterable>>detect: block ifNone: noneBlock [
+Iterable>>detect: block ifNone: noneBlock [
   # Find first element where block returns true, or evaluate noneBlock
   self do: [ :each |
     (block value: each) ifTrue: [ ^ each ]
@@ -113,7 +112,7 @@ TIterable>>detect: block ifNone: noneBlock [
   ^ noneBlock value
 ]
 
-TIterable>>inject: initialValue into: block [
+Iterable>>inject: initialValue into: block [
   # Accumulate a result by iterating with block
   | result |
   result := initialValue.
@@ -121,7 +120,7 @@ TIterable>>inject: initialValue into: block [
   ^ result
 ]
 
-TIterable>>anySatisfy: block [
+Iterable>>anySatisfy: block [
   # Return true if any element satisfies the block
   self do: [ :each |
     (block value: each) ifTrue: [ ^ true ]
@@ -129,7 +128,7 @@ TIterable>>anySatisfy: block [
   ^ false
 ]
 
-TIterable>>allSatisfy: block [
+Iterable>>allSatisfy: block [
   # Return true if all elements satisfy the block
   self do: [ :each |
     (block value: each) ifFalse: [ ^ false ]
@@ -137,7 +136,7 @@ TIterable>>allSatisfy: block [
   ^ true
 ]
 
-TIterable>>noneSatisfy: block [
+Iterable>>noneSatisfy: block [
   # Return true if no elements satisfy the block
   self do: [ :each |
     (block value: each) ifTrue: [ ^ false ]
@@ -145,12 +144,12 @@ TIterable>>noneSatisfy: block [
   ^ true
 ]
 
-TIterable>>sum [
+Iterable>>sum [
   # Return sum of all numeric elements
   ^ self inject: 0 into: [ :sum :each | sum + each ]
 ]
 
-TIterable>>count: block [
+Iterable>>count: block [
   # Count elements satisfying the block
   | count |
   count := 0.
@@ -161,13 +160,13 @@ TIterable>>count: block [
 ]
 
 # ============================================================================
-# TPrintable - Provides printString and related methods
+# Printable - Provides printString and related methods
 # Subclasses should implement printOn: for custom formatting
 # ============================================================================
 
-TPrintable := Mixin derive.
+Printable := Mixin derive.
 
-TPrintable>>printOn: stream [
+Printable>>printOn: stream [
   # Append a string representation to the stream
   # Default: use class name with identity hash
   stream show: (self class name).
@@ -175,7 +174,7 @@ TPrintable>>printOn: stream [
   stream show: (self identityHash printString)
 ]
 
-TPrintable>>printString [
+Printable>>printString [
   # Return a string representation
   | stream |
   stream := "" writeStream.
@@ -183,23 +182,23 @@ TPrintable>>printString [
   ^ stream contents
 ]
 
-TPrintable>>print [
+Printable>>print [
   # Print to stdout (or Transcript in IDE)
   Transcript show: self printString
 ]
 
-TPrintable>>printCr [
+Printable>>printCr [
   # Print to stdout with newline
   Transcript showCr: self printString
 ]
 
-TPrintable>>displayOn: stream [
+Printable>>displayOn: stream [
   # Append a user-friendly string to the stream
   # Default: same as printOn:
   self printOn: stream
 ]
 
-TPrintable>>displayString [
+Printable>>displayString [
   # Return a user-friendly string
   | stream |
   stream := "" writeStream.
@@ -208,25 +207,25 @@ TPrintable>>displayString [
 ]
 
 # ============================================================================
-# TSynchronizable - Interface for synchronization primitives
+# Synchronizable - Interface for synchronization primitives
 # Implemented by Monitor, Semaphore for polymorphic synchronization
 # ============================================================================
 
-TSynchronizable := Mixin derive.
+Synchronizable := Mixin derive.
 
-TSynchronizable>>critical: aBlock [
+Synchronizable>>critical: aBlock [
   # Execute block with mutual exclusion
   # Subclasses must implement
   self subclassResponsibility
 ]
 
-TSynchronizable>>acquire [
+Synchronizable>>acquire [
   # Acquire the lock/resource
   # Subclasses must implement
   self subclassResponsibility
 ]
 
-TSynchronizable>>release [
+Synchronizable>>release [
   # Release the lock/resource
   # Subclasses must implement
   self subclassResponsibility
@@ -238,7 +237,7 @@ TSynchronizable>>release [
 #
 # # Adding comparability to a custom class:
 # Point := Object derive: #(x y).
-# Point addSuperclass: TComparable.
+# Point addSuperclass: Comparable.
 #
 # Point>>compareTo: other [
 #   # Compare by distance from origin
@@ -252,7 +251,7 @@ TSynchronizable>>release [
 #
 # # Adding iterability:
 # LinkedList := Object derive: #(head tail).
-# LinkedList addSuperclass: TIterable.
+# LinkedList addSuperclass: Iterable.
 #
 # LinkedList>>do: block [
 #   | current |
