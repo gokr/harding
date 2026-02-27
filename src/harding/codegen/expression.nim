@@ -3,6 +3,7 @@ import ../core/types
 import ../compiler/context
 import ../compiler/symbols
 import ./blocks
+import ./slots
 
 # ============================================================================
 # Expression Code Generation
@@ -1052,13 +1053,21 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
     let assign = node.AssignNode
     let varName = assign.variable
     
-    # Infer type from the expression being assigned
-    let exprType = ctx.inferTypeFromExpression(assign.expression)
-    if exprType.className.len > 0:
-      ctx.setVariableType(varName, exprType.className, exprType.isNativeClass)
-    
     let exprCode = genExpression(ctx, assign.expression)
 
+    # Check if it's a slot assignment in method context
+    if ctx.cls != nil and ctx.inMethod:
+      let classDef = ctx.classInfo.getOrDefault(ctx.cls.name)
+      for slot in classDef.slots:
+        if slot.name == varName:
+          # It's a slot - generate setter call
+          let mangledSlot = mangleSlot(slot.name)
+          let setterCall = fmt("set{mangledSlot}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
+          if isLast:
+            return "return " & setterCall
+          else:
+            return "discard " & setterCall
+    
     # Check if it's a reassignment of an existing variable
     if varName in ctx.locals or varName in ctx.globals:
       return fmt"{varName} = {exprCode}"
@@ -1070,15 +1079,23 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
   of nkMessage:
     return genStatement(ctx, node)
 
+  of nkSuperSend:
+    # super selector - call parent class method
+    # Use sendMessage with runtime to properly look up parent class method
+    let ss = node.SuperSendNode
+    let args = ss.arguments.mapIt(genExpression(ctx, it)).join(", ")
+    if args.len > 0:
+      return fmt("discard sendMessage(currentRuntime[], self, \"{ss.selector}\", @[{args}])")
+    else:
+      return fmt("discard sendMessage(currentRuntime[], self, \"{ss.selector}\", @[])")
+
   of nkReturn:
-    # Return in method body - return NodeValue directly
     let ret = node.ReturnNode
     if ret.expression != nil:
       return "return " & genExpression(ctx, ret.expression)
     return "return NodeValue(kind: vkNil)"
 
   else:
-    # Other expressions - if last statement, implicit return
     let exprCode = genExpression(ctx, node)
     if exprCode.len > 0:
       if isLast:
