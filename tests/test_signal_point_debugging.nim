@@ -1,5 +1,8 @@
 import std/unittest
+import std/os
+import std/osproc
 import std/strutils
+import std/strtabs
 import ../src/harding/core/types
 import ../src/harding/interpreter/[vm]
 
@@ -7,6 +10,18 @@ import ../src/harding/interpreter/[vm]
 ## Phase 1: Core existing functionality tests
 
 var sharedInterp: Interpreter
+const uncaughtTestEnv = "HARDING_UNCAUGHT_TEST_MODE"
+
+if existsEnv(uncaughtTestEnv):
+  var uncaughtInterp = newInterpreter()
+  initGlobals(uncaughtInterp)
+  loadStdlib(uncaughtInterp)
+  # Expected behavior: this exits via uncaught exception default action.
+  discard uncaughtInterp.evalStatements("""
+    Error signal: "no handler here"
+  """)
+  # If execution reaches here, uncaught behavior did not terminate as expected.
+  quit(2)
 
 proc setupTestEnvironment() =
   sharedInterp = newInterpreter()
@@ -153,13 +168,15 @@ suite "Resumption Semantics":
 
 suite "Uncaught Exception Handling":
 
-  test "uncaught exception propagates as error":
-    ## When no handler matches, signal raises EvalError so CLI can report and exit
-    let (results, err) = sharedInterp.evalStatements("""
-      Error signal: "no handler here"
-    """)
-    check(err.len > 0)
-    check("Error" in err or "no handler here" in err)
+  test "uncaught exception exits with stack trace":
+    var env = newStringTable(modeCaseSensitive)
+    env[uncaughtTestEnv] = "1"
+    let command = "\"" & getAppFilename() & "\""
+    let run = execCmdEx(command, env = env)
+    check(run.exitCode != 0)
+    check("=== Uncaught Exception ===" in run.output)
+    check("Error: no handler here" in run.output)
+    check("Stack trace:" in run.output)
 
   test "process suspended for debugger":
     skip() # Requires debugger infrastructure
