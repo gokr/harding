@@ -144,7 +144,6 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
 proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
 proc parseStatement(parser: var Parser; parseMessages = true): Node
-proc parseMethod(parser: var Parser): BlockNode
 proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
@@ -236,8 +235,9 @@ proc parsePrimary(parser: var Parser): Node =
       if token.value == "super":
         # Check if this is a super send (followed by message selector)
         let nextTok = parser.peek()
-        if nextTok.kind in {tkIdent, tkKeyword, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent,
-                           tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkLt, tkTag}:
+        if nextTok.kind in {tkIdent, tkKeyword, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq,
+                           tkPercent, tkComma, tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq,
+                           tkAmpersand, tkPipe, tkTag}:
           # This is a super send, parse it
           var explicitParent: string = ""
 
@@ -669,8 +669,8 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
       else:
         parser.parseError("Expected message after ;")
         return nil
-    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent, tkComma,
-       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq:
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
       # Binary operator
       discard parser.next()  # Skip operator
       let right = parser.parseExpression(parseMessages = false)
@@ -1013,15 +1013,6 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
     discard parser.expect(tkPeriod)
     return expr
 
-# Parse block literal (defined above at line 209)
-
-# Parse method definition (block with isMethod flag)
-proc parseMethod(parser: var Parser): BlockNode =
-  let blk = parser.parseBlock()
-  if blk != nil:
-    blk.isMethod = true
-  return blk
-
 # Parse method definition syntax: Receiver>>selector [ body ] or Receiver class>>selector [ body ]
 # Transforms to: Receiver selector: 'sel' put: [body] (instance method)
 # Or: Receiver classSelector: 'sel' put: [body] (class method)
@@ -1322,14 +1313,6 @@ proc parseExpression*(input: string): (Node, Parser) =
   var parser = initParser(tokens)
   let node = parser.parseExpression(parseMessages = true)
   return (node, parser)
-
-# Convenience function to parse a method
-proc parseMethod*(input: string): (BlockNode, Parser) =
-  ## Parse a method definition
-  let tokens = lex(input)
-  var parser = initParser(tokens)
-  let meth = parser.parseMethod()
-  return (meth, parser)
 
 # AST printing for debugging
 proc printAST*(node: Node, indent: int = 0): string =
