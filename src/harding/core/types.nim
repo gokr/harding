@@ -425,18 +425,13 @@ var nilInstance*: Instance = nil
 # Truthiness check for NodeValue
 # ============================================================================
 proc isTruthy*(val: NodeValue): bool =
-  ## Check if a value is "truthy" (true, non-zero, non-empty, non-nil)
-  ## Note: nilInstance (UndefinedObject) is NOT falsy - it doesn't respond to conditionals
+  ## Smalltalk boolean semantics: only true/false are valid condition values.
+  ## Any non-boolean in a conditional is a runtime error.
   case val.kind
-  of vkNil: return false
   of vkBool: return val.boolVal
-  of vkInt: return val.intVal != 0
-  of vkFloat: return val.floatVal != 0.0
-  of vkString: return val.strVal.len > 0
-  of vkSymbol: return val.symVal.len > 0
-  of vkArray: return val.arrayVal.len > 0
-  of vkTable: return val.tableVal.len > 0
-  else: return true  # Blocks, classes, instances (including nilInstance) are truthy
+  else:
+    raise newException(ValueError,
+      "Conditional requires Boolean (true/false), got " & $val.kind)
 
 # ============================================================================
 # Node kind helper
@@ -463,94 +458,56 @@ proc kind*(node: Node): NodeKind =
   else: raise newException(ValueError, "Unknown node type")
 
 # Value conversion utilities
-proc formatLiteral*(val: NodeValue): string
+proc formatValue(val: NodeValue, quoteStrings: bool): string =
+  ## Shared formatting logic for toString and formatLiteral.
+  ## When quoteStrings is true, strings are quoted and arrays recurse with quoting.
+  proc formatStr(s: string): string =
+    if quoteStrings: '"' & s & '"' else: s
+
+  proc formatSeq(elements: seq[NodeValue]): string =
+    var parts: seq[string] = @[]
+    for v in elements:
+      parts.add(formatValue(v, quoteStrings))
+    "#(" & parts.join(" ") & ")"
+
+  proc formatTable(entries: Table[NodeValue, NodeValue]): string =
+    var parts: seq[string] = @[]
+    for k, v in entries:
+      parts.add(formatValue(k, true) & " -> " & formatValue(v, true))
+    "#{" & parts.join(" . ") & "}"
+
+  case val.kind
+  of vkInt: $val.intVal
+  of vkFloat: $val.floatVal
+  of vkString: formatStr(val.strVal)
+  of vkSymbol: val.symVal
+  of vkBool: $val.boolVal
+  of vkNil: "nil"
+  of vkClass: "<class " & val.classVal.name & ">"
+  of vkInstance:
+    if val.instVal == nil or val.instVal.class == nil:
+      "<instance nil>"
+    elif val.instVal == nilInstance or val.instVal.class == undefinedObjectClass:
+      "nil"
+    else:
+      case val.instVal.kind
+      of ikInt: $(val.instVal.intVal)
+      of ikFloat: $(val.instVal.floatVal)
+      of ikString: formatStr(val.instVal.strVal)
+      of ikArray: formatSeq(val.instVal.elements)
+      of ikTable: formatTable(val.instVal.entries)
+      of ikObject: "<instance of " & val.instVal.class.name & ">"
+  of vkBlock: "<block>"
+  of vkArray: formatSeq(val.arrayVal)
+  of vkTable: formatTable(val.tableVal)
 
 proc toString*(val: NodeValue): string =
   ## Convert NodeValue to string for display
-  case val.kind
-  of vkInt: $val.intVal
-  of vkFloat: $val.floatVal
-  of vkString: val.strVal
-  of vkSymbol: val.symVal
-  of vkBool: $val.boolVal
-  of vkNil: "nil"
-  of vkClass: "<class " & val.classVal.name & ">"
-  of vkInstance:
-    if val.instVal == nil or val.instVal.class == nil:
-      "<instance nil>"
-    elif val.instVal == nilInstance or val.instVal.class == undefinedObjectClass:
-      # The nil singleton instance - display as "nil"
-      "nil"
-    else:
-      case val.instVal.kind
-      of ikInt: $(val.instVal.intVal)
-      of ikFloat: $(val.instVal.floatVal)
-      of ikString: val.instVal.strVal
-      of ikArray:
-        var parts: seq[string] = @[]
-        for v in val.instVal.elements:
-          parts.add(toString(v))
-        "#(" & parts.join(" ") & ")"
-      of ikTable:
-        var parts: seq[string] = @[]
-        for k, v in val.instVal.entries:
-          parts.add(formatLiteral(k) & " -> " & formatLiteral(v))
-        "#{" & parts.join(" . ") & "}"
-      of ikObject: "<instance of " & val.instVal.class.name & ">"
-  of vkBlock: "<block>"
-  of vkArray:
-    var parts: seq[string] = @[]
-    for v in val.arrayVal:
-      parts.add(toString(v))
-    "#(" & parts.join(" ") & ")"
-  of vkTable:
-    var parts: seq[string] = @[]
-    for k, v in val.tableVal:
-      parts.add(formatLiteral(k) & " -> " & formatLiteral(v))
-    "#{" & parts.join(" . ") & "}"
+  formatValue(val, quoteStrings = false)
 
 proc formatLiteral*(val: NodeValue): string =
   ## Format a literal value for display (quoted strings, bare numbers/symbols/booleans)
-  case val.kind
-  of vkString: '"' & val.strVal & '"'
-  of vkInt: $val.intVal
-  of vkFloat: $val.floatVal
-  of vkBool: $val.boolVal
-  of vkNil: "nil"
-  of vkSymbol: val.symVal
-  of vkClass: "<class " & val.classVal.name & ">"
-  of vkInstance:
-    if val.instVal == nil or val.instVal.class == nil:
-      "<instance nil>"
-    elif val.instVal == nilInstance or val.instVal.class == undefinedObjectClass:
-      "nil"
-    else:
-      case val.instVal.kind
-      of ikInt: $(val.instVal.intVal)
-      of ikFloat: $(val.instVal.floatVal)
-      of ikString: '"' & val.instVal.strVal & '"'
-      of ikArray:
-        var parts: seq[string] = @[]
-        for v in val.instVal.elements:
-          parts.add(formatLiteral(v))
-        "#(" & parts.join(" ") & ")"
-      of ikTable:
-        var parts: seq[string] = @[]
-        for k, v in val.instVal.entries:
-          parts.add(formatLiteral(k) & " -> " & formatLiteral(v))
-        "#{" & parts.join(" . ") & "}"
-      of ikObject: "<instance of " & val.instVal.class.name & ">"
-  of vkBlock: "<block>"
-  of vkArray:
-    var parts: seq[string] = @[]
-    for v in val.arrayVal:
-      parts.add(formatLiteral(v))
-    "#(" & parts.join(" ") & ")"
-  of vkTable:
-    var parts: seq[string] = @[]
-    for k, v in val.tableVal:
-      parts.add(formatLiteral(k) & " -> " & formatLiteral(v))
-    "#{" & parts.join(" . ") & "}"
+  formatValue(val, quoteStrings = true)
 
 # Equality operator for NodeValue
 proc `==`*(a, b: NodeValue): bool =
@@ -695,31 +652,6 @@ proc unwrap*(val: NodeValue): NodeValue =
       # These stay wrapped as vkInstance
       return val
   return val
-
-proc toBlock*(val: NodeValue): BlockNode =
-  if val.kind != vkBlock:
-    raise newException(ValueError, "Not a block: " & val.toString)
-  val.blockVal
-
-proc toClass*(val: NodeValue): Class =
-  if val.kind != vkClass:
-    raise newException(ValueError, "Not a class: " & val.toString)
-  val.classVal
-
-proc toInstance*(val: NodeValue): Instance =
-  if val.kind != vkInstance:
-    raise newException(ValueError, "Not an instance: " & val.toString)
-  val.instVal
-
-proc toArray*(val: NodeValue): seq[NodeValue] =
-  if val.kind != vkArray:
-    raise newException(ValueError, "Not an array: " & val.toString)
-  val.arrayVal
-
-proc toTable*(val: NodeValue): Table[NodeValue, NodeValue] =
-  if val.kind != vkTable:
-    raise newException(ValueError, "Not a table: " & val.toString)
-  val.tableVal
 
 # ============================================================================
 # Symbol Table for Canonicalization
@@ -1015,14 +947,6 @@ proc setSlot*(inst: Instance, index: int, value: NodeValue) =
     return
   if index >= 0 and index < inst.slots.len:
     inst.slots[index] = value
-
-# Helper procs for Instance variant checking
-proc isInt*(inst: Instance): bool = inst.kind == ikInt
-proc isFloat*(inst: Instance): bool = inst.kind == ikFloat
-proc isString*(inst: Instance): bool = inst.kind == ikString
-proc isArray*(inst: Instance): bool = inst.kind == ikArray
-proc isTable*(inst: Instance): bool = inst.kind == ikTable
-proc isObject*(inst: Instance): bool = inst.kind == ikObject
 
 # Helper procs for getting values from Instance variants
 proc getIntValue*(inst: Instance): int =
