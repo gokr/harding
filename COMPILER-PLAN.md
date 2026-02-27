@@ -68,6 +68,8 @@
 - Fix slot assignments in methods (generate setter calls)
 - Fix return semantics (return self for last statement)
 - Add super call support (nkSuperSend)
+- Document compile:/main: in MANUAL.md
+- Note: compile:/main: is compiler-only (not supported in interpreter)
 
 ---
 
