@@ -49,7 +49,7 @@
                     <h3>Installation</h3>
                     <pre><code>git clone https://github.com/gokr/harding.git
 cd harding
-nimble local</code></pre>
+nimble harding</code></pre>
                     <p>Requires <a href="https://nim-lang.org/install.html">Nim 2.2.6+</a></p>
                 </div>
 
@@ -237,7 +237,7 @@ result println   # 0</code></pre>
                         <tr>
                             <td>Execution</td>
                             <td>VM</td>
-                            <td>VM or Native compilation (future)</td>
+                            <td>VM or Native compilation (Granite)</td>
                         </tr>
                         <tr>
                             <td>Inheritance</td>
@@ -261,16 +261,23 @@ Person class >> newPerson [ ^ self new ]</code></pre>
         </div>
     </section>
 
-    <!-- Environment Variables -->
+    <!-- Bona GTK IDE -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">Environment Variables</h2>
+            <h2 class="section-title">Bona GTK IDE</h2>
 
-            <div class="example-grid">
-                <div class="example-item">
-                    <h4>HARDING_HOME</h4>
-                    <p>Default directory for loading libraries</p>
-                </div>
+            <div class="doc-card">
+                <h3>Installation</h3>
+                <pre><code>nimble bona    # Build the IDE
+./bona         # Launch</code></pre>
+                <p>Features:</p>
+                <ul style="margin-top: 1rem; margin-left: 1.5rem;">
+                    <li><strong>Workspace</strong> - Code editor with Do It / Print It / Inspect It</li>
+                    <li><strong>Transcript</strong> - Output console</li>
+                    <li><strong>System Browser</strong> - Four-pane class/method browser</li>
+                    <li><strong>Inspector</strong> - Object slot and property viewer</li>
+                </ul>
+                <p style="margin-top: 1rem;">All written in Harding itself.</p>
             </div>
         </div>
     </section>
@@ -282,8 +289,15 @@ Person class >> newPerson [ ^ self new ]</code></pre>
 
             <div class="doc-card">
                 <h3>Installation</h3>
-                <pre><code>code --install-extension harding-lang-0.1.0.vsix</code></pre>
-                <p>Features: Syntax highlighting, comment toggling, bracket matching</p>
+                <pre><code>nimble vsix    # Build the extension
+code --install-extension harding-lang-*.vsix</code></pre>
+                <p>Features:</p>
+                <ul style="margin-top: 1rem; margin-left: 1.5rem;">
+                    <li><strong>Syntax highlighting</strong> with TextMate grammar</li>
+                    <li><strong>Language Server Protocol (LSP)</strong> - Completions, hover info, go to definition, document/workspace symbols</li>
+                    <li><strong>Debug Adapter Protocol (DAP)</strong> - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions</li>
+                    <li>Comment toggling, bracket matching, code folding</li>
+                </ul>
             </div>
         </div>
     </section>

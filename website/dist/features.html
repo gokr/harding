@@ -46,13 +46,13 @@
 
             <div class="feature-detail">
                 <div class="feature-text">
-                    <h3>Pure Smalltalk Semantics</h3>
+                    <h3>Smalltalk Semantics</h3>
                     <p>Harding preserves the essence of Smalltalk:</p>
                     <ul>
                         <li><strong>Everything is an object</strong> - Numbers, strings, blocks, classes</li>
                         <li><strong>Everything happens via message passing</strong> - No function calls, only messages</li>
                         <li><strong>Late binding</strong> - Method lookup happens at message send time</li>
-                        <li><strong>Blocks with non-local returns</strong> - True closures with <code>^</code> return</li>
+                        <li><strong>Blocks with non-local returns</strong> - True lexical closures with <code>^</code> return</li>
                     </ul>
                 </div>
                 <div class="feature-code">
@@ -102,9 +102,10 @@ z := x + y              <span class="comment"># But periods work too</span>
                     <h3>Class-Based with Multiple Inheritance</h3>
                     <p>Create classes dynamically with slots and methods:</p>
                     <ul>
-                        <li>Dynamic class creation with <code>derive:</code></li>
+                        <li><code>derive:</code> for class creation with slots</li>
+                        <li><code>deriveWithAccessors:</code> for automatic getter/setter generation</li>
                         <li>Direct slot access for O(1) performance</li>
-                        <li>Multiple inheritance with conflict detection</li>
+                        <li>Multiple inheritance with automatic conflict detection</li>
                         <li>Qualified and unqualified super sends</li>
                     </ul>
                 </div>
@@ -176,53 +177,111 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
 
             <div class="feature-detail reverse" style="margin-top: 3rem;">
                 <div class="feature-text">
-                    <h3>Full Constructor Syntax</h3>
-                    <p>Create classes with multiple parents, slots, and methods in one call:</p>
+                    <h3>Automatic Accessors</h3>
+                    <p>Create classes with auto-generated getters and setters:</p>
                     <ul>
-                        <li><code>derive:</code> - Initial slots</li>
-                        <li><code>parents:</code> - Additional parent classes</li>
-                        <li><code>slots:</code> - Extra slots</li>
-                        <li><code>methods:</code> - Method dictionary</li>
+                        <li><code>deriveWithAccessors:</code> - Generate getters and setters for all slots</li>
+                        <li>Getter: <code>slotName</code> returns the value</li>
+                        <li>Setter: <code>slotName:</code> sets the value</li>
                     </ul>
-                    <h3>Class Construction</h3>
-                    <p>For complete control with selective getters and setters:</p>
+
+                    <h3>Selective Accessors</h3>
+                    <p>For complete control over which slots get accessors:</p>
                     <ul>
-                        <li><code>derive:parents:slots:getters:setters:methods:</code> - Full control</li>
-                        <li><code>getters:</code> - Slots to generate getters for</li>
-                        <li><code>setters:</code> - Slots to generate setters for</li>
+                        <li><code>derive:getters:setters:</code> - Specify which slots get getters/setters</li>
+                        <li>Generate getters for both, setter only for specific slots</li>
                     </ul>
-                    <h3>Mixin Class</h3>
-                    <p>For slotless composition, use the <code>Mixin</code> class - ideal for shared behavior without state.</p>
+
                     <h3>Conflict Detection</h3>
-                    <p>When multiple parents define the same method, Harding detects conflicts automatically.</p>
+                    <p>When multiple parents define the same method, Harding detects conflicts at class definition time. Override conflicting methods in the child class to resolve.</p>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Advanced Class Creation</div>
-                        <pre><code><span class="comment"># Full constructor syntax</span>
-<span class="type">MyClass</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(slot1 slot2)
-    parents: <span class="keyword">#</span>(<span class="type">Parent1</span> <span class="type">Parent2</span>)
-    slots: <span class="keyword">#</span>(extraSlot)
-    methods: [
-        <span class="keyword">self</span><span class="operator">>></span>method1 [ ... ]
-        <span class="keyword">self</span><span class="operator">>></span>method2 [ ... ]
-    ]
+                        <div class="code-header">Accessors and Conflict Resolution</div>
+                        <pre><code><span class="comment"># Automatic accessors</span>
+<span class="type">Person</span> := <span class="type">Object</span> deriveWithAccessors: <span class="keyword">#</span>(name age)
+p := <span class="type">Person</span> new
+p name: <span class="string">"Alice"</span>    <span class="comment"># Auto-generated setter</span>
+p age: <span class="number">30</span>
+p name             <span class="comment"># Auto-generated getter</span>
 
-<span class="comment"># Class Construction with selective accessors</span>
-<span class="type">MyClass</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(slot1 slot2)
-    parents: <span class="keyword">#</span>(<span class="type">Parent1</span> <span class="type">Parent2</span>)
-    slots: <span class="keyword">#</span>(extraSlot)
-    getters: <span class="keyword">#</span>(slot1 extraSlot)
-    setters: <span class="keyword">#</span>(slot2)
-    methods: [
-        <span class="keyword">self</span><span class="operator">>></span>method1 [ ... ]
-    ]
+<span class="comment"># Selective accessors</span>
+<span class="type">Account</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(balance owner)
+                       getters: <span class="keyword">#</span>(balance owner)
+                       setters: <span class="keyword">#</span>(balance)
 
-<span class="comment"># Mixin for slotless composition</span>
-<span class="type">Comparable</span> := <span class="type">Mixin</span> derive: <span class="keyword">#</span>()
-<span class="type">Comparable</span> <span class="operator">>></span> <span class="operator">&lt;</span> other [
-    <span class="operator">&lt;</span>primitive: primitiveLessThan<span class="operator">&gt;</span>
-]</code></pre>
+<span class="comment"># Conflict detection</span>
+<span class="type">Parent1</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(a)
+<span class="type">Parent1</span> <span class="operator">>></span> foo [ ^ <span class="string">"foo1"</span> ]
+
+<span class="type">Parent2</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(b)
+<span class="type">Parent2</span> <span class="operator">>></span> foo [ ^ <span class="string">"foo2"</span> ]
+
+<span class="comment"># Override first, then add parents</span>
+<span class="type">Child</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x)
+<span class="type">Child</span> <span class="operator">>></span> foo [ ^ <span class="string">"child"</span> ]
+<span class="type">Child</span> addSuperclass: <span class="type">Parent1</span>
+<span class="type">Child</span> addSuperclass: <span class="type">Parent2</span></code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Mixins</h3>
+                    <p>Mixin is a slotless class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots:</p>
+
+                    <h4>Built-in Mixins</h4>
+                    <table class="comparison-table" style="margin-top: 1rem;">
+                        <thead>
+                            <tr>
+                                <th>Mixin</th>
+                                <th>Requires</th>
+                                <th>Provides</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>Comparable</code></td>
+                                <td><code>compareTo:</code></td>
+                                <td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>between:and:</code>, <code>min:</code>, <code>max:</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>Iterable</code></td>
+                                <td><code>do:</code></td>
+                                <td><code>collect:</code>, <code>select:</code>, <code>reject:</code>, <code>detect:</code>, <code>inject:into:</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>Printable</code></td>
+                                <td><code>printOn:</code></td>
+                                <td><code>printString</code>, <code>print</code>, <code>printCr</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>Synchronizable</code></td>
+                                <td>—</td>
+                                <td><code>critical:</code>, <code>acquire</code>, <code>release</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Mixins</div>
+                        <pre><code><span class="comment"># Create a mixin</span>
+<span class="type">Comparable</span> := <span class="type">Mixin</span> derive.
+<span class="type">Comparable</span> <span class="operator">>></span> &lt; other [ ^ (self compareTo: other) &lt; 0 ]
+<span class="type">Comparable</span> <span class="operator">>></span> &gt; other [ ^ (self compareTo: other) &gt; 0 ]
+<span class="type">Comparable</span> <span class="operator">>></span> between: min and: max [
+    ^ (self &gt;= min) and: [ self &lt;= max ]
+]
+
+<span class="comment"># Add mixin to any class</span>
+<span class="type">Point</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x y)
+<span class="type">Point</span> addSuperclass: <span class="type">Comparable</span>
+<span class="type">Point</span> <span class="operator">>></span> compareTo: other [
+    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
+]
+<span class="comment"># Now Point supports &lt;, &gt;, between:and:, etc.</span></code></pre>
                     </div>
                 </div>
             </div>
@@ -237,16 +296,39 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
             <div class="feature-detail">
                 <div class="feature-text">
                     <h3>Smalltalk-Style Exception Handling</h3>
-                    <p>Resumable exceptions with full signal point preservation:</p>
-                    <ul>
-                        <li><code>on:do:</code> - Exception handler installation</li>
-                        <li><code>signal</code> - Raise an exception</li>
-                        <li><code>resume</code> / <code>resume:</code> - Resume execution</li>
-                        <li><code>retry</code> - Re-execute protected block</li>
-                        <li><code>pass</code> - Delegate to outer handler</li>
-                        <li><code>return:</code> - Return from on:do: expression</li>
-                    </ul>
-                    <p>Unlike traditional exceptions, Harding preserves the signal point, allowing execution to continue from where the exception was raised.</p>
+                    <p>Harding implements <strong>Smalltalk-style resumable exceptions</strong> with full signal point preservation. Unlike traditional exception handling that unwinds the stack, Harding's exceptions can be resumed, retried, or delegated.</p>
+
+                    <h4>Exception Actions</h4>
+                    <table class="comparison-table" style="margin-top: 1rem;">
+                        <thead>
+                            <tr>
+                                <th>Message</th>
+                                <th>Effect</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>ex resume</code></td>
+                                <td>Restore signal point, <code>signal</code> returns nil</td>
+                            </tr>
+                            <tr>
+                                <td><code>ex resume: value</code></td>
+                                <td>Restore signal point, <code>signal</code> returns the given value</td>
+                            </tr>
+                            <tr>
+                                <td><code>ex retry</code></td>
+                                <td>Re-execute the protected block from the beginning</td>
+                            </tr>
+                            <tr>
+                                <td><code>ex pass</code></td>
+                                <td>Delegate to the next outer matching handler</td>
+                            </tr>
+                            <tr>
+                                <td><code>ex return: value</code></td>
+                                <td>Return value from the <code>on:do:</code> expression</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
@@ -255,13 +337,13 @@ p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code>
 result := [
     riskyOperation value
 ] on: Error do: [:ex |
-    Transcript showCr: "Caught!".
-    ex resume: 42
+    Transcript showCr: "Caught: " + ex message.
+    ex resume: 42  <span class="comment"># Resume with a value</span>
 ]
 
 <span class="comment"># Resume execution</span>
-[
-    10 / 0
+result := [
+    10 // 0
 ] on: DivisionByZero do: [:ex |
     ex resume: 0
 ]
@@ -441,7 +523,7 @@ obj respondsTo: #do:    <span class="comment"># Check method existence</span></c
         <div class="container">
             <h2 class="section-title">Runtime Features</h2>
 
-            <div class="feature-cards">
+            <div class="feature-cards runtime-feature-cards">
                 <div class="feature-card-large">
                     <div class="feature-icon-large">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -463,6 +545,32 @@ worker resume
 worker terminate</code></pre>
                     <p><strong>Process States:</strong> ready, running, blocked, suspended, terminated</p>
                     <p><strong>Scheduler:</strong> <code>Processor yield</code>, <code>Scheduler listProcesses</code>, <code>process priority:</code></p>
+                </div>
+
+                <div class="feature-card-large">
+                    <div class="feature-icon-large">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <path d="M8 12h8M8 8h8M8 16h5"/>
+                        </svg>
+                    </div>
+                    <h3>Synchronization Primitives</h3>
+                    <p>Coordinate between green processes using built-in primitives:</p>
+                    <pre><code># Monitor - mutual exclusion
+monitor := Monitor new
+monitor critical: [
+    sharedResource := sharedResource + 1
+]
+
+# SharedQueue - producer/consumer
+queue := SharedQueue new
+queue nextPut: "item"     # Producer
+item := queue next        # Consumer (blocks if empty)
+
+# Semaphore - counting/binary locks
+sem := Semaphore forMutualExclusion
+sem wait
+sem signal</code></pre>
                 </div>
 
                 <div class="feature-card-large">
@@ -666,13 +774,15 @@ process priority   # Scheduling priority</code></pre>
                 <div class="feature-card-large">
                     <h3>Implemented</h3>
                     <ul>
-                        <li>Functional interpreter with green threads</li>
+                        <li>Functional interpreter with green threads and synchronization primitives</li>
                         <li>MIC/PIC method caching for performance</li>
-                        <li>Smalltalk-style resumable exceptions</li>
-                        <li>GTK IDE (Bona) for graphical development</li>
-                        <li>VSCode extension with syntax highlighting</li>
-                        <li>Granite compiler for native binaries</li>
-                        <li>BitBarrel integration for persistent storage</li>
+                        <li>Smalltalk-style resumable exceptions with signal point preservation</li>
+                        <li>GTK IDE (Bona) with Workspace, System Browser, and Inspector</li>
+                        <li>VSCode extension with full LSP and DAP support</li>
+                        <li>Granite compiler for native binary compilation</li>
+                        <li>BitBarrel integration for persistent storage (optional)</li>
+                        <li>Automatic accessor generation (<code>deriveWithAccessors:</code>)</li>
+                        <li>Collections: Array, Table, Set, Interval, SortedCollection</li>
                     </ul>
                 </div>
                 <div class="feature-card-large">
@@ -680,8 +790,6 @@ process priority   # Scheduling priority</code></pre>
                     <ul>
                         <li>Actor-based shared-nothing concurrency</li>
                         <li>Enhanced standard library</li>
-                        <li>Package manager and ecosystem</li>
-                        <li>AI integration hooks</li>
                     </ul>
                 </div>
             </div>

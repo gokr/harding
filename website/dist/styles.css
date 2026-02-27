@@ -51,6 +51,16 @@
     --color-border: #2d3a52;
     --color-border-light: #3d4d6a;
 
+    --syntax-comment: #7f8ea3;
+    --syntax-type: #67d8ef;
+    --syntax-keyword: #f7c873;
+    --syntax-selector: #ff9f82;
+    --syntax-string: #9be89b;
+    --syntax-number: #ffd27d;
+    --syntax-symbol: #d59fff;
+    --syntax-operator: #f9cf6d;
+    --syntax-punctuation: #b9c6da;
+
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
@@ -512,13 +522,90 @@ blockquote {
     line-height: 1.7;
 }
 
+.code-body pre code {
+    display: block;
+}
+
 /* Syntax Highlighting */
-.comment { color: var(--color-text-muted); font-style: italic; }
-.type { color: var(--color-accent-cyan); }
-.keyword { color: var(--color-accent-pink); }
-.string { color: var(--color-accent-green); }
-.number { color: var(--color-accent-yellow); }
-.operator { color: var(--color-accent-orange); }
+pre.syntax-enhanced {
+    position: relative;
+    counter-reset: code-line;
+}
+
+code.syntax-enhanced {
+    display: block;
+}
+
+code.syntax-enhanced .code-line {
+    display: block;
+    position: relative;
+    min-height: 1.7em;
+    padding-left: 0.75rem;
+    border-left: 1px solid rgba(61, 77, 106, 0.55);
+}
+
+code.syntax-enhanced .code-line:hover {
+    background: rgba(232, 184, 74, 0.06);
+}
+
+pre.show-line-numbers code.syntax-enhanced .code-line {
+    padding-left: 3.5rem;
+}
+
+pre.show-line-numbers code.syntax-enhanced .code-line::before {
+    counter-increment: code-line;
+    content: counter(code-line);
+    position: absolute;
+    left: 0;
+    width: 2.5rem;
+    text-align: right;
+    color: rgba(127, 142, 163, 0.8);
+    font-size: 12px;
+}
+
+.hl-comment,
+.comment {
+    color: var(--syntax-comment);
+    font-style: italic;
+}
+
+.hl-type,
+.type {
+    color: var(--syntax-type);
+}
+
+.hl-keyword,
+.keyword {
+    color: var(--syntax-keyword);
+    font-weight: 500;
+}
+
+.hl-selector {
+    color: var(--syntax-selector);
+}
+
+.hl-string,
+.string {
+    color: var(--syntax-string);
+}
+
+.hl-number,
+.number {
+    color: var(--syntax-number);
+}
+
+.hl-symbol {
+    color: var(--syntax-symbol);
+}
+
+.hl-operator,
+.operator {
+    color: var(--syntax-operator);
+}
+
+.hl-punctuation {
+    color: var(--syntax-punctuation);
+}
 
 .scroll-indicator {
     position: absolute;
@@ -1645,8 +1732,12 @@ section {
 
 .feature-cards {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 24px;
+}
+
+.runtime-feature-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .feature-card-large {
@@ -1654,6 +1745,7 @@ section {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: 32px;
+    min-width: 0;
 }
 
 .feature-icon-large {
