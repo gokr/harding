@@ -99,3 +99,19 @@ suite "Exception Handling":
       Result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex | ex resume: 99 ]
     """)
     check(result[0][^1].intVal == 99)
+
+  test "DivisionByZero catches integer modulo by zero":
+    let result = interp.evalStatements("""
+      Result := [ 10 % 0 ] on: DivisionByZero do: [ :ex | ex resume: 7 ]
+    """)
+    check(result[0][^1].intVal == 7)
+
+  test "pass skips non-matching outer handler":
+    let result = interp.evalStatements("""
+      Result := [
+        [
+          [ Error signal: "pass route" ] on: Error do: [ :ex | ex pass ]
+        ] on: Notification do: [ :ex | "notification outer" ]
+      ] on: Error do: [ :ex | "error outer" ]
+    """)
+    check(result[0][^1].strVal == "error outer")
