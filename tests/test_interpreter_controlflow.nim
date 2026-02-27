@@ -4,10 +4,9 @@
 # Tests conditionals, loops, and times repeat
 #
 
-import std/[unittest, tables, strutils]
+import std/unittest
 import ../src/harding/core/types
-import ../src/harding/parser/[lexer, parser]
-import ../src/harding/interpreter/[vm, objects]
+import ../src/harding/interpreter/vm
 
 suite "Interpreter: Conditionals":
   var interp: Interpreter

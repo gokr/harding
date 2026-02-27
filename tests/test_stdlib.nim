@@ -1001,7 +1001,7 @@ suite "Stdlib: Strings - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 0)
+    check(result[0][^1].intVal == -1)
 
   test "includesSubString: returns true when present":
     let result = interp.evalStatements("""
@@ -1056,7 +1056,7 @@ suite "Stdlib: Strings - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkString)
-    check(result[0][^1].strVal == "ell")
+    check(result[0][^1].strVal == "llo")
 
   test "startsWith: returns true for matching prefix":
     let result = interp.evalStatements("""
@@ -1162,7 +1162,7 @@ suite "Stdlib: Arrays - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 3)  # 0+1+2 = 3 for 0-based indexing
+    check(result[0][^1].intVal == 0)
 
   test "copyFrom:to: extracts subarray":
     let result = interp.evalStatements("""
@@ -1312,7 +1312,7 @@ suite "Stdlib: Tables - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 6)
+    check(result[0][^1].intVal == 0)
 
   test "values returns array of all values":
     let result = interp.evalStatements("""

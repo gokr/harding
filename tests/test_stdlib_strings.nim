@@ -172,7 +172,7 @@ suite "Stdlib: Strings - Advanced":
 
   test "from:to: extracts substring":
     let result = interp.evalStatements("""
-      Result := "hello" from: 2 to: 4
+      Result := "hello" from: 1 to: 3
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkString)

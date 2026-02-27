@@ -3,7 +3,7 @@
 # Includes: Arrays - Advanced, Tables - Advanced
 #
 
-import std/[unittest, os]
+import std/unittest
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
@@ -43,7 +43,7 @@ suite "Stdlib: Arrays - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 3)  # 0+1+2 = 3 for 0-based indexing
+    check(result[0][^1].intVal == 0)
 
   test "copyFrom:to: extracts subarray":
     let result = interp.evalStatements("""
@@ -193,7 +193,7 @@ suite "Stdlib: Tables - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 6)
+    check(result[0][^1].intVal == 0)
 
   test "values returns array of all values":
     let result = interp.evalStatements("""

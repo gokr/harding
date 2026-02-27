@@ -208,7 +208,7 @@ suite "Reflection: allInstanceMethods":
       methods := Widget allInstanceMethods
       found := false.
       methods do: [:m |
-        m = "render" ifTrue: [ found := true ]
+        m = #render ifTrue: [ found := true ]
       ].
       Result := found
     """)
