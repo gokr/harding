@@ -50,10 +50,10 @@ Two execution models: a stackless VM written in Nim and the Granite compiler for
 No image files. Source lives in `.hrd` files you can version control, diff, and edit with any editor.
 
 ### Multiple Inheritance
-Experimental support for multiple inheritance with conflict detection.
+Multiple inheritance with automatic conflict detection at class definition time.
 
 ### Green Threads
-Cooperative multitasking with first-class Process objects. Built-in scheduler with round-robin execution.
+Cooperative multitasking with first-class Process objects. Built-in scheduler with Monitor, SharedQueue, and Semaphore synchronization.
 
 ### Smalltalk-Style Exceptions
 Resumable exception handling with `on:do:`, `signal`, `resume`, `retry`, and `pass`. Full signal point preservation.
@@ -63,6 +63,9 @@ Granite compiler produces standalone native binaries. No runtime dependencies, t
 
 ### Nim Interop
 Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.
+
+### IDE Tooling
+VSCode extension with full LSP and DAP support. GTK-based Bona IDE with Workspace, System Browser, and Inspector - all written in Harding.
 
 ## Get Started
 

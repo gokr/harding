@@ -84,56 +84,74 @@ ColoredPoint addSuperclass: Comparable
 ColoredPoint addSuperclass: Printable
 ```
 
-**Full Constructor Syntax:**
+**Automatic Accessors:**
 
 ```harding
-# Create a class with multiple parents and methods in one call
-MyClass := Object derive: #(slot1 slot2)
-    parents: #(Parent1 Parent2)
-    slots: #(extraSlot)
-    methods: [
-        self>>method1 [ ... ]
-        self>>method2 [ ... ]
-    ]
+# Create a class with auto-generated getters and setters
+Person := Object deriveWithAccessors: #(name age)
+p := Person new
+p name: "Alice"    # Auto-generated setter
+p age: 30
+p name             # Auto-generated getter - returns "Alice"
 ```
 
-**Class Construction:**
-
-For complete control with selective getters and setters:
+**Selective Accessors:**
 
 ```harding
-# derive:parents:slots:getters:setters:methods: - full control
-MyClass := Object derive: #(slot1 slot2)
-    parents: #(Parent1 Parent2)
-    slots: #(extraSlot)
-    getters: #(slot1 extraSlot)
-    setters: #(slot2)
-    methods: [
-        self>>method1 [ ...]
-        self>>method2 [ ...]
-    ]
-```
-
-**Mixin Class:**
-
-For slotless composition, use the `Mixin` class:
-
-```harding
-# Mixin is a slotless class for shared behavior
-Comparable := Mixin derive: #()
-Comparable >> < other [ <primitive: primitiveLessThan> ]
-Comparable >> > other [ <primitive: primitiveGreaterThan> ]
+# Generate getters for both, setter only for balance
+Account := Object derive: #(balance owner)
+                       getters: #(balance owner)
+                       setters: #(balance)
 ```
 
 **Conflict Detection:**
 
-When multiple parents define the same method, Harding detects conflicts:
+When multiple parents define the same method, Harding detects conflicts at class definition time. Override conflicting methods in the child class to resolve:
 
 ```harding
-A := Object derive: #() methods: #{ #foo -> [ ^ 'A' ] }
-B := Object derive: #() methods: #{ #foo -> [ ^ 'B' ] }
-C := Object derive: #() parents: #(A B)  # Conflict detected on #foo
+Parent1 := Object derive: #(a)
+Parent1 >> foo [ ^ "foo1" ]
+
+Parent2 := Object derive: #(b)
+Parent2 >> foo [ ^ "foo2" ]
+
+# Override first, then add parents
+Child := Object derive: #(x)
+Child >> foo [ ^ "child" ]
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
 ```
+
+#### Mixins
+
+Mixin is a slotless class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots:
+
+```harding
+# Create a mixin (naming convention: prefix with T)
+Comparable := Mixin derive.
+Comparable >> < other [ ^ (self compareTo: other) < 0 ]
+Comparable >> > other [ ^ (self compareTo: other) > 0 ]
+Comparable >> between: min and: max [
+    ^ (self >= min) and: [ self <= max ]
+]
+
+# Add mixin to any class
+Point := Object derive: #(x y)
+Point addSuperclass: Comparable
+Point >> compareTo: other [
+    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
+]
+# Now Point supports <, >, between:and:, etc.
+```
+
+**Built-in Mixins:**
+
+| Mixin | Requires | Provides |
+|-------|----------|----------|
+| `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:` |
+| `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:` |
+| `Printable` | `printOn:` | `printString`, `print`, `printCr` |
+| `Synchronizable` | — | `critical:`, `acquire`, `release` |
 
 ## Advanced Features
 
@@ -148,7 +166,7 @@ Harding implements **Smalltalk-style resumable exceptions** with full signal poi
 result := [
     riskyOperation value
 ] on: Error do: [:ex |
-    Transcript showCr: "Caught: " + ex messageText.
+    Transcript showCr: "Caught: " + ex message.
     ex resume: 42  # Resume with a value
 ]
 ```
@@ -232,7 +250,7 @@ Array>>at: index <primitive primitiveAt: index>
 
 # Primitive with validation wrapper
 Array>>at: index [
-    (index < 1 or: [index > self size]) ifTrue: [
+    (index < 0 or: [index >= self size]) ifTrue: [
         self error: "Index out of bounds"
     ].
     ^ <primitive primitiveAt: index>
@@ -244,7 +262,7 @@ Array>>at: index [
 | Primitive | Description |
 |-----------|-------------|
 | `primitiveClone` | Create a shallow copy of an object |
-| `primitiveAt:` | Access element at index (1-based) |
+| `primitiveAt:` | Access element at index (0-based) |
 | `primitiveAt:put:` | Set element at index |
 | `primitiveIdentity:` | Check object identity |
 | `primitiveCCall:with:` | Call C library functions |
@@ -259,7 +277,7 @@ String>>size <primitive primitiveStringSize>
 
 # Wrapper with error handling
 String>>at: index [
-    (index < 1 or: [index > self size]) ifTrue: [
+    (index < 0 or: [index >= self size]) ifTrue: [
         self error: "Index out of bounds"
     ].
     ^ <primitive primitiveStringAt: index>
@@ -385,10 +403,11 @@ Harding provides a `Root` class that serves as the proxy/DNU base:
 
 ```harding
 # Root is the ultimate parent class
-Object superclass   # nil
+# Object and Mixin both derive from Root
+Object superclass   # Root
 
 # Mixin is a slotless class for shared behavior
-Comparable := Mixin derive: #()
+Comparable := Mixin derive
 ```
 
 **Object Inspection:**
@@ -455,6 +474,28 @@ Processor activeProcess
 process priority: 5
 ```
 
+### Synchronization Primitives
+
+Coordinate between green processes using built-in primitives:
+
+```harding
+# Monitor - mutual exclusion
+monitor := Monitor new
+monitor critical: [
+    sharedResource := sharedResource + 1
+]
+
+# SharedQueue - producer/consumer
+queue := SharedQueue new
+queue nextPut: "item"     # Producer
+item := queue next        # Consumer (blocks if empty)
+
+# Semaphore - counting/binary locks
+sem := Semaphore forMutualExclusion
+sem wait
+sem signal
+```
+
 ### Stackless VM
 
 Each Process runs in its own stackless VM, enabling:
@@ -499,12 +540,12 @@ git commit -m "Add feature"
 
 ### VSCode Extension
 
-Syntax highlighting and basic IDE support:
+Full IDE support for `.hrd` files:
 
-- Syntax highlighting for `.hrd` files
-- Comment toggling
-- Bracket matching
-- Code folding
+- **Syntax highlighting** with TextMate grammar
+- **Language Server Protocol (LSP)** - Completions, hover info, go to definition, document/workspace symbols
+- **Debug Adapter Protocol (DAP)** - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions
+- Comment toggling, bracket matching, code folding
 
 ## Standard Library
 
@@ -533,8 +574,11 @@ Syntax highlighting and basic IDE support:
 - `size`, `at:`, `println`
 
 **Collections**
-- **Array** - Ordered collection `#(1 2 3)`
+- **Array** - Ordered collection `#(1 2 3)` (0-based indexing)
 - **Table** - Dictionary `#{"key" -> "value"}`
+- **Set** - Unordered unique-element collection with union, intersection, difference
+- **Interval** - Numeric range: `1 to: 10`, `1 to: 10 by: 2`
+- **SortedCollection** - Automatically sorted collection with configurable sort blocks
 - Methods: `do:`, `collect:`, `select:`, `detect:`, `inject:into:`
 
 ### Collection Examples
@@ -553,7 +597,7 @@ numbers do: [:n | n println]
 squares := numbers collect: [:n | n * n]
 
 # Filter
-evens := numbers select: [:n | (n % 2) = 0]
+evens := numbers select: [:n | (n \\ 2) = 0]
 
 # Reduce
 sum := numbers inject: 0 into: [:acc :n | acc + n]
@@ -629,7 +673,7 @@ Array>>at: index <primitive primitiveAt: index>
 
 # With validation
 Array>>at: index [
-    (index < 1 or: [index > self size]) ifTrue: [
+    (index < 0 or: [index >= self size]) ifTrue: [
         self error: "Index out of bounds"
     ].
     ^ <primitive primitiveAt: index>
@@ -730,13 +774,15 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 ## Current Status: v0.6.0
 
 **Implemented:**
-- Functional interpreter with green threads
+- Functional interpreter with green threads and synchronization primitives
 - MIC/PIC method caching for performance
-- Smalltalk-style resumable exceptions
-- GTK IDE (Bona) for graphical development
-- VSCode extension with syntax highlighting
+- Smalltalk-style resumable exceptions with signal point preservation
+- GTK IDE (Bona) with Workspace, Transcript, System Browser, and Inspector
+- VSCode extension with full LSP and DAP support
 - Granite compiler for native binary compilation
 - BitBarrel integration for persistent storage (optional)
+- Automatic accessor generation (`deriveWithAccessors:`)
+- Collections: Array, Table, Set, Interval, SortedCollection
 
 **In Progress:**
 - Actor-based shared-nothing concurrency

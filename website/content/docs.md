@@ -12,10 +12,10 @@ git clone https://github.com/gokr/harding.git
 cd harding
 
 # Build and put binaries in current directory
-nimble local
+nimble harding
 
-# Or install to ~/.nimble/bin
-nimble install
+# Or install to ~/.local/bin
+nimble install_harding
 ```
 
 Requirements:
@@ -126,8 +126,8 @@ Exception Handling:
 ```harding
 # Resumable exceptions
 result := [
-    10 / 0
-] on: ZeroDivideError do: [:ex |
+    10 // 0
+] on: DivisionByZero do: [:ex |
     Transcript showCr: "Cannot divide by zero!".
     ex resume: 0  # Return 0 instead
 ].
@@ -197,16 +197,33 @@ nil isNil     # true
 
 ## VSCode Extension
 
-Syntax highlighting for `.hrd` files:
+Full IDE support for `.hrd` files:
 
 ```bash
-code --install-extension harding-lang-0.1.0.vsix
+nimble vsix    # Build the extension
+code --install-extension harding-lang-*.vsix
 ```
 
 Features:
-- Syntax highlighting
-- Comment toggling
-- Bracket matching
+- **Syntax highlighting** with TextMate grammar
+- **Language Server Protocol (LSP)** - Completions, hover info, go to definition, document/workspace symbols
+- **Debug Adapter Protocol (DAP)** - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions
+- Comment toggling, bracket matching, code folding
+
+## Bona GTK IDE
+
+A graphical IDE written in Harding itself:
+
+```bash
+nimble bona    # Build the IDE
+./bona         # Launch
+```
+
+Features:
+- **Workspace** - Code editor with Do It / Print It / Inspect It
+- **Transcript** - Output console
+- **System Browser** - Four-pane class/method browser
+- **Inspector** - Object slot and property viewer
 
 ## Environment Variables
 
