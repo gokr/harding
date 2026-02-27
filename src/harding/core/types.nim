@@ -973,7 +973,6 @@ proc newInstance*(cls: Class): Instance =
     result.slots[i] = nilValue()
   result.isNimProxy = false
   result.nimValue = NimValueDefault
-  debug("newInstance: created ", cls.name, " with ", result.slots.len, " slots")
 
 proc newIntInstance*(cls: Class, value: int): Instance =
   ## Create a new Integer instance with direct value storage

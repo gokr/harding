@@ -20,6 +20,9 @@ suite "Exception Handling":
     interp.workQueue.setLen(0)
     # Clear exception context registry to prevent interference
     exceptionContextRegistry.setLen(0)
+    # Clear activation stack to prevent captured variable leakage between tests
+    interp.activationStack.setLen(0)
+    interp.currentActivation = nil
 
   test "basic on:do: catches exception":
     let result = interp.evalStatements("""

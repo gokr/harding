@@ -356,13 +356,12 @@ proc finalizeClass*(cls: Class) =
 proc rebuildAllMethodTables*() =
   ## Rebuild all method tables for all known classes
   ## Forces immediate rebuild - use sparingly, prefer lazy rebuilding
+  ## IMPORTANT: Must rebuild ALL descendants to ensure inherited class methods are propagated
   if rootClass != nil:
-    rebuildAllTables(rootClass)
-    rootClass.methodsDirty = false
+    rebuildAllDescendants(rootClass)
   # Also rebuild Object hierarchy if different from Root
   if objectClass != nil and objectClass != rootClass:
-    rebuildAllTables(objectClass)
-    objectClass.methodsDirty = false
+    rebuildAllDescendants(objectClass)
 
 # ============================================================================
 # AST Rewriter for Slot Access
@@ -1939,13 +1938,25 @@ proc invalidateSubclasses*(cls: Class) =
 
 proc rebuildAllTables*(cls: Class) =
   ## Rebuild inherited method tables
+  debug("rebuildAllTables: class=", cls.name, " methodsDirty=", cls.methodsDirty, " superclasses.len=", cls.superclasses.len)
   ## Pre-size tables to avoid enlargement overhead
   let ownMethodCount = cls.methods.len
   let parentMethodCount = if cls.superclasses.len > 0 and cls.superclasses[0].allMethods.len > 0: cls.superclasses[0].allMethods.len else: 0
-  let expectedSize = max(ownMethodCount + parentMethodCount, 16)  # At least 16 to avoid tiny tables
-  
+  let expectedSize = max(ownMethodCount + parentMethodCount, 16)
+
   var allMethods = initTable[string, BlockNode](expectedSize)
   var allClassMethods = initTable[string, BlockNode](expectedSize)
+  
+  # Also inherit slot names from parents
+  var allSlotNames = cls.slotNames
+  
+  for parent in cls.superclasses:
+    for slotName in parent.allSlotNames:
+      if slotName notin allSlotNames:
+        allSlotNames.add(slotName)
+
+  cls.allSlotNames = allSlotNames
+  cls.hasSlots = allSlotNames.len > 0
 
   # For the class itself, use directly-defined methods only
   for sel, m in cls.methods:
@@ -1963,15 +1974,6 @@ proc rebuildAllTables*(cls: Class) =
       for sel, m in c.allClassMethods:
         if sel notin allClassMethods:
           allClassMethods[sel] = m
-
-  # Also inherit slot names from parents
-  var allSlotNames = cls.slotNames
-  for parent in cls.superclasses:
-    for slotName in parent.allSlotNames:
-      if slotName notin allSlotNames:
-        allSlotNames.add(slotName)
-  cls.allSlotNames = allSlotNames
-  cls.hasSlots = allSlotNames.len > 0
 
   # Rebuild tables
   cls.allMethods = allMethods

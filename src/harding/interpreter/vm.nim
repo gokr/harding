@@ -254,16 +254,13 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
 
   # First check current activation (for block execution or method locals)
   if activation != nil:
-    # Check captured environment FIRST - captured variables from outer lexical scope
-    # should take precedence over local temporaries in the current activation
-    # This is the key difference: blocks capture variables from where they were defined,
-    # not where they're executed. IMPORTANT: Only apply to blocks, NOT methods.
-    # Methods should access slots on the receiver, not captured lexical variables.
-    if activation.currentMethod != nil and activation.currentMethod.capturedEnvInitialized and activation.currentMethod.capturedEnv.len > 0 and not activation.currentMethod.isMethod:
-      if name in activation.currentMethod.capturedEnv:
-        let value = activation.currentMethod.capturedEnv[name].value
-        debug("Found variable in captured environment: ", name, " = ", value.toString())
-        return (true, value)
+    # Check locals FIRST - this includes block parameters which should take
+    # precedence over captured variables from outer scope. This is critical
+    # for exception handlers where :ex parameter shadows any captured 'ex'.
+    if name in activation.locals:
+      let val = activation.locals[name]
+      debug("lookupVariable: found ", name, " in locals kind=", $val.kind)
+      return (true, val)
 
     # Check capturedVars on the activation - these are shared MutableCells for
     # variables captured by child blocks. Reading from the cell ensures we see
@@ -273,11 +270,16 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
       debug("lookupVariable: found ", name, " in capturedVars kind=", $val.kind)
       return (true, val)
 
-    # Then check locals (temporaries defined in this activation)
-    if name in activation.locals:
-      let val = activation.locals[name]
-      debug("lookupVariable: found ", name, " in locals kind=", $val.kind)
-      return (true, val)
+    # Then check captured environment - captured variables from outer lexical scope
+    # should take precedence over local temporaries in the current activation.
+    # This is the key difference: blocks capture variables from where they were defined,
+    # not where they're executed. IMPORTANT: Only apply to blocks, NOT methods.
+    # Methods should access slots on the receiver, not captured lexical variables.
+    if activation.currentMethod != nil and activation.currentMethod.capturedEnvInitialized and activation.currentMethod.capturedEnv.len > 0 and not activation.currentMethod.isMethod:
+      if name in activation.currentMethod.capturedEnv:
+        let value = activation.currentMethod.capturedEnv[name].value
+        debug("Found variable in captured environment: ", name, " = ", value.toString())
+        return (true, value)
 
     # If this is a block activation and variable not found yet, check globals BEFORE
     # walking up the chain. This prevents blocks from inadvertently capturing variables
@@ -1300,93 +1302,62 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       if msgValue.kind == vkString:
         message = msgValue.strVal
 
-  # Walk exceptionHandlers stack from top (newest) to bottom
+  # Search for matching handler from newest to oldest
   for i in countdown(interp.exceptionHandlers.len - 1, 0):
     let handler = interp.exceptionHandlers[i]
-
-    # Check if exception isKindOf: handler's exceptionClass
     if isKindOf(self.class, handler.exceptionClass):
-      debug("primitiveSignal: found matching handler at index ", i)
-
-      # Debug: print current work queue state
-      debug("primitiveSignal: workQueue.len = ", interp.workQueue.len)
-      for idx, f in interp.workQueue:
-        debug("  WQ[", idx, "] = ", f.kind)
-      debug("primitiveSignal: activationStack.len = ", interp.activationStack.len)
-      for idx, act in interp.activationStack:
-        let methSelector = if act.currentMethod != nil and act.currentMethod.isMethod: 
-                             act.currentMethod.selector 
-                           elif act.currentMethod != nil: 
-                             "(block " & $act.currentMethod.parameters.len & " args)"
-                           else: 
-                             "(unknown)"
-        debug("  AS[", idx, "] = ", methSelector)
-
-          # Create ExceptionContext with full signal point state
-      # Mark captured activations so they are not returned to the pool
+      # Mark captured activations so they are not returned to pools while
+      # exception context may reference them for resume/debugging.
       if interp.currentActivation != nil:
         interp.currentActivation.wasCaptured = true
       if handler.activation != nil:
         handler.activation.wasCaptured = true
+
+      # Capture full signal-point context for resume/debugging.
       let ctx = ExceptionContext(
         signalActivation: interp.currentActivation,
         handlerActivation: handler.activation,
         signaler: interp.currentReceiver,
-        signalerContext: interp.currentActivation,  # TODO: walk sender chain
-        signalWorkQueue: interp.workQueue,  # Copy full work queue
-        signalEvalStack: interp.evalStack,  # Copy full eval stack
+        signalerContext: interp.currentActivation,
+        signalWorkQueue: interp.workQueue,
+        signalEvalStack: interp.evalStack,
         signalActivationDepth: interp.activationStack.len,
-        isResumable: true,  # TODO: check exception class
+        isResumable: true,
         hasBeenResumed: false,
+        outerContext: nil,
         exceptionInstance: self
       )
       registerExceptionContext(ctx)
 
-      # Store context in handler
+      # Record signal metadata on handler for return:/pass/retry/resume.
       interp.exceptionHandlers[i].exceptionInstance = self
       interp.exceptionHandlers[i].signalWorkQueueDepth = interp.workQueue.len
       interp.exceptionHandlers[i].signalEvalStackDepth = interp.evalStack.len
       interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
       interp.exceptionHandlers[i].exceptionContext = ctx
 
-      # SMALLTALK-STYLE: Preserve full activation stack for debugging/resume
-      # Capture snapshot in ExceptionContext for resume/debugger access
-      # Filter work queue to remove wfPopActivation/wfReturnValue frames from signal path
-      # while preserving the activation stack itself for debugging
-      debug("primitiveSignal: handler.workQueueDepth=", handler.workQueueDepth, " workQueue.len=", interp.workQueue.len)
+      # Keep activation stack intact for debugging, but filter work queue so
+      # signal-path unwind frames do not interfere with handler execution.
       var newWorkQueue: seq[WorkFrame] = @[]
       for j in 0..<handler.workQueueDepth:
         let frameKind = interp.workQueue[j].kind
         if frameKind != wfPopActivation and frameKind != wfReturnValue:
           newWorkQueue.add(interp.workQueue[j])
-        else:
-          debug("primitiveSignal: removing frame ", frameKind, " at index ", j)
-      # Keep remaining frames after handler.workQueueDepth (includes code after signal for resume)
       for j in handler.workQueueDepth..<interp.workQueue.len:
         newWorkQueue.add(interp.workQueue[j])
-        debug("primitiveSignal: keeping frame ", interp.workQueue[j].kind, " at index ", j)
       interp.workQueue = newWorkQueue
-      debug("primitiveSignal: workQueue.len after filter=", interp.workQueue.len)
       interp.evalStack.setLen(handler.evalStackDepth)
-      # NOTE: We do NOT pop the activation stack - it remains intact
-      # The ExceptionContext snapshot captures the signal point state for resume/debugging
-      
-      # Clear hasReturned flag on activations above the handler to prevent
-      # non-local return propagation from interfering with handler execution
+
+      # Clear pending non-local-return markers above the handler activation.
       for j in (handler.stackDepth + 1)..<interp.activationStack.len:
         interp.activationStack[j].hasReturned = false
 
-      # DON'T remove the handler yet - keep it for return:/pass/retry/resume
-      # Push wfExceptionReturn barrier, then handler block on top
+      # Schedule handler evaluation through work queue so Exception>>return:,
+      # pass, retry, and fall-through semantics remain consistent.
       interp.pushWorkFrame(newExceptionReturnFrame(i))
-
-      # Schedule handler block with exception as argument
-      let exValue = self.toValue()
       var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
-      applyFrame.blockArgs = @[exValue]
+      applyFrame.blockArgs = @[self.toValue()]
       interp.pushWorkFrame(applyFrame)
-
-      # Return nil - the handler block will push its result
       return nilValue()
 
   # No handler found - call defaultAction on the exception
@@ -1401,6 +1372,11 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   let defaultActionLookup = lookupMethod(interp, self, "defaultAction")
   if defaultActionLookup.found:
     debug("primitiveSignal: found defaultAction, executing...")
+    writeStderr("\n=== Uncaught Exception ===\n")
+    let className = if self != nil and self.class != nil: self.class.name else: "Exception"
+    writeStderr(className & ": " & message & "\n")
+    writeStderr("Stack trace:\n")
+    printStackTrace(interp)
     discard executeMethod(interp, defaultActionLookup.currentMethod, self, @[], defaultActionLookup.definingClass)
     # defaultAction should not return, but if it does, we exit
     quit(1)
@@ -1419,6 +1395,94 @@ proc findHandlerForException(interp: var Interpreter, self: Instance): int =
     if interp.exceptionHandlers[i].exceptionInstance == self:
       return i
   return -1
+
+proc truncateExceptionHandlers(interp: var Interpreter, newLen: int) =
+  ## Truncate exception handler stack with ExceptionContext cleanup.
+  var target = newLen
+  if target < 0:
+    target = 0
+  if target >= interp.exceptionHandlers.len:
+    return
+
+  for i in countdown(interp.exceptionHandlers.high, target):
+    let ctx = interp.exceptionHandlers[i].exceptionContext
+    if ctx != nil:
+      unregisterExceptionContext(ctx)
+  interp.exceptionHandlers.setLen(target)
+
+proc resumeFromSignalContext(interp: var Interpreter, handlerIdx: int, resumeValue: NodeValue, resumeExceptionMsg: string): NodeValue =
+  ## Common resume flow for Exception>>resume and Exception>>resume:
+  let handler = interp.exceptionHandlers[handlerIdx]
+  let ctx = handler.exceptionContext
+
+  if ctx == nil:
+    writeStderr("resume: no signal context available")
+    return nilValue()
+
+  if not ctx.isResumable:
+    writeStderr("resume: this exception is not resumable")
+    return nilValue()
+
+  # Pop handler block activation and anything added during handler execution,
+  # but restore to the signal point's activation depth so the signal chain's
+  # wfReturnValue frames can unwind correctly via the work queue.
+  debug("resume: signalActivationDepth = ", ctx.signalActivationDepth, " activationStack.len = ", interp.activationStack.len)
+  while interp.activationStack.len > ctx.signalActivationDepth:
+    discard interp.activationStack.pop()
+  debug("resume: activationStack.len after pop = ", interp.activationStack.len)
+
+  if interp.activationStack.len > 0:
+    interp.currentActivation = interp.activationStack[^1]
+    interp.currentReceiver = interp.currentActivation.receiver
+  else:
+    interp.currentActivation = nil
+    interp.currentReceiver = nil
+
+  # Find the correct work queue starting point
+  # The structure is: [...][wfPopHandler][wfPopActivation][body frames...]
+  # We want: [wfPopActivation][body frames...] plus the signal chain frames
+  # (wfPopActivation_classSignal, wfReturnValue) which unwind correctly when
+  # the activation stack is at the signal point's depth.
+  var popHandlerIdx = -1
+  let savedWQ = ctx.signalWorkQueue
+
+  debug("RESUME: savedWQ.len=", savedWQ.len)
+
+  # Find wfPopHandler
+  for i in 0..<savedWQ.len:
+    if savedWQ[i].kind == wfPopHandler:
+      popHandlerIdx = i
+      break
+
+  if popHandlerIdx >= 0 and popHandlerIdx + 1 < savedWQ.len:
+    # Skip wfPopActivation/wfReturnValue frames that were for activations we already popped
+    var startIdx = popHandlerIdx + 1
+    while startIdx < savedWQ.len and (savedWQ[startIdx].kind == wfPopActivation or savedWQ[startIdx].kind == wfReturnValue):
+      startIdx += 1
+    if startIdx < savedWQ.len:
+      interp.workQueue = savedWQ[startIdx..^1]
+      debug("resume: restored work queue from index ", startIdx, " len = ", interp.workQueue.len)
+    else:
+      interp.workQueue = @[]
+      debug("resume: no executable frames after wfPopHandler")
+  else:
+    interp.workQueue = @[]
+    debug("resume: no wfPopHandler found at popHandlerIdx=", popHandlerIdx, ", savedWQ.len=", savedWQ.len)
+
+  # Restore eval stack from signal point
+  interp.evalStack = ctx.signalEvalStack
+
+  # Push the resumed value as return value of signal
+  interp.pushValue(resumeValue)
+
+  # Remove handler
+  interp.truncateExceptionHandlers(handlerIdx)
+
+  # Mark as resumed
+  ctx.hasBeenResumed = true
+
+  debug("Exception resumed, continuing from signal point with WQ len = ", interp.workQueue.len)
+  raise newException(ResumeException, resumeExceptionMsg)
 
 proc findClassInLibraries(interp: Interpreter, name: string): Class =
   ## Find a class by name in imported libraries
@@ -1505,78 +1569,7 @@ proc primitiveExceptionResumeImpl(interp: var Interpreter, self: Instance, args:
   if handlerIdx < 0:
     writeStderr("resume called on exception with no active handler")
     return nilValue()
-  
-  let handler = interp.exceptionHandlers[handlerIdx]
-  if handler.exceptionContext == nil:
-    writeStderr("resume: no signal context available")
-    return nilValue()
-
-  let ctx = handler.exceptionContext
-
-  if not ctx.isResumable:
-    writeStderr("resume: this exception is not resumable")
-    return nilValue()
-
-  # Pop handler block activation and anything added during handler execution,
-  # but restore to the signal point's activation depth so the signal chain's
-  # wfReturnValue frames can unwind correctly via the work queue.
-  debug("resume: signalActivationDepth = ", ctx.signalActivationDepth, " activationStack.len = ", interp.activationStack.len)
-  while interp.activationStack.len > ctx.signalActivationDepth:
-    discard interp.activationStack.pop()
-  debug("resume: activationStack.len after pop = ", interp.activationStack.len)
-
-  if interp.activationStack.len > 0:
-    interp.currentActivation = interp.activationStack[^1]
-    interp.currentReceiver = interp.currentActivation.receiver
-  else:
-    interp.currentActivation = nil
-    interp.currentReceiver = nil
-
-  # Find the correct work queue starting point
-  # The structure is: [...][wfPopHandler][wfPopActivation][body frames...]
-  # We want: [wfPopActivation][body frames...] plus the signal chain frames
-  # (wfPopActivation_classSignal, wfReturnValue) which unwind correctly when
-  # the activation stack is at the signal point's depth.
-  var popHandlerIdx = -1
-  let savedWQ = ctx.signalWorkQueue
-  
-  debug("RESUME: savedWQ.len=", savedWQ.len)
-
-  # Find wfPopHandler
-  for i in 0..<savedWQ.len:
-    if savedWQ[i].kind == wfPopHandler:
-      popHandlerIdx = i
-      break
-
-  if popHandlerIdx >= 0 and popHandlerIdx + 1 < savedWQ.len:
-    # Skip wfPopActivation/wfReturnValue frames that were for activations we already popped
-    var startIdx = popHandlerIdx + 1
-    while startIdx < savedWQ.len and (savedWQ[startIdx].kind == wfPopActivation or savedWQ[startIdx].kind == wfReturnValue):
-      startIdx += 1
-    if startIdx < savedWQ.len:
-      interp.workQueue = savedWQ[startIdx..^1]
-      debug("resume: restored work queue from index ", startIdx, " len = ", interp.workQueue.len)
-    else:
-      interp.workQueue = @[]
-      debug("resume: no executable frames after wfPopHandler")
-  else:
-    interp.workQueue = @[]
-    debug("resume: no wfPopHandler found at popHandlerIdx=", popHandlerIdx, ", savedWQ.len=", savedWQ.len)
-
-  # Restore eval stack from signal point
-  interp.evalStack = ctx.signalEvalStack
-
-  # Push nil as the return value of signal
-  interp.pushValue(nilValue())
-
-  # Remove handler
-  interp.exceptionHandlers.setLen(handlerIdx)
-
-  # Mark as resumed
-  ctx.hasBeenResumed = true
-
-  debug("Exception resumed, continuing from signal point with WQ len = ", interp.workQueue.len)
-  raise newException(ResumeException, "resume")
+  return resumeFromSignalContext(interp, handlerIdx, nilValue(), "resume")
 
 proc primitiveExceptionResumeWithValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>resume: value - continue from signal point with given value
@@ -1586,67 +1579,7 @@ proc primitiveExceptionResumeWithValueImpl(interp: var Interpreter, self: Instan
   if handlerIdx < 0:
     writeStderr("resume: called on exception with no active handler")
     return nilValue()
-  
-  let handler = interp.exceptionHandlers[handlerIdx]
-  if handler.exceptionContext == nil:
-    writeStderr("resume: no signal context available")
-    return nilValue()
-  
-  let ctx = handler.exceptionContext
-  
-  if not ctx.isResumable:
-    writeStderr("resume: this exception is not resumable")
-    return nilValue()
-  
-  # Pop handler block activation and anything added during handler execution,
-  # but restore to the signal point's activation depth so the signal chain's
-  # wfReturnValue frames can unwind correctly via the work queue.
-  debug("resume: signalActivationDepth = ", ctx.signalActivationDepth, " activationStack.len = ", interp.activationStack.len)
-  while interp.activationStack.len > ctx.signalActivationDepth:
-    discard interp.activationStack.pop()
-  debug("resume: activationStack.len after pop = ", interp.activationStack.len)
-
-  if interp.activationStack.len > 0:
-    interp.currentActivation = interp.activationStack[^1]
-    interp.currentReceiver = interp.currentActivation.receiver
-  else:
-    interp.currentActivation = nil
-    interp.currentReceiver = nil
-
-  # Find the correct work queue starting point
-  # The structure is: [...][wfPopHandler][wfPopActivation][body frames...]
-  # We want: [wfPopActivation][body frames...] plus the signal chain frames
-  # (wfPopActivation_classSignal, wfReturnValue) which unwind correctly when
-  # the activation stack is at the signal point's depth.
-  var popHandlerIdx = -1
-  let savedWQ = ctx.signalWorkQueue
-
-  for i in 0..<savedWQ.len:
-    if savedWQ[i].kind == wfPopHandler:
-      popHandlerIdx = i
-      break
-
-  if popHandlerIdx >= 0 and popHandlerIdx + 1 < savedWQ.len:
-    interp.workQueue = savedWQ[popHandlerIdx + 1..^1]
-    debug("resume: restored work queue from index ", popHandlerIdx + 1, " len = ", interp.workQueue.len)
-  else:
-    interp.workQueue = @[]
-    debug("resume: no wfPopHandler found, empty queue")
-  
-  # Restore eval stack from signal point
-  interp.evalStack = ctx.signalEvalStack
-  
-  # Push the provided value as return value of signal
-  interp.pushValue(resumeValue)
-  
-  # Remove handler
-  interp.exceptionHandlers.setLen(handlerIdx)
-  
-  # Mark as resumed
-  ctx.hasBeenResumed = true
-  
-  debug("Exception resumed with value, continuing from signal point with WQ len = ", interp.workQueue.len)
-  raise newException(ResumeException, "resume:")
+  return resumeFromSignalContext(interp, handlerIdx, resumeValue, "resume:")
 
 proc primitiveExceptionReturnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>return: value - explicit unwind, providing value to on:do:
@@ -1667,7 +1600,7 @@ proc primitiveExceptionReturnImpl(interp: var Interpreter, self: Instance, args:
     interp.currentReceiver = interp.currentActivation.receiver
 
   # Remove handler and any above it
-  interp.exceptionHandlers.setLen(handlerIdx)
+  interp.truncateExceptionHandlers(handlerIdx)
 
   # Push the return value as on:do:'s result
   return returnValue
@@ -1690,7 +1623,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
     interp.currentReceiver = interp.currentActivation.receiver
 
   # Remove current handler
-  interp.exceptionHandlers.setLen(handlerIdx)
+  interp.truncateExceptionHandlers(handlerIdx)
 
   # Search for next matching handler from remaining handlers
   for j in countdown(interp.exceptionHandlers.len - 1, 0):
@@ -1701,6 +1634,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
       interp.exceptionHandlers[j].signalWorkQueueDepth = interp.workQueue.len
       interp.exceptionHandlers[j].signalEvalStackDepth = interp.evalStack.len
       interp.exceptionHandlers[j].signalActivationDepth = interp.activationStack.len
+      interp.exceptionHandlers[j].exceptionContext = handler.exceptionContext
 
       # Unwind to next handler's install point
       interp.truncateWorkQueue(nextHandler.workQueueDepth)
@@ -1719,7 +1653,9 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
       interp.pushWorkFrame(applyFrame)
       return nilValue()
 
-  writeStderr("Uncaught exception (pass): no outer handler found")
+  # No outer handler found: re-signal and let uncaught exception handling
+  # run defaultAction + stack trace + process exit.
+  discard primitiveSignalImpl(interp, self, @[])
   return nilValue()
 
 proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1745,7 +1681,7 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
     interp.currentReceiver = interp.currentActivation.receiver
 
   # Remove handler
-  interp.exceptionHandlers.setLen(handlerIdx)
+  interp.truncateExceptionHandlers(handlerIdx)
 
   # Re-schedule same structure as on:do:: popHandler, evalBlock, pushHandler
   # Capture work queue depth before pushing frames
@@ -5683,7 +5619,9 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # If an exception WAS caught, the handler was already removed by signal,
     # and this wfPopHandler was removed from WQ by truncation.
     if interp.exceptionHandlers.len > 0:
-      discard interp.exceptionHandlers.pop()
+      let popped = interp.exceptionHandlers.pop()
+      if popped != nil and popped.exceptionContext != nil:
+        unregisterExceptionContext(popped.exceptionContext)
     return true
 
   of wfExceptionReturn:
@@ -5692,7 +5630,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     let handlerIdx = frame.handlerIndex
     if handlerIdx < interp.exceptionHandlers.len:
       # Remove handler
-      interp.exceptionHandlers.setLen(handlerIdx)
+      interp.truncateExceptionHandlers(handlerIdx)
     # Handler block's result is already on evalStack from wfApplyBlock
     # It becomes the on:do: return value - nothing more to do
     return true
@@ -5903,8 +5841,8 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   # This creates a proper method activation that blocks can return from
   var results = newSeq[NodeValue]()
   try:
-    let result = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
-    results.add(result)
+    let methodResult = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
+    results.add(methodResult)
   except ValueError as e:
     return (@[], "Error: " & e.msg)
   except EvalError as e:
