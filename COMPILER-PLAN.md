@@ -4,19 +4,18 @@
 
 **Incremental improvement over wholesale rewrite.** A working compiler exists with 3700 lines. The goal is to improve what exists, not redesign it into 20 new modules.
 
-## What GLM4.7 Got Right
+## What We Got Right
 
-- Code duplication exists in runtime helpers
-- Large files (expression.nim at 845 lines) are hard to maintain
-- No test coverage for compiler
-- Debug echoes in production code
+- Working method compilation system
+- Slot accessor optimization in method bodies
+- Inheritance with superclass hierarchy
+- compile:/main: block syntax support
 
-## What GLM4.7 Got Wrong
+## What Still Needs Work
 
-- "Runtime coupling" - Actually fine, fast paths already generate inline code
-- "Type system unused" - Actually incomplete but working for its scope
-- "VM dependency is a problem" - Intentional design, hard to avoid
-- 10-week timeline with 50+ new files - Excessive scope
+- Super calls in expression chains
+- Method return value patterns
+- Some examples have edge case issues
 
 ---
 
@@ -38,13 +37,7 @@
 
 **Files**: `tests/test_compiler_basic.nim` (new)
 
-**Tests added** (23 passing):
-- Lexer tests (4): integer, string, identifier, keyword tokens
-- Parser tests (7): literals, assignment, messages, blocks
-- Context tests (4): compiler context, class info, slots
-- Symbol tests (4): selector/class/slot name mangling
-- Analyzer tests (3): derive chain extraction, class graph, type parsing
-- Codegen tests (8): literals, block registry, captures
+**Tests added** (23 passing)
 
 ---
 
@@ -54,63 +47,65 @@
 
 **Files**: `codegen/blocks.nim`
 
-**Changes**: 
-- Implemented `generateBlockProcBody()` to generate actual Nim code
-- Handles literals (int, float, string, nil) directly
-- Handles assignments with literal values
-- Handles explicit returns with literal values
-- Generates proper variable declarations for temporaries
-- Handles implicit returns for last expression
+**Changes**: Implemented `generateBlockProcBody()` to generate actual Nim code.
 
 ---
 
-## Priority 2: Real Improvements (This Month)
+### 1.4 Method Compilation (NEW)
 
-### 2.1 Improve Error Messages
+**Status**: ✓ Completed
 
-**Files**: `compiler/granite.nim`, `parser/`
+**Files**: `codegen/module.nim`, `codegen/expression.nim`, `runtime/runtime.nim`
 
-**Improvements**:
-- Show line/column for parse errors
-- Show context around error location
-- Suggest fixes for common mistakes
-
-**Estimated**: 1 day
-
----
-
-### 2.2 Fix Known Parser/Compiler Issues
-
-**Files**: Various
-
-**Quick fixes**:
-- Parser error recovery
-- Missing method warnings
-- Slot access edge cases
-
-**Estimated**: 1-2 days
+**Changes**:
+- Extract method definitions from AST (selector:put: pattern)
+- Generate Nim procs from method bodies
+- Add method registration system (compiledMethodProcs table)
+- Implement method dispatch in sendMessage
+- Add slot accessor optimization in method bodies (self slotName → getSlot())
+- Add inheritance support via superclass hierarchy
+- Add compile:/main: block syntax support
+- Fix slot assignments in methods (generate setter calls)
+- Fix return semantics (return self for last statement)
+- Add super call support (nkSuperSend)
 
 ---
 
-### 2.3 Enhance Block Compilation
+## Working Examples (14)
 
-**Current state**: Basic literal handling works
-
-**Enhancements needed**:
-- Support message sends in block bodies
-- Support arithmetic expressions
-- Support control flow (ifTrue:, whileTrue:, etc.)
-
-**Estimated**: 2-3 days
+| Example | Status |
+|---------|--------|
+| hello | ✅ |
+| arithmetic | ✅ |
+| variables | ✅ |
+| objects | ✅ |
+| methods | ✅ |
+| classes | ✅ |
+| control_flow | ✅ |
+| fibonacci | ⚠️ Works but returns nil |
+| benchmark_blocks | ✅ |
+| simple_test | ✅ |
+| multiple_inheritance | ✅ |
+| collections | ⚠️ Partial |
+| blocks | ✅ |
+| harding_main | ✅ |
 
 ---
 
-## Priority 3: Nice to Have (Someday)
+## Remaining Issues
 
-- Split expression.nim into sections (NOT new files)
-- Type inference improvements
-- Performance optimization
-- Better debugging output
+### High Priority
+
+1. **Super calls in chains** - `super method , "suffix"` doesn't work
+   - The super call returns self, but it's not used as receiver for comma
+
+2. **fibonacci methods return nil** - Different pattern than working examples
+   - Methods defined differently in that example
+
+### Medium Priority
+
+3. **collections timeout** - Some infinite loop issue
+4. **inheritance example** - Uses super in chains
 
 ---
 
@@ -124,33 +119,20 @@
 ### Modified Files
 | File | Changes | Status |
 |------|---------|--------|
-| `codegen/primitive.nim` | Removed unused genPrimitiveRuntimeHelper | ✓ Complete |
-| `codegen/blocks.nim` | Implemented block body generation | ✓ Complete |
-
-### No Changes Needed
-- `compiler/analyzer.nim` - No debug echoes found (already cleaned)
-- `codegen/control.nim` - Already generates inline fast paths
-- `compiler/granite.nim` - VM initialization is intentional
-- `codegen/expression.nim` - Works, just large
-
----
-
-## Success Metrics (Updated)
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Debug echoes in code | 0 | 0 ✓ |
-| Dead code in compiler | ~35 lines | 0 ✓ |
-| Compiler test coverage | 0 tests | 23 tests ✓ |
-| Block body generation | Stubbed | Basic working ✓ |
+| `codegen/primitive.nim` | Removed unused function | ✓ Complete |
+| `codegen/blocks.nim` | Block body generation | ✓ Complete |
+| `codegen/module.nim` | Method compilation, class gen | ✓ Complete |
+| `codegen/expression.nim` | Slot optimization, super calls | ✓ Complete |
+| `runtime/runtime.nim` | Method dispatch | ✓ Complete |
 
 ---
 
 ## Next Steps
 
-1. **Improve error messages** - Better diagnostics for users
-2. **Fix known bugs** - Parser/compiler edge cases
-3. **Enhance block compilation** - More expression types
+1. **Fix super calls in expression chains** - Make super call return value used as receiver
+2. **Fix fibonacci example** - Different method pattern
+3. **Test all examples** - Ensure edge cases work
+4. **Add more test coverage** - Behavioral tests for compilation
 
 ---
 
