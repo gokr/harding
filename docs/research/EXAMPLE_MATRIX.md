@@ -2,18 +2,18 @@
 
 ## Snapshot (2026-02-27)
 
-Tested with `./granite run` on the current `compiler-next` worktree.
+Tested with `./granite run` on the current `main` worktree.
 
 ## Verified Results
 
 | Example | Status | Notes |
 |---------|--------|-------|
 | `hello` | ✅ | Basic output path works. |
-| `control_flow` | ⚠️ | `if`/`while`/`timesRepeat:` work; boolean logical operators still return `nil` in this path. |
+| `control_flow` | ✅ | Conditionals, loops, `to:do:`, and boolean logic produce expected output. |
 | `fibonacci` | ✅ | Compiled method + loop behavior working; expected sequence prints. |
 | `inheritance` | ✅ | `super` dispatch and `isKindOf:` hierarchy checks working. |
 | `harding_main` | ✅ | `Harding compile:` + `Harding main:` split works as intended. |
-| `collections` | ⚠️ | Builds/runs, but collection operations still return many `nil` values. |
+| `collections` | ✅ | Array/Table creation, mutation, reads, and reductions produce expected values. |
 
 ## Key Behavior Confirmed
 
@@ -25,9 +25,8 @@ Tested with `./granite run` on the current `compiler-next` worktree.
 
 ## Open Gaps
 
-1. Collection operations in compiled mode (`Array`/`Table` usage in `collections.hrd`).
-2. Boolean/logical operator behavior in compiled mode (`and:`, `or:`, `&`, `|`, `not`).
-3. Generated-file cleanup (remove currently unused imports in module header).
+1. Generated-file cleanup (remove currently unused imports in module header).
+2. Add targeted regression tests for runtime selectors added in this phase (`new`, `add:`, `at:put:`, `inject:into:`, `to:do:`, boolean selectors).
 
 ## Useful Commands
 

@@ -90,19 +90,25 @@ proc getSlotDef*(cls: ClassInfo, name: string): SlotDef =
 proc getAllSlots*(cls: ClassInfo): seq[SlotDef] =
   ## Get all slots including inherited ones (parents first)
   result = @[]
-  var current: ClassInfo = cls
-  while current != nil:
-    for slot in current.slots:
-      if not slot.isInherited:
-        # Check if slot with same name already exists
-        var found = false
-        for existing in result:
-          if existing.name == slot.name:
-            found = true
-            break
-        if not found:
-          result.insert(slot, 0)
-    current = current.parent
+
+  if cls == nil:
+    return result
+
+  if cls.parent != nil:
+    result = cls.parent.getAllSlots()
+
+  for slot in cls.slots:
+    if slot.isInherited:
+      continue
+
+    var found = false
+    for existing in result:
+      if existing.name == slot.name:
+        found = true
+        break
+
+    if not found:
+      result.add(slot)
 
 proc resolveSlotIndices*(ctx: var CompilerContext): void =
   ## Resolve and assign slot indices across inheritance chain

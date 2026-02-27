@@ -222,6 +222,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return receiver
   of "toString", "asString":
     return NodeValue(kind: vkString, strVal: receiver.toString())
+  of "printString":
+    return NodeValue(kind: vkString, strVal: receiver.toString())
   of ",":
     if args.len > 0:
       let aStr = receiver.toString()
@@ -243,6 +245,148 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   of "/":
     if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
       return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
+    return NodeValue(kind: vkNil)
+
+  of "new":
+    if receiver.kind == vkSymbol:
+      case receiver.symVal
+      of "Array":
+        return NodeValue(kind: vkArray, arrayVal: @[])
+      of "Table":
+        return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "add:":
+    if receiver.kind == vkArray and args.len > 0:
+      var arr = receiver.arrayVal
+      arr.add(args[0])
+      return NodeValue(kind: vkArray, arrayVal: arr)
+    return NodeValue(kind: vkNil)
+
+  of "at:":
+    if args.len > 0:
+      if receiver.kind == vkArray and args[0].kind == vkInt:
+        let idx = args[0].intVal - 1
+        if idx >= 0 and idx < receiver.arrayVal.len:
+          return receiver.arrayVal[idx]
+      elif receiver.kind == vkTable:
+        if receiver.tableVal.hasKey(args[0]):
+          return receiver.tableVal[args[0]]
+    return NodeValue(kind: vkNil)
+
+  of "at:put:":
+    if args.len >= 2:
+      if receiver.kind == vkArray and args[0].kind == vkInt:
+        let idx = args[0].intVal - 1
+        if idx >= 0:
+          var arr = receiver.arrayVal
+          if idx < arr.len:
+            arr[idx] = args[1]
+          elif idx == arr.len:
+            arr.add(args[1])
+          return NodeValue(kind: vkArray, arrayVal: arr)
+      elif receiver.kind == vkTable:
+        var tbl = receiver.tableVal
+        tbl[args[0]] = args[1]
+        return NodeValue(kind: vkTable, tableVal: tbl)
+    return receiver
+
+  of "size":
+    if receiver.kind == vkArray:
+      return NodeValue(kind: vkInt, intVal: receiver.arrayVal.len)
+    if receiver.kind == vkTable:
+      return NodeValue(kind: vkInt, intVal: receiver.tableVal.len)
+    return NodeValue(kind: vkNil)
+
+  of "last":
+    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
+      return receiver.arrayVal[^1]
+    return NodeValue(kind: vkNil)
+
+  of "keys":
+    if receiver.kind == vkTable:
+      var keys: seq[NodeValue] = @[]
+      for k in receiver.tableVal.keys:
+        keys.add(k)
+      return NodeValue(kind: vkArray, arrayVal: keys)
+    return NodeValue(kind: vkNil)
+
+  of "do:":
+    if receiver.kind == vkArray and args.len > 0:
+      for item in receiver.arrayVal:
+        discard sendMessage(runtime, args[0], "value:", @[item])
+      return receiver
+    return NodeValue(kind: vkNil)
+
+  of "inject:into:":
+    if receiver.kind == vkArray and args.len >= 2:
+      var acc = args[0]
+      for item in receiver.arrayVal:
+        acc = sendMessage(runtime, args[1], "value:value:", @[acc, item])
+      return acc
+    return NodeValue(kind: vkNil)
+
+  of "to:do:":
+    if receiver.kind == vkInt and args.len >= 2 and args[0].kind == vkInt:
+      let startNum = receiver.intVal
+      let endNum = args[0].intVal
+      if startNum <= endNum:
+        for i in startNum..endNum:
+          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
+      else:
+        for i in countdown(startNum, endNum):
+          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
+      return receiver
+    return NodeValue(kind: vkNil)
+
+  of "ifTrue:":
+    if args.len > 0 and isTruthy(receiver):
+      return sendMessage(runtime, args[0], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "ifFalse:":
+    if args.len > 0 and not isTruthy(receiver):
+      return sendMessage(runtime, args[0], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "ifTrue:ifFalse:":
+    if args.len >= 2:
+      if isTruthy(receiver):
+        return sendMessage(runtime, args[0], "value", @[])
+      return sendMessage(runtime, args[1], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "and:":
+    if receiver.kind == vkBool and args.len > 0:
+      if not receiver.boolVal:
+        return NodeValue(kind: vkBool, boolVal: false)
+      let rhs = sendMessage(runtime, args[0], "value", @[])
+      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
+    return NodeValue(kind: vkNil)
+
+  of "or:":
+    if receiver.kind == vkBool and args.len > 0:
+      if receiver.boolVal:
+        return NodeValue(kind: vkBool, boolVal: true)
+      let rhs = sendMessage(runtime, args[0], "value", @[])
+      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
+    return NodeValue(kind: vkNil)
+
+  of "&":
+    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
+      return NodeValue(kind: vkBool, boolVal: receiver.boolVal and args[0].boolVal)
+    return NodeValue(kind: vkNil)
+
+  of "|":
+    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
+      return NodeValue(kind: vkBool, boolVal: receiver.boolVal or args[0].boolVal)
+    return NodeValue(kind: vkNil)
+
+  of "not":
+    if receiver.kind == vkBool:
+      return NodeValue(kind: vkBool, boolVal: not receiver.boolVal)
     return NodeValue(kind: vkNil)
   else:
     # Check for compiled method on Nim proxy objects

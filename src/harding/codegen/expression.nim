@@ -1031,6 +1031,23 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     else:
       discard
 
+    # Messages that mutate collection variables should write the updated value back
+    # to the receiver variable when used as a statement.
+    if msg.receiver != nil and msg.receiver.kind == nkIdent and msg.selector in ["add:", "at:put:"]:
+      let receiverName = msg.receiver.IdentNode.name
+      let msgCode = genMessage(ctx, msg)
+      if ctx.isSlot(receiverName):
+        if ctx.inMethod and ctx.cls != nil:
+          let slotName = mangleSlot(receiverName)
+          return fmt("discard set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {msgCode})")
+        let slotIdx = ctx.getSlotIndex(receiverName)
+        if slotIdx >= 0:
+          return fmt("self.slots[{slotIdx}] = {msgCode}")
+      elif ctx.isLocal(receiverName):
+        return fmt("{receiverName} = {msgCode}")
+      elif receiverName in ctx.globals:
+        return fmt("discard setGlobal(\"{receiverName}\", {msgCode})")
+
     # Default: message send as statement
     let msgCode = genMessage(ctx, node.MessageNode)
     return "discard " & msgCode

@@ -18,6 +18,9 @@ Granite now compiles and runs inheritance and fibonacci examples with compiled m
 - Added direct handling for `nkWhile` and `nkIf` in statement generation.
 - Fixed generated-code ordering so compiled methods are emitted after operator helpers, avoiding undeclared `nt_*` calls.
 - Cleaned a few warnings from recent changes (`result` shadowing and unused locals).
+- Added runtime selector support for compiled mode collection/boolean paths (`new`, `add:`, `at:`, `at:put:`, `size`, `keys`, `inject:into:`, `to:do:`, boolean selectors).
+- Added statement write-back for mutating collection messages (`add:`, `at:put:`) so local/slot receivers retain updates.
+- Fixed slot ordering in `getAllSlots` to keep parent slots first, preventing bad casts in superclass method execution.
 
 ## Verified Examples
 
@@ -26,15 +29,15 @@ Validated with `./granite run`:
 - `examples/inheritance.hrd` ✅
 - `examples/fibonacci.hrd` ✅
 - `examples/harding_main.hrd` ✅
-- `examples/control_flow.hrd` ✅ (core control flow works; boolean logical operator behavior still partial)
-- `examples/collections.hrd` ⚠️ (builds/runs, many operations still resolve to `nil`)
+- `examples/control_flow.hrd` ✅
+- `examples/collections.hrd` ✅
 
 ## Remaining Work
 
 ### High priority
 
-1. Improve collection primitives/interpreter fallback in compiled mode so `size`, `at:`, `keys`, and iteration produce values in `collections.hrd`.
-2. Complete boolean/logical operator support in compiled runtime (`and:`, `or:`, `&`, `|`, `not`) to match interpreter semantics.
+1. Add regression tests covering new compiled runtime selector behavior (collections + boolean logic + `to:do:`).
+2. Review semantics compatibility against interpreter for edge cases (e.g., selector return-value conventions on mutating collection messages).
 
 ### Medium priority
 
@@ -46,6 +49,6 @@ Validated with `./granite run`:
 
 ## Next Steps
 
-1. Fix `collections.hrd` behavior by tracing message fallback for Array/Table operations in compiled runtime.
-2. Implement missing boolean primitive paths and rerun `control_flow.hrd`.
-3. Run wider example sweep and refresh `EXAMPLE_MATRIX.md` with final pass/fail notes.
+1. Add focused tests for `control_flow.hrd` and `collections.hrd` behavior in the compiler test suite.
+2. Reduce generated-module import warnings (`sequtils`, `objects`, `activation`).
+3. Run wider example sweep and refresh `EXAMPLE_MATRIX.md` after test additions.
