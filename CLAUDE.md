@@ -991,6 +991,18 @@ The `docs/` directory contains project documentation:
 
 When working with documentation, prefer the root-level user guides over research documents for understanding current behavior.
 
+### Changelog Maintenance
+
+Keep `CHANGELOG.md` current for all user-visible changes.
+
+- Use Keep a Changelog style sections (`Added`, `Changed`, `Fixed`, `Removed`, `Performance`, `Docs`, `Tests`) as needed.
+- During normal development, add concise entries under `## [Unreleased]`.
+- For a release, move relevant `Unreleased` entries into a new version heading like `## [0.7.0] - YYYY-MM-DD`.
+- Group entries by impact to users, not by file names or internal refactors.
+- Write in neutral, factual language; avoid hype and implementation noise.
+- Include compare links at the bottom for `Unreleased` and each released version.
+- When bumping version in `harding.nimble`, ensure the changelog release section is added/updated in the same change set.
+
 ## File Naming Conventions
 
 - Source files use `.nim` extension
