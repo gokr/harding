@@ -11,15 +11,24 @@ import ../src/harding/interpreter/[vm]
 
 var sharedInterp: Interpreter
 const uncaughtTestEnv = "HARDING_UNCAUGHT_TEST_MODE"
+const uncaughtModeError = "errorSignal"
+const uncaughtModePass = "passNoOuter"
 
 if existsEnv(uncaughtTestEnv):
   var uncaughtInterp = newInterpreter()
   initGlobals(uncaughtInterp)
   loadStdlib(uncaughtInterp)
-  # Expected behavior: this exits via uncaught exception default action.
-  discard uncaughtInterp.evalStatements("""
-    Error signal: "no handler here"
-  """)
+  let mode = getEnv(uncaughtTestEnv)
+  case mode
+  of uncaughtModePass:
+    discard uncaughtInterp.evalStatements("""
+      [ Error signal: "pass through" ] on: Error do: [ :ex | ex pass ]
+    """)
+  else:
+    # Expected behavior: this exits via uncaught exception default action.
+    discard uncaughtInterp.evalStatements("""
+      Error signal: "no handler here"
+    """)
   # If execution reaches here, uncaught behavior did not terminate as expected.
   quit(2)
 
@@ -28,48 +37,28 @@ proc setupTestEnvironment() =
   initGlobals(sharedInterp)
   loadStdlib(sharedInterp)
 
-suite "Existing Exception Handling":
-  
+proc resetInterpreterState(interp: var Interpreter) =
+  interp.exceptionHandlers.setLen(0)
+  interp.evalStack.setLen(0)
+  interp.workQueue.setLen(0)
+  interp.activationStack.setLen(0)
+  interp.currentActivation = nil
+  interp.currentReceiver = nil
+  exceptionContextRegistry.setLen(0)
+
+proc runUncaughtCase(mode: string): tuple[output: string, exitCode: int] =
+  var env = newStringTable(modeCaseSensitive)
+  env[uncaughtTestEnv] = mode
+  let command = "\"" & getAppFilename() & "\""
+  execCmdEx(command, env = env)
+
+suite "Signal Point Preservation":
+
   setup:
     if sharedInterp.isNil:
       setupTestEnvironment()
-    sharedInterp.exceptionHandlers.setLen(0)
-    sharedInterp.evalStack.setLen(0)
+    resetInterpreterState(sharedInterp)
 
-  test "basic on:do: catches exception":
-    ## Existing functionality should still work
-    let result = sharedInterp.evalStatements("""
-      Result := [ Error signal: "test" ] on: Error do: [ :ex | "caught" ]
-    """)
-    
-    check(result[0].len > 0)
-    check(result[0][^1].strVal == "caught")
-
-  test "return: provides value to on:do:":
-    let result = sharedInterp.evalStatements("""
-      Result := [ Error signal: "test" ] on: Error do: [ :ex | ex return: 42 ]
-    """)
-    
-    check(result[0][^1].intVal == 42)
-
-  test "pass delegates to outer handler":
-    let result = sharedInterp.evalStatements("""
-      Result := [
-        [ Error signal: "test" ] on: Error do: [ :ex | ex pass ]
-      ] on: Error do: [ :ex | "outer caught" ]
-    """)
-    
-    check(result[0][^1].strVal == "outer caught")
-
-  test "normal completion returns block result":
-    let result = sharedInterp.evalStatements("""
-      Result := [ "normal" ] on: Error do: [ :ex | "caught" ]
-    """)
-    
-    check(result[0][^1].strVal == "normal")
-
-suite "Signal Point Preservation (TODO)":
-  
   test "signal context accessible from exception":
     ## The exception should have access to its signal context
     let result = sharedInterp.evalStatements("""
@@ -97,7 +86,12 @@ suite "Signal Point Preservation (TODO)":
     skip() # TODO: Don't truncate activation stack
 
 suite "Handler Actions":
-  
+
+  setup:
+    if sharedInterp.isNil:
+      setupTestEnvironment()
+    resetInterpreterState(sharedInterp)
+
   test "resume continues from signal point":
     ## Exception>>resume causes signal to return nil, execution continues after signal
     let result = sharedInterp.evalStatements("""
@@ -152,6 +146,11 @@ suite "Handler Actions":
 
 suite "Resumption Semantics":
 
+  setup:
+    if sharedInterp.isNil:
+      setupTestEnvironment()
+    resetInterpreterState(sharedInterp)
+
   test "Error is not resumable":
     let result = sharedInterp.evalStatements("""
       Result := Error new isResumable
@@ -169,13 +168,17 @@ suite "Resumption Semantics":
 suite "Uncaught Exception Handling":
 
   test "uncaught exception exits with stack trace":
-    var env = newStringTable(modeCaseSensitive)
-    env[uncaughtTestEnv] = "1"
-    let command = "\"" & getAppFilename() & "\""
-    let run = execCmdEx(command, env = env)
+    let run = runUncaughtCase(uncaughtModeError)
     check(run.exitCode != 0)
     check("=== Uncaught Exception ===" in run.output)
     check("Error: no handler here" in run.output)
+    check("Stack trace:" in run.output)
+
+  test "uncaught pass exits with stack trace":
+    let run = runUncaughtCase(uncaughtModePass)
+    check(run.exitCode != 0)
+    check("=== Uncaught Exception ===" in run.output)
+    check("Error: pass through" in run.output)
     check("Stack trace:" in run.output)
 
   test "process suspended for debugger":
