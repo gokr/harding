@@ -1,0 +1,31 @@
+#!/usr/bin/env harding
+#
+# File.hrd - simple file convenience API
+
+File := Object derive: #()
+
+File class>>readAll: path [
+  | stream contents |
+  stream := FileStream openRead: path.
+  contents := stream readAll.
+  stream close.
+  ^ contents
+]
+
+File class>>write: content to: path [
+  | stream |
+  stream := FileStream openWrite: path.
+  stream write: content.
+  stream close.
+  ^ content
+]
+
+File class>>append: content to: path [
+  | stream |
+  stream := FileStream openAppend: path.
+  stream write: content.
+  stream close.
+  ^ content
+]
+
+File class>>exists: path <primitive primitiveFileExists: path>

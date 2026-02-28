@@ -590,7 +590,9 @@ The Standard Library provides additional collection and utility classes, auto-im
 - **Set** - Unordered unique-element collection
 - **Interval** - Numeric range with iteration
 - **SortedCollection** - Array maintaining sort order
+- **File** - Class-side file convenience methods
 - **FileStream** - File I/O operations
+- **System** - Process args, cwd, stdio access
 - **Exception hierarchy** - Error, MessageNotUnderstood, etc.
 
 ### BitBarrel (Optional)

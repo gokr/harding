@@ -20,7 +20,8 @@ type
 
 # Create a REPL context
 proc newDoitContext*(trace: bool = false, maxStackDepth: int = 10000,
-                     hardingHome: string = ".", bootstrapFile: string = ""): DoitContext =
+                     hardingHome: string = ".", bootstrapFile: string = "",
+                     commandLineArgs: seq[string] = @[]): DoitContext =
   ## Create new REPL context with scheduler support for processes
   # Create scheduler context (initializes Processor, Process, Scheduler globals)
   let schedCtx = newSchedulerContext()
@@ -36,6 +37,7 @@ proc newDoitContext*(trace: bool = false, maxStackDepth: int = 10000,
 
   # Set hardingHome on the interpreter
   result.interpreter.hardingHome = hardingHome
+  result.interpreter.commandLineArgs = commandLineArgs
 
   # Load standard library (using bootstrap file if provided)
   loadStdlib(result.interpreter, bootstrapFile)
@@ -157,12 +159,14 @@ proc main*() =
 
 # File-based script execution
 proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxStackDepth: int = 10000,
-                hardingHome: string = ".", bootstrapFile: string = ""): (string, string) =
+                hardingHome: string = ".", bootstrapFile: string = "",
+                commandLineArgs: seq[string] = @[]): (string, string) =
   ## Run a Harding script file
   ## Scripts are auto-wrapped in [ ... ] to enable temporary variable declarations
   ## using Smalltalk syntax: | temp1 temp2 |
   var scriptCtx = if ctx != nil: ctx else: newDoitContext(maxStackDepth = maxStackDepth, hardingHome = hardingHome,
-                                                           bootstrapFile = bootstrapFile)
+                                                           bootstrapFile = bootstrapFile,
+                                                           commandLineArgs = commandLineArgs)
 
   if not fileExists(filename):
     return ("", "File not found: " & filename)
@@ -199,10 +203,12 @@ proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxSt
     return ("", "")
 
 proc execScript*(filename: string, dumpAst = false, maxStackDepth: int = 10000,
-                 hardingHome: string = ".", bootstrapFile: string = "") =
+                 hardingHome: string = ".", bootstrapFile: string = "",
+                 commandLineArgs: seq[string] = @[]) =
   ## Execute a script file
   let (_, err) = runScript(filename, dumpAst = dumpAst, maxStackDepth = maxStackDepth,
-                           hardingHome = hardingHome, bootstrapFile = bootstrapFile)
+                           hardingHome = hardingHome, bootstrapFile = bootstrapFile,
+                           commandLineArgs = commandLineArgs)
   if err.len > 0:
     stderr.writeLine(err)
     quit(1)
@@ -238,4 +244,3 @@ proc testREPL*(): (bool, string) =
     return (true, "All tests passed")
   except Exception as e:
     return (false, "Test failed with exception: " & e.msg)
-

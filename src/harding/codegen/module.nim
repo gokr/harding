@@ -20,7 +20,8 @@ proc mangleModuleName*(name: string): string =
   ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
   return name
 
-proc genModuleHeader*(ctx: var CompilerContext, moduleName: string): string =
+proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
+                      includeOsImport: bool = false): string =
   ## Generate module header with imports and documentation
   var output = ""
 
@@ -29,7 +30,10 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string): string =
   output.add("## Do not edit - generated from .hrd source\n\n")
 
   output.add("# Imports\n")
-  output.add("import std/[tables, sequtils]\n")
+  if includeOsImport:
+    output.add("import std/[tables, sequtils, os]\n")
+  else:
+    output.add("import std/[tables, sequtils]\n")
   output.add("import ../src/harding/core/[types]\n")
   output.add("import ../src/harding/interpreter/[objects, activation]\n\n")
 
@@ -311,7 +315,8 @@ proc extractHardingBlocks(nodes: seq[Node]): tuple[compileBlock, mainBlock: Bloc
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
                   blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
                   classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
-                  mixed: bool = false, sourceFile: string = ""): string =
+                  mixed: bool = false, sourceFile: string = "",
+                  injectMainArgsVar: bool = false): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -332,8 +337,17 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   if mixed and sourceFile.len > 0:
     output.add(fmt("  initHybridRuntime(@[\"{sourceFile}\"])\n\n"))
 
+  if injectMainArgsVar:
+    output.add("  var hardingArgsElems: seq[NodeValue] = @[]\n")
+    output.add("  for arg in commandLineParams():\n")
+    output.add("    hardingArgsElems.add(NodeValue(kind: vkString, strVal: arg))\n")
+    output.add("  var args {.used.} = NodeValue(kind: vkArray, arrayVal: hardingArgsElems)\n\n")
+
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
+  if injectMainArgsVar:
+    genCtx.locals.add("args")
+    genCtx.globals.add("args")
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
 
@@ -354,14 +368,15 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 moduleName: string, mixed: bool = false, sourceFile: string = "",
-                reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
+                reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                injectMainArgsVar: bool = false): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
   ## reflectedClasses: optional class info from interpreter execution (for dynamic classes)
   var output = ""
 
-  output.add(genModuleHeader(ctx, moduleName))
+  output.add(genModuleHeader(ctx, moduleName, includeOsImport = injectMainArgsVar))
   output.add(genRuntimeHelperMethods())
   output.add("\n")
   output.add(genBlockRuntimeHelpers())
@@ -546,7 +561,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n\n")
 
   # Generate main proc for top-level statements, sharing block registry
-  output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames, analysis.classes, mixed, sourceFile))
+  output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
+                         analysis.classes, mixed, sourceFile, injectMainArgsVar))
 
   # Module initialization
   output.add("\n")

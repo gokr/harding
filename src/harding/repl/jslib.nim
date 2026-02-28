@@ -5,8 +5,8 @@
 # eliminating the need for file I/O in the browser environment.
 #
 # The library files are organized by category:
-# - Core: Object, Boolean, Block, Number, String (loaded into globals)
-# - Standard: Collections, SortedCollection, Interval, FileStream, Exception, TestCase (loaded into Standard)
+# - Core: Object, Boolean, Block, Number, String, System (loaded into globals)
+# - Standard: Collections, SortedCollection, Interval, File, FileStream, Exception, TestCase (loaded into Standard)
 #
 
 import std/[tables, strutils, logging]
@@ -24,11 +24,13 @@ const EmbeddedBooleanHrd = staticRead("../../../lib/core/Boolean.hrd")
 const EmbeddedBlockHrd = staticRead("../../../lib/core/Block.hrd")
 const EmbeddedNumberHrd = staticRead("../../../lib/core/Number.hrd")
 const EmbeddedStringHrd = staticRead("../../../lib/core/String.hrd")
+const EmbeddedSystemHrd = staticRead("../../../lib/core/System.hrd")
 
 # Standard library files (loaded into Standard Library)
 const EmbeddedCollectionsHrd = staticRead("../../../lib/core/Collections.hrd")
 const EmbeddedSortedCollectionHrd = staticRead("../../../lib/core/SortedCollection.hrd")
 const EmbeddedIntervalHrd = staticRead("../../../lib/core/Interval.hrd")
+const EmbeddedFileHrd = staticRead("../../../lib/core/File.hrd")
 const EmbeddedFileStreamHrd = staticRead("../../../lib/core/FileStream.hrd")
 const EmbeddedExceptionHrd = staticRead("../../../lib/core/Exception.hrd")
 const EmbeddedTestCaseHrd = staticRead("../../../lib/core/TestCase.hrd")
@@ -62,11 +64,13 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
   loadEmbeddedSource(interp, EmbeddedBlockHrd, "Block.hrd")
   loadEmbeddedSource(interp, EmbeddedNumberHrd, "Number.hrd")
   loadEmbeddedSource(interp, EmbeddedStringHrd, "String.hrd")
+  loadEmbeddedSource(interp, EmbeddedSystemHrd, "System.hrd")
 
   # Load standard library files into Standard
   loadEmbeddedSource(interp, EmbeddedCollectionsHrd, "Collections.hrd")
   loadEmbeddedSource(interp, EmbeddedSortedCollectionHrd, "SortedCollection.hrd")
   loadEmbeddedSource(interp, EmbeddedIntervalHrd, "Interval.hrd")
+  loadEmbeddedSource(interp, EmbeddedFileHrd, "File.hrd")
   loadEmbeddedSource(interp, EmbeddedFileStreamHrd, "FileStream.hrd")
   loadEmbeddedSource(interp, EmbeddedExceptionHrd, "Exception.hrd")
   loadEmbeddedSource(interp, EmbeddedTestCaseHrd, "TestCase.hrd")
@@ -128,7 +132,7 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
       tableClassCache = tableVal.classVal
       debug("Set tableClassCache from Table global")
 
-  # Set up FileStream class and Stdout instance
+  # Set up FileStream class and standard stream globals
   let fileStreamCls = if "FileStream" in interp.globals[]:
                          let fsVal = interp.globals[]["FileStream"]
                          if fsVal.kind == vkClass: fsVal.classVal else: nil
@@ -137,7 +141,11 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
 
   if fileStreamCls != nil:
     let stdoutInstance = fileStreamCls.newInstance()
+    let stderrInstance = fileStreamCls.newInstance()
+    let stdinInstance = fileStreamCls.newInstance()
     interp.globals[]["Stdout"] = stdoutInstance.toValue()
+    interp.globals[]["Stderr"] = stderrInstance.toValue()
+    interp.globals[]["Stdin"] = stdinInstance.toValue()
     debug("Created Stdout instance from FileStream class")
 
 # ============================================================================
@@ -145,7 +153,7 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
 # ============================================================================
 
 proc setupJSStdout*(interp: var Interpreter) =
-  ## Set up Stdout for JS environment
+  ## Set up standard stream globals for JS environment
   ## FileStream methods use console.log via emit in objects.nim
 
   # Find FileStream class
@@ -156,7 +164,10 @@ proc setupJSStdout*(interp: var Interpreter) =
                          nil
 
   if fileStreamCls != nil:
-    # Create Stdout instance
     let stdoutInstance = fileStreamCls.newInstance()
+    let stderrInstance = fileStreamCls.newInstance()
+    let stdinInstance = fileStreamCls.newInstance()
     interp.globals[]["Stdout"] = stdoutInstance.toValue()
-    debug("Created Stdout instance from FileStream class")
+    interp.globals[]["Stderr"] = stderrInstance.toValue()
+    interp.globals[]["Stdin"] = stdinInstance.toValue()
+    debug("Created Stdin/Stdout/Stderr instances from FileStream class")
