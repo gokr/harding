@@ -1,0 +1,34 @@
+#!/usr/bin/env harding
+#
+# Main entry point for MyApp (Granite Pattern)
+#
+# This file is compiled to Nim using Granite, then compiled to a native binary.
+#
+# Note: In Granite-compiled mode, you don't need a separate Nim entry point.
+# Granite generates the Nim code that includes the Harding runtime setup.
+
+# Application: Greeting with arguments
+args := System arguments
+
+Stdout writeline: "=== MyApp (Pattern 2: Granite) ==="
+Stdout writeline: ""
+
+(args size > 0) ifTrue: [
+  Stdout writeline: ("Hello, " , (args at: 0) , "!")
+  
+  (args size > 1) ifTrue: [
+    Stdout writeline: "Additional arguments:"
+    1 to: (args size - 1) do: [:i |
+      Stdout writeline: (("  " , i asString , ". ") , (args at: i))
+    ]
+  ]
+] ifFalse: [
+  Stdout writeline: "Hello, World!"
+  Stdout writeline: ""
+  Stdout writeline: "Usage: ./myapp <name> [args...]"
+  Stdout writeline: ""
+  Stdout writeline: "Example: ./myapp Alice Bob Charlie"
+]
+
+Stdout writeline: ""
+Stdout writeline: "=== Application Complete ==="
