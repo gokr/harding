@@ -54,6 +54,7 @@ nimble install_bona  # Installs .desktop file and icon
 ```bash
 harding                    # Interactive REPL
 harding script.hrd         # Run a file
+harding script.hrd -- a b  # Pass runtime args to System arguments
 harding -e "3 + 4"         # Evaluate expression
 harding --ast script.hrd   # Show AST, then execute
 harding --loglevel DEBUG   # Verbose execution trace
@@ -176,6 +177,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Method definition (`>>`), `self` and `super` support
 - Multi-character operators (`==`, `//`, `<=`, `>=`, `~=`, `~~`)
 - Standard library (Object, Boolean, Block, Number, Collections, String, Exception, TestCase)
+- Core I/O and process helpers (`File`, `FileStream`, `System`, `Stdin`/`Stdout`/`Stderr`)
 - Green threads: `Processor fork:`, `Processor yield`
 - Synchronization primitives: Monitor, SharedQueue, Semaphore
 - Multiple inheritance with conflict detection and scoped super send
@@ -209,6 +211,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Bootstrap](docs/BOOTSTRAP.md) - Bootstrap architecture and stdlib loading
 - [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
 - [Compilation Pipeline](docs/COMPILATION_PIPELINE.md) - Granite compiler architecture
+- [Nim Package Tutorial](docs/NIM_PACKAGE_TUTORIAL.md) - Bundle Nim primitives with `.hrd` sources
 - [Roadmap](docs/ROADMAP.md) - Active priorities and milestones
 - [Performance](docs/PERFORMANCE.md) - Performance workflow and priorities
 - [Future Plans](docs/FUTURE.md) - Long-term roadmap

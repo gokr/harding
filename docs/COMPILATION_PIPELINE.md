@@ -24,6 +24,7 @@ Granite is the Harding-to-Nim compiler. There are two entry points:
 - Primitives: `primitiveGraniteCompile:`, `primitiveGraniteBuild:`
 - Has full access to loaded classes, methods, and object graph
 - Located in: `src/harding/compiler/compiler_primitives.nim`
+- Application builds now inject host command-line arguments into `main: args`
 
 ### Block Compilation (implemented)
 - Block registry: `src/harding/codegen/blocks.nim`

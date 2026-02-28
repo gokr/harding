@@ -101,7 +101,7 @@ These methods MUST be defined in Nim because they're needed **before** `.hrd` fi
 | `classSelector:put:` | Define class method | Needed to parse class method definitions |
 | `derive:` | Create subclass with slots | Needed to define new classes |
 | `new` | Create instance | Needed before `.hrd` files can define initialization |
-| `load:` | Load and evaluate a `.hrd` file | Required to load stdlib |
+| `load:` | Load/evaluate `.hrd` from filesystem or embedded package sources | Required to load stdlib and packaged libraries |
 
 ### Primitive Selectors
 

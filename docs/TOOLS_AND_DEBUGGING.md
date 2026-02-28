@@ -24,8 +24,14 @@ harding
 # Run a script file
 harding script.hrd
 
+# Run a script and pass runtime args
+harding script.hrd -- one two three
+
 # Evaluate an expression
 harding -e "3 + 4"
+
+# Evaluate with runtime args available to System arguments
+harding -e "System arguments size" -- a b
 
 # Show AST without executing (parse only)
 harding --ast script.hrd
@@ -56,6 +62,10 @@ harding --ast --loglevel DEBUG -e "Object clone"
 **--help:** Display usage information
 **--debugger-port <port>:** Start debugger server on specified port (requires `-d:debugger` build)
 
+**`--` (argument separator):**
+- All tokens after `--` are treated as runtime arguments, not CLI flags
+- Runtime arguments are exposed to Harding code via `System arguments`
+
 ### Script Files
 
 Harding script files (`.hrd` extension) are executed as blocks, enabling temporary variable declarations:
@@ -78,6 +88,7 @@ total  "Returns sum of 1+2+3+4+5 = 15"
 - Scripts execute with `self = nil` (Smalltalk workspace convention)
 - No need for uppercase globals in simple scripts - use lowercase temporaries
 - File extension can be `.hrd`, `.harding`, or no extension
+- Script/runtime args are passed after `--` and can be read using `System arguments`
 
 ### Debug Logging Output
 
@@ -239,6 +250,7 @@ Granite compiles standalone `.hrd` scripts with inline control flow:
 - `timesRepeat:` → Nim `for`
 - Arithmetic and comparisons → helper function calls
 - Variables → direct Nim `var` declarations
+- For in-VM Application builds, generated `main: args` now receives host command-line arguments
 
 ## The IDE: bona
 

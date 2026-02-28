@@ -1047,7 +1047,9 @@ Global system utilities are also available by default:
 ```smalltalk
 System arguments        # Array of CLI args passed after '--'
 System cwd              # Current working directory
+System stdin            # Standard input stream
 System stdout           # Stdout stream
+System stderr           # Stderr stream
 ```
 
 ### Packaging Nim-Backed Libraries
@@ -1406,6 +1408,8 @@ app := MyApp new
 app name: "myapp"
 Granite build: app
 ```
+
+`args` receives host command-line arguments in both interpreter and compiled execution paths.
 
 #### Performance
 
