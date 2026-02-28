@@ -36,6 +36,7 @@ type
     hardingHome*: string
     bootstrapFile*: string
     debuggerPort*: int           # Debugger server port (0 = disabled)
+    runtimeArgs*: seq[string]    # Args after '--' passed into Harding code
     positionalArgs*: seq[string]
 
 proc parseLogLevel*(levelStr: string): Level =
@@ -67,11 +68,17 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
     hardingHome: getEnv("HARDING_HOME", DefaultHardingHome),
     bootstrapFile: "",
     debuggerPort: 0,  # Disabled by default
+    runtimeArgs: @[],
     positionalArgs: @[]
   )
 
   var i = 0
   while i < allArgs.len:
+    if allArgs[i] == "--":
+      if i + 1 < allArgs.len:
+        result.runtimeArgs = allArgs[(i + 1)..^1]
+      break
+
     case allArgs[i]
     of "--loglevel":
       if i + 1 < allArgs.len:
@@ -146,6 +153,7 @@ proc showUsage*(appName: string, appDesc: string, examples: seq[string] = @[],
   if appName == "harding":
     echo "  ", appName, " [options] <file.hrd>      # Run script file"
     echo "  ", appName, " [options] -e \"<code>\"      # Evaluate expression"
+    echo "  ", appName, " [options] <file.hrd> -- args  # Script args"
   echo "  ", appName, " --help                       # Show this help"
   echo "  ", appName, " --version                    # Show version"
   echo ""

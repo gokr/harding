@@ -6,6 +6,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `System` stdlib class with `arguments`, `cwd`, and stdio accessors (`stdin`, `stdout`, `stderr`).
+- `File` stdlib convenience class (`readAll:`, `write:to:`, `append:to:`, `exists:`).
+- Package API for embedding Harding sources with Nim primitives (`src/harding/packages/package_api.nim`) and package-loading tutorial (`docs/NIM_PACKAGE_TUTORIAL.md`).
+
+### Changed
+- `FileStream` now uses native file primitives (`primitiveFileOpen:mode:`, `primitiveFileReadAll`, etc.) and exposes `Stdin`, `Stdout`, and `Stderr` globals.
+- CLI parsing now supports script/runtime args after `--`, and passes them into interpreter `System arguments`.
+- `load:` for `Harding` and `Library` now resolves both filesystem paths and embedded package sources.
+- Granite Application builds now inject command-line args into `main: args` via generated runtime setup.
+
+### Tests
+- Added stdlib/package coverage for system arguments, stream globals, file I/O convenience methods, and embedded package loading.
+- Added end-to-end CLI coverage verifying `--` argument forwarding for script mode and `-e` mode.
+
 ## [0.7.0] - 2026-02-27
 
 ### Added

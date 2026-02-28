@@ -57,7 +57,9 @@ nimble harding</code></pre>
                     <h3>Quick Start</h3>
                     <pre><code>harding              # Interactive REPL
 harding script.hrd   # Run a script
+harding script.hrd -- one two  # Run with runtime args
 harding -e "3 + 4"   # Evaluate expression
+harding -e "System arguments size" -- red blue green  # Eval with args
 harding --ast script.hrd  # Show AST then execute
 harding --loglevel DEBUG script.hrd  # Debug output</code></pre>
                     <p>Use <code>--loglevel DEBUG</code> for verbose output</p>
@@ -134,6 +136,19 @@ result println   # 0</code></pre>
         </div>
     </section>
 
+    <!-- New in Current Runtime -->
+    <section class="content-section">
+        <div class="container">
+            <h2 class="section-title">New in Current Runtime</h2>
+            <ul>
+                <li><code>System</code> class for process/stdio access (<code>arguments</code>, <code>cwd</code>, <code>stdin</code>, <code>stdout</code>, <code>stderr</code>)</li>
+                <li><code>File</code> convenience API for file reads/writes (<code>readAll:</code>, <code>write:to:</code>, <code>append:to:</code>, <code>exists:</code>)</li>
+                <li><code>FileStream</code> native file primitives for stream-style I/O</li>
+                <li>Nim-Harding package model for bundled Nim primitives + embedded .hrd sources</li>
+            </ul>
+        </div>
+    </section>
+
     <!-- Reference Docs -->
     <section class="content-section">
         <div class="container">
@@ -146,6 +161,7 @@ result println   # 0</code></pre>
                         <li><a href="https://github.com/gokr/harding/blob/main/docs/MANUAL.md">Language Manual</a> - Complete specification</li>
                         <li><a href="https://github.com/gokr/harding/blob/main/docs/QUICKREF.md">Quick Reference</a> - Syntax cheat sheet</li>
                         <li><a href="https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md">Implementation</a> - VM internals</li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md">Nim Package Tutorial</a> - Package Nim primitives with Harding sources</li>
                     </ul>
                 </div>
 

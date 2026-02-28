@@ -18,11 +18,13 @@ Harding load: "lib/core/Array.hrd"
 Harding load: "lib/core/Table.hrd"
 Harding load: "lib/core/Library.hrd"
 Harding load: "lib/core/Number.hrd"
+Harding load: "lib/core/System.hrd"
 
 # Load new classes into Standard Library
 Standard load: "lib/core/Collections.hrd"
 Standard load: "lib/core/SortedCollection.hrd"
 Standard load: "lib/core/Interval.hrd"
+Standard load: "lib/core/File.hrd"
 Standard load: "lib/core/FileStream.hrd"
 Standard load: "lib/core/Exception.hrd"
 Standard load: "lib/core/TestCase.hrd"

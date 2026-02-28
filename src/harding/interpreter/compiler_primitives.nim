@@ -179,7 +179,7 @@ when defined(granite):
 
     let outputDir = "./build"
     var ctx = newCompiler(outputDir, appName)
-    let nimCode = genModule(ctx, nodes, appName)
+    let nimCode = genModule(ctx, nodes, appName, injectMainArgsVar = true)
 
     # Write to file
     let nimPath = outputDir / appName & ".nim"

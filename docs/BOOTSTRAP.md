@@ -67,7 +67,7 @@ These are the methods that MUST be defined in Nim because they're needed **befor
 
 | Selector | Purpose | Location |
 |----------|---------|----------|
-| `load:` | Load and evaluate a `.hrd` file | `vm.nim` - required to load stdlib |
+| `load:` | Load and evaluate a `.hrd` file (filesystem or embedded package source) | `vm.nim` - required to load stdlib |
 | `import:` | Import a foreign library | `vm.nim` - FFI support |
 | `eval:` | Evaluate Harding code string | `vm.nim` - REPL support |
 
@@ -114,24 +114,31 @@ Integer>>+ other <primitive primitivePlus: other>
 The `lib/core/Bootstrap.hrd` file loads the core library in the correct order:
 
 ```harding
-load: "lib/core/Object.hrd"
-load: "lib/core/Boolean.hrd"
-load: "lib/core/Number.hrd"
-load: "lib/core/Integer.hrd"
-load: "lib/core/Float.hrd"
-load: "lib/core/String.hrd"
-load: "lib/core/Symbol.hrd"
-load: "lib/core/Table.hrd"
-load: "lib/core/Array.hrd"
-load: "lib/core/Block.hrd"
-load: "lib/core/Collections.hrd"
-# ... additional files
+Harding load: "lib/core/Object.hrd"
+Harding load: "lib/core/Boolean.hrd"
+Harding load: "lib/core/Number.hrd"
+Harding load: "lib/core/Integer.hrd"
+Harding load: "lib/core/Float.hrd"
+Harding load: "lib/core/String.hrd"
+Harding load: "lib/core/Symbol.hrd"
+Harding load: "lib/core/Table.hrd"
+Harding load: "lib/core/Array.hrd"
+Harding load: "lib/core/Block.hrd"
+Harding load: "lib/core/System.hrd"
+
+Standard load: "lib/core/Collections.hrd"
+Standard load: "lib/core/Interval.hrd"
+Standard load: "lib/core/File.hrd"
+Standard load: "lib/core/FileStream.hrd"
+Standard load: "lib/core/Exception.hrd"
 ```
 
 Loading order matters because:
 1. `Object.hrd` must define the base class methods before subclasses can inherit
 2. `Number.hrd` defines shared numeric behavior before `Integer` and `Float`
 3. Primitives must be registered in `vm.nim` BEFORE the `.hrd` file that uses them is loaded
+
+The same `load:` mechanism is also used for packaged libraries that provide embedded `.hrd` sources (via `HardingPackageSpec`).
 
 ## Primitive Selector Registration in `initGlobals()`
 

@@ -1,0 +1,21 @@
+#!/usr/bin/env harding
+#
+# System.hrd - process-level utilities
+
+System := Object derive: #()
+
+System class>>arguments <primitive primitiveSystemArguments>
+
+System class>>cwd <primitive primitiveSystemCwd>
+
+System class>>stdin [
+  ^ Stdin
+]
+
+System class>>stdout [
+  ^ Stdout
+]
+
+System class>>stderr [
+  ^ Stderr
+]

@@ -236,6 +236,8 @@ type
     evalStack*: seq[NodeValue]  # Value stack for expression results
     # Library support
     importedLibraries*: seq[Instance]  # Stack of imported Library instances for namespace search
+    commandLineArgs*: seq[string]  # Command-line arguments available to Harding code
+    packageSources*: ref Table[string, string]  # Embedded source files keyed by virtual path
     # Debugger support
     when defined(debugger):
       debugMode*: bool              # Whether debugger is attached

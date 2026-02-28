@@ -523,6 +523,30 @@ obj respondsTo: #do:    <span class="comment"># Check method existence</span></c
         <div class="container">
             <h2 class="section-title">Runtime Features</h2>
 
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>System and File I/O</h3>
+                    <p>Harding includes practical process/file utilities in the stdlib:</p>
+                    <ul>
+                        <li><code>System arguments</code> for CLI/runtime arguments</li>
+                        <li><code>System cwd</code>, <code>System stdin</code>, <code>System stdout</code>, <code>System stderr</code></li>
+                        <li><code>File</code> class convenience messages (<code>readAll:</code>, <code>write:to:</code>, <code>append:to:</code>, <code>exists:</code>)</li>
+                        <li><code>FileStream</code> for stream-style open/read/write</li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">File and System Helpers</div>
+                        <pre><code><span class="comment"># File helpers</span>
+content := <span class="type">File</span> readAll: <span class="string">"README.md"</span>
+<span class="type">File</span> write: content to: <span class="string">"README.copy.md"</span>
+
+<span class="comment"># Process info and stdio</span>
+<span class="type">System</span> stdout writeline: (<span class="string">"args: "</span> , (<span class="type">System</span> arguments size) asString)</code></pre>
+                    </div>
+                </div>
+            </div>
+
             <div class="feature-cards runtime-feature-cards">
                 <div class="feature-card-large">
                     <div class="feature-icon-large">
@@ -677,8 +701,21 @@ obj hardingType     <span class="comment"># Get Harding type name</span>
 obj nimValue        <span class="comment"># Access Nim value</span>
 
 <span class="comment"># C library access via Nim FFI</span>
-<span class="operator">&lt;</span>primitive primitiveCCall: function with: args<span class="operator">&gt;</span></code></pre>
+<span class="operator"><</span>primitive primitiveCCall: function with: args<span class="operator">></span></code></pre>
                     </div>
+                </div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Nim-Harding Package Model</h3>
+                    <p>Harding supports packaging Nim primitives and Harding source files together:</p>
+                    <ul>
+                        <li>Package .hrd files are embedded and loaded through the same load: message</li>
+                        <li>Nim primitive registration is bundled with package install</li>
+                        <li>One package version controls both Nim implementation and Harding API surface</li>
+                    </ul>
+                    <p>For a full walkthrough, see the <a href="https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md">Nim Package Tutorial</a>.</p>
                 </div>
             </div>
         </div>
@@ -769,7 +806,7 @@ process priority   # Scheduling priority</code></pre>
     <!-- Current Status -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">Current Status: v0.6.0</h2>
+            <h2 class="section-title">Current Status: v0.7.0</h2>
             <div class="feature-cards">
                 <div class="feature-card-large">
                     <h3>Implemented</h3>
@@ -783,6 +820,9 @@ process priority   # Scheduling priority</code></pre>
                         <li>BitBarrel integration for persistent storage (optional)</li>
                         <li>Automatic accessor generation (<code>deriveWithAccessors:</code>)</li>
                         <li>Collections: Array, Table, Set, Interval, SortedCollection</li>
+                        <li>System/File I/O stdlib (<code>System</code>, <code>File</code>, <code>FileStream</code>, stdio globals)</li>
+                        <li>CLI/runtime arg forwarding via <code>System arguments</code> (including <code>harding ... -- args</code>)</li>
+                        <li>Nim-Harding package model for bundled primitives + embedded .hrd sources</li>
                     </ul>
                 </div>
                 <div class="feature-card-large">

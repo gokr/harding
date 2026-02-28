@@ -69,6 +69,9 @@ harding
 # Run a script
 harding script.hrd
 
+# Run a script with runtime arguments
+harding script.hrd -- one two three
+
 # Compile and run natively
 granite run script.hrd --release
 ```
@@ -1025,6 +1028,8 @@ The Standard Library is pre-loaded with common classes and utilities:
 ```smalltalk
 Standard load: "lib/core/Collections.hrd"      # Set
 Standard load: "lib/core/Interval.hrd"         # Interval
+Standard load: "lib/core/File.hrd"             # File convenience API
+Standard load: "lib/core/FileStream.hrd"       # Stream I/O
 Standard load: "lib/core/Exception.hrd"        # Exception hierarchy
 ```
 
@@ -1033,8 +1038,31 @@ The Standard Library is automatically imported at startup, so these classes are 
 ```smalltalk
 Set new                # Set collection (from Standard)
 1 to: 10               # Interval (from Standard)
+File readAll: "README.md"
 Error error: "oops"    # Exception class (from Standard)
 ```
+
+Global system utilities are also available by default:
+
+```smalltalk
+System arguments        # Array of CLI args passed after '--'
+System cwd              # Current working directory
+System stdin            # Standard input stream
+System stdout           # Stdout stream
+System stderr           # Stderr stream
+```
+
+### Packaging Nim-Backed Libraries
+
+Harding supports packaging Nim primitive implementations together with embedded `.hrd` sources.
+
+Use this flow:
+
+1. Define Harding-facing methods in `.hrd` using `<primitive ...>` selectors.
+2. Implement the selectors in Nim and register them on the target class.
+3. Bundle all package `.hrd` files as embedded strings and install them with `HardingPackageSpec`.
+
+For a full end-to-end example, see `docs/NIM_PACKAGE_TUTORIAL.md`.
 
 ### Loading Code into Global Scope
 
@@ -1380,6 +1408,8 @@ app := MyApp new
 app name: "myapp"
 Granite build: app
 ```
+
+`args` receives host command-line arguments in both interpreter and compiled execution paths.
 
 #### Performance
 

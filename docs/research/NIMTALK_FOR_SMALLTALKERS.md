@@ -477,13 +477,15 @@ Hash table literals with arrow syntax:
 dict := #{ "name" -> "Alice" "age" -> 30 }.
 ```
 
-### 4. Stdout Global
+### 4. Standard Stream Globals
 
-Harding provides a `Stdout` global for console output:
+Harding provides `Stdin`, `Stdout`, and `Stderr` globals for console I/O:
 
 ```harding
 Stdout write: "Hello"           # Print without newline
 Stdout writeline: "World"       # Print with newline
+line := Stdin readLine
+Stderr writeline: "warning"
 ```
 
 ### 5. String repeat:

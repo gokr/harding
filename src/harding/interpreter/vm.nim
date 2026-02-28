@@ -63,6 +63,19 @@ type
 
 var currentResumeControl*: ptr ResumeControlFlow = nil
 
+type
+  FileStreamKind = enum
+    fskClosed, fskFile, fskStdout, fskStderr, fskStdin
+
+  FileStreamProxy = ref object
+    kind: FileStreamKind
+    when not defined(js):
+      file: File
+
+# Keep FileStreamProxy references alive - stored as raw pointer in nimValue,
+# ARC needs a rooted reference to avoid premature collection.
+var fileStreamProxies: seq[FileStreamProxy] = @[]
+
 # Forward declarations
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue
@@ -71,6 +84,23 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
 proc installGlobalTableMethods*(globalTableClass: Class)
 proc installLibraryMethods*()
 proc initHardingGlobal*(interp: var Interpreter)
+proc primitiveFileOpenImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileCloseImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileReadLineImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileWriteImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileAtEndImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileReadAllImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileExistsImpl(interp: var Interpreter, self: Instance,
+                             args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveSystemArgumentsImpl(interp: var Interpreter, self: Instance,
+                                  args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveSystemCwdImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.}
+proc resolveLoadInput(interp: Interpreter,
+                      requestedPath: string): tuple[ok: bool, source: string, displayPath: string]
+proc makeStandardFileStreamInstance(fileStreamCls: Class,
+                                    kind: FileStreamKind,
+                                    mode: string): Instance
 
 proc callNativeValueMethod(interp: var Interpreter, meth: BlockNode,
                           receiverVal: NodeValue,
@@ -128,6 +158,8 @@ proc printStackTrace*(interp: var Interpreter) =
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpreter =
   ## Create a new interpreter instance
+  var pkgSources = new(Table[string, string])
+  pkgSources[] = initTable[string, string]()
   result = Interpreter(
     globals: new(Table[string, NodeValue]),
     activationStack: @[],
@@ -136,7 +168,9 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
     maxStackDepth: maxStackDepth,
     traceExecution: trace,
     lastResult: nilValue(),
-    rootObject: nil
+    rootObject: nil,
+    commandLineArgs: @[],
+    packageSources: pkgSources
   )
 
   # Initialize the heap-allocated globals table
@@ -152,10 +186,16 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
 # Create interpreter with shared globals and rootObject (for green threads)
 proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
                                 rootObject: Instance,
+                                packageSources: ref Table[string, string] = nil,
                                 trace: bool = false,
                                 maxStackDepth: int = 10000): Interpreter =
   ## Create a new interpreter that shares globals and rootClass with others
   ## Used for green threads where multiple interpreters share state
+  var pkgSources = packageSources
+  if pkgSources == nil:
+    pkgSources = new(Table[string, string])
+    pkgSources[] = initTable[string, string]()
+
   result = Interpreter(
     globals: globals,
     activationStack: @[],
@@ -166,7 +206,9 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
     lastResult: nilValue(),
     rootObject: rootObject,
     exceptionHandlers: @[],
-    schedulerContextPtr: nil
+    schedulerContextPtr: nil,
+    commandLineArgs: @[],
+    packageSources: pkgSources
   )
 
   # Use the shared root class and root object
@@ -2855,16 +2897,11 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Add isClass method to Object - returns true if self is a Class object
   proc primitiveIsClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-    # Check if self is a Class object (like Object, String, Number, etc.)
-    # Class objects are ikObject instances with 0 slots (they don't have instance variables)
-    # Regular instances have slots defined by their class.
-    #
-    # When a Class (vkClass) is wrapped as an Instance, it becomes an ikObject
-    # with 0 slots because classes don't have instance slots in this system.
-    # When a regular instance is created, it has slots as defined by its class.
-    #
-    # So the check is: ikObject with 0 slots = likely a class object
-    if self.kind == ikObject and self.slots.len == 0:
+    # A class receiver is represented as a tagged wrapper instance created
+    # by the vkClass dispatch path. Regular zero-slot objects must not report
+    # themselves as classes.
+    if self.kind == ikObject and self.class != nil and self.isNimProxy and
+       self.nimValue == cast[pointer](self.class):
       return trueValue
     return falseValue
 
@@ -3871,7 +3908,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       tableClassCache = tableVal.classVal
       debug("Set tableClassCache from Table global")
 
-  # Set up FileStream class and Stdout instance
+  # Set up FileStream class and standard stream globals
   proc findClassInLibraries(interp: Interpreter, name: string): Class =
     for lib in interp.importedLibraries:
       if lib.kind == ikObject and lib.class == libraryClass:
@@ -3889,23 +3926,86 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
                          findClassInLibraries(interp, "FileStream")
 
   if fileStreamCls != nil:
-    # Native builds: Use native implementations
-    let fsWriteMethod = createCoreMethod("write:")
-    fsWriteMethod.setNativeImpl(writeImpl)
-    setNativeValueFromInstance(fsWriteMethod, writeImpl)
-    fileStreamCls.methods["write:"] = fsWriteMethod
-    fileStreamCls.allMethods["write:"] = fsWriteMethod
+    fileStreamCls.isNimProxy = true
+    fileStreamCls.hardingType = "FileStream"
 
-    let fsWritelineMethod = createCoreMethod("writeline:")
-    fsWritelineMethod.setNativeImpl(writelineImpl)
-    setNativeValueFromInstance(fsWritelineMethod, writelineImpl)
-    fileStreamCls.methods["writeline:"] = fsWritelineMethod
-    fileStreamCls.allMethods["writeline:"] = fsWritelineMethod
-    debug("Registered native FileStream methods")
+    let fsOpenMethod = createCoreMethod("primitiveFileOpen:mode:")
+    fsOpenMethod.setNativeImpl(primitiveFileOpenImpl)
+    setNativeValueFromInstance(fsOpenMethod, primitiveFileOpenImpl)
+    fileStreamCls.methods["primitiveFileOpen:mode:"] = fsOpenMethod
+    fileStreamCls.allMethods["primitiveFileOpen:mode:"] = fsOpenMethod
 
-    let stdoutInstance = fileStreamCls.newInstance()
-    interp.globals[]["Stdout"] = stdoutInstance.toValue()
-    debug("Created Stdout instance from FileStream class")
+    let fsCloseMethod = createCoreMethod("primitiveFileClose")
+    fsCloseMethod.setNativeImpl(primitiveFileCloseImpl)
+    setNativeValueFromInstance(fsCloseMethod, primitiveFileCloseImpl)
+    fileStreamCls.methods["primitiveFileClose"] = fsCloseMethod
+    fileStreamCls.allMethods["primitiveFileClose"] = fsCloseMethod
+
+    let fsReadLineMethod = createCoreMethod("primitiveFileReadLine")
+    fsReadLineMethod.setNativeImpl(primitiveFileReadLineImpl)
+    setNativeValueFromInstance(fsReadLineMethod, primitiveFileReadLineImpl)
+    fileStreamCls.methods["primitiveFileReadLine"] = fsReadLineMethod
+    fileStreamCls.allMethods["primitiveFileReadLine"] = fsReadLineMethod
+
+    let fsPrimitiveWriteMethod = createCoreMethod("primitiveFileWrite:")
+    fsPrimitiveWriteMethod.setNativeImpl(primitiveFileWriteImpl)
+    setNativeValueFromInstance(fsPrimitiveWriteMethod, primitiveFileWriteImpl)
+    fileStreamCls.methods["primitiveFileWrite:"] = fsPrimitiveWriteMethod
+    fileStreamCls.allMethods["primitiveFileWrite:"] = fsPrimitiveWriteMethod
+
+    let fsAtEndMethod = createCoreMethod("primitiveFileAtEnd")
+    fsAtEndMethod.setNativeImpl(primitiveFileAtEndImpl)
+    setNativeValueFromInstance(fsAtEndMethod, primitiveFileAtEndImpl)
+    fileStreamCls.methods["primitiveFileAtEnd"] = fsAtEndMethod
+    fileStreamCls.allMethods["primitiveFileAtEnd"] = fsAtEndMethod
+
+    let fsReadAllMethod = createCoreMethod("primitiveFileReadAll")
+    fsReadAllMethod.setNativeImpl(primitiveFileReadAllImpl)
+    setNativeValueFromInstance(fsReadAllMethod, primitiveFileReadAllImpl)
+    fileStreamCls.methods["primitiveFileReadAll"] = fsReadAllMethod
+    fileStreamCls.allMethods["primitiveFileReadAll"] = fsReadAllMethod
+
+    debug("Registered native FileStream primitive methods")
+
+    interp.globals[]["Stdout"] = makeStandardFileStreamInstance(fileStreamCls, fskStdout, "w").toValue()
+    interp.globals[]["Stderr"] = makeStandardFileStreamInstance(fileStreamCls, fskStderr, "w").toValue()
+    interp.globals[]["Stdin"] = makeStandardFileStreamInstance(fileStreamCls, fskStdin, "r").toValue()
+    debug("Created Stdin/Stdout/Stderr instances from FileStream class")
+
+  let systemCls = if "System" in interp.globals[]:
+                    let sysVal = interp.globals[]["System"]
+                    if sysVal.kind == vkClass: sysVal.classVal else: nil
+                  else:
+                    findClassInLibraries(interp, "System")
+
+  if systemCls != nil:
+    let systemArgsMethod = createCoreMethod("primitiveSystemArguments")
+    systemArgsMethod.setNativeImpl(primitiveSystemArgumentsImpl)
+    systemArgsMethod.hasInterpreterParam = true
+    systemCls.classMethods["primitiveSystemArguments"] = systemArgsMethod
+    systemCls.allClassMethods["primitiveSystemArguments"] = systemArgsMethod
+
+    let systemCwdMethod = createCoreMethod("primitiveSystemCwd")
+    systemCwdMethod.setNativeImpl(primitiveSystemCwdImpl)
+    systemCwdMethod.hasInterpreterParam = true
+    systemCls.classMethods["primitiveSystemCwd"] = systemCwdMethod
+    systemCls.allClassMethods["primitiveSystemCwd"] = systemCwdMethod
+
+    debug("Registered native System primitive methods")
+
+  let fileCls = if "File" in interp.globals[]:
+                  let fileVal = interp.globals[]["File"]
+                  if fileVal.kind == vkClass: fileVal.classVal else: nil
+                else:
+                  findClassInLibraries(interp, "File")
+
+  if fileCls != nil:
+    let fileExistsMethod = createCoreMethod("primitiveFileExists:")
+    fileExistsMethod.setNativeImpl(primitiveFileExistsImpl)
+    fileExistsMethod.hasInterpreterParam = true
+    fileCls.classMethods["primitiveFileExists:"] = fileExistsMethod
+    fileCls.allClassMethods["primitiveFileExists:"] = fileExistsMethod
+    debug("Registered native File primitive methods")
 
   # Force rebuild of all method tables after stdlib loading completes
   # This ensures inherited methods are properly populated in allMethods tables
@@ -4093,6 +4193,306 @@ proc execWithOutput*(interp: var Interpreter, source: string): (string, string) 
     return (value.toString(), "")
 
 # ============================================================================
+# FileStream and System primitives
+# ============================================================================
+
+proc registerFileStreamProxy(proxy: FileStreamProxy) =
+  if proxy != nil and proxy notin fileStreamProxies:
+    fileStreamProxies.add(proxy)
+
+proc extractPathArg(val: NodeValue): string =
+  case val.kind
+  of vkString:
+    val.strVal
+  of vkSymbol:
+    val.symVal
+  else:
+    ""
+
+proc setNamedSlot(inst: Instance, slotName: string, value: NodeValue) =
+  if inst == nil or inst.class == nil:
+    return
+  let idx = inst.class.allSlotNames.find(slotName)
+  if idx >= 0 and idx < inst.slots.len:
+    inst.slots[idx] = value
+
+proc getFileStreamProxy(self: Instance): FileStreamProxy =
+  if self != nil and self.isNimProxy and self.class != nil and
+     self.class.hardingType == "FileStream" and nimValueIsSet(self.nimValue):
+    return cast[FileStreamProxy](self.nimValue)
+  return nil
+
+proc ensureFileStreamProxy(self: Instance): FileStreamProxy =
+  result = getFileStreamProxy(self)
+  if result != nil:
+    return result
+  result = FileStreamProxy(kind: fskClosed)
+  registerFileStreamProxy(result)
+  self.isNimProxy = true
+  self.nimValue = cast[pointer](result)
+
+proc makeStandardFileStreamInstance(fileStreamCls: Class,
+                                    kind: FileStreamKind,
+                                    mode: string): Instance =
+  result = fileStreamCls.newInstance()
+  result.isNimProxy = true
+  let proxy = FileStreamProxy(kind: kind)
+  registerFileStreamProxy(proxy)
+  result.nimValue = cast[pointer](proxy)
+  setNamedSlot(result, "mode", toValue(mode))
+  setNamedSlot(result, "isOpen", toValue(true))
+
+when not defined(js):
+  proc parseFileMode(mode: string, fileMode: var FileMode): bool =
+    case mode
+    of "r":
+      fileMode = fmRead
+      return true
+    of "w":
+      fileMode = fmWrite
+      return true
+    of "a":
+      fileMode = fmAppend
+      return true
+    of "r+":
+      fileMode = fmReadWriteExisting
+      return true
+    of "w+":
+      fileMode = fmReadWrite
+      return true
+    else:
+      return false
+
+proc primitiveFileOpenImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self == nil or args.len < 2:
+    return nilValue()
+
+  let filePath = extractPathArg(args[0])
+  let mode = extractPathArg(args[1])
+  if filePath.len == 0 or mode.len == 0:
+    return nilValue()
+
+  when defined(js):
+    discard filePath
+    discard mode
+    writeStderr("Error: FileStream file operations are not available in JS backend")
+    return nilValue()
+  else:
+    var fileMode: FileMode
+    if not parseFileMode(mode, fileMode):
+      writeStderr("Error: Unsupported file mode: " & mode)
+      return nilValue()
+
+    let proxy = ensureFileStreamProxy(self)
+    if proxy.kind == fskFile:
+      try:
+        close(proxy.file)
+      except CatchableError:
+        discard
+
+    var f: File
+    if not open(f, filePath, fileMode):
+      setNamedSlot(self, "isOpen", toValue(false))
+      writeStderr("Error: Could not open file: " & filePath)
+      return nilValue()
+
+    proxy.kind = fskFile
+    proxy.file = f
+    setNamedSlot(self, "file", toValue(filePath))
+    setNamedSlot(self, "mode", toValue(mode))
+    setNamedSlot(self, "isOpen", toValue(true))
+    return self.toValue()
+
+proc primitiveFileCloseImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard args
+  let proxy = getFileStreamProxy(self)
+  if proxy == nil:
+    setNamedSlot(self, "isOpen", toValue(false))
+    return self.toValue()
+
+  case proxy.kind
+  of fskFile:
+    when not defined(js):
+      try:
+        close(proxy.file)
+      except CatchableError:
+        discard
+    proxy.kind = fskClosed
+    setNamedSlot(self, "isOpen", toValue(false))
+  of fskStdout, fskStderr, fskStdin:
+    # Standard streams stay open for the process lifetime.
+    discard
+  of fskClosed:
+    discard
+  self.toValue()
+
+proc primitiveFileReadLineImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard args
+  let proxy = getFileStreamProxy(self)
+  if proxy == nil:
+    return nilValue()
+
+  case proxy.kind
+  of fskStdin:
+    var line = ""
+    if stdin.readLine(line):
+      return toValue(line)
+    return nilValue()
+  of fskFile:
+    when defined(js):
+      return nilValue()
+    else:
+      var line = ""
+      if proxy.file.readLine(line):
+        return toValue(line)
+      return nilValue()
+  else:
+    return nilValue()
+
+proc primitiveFileWriteImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if args.len < 1:
+    return self.toValue()
+
+  let text = args[0].toString()
+  let proxy = getFileStreamProxy(self)
+  if proxy == nil:
+    return nilValue()
+
+  case proxy.kind
+  of fskStdout:
+    stdout.write(text)
+    flushFile(stdout)
+  of fskStderr:
+    stderr.write(text)
+    flushFile(stderr)
+  of fskFile:
+    when defined(js):
+      return nilValue()
+    else:
+      try:
+        proxy.file.write(text)
+      except CatchableError:
+        return nilValue()
+  else:
+    return nilValue()
+
+  return self.toValue()
+
+proc primitiveFileAtEndImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard args
+  let proxy = getFileStreamProxy(self)
+  if proxy == nil:
+    return toValue(true)
+
+  case proxy.kind
+  of fskFile:
+    when defined(js):
+      return toValue(true)
+    else:
+      return toValue(endOfFile(proxy.file))
+  of fskStdin:
+    return toValue(false)
+  of fskStdout, fskStderr:
+    return toValue(false)
+  of fskClosed:
+    return toValue(true)
+
+proc primitiveFileReadAllImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard args
+  let proxy = getFileStreamProxy(self)
+  if proxy == nil:
+    return nilValue()
+
+  case proxy.kind
+  of fskFile:
+    when defined(js):
+      return nilValue()
+    else:
+      try:
+        return toValue(proxy.file.readAll())
+      except CatchableError:
+        return nilValue()
+  else:
+    return nilValue()
+
+proc primitiveFileExistsImpl(interp: var Interpreter,
+                             self: Instance,
+                             args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard self
+  if args.len < 1:
+    return toValue(false)
+
+  let requestedPath = extractPathArg(args[0])
+  if requestedPath.len == 0:
+    return toValue(false)
+
+  let resolvedPath = if requestedPath.isAbsolute:
+                       requestedPath
+                     else:
+                       interp.hardingHome / requestedPath
+
+  if fileExists(resolvedPath):
+    return toValue(true)
+
+  if interp.packageSources != nil and
+     (requestedPath in interp.packageSources[] or resolvedPath in interp.packageSources[]):
+    return toValue(true)
+
+  return toValue(false)
+
+proc primitiveSystemArgumentsImpl(interp: var Interpreter,
+                                  self: Instance,
+                                  args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard self
+  discard args
+  var elements: seq[NodeValue] = @[]
+  for arg in interp.commandLineArgs:
+    elements.add(toValue(arg))
+  newArrayInstance(arrayClass, elements).toValue()
+
+proc primitiveSystemCwdImpl(interp: var Interpreter,
+                            self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard interp
+  discard self
+  discard args
+  try:
+    toValue(getCurrentDir())
+  except CatchableError:
+    nilValue()
+
+proc resolveLoadInput(interp: Interpreter,
+                      requestedPath: string): tuple[ok: bool, source: string, displayPath: string] =
+  ## Resolve load path from file system or embedded package sources
+  if requestedPath.len == 0:
+    return (false, "", requestedPath)
+
+  let resolvedPath = if requestedPath.isAbsolute:
+                       requestedPath
+                     else:
+                       interp.hardingHome / requestedPath
+
+  if fileExists(resolvedPath):
+    try:
+      return (true, readFile(resolvedPath), resolvedPath)
+    except CatchableError:
+      return (false, "", resolvedPath)
+
+  if not requestedPath.isAbsolute and fileExists(requestedPath):
+    try:
+      return (true, readFile(requestedPath), requestedPath)
+    except CatchableError:
+      return (false, "", requestedPath)
+
+  if interp.packageSources != nil:
+    if requestedPath in interp.packageSources[]:
+      return (true, interp.packageSources[][requestedPath], requestedPath)
+    if resolvedPath in interp.packageSources[]:
+      return (true, interp.packageSources[][resolvedPath], resolvedPath)
+
+  return (false, "", resolvedPath)
+
+# ============================================================================
 # GlobalTable Class and Harding Global
 # ============================================================================
 
@@ -4240,7 +4640,7 @@ proc globalTableIncludesKeyImpl(interp: var Interpreter, self: Instance, args: s
 
 proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable load: - load and evaluate a Harding file
-  ## Resolves paths relative to HARDING_HOME if not absolute
+  ## Resolves paths from filesystem or embedded package sources
   if args.len < 1:
     return nilValue()
 
@@ -4254,26 +4654,18 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
   if filePath.len == 0:
     return nilValue()
 
-  # Resolve path relative to hardingHome if not absolute
-  let resolvedPath = if filePath.isAbsolute:
-                       filePath
-                     else:
-                       interp.hardingHome / filePath
-
-  # Check if file exists
-  if not fileExists(resolvedPath):
-    writeStderr("Error: File not found: " & resolvedPath)
+  let (ok, source, displayPath) = resolveLoadInput(interp, filePath)
+  if not ok:
+    writeStderr("Error: File not found: " & displayPath)
     return nilValue()
 
-  # Read and evaluate the file
   try:
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
-    let source = readFile(resolvedPath)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & resolvedPath & ": " & err)
+      writeStderr("Error loading " & displayPath & ": " & err)
       interp.methodTableDeferRebuild = false
       return nilValue()
 
@@ -4281,11 +4673,11 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     rebuildAllMethodTables()
     interp.methodTableDeferRebuild = false
 
-    debug("Successfully loaded: ", resolvedPath)
+    debug("Successfully loaded: ", displayPath)
     return toValue(true)
   except Exception as e:
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & resolvedPath & ": " & e.msg)
+    writeStderr("Error reading " & displayPath & ": " & e.msg)
     return nilValue()
 
 proc globalTableCompileImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -4328,13 +4720,9 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   if filePath.len == 0:
     return nilValue()
 
-  let resolvedPath = if filePath.isAbsolute:
-                       filePath
-                     else:
-                       interp.hardingHome / filePath
-
-  if not fileExists(resolvedPath):
-    writeStderr("Error: File not found: " & resolvedPath)
+  let (ok, source, displayPath) = resolveLoadInput(interp, filePath)
+  if not ok:
+    writeStderr("Error: File not found: " & displayPath)
     return nilValue()
 
   # Save original globals and create a copy for capturing new definitions
@@ -4350,10 +4738,9 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
-    let source = readFile(resolvedPath)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & resolvedPath & ": " & err)
+      writeStderr("Error loading " & displayPath & ": " & err)
       interp.globals = originalGlobals
       interp.methodTableDeferRebuild = false
       return nilValue()
@@ -4373,12 +4760,12 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     rebuildAllMethodTables()
     interp.methodTableDeferRebuild = false
 
-    debug("Successfully loaded into library: ", resolvedPath)
+    debug("Successfully loaded into library: ", displayPath)
     return toValue(true)
   except Exception as e:
     interp.globals = originalGlobals
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & resolvedPath & ": " & e.msg)
+    writeStderr("Error reading " & displayPath & ": " & e.msg)
     return nilValue()
 
 proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -4765,12 +5152,11 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       elif interp.currentActivation != nil and interp.currentActivation.isClassMethod:
         interp.pushValue(interp.currentReceiver.class.toValue())
       else:
-        # Check if currentReceiver is a class wrapper (instance representing a class)
-        # Class wrappers have kind=ikObject, empty slots, and nimValue=nil
-        # When asSelfDo: sets self to a class, we need to return vkClass so method dispatch works
+        # Check if currentReceiver is a class wrapper (instance representing a class).
+        # We tag wrappers as isNimProxy with nimValue equal to the class pointer.
         if interp.currentReceiver.kind == ikObject and interp.currentReceiver.class != nil:
-          # Class wrappers have empty slots and no nimValue
-          if interp.currentReceiver.slots.len == 0 and not nimValueIsSet(interp.currentReceiver.nimValue):
+          if interp.currentReceiver.isNimProxy and
+             interp.currentReceiver.nimValue == cast[pointer](interp.currentReceiver.class):
             # This is a class wrapper - return the class as vkClass
             interp.pushValue(interp.currentReceiver.class.toValue())
           else:
@@ -5456,7 +5842,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           var resultVal: NodeValue
           if currentMethod.hasInterpreterParam:
             let savedReceiver = interp.currentReceiver
-            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
             interp.currentReceiver = classReceiver
             try:
               type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
@@ -5472,7 +5859,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           return true
 
         # Interpreted class method - create activation with class wrapper as receiver
-        let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+        let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+          nimValue: cast[pointer](cls))
 
         # Check parameter count
         if currentMethod.parameters.len != args.len:
@@ -5533,7 +5921,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           # Handle native implementations
           if nativeImplIsSet(currentMethod):
-            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
             let savedReceiver = interp.currentReceiver
             interp.currentReceiver = classReceiver
             try:
@@ -5557,7 +5946,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
               "Wrong number of arguments: expected " & $currentMethod.parameters.len &
               ", got " & $args.len)
 
-          let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+          let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+            nimValue: cast[pointer](cls))
           let activation = newActivation(currentMethod, classReceiver, interp.currentActivation, instanceLookup.definingClass)
 
           for i in 0..<currentMethod.parameters.len:
@@ -5606,7 +5996,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           if classMethodToRun != nil:
             debug("VM: Found class method '", frame.selector, "' for class ", cls.name)
-
             if nativeValueImplIsSet(classMethodToRun):
               interp.pushValue(callNativeValueMethod(interp, classMethodToRun, receiverVal, args))
               return true
@@ -5615,7 +6004,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             if nativeImplIsSet(classMethodToRun):
               var resultVal: NodeValue
               if classMethodToRun.hasInterpreterParam:
-                let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+                let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+                  nimValue: cast[pointer](cls))
                 let savedReceiver = interp.currentReceiver
                 interp.currentReceiver = classReceiver
                 try:
@@ -5637,7 +6027,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
                 "Wrong number of arguments: expected " & $classMethodToRun.parameters.len &
                 ", got " & $args.len)
 
-            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: false, nimValue: nil)
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
             let activation = newActivation(classMethodToRun, classReceiver, interp.currentActivation, classMethodDefiningClass, isClassMethod = true)
 
             for i in 0..<classMethodToRun.parameters.len:
@@ -5726,6 +6117,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         discard  # Fall through to regular method dispatch
 
     var receiverClass = classOfValue(receiverVal)
+    if receiverVal.kind == vkBool and trueClassCache != nil and falseClassCache != nil:
+      receiverClass = if receiverVal.boolVal: trueClassCache else: falseClassCache
     if receiverClass == nil and receiverVal.kind == vkSymbol:
       receiverClass = symbolClassCache
     if receiverClass == nil:

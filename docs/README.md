@@ -10,6 +10,7 @@ These are the active, maintained documents:
 |----------|---------|----------|
 | [MANUAL.md](MANUAL.md) | Complete language and runtime reference | All users |
 | [QUICKREF.md](QUICKREF.md) | Syntax and common idioms cheat sheet | Daily reference |
+| [NIM_PACKAGE_TUTORIAL.md](NIM_PACKAGE_TUTORIAL.md) | Packaging Nim primitives with Harding code | Contributors |
 | [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | CLI tools, workflows, and debugging | Users and contributors |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM/runtime architecture details | Contributors |
 | [BOOTSTRAP.md](BOOTSTRAP.md) | Bootstrap architecture and stdlib loading | Contributors |

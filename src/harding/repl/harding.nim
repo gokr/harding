@@ -26,6 +26,7 @@ const
 let Examples = @[
   "harding                              # Start REPL interactively",
   "harding examples/demo.hrd            # Run a script file",
+  "harding app.hrd -- one two           # Run script with args",
   "harding -e \"3 + 4\"                  # Evaluate expression (prints: 7)",
   "harding --ast examples/test.hrd      # Show AST then execute",
   "harding --loglevel DEBUG script.hrd  # Run with debug logging",
@@ -120,14 +121,16 @@ proc main() =
   if opts.positionalArgs.len == 0:
     # Start REPL
     var ctx = newDoitContext(maxStackDepth = opts.maxStackDepth, hardingHome = opts.hardingHome,
-                             bootstrapFile = opts.bootstrapFile)
+                             bootstrapFile = opts.bootstrapFile,
+                             commandLineArgs = opts.runtimeArgs)
     ctx.showResults = opts.showResults
     runREPL(ctx)
   elif opts.positionalArgs.len == 1:
     # Check if it's a file
     if fileExists(opts.positionalArgs[0]):
       # Run script file
-      execScript(opts.positionalArgs[0], opts.dumpAst, opts.maxStackDepth, opts.hardingHome, opts.bootstrapFile)
+      execScript(opts.positionalArgs[0], opts.dumpAst, opts.maxStackDepth,
+                 opts.hardingHome, opts.bootstrapFile, opts.runtimeArgs)
     else:
       # Unrecognized argument
       echo "Unknown option or file not found: " & opts.positionalArgs[0]
@@ -136,7 +139,8 @@ proc main() =
   elif opts.positionalArgs.len == 2 and opts.positionalArgs[0] == "-e":
     # Evaluate expression
     var ctx = newDoitContext(maxStackDepth = opts.maxStackDepth, hardingHome = opts.hardingHome,
-                             bootstrapFile = opts.bootstrapFile)
+                             bootstrapFile = opts.bootstrapFile,
+                             commandLineArgs = opts.runtimeArgs)
     let (result, err) = ctx.doit(opts.positionalArgs[1], opts.dumpAst)
     if err.len > 0:
       stderr.writeLine("Error: " & err)

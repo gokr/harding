@@ -20,7 +20,7 @@ This document tracks current work items and future directions for Harding develo
 - **Exception handling via on:do:** ✅
 - **Exception class hierarchy (Error, MessageNotUnderstood, SubscriptOutOfBounds, DivisionByZero)** ✅
 - **nil as singleton UndefinedObject instance** ✅
-- **Stdout global for console output** ✅
+- **Standard stream globals (`Stdin`, `Stdout`, `Stderr`)** ✅
 - Smalltalk-style temporary variables in blocks (`| temp |`) ✅
 - Multiline keyword message support (no `.` needed between lines) ✅
 - **All stdlib files load successfully** ✅
@@ -300,8 +300,8 @@ Granite build: app
 # 2 + 3 = 5
 ```
 
-**Note on Command-Line Arguments:**
-The `main: args` method signature accepts an array of arguments, but currently the compiler passes an empty array. Full command-line argument passing from the host OS is not yet implemented.
+**Note on Command-Line Arguments (historical):**
+This limitation is resolved. `main: args` now receives host command-line arguments in generated Application builds.
 
 **Next Steps (Priority Order):**
 
@@ -497,7 +497,7 @@ EOF
 
 ### Harding Object System Updates (2025-02-03)
 - `nil` as singleton UndefinedObject instance (not primitive)
-- Stdout global for console output
+- Standard stream globals (`Stdin`, `Stdout`, `Stderr`) for console I/O
 - String `repeat:` and Array `join:` methods
 - Class introspection: `className`, `slotNames`, `superclassNames`
 - Fixed class-side method definition via `extendClass:`

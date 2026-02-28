@@ -81,8 +81,12 @@ proc forkProcess*(ctx: SchedulerContext, blockNode: BlockNode,
   # Create new interpreter sharing globals and rootObject
   let newInterp = newInterpreterWithShared(
     sched.sharedGlobals,
-    sched.rootObject
+    sched.rootObject,
+    ctx.mainProcess.getInterpreter().packageSources
   )
+
+  # Preserve command-line arguments across forked interpreters
+  newInterp.commandLineArgs = ctx.mainProcess.getInterpreter().commandLineArgs
 
   # Set scheduler context on new interpreter
   newInterp.schedulerContextPtr = cast[pointer](ctx)
