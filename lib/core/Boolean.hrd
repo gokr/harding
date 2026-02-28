@@ -20,6 +20,10 @@ Boolean>>asString [
   ^ self printString
 ].
 
+Boolean>>ifFalse: falseBlock ifTrue: trueBlock [
+  ^ self ifTrue: trueBlock ifFalse: falseBlock
+].
+
 #====================================================================
 # True class extensions
 #====================================================================

@@ -152,6 +152,8 @@ proc eventControllerGetGdkKeyImpl*(interp: var Interpreter, self: Instance, args
       return NodeValue(kind: vkInt, intVal: GDKKEYD.int)
     of "p", "P":
       return NodeValue(kind: vkInt, intVal: GDKKEYP.int)
+    of "s", "S":
+      return NodeValue(kind: vkInt, intVal: GDKKEYS.int)
     of "Return", "Enter":
       return NodeValue(kind: vkInt, intVal: GDKKEYRETURN.int)
     of "Escape":

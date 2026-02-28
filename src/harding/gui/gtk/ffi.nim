@@ -116,6 +116,10 @@ proc gtkWidgetShow*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_show".}
 proc gtkWidgetHide*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_hide".}
 proc gtkWidgetShowAll*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_show_all".}
 proc gtkWidgetSetSizeRequest*(widget: GtkWidget, width: cint, height: cint) {.cdecl, importc: "gtk_widget_set_size_request".}
+proc gtkWidgetSetHalign*(widget: GtkWidget, align: cint) {.cdecl, importc: "gtk_widget_set_halign".}
+
+const
+  GTKALIGNSTART* = 1.cint
 
 # GTK4 widget expand properties
 when not defined(gtk3):
@@ -330,5 +334,6 @@ const
   GDKKEYA* = 97.cuint
   GDKKEYD* = 100.cuint
   GDKKEYP* = 112.cuint
+  GDKKEYS* = 115.cuint
 
   GDKCONTROLDMASK* = 4.cint  # Control key modifier mask

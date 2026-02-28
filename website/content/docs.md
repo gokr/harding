@@ -30,8 +30,14 @@ harding
 # Run a script
 harding script.hrd
 
+# Run with runtime args
+harding script.hrd -- one two
+
 # Evaluate an expression
 harding -e "3 + 4"
+
+# Evaluate with runtime args (read via System arguments)
+harding -e "System arguments size" -- red blue green
 
 # Show AST then execute
 harding --ast script.hrd
@@ -56,6 +62,13 @@ granite run myprogram.hrd
 ```
 
 ## Learning Harding
+
+### New in Current Runtime
+
+- `System` class for process/stdio access (`arguments`, `cwd`, `stdin`, `stdout`, `stderr`)
+- `File` convenience API for file reads/writes (`readAll:`, `write:to:`, `append:to:`, `exists:`)
+- `FileStream` native file primitives for stream-style I/O
+- Nim-Harding package model for bundled Nim primitives + embedded `.hrd` sources
 
 ### For Smalltalk Programmers
 
@@ -144,6 +157,7 @@ result println   # 0
 | [Language Manual](https://github.com/gokr/harding/blob/main/docs/MANUAL.md) | Complete language specification |
 | [Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md) | Syntax cheat sheet |
 | [Implementation Notes](https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md) | VM internals |
+| [Nim Package Tutorial](https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md) | Package Nim primitives with Harding sources |
 
 ### Tools and Development
 

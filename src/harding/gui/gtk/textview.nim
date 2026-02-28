@@ -264,9 +264,10 @@ proc textViewInsertTextAtSelectedEndImpl*(interp: var Interpreter, self: Instanc
   let insertPos = if hasSelection != 0:
     gtkTextIterGetOffset(endIter)
   else:
-    # No selection, use cursor position
+    # No selection, insert at end of current line
     let insertMark = gtkTextBufferGetInsert(buffer)
     gtkTextBufferGetIterAtMark(buffer, endIter, insertMark)
+    discard gtkTextIterForwardToLineEnd(endIter)
     gtkTextIterGetOffset(endIter)
 
   # Insert the text

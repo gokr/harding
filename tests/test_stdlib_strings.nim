@@ -97,6 +97,14 @@ suite "Stdlib: Strings":
     check(result[0][^1].kind == vkString)
     check(result[0][^1].strVal == "hello")
 
+  test "string less-than comparison works":
+    let result = interp.evalStatements("""
+      Result := "alpha" < "beta"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal == true)
+
 suite "Stdlib: Strings - Advanced":
   var interp {.used.}: Interpreter
 

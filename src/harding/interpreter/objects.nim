@@ -129,6 +129,7 @@ proc instStringSplitImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringAsIntegerImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringAsSymbolImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringRepeatImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringLessThanImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc classImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instIdentityImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instanceCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue
@@ -1656,6 +1657,27 @@ proc instStringRepeatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     elif ok and count <= 0:
       return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, ""))
   return NodeValue(kind: vkInstance, instVal: newStringInstance(self.class, self.strVal))
+
+proc instStringLessThanImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Lexicographic string less-than comparison
+  if self.kind != ikString or args.len < 1:
+    return toValue(false)
+
+  var other = ""
+  case args[0].kind
+  of vkString:
+    other = args[0].strVal
+  of vkSymbol:
+    other = args[0].symVal
+  of vkInstance:
+    if args[0].instVal != nil and args[0].instVal.kind == ikString:
+      other = args[0].instVal.strVal
+    else:
+      return toValue(false)
+  else:
+    return toValue(false)
+
+  return toValue(self.strVal < other)
 
 # Array primitives
 proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =

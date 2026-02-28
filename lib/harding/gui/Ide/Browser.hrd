@@ -4,13 +4,20 @@
 # With a source pane at the bottom for viewing/editing code
 # ============================================================================
 
-SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceView currentLibrary currentClass currentCategory currentMethod owner)
+SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner)
 
 SystemBrowser>>initialize [
     currentLibrary := nil.
     currentClass := nil.
     currentCategory := nil.
     currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodSuffix := "".
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
     owner := nil.
     ^ self
 ]
@@ -32,23 +39,19 @@ SystemBrowser>>openWindowFor: anOwner [
 
     owner := anOwner.
 
-    # Create main window
     window := GtkWindow new.
     window title: "System Browser".
     window iconName: "harding".
     window setDefaultSize: 1200 height: 800.
 
-    # Create vertical box layout
     mainBox := GtkBox vertical.
     mainBox setSpacing: 5.
 
-    # Create horizontal box for the four panes
     panesBox := GtkBox horizontal.
-    panesBox setSpacing: 5.
+    panesBox setSpacing: 8.
     panesBox vexpand: true.
     panesBox hexpand: true.
 
-    # Create the four browser panes with labels
     libraryPane := BrowserPane new.
     libraryPane createWidgets.
     libraryPane setLabel: "Libraries".
@@ -69,16 +72,15 @@ SystemBrowser>>openWindowFor: anOwner [
     methodPane setLabel: "Methods".
     methodPane onSelectionChanged: [:meth | self selectMethod: meth ].
 
-    # Add panes to the panes box
     panesBox append: (libraryPane widget).
     panesBox append: (classPane widget).
     panesBox append: (categoryPane widget).
     panesBox append: (methodPane widget).
 
-    # Create source view (read-only initially)
-    sourceView := self createSourceView.
+    sourceScrolled := self createSourceView.
+    sourceScrolled addCssClass: "frame".
+    sourceScrolled addCssClass: "view".
 
-    # Create button box
     buttonBox := GtkBox horizontal.
     buttonBox setSpacing: 5.
 
@@ -90,21 +92,24 @@ SystemBrowser>>openWindowFor: anOwner [
     refreshButton clicked: [ self refresh ].
     buttonBox append: refreshButton.
 
-    # Assemble the UI
+    newMethodButton := GtkButton newLabel: "New Method".
+    newMethodButton clicked: [ self createNewMethod ].
+    buttonBox append: newMethodButton.
+
+    deleteMethodButton := GtkButton newLabel: "Delete Method".
+    deleteMethodButton clicked: [ self deleteCurrentMethod ].
+    buttonBox append: deleteMethodButton.
+
     window setChild: mainBox.
     mainBox append: panesBox.
-    mainBox append: sourceView.
+    mainBox append: sourceScrolled.
     mainBox append: buttonBox.
 
-    # Connect destroy signal
     window destroyed: [ self onDestroy ].
 
-    # Register with owner
     anOwner notNil ifTrue: [ anOwner addWindow: self ].
 
     window present.
-
-    # Populate the first pane with libraries
     self populateLibraries.
 
     Transcript showCr: "System Browser opened".
@@ -112,17 +117,26 @@ SystemBrowser>>openWindowFor: anOwner [
 ]
 
 SystemBrowser>>createSourceView [
-    # Create a scrolled source view for method source display
     | scrolled |
     scrolled := GtkScrolledWindow new.
     scrolled vexpand: true.
     scrolled hexpand: true.
-    scrolled setChild: (GtkLabel new: "Select a method to view its source code").
+
+    sourceView := GtkSourceView new.
+    sourceView text: "Select a method to view its source code".
+    sourceView showLineNumbers: true.
+    sourceView setTabWidth: 2.
+    sourceView editable: true.
+
+    sourceView enableKeyboardShortcuts.
+    sourceView onControlKey: "s" do: [ self saveCurrentMethod ].
+
+    sourceScrolled := scrolled.
+    scrolled setChild: sourceView.
     ^ scrolled
 ]
 
 SystemBrowser>>populateLibraries [
-    # Get all library names from Library class
     | libraryNames |
     libraryNames := Library allNames.
     libraryPane items: libraryNames.
@@ -132,32 +146,48 @@ SystemBrowser>>selectLibrary: aLibraryName [
     currentLibrary := aLibraryName.
     Transcript showCr: ("Selected library: " , aLibraryName).
 
-    # Clear downstream panes
+    currentClass := nil.
+    currentCategory := nil.
+    currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
+
     classPane clear.
     categoryPane clear.
     methodPane clear.
 
-    # Populate classes based on selected library
     self populateClassesFor: aLibraryName.
 ]
 
 SystemBrowser>>populateClassesFor: aLibraryName [
-    # Get classes for the selected library
-    | libb classNames |
-    Transcript showCr: ("Populating classes for library: " , aLibraryName).
-
-    # Find the library by name
-    # Smething is wrong here, this does not seem to run Library class>>named:
-    libb := Library named: aLibraryName.
-    libb isNil ifTrue: [
-        Transcript showCr: ("Library not found: " , aLibraryName).
+    | libb classNames libraryName |
+    aLibraryName isNil ifTrue: [
         classPane items: #().
         ^ self
     ].
 
-    # Get class names from the library
+    libraryName := (aLibraryName isKindOf: String)
+        ifTrue: [ aLibraryName ]
+        ifFalse: [ aLibraryName name ].
+
+    Transcript showCr: ("Populating classes for library: " , libraryName).
+
+    libb := (aLibraryName isKindOf: Library)
+        ifTrue: [ aLibraryName ]
+        ifFalse: [ Library named: libraryName ].
+
+    libb isNil ifTrue: [
+        Transcript showCr: ("Library not found: " , libraryName).
+        classPane items: #().
+        ^ self
+    ].
+
     classNames := libb classNames.
-    Transcript showCr: ("Library " , aLibraryName , " has " , (classNames size printString) , " classes").
+    Transcript showCr: ("Library " , libraryName , " has " , (classNames size printString) , " classes").
 
     classPane items: classNames.
 ]
@@ -166,37 +196,77 @@ SystemBrowser>>selectClass: aClassName [
     currentClass := aClassName.
     Transcript showCr: ("Selected class: " , aClassName).
 
-    # Clear downstream panes
+    currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
+
     categoryPane clear.
     methodPane clear.
 
-    # Populate categories
     self populateCategoriesFor: aClassName.
+
+    currentCategory := "all".
+    Transcript showCr: "Auto-selecting category: all".
+    [ self populateMethodsFor: aClassName category: currentCategory ]
+        on: Exception
+        do: [:ex |
+            Transcript showCr: ("selectClass auto-populate error: " , ex printString)
+        ].
 ]
 
 SystemBrowser>>populateCategoriesFor: aClassName [
-    # Get categories for the selected class
     | categories |
     categories := self inferCategoriesFor: aClassName.
     categoryPane items: categories.
 ]
 
-SystemBrowser>>inferCategoriesFor: aClassName [
-    # Infer method categories from method comments or naming conventions
-    # For now, return common categories
-    | classObj methods categories |
+SystemBrowser>>classForName: aClassName [
+    | lib classObj found |
+    found := nil.
 
-    classObj := Harding at: aClassName ifAbsent: [ ^ #("all") ].
-    classObj isKindOf: Class ifFalse: [ ^ #("all") ].
+    currentLibrary notNil ifTrue: [
+        lib := Library named: currentLibrary.
+        lib notNil ifTrue: [
+            classObj := lib at: aClassName.
+            classObj notNil ifTrue: [ found := classObj ].
 
-    methods := classObj methods.
-    categories := #("all").
-
-    # Categorize based on method naming conventions
-    #( "accessing" "parsing" "printing" "initialization" "testing" "private" ) do: [:cat |
-        categories := categories add: cat
+            found isNil ifTrue: [
+                lib keys do: [:key |
+                    (((key asString) = (aClassName asString)) and: [ found isNil ]) ifTrue: [
+                        found := lib at: key
+                    ]
+                ]
+            ]
+        ]
     ].
 
+    found isNil ifTrue: [
+        (Harding includesKey: aClassName) ifTrue: [
+            found := Harding at: aClassName
+        ]
+    ].
+
+    found isNil ifTrue: [
+        Harding keys do: [:key |
+            (((key asString) = (aClassName asString)) and: [ found isNil ]) ifTrue: [
+                found := Harding at: key
+            ]
+        ]
+    ].
+
+    ^ found
+]
+
+SystemBrowser>>inferCategoriesFor: aClassName [
+    | categories |
+    categories := Array new.
+    categories add: "all".
+    categories add: "defined".
+    categories add: "inherited".
     ^ categories
 ]
 
@@ -204,103 +274,348 @@ SystemBrowser>>selectCategory: aCategory [
     currentCategory := aCategory.
     Transcript showCr: ("Selected category: " , aCategory).
 
-    # Clear downstream panes
+    Transcript showCr: "Clearing method pane".
     methodPane clear.
+    Transcript showCr: "Method pane cleared".
 
-    # Populate methods
-    self populateMethodsFor: currentClass category: aCategory.
+    Transcript showCr: "Populating methods".
+    [ self populateMethodsFor: currentClass category: aCategory ]
+        on: Exception
+        do: [:ex |
+            Transcript showCr: ("selectCategory error: " , ex printString)
+        ].
+    Transcript showCr: "Finished populateMethodsFor call".
 ]
 
 SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
-    # Get methods for the selected class and category
-    | classObj methods methodNames |
+    | classObj methods definedMethods methodNames stringNames rawNames |
 
-    classObj := Harding at: aClassName ifAbsent: [ ^ #() ].
-    classObj isKindOf: Class ifFalse: [ ^ #() ].
+    aClassName isNil ifTrue: [
+        methodPane items: #().
+        Transcript showCr: "populateMethodsFor: class is nil".
+        ^ self
+    ].
+
+    classObj := self classForName: aClassName.
+    classObj isNil ifTrue: [
+        methodPane items: #().
+        Transcript showCr: ("No class object found for " , aClassName).
+        ^ self
+    ].
+
+    (classObj isClass) ifFalse: [
+        methodPane items: #().
+        Transcript showCr: ("Resolved object is not a class for " , aClassName).
+        ^ self
+    ].
 
     methods := classObj methods.
+    definedMethods := classObj definedMethods.
+    rawNames := Array new.
 
-    # Filter by category if not "all"
     (aCategory = "all") ifTrue: [
-        methodNames := methods
+        methods do: [:selector | rawNames add: selector ]
     ] ifFalse: [
-        # Simple filtering based on naming conventions
-        methodNames := methods select: [:selector |
-            self selector: selector matchesCategory: aCategory
-        ].
+        (aCategory = "defined") ifTrue: [
+            definedMethods do: [:selector | rawNames add: selector ]
+        ] ifFalse: [
+            (aCategory = "inherited") ifTrue: [
+                methods do: [:selector |
+                    (definedMethods includes: selector) ifFalse: [
+                        rawNames add: selector
+                    ]
+                ]
+            ] ifFalse: [
+                methods do: [:selector | rawNames add: selector ]
+            ]
+        ]
     ].
+
+    methodNames := Array new.
+    rawNames do: [:selector |
+        ((selector asString startsWith: "primitive") not) ifTrue: [
+            methodNames add: selector
+        ]
+    ].
+
+    stringNames := methodNames collect: [:selector | selector asString ].
+    methodNames := [ stringNames sorted ]
+        on: Exception
+        do: [:ex |
+            Transcript showCr: ("Method sort failed: " , ex printString).
+            stringNames
+        ].
 
     methodPane items: methodNames.
-]
-
-SystemBrowser>>selector: selector matchesCategory: aCategory [
-    # Check if a selector matches a category based on naming conventions
-    (aCategory = "accessing") ifTrue: [
-        ^ (selector endsWith: ":") and: (selector size > 1)
-    ].
-    (aCategory = "testing") ifTrue: [
-        ^ (selector startsWith: "is") or: (selector startsWith: "has")
-    ].
-    (aCategory = "printing") ifTrue: [
-        ^ (selector includesSubString: "print") or: (selector includesSubString: "String")
-    ].
-    (aCategory = "parsing") ifTrue: [
-        ^ (selector includesSubString: "parse")
-    ].
-    (aCategory = "initialization") ifTrue: [
-        ^ (selector = "initialize") or: (selector = "new")
-    ].
-    ^ true
+    Transcript showCr: ("Methods for " , aClassName , " [" , aCategory , "] = " , (methodNames size printString)).
 ]
 
 SystemBrowser>>selectMethod: aMethodName [
     currentMethod := aMethodName.
     Transcript showCr: ("Selected method: " , aMethodName).
-
-    # Show method source
     self showMethodSource: aMethodName.
 ]
 
+SystemBrowser>>methodSourceInfoFor: aMethodName [
+    ^ Harding methodSourceInfoForClass: currentClass selector: aMethodName
+]
+
 SystemBrowser>>showMethodSource: aMethodName [
-    # Display the source code for the selected method
-    | classObj sourceText |
+    | info found sourceText editorHeader |
+    info := self methodSourceInfoFor: aMethodName.
+    found := (info includesKey: "found")
+        ifTrue: [ info at: "found" ]
+        ifFalse: [ false ].
 
-    classObj := Harding at: currentClass ifAbsent: [ ^ self ].
-    classObj isKindOf: Class ifFalse: [ ^ self ].
+    found ifFalse: [
+        currentMethodFile := nil.
+        currentMethodOwnerClass := nil.
+        currentMethodHeader := nil.
+        currentMethodSuffix := "".
+        currentMethodStartLine := nil.
+        currentMethodEndLine := nil.
+        currentMethodHasBlock := false.
 
-    # For now, display a placeholder with method info
-    sourceText := "Method: " , currentClass , ">>" , aMethodName , "\n\nMethod source would be displayed here.\nThis requires source tracking to be implemented."
+        sourceText := aMethodName , "\n\nMethod source not found in .hrd files.".
+        self updateSourceView: sourceText.
+        ^ self
+    ].
 
+    currentMethodFile := (info includesKey: "file")
+        ifTrue: [ info at: "file" ]
+        ifFalse: [ nil ].
+    currentMethodOwnerClass := (info includesKey: "ownerClass")
+        ifTrue: [ info at: "ownerClass" ]
+        ifFalse: [ currentClass ].
+    currentMethodHeader := (info includesKey: "header")
+        ifTrue: [ info at: "header" ]
+        ifFalse: [ nil ].
+    currentMethodSuffix := (info includesKey: "suffix")
+        ifTrue: [ info at: "suffix" ]
+        ifFalse: [ "" ].
+    currentMethodStartLine := (info includesKey: "startLine")
+        ifTrue: [ info at: "startLine" ]
+        ifFalse: [ nil ].
+    currentMethodEndLine := (info includesKey: "endLine")
+        ifTrue: [ info at: "endLine" ]
+        ifFalse: [ nil ].
+    currentMethodHasBlock := (info includesKey: "hasBlock")
+        ifTrue: [ info at: "hasBlock" ]
+        ifFalse: [ false ].
+
+    editorHeader := self editableHeaderFromMethodHeader: currentMethodHeader.
+    sourceText := (info includesKey: "source")
+        ifTrue: [ info at: "source" ]
+        ifFalse: [ "" ].
+
+    currentMethodHasBlock ifTrue: [
+        sourceText := editorHeader , "\n" , sourceText
+    ] ifFalse: [
+        sourceText isEmpty
+            ifTrue: [ sourceText := editorHeader ]
+            ifFalse: [ sourceText := editorHeader , "\n" , sourceText ]
+    ].
     self updateSourceView: sourceText.
 ]
 
+SystemBrowser>>editableHeaderFromMethodHeader: aHeader [
+    | sep |
+    aHeader isNil ifTrue: [ ^ currentMethod ].
+
+    sep := aHeader indexOf: ">>".
+    sep >= 0 ifFalse: [ ^ aHeader ].
+    ^ (aHeader from: (sep + 2) to: (aHeader size - 1)) trim
+]
+
+SystemBrowser>>saveCurrentMethod [
+    | fileText lines before after replacement editorLines bodyLines allLines savedText index selectorLine fullHeader originalHeader creatingNew |
+
+    currentMethodFile isNil ifTrue: [
+        Transcript showCr: "No method source selected to save".
+        ^ self
+    ].
+
+    currentMethodHasBlock ifFalse: [
+        Transcript showCr: "Saving primitive-line methods is not supported yet".
+        ^ self
+    ].
+
+    currentMethodHeader isNil ifTrue: [
+        Transcript showCr: "Method header is missing; cannot save".
+        ^ self
+    ].
+
+    fileText := File readAll: currentMethodFile.
+    lines := fileText split: "\n".
+
+    editorLines := sourceView text split: "\n".
+    editorLines isEmpty ifTrue: [
+        Transcript showCr: "Editor is empty; cannot save".
+        ^ self
+    ].
+
+    selectorLine := ((editorLines at: 0) asString) trim.
+    selectorLine isEmpty ifTrue: [
+        Transcript showCr: "Method selector line is empty; cannot save".
+        ^ self
+    ].
+
+    fullHeader := currentMethodOwnerClass , ">>" , selectorLine.
+    originalHeader := self editableHeaderFromMethodHeader: currentMethodHeader.
+    creatingNew := currentMethodStartLine isNil or: [ (selectorLine = originalHeader) not ].
+
+    bodyLines := Array new.
+    index := 1.
+    [ index < editorLines size ] whileTrue: [
+        bodyLines add: (editorLines at: index).
+        index := index + 1
+    ].
+
+    replacement := Array new.
+    replacement add: (fullHeader , " [").
+    replacement addAll: bodyLines.
+    replacement add: ("]" , currentMethodSuffix).
+
+    allLines := Array new.
+    creatingNew ifTrue: [
+        allLines addAll: lines.
+        (allLines isEmpty not and: [ (allLines last) trim isEmpty not ]) ifTrue: [
+            allLines add: ""
+        ].
+        allLines addAll: replacement
+    ] ifFalse: [
+        before := Array new.
+        after := Array new.
+
+        index := 0.
+        [ index < (currentMethodStartLine - 1) ] whileTrue: [
+            before add: (lines at: index).
+            index := index + 1
+        ].
+
+        index := currentMethodEndLine.
+        [ index < lines size ] whileTrue: [
+            after add: (lines at: index).
+            index := index + 1
+        ].
+
+        allLines addAll: before.
+        allLines addAll: replacement.
+        allLines addAll: after
+    ].
+
+    savedText := self linesToText: allLines.
+    File write: savedText to: currentMethodFile.
+
+    self installMethodInImage: fullHeader bodyLines: bodyLines.
+    self reloadCurrentMethodFile.
+
+    currentMethod := selectorLine.
+    currentMethodHeader := fullHeader.
+
+    creatingNew ifTrue: [
+        Transcript showCr: ("Saved new method " , currentMethodOwnerClass , ">>" , selectorLine , " to " , currentMethodFile)
+    ] ifFalse: [
+        Transcript showCr: ("Saved " , currentMethodOwnerClass , ">>" , selectorLine , " to " , currentMethodFile)
+    ].
+
+    creatingNew ifTrue: [ currentCategory := "defined" ].
+    self populateMethodsFor: currentClass category: currentCategory.
+    self showMethodSource: selectorLine.
+]
+
+SystemBrowser>>reloadCurrentMethodFile [
+    | result |
+    currentMethodFile isNil ifTrue: [ ^ self ].
+
+    result := [ Harding load: currentMethodFile ]
+        on: Exception
+        do: [:ex | "IDE_ERROR: " , ex printString ].
+
+    ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
+        Transcript showCr: ("Failed to reload file: " , result)
+    ].
+]
+
+SystemBrowser>>installMethodInImage: fullHeader bodyLines: bodyLines [
+    | methodText bodyText result selector classObj installed |
+    bodyText := self linesToText: bodyLines.
+    methodText := fullHeader , " [\n" , bodyText , "\n]".
+    selector := self editableHeaderFromMethodHeader: fullHeader.
+
+    result := [ Object eval: methodText ]
+        on: Exception
+        do: [:ex | "IDE_ERROR: " , ex printString ].
+
+    ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
+        Transcript showCr: ("Failed to install method in image: " , result).
+        ^ self
+    ].
+
+    classObj := self classForName: currentClass.
+    classObj isNil ifTrue: [
+        Transcript showCr: "Method install verification failed: class not found".
+        ^ self
+    ].
+
+    installed := classObj methods includes: (selector asSymbol).
+    installed ifFalse: [
+        Transcript showCr: ("Method install verification failed for " , selector)
+    ].
+]
+
+SystemBrowser>>isErrorResult: result [
+    ^ (result isKindOf: String)
+        and: [
+            (result startsWith: "IDE_ERROR:")
+                or: [
+                    (result startsWith: "Error:")
+                        or: [
+                            (result startsWith: "Runtime error:")
+                                or: [ result startsWith: "Parse error:" ]
+                        ]
+                ]
+        ]
+]
+
+SystemBrowser>>linesToText: lines [
+    | out first |
+    out := "".
+    first := true.
+
+    lines do: [:line |
+        first ifFalse: [ out := out , "\n" ].
+        out := out , line asString.
+        first := false
+    ].
+
+    ^ out
+]
+
 SystemBrowser>>updateSourceView: aString [
-    # Update the source view with new text
-    | scrolled |
-    scrolled := GtkScrolledWindow new.
-    scrolled vexpand: true.
-    scrolled hexpand: true.
-
-    sourceView := GtkSourceView new.
-    sourceView text: aString.
-    sourceView showLineNumbers: true.
-    sourceView editable: false.  # Read-only for now
-
-    scrolled setChild: sourceView.
-
-    # Replace old source view in main box
-    # (In a full implementation, we'd update in place)
+    sourceView notNil ifTrue: [
+        sourceView text: aString
+    ]
 ]
 
 SystemBrowser>>refresh [
-    # Refresh all panes
     classPane clear.
     categoryPane clear.
     methodPane clear.
+
     currentLibrary := nil.
     currentClass := nil.
     currentCategory := nil.
     currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodSuffix := "".
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
+
+    self updateSourceView: "Select a method to view its source code".
     self populateLibraries.
     Transcript showCr: "Browser refreshed".
 ]
@@ -317,4 +632,137 @@ SystemBrowser>>onDestroy [
         owner := nil
     ].
     window := nil.
+]
+
+SystemBrowser>>resolveMethodFileForCurrentClass [
+    | classObj candidates index selector info found owner file |
+    currentMethodFile notNil ifTrue: [ ^ currentMethodFile ].
+
+    classObj := self classForName: currentClass.
+    classObj isNil ifTrue: [ ^ nil ].
+
+    candidates := classObj definedMethods.
+    candidates isEmpty ifTrue: [
+        candidates := classObj methods
+    ].
+
+    file := nil.
+    index := 0.
+    [ file isNil and: [ index < candidates size ] ] whileTrue: [
+        selector := (candidates at: index) asString.
+        info := self methodSourceInfoFor: selector.
+        found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+
+        found ifTrue: [
+            owner := (info includesKey: "ownerClass") ifTrue: [ info at: "ownerClass" ] ifFalse: [ currentClass ].
+            (owner = currentClass) ifTrue: [
+                file := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ]
+            ]
+        ].
+        index := index + 1
+    ].
+
+    ^ file
+]
+
+SystemBrowser>>createNewMethod [
+    | resolvedFile |
+    currentClass isNil ifTrue: [
+        Transcript showCr: "No class selected; cannot create new method".
+        ^ self
+    ].
+
+    resolvedFile := self resolveMethodFileForCurrentClass.
+    currentMethodFile := resolvedFile.
+
+    currentMethodFile isNil ifTrue: [
+        Transcript showCr: "No .hrd file found for class; cannot create new method".
+        ^ self
+    ].
+
+    currentMethodOwnerClass := currentClass.
+    currentMethod := "newMethod".
+    currentMethodHeader := currentClass , ">>newMethod".
+    currentMethodSuffix := "".
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := true.
+
+    self updateSourceView: "newMethod" , "\n\n^ nil".
+    Transcript showCr: ("Created new method stub for " , currentClass , " in " , currentMethodFile).
+]
+
+SystemBrowser>>deleteCurrentMethod [
+    | fileText lines before after allLines savedText index confirmMessage |
+
+    currentMethod isNil ifTrue: [
+        Transcript showCr: "No method selected to delete".
+        ^ self
+    ].
+
+    currentMethodFile isNil ifTrue: [
+        Transcript showCr: "No method file found; cannot delete".
+        ^ self
+    ].
+
+    currentMethodHasBlock ifFalse: [
+        Transcript showCr: "Cannot delete primitive methods".
+        ^ self
+    ].
+
+    currentMethodStartLine isNil ifTrue: [
+        Transcript showCr: "Method is new and not saved yet; nothing to delete".
+        ^ self
+    ].
+
+    confirmMessage := "Delete method " , currentClass , ">>" , currentMethod , "?".
+
+    fileText := File readAll: currentMethodFile.
+    lines := fileText split: "\n".
+
+    before := Array new.
+    after := Array new.
+
+    index := 0.
+    [ index < (currentMethodStartLine - 1) ] whileTrue: [
+        before add: (lines at: index).
+        index := index + 1
+    ].
+
+    index := currentMethodEndLine.
+    [ index < lines size ] whileTrue: [
+        after add: (lines at: index).
+        index := index + 1
+    ].
+
+    allLines := Array new.
+    allLines addAll: before.
+    allLines addAll: after.
+
+    savedText := self linesToText: allLines.
+    File write: savedText to: currentMethodFile.
+
+    self removeMethodFromClass: currentMethod.
+
+    Transcript showCr: ("Deleted method " , currentClass , ">>" , currentMethod).
+
+    currentMethod := nil.
+    currentMethodHeader := nil.
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+
+    self updateSourceView: "Method deleted. Select another method or create new.".
+    self populateMethodsFor: currentClass category: currentCategory.
+]
+
+SystemBrowser>>removeMethodFromClass: aSelector [
+    | classObj |
+    classObj := self classForName: currentClass.
+    classObj isNil ifTrue: [
+        Transcript showCr: "Cannot find class object to remove method".
+        ^ self
+    ].
+
+    classObj removeMethod: aSelector.
+    Transcript showCr: ("Removed method " , aSelector , " from class " , currentClass).
 ]

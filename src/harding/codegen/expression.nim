@@ -569,7 +569,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{mangleSelector(node.selector)}({receiverCode}, {keyCode}, {valCode})")
     return receiverCode
 
-  of "println", "writeLine:":
+  of "println", "writeLine:", "writeline:":
     # Print with newline - generates a statement, not an expression
     # This is a limitation - we need statement context for echo
     if node.arguments.len >= 1:

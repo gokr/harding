@@ -3,7 +3,7 @@
 # A scrollable list of selectable items (libraries, classes, categories, methods)
 # ============================================================================
 
-BrowserPane := Object derive: #(scrolledWindow containerBox items buttons selectedItem selectionCallback headerLabel)
+BrowserPane := Object derive: #(scrolledWindow containerBox items buttons selectedItem selectionCallback headerLabel contextMenuCallback rightClickCallback)
 
 BrowserPane>>initialize [
     items := #().
@@ -11,6 +11,8 @@ BrowserPane>>initialize [
     selectedItem := nil.
     selectionCallback := nil.
     headerLabel := nil.
+    contextMenuCallback := nil.
+    rightClickCallback := nil.
     ^ self
 ]
 
@@ -19,6 +21,8 @@ BrowserPane>>createWidgets [
     scrolledWindow := GtkScrolledWindow new.
     scrolledWindow vexpand: true.
     scrolledWindow hexpand: true.
+    scrolledWindow addCssClass: "frame".
+    scrolledWindow addCssClass: "view".
 
     containerBox := GtkBox vertical.
     containerBox setSpacing: 1.
@@ -99,6 +103,7 @@ BrowserPane>>addButtonFor: anItem [
 
     button label: itemString.
     button hexpand: true.
+    button halignStart.
 
     # Flat appearance for list items
     button addCssClass: "flat".
@@ -106,8 +111,35 @@ BrowserPane>>addButtonFor: anItem [
     # Connect click handler
     button clicked: [ self selectItem: anItem ].
 
+    # Connect right-click handler for context menu
+    rightClickCallback notNil ifTrue: [
+        button onRightClick: [ self showContextMenuFor: anItem ]
+    ].
+
     containerBox append: button.
     buttons addLast: button.
+]
+
+BrowserPane>>showContextMenuFor: anItem [
+    | menuModel menuItem deleteItem |
+    contextMenuCallback isNil ifTrue: [ ^ self ].
+
+    menuModel := GMenu new.
+
+    deleteItem := GMenuItem new: "Delete" action: "".
+    menuModel appendItem: deleteItem.
+
+    contextMenuCallback value: anItem value: menuModel.
+]
+
+BrowserPane>>onRightClick: aBlock [
+    rightClickCallback := aBlock.
+    ^ self
+]
+
+BrowserPane>>onContextMenu: aBlock [
+    contextMenuCallback := aBlock.
+    ^ self
 ]
 
 BrowserPane>>selectItem: anItem [

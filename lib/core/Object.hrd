@@ -160,11 +160,29 @@ Object>>superclassNames <primitive primitiveSuperclassNames>
 
 Object>>respondsTo: selector <primitive primitiveRespondsTo: selector>
 
-Object>>methods <primitive primitiveMethods>
+Object class>>methods [
+  ^ self primitiveMethods
+]
 
-Object>>allInstanceMethods <primitive primitiveAllInstanceMethods>
+Object class>>definedMethods [
+  ^ self primitiveDefinedMethods
+]
 
-Object>>allClassMethods <primitive primitiveAllClassMethods>
+Object class>>removeMethod: selector [
+  ^ self primitiveRemoveMethod: selector
+]
+
+Object class>>removeClassMethod: selector [
+  ^ self primitiveRemoveClassMethod: selector
+]
+
+Object class>>allInstanceMethods [
+  ^ self primitiveAllInstanceMethods
+]
+
+Object class>>allClassMethods [
+  ^ self primitiveAllClassMethods
+]
 
 Object>>doesNotUnderstand: selector [
   # Default handler for unrecognized messages with just the selector.
@@ -205,6 +223,9 @@ Object>>== other <primitive primitiveEquals: other>
 
 Object>>printString [
   # Return a string representation of this object.
+  (self isClass) ifTrue: [
+    ^ "<class " , self name , ">"
+  ].
   ^ "<" , self class name , ">"
 ]
 

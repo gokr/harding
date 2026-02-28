@@ -64,6 +64,12 @@ Granite compiler produces standalone native binaries. No runtime dependencies, t
 ### Nim Interop
 Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.
 
+### Nim-Harding Package Model
+Bundle Nim primitive implementations and matching `.hrd` sources in one package. Load package code through `load:` and keep Harding and Nim APIs versioned together.
+
+### Practical I/O and Process API
+Built-in `File`, `FileStream`, and `System` helpers provide file read/write, current directory, stdio streams (`Stdin`, `Stdout`, `Stderr`), and command-line arguments.
+
 ### IDE Tooling
 VSCode extension with full LSP and DAP support. GTK-based Bona IDE currently includes Launcher, Workspace, and Transcript; Browser and Inspector are in progress, with Debugger planned.
 

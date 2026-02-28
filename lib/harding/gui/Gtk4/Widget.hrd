@@ -63,3 +63,8 @@ GtkWidget>>hexpand: aBoolean [
     # Set horizontal expand property
     self setHexpand: aBoolean
 ].
+
+GtkWidget>>halignStart [
+    # Align widget to the start of the horizontal axis
+    self setHalignStart
+].

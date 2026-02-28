@@ -1446,6 +1446,10 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   # No handler found - call defaultAction on the exception
   # This allows applications (like Bona) to override defaultAction to open a debugger
   debug("primitiveSignal: no handler found for exception, calling defaultAction")
+
+  if interp.suppressUncaughtExit:
+    let className = if self != nil and self.class != nil: self.class.name else: "Exception"
+    raise newException(EvalError, className & ": " & message)
   
   # Store uncaught exception info for potential debugger use
   interp.uncaughtException = self
@@ -1801,6 +1805,86 @@ proc primitiveMethodsImpl(interp: var Interpreter, self: Instance, args: seq[Nod
     for selector in self.class.allMethods.keys():
       selectors.add(toSymbol(selector))
   return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveDefinedMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return only methods defined directly on this class (not inherited)
+  var selectors: seq[NodeValue] = @[]
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.methods.keys():
+      selectors.add(toSymbol(selector))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveRemoveMethodImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Remove a method from this class
+  ## Args: selector (string or symbol)
+  if args.len < 1:
+    return toValue(false)
+
+  var selector = ""
+  case args[0].kind
+  of vkString:
+    selector = args[0].strVal
+  of vkSymbol:
+    selector = args[0].symVal
+  else:
+    return toValue(false)
+
+  if selector.len == 0:
+    return toValue(false)
+
+  if self.kind == ikObject and self.class != nil:
+    var removed = false
+    if selector in self.class.methods:
+      self.class.methods.del(selector)
+      removed = true
+    if selector in self.class.allMethods:
+      self.class.allMethods.del(selector)
+      removed = true
+
+    if removed:
+      self.class.version += 1
+      self.class.methodsDirty = true
+      invalidateSubclasses(self.class)
+
+    return toValue(removed)
+
+  return toValue(false)
+
+proc primitiveRemoveClassMethodImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Remove a class-side method from this class
+  ## Args: selector (string or symbol)
+  if args.len < 1:
+    return toValue(false)
+
+  var selector = ""
+  case args[0].kind
+  of vkString:
+    selector = args[0].strVal
+  of vkSymbol:
+    selector = args[0].symVal
+  else:
+    return toValue(false)
+
+  if selector.len == 0:
+    return toValue(false)
+
+  if self.kind == ikObject and self.class != nil:
+    var removed = false
+    if selector in self.class.classMethods:
+      self.class.classMethods.del(selector)
+      removed = true
+    if selector in self.class.allClassMethods:
+      self.class.allClassMethods.del(selector)
+      removed = true
+
+    if removed:
+      self.class.version += 1
+      self.class.methodsDirty = true
+      invalidateSubclasses(self.class)
+
+    return toValue(removed)
+
+  return toValue(false)
 
 proc primitiveAllInstanceMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return the class's instance method selector names as an array
@@ -2178,6 +2262,27 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.methods["primitiveMethods"] = objMethodsMethod
   objectCls.allMethods["primitiveMethods"] = objMethodsMethod
 
+  # Add primitiveDefinedMethods for directly-defined methods
+  let objDefinedMethodsMethod = createCoreMethod("primitiveDefinedMethods")
+  objDefinedMethodsMethod.setNativeImpl(primitiveDefinedMethodsImpl)
+  objDefinedMethodsMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveDefinedMethods"] = objDefinedMethodsMethod
+  objectCls.allMethods["primitiveDefinedMethods"] = objDefinedMethodsMethod
+
+  # Add primitiveRemoveMethod: for removing methods from a class
+  let objRemoveMethodMethod = createCoreMethod("primitiveRemoveMethod:")
+  objRemoveMethodMethod.setNativeImpl(primitiveRemoveMethodImpl)
+  objRemoveMethodMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveRemoveMethod:"] = objRemoveMethodMethod
+  objectCls.allMethods["primitiveRemoveMethod:"] = objRemoveMethodMethod
+
+  # Add primitiveRemoveClassMethod: for removing class-side methods from a class
+  let objRemoveClassMethodMethod = createCoreMethod("primitiveRemoveClassMethod:")
+  objRemoveClassMethodMethod.setNativeImpl(primitiveRemoveClassMethodImpl)
+  objRemoveClassMethodMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveRemoveClassMethod:"] = objRemoveClassMethodMethod
+  objectCls.allMethods["primitiveRemoveClassMethod:"] = objRemoveClassMethodMethod
+
   # Add primitiveAllInstanceMethods for allInstanceMethods implementation
   let objAllInstanceMethodsMethod = createCoreMethod("primitiveAllInstanceMethods")
   objAllInstanceMethodsMethod.setNativeImpl(primitiveAllInstanceMethodsImpl)
@@ -2332,7 +2437,27 @@ proc initGlobals*(interp: var Interpreter) =
       return nilValue()
 
     let code = args[0].strVal
-    let (results, err) = interp.evalStatements(code)
+    # Evaluate in an isolated interpreter that shares globals/root state.
+    # This avoids clobbering the caller VM's work queue/eval stack when eval:
+    # is invoked during an active callback or expression evaluation.
+    var evalInterp = newInterpreterWithShared(
+      interp.globals,
+      interp.rootObject,
+      interp.packageSources,
+      trace = interp.traceExecution,
+      maxStackDepth = interp.maxStackDepth
+    )
+    evalInterp.hardingHome = interp.hardingHome
+    evalInterp.commandLineArgs = interp.commandLineArgs
+    evalInterp.importedLibraries = interp.importedLibraries
+    evalInterp.methodTableDeferRebuild = interp.methodTableDeferRebuild
+    evalInterp.suppressUncaughtExit = true
+
+    let (results, err) =
+      try:
+        evalInterp.evalStatements(code)
+      finally:
+        discard
     if err.len > 0:
       # Return error as string
       return err.toValue()
@@ -2418,6 +2543,11 @@ proc initGlobals*(interp: var Interpreter) =
   stringIndexOfMethod.setNativeImpl(instStringIndexOfImpl)
   stringCls.methods["primitiveIndexOf:"] = stringIndexOfMethod
   stringCls.allMethods["primitiveIndexOf:"] = stringIndexOfMethod
+
+  let stringLessThanMethod = createCoreMethod("primitiveLessThan:")
+  stringLessThanMethod.setNativeImpl(instStringLessThanImpl)
+  stringCls.methods["primitiveLessThan:"] = stringLessThanMethod
+  stringCls.allMethods["primitiveLessThan:"] = stringLessThanMethod
 
   let stringIncludesSubStringMethod = createCoreMethod("primitiveIncludesSubString:")
   stringIncludesSubStringMethod.setNativeImpl(instStringIncludesSubStringImpl)
@@ -4029,6 +4159,234 @@ proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[No
   debug("Imported library, total imports: ", $interp.importedLibraries.len)
   return toValue(true)
 
+type
+  MethodSourceInfo = object
+    found: bool
+    filePath: string
+    ownerClass: string
+    header: string
+    source: string
+    suffix: string
+    startLine: int
+    endLine: int
+    hasBlock: bool
+
+proc parseSelectorFromMethodHeader(header: string): string =
+  let tokens = header.splitWhitespace()
+  if tokens.len == 0:
+    return ""
+
+  var keywordSelector = ""
+  for tok in tokens:
+    if tok.endsWith(":"):
+      keywordSelector.add(tok)
+
+  if keywordSelector.len > 0:
+    return keywordSelector
+  return tokens[0]
+
+proc collectClassNamesForLookup(cls: Class, names: var seq[string]) =
+  if cls == nil:
+    return
+  if cls.name notin names:
+    names.add(cls.name)
+  for parent in cls.superclasses:
+    collectClassNamesForLookup(parent, names)
+
+proc findMethodInFile(filePath, className, selector: string): MethodSourceInfo =
+  if not fileExists(filePath):
+    return result
+
+  let lines = readFile(filePath).splitLines()
+  for i in 0..<lines.len:
+    let rawLine = lines[i]
+    let line = rawLine.strip()
+    if line.len == 0 or line.startsWith("#"):
+      continue
+
+    let sepIdx = line.find(">>")
+    if sepIdx < 0:
+      continue
+
+    let headerClass = line[0..<sepIdx].strip()
+    if headerClass != className:
+      continue
+
+    var rest = line[(sepIdx + 2)..^1].strip()
+    if rest.len == 0:
+      continue
+
+    let primitiveIdx = rest.find("<primitive")
+    let bracketIdx = rest.find('[')
+
+    var selectorHeader = rest
+    if primitiveIdx >= 0 and (bracketIdx < 0 or primitiveIdx < bracketIdx):
+      selectorHeader = rest[0..<primitiveIdx].strip()
+    elif bracketIdx >= 0:
+      selectorHeader = rest[0..<bracketIdx].strip()
+
+    let parsedSelector = parseSelectorFromMethodHeader(selectorHeader)
+    if parsedSelector != selector:
+      continue
+
+    result.found = true
+    result.filePath = filePath
+    result.ownerClass = className
+    result.startLine = i + 1
+
+    if primitiveIdx >= 0 and (bracketIdx < 0 or primitiveIdx < bracketIdx):
+      result.hasBlock = false
+      result.header = rawLine.strip()
+
+      var commentLines: seq[string] = @[]
+      var endLineIdx = i + 1
+      while endLineIdx < lines.len:
+        let nextLine = lines[endLineIdx].strip()
+        if nextLine.len == 0:
+          inc(endLineIdx)
+          continue
+        if nextLine.startsWith("#"):
+          commentLines.add(nextLine)
+          inc(endLineIdx)
+        else:
+          break
+
+      result.endLine = endLineIdx
+      if commentLines.len > 0:
+        result.source = commentLines.join("\n")
+      else:
+        result.source = ""
+      result.suffix = ""
+      return result
+
+    let openIdx = rawLine.find('[')
+    if openIdx < 0:
+      result.hasBlock = false
+      result.endLine = i + 1
+      result.header = rawLine.strip()
+      result.source = rawLine.strip()
+      result.suffix = ""
+      return result
+
+    result.hasBlock = true
+    result.header = rawLine[0..<openIdx].strip(trailing = true, leading = false)
+
+    var depth = 1
+    var bodyLines: seq[string] = @[]
+    var endLineIdx = i
+    var suffix = ""
+
+    var currentLine = if openIdx + 1 <= rawLine.high: rawLine[(openIdx + 1)..^1] else: ""
+    var closed = false
+
+    while true:
+      var extracted = ""
+      var j = 0
+      while j < currentLine.len:
+        let ch = currentLine[j]
+        if ch == '[':
+          depth += 1
+          extracted.add(ch)
+        elif ch == ']':
+          if depth == 1:
+            depth -= 1
+            closed = true
+            if j + 1 <= currentLine.high:
+              suffix = currentLine[(j + 1)..^1]
+            break
+          else:
+            depth -= 1
+            extracted.add(ch)
+        else:
+          extracted.add(ch)
+        inc(j)
+
+      bodyLines.add(extracted)
+      if closed:
+        break
+
+      inc(endLineIdx)
+      if endLineIdx >= lines.len:
+        break
+      currentLine = lines[endLineIdx]
+    result.endLine = endLineIdx + 1
+    result.source = bodyLines.join("\n").strip(chars = {'\n', '\r'})
+    result.suffix = suffix
+    return result
+
+proc findMethodSourceInfo(interp: var Interpreter, className, selector: string): MethodSourceInfo =
+  var classNames: seq[string] = @[className]
+  var resolvedClass: Class = nil
+
+  if className in interp.globals[]:
+    let classVal = interp.globals[][className]
+    if classVal.kind == vkClass and classVal.classVal != nil:
+      resolvedClass = classVal.classVal
+
+  if resolvedClass == nil:
+    for _, val in interp.globals[].pairs:
+      if val.kind == vkClass and val.classVal != nil and val.classVal.name == className:
+        resolvedClass = val.classVal
+        break
+
+  if resolvedClass != nil:
+    classNames = @[]
+    collectClassNamesForLookup(resolvedClass, classNames)
+
+  let primaryRoot = joinPath(interp.hardingHome, "lib")
+  let libRoot = if dirExists(primaryRoot): primaryRoot else: "lib"
+
+  var files: seq[string] = @[]
+  if dirExists(libRoot):
+    for path in walkDirRec(libRoot):
+      if path.toLowerAscii().endsWith(".hrd"):
+        files.add(path)
+
+  for candidateClass in classNames:
+    for filePath in files:
+      let info = findMethodInFile(filePath, candidateClass, selector)
+      if info.found:
+        return info
+
+proc globalTableMethodSourceInfoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Harding methodSourceInfoForClass:selector:
+  ## Returns a Table with keys: found, file, ownerClass, header, source,
+  ## startLine, endLine, hasBlock, suffix
+  let infoTable = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+
+  if args.len < 2:
+    setTableValue(infoTable, toValue("found"), toValue(false))
+    return infoTable.toValue()
+
+  let className = case args[0].kind
+    of vkString: args[0].strVal
+    of vkSymbol: args[0].symVal
+    else: ""
+
+  let selector = case args[1].kind
+    of vkString: args[1].strVal
+    of vkSymbol: args[1].symVal
+    else: ""
+
+  if className.len == 0 or selector.len == 0:
+    setTableValue(infoTable, toValue("found"), toValue(false))
+    return infoTable.toValue()
+
+  let info = findMethodSourceInfo(interp, className, selector)
+  setTableValue(infoTable, toValue("found"), toValue(info.found))
+
+  if info.found:
+    setTableValue(infoTable, toValue("file"), toValue(info.filePath))
+    setTableValue(infoTable, toValue("ownerClass"), toValue(info.ownerClass))
+    setTableValue(infoTable, toValue("header"), toValue(info.header))
+    setTableValue(infoTable, toValue("source"), toValue(info.source))
+    setTableValue(infoTable, toValue("startLine"), toValue(info.startLine))
+    setTableValue(infoTable, toValue("endLine"), toValue(info.endLine))
+    setTableValue(infoTable, toValue("hasBlock"), toValue(info.hasBlock))
+    setTableValue(infoTable, toValue("suffix"), toValue(info.suffix))
+
+  return infoTable.toValue()
+
 proc installLibraryMethods*() =
   ## Install Library methods that need interpreter access
   if libraryClass == nil:
@@ -4091,6 +4449,11 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   mainMethod.setNativeImpl(globalTableMainImpl)
   mainMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "main:", mainMethod)
+
+  let methodSourceInfoMethod = createCoreMethod("methodSourceInfoForClass:selector:")
+  methodSourceInfoMethod.setNativeImpl(globalTableMethodSourceInfoImpl)
+  methodSourceInfoMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "methodSourceInfoForClass:selector:", methodSourceInfoMethod)
 
 # ============================================================================
 # Explicit Stack AST Interpreter (VM)

@@ -212,7 +212,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       discard
 
   case selector
-  of "writeLine:", "println":
+  of "writeLine:", "writeline:", "println":
     if args.len > 0:
       echo args[0].toString()
     return receiver

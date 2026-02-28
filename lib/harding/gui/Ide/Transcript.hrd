@@ -14,9 +14,9 @@ Transcript>>initialize [
 ]
 
 Transcript>>show: anObject [
-  # Append anObject's printString to the transcript.
+  # Append anObject's asString to the transcript.
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString).
+    sourceView insertTextAtEnd: (anObject asString).
     self scrollToBottom
   ]
 ]
@@ -148,13 +148,23 @@ Transcript>>installKeyboardShortcuts [
 
 Transcript>>doItSelection [
   # Do It - evaluate selected text
-  | code result |
+  | code result shown |
   code := sourceView selectedText.
   code isEmpty not ifTrue: [
-    result := Object eval: code.
-    self showCr: result printString.
+    result := [ Object eval: code ]
+      on: Exception
+      do: [:ex | "IDE_ERROR: " , ex printString ].
+    (result isKindOf: String)
+      ifTrue: [ shown := result ]
+      ifFalse: [
+        shown := (result isClass)
+          ifTrue: [ "<class " , result name , ">" ]
+          ifFalse: [ result printString ]
+      ].
+    self showCr: shown.
     ^ result
   ].
+  self showCr: "No code selected/current line to evaluate".
   ^ nil
 ]
 

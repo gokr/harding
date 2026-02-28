@@ -113,51 +113,138 @@ Workspace>>onDestroy [
 ].
 
 Workspace>>doIt: codeString [
-    ^Object eval: codeString
+    ^ [ Object eval: codeString ]
+        on: Exception
+        do: [:ex | "IDE_ERROR: " , ex printString ]
+]
+
+Workspace>>isErrorResult: result [
+    ^ (result isKindOf: String)
+        and: [
+            (result startsWith: "IDE_ERROR:")
+                or: [
+                    (result startsWith: "Error:")
+                        or: [
+                            (result startsWith: "Runtime error:")
+                                or: [ result startsWith: "Parse error:" ]
+                        ]
+                ]
+        ]
 ]
 
 Workspace>>doItSelection [
     # Do It - evaluate selected text or current line
-    | code |
-    code := sourceView selectedText
-    code isEmpty not ifTrue: [
-        ^self doIt: code
-    ]
+    | code result |
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [
+        self showError: "No code selected/current line to evaluate".
+        ^ nil
+    ].
+
+    result := self doIt: code.
+    (self isErrorResult: result) ifTrue: [
+        self showError: result.
+        self showErrorDialog: result.
+        ^ nil
+    ].
+
+    self clearError.
+    ^ result
 ]
 
 Workspace>>printItSelection [
     # Print It - evaluate and insert result after selection
     # The result is then selected so it can be easily deleted
-    | code result resultString insertPos |
-    code := sourceView selectedText.
-    code isEmpty not ifTrue: [
-        result := self doIt: code
-        resultString := result printString
+    | code result resultString |
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [
+        self showError: "No code selected/current line to evaluate".
+        ^ nil
+    ].
 
-        # Insert the result after the selection (or after the line if no selection)
-        insertPos := (sourceView insertTextAtSelectedEnd: resultString)
+    result := self doIt: code.
+    (self isErrorResult: result) ifTrue: [
+        self showError: result.
+        self showErrorDialog: result.
+        ^ nil
+    ].
 
-        # Select the inserted text for easy deletion
-        sourceView selectRangeFrom: insertPos to: (insertPos + resultString size)
+    self clearError.
+    resultString := (result isClass)
+        ifTrue: [ "<class " , result name , ">" ]
+        ifFalse: [ result printString ].
 
-        ^result
-    ]
-    ^nil
+    # Append result visibly on its own line for robust behavior.
+    sourceView text: (sourceView text , "\n" , resultString).
+    ^ result
 ]
 
 Workspace>>inspectItSelection [
     # Inspect It - evaluate and open inspector on result
     | code result |
-    code := sourceView selectedText.
-    code isEmpty not ifTrue: [
-        result := self doIt: code.
-        result notNil ifTrue: [
-            result inspect.
-            Transcript showCr: ("Inspecting: " , (result printString)).
-        ].
-        ^result
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [
+        self showError: "No code selected/current line to evaluate".
+        ^ nil
     ].
-    ^nil
+
+    result := self doIt: code.
+    (self isErrorResult: result) ifTrue: [
+        self showError: result.
+        self showErrorDialog: result.
+        ^ nil
+    ].
+
+    self clearError.
+    result notNil ifTrue: [
+        result inspect.
+        Transcript showCr: ("Inspecting: " , (result printString)).
+    ].
+    ^ result
+]
+
+Workspace>>evaluationSourceCode [
+    | code |
+    code := sourceView selectedText.
+    (code isNil or: [ code isEmpty ]) ifTrue: [
+        code := sourceView text
+    ].
+    code isNil ifTrue: [ ^ "" ].
+    ^ code trim
+]
+
+Workspace>>showError: messageText [
+    Transcript showCr: messageText.
+    window notNil ifTrue: [
+        window title: ("Workspace - " , messageText)
+    ]
+]
+
+Workspace>>showErrorDialog: messageText [
+    | dialog box label okButton |
+    dialog := GtkWindow new.
+    dialog title: "Workspace Error".
+    dialog setDefaultSize: 520 height: 140.
+
+    box := GtkBox vertical.
+    box setSpacing: 8.
+
+    label := GtkLabel new: messageText.
+    label halignStart.
+
+    okButton := GtkButton newLabel: "OK".
+    okButton clicked: [ dialog close ].
+
+    dialog setChild: box.
+    box append: label.
+    box append: okButton.
+    dialog present.
+]
+
+Workspace>>clearError [
+    window notNil ifTrue: [
+        window title: "Workspace"
+    ]
 ]
 
 Workspace>>evalAll [

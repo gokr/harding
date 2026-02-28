@@ -120,6 +120,18 @@ Array>>join: separator [
     ^ result
 ]
 
+Array>>printString [
+    | out first |
+    out := "#(".
+    first := true.
+    self do: [:elem |
+        first ifFalse: [ out := out , " " ].
+        out := out , (elem printString).
+        first := false
+    ].
+    ^ out , ")"
+]
+
 #====================================================================
 # Array testing
 #====================================================================

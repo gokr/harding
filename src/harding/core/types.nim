@@ -247,6 +247,7 @@ type
     # Uncaught exception info (for debugger)
     uncaughtException*: Instance     # The uncaught exception instance
     uncaughtExceptionMessage*: string  # The exception message
+    suppressUncaughtExit*: bool  # When true, uncaught exceptions raise EvalError instead of quitting
 
   BlockNode* = ref object of Node
     parameters*: seq[string]              # method parameters

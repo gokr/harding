@@ -281,3 +281,12 @@ proc widgetSetHexpandImpl*(interp: var Interpreter, self: Instance, args: seq[No
       debug("Set hexpand on widget")
 
   nilValue()
+
+## Native method: setHalignStart
+proc widgetSetHalignStartImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Align widget to the start (left in LTR layouts)
+  if self.isNimProxy and self.nimValue != nil:
+    let widget = cast[GtkWidget](self.nimValue)
+    gtkWidgetSetHalign(widget, GTKALIGNSTART)
+
+  nilValue()

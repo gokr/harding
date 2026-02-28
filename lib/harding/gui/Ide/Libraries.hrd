@@ -23,36 +23,70 @@ IDELib name: "IDE".
 Libraries addLast: IDELib.
 
 # Library class methods for accessing registered libraries
+Library class>>syncDynamicLibraries [
+    # Refresh GUI and IDE library entries from currently loaded globals
+    | obj ideNames index name |
+
+    # GUI classes (all Gtk* classes loaded by the GTK bridge)
+    Harding keys do: [:key |
+        (key startsWith: "Gtk") ifTrue: [
+            obj := Harding at: key.
+            (obj notNil and: [ obj isClass ]) ifTrue: [
+                GUILib at: key put: obj
+            ]
+        ]
+    ].
+
+    # IDE classes (loaded from lib/harding/gui/Ide/*.hrd)
+    # Keep this explicit so unrelated classes are not pulled in.
+    ideNames := #("Launcher" "Workspace" "Transcript" "SystemBrowser" "BrowserPane" "Inspector").
+    index := 0.
+    [ index < ideNames size ] whileTrue: [
+        name := ideNames at: index.
+        (Harding includesKey: name) ifTrue: [
+            obj := Harding at: name.
+            (obj notNil and: [ obj isClass ]) ifTrue: [
+                IDELib at: name put: obj
+            ]
+        ].
+        index := index + 1
+    ].
+].
+
 Library class>>allLibraries [
+    self syncDynamicLibraries.
     ^ Libraries
 ].
 
 Library class>>named: aName [
-    | index size |
-    index := 1.
-    size := Libraries size.
-    [ index <= size ] whileTrue: [
-        (Libraries at: index) name = aName ifTrue: [ ^ Libraries at: index ].
-        index := index + 1
-    ].
-    ^ nil
+    self syncDynamicLibraries.
+    ^ Libraries detect: [:lib | lib name = aName ]
 ].
 
 Library class>>allNames [
+    self syncDynamicLibraries.
     ^ Libraries collect: [:lib | lib name ]
 ].
 
 # Instance method to get classes in a library
 Library>>classes [
-    # Return all values that are actual Class objects
-    # Access bindings slot directly (it's slot 0 in Library)
-    ^ bindings values select: [:obj | obj isClass ]
+    # Return class objects whose binding key matches their className.
+    # This excludes non-class globals such as Processor.
+    ^ self classNames collect: [:className | self at: className ]
 ].
 
 # Instance method to get class names in a library
 Library>>classNames [
-    # Return names of all classes in this library
-    ^ self classes collect: [:cls | cls name ]
+    # Return binding keys that map to class objects.
+    | result |
+    result := Array new.
+
+    self keys do: [:key |
+        | obj |
+        obj := self at: key.
+        (obj notNil and: [ obj isClass ]) ifTrue: [ result add: key ]
+    ].
+    ^ result sorted
 ].
 
 # Register core classes with CoreLib

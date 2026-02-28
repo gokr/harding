@@ -187,6 +187,67 @@ suite "Stdlib: Arrays":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 3)
 
+suite "Stdlib: Reflection":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "class objects report isClass":
+    let (result, err) = interp.doit("Object isClass")
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == true)
+
+  test "Object new returns an instance value":
+    let (result, err) = interp.doit("Object new")
+    check(err.len == 0)
+    check(result.kind == vkInstance)
+    if result.kind == vkInstance:
+      check(result.instVal != nil)
+
+  test "regular instances do not report isClass":
+    let (result, err) = interp.doit("Object new isClass")
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == false)
+
+  test "primitive values do not report isClass":
+    let (result, err) = interp.doit("1 isClass")
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == false)
+
+  test "definedMethods returns only class-local selectors":
+    let (result, err) = interp.doit("BaseForDefined := Object derive. BaseForDefined selector: #foo put: [ ^ 1 ]. ChildForDefined := BaseForDefined derive. ChildForDefined selector: #bar put: [ ^ 2 ]. (ChildForDefined definedMethods includes: #bar) and: [ (ChildForDefined definedMethods includes: #foo) not ]")
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == true)
+
+  test "removeMethod removes selector from class":
+    let (result, err) = interp.doit("RemoveMethodClass := Object derive. RemoveMethodClass selector: #tempMethod put: [ ^ 1 ]. RemoveMethodClass removeMethod: #tempMethod. (RemoveMethodClass methods includes: #tempMethod) not")
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == true)
+
+  test "methodSourceInfo primitive finds core method":
+    let result = interp.evalStatements("""
+      Info := Harding methodSourceInfoForClass: "Object" selector: "isNil".
+      Result := Info at: "found"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal == true)
+
+  test "methodSourceInfo primitive finds keyword selector":
+    let result = interp.evalStatements("""
+      Info := Harding methodSourceInfoForClass: "Object" selector: "doesNotUnderstand:with:with:".
+      Result := Info at: "found"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal == true)
+
   test "first returns first element":
     let result = interp.evalStatements("""
       Arr := Array new.

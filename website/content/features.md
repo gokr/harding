@@ -420,6 +420,24 @@ obj slotNames       # Get list of instance variable names
 
 ## Runtime Features
 
+### System and File I/O
+
+Harding includes practical process/file utilities in the stdlib:
+
+- `System arguments` for CLI/runtime arguments
+- `System cwd`, `System stdin`, `System stdout`, `System stderr`
+- `File` class convenience messages (`readAll:`, `write:to:`, `append:to:`, `exists:`)
+- `FileStream` for stream-style open/read/write
+
+```harding
+# File helpers
+content := File readAll: "README.md"
+File write: content to: "README.copy.md"
+
+# Process info and stdio
+System stdout writeline: ("args: " , (System arguments size) asString)
+```
+
 ### Green Threads (Processes)
 
 Cooperative multitasking with first-class Process objects:
@@ -532,6 +550,9 @@ Source code lives in `.hrd` files:
 ```bash
 # Run it
 harding myprogram.hrd
+
+# Pass runtime args available via System arguments
+harding myprogram.hrd -- alpha beta
 
 # Git friendly
 git add myprogram.hrd
@@ -693,6 +714,16 @@ obj nimValue       # Access the underlying Nim value
 
 These fields enable seamless integration with the Nim ecosystem, allowing Harding objects to wrap Nim structs, pointers, and other native types.
 
+### Nim-Harding Package Model
+
+Harding supports packaging Nim primitives and Harding source files together:
+
+- Package `.hrd` files are embedded and loaded through the same `load:` message
+- Nim primitive registration is bundled with package install
+- One package version controls both Nim implementation and Harding API surface
+
+For a full walkthrough, see the [Nim Package Tutorial](https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md).
+
 ### C Library Access
 
 Through Nim's FFI:
@@ -771,7 +802,7 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 - AI integration hooks
 - Package manager and ecosystem
 
-## Current Status: v0.6.0
+## Current Status: v0.7.0
 
 **Implemented:**
 - Functional interpreter with green threads and synchronization primitives
@@ -783,6 +814,9 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 - BitBarrel integration for persistent storage (optional)
 - Automatic accessor generation (`deriveWithAccessors:`)
 - Collections: Array, Table, Set, Interval, SortedCollection
+- System/File I/O stdlib (`System`, `File`, `FileStream`, stdio globals)
+- CLI/runtime arg forwarding via `System arguments` (including `harding ... -- args`)
+- Nim-Harding package model for bundled primitives + embedded `.hrd` sources
 
 **In Progress:**
 - Actor-based shared-nothing concurrency

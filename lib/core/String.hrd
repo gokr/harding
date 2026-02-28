@@ -24,6 +24,9 @@ String>>from: start to: end <primitive primitiveFromTo: start to: end>
 String>>indexOf: substring <primitive primitiveIndexOf: substring>
   # Return index of substring (0 if not found)
 
+String>>< other <primitive primitiveLessThan: other>
+  # Lexicographic comparison
+
 String>>includesSubString: substring <primitive primitiveIncludesSubString: substring>
   # Check if string includes substring
 
@@ -96,4 +99,81 @@ String>>endsWith: suffix [
   (selfSize >= suffixSize) ifFalse: [ ^ false ].
   start := selfSize - suffixSize.
   ^ (self from: start to: (selfSize - 1)) = suffix
+]
+
+String>>banana2 [
+
+^ "banana2"
+]
+
+String>>gurka [
+
+^ 4
+]
+
+String>>burp [
+
+^ 99
+]
+
+String>>pup [
+
+^ "pup"
+]
+
+String>>pup [
+# H
+^ "pup"
+]
+
+
+String>>newMesthod [
+# HWat
+^ nil
+]
+
+String>>newMesthod [
+
+^ 3
+]
+
+String>>newMesthod [
+# Hwat
+^ 3
+]
+
+String>>pupp [
+	^ 99
+]
+
+String>>pupp [
+	^ 99
+]
+
+String>>pupp [
+	^ 99
+]
+
+String>>pupp [
+	^ 99
+]
+
+String>>pupp [
+# HWat
+^ nil
+]
+
+String>>newMethod [
+
+^ nil
+]
+
+String>>newMethod [
+
+^ nil
+]
+
+String>>newwMesthod [
+# HWat
+^ nil
 ]

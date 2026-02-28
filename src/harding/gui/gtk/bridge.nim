@@ -128,6 +128,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   widgetSetHexpandMethod.hasInterpreterParam = true
   addMethodToClass(widgetCls, "setHexpand:", widgetSetHexpandMethod)
 
+  let widgetSetHalignStartMethod = createCoreMethod("setHalignStart")
+  widgetSetHalignStartMethod.nativeImpl = cast[pointer](widgetSetHalignStartImpl)
+  widgetSetHalignStartMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "setHalignStart", widgetSetHalignStartMethod)
+
   interp.globals[]["GtkWidget"] = widgetCls.toValue()
   debug("Registered GtkWidget class")
 
