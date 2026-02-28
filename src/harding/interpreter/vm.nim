@@ -26,6 +26,8 @@ template writeStderr*(s: string) =
   stderr.write(s)
 template nativeImplIsSet*(meth: BlockNode): bool =
   meth.nativeImpl != nil
+template nativeValueImplIsSet*(meth: BlockNode): bool =
+  meth.nativeValueImpl != nil
 
 # ============================================================================
 # Evaluation engine for Harding
@@ -99,6 +101,19 @@ proc resolveLoadInput(interp: Interpreter,
 proc makeStandardFileStreamInstance(fileStreamCls: Class,
                                     kind: FileStreamKind,
                                     mode: string): Instance
+
+proc callNativeValueMethod(interp: var Interpreter, meth: BlockNode,
+                          receiverVal: NodeValue,
+                          args: seq[NodeValue]): NodeValue =
+  ## Execute a NodeValue-oriented native implementation.
+  if meth.hasInterpreterParam:
+    type NativeValueProcWithInterp = proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue {.nimcall.}
+    let nativeProc = cast[NativeValueProcWithInterp](meth.nativeValueImpl)
+    return nativeProc(interp, receiverVal, args)
+
+  type NativeValueProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue {.nimcall.}
+  let nativeProc = cast[NativeValueProc](meth.nativeValueImpl)
+  return nativeProc(receiverVal, args)
 
 # ============================================================================
 # Stack Trace Printing
@@ -658,6 +673,75 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
 
   return MethodResult(currentMethod: nil, receiver: receiver, definingClass: nil, found: false)
 
+proc lookupMethodOnClass*(interp: Interpreter, receiverClass: Class, selector: string): MethodResult =
+  ## Look up an instance method directly from a runtime class.
+  ## This avoids requiring a materialized Instance for lookup-only paths.
+  if receiverClass == nil:
+    return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
+
+  if selector in receiverClass.allMethods:
+    return MethodResult(
+      currentMethod: receiverClass.allMethods[selector],
+      receiver: nil,
+      definingClass: receiverClass,
+      found: true
+    )
+
+  if receiverClass.methodsDirty:
+    rebuildAllTables(receiverClass)
+    receiverClass.methodsDirty = false
+    if selector in receiverClass.allMethods:
+      return MethodResult(
+        currentMethod: receiverClass.allMethods[selector],
+        receiver: nil,
+        definingClass: receiverClass,
+        found: true
+      )
+
+  return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
+
+proc materializeReceiverForSend(receiverVal: NodeValue): Instance =
+  ## Materialize an Instance receiver only when execution requires it.
+  case receiverVal.kind
+  of vkInstance:
+    return receiverVal.instVal
+  of vkInt:
+    return newIntInstance(integerClass, receiverVal.intVal)
+  of vkFloat:
+    return newFloatInstance(floatClass, receiverVal.floatVal)
+  of vkString:
+    return newStringInstance(stringClass, receiverVal.strVal)
+  of vkBool:
+    let p = cast[pointer](new(bool))
+    cast[ptr bool](p)[] = receiverVal.boolVal
+    return Instance(
+      kind: ikObject,
+      class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
+      slots: @[],
+      isNimProxy: true,
+      nimValue: p
+    )
+  of vkNil:
+    return nilInstance
+  of vkArray:
+    return newArrayInstance(arrayClass, receiverVal.arrayVal)
+  of vkTable:
+    return newTableInstance(tableClass, receiverVal.tableVal)
+  of vkBlock:
+    registerBlockNode(receiverVal.blockVal)
+    return Instance(
+      kind: ikObject,
+      class: blockClass,
+      slots: @[],
+      isNimProxy: false,
+      nimValue: cast[pointer](receiverVal.blockVal)
+    )
+  of vkSymbol:
+    let symClass = if symbolClassCache != nil: symbolClassCache else: stringClass
+    return newStringInstance(symClass, receiverVal.symVal)
+  of vkClass:
+    return Instance(kind: ikObject, class: receiverVal.classVal, slots: @[], isNimProxy: false, nimValue: nil)
+
 proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
   ## Look up class method in class (fast O(1) lookup)
   ## Only rebuilds method tables on actual cache miss, not every lookup
@@ -701,16 +785,18 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   debug("Executing method with ", arguments.len, " arguments")
 
   # Check for native implementation first
-  if nativeImplIsSet(currentMethod):
+  if nativeValueImplIsSet(currentMethod) or nativeImplIsSet(currentMethod):
       debug("Calling native implementation: ", currentMethod.selector, " receiver=", $receiver.class.name, " receiver.kind=", $receiver.kind, " hasInterpreterParam=", currentMethod.hasInterpreterParam)
       let savedReceiver = interp.currentReceiver
       try:
-        if currentMethod.hasInterpreterParam:
-          type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
-          let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-          debug("About to call nativeProc with interpreter param, receiver ptr=", cast[int](receiver), " nativeImpl ptr=", cast[int](currentMethod.nativeImpl))
-          return nativeProc(interp, receiver, arguments)
+        if nativeValueImplIsSet(currentMethod):
+          return callNativeValueMethod(interp, currentMethod, receiver.toValue().unwrap(), arguments)
         else:
+          if currentMethod.hasInterpreterParam:
+            type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
+            let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
+            debug("About to call nativeProc with interpreter param, receiver ptr=", cast[int](receiver), " nativeImpl ptr=", cast[int](currentMethod.nativeImpl))
+            return nativeProc(interp, receiver, arguments)
           type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
           debug("About to call nativeProc without interpreter param, receiver ptr=", cast[int](receiver), " nativeImpl ptr=", cast[int](currentMethod.nativeImpl))
@@ -1936,6 +2022,16 @@ proc primitiveEqualsImpl(self: Instance, args: seq[NodeValue]): NodeValue =
     return trueValue
   return falseValue
 
+proc primitiveEqualsValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## Identity/value equality for Object on NodeValue receivers
+  if args.len < 1:
+    return falseValue
+  let selfVal = self.unwrap()
+  let otherVal = args[0].unwrap()
+  if selfVal == otherVal:
+    return trueValue
+  return falseValue
+
 proc primitiveSlotNamesImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return slot names of this class as an array of symbols
   if self.kind != ikObject or self.class == nil:
@@ -2107,6 +2203,22 @@ proc initGlobals*(interp: var Interpreter) =
   ##
   ## See objects.nim for full design documentation.
 
+  template setNativeValueFromInstance(meth: BlockNode, impl: untyped) =
+    meth.setNativeValueImpl(proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      let receiver = materializeReceiverForSend(self)
+      if receiver == nil:
+        return nilValue()
+      return impl(receiver, args)
+    )
+
+  template setNativeValueFromInstanceWithInterp(meth: BlockNode, impl: untyped) =
+    meth.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+      let receiver = materializeReceiverForSend(self)
+      if receiver == nil:
+        return nilValue()
+      return impl(interp, receiver, args)
+    )
+
   # Set rootClass and create the basic class hierarchy from Root
   let rootCls = initRootClass()
 
@@ -2144,6 +2256,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let addSuperclassMethod = createCoreMethod("addSuperclass:")
   addSuperclassMethod.setNativeImpl(addSuperclassImpl)
+  setNativeValueFromInstanceWithInterp(addSuperclassMethod, addSuperclassImpl)
   addSuperclassMethod.hasInterpreterParam = true
   rootCls.classMethods["addSuperclass:"] = addSuperclassMethod
   rootCls.allClassMethods["addSuperclass:"] = addSuperclassMethod
@@ -2169,6 +2282,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let classNewMethod = createCoreMethod("new")
   classNewMethod.setNativeImpl(objectClassNewImpl)
+  setNativeValueFromInstanceWithInterp(classNewMethod, objectClassNewImpl)
   classNewMethod.hasInterpreterParam = true
   objectCls.classMethods["new"] = classNewMethod
   objectCls.allClassMethods["new"] = classNewMethod
@@ -2183,6 +2297,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let classBasicNewMethod = createCoreMethod("basicNew")
   classBasicNewMethod.setNativeImpl(objectClassBasicNewImpl)
+  setNativeValueFromInstanceWithInterp(classBasicNewMethod, objectClassBasicNewImpl)
   classBasicNewMethod.hasInterpreterParam = true
   objectCls.classMethods["basicNew"] = classBasicNewMethod
   objectCls.allClassMethods["basicNew"] = classBasicNewMethod
@@ -2193,18 +2308,21 @@ proc initGlobals*(interp: var Interpreter) =
   # Add perform: methods to Object class (for primitive dispatch from Smalltalk)
   let objPerformMethod = createCoreMethod("perform:")
   objPerformMethod.setNativeImpl(performWithImpl)
+  setNativeValueFromInstanceWithInterp(objPerformMethod, performWithImpl)
   objPerformMethod.hasInterpreterParam = true
   objectCls.methods["perform:"] = objPerformMethod
   objectCls.allMethods["perform:"] = objPerformMethod
 
   let objPerformWithMethod = createCoreMethod("perform:with:")
   objPerformWithMethod.setNativeImpl(performWithImpl)
+  setNativeValueFromInstanceWithInterp(objPerformWithMethod, performWithImpl)
   objPerformWithMethod.hasInterpreterParam = true
   objectCls.methods["perform:with:"] = objPerformWithMethod
   objectCls.allMethods["perform:with:"] = objPerformWithMethod
 
   let objPerformWithWithMethod = createCoreMethod("perform:with:with:")
   objPerformWithWithMethod.setNativeImpl(performWithImpl)
+  setNativeValueFromInstanceWithInterp(objPerformWithWithMethod, performWithImpl)
   objPerformWithWithMethod.hasInterpreterParam = true
   objectCls.methods["perform:with:with:"] = objPerformWithWithMethod
   objectCls.allMethods["perform:with:with:"] = objPerformWithWithMethod
@@ -2220,12 +2338,14 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveIdentity: for == comparison
   let objIdentityMethod = createCoreMethod("primitiveIdentity:")
   objIdentityMethod.setNativeImpl(instIdentityImpl)
+  setNativeValueFromInstance(objIdentityMethod, instIdentityImpl)
   objectCls.methods["primitiveIdentity:"] = objIdentityMethod
   objectCls.allMethods["primitiveIdentity:"] = objIdentityMethod
 
   # Add primitiveAsSelfDo: for asSelfDo: implementation (as both instance and class method)
   let objAsSelfDoMethod = createCoreMethod("primitiveAsSelfDo:")
   objAsSelfDoMethod.setNativeImpl(primitiveAsSelfDoImpl)
+  setNativeValueFromInstanceWithInterp(objAsSelfDoMethod, primitiveAsSelfDoImpl)
   objAsSelfDoMethod.hasInterpreterParam = true
   # Register as instance method on Object (for instances)
   objectCls.methods["primitiveAsSelfDo:"] = objAsSelfDoMethod
@@ -2237,6 +2357,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveHasProperty: for hasProperty: implementation
   let objHasPropertyMethod = createCoreMethod("primitiveHasProperty:")
   objHasPropertyMethod.setNativeImpl(primitiveHasPropertyImpl)
+  setNativeValueFromInstanceWithInterp(objHasPropertyMethod, primitiveHasPropertyImpl)
   objHasPropertyMethod.hasInterpreterParam = true
   objectCls.methods["primitiveHasProperty:"] = objHasPropertyMethod
   objectCls.allMethods["primitiveHasProperty:"] = objHasPropertyMethod
@@ -2244,6 +2365,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveProperties for properties implementation
   let objPropertiesMethod = createCoreMethod("primitiveProperties")
   objPropertiesMethod.setNativeImpl(primitivePropertiesImpl)
+  setNativeValueFromInstanceWithInterp(objPropertiesMethod, primitivePropertiesImpl)
   objPropertiesMethod.hasInterpreterParam = true
   objectCls.methods["primitiveProperties"] = objPropertiesMethod
   objectCls.allMethods["primitiveProperties"] = objPropertiesMethod
@@ -2251,6 +2373,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveRespondsTo: for respondsTo: implementation
   let objRespondsToMethod = createCoreMethod("primitiveRespondsTo:")
   objRespondsToMethod.setNativeImpl(primitiveRespondsToImpl)
+  setNativeValueFromInstanceWithInterp(objRespondsToMethod, primitiveRespondsToImpl)
   objRespondsToMethod.hasInterpreterParam = true
   objectCls.methods["primitiveRespondsTo:"] = objRespondsToMethod
   objectCls.allMethods["primitiveRespondsTo:"] = objRespondsToMethod
@@ -2258,6 +2381,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveMethods for methods implementation
   let objMethodsMethod = createCoreMethod("primitiveMethods")
   objMethodsMethod.setNativeImpl(primitiveMethodsImpl)
+  setNativeValueFromInstanceWithInterp(objMethodsMethod, primitiveMethodsImpl)
   objMethodsMethod.hasInterpreterParam = true
   objectCls.methods["primitiveMethods"] = objMethodsMethod
   objectCls.allMethods["primitiveMethods"] = objMethodsMethod
@@ -2286,6 +2410,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveAllInstanceMethods for allInstanceMethods implementation
   let objAllInstanceMethodsMethod = createCoreMethod("primitiveAllInstanceMethods")
   objAllInstanceMethodsMethod.setNativeImpl(primitiveAllInstanceMethodsImpl)
+  setNativeValueFromInstanceWithInterp(objAllInstanceMethodsMethod, primitiveAllInstanceMethodsImpl)
   objAllInstanceMethodsMethod.hasInterpreterParam = true
   objectCls.methods["primitiveAllInstanceMethods"] = objAllInstanceMethodsMethod
   objectCls.allMethods["primitiveAllInstanceMethods"] = objAllInstanceMethodsMethod
@@ -2293,6 +2418,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveAllClassMethods for allClassMethods implementation
   let objAllClassMethodsMethod = createCoreMethod("primitiveAllClassMethods")
   objAllClassMethodsMethod.setNativeImpl(primitiveAllClassMethodsImpl)
+  setNativeValueFromInstanceWithInterp(objAllClassMethodsMethod, primitiveAllClassMethodsImpl)
   objAllClassMethodsMethod.hasInterpreterParam = true
   objectCls.methods["primitiveAllClassMethods"] = objAllClassMethodsMethod
   objectCls.allMethods["primitiveAllClassMethods"] = objAllClassMethodsMethod
@@ -2300,6 +2426,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveClass for class implementation
   let objClassMethod = createCoreMethod("primitiveClass")
   objClassMethod.setNativeImpl(classImpl)
+  setNativeValueFromInstance(objClassMethod, classImpl)
   objectCls.methods["primitiveClass"] = objClassMethod
   objectCls.allMethods["primitiveClass"] = objClassMethod
   objectCls.allMethods["primitiveMethods"] = objMethodsMethod
@@ -2307,6 +2434,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveError: for error: implementation
   let objErrorMethod = createCoreMethod("primitiveError:")
   objErrorMethod.setNativeImpl(primitiveErrorImpl)
+  setNativeValueFromInstanceWithInterp(objErrorMethod, primitiveErrorImpl)
   objErrorMethod.hasInterpreterParam = true
   objectCls.methods["primitiveError:"] = objErrorMethod
   objectCls.allMethods["primitiveError:"] = objErrorMethod
@@ -2314,12 +2442,14 @@ proc initGlobals*(interp: var Interpreter) =
   # Add primitiveEquals: for == implementation
   let objEqualsMethod = createCoreMethod("primitiveEquals:")
   objEqualsMethod.setNativeImpl(primitiveEqualsImpl)
+  objEqualsMethod.setNativeValueImpl(primitiveEqualsValueImpl)
   objectCls.methods["primitiveEquals:"] = objEqualsMethod
   objectCls.allMethods["primitiveEquals:"] = objEqualsMethod
 
   # Add primitiveIsKindOf: for isKindOf: implementation
   let objIsKindOfMethod = createCoreMethod("primitiveIsKindOf:")
   objIsKindOfMethod.setNativeImpl(primitiveIsKindOfImpl)
+  setNativeValueFromInstanceWithInterp(objIsKindOfMethod, primitiveIsKindOfImpl)
   objIsKindOfMethod.hasInterpreterParam = true
   objectCls.methods["primitiveIsKindOf:"] = objIsKindOfMethod
   objectCls.allMethods["primitiveIsKindOf:"] = objIsKindOfMethod
@@ -2327,6 +2457,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add slotNames for class introspection - returns slot names of this class
   let objSlotNamesMethod = createCoreMethod("slotNames")
   objSlotNamesMethod.setNativeImpl(primitiveSlotNamesImpl)
+  setNativeValueFromInstanceWithInterp(objSlotNamesMethod, primitiveSlotNamesImpl)
   objSlotNamesMethod.hasInterpreterParam = true
   objectCls.methods["slotNames"] = objSlotNamesMethod
   objectCls.allMethods["slotNames"] = objSlotNamesMethod
@@ -2337,6 +2468,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Add superclassNames for class introspection - returns names of superclasses
   let objSuperclassNamesMethod = createCoreMethod("superclassNames")
   objSuperclassNamesMethod.setNativeImpl(primitiveSuperclassNamesImpl)
+  setNativeValueFromInstanceWithInterp(objSuperclassNamesMethod, primitiveSuperclassNamesImpl)
   objSuperclassNamesMethod.hasInterpreterParam = true
   objectCls.methods["superclassNames"] = objSuperclassNamesMethod
   objectCls.allMethods["superclassNames"] = objSuperclassNamesMethod
@@ -2350,8 +2482,508 @@ proc initGlobals*(interp: var Interpreter) =
       return toValue(self.class.name)
     return toValue("")
 
+  proc primitiveClassNameValueImpl(interp: var Interpreter, self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard interp
+    discard argsUnused
+    if self.kind == vkClass and self.classVal != nil:
+      return toValue(self.classVal.name)
+    let cls = classOfValue(self)
+    if cls != nil:
+      return toValue(cls.name)
+    return toValue("")
+
+  proc primitiveStringSizeValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    case self.kind
+    of vkString:
+      return NodeValue(kind: vkInt, intVal: self.strVal.len)
+    of vkSymbol:
+      return NodeValue(kind: vkInt, intVal: self.symVal.len)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        return NodeValue(kind: vkInt, intVal: self.instVal.strVal.len)
+    else:
+      discard
+    return nilValue()
+
+  proc primitiveStringConcatValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      case self.kind
+      of vkString:
+        return self
+      of vkSymbol:
+        return NodeValue(kind: vkString, strVal: self.symVal)
+      of vkInstance:
+        if self.instVal != nil and self.instVal.kind == ikString:
+          return NodeValue(kind: vkString, strVal: self.instVal.strVal)
+      else:
+        discard
+      return NodeValue(kind: vkString, strVal: "")
+
+    let rhs = args[0].toString()
+    case self.kind
+    of vkString:
+      return NodeValue(kind: vkString, strVal: self.strVal & rhs)
+    of vkSymbol:
+      return NodeValue(kind: vkString, strVal: self.symVal & rhs)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        return NodeValue(kind: vkString, strVal: self.instVal.strVal & rhs)
+    else:
+      discard
+    return NodeValue(kind: vkString, strVal: rhs)
+
+  proc primitiveStringAtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return toValue("")
+
+    let (ok, idx) = args[0].tryGetInt()
+    if not ok or idx < 0:
+      return toValue("")
+
+    var source = ""
+    case self.kind
+    of vkString:
+      source = self.strVal
+    of vkSymbol:
+      source = self.symVal
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        source = self.instVal.strVal
+    else:
+      discard
+
+    if idx >= source.len:
+      return toValue("")
+    return toValue($source[idx])
+
+  proc primitiveStringAsIntegerValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var source = ""
+    case self.kind
+    of vkString:
+      source = self.strVal
+    of vkSymbol:
+      source = self.symVal
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        source = self.instVal.strVal
+    else:
+      discard
+
+    try:
+      return toValue(parseInt(source))
+    except ValueError:
+      return toValue(0)
+
+  proc tryExtractString(val: NodeValue, outStr: var string): bool =
+    case val.kind
+    of vkString:
+      outStr = val.strVal
+      return true
+    of vkSymbol:
+      outStr = val.symVal
+      return true
+    of vkInstance:
+      if val.instVal != nil and val.instVal.kind == ikString:
+        outStr = val.instVal.strVal
+        return true
+    else:
+      discard
+    return false
+
+  proc primitiveStringLowercaseValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var source = ""
+    if tryExtractString(self, source):
+      return toValue(source.toLowerAscii())
+    return toValue("")
+
+  proc primitiveStringUppercaseValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var source = ""
+    if tryExtractString(self, source):
+      return toValue(source.toUpperAscii())
+    return toValue("")
+
+  proc primitiveStringTrimValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var source = ""
+    if tryExtractString(self, source):
+      return toValue(strip(source))
+    return toValue("")
+
+  proc primitiveStringSplitValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return NodeValue(kind: vkArray, arrayVal: @[])
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return NodeValue(kind: vkArray, arrayVal: @[])
+
+    var delim = ""
+    if not tryExtractString(args[0], delim):
+      delim = ""
+    if delim.len == 0:
+      return NodeValue(kind: vkArray, arrayVal: @[])
+
+    let parts = source.split(delim)
+    var elements: seq[NodeValue] = @[]
+    for part in parts:
+      elements.add(toValue(part))
+    return NodeValue(kind: vkArray, arrayVal: elements)
+
+  proc primitiveStringFromToValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len < 2:
+      return toValue("")
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return toValue("")
+
+    let (ok1, fromIdx) = args[0].tryGetInt()
+    let (ok2, toIdx) = args[1].tryGetInt()
+    if ok1 and ok2 and fromIdx >= 0 and toIdx < source.len and fromIdx <= toIdx:
+      return toValue(source[fromIdx..toIdx])
+    return toValue("")
+
+  proc primitiveStringIndexOfValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return toValue(-1)
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return toValue(-1)
+
+    var needle = ""
+    if not tryExtractString(args[0], needle):
+      return toValue(-1)
+    if needle.len == 0:
+      return toValue(-1)
+
+    return toValue(source.find(needle))
+
+  proc primitiveStringIncludesSubStringValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return falseValue
+
+    var needle = ""
+    if not tryExtractString(args[0], needle):
+      return falseValue
+    return toValue(needle in source)
+
+  proc primitiveStringReplaceWithValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len < 2:
+      var source = ""
+      if tryExtractString(self, source):
+        return toValue(source)
+      return toValue("")
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return toValue("")
+
+    var oldPart = ""
+    var newPart = ""
+    if not tryExtractString(args[0], oldPart):
+      oldPart = ""
+    if not tryExtractString(args[1], newPart):
+      newPart = ""
+    return toValue(source.replace(oldPart, newPart))
+
+  proc primitiveStringAsSymbolValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var source = ""
+    if tryExtractString(self, source):
+      return toSymbol(source)
+    return self
+
+  proc primitiveStringRepeatValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      var source = ""
+      if tryExtractString(self, source):
+        return toValue(source)
+      return toValue("")
+
+    var source = ""
+    if not tryExtractString(self, source):
+      return toValue("")
+
+    let (ok, count) = args[0].tryGetInt()
+    if not ok or count <= 0:
+      return toValue("")
+
+    var resultStr = ""
+    for _ in 0..<count:
+      resultStr.add(source)
+    return toValue(resultStr)
+
+  proc primitiveSqrtValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    let (ok, val) = self.tryGetFloat()
+    if ok:
+      return toValue(sqrt(val))
+    return nilValue()
+
+  proc primitiveArraySizeValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    case self.kind
+    of vkArray:
+      return toValue(self.arrayVal.len)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikArray:
+        return toValue(self.instVal.elements.len)
+    else:
+      discard
+    return toValue(0)
+
+  proc primitiveArrayAtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (ok, idx) = args[0].tryGetInt()
+    if not ok or idx < 0:
+      return nilValue()
+
+    case self.kind
+    of vkArray:
+      if idx < self.arrayVal.len:
+        return self.arrayVal[idx]
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikArray and idx < self.instVal.elements.len:
+        return self.instVal.elements[idx]
+    else:
+      discard
+    return nilValue()
+
+  proc primitiveArrayIncludesValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+
+    case self.kind
+    of vkArray:
+      for elem in self.arrayVal:
+        if valuesEqual(elem, args[0]):
+          return trueValue
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikArray:
+        for elem in self.instVal.elements:
+          if valuesEqual(elem, args[0]):
+            return trueValue
+    else:
+      discard
+    return falseValue
+
+  proc primitiveTableAtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+
+    case self.kind
+    of vkTable:
+      if args[0] in self.tableVal:
+        return self.tableVal[args[0]]
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikTable and args[0] in self.instVal.entries:
+        return self.instVal.entries[args[0]]
+    else:
+      discard
+    return nilValue()
+
+  proc primitiveTableKeysValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    var keys: seq[NodeValue] = @[]
+    case self.kind
+    of vkTable:
+      for key in self.tableVal.keys():
+        keys.add(key)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikTable:
+        for key in self.instVal.entries.keys():
+          keys.add(key)
+    else:
+      discard
+    return NodeValue(kind: vkArray, arrayVal: keys)
+
+  proc primitiveTableIncludesKeyValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+
+    case self.kind
+    of vkTable:
+      return toValue(args[0] in self.tableVal)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikTable:
+        return toValue(args[0] in self.instVal.entries)
+    else:
+      discard
+    return falseValue
+
+  proc primitivePrintStringValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    case self.kind
+    of vkString:
+      return self
+    of vkSymbol:
+      return NodeValue(kind: vkString, strVal: "#" & self.symVal)
+    else:
+      return NodeValue(kind: vkString, strVal: self.toString())
+
+  proc primitivePlusValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal + intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat + rhsFloat)
+    return nilValue()
+
+  proc primitiveMinusValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal - intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat - rhsFloat)
+    return nilValue()
+
+  proc primitiveTimesValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal * intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat * rhsFloat)
+    return nilValue()
+
+  proc primitiveDivideValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      if rhsFloat == 0.0:
+        return nilValue()
+      return toValue(lhsFloat / rhsFloat)
+    return nilValue()
+
+  proc primitiveIntDivValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (lhsOk, lhsInt) = self.tryGetInt()
+    let (rhsOk, rhsInt) = args[0].tryGetInt()
+    if lhsOk and rhsOk:
+      if rhsInt == 0:
+        raise newException(DivByZeroDefect, "Integer division by zero")
+      return toValue(lhsInt div rhsInt)
+    return nilValue()
+
+  proc primitiveBackslashModuloValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return nilValue()
+    let (lhsOk, lhsInt) = self.tryGetInt()
+    let (rhsOk, rhsInt) = args[0].tryGetInt()
+    if lhsOk and rhsOk:
+      if rhsInt == 0:
+        raise newException(DivByZeroDefect, "Integer modulo by zero")
+      return toValue(lhsInt mod rhsInt)
+    return nilValue()
+
+  proc primitiveLtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal < intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat < rhsFloat)
+    return falseValue
+
+  proc primitiveGtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal > intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat > rhsFloat)
+    return falseValue
+
+  proc primitiveEqValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal == intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat == rhsFloat)
+    return falseValue
+
+  proc primitiveLeValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal <= intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat <= rhsFloat)
+    return falseValue
+
+  proc primitiveGeValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return falseValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal >= intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat >= rhsFloat)
+    return falseValue
+
+  proc primitiveNeValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    if args.len == 0:
+      return trueValue
+    let (intOk, intVal) = args[0].tryGetInt()
+    if self.kind == vkInt and intOk:
+      return toValue(self.intVal != intVal)
+
+    let (lhsOk, lhsFloat) = self.tryGetFloat()
+    let (rhsOk, rhsFloat) = args[0].tryGetFloat()
+    if lhsOk and rhsOk:
+      return toValue(lhsFloat != rhsFloat)
+    return trueValue
+
   let classNameMethod = createCoreMethod("className")
   classNameMethod.setNativeImpl(primitiveClassNameImpl)
+  classNameMethod.setNativeValueImpl(primitiveClassNameValueImpl)
   classNameMethod.hasInterpreterParam = true
   # Add to instance methods (for objects to get their class name via className)
   objectCls.methods["className"] = classNameMethod
@@ -2380,6 +3012,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let isClassMethod = createCoreMethod("isClass")
   isClassMethod.setNativeImpl(primitiveIsClassImpl)
+  setNativeValueFromInstanceWithInterp(isClassMethod, primitiveIsClassImpl)
   isClassMethod.hasInterpreterParam = true
   objectCls.methods["isClass"] = isClassMethod
   objectCls.allMethods["isClass"] = isClassMethod
@@ -2420,11 +3053,13 @@ proc initGlobals*(interp: var Interpreter) =
 
   let printMethod = createCoreMethod("print")
   printMethod.setNativeImpl(objPrintImpl)
+  setNativeValueFromInstanceWithInterp(printMethod, objPrintImpl)
   objectCls.methods["print"] = printMethod
   objectCls.allMethods["print"] = printMethod
 
   let printlnMethod = createCoreMethod("println")
   printlnMethod.setNativeImpl(objPrintlnImpl)
+  setNativeValueFromInstanceWithInterp(printlnMethod, objPrintlnImpl)
   printlnMethod.hasInterpreterParam = true
   objectCls.methods["println"] = printlnMethod
   objectCls.allMethods["println"] = printlnMethod
@@ -2468,6 +3103,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let evalMethod = createCoreMethod("eval:")
   evalMethod.setNativeImpl(primitiveEvalImpl)
+  setNativeValueFromInstanceWithInterp(evalMethod, primitiveEvalImpl)
   evalMethod.hasInterpreterParam = true
   objectCls.classMethods["eval:"] = evalMethod
   objectCls.allClassMethods["eval:"] = evalMethod
@@ -2500,47 +3136,56 @@ proc initGlobals*(interp: var Interpreter) =
   # Register String primitive methods
   let stringConcatMethod = createCoreMethod("primitiveConcat:")
   stringConcatMethod.setNativeImpl(instStringConcatImpl)
+  stringConcatMethod.setNativeValueImpl(primitiveStringConcatValueImpl)
   stringCls.methods["primitiveConcat:"] = stringConcatMethod
   stringCls.allMethods["primitiveConcat:"] = stringConcatMethod
 
   let stringSizeMethod = createCoreMethod("primitiveStringSize")
   stringSizeMethod.setNativeImpl(instStringSizeImpl)
+  stringSizeMethod.setNativeValueImpl(primitiveStringSizeValueImpl)
   stringCls.methods["primitiveStringSize"] = stringSizeMethod
   stringCls.allMethods["primitiveStringSize"] = stringSizeMethod
 
   let stringAtMethod = createCoreMethod("primitiveStringAt:")
   stringAtMethod.setNativeImpl(instStringAtImpl)
+  stringAtMethod.setNativeValueImpl(primitiveStringAtValueImpl)
   stringCls.methods["primitiveStringAt:"] = stringAtMethod
   stringCls.allMethods["primitiveStringAt:"] = stringAtMethod
 
   let stringSplitMethod = createCoreMethod("primitiveSplit:")
   stringSplitMethod.setNativeImpl(instStringSplitImpl)
+  stringSplitMethod.setNativeValueImpl(primitiveStringSplitValueImpl)
   stringCls.methods["primitiveSplit:"] = stringSplitMethod
   stringCls.allMethods["primitiveSplit:"] = stringSplitMethod
 
   # Register Instance-based String primitives
   let stringLowercaseMethod = createCoreMethod("primitiveLowercase")
   stringLowercaseMethod.setNativeImpl(instStringLowercaseImpl)
+  stringLowercaseMethod.setNativeValueImpl(primitiveStringLowercaseValueImpl)
   stringCls.methods["primitiveLowercase"] = stringLowercaseMethod
   stringCls.allMethods["primitiveLowercase"] = stringLowercaseMethod
 
   let stringUppercaseMethod = createCoreMethod("primitiveUppercase")
   stringUppercaseMethod.setNativeImpl(instStringUppercaseImpl)
+  stringUppercaseMethod.setNativeValueImpl(primitiveStringUppercaseValueImpl)
   stringCls.methods["primitiveUppercase"] = stringUppercaseMethod
   stringCls.allMethods["primitiveUppercase"] = stringUppercaseMethod
 
   let stringTrimMethod = createCoreMethod("primitiveTrim")
   stringTrimMethod.setNativeImpl(instStringTrimImpl)
+  stringTrimMethod.setNativeValueImpl(primitiveStringTrimValueImpl)
   stringCls.methods["primitiveTrim"] = stringTrimMethod
   stringCls.allMethods["primitiveTrim"] = stringTrimMethod
 
   let stringFromToMethod = createCoreMethod("primitiveFromTo:to:")
   stringFromToMethod.setNativeImpl(instStringFromToImpl)
+  stringFromToMethod.setNativeValueImpl(primitiveStringFromToValueImpl)
   stringCls.methods["primitiveFromTo:to:"] = stringFromToMethod
   stringCls.allMethods["primitiveFromTo:to:"] = stringFromToMethod
 
   let stringIndexOfMethod = createCoreMethod("primitiveIndexOf:")
   stringIndexOfMethod.setNativeImpl(instStringIndexOfImpl)
+  stringIndexOfMethod.setNativeValueImpl(primitiveStringIndexOfValueImpl)
   stringCls.methods["primitiveIndexOf:"] = stringIndexOfMethod
   stringCls.allMethods["primitiveIndexOf:"] = stringIndexOfMethod
 
@@ -2551,26 +3196,31 @@ proc initGlobals*(interp: var Interpreter) =
 
   let stringIncludesSubStringMethod = createCoreMethod("primitiveIncludesSubString:")
   stringIncludesSubStringMethod.setNativeImpl(instStringIncludesSubStringImpl)
+  stringIncludesSubStringMethod.setNativeValueImpl(primitiveStringIncludesSubStringValueImpl)
   stringCls.methods["primitiveIncludesSubString:"] = stringIncludesSubStringMethod
   stringCls.allMethods["primitiveIncludesSubString:"] = stringIncludesSubStringMethod
 
   let stringReplaceWithMethod = createCoreMethod("primitiveReplaceWith:with:")
   stringReplaceWithMethod.setNativeImpl(instStringReplaceWithImpl)
+  stringReplaceWithMethod.setNativeValueImpl(primitiveStringReplaceWithValueImpl)
   stringCls.methods["primitiveReplaceWith:with:"] = stringReplaceWithMethod
   stringCls.allMethods["primitiveReplaceWith:with:"] = stringReplaceWithMethod
 
   let stringAsIntegerMethod = createCoreMethod("primitiveAsInteger")
   stringAsIntegerMethod.setNativeImpl(instStringAsIntegerImpl)
+  stringAsIntegerMethod.setNativeValueImpl(primitiveStringAsIntegerValueImpl)
   stringCls.methods["primitiveAsInteger"] = stringAsIntegerMethod
   stringCls.allMethods["primitiveAsInteger"] = stringAsIntegerMethod
 
   let stringAsSymbolMethod = createCoreMethod("primitiveAsSymbol")
   stringAsSymbolMethod.setNativeImpl(instStringAsSymbolImpl)
+  stringAsSymbolMethod.setNativeValueImpl(primitiveStringAsSymbolValueImpl)
   stringCls.methods["primitiveAsSymbol"] = stringAsSymbolMethod
   stringCls.allMethods["primitiveAsSymbol"] = stringAsSymbolMethod
 
   let stringRepeatMethod = createCoreMethod("primitiveRepeat:")
   stringRepeatMethod.setNativeImpl(instStringRepeatImpl)
+  stringRepeatMethod.setNativeValueImpl(primitiveStringRepeatValueImpl)
   stringCls.methods["primitiveRepeat:"] = stringRepeatMethod
   stringCls.allMethods["primitiveRepeat:"] = stringRepeatMethod
 
@@ -2581,73 +3231,87 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Integer arithmetic primitives
   let intPlusMethod = createCoreMethod("primitivePlus:")
   intPlusMethod.setNativeImpl(plusImpl)
+  intPlusMethod.setNativeValueImpl(primitivePlusValueImpl)
   intCls.methods["primitivePlus:"] = intPlusMethod
   intCls.allMethods["primitivePlus:"] = intPlusMethod
 
   let intMinusMethod = createCoreMethod("primitiveMinus:")
   intMinusMethod.setNativeImpl(minusImpl)
+  intMinusMethod.setNativeValueImpl(primitiveMinusValueImpl)
   intCls.methods["primitiveMinus:"] = intMinusMethod
   intCls.allMethods["primitiveMinus:"] = intMinusMethod
 
   let intTimesMethod = createCoreMethod("primitiveTimes:")
   intTimesMethod.setNativeImpl(starImpl)
+  intTimesMethod.setNativeValueImpl(primitiveTimesValueImpl)
   intCls.methods["primitiveTimes:"] = intTimesMethod
   intCls.allMethods["primitiveTimes:"] = intTimesMethod
 
   let intDivideMethod = createCoreMethod("primitiveDivide:")
   intDivideMethod.setNativeImpl(slashImpl)
+  intDivideMethod.setNativeValueImpl(primitiveDivideValueImpl)
   intCls.methods["primitiveDivide:"] = intDivideMethod
   intCls.allMethods["primitiveDivide:"] = intDivideMethod
 
   let intIntDivMethod = createCoreMethod("primitiveIntDiv:")
   intIntDivMethod.setNativeImpl(intDivImpl)
+  intIntDivMethod.setNativeValueImpl(primitiveIntDivValueImpl)
   intCls.methods["primitiveIntDiv:"] = intIntDivMethod
   intCls.allMethods["primitiveIntDiv:"] = intIntDivMethod
 
   # Register Integer comparison primitives
   let intLessThanMethod = createCoreMethod("primitiveLessThan:")
   intLessThanMethod.setNativeImpl(ltImpl)
+  intLessThanMethod.setNativeValueImpl(primitiveLtValueImpl)
   intCls.methods["primitiveLessThan:"] = intLessThanMethod
   intCls.allMethods["primitiveLessThan:"] = intLessThanMethod
 
   let intGreaterThanMethod = createCoreMethod("primitiveGreaterThan:")
   intGreaterThanMethod.setNativeImpl(gtImpl)
+  intGreaterThanMethod.setNativeValueImpl(primitiveGtValueImpl)
   intCls.methods["primitiveGreaterThan:"] = intGreaterThanMethod
   intCls.allMethods["primitiveGreaterThan:"] = intGreaterThanMethod
 
   let intEqualsMethod = createCoreMethod("primitiveEquals:")
   intEqualsMethod.setNativeImpl(eqImpl)
+  intEqualsMethod.setNativeValueImpl(primitiveEqValueImpl)
   intCls.methods["primitiveEquals:"] = intEqualsMethod
   intCls.allMethods["primitiveEquals:"] = intEqualsMethod
 
   let intLessOrEqMethod = createCoreMethod("primitiveLessOrEq:")
   intLessOrEqMethod.setNativeImpl(leImpl)
+  intLessOrEqMethod.setNativeValueImpl(primitiveLeValueImpl)
   intCls.methods["primitiveLessOrEq:"] = intLessOrEqMethod
   intCls.allMethods["primitiveLessOrEq:"] = intLessOrEqMethod
 
   let intGreaterOrEqMethod = createCoreMethod("primitiveGreaterOrEq:")
   intGreaterOrEqMethod.setNativeImpl(geImpl)
+  intGreaterOrEqMethod.setNativeValueImpl(primitiveGeValueImpl)
   intCls.methods["primitiveGreaterOrEq:"] = intGreaterOrEqMethod
   intCls.allMethods["primitiveGreaterOrEq:"] = intGreaterOrEqMethod
 
   let intNotEqualsMethod = createCoreMethod("primitiveNotEquals:")
   intNotEqualsMethod.setNativeImpl(neImpl)
+  intNotEqualsMethod.setNativeValueImpl(primitiveNeValueImpl)
   intCls.methods["primitiveNotEquals:"] = intNotEqualsMethod
   intCls.allMethods["primitiveNotEquals:"] = intNotEqualsMethod
 
   # Register Integer other primitives
   let intSqrtMethod = createCoreMethod("primitiveSqrt")
   intSqrtMethod.setNativeImpl(sqrtImpl)
+  intSqrtMethod.setNativeValueImpl(primitiveSqrtValueImpl)
   intCls.methods["primitiveSqrt"] = intSqrtMethod
   intCls.allMethods["primitiveSqrt"] = intSqrtMethod
 
   let intPrintStringMethod = createCoreMethod("primitivePrintString")
   intPrintStringMethod.setNativeImpl(printStringImpl)
+  intPrintStringMethod.setNativeValueImpl(primitivePrintStringValueImpl)
   intCls.methods["primitivePrintString"] = intPrintStringMethod
   intCls.allMethods["primitivePrintString"] = intPrintStringMethod
 
   let intBackslashModuloMethod = createCoreMethod("primitiveBackslashModulo:")
   intBackslashModuloMethod.setNativeImpl(backslashModuloImpl)
+  intBackslashModuloMethod.setNativeValueImpl(primitiveBackslashModuloValueImpl)
   intCls.methods["primitiveBackslashModulo:"] = intBackslashModuloMethod
   intCls.allMethods["primitiveBackslashModulo:"] = intBackslashModuloMethod
 
@@ -2659,68 +3323,81 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Float arithmetic primitives
   let floatPlusMethod = createCoreMethod("primitivePlus:")
   floatPlusMethod.setNativeImpl(plusImpl)
+  floatPlusMethod.setNativeValueImpl(primitivePlusValueImpl)
   floatCls.methods["primitivePlus:"] = floatPlusMethod
   floatCls.allMethods["primitivePlus:"] = floatPlusMethod
 
   let floatMinusMethod = createCoreMethod("primitiveMinus:")
   floatMinusMethod.setNativeImpl(minusImpl)
+  floatMinusMethod.setNativeValueImpl(primitiveMinusValueImpl)
   floatCls.methods["primitiveMinus:"] = floatMinusMethod
   floatCls.allMethods["primitiveMinus:"] = floatMinusMethod
 
   let floatTimesMethod = createCoreMethod("primitiveTimes:")
   floatTimesMethod.setNativeImpl(starImpl)
+  floatTimesMethod.setNativeValueImpl(primitiveTimesValueImpl)
   floatCls.methods["primitiveTimes:"] = floatTimesMethod
   floatCls.allMethods["primitiveTimes:"] = floatTimesMethod
 
   let floatDivideMethod = createCoreMethod("primitiveDivide:")
   floatDivideMethod.setNativeImpl(slashImpl)
+  floatDivideMethod.setNativeValueImpl(primitiveDivideValueImpl)
   floatCls.methods["primitiveDivide:"] = floatDivideMethod
   floatCls.allMethods["primitiveDivide:"] = floatDivideMethod
 
   # Register Float comparison primitives
   let floatLessThanMethod = createCoreMethod("primitiveLessThan:")
   floatLessThanMethod.setNativeImpl(ltImpl)
+  floatLessThanMethod.setNativeValueImpl(primitiveLtValueImpl)
   floatCls.methods["primitiveLessThan:"] = floatLessThanMethod
   floatCls.allMethods["primitiveLessThan:"] = floatLessThanMethod
 
   let floatGreaterThanMethod = createCoreMethod("primitiveGreaterThan:")
   floatGreaterThanMethod.setNativeImpl(gtImpl)
+  floatGreaterThanMethod.setNativeValueImpl(primitiveGtValueImpl)
   floatCls.methods["primitiveGreaterThan:"] = floatGreaterThanMethod
   floatCls.allMethods["primitiveGreaterThan:"] = floatGreaterThanMethod
 
   let floatEqualsMethod = createCoreMethod("primitiveEquals:")
   floatEqualsMethod.setNativeImpl(eqImpl)
+  floatEqualsMethod.setNativeValueImpl(primitiveEqValueImpl)
   floatCls.methods["primitiveEquals:"] = floatEqualsMethod
   floatCls.allMethods["primitiveEquals:"] = floatEqualsMethod
 
   let floatLessOrEqMethod = createCoreMethod("primitiveLessOrEq:")
   floatLessOrEqMethod.setNativeImpl(leImpl)
+  floatLessOrEqMethod.setNativeValueImpl(primitiveLeValueImpl)
   floatCls.methods["primitiveLessOrEq:"] = floatLessOrEqMethod
   floatCls.allMethods["primitiveLessOrEq:"] = floatLessOrEqMethod
 
   let floatGreaterOrEqMethod = createCoreMethod("primitiveGreaterOrEq:")
   floatGreaterOrEqMethod.setNativeImpl(geImpl)
+  floatGreaterOrEqMethod.setNativeValueImpl(primitiveGeValueImpl)
   floatCls.methods["primitiveGreaterOrEq:"] = floatGreaterOrEqMethod
   floatCls.allMethods["primitiveGreaterOrEq:"] = floatGreaterOrEqMethod
 
   let floatNotEqualsMethod = createCoreMethod("primitiveNotEquals:")
   floatNotEqualsMethod.setNativeImpl(neImpl)
+  floatNotEqualsMethod.setNativeValueImpl(primitiveNeValueImpl)
   floatCls.methods["primitiveNotEquals:"] = floatNotEqualsMethod
   floatCls.allMethods["primitiveNotEquals:"] = floatNotEqualsMethod
 
   # Register Float other primitives
   let floatSqrtMethod = createCoreMethod("primitiveSqrt")
   floatSqrtMethod.setNativeImpl(sqrtImpl)
+  floatSqrtMethod.setNativeValueImpl(primitiveSqrtValueImpl)
   floatCls.methods["primitiveSqrt"] = floatSqrtMethod
   floatCls.allMethods["primitiveSqrt"] = floatSqrtMethod
 
   let floatPrintStringMethod = createCoreMethod("primitivePrintString")
   floatPrintStringMethod.setNativeImpl(printStringImpl)
+  floatPrintStringMethod.setNativeValueImpl(primitivePrintStringValueImpl)
   floatCls.methods["primitivePrintString"] = floatPrintStringMethod
   floatCls.allMethods["primitivePrintString"] = floatPrintStringMethod
 
   let floatBackslashModuloMethod = createCoreMethod("primitiveBackslashModulo:")
   floatBackslashModuloMethod.setNativeImpl(backslashModuloImpl)
+  floatBackslashModuloMethod.setNativeValueImpl(primitiveBackslashModuloValueImpl)
   floatCls.methods["primitiveBackslashModulo:"] = floatBackslashModuloMethod
   floatCls.allMethods["primitiveBackslashModulo:"] = floatBackslashModuloMethod
 
@@ -2740,41 +3417,49 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Array primitive selectors (used by lib/core/Array.hrd)
   let arraySizeMethod = createCoreMethod("primitiveArraySize")
   arraySizeMethod.setNativeImpl(arraySizeImpl)
+  arraySizeMethod.setNativeValueImpl(primitiveArraySizeValueImpl)
   arrayCls.methods["primitiveArraySize"] = arraySizeMethod
   arrayCls.allMethods["primitiveArraySize"] = arraySizeMethod
 
   let arrayAtMethod = createCoreMethod("primitiveArrayAt:")
   arrayAtMethod.setNativeImpl(arrayAtImpl)
+  arrayAtMethod.setNativeValueImpl(primitiveArrayAtValueImpl)
   arrayCls.methods["primitiveArrayAt:"] = arrayAtMethod
   arrayCls.allMethods["primitiveArrayAt:"] = arrayAtMethod
 
   let arrayAtPutMethod = createCoreMethod("primitiveArrayAt:put:")
   arrayAtPutMethod.setNativeImpl(arrayAtPutImpl)
+  setNativeValueFromInstance(arrayAtPutMethod, arrayAtPutImpl)
   arrayCls.methods["primitiveArrayAt:put:"] = arrayAtPutMethod
   arrayCls.allMethods["primitiveArrayAt:put:"] = arrayAtPutMethod
 
   let arrayAddMethod = createCoreMethod("primitiveArrayAdd:")
   arrayAddMethod.setNativeImpl(arrayAddImpl)
+  setNativeValueFromInstance(arrayAddMethod, arrayAddImpl)
   arrayCls.methods["primitiveArrayAdd:"] = arrayAddMethod
   arrayCls.allMethods["primitiveArrayAdd:"] = arrayAddMethod
 
   let arrayRemoveAtMethod = createCoreMethod("primitiveArrayRemoveAt:")
   arrayRemoveAtMethod.setNativeImpl(arrayRemoveAtImpl)
+  setNativeValueFromInstance(arrayRemoveAtMethod, arrayRemoveAtImpl)
   arrayCls.methods["primitiveArrayRemoveAt:"] = arrayRemoveAtMethod
   arrayCls.allMethods["primitiveArrayRemoveAt:"] = arrayRemoveAtMethod
 
   let arrayIncludesMethod = createCoreMethod("primitiveArrayIncludes:")
   arrayIncludesMethod.setNativeImpl(arrayIncludesImpl)
+  arrayIncludesMethod.setNativeValueImpl(primitiveArrayIncludesValueImpl)
   arrayCls.methods["primitiveArrayIncludes:"] = arrayIncludesMethod
   arrayCls.allMethods["primitiveArrayIncludes:"] = arrayIncludesMethod
 
   let arrayReverseMethod = createCoreMethod("primitiveArrayReverse")
   arrayReverseMethod.setNativeImpl(arrayReverseImpl)
+  setNativeValueFromInstance(arrayReverseMethod, arrayReverseImpl)
   arrayCls.methods["primitiveArrayReverse"] = arrayReverseMethod
   arrayCls.allMethods["primitiveArrayReverse"] = arrayReverseMethod
 
   let arrayDoMethod = createCoreMethod("primitiveDo:")
   arrayDoMethod.setNativeImpl(arrayDoImpl)
+  setNativeValueFromInstanceWithInterp(arrayDoMethod, arrayDoImpl)
   arrayDoMethod.hasInterpreterParam = true
   arrayCls.methods["primitiveDo:"] = arrayDoMethod
   arrayCls.allMethods["primitiveDo:"] = arrayDoMethod
@@ -2793,12 +3478,14 @@ proc initGlobals*(interp: var Interpreter) =
 
   let arrayNewMethod = createCoreMethod("primitiveArrayNew")
   arrayNewMethod.setNativeImpl(arrayClassNewImpl)
+  setNativeValueFromInstanceWithInterp(arrayNewMethod, arrayClassNewImpl)
   arrayNewMethod.hasInterpreterParam = true
   arrayCls.classMethods["primitiveArrayNew"] = arrayNewMethod
   arrayCls.allClassMethods["primitiveArrayNew"] = arrayNewMethod
 
   let arrayNewSizeMethod = createCoreMethod("primitiveArrayNew:")
   arrayNewSizeMethod.setNativeImpl(arrayClassNewImpl)
+  setNativeValueFromInstanceWithInterp(arrayNewSizeMethod, arrayClassNewImpl)
   arrayNewSizeMethod.hasInterpreterParam = true
   arrayCls.classMethods["primitiveArrayNew:"] = arrayNewSizeMethod
   arrayCls.allClassMethods["primitiveArrayNew:"] = arrayNewSizeMethod
@@ -2816,6 +3503,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let arrayNewWithAllMethod = createCoreMethod("primitiveArrayNew:withAll:")
   arrayNewWithAllMethod.setNativeImpl(arrayClassNewWithAllImpl)
+  setNativeValueFromInstanceWithInterp(arrayNewWithAllMethod, arrayClassNewWithAllImpl)
   arrayNewWithAllMethod.hasInterpreterParam = true
   arrayCls.classMethods["primitiveArrayNew:withAll:"] = arrayNewWithAllMethod
   arrayCls.allClassMethods["primitiveArrayNew:withAll:"] = arrayNewWithAllMethod
@@ -2832,26 +3520,31 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Table primitive selectors (used by lib/core/Table.hrd)
   let tableAtMethod = createCoreMethod("primitiveTableAt:")
   tableAtMethod.setNativeImpl(tableAtImpl)
+  tableAtMethod.setNativeValueImpl(primitiveTableAtValueImpl)
   tableCls.methods["primitiveTableAt:"] = tableAtMethod
   tableCls.allMethods["primitiveTableAt:"] = tableAtMethod
 
   let tableAtPutMethod = createCoreMethod("primitiveTableAt:put:")
   tableAtPutMethod.setNativeImpl(tableAtPutImpl)
+  setNativeValueFromInstance(tableAtPutMethod, tableAtPutImpl)
   tableCls.methods["primitiveTableAt:put:"] = tableAtPutMethod
   tableCls.allMethods["primitiveTableAt:put:"] = tableAtPutMethod
 
   let tableKeysMethod = createCoreMethod("primitiveKeys")
   tableKeysMethod.setNativeImpl(tableKeysImpl)
+  tableKeysMethod.setNativeValueImpl(primitiveTableKeysValueImpl)
   tableCls.methods["primitiveKeys"] = tableKeysMethod
   tableCls.allMethods["primitiveKeys"] = tableKeysMethod
 
   let tableIncludesKeyMethod = createCoreMethod("primitiveIncludesKey:")
   tableIncludesKeyMethod.setNativeImpl(tableIncludesKeyImpl)
+  tableIncludesKeyMethod.setNativeValueImpl(primitiveTableIncludesKeyValueImpl)
   tableCls.methods["primitiveIncludesKey:"] = tableIncludesKeyMethod
   tableCls.allMethods["primitiveIncludesKey:"] = tableIncludesKeyMethod
 
   let tableRemoveKeyMethod = createCoreMethod("primitiveRemoveKey:")
   tableRemoveKeyMethod.setNativeImpl(tableRemoveKeyImpl)
+  setNativeValueFromInstance(tableRemoveKeyMethod, tableRemoveKeyImpl)
   tableCls.methods["primitiveRemoveKey:"] = tableRemoveKeyMethod
   tableCls.allMethods["primitiveRemoveKey:"] = tableRemoveKeyMethod
 
@@ -2865,6 +3558,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   let tableNewMethod = createCoreMethod("new")
   tableNewMethod.setNativeImpl(tableClassNewImpl)
+  setNativeValueFromInstanceWithInterp(tableNewMethod, tableClassNewImpl)
   tableNewMethod.hasInterpreterParam = true
   tableCls.classMethods["new"] = tableNewMethod
   tableCls.allClassMethods["new"] = tableNewMethod
@@ -2889,43 +3583,51 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Library instance primitives (at:, at:put:, keys, etc.)
   let libraryAtMethod = createCoreMethod("primitiveLibraryAt:")
   libraryAtMethod.setNativeImpl(libraryAtImpl)
+  setNativeValueFromInstance(libraryAtMethod, libraryAtImpl)
   libraryCls.methods["primitiveLibraryAt:"] = libraryAtMethod
   libraryCls.allMethods["primitiveLibraryAt:"] = libraryAtMethod
 
   let libraryAtPutMethod = createCoreMethod("primitiveLibraryAt:put:")
   libraryAtPutMethod.setNativeImpl(libraryAtPutImpl)
+  setNativeValueFromInstance(libraryAtPutMethod, libraryAtPutImpl)
   libraryCls.methods["primitiveLibraryAt:put:"] = libraryAtPutMethod
   libraryCls.allMethods["primitiveLibraryAt:put:"] = libraryAtPutMethod
 
   let libraryKeysMethod = createCoreMethod("primitiveLibraryKeys")
   libraryKeysMethod.setNativeImpl(libraryKeysImpl)
+  setNativeValueFromInstance(libraryKeysMethod, libraryKeysImpl)
   libraryCls.methods["primitiveLibraryKeys"] = libraryKeysMethod
   libraryCls.allMethods["primitiveLibraryKeys"] = libraryKeysMethod
 
   let libraryIncludesKeyMethod = createCoreMethod("primitiveLibraryIncludesKey:")
   libraryIncludesKeyMethod.setNativeImpl(libraryIncludesKeyImpl)
+  setNativeValueFromInstance(libraryIncludesKeyMethod, libraryIncludesKeyImpl)
   libraryCls.methods["primitiveLibraryIncludesKey:"] = libraryIncludesKeyMethod
   libraryCls.allMethods["primitiveLibraryIncludesKey:"] = libraryIncludesKeyMethod
 
   let libraryNameMethod = createCoreMethod("primitiveLibraryName")
   libraryNameMethod.setNativeImpl(libraryNameImpl)
+  setNativeValueFromInstance(libraryNameMethod, libraryNameImpl)
   libraryCls.methods["primitiveLibraryName"] = libraryNameMethod
   libraryCls.allMethods["primitiveLibraryName"] = libraryNameMethod
 
   let libraryNameSetMethod = createCoreMethod("primitiveLibraryName:")
   libraryNameSetMethod.setNativeImpl(libraryNameSetImpl)
+  setNativeValueFromInstance(libraryNameSetMethod, libraryNameSetImpl)
   libraryCls.methods["primitiveLibraryName:"] = libraryNameSetMethod
   libraryCls.allMethods["primitiveLibraryName:"] = libraryNameSetMethod
 
   # Register primitiveLibraryBindings for bindings slot access
   let libraryBindingsMethod = createCoreMethod("primitiveLibraryBindings")
   libraryBindingsMethod.setNativeImpl(libraryBindingsImpl)
+  setNativeValueFromInstance(libraryBindingsMethod, libraryBindingsImpl)
   libraryCls.methods["primitiveLibraryBindings"] = libraryBindingsMethod
   libraryCls.allMethods["primitiveLibraryBindings"] = libraryBindingsMethod
 
   # Register Library class new method (as class method primitive)
   let libraryNewPrimMethod = createCoreMethod("primitiveLibraryNew")
   libraryNewPrimMethod.setNativeImpl(libraryNewImpl)
+  setNativeValueFromInstance(libraryNewPrimMethod, libraryNewImpl)
   libraryNewPrimMethod.hasInterpreterParam = false  # libraryNewImpl doesn't take interpreter param
   libraryCls.classMethods["primitiveLibraryNew"] = libraryNewPrimMethod
   libraryCls.allClassMethods["primitiveLibraryNew"] = libraryNewPrimMethod
@@ -2933,6 +3635,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Also register user-facing 'new' as a class method that wraps the primitive
   let libraryNewMethod = createCoreMethod("new")
   libraryNewMethod.setNativeImpl(libraryNewImpl)
+  setNativeValueFromInstance(libraryNewMethod, libraryNewImpl)
   libraryNewMethod.hasInterpreterParam = false  # libraryNewImpl doesn't take interpreter param
   libraryCls.classMethods["new"] = libraryNewMethod
   libraryCls.allClassMethods["new"] = libraryNewMethod
@@ -2946,12 +3649,14 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Boolean primitive selectors
   let ifTrueMethod = createCoreMethod("primitiveIfTrue:")
   ifTrueMethod.setNativeImpl(ifTrueImpl)
+  setNativeValueFromInstanceWithInterp(ifTrueMethod, ifTrueImpl)
   ifTrueMethod.hasInterpreterParam = true
   booleanCls.methods["primitiveIfTrue:"] = ifTrueMethod
   booleanCls.allMethods["primitiveIfTrue:"] = ifTrueMethod
 
   let ifFalseMethod = createCoreMethod("primitiveIfFalse:")
   ifFalseMethod.setNativeImpl(ifFalseImpl)
+  setNativeValueFromInstanceWithInterp(ifFalseMethod, ifFalseImpl)
   ifFalseMethod.hasInterpreterParam = true
   booleanCls.methods["primitiveIfFalse:"] = ifFalseMethod
   booleanCls.allMethods["primitiveIfFalse:"] = ifFalseMethod
@@ -2975,36 +3680,42 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Block primitive selectors (used by lib/core/Block.hrd)
   let whileTrueMethod = createCoreMethod("primitiveWhileTrue:")
   whileTrueMethod.setNativeImpl(whileTrueImpl)
+  setNativeValueFromInstanceWithInterp(whileTrueMethod, whileTrueImpl)
   whileTrueMethod.hasInterpreterParam = true
   blockCls.methods["primitiveWhileTrue:"] = whileTrueMethod
   blockCls.allMethods["primitiveWhileTrue:"] = whileTrueMethod
 
   let whileFalseMethod = createCoreMethod("primitiveWhileFalse:")
   whileFalseMethod.setNativeImpl(whileFalseImpl)
+  setNativeValueFromInstanceWithInterp(whileFalseMethod, whileFalseImpl)
   whileFalseMethod.hasInterpreterParam = true
   blockCls.methods["primitiveWhileFalse:"] = whileFalseMethod
   blockCls.allMethods["primitiveWhileFalse:"] = whileFalseMethod
 
   let primitiveValueMethod = createCoreMethod("primitiveValue")
   primitiveValueMethod.setNativeImpl(primitiveValueImpl)
+  setNativeValueFromInstanceWithInterp(primitiveValueMethod, primitiveValueImpl)
   primitiveValueMethod.hasInterpreterParam = true
   blockCls.methods["primitiveValue"] = primitiveValueMethod
   blockCls.allMethods["primitiveValue"] = primitiveValueMethod
 
   let primitiveValueWithArgMethod = createCoreMethod("primitiveValue:")
   primitiveValueWithArgMethod.setNativeImpl(primitiveValueWithArgImpl)
+  setNativeValueFromInstanceWithInterp(primitiveValueWithArgMethod, primitiveValueWithArgImpl)
   primitiveValueWithArgMethod.hasInterpreterParam = true
   blockCls.methods["primitiveValue:"] = primitiveValueWithArgMethod
   blockCls.allMethods["primitiveValue:"] = primitiveValueWithArgMethod
 
   let primitiveValueWithTwoArgsMethod = createCoreMethod("primitiveValue:value:")
   primitiveValueWithTwoArgsMethod.setNativeImpl(primitiveValueWithTwoArgsImpl)
+  setNativeValueFromInstanceWithInterp(primitiveValueWithTwoArgsMethod, primitiveValueWithTwoArgsImpl)
   primitiveValueWithTwoArgsMethod.hasInterpreterParam = true
   blockCls.methods["primitiveValue:value:"] = primitiveValueWithTwoArgsMethod
   blockCls.allMethods["primitiveValue:value:"] = primitiveValueWithTwoArgsMethod
 
   let primitiveValueWithThreeArgsMethod = createCoreMethod("primitiveValue:value:value:")
   primitiveValueWithThreeArgsMethod.setNativeImpl(primitiveValueWithThreeArgsImpl)
+  setNativeValueFromInstanceWithInterp(primitiveValueWithThreeArgsMethod, primitiveValueWithThreeArgsImpl)
   primitiveValueWithThreeArgsMethod.hasInterpreterParam = true
   blockCls.methods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
   blockCls.allMethods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
@@ -3014,6 +3725,7 @@ proc initGlobals*(interp: var Interpreter) =
   # Block>>on: exceptionClass do: handlerBlock <primitive primitiveOnDo: exceptionClass do: handlerBlock>
   let primitiveOnDoMethod = createCoreMethod("primitiveOnDo:do:")
   primitiveOnDoMethod.setNativeImpl(primitiveOnDoImpl)
+  setNativeValueFromInstanceWithInterp(primitiveOnDoMethod, primitiveOnDoImpl)
   primitiveOnDoMethod.hasInterpreterParam = true
   blockCls.methods["primitiveOnDo:do:"] = primitiveOnDoMethod
   blockCls.allMethods["primitiveOnDo:do:"] = primitiveOnDoMethod
@@ -3025,6 +3737,7 @@ proc initGlobals*(interp: var Interpreter) =
 
     let setNewMethod = createCoreMethod("primitiveSetNew")
     setNewMethod.setNativeImpl(primitiveSetNewImpl)
+    setNativeValueFromInstance(setNewMethod, primitiveSetNewImpl)
     setCls.classMethods["primitiveSetNew"] = setNewMethod
     setCls.allClassMethods["primitiveSetNew"] = setNewMethod
     setCls.methods["primitiveSetNew"] = setNewMethod
@@ -3035,41 +3748,49 @@ proc initGlobals*(interp: var Interpreter) =
 
     let setAddMethod = createCoreMethod("primitiveSetAdd:")
     setAddMethod.setNativeImpl(primitiveSetAddImpl)
+    setNativeValueFromInstance(setAddMethod, primitiveSetAddImpl)
     setCls.methods["primitiveSetAdd:"] = setAddMethod
     setCls.allMethods["primitiveSetAdd:"] = setAddMethod
 
     let setRemoveMethod = createCoreMethod("primitiveSetRemove:")
     setRemoveMethod.setNativeImpl(primitiveSetRemoveImpl)
+    setNativeValueFromInstance(setRemoveMethod, primitiveSetRemoveImpl)
     setCls.methods["primitiveSetRemove:"] = setRemoveMethod
     setCls.allMethods["primitiveSetRemove:"] = setRemoveMethod
 
     let setIncludesMethod = createCoreMethod("primitiveSetIncludes:")
     setIncludesMethod.setNativeImpl(primitiveSetIncludesImpl)
+    setNativeValueFromInstance(setIncludesMethod, primitiveSetIncludesImpl)
     setCls.methods["primitiveSetIncludes:"] = setIncludesMethod
     setCls.allMethods["primitiveSetIncludes:"] = setIncludesMethod
 
     let setSizeMethod = createCoreMethod("primitiveSetSize")
     setSizeMethod.setNativeImpl(primitiveSetSizeImpl)
+    setNativeValueFromInstance(setSizeMethod, primitiveSetSizeImpl)
     setCls.methods["primitiveSetSize"] = setSizeMethod
     setCls.allMethods["primitiveSetSize"] = setSizeMethod
 
     let setUnionMethod = createCoreMethod("primitiveSetUnion:")
     setUnionMethod.setNativeImpl(primitiveSetUnionImpl)
+    setNativeValueFromInstance(setUnionMethod, primitiveSetUnionImpl)
     setCls.methods["primitiveSetUnion:"] = setUnionMethod
     setCls.allMethods["primitiveSetUnion:"] = setUnionMethod
 
     let setIntersectionMethod = createCoreMethod("primitiveSetIntersection:")
     setIntersectionMethod.setNativeImpl(primitiveSetIntersectionImpl)
+    setNativeValueFromInstance(setIntersectionMethod, primitiveSetIntersectionImpl)
     setCls.methods["primitiveSetIntersection:"] = setIntersectionMethod
     setCls.allMethods["primitiveSetIntersection:"] = setIntersectionMethod
 
     let setDifferenceMethod = createCoreMethod("primitiveSetDifference:")
     setDifferenceMethod.setNativeImpl(primitiveSetDifferenceImpl)
+    setNativeValueFromInstance(setDifferenceMethod, primitiveSetDifferenceImpl)
     setCls.methods["primitiveSetDifference:"] = setDifferenceMethod
     setCls.allMethods["primitiveSetDifference:"] = setDifferenceMethod
 
     let setDoMethod = createCoreMethod("primitiveSetDo:")
     setDoMethod.setNativeImpl(primitiveSetDoImpl)
+    setNativeValueFromInstanceWithInterp(setDoMethod, primitiveSetDoImpl)
     setDoMethod.hasInterpreterParam = true
     setCls.methods["primitiveSetDo:"] = setDoMethod
     setCls.allMethods["primitiveSetDo:"] = setDoMethod
@@ -3121,21 +3842,25 @@ proc initGlobals*(interp: var Interpreter) =
   # Register Random primitive methods
   let randomNextMethod = createCoreMethod("primitiveRandomNext")
   randomNextMethod.setNativeImpl(randomNextImpl)
+  setNativeValueFromInstanceWithInterp(randomNextMethod, randomNextImpl)
   randomCls.methods["primitiveRandomNext"] = randomNextMethod
   randomCls.allMethods["primitiveRandomNext"] = randomNextMethod
 
   let randomNextMaxMethod = createCoreMethod("primitiveRandomNext:")
   randomNextMaxMethod.setNativeImpl(randomNextMaxImpl)
+  setNativeValueFromInstanceWithInterp(randomNextMaxMethod, randomNextMaxImpl)
   randomCls.methods["primitiveRandomNext:"] = randomNextMaxMethod
   randomCls.allMethods["primitiveRandomNext:"] = randomNextMaxMethod
 
   let randomSeedMethod = createCoreMethod("primitiveRandomSeed")
   randomSeedMethod.setNativeImpl(randomSeedImpl)
+  setNativeValueFromInstanceWithInterp(randomSeedMethod, randomSeedImpl)
   randomCls.methods["primitiveRandomSeed"] = randomSeedMethod
   randomCls.allMethods["primitiveRandomSeed"] = randomSeedMethod
 
   let randomSeedSetMethod = createCoreMethod("primitiveRandomSeed:")
   randomSeedSetMethod.setNativeImpl(randomSeedSetImpl)
+  setNativeValueFromInstanceWithInterp(randomSeedSetMethod, randomSeedSetImpl)
   randomCls.methods["primitiveRandomSeed:"] = randomSeedSetMethod
   randomCls.allMethods["primitiveRandomSeed:"] = randomSeedSetMethod
 
@@ -3218,6 +3943,22 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   ## Load core library files
   ## If bootstrapFile is provided and exists, it will be loaded and should use
   ## Harding load: to load other files. Otherwise, uses the default Bootstrap.hrd.
+
+  template setNativeValueFromInstance(meth: BlockNode, impl: untyped) =
+    meth.setNativeValueImpl(proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      let receiver = materializeReceiverForSend(self)
+      if receiver == nil:
+        return nilValue()
+      return impl(receiver, args)
+    )
+
+  template setNativeValueFromInstanceWithInterp(meth: BlockNode, impl: untyped) =
+    meth.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+      let receiver = materializeReceiverForSend(self)
+      if receiver == nil:
+        return nilValue()
+      return impl(interp, receiver, args)
+    )
 
   # Initialize Process, Scheduler, Monitor, SharedQueue, Semaphore classes
   # Use a callback to avoid circular import with scheduler module
@@ -3320,31 +4061,37 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
 
     let fsOpenMethod = createCoreMethod("primitiveFileOpen:mode:")
     fsOpenMethod.setNativeImpl(primitiveFileOpenImpl)
+    setNativeValueFromInstance(fsOpenMethod, primitiveFileOpenImpl)
     fileStreamCls.methods["primitiveFileOpen:mode:"] = fsOpenMethod
     fileStreamCls.allMethods["primitiveFileOpen:mode:"] = fsOpenMethod
 
     let fsCloseMethod = createCoreMethod("primitiveFileClose")
     fsCloseMethod.setNativeImpl(primitiveFileCloseImpl)
+    setNativeValueFromInstance(fsCloseMethod, primitiveFileCloseImpl)
     fileStreamCls.methods["primitiveFileClose"] = fsCloseMethod
     fileStreamCls.allMethods["primitiveFileClose"] = fsCloseMethod
 
     let fsReadLineMethod = createCoreMethod("primitiveFileReadLine")
     fsReadLineMethod.setNativeImpl(primitiveFileReadLineImpl)
+    setNativeValueFromInstance(fsReadLineMethod, primitiveFileReadLineImpl)
     fileStreamCls.methods["primitiveFileReadLine"] = fsReadLineMethod
     fileStreamCls.allMethods["primitiveFileReadLine"] = fsReadLineMethod
 
-    let fsWriteMethod = createCoreMethod("primitiveFileWrite:")
-    fsWriteMethod.setNativeImpl(primitiveFileWriteImpl)
-    fileStreamCls.methods["primitiveFileWrite:"] = fsWriteMethod
-    fileStreamCls.allMethods["primitiveFileWrite:"] = fsWriteMethod
+    let fsPrimitiveWriteMethod = createCoreMethod("primitiveFileWrite:")
+    fsPrimitiveWriteMethod.setNativeImpl(primitiveFileWriteImpl)
+    setNativeValueFromInstance(fsPrimitiveWriteMethod, primitiveFileWriteImpl)
+    fileStreamCls.methods["primitiveFileWrite:"] = fsPrimitiveWriteMethod
+    fileStreamCls.allMethods["primitiveFileWrite:"] = fsPrimitiveWriteMethod
 
     let fsAtEndMethod = createCoreMethod("primitiveFileAtEnd")
     fsAtEndMethod.setNativeImpl(primitiveFileAtEndImpl)
+    setNativeValueFromInstance(fsAtEndMethod, primitiveFileAtEndImpl)
     fileStreamCls.methods["primitiveFileAtEnd"] = fsAtEndMethod
     fileStreamCls.allMethods["primitiveFileAtEnd"] = fsAtEndMethod
 
     let fsReadAllMethod = createCoreMethod("primitiveFileReadAll")
     fsReadAllMethod.setNativeImpl(primitiveFileReadAllImpl)
+    setNativeValueFromInstance(fsReadAllMethod, primitiveFileReadAllImpl)
     fileStreamCls.methods["primitiveFileReadAll"] = fsReadAllMethod
     fileStreamCls.allMethods["primitiveFileReadAll"] = fsReadAllMethod
 
@@ -3416,6 +4163,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       # This is called when Granite class>>compile: sourceString <primitive primitiveGraniteCompile: sourceString>
       let primCompileMethod = createCoreMethod("primitiveGraniteCompile:")
       primCompileMethod.setNativeImpl(graniteCompileImpl)
+      setNativeValueFromInstance(primCompileMethod, graniteCompileImpl)
       graniteCls.methods["primitiveGraniteCompile:"] = primCompileMethod
       graniteCls.allMethods["primitiveGraniteCompile:"] = primCompileMethod
 
@@ -3423,6 +4171,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       # This is called when Granite class>>build: anApplication <primitive primitiveGraniteBuild: anApplication>
       let primBuildMethod = createCoreMethod("primitiveGraniteBuild:")
       primBuildMethod.setNativeImpl(graniteBuildImpl)
+      setNativeValueFromInstance(primBuildMethod, graniteBuildImpl)
       graniteCls.methods["primitiveGraniteBuild:"] = primBuildMethod
       graniteCls.allMethods["primitiveGraniteBuild:"] = primBuildMethod
 
@@ -3466,6 +4215,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   if exceptionCls != nil:
     let primitiveSignalMethod = createCoreMethod("primitiveSignal")
     primitiveSignalMethod.setNativeImpl(primitiveSignalImpl)
+    setNativeValueFromInstanceWithInterp(primitiveSignalMethod, primitiveSignalImpl)
     primitiveSignalMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveSignal"] = primitiveSignalMethod
     exceptionCls.allMethods["primitiveSignal"] = primitiveSignalMethod
@@ -3480,6 +4230,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>return: primitive
     let returnMethod = createCoreMethod("primitiveExceptionReturn:")
     returnMethod.setNativeImpl(primitiveExceptionReturnImpl)
+    setNativeValueFromInstanceWithInterp(returnMethod, primitiveExceptionReturnImpl)
     returnMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionReturn:"] = returnMethod
     exceptionCls.allMethods["primitiveExceptionReturn:"] = returnMethod
@@ -3488,6 +4239,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>pass primitive
     let passMethod = createCoreMethod("primitiveExceptionPass")
     passMethod.setNativeImpl(primitiveExceptionPassImpl)
+    setNativeValueFromInstanceWithInterp(passMethod, primitiveExceptionPassImpl)
     passMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionPass"] = passMethod
     exceptionCls.allMethods["primitiveExceptionPass"] = passMethod
@@ -3496,6 +4248,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>retry primitive
     let retryMethod = createCoreMethod("primitiveExceptionRetry")
     retryMethod.setNativeImpl(primitiveExceptionRetryImpl)
+    setNativeValueFromInstanceWithInterp(retryMethod, primitiveExceptionRetryImpl)
     retryMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionRetry"] = retryMethod
     exceptionCls.allMethods["primitiveExceptionRetry"] = retryMethod
@@ -3504,6 +4257,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>signalContext primitive (for debugging)
     let signalContextMethod = createCoreMethod("primitiveExceptionSignalContext")
     signalContextMethod.setNativeImpl(primitiveExceptionSignalContextImpl)
+    setNativeValueFromInstanceWithInterp(signalContextMethod, primitiveExceptionSignalContextImpl)
     signalContextMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionSignalContext"] = signalContextMethod
     exceptionCls.allMethods["primitiveExceptionSignalContext"] = signalContextMethod
@@ -3512,6 +4266,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>signaler primitive
     let signalerMethod = createCoreMethod("primitiveExceptionSignaler")
     signalerMethod.setNativeImpl(primitiveExceptionSignalerImpl)
+    setNativeValueFromInstanceWithInterp(signalerMethod, primitiveExceptionSignalerImpl)
     signalerMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionSignaler"] = signalerMethod
     exceptionCls.allMethods["primitiveExceptionSignaler"] = signalerMethod
@@ -3520,6 +4275,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>signalActivationDepth primitive
     let signalDepthMethod = createCoreMethod("primitiveExceptionSignalActivationDepth")
     signalDepthMethod.setNativeImpl(primitiveExceptionSignalActivationDepthImpl)
+    setNativeValueFromInstanceWithInterp(signalDepthMethod, primitiveExceptionSignalActivationDepthImpl)
     signalDepthMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
     exceptionCls.allMethods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
@@ -3528,6 +4284,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>resume primitive
     let resumeMethod = createCoreMethod("primitiveExceptionResume")
     resumeMethod.setNativeImpl(primitiveExceptionResumeImpl)
+    setNativeValueFromInstanceWithInterp(resumeMethod, primitiveExceptionResumeImpl)
     resumeMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionResume"] = resumeMethod
     exceptionCls.allMethods["primitiveExceptionResume"] = resumeMethod
@@ -3536,6 +4293,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Register Exception>>resume: primitive
     let resumeWithMethod = createCoreMethod("primitiveExceptionResume:")
     resumeWithMethod.setNativeImpl(primitiveExceptionResumeWithValueImpl)
+    setNativeValueFromInstanceWithInterp(resumeWithMethod, primitiveExceptionResumeWithValueImpl)
     resumeWithMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveExceptionResume:"] = resumeWithMethod
     exceptionCls.allMethods["primitiveExceptionResume:"] = resumeWithMethod
@@ -4394,6 +5152,12 @@ proc installLibraryMethods*() =
 
   let loadMethod = createCoreMethod("load:")
   loadMethod.setNativeImpl(libraryLoadImpl)
+  loadMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return libraryLoadImpl(interp, receiver, args)
+  )
   loadMethod.hasInterpreterParam = true
   addMethodToClass(libraryClass, "load:", loadMethod)
 
@@ -4406,47 +5170,95 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   # Override at: method
   let atMethod = createCoreMethod("at:")
   atMethod.setNativeImpl(globalTableAtImpl)
+  atMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableAtImpl(interp, receiver, args)
+  )
   atMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "at:", atMethod)
 
   # Override at:put: method
   let atPutMethod = createCoreMethod("at:put:")
   atPutMethod.setNativeImpl(globalTableAtPutImpl)
+  atPutMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableAtPutImpl(interp, receiver, args)
+  )
   atPutMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "at:put:", atPutMethod)
 
   # Override keys method
   let keysMethod = createCoreMethod("keys")
   keysMethod.setNativeImpl(globalTableKeysImpl)
+  keysMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableKeysImpl(interp, receiver, args)
+  )
   keysMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "keys", keysMethod)
 
   # Override includesKey: method
   let includesKeyMethod = createCoreMethod("includesKey:")
   includesKeyMethod.setNativeImpl(globalTableIncludesKeyImpl)
+  includesKeyMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableIncludesKeyImpl(interp, receiver, args)
+  )
   includesKeyMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "includesKey:", includesKeyMethod)
 
   # Add load: method for loading Harding files
   let loadMethod = createCoreMethod("load:")
   loadMethod.setNativeImpl(globalTableLoadImpl)
+  loadMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableLoadImpl(interp, receiver, args)
+  )
   loadMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "load:", loadMethod)
 
   # Add import: method for importing Libraries into the interpreter
   let importMethod = createCoreMethod("import:")
   importMethod.setNativeImpl(globalTableImportImpl)
+  importMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableImportImpl(interp, receiver, args)
+  )
   importMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "import:", importMethod)
 
   # Add compile: and main: methods used by Granite-friendly scripts
   let compileMethod = createCoreMethod("compile:")
   compileMethod.setNativeImpl(globalTableCompileImpl)
+  compileMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableCompileImpl(interp, receiver, args)
+  )
   compileMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "compile:", compileMethod)
 
   let mainMethod = createCoreMethod("main:")
   mainMethod.setNativeImpl(globalTableMainImpl)
+  mainMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableMainImpl(interp, receiver, args)
+  )
   mainMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "main:", mainMethod)
 
@@ -5074,120 +5886,130 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfSendMessage:
     # Pop args and receiver, send message
-    let args = interp.popValues(frame.argCount)
-    let receiverVal = interp.popValue()
+    var args: seq[NodeValue]
+    var receiverVal: NodeValue
+    var singleArg: NodeValue
+    var hasSingleArg = false
+
+    case frame.argCount
+    of 0:
+      receiverVal = interp.popValue()
+    of 1:
+      hasSingleArg = true
+      singleArg = interp.popValue()
+      receiverVal = interp.popValue()
+    else:
+      args = interp.popValues(frame.argCount)
+      receiverVal = interp.popValue()
 
     # Handle block invocation
     if receiverVal.kind == vkBlock:
       case frame.selector
       of "value", "value:", "value:value:", "value:value:value:", "value:value:value:value:":
-        interp.pushWorkFrame(newApplyBlockFrame(receiverVal.blockVal, args.len))
+        interp.pushWorkFrame(newApplyBlockFrame(receiverVal.blockVal, frame.argCount))
         # Push args back for block application
-        for arg in args:
-          interp.pushValue(arg)
+        if hasSingleArg:
+          interp.pushValue(singleArg)
+        else:
+          for arg in args:
+            interp.pushValue(arg)
         return true
+      of "whileTrue:":
+        if hasSingleArg and singleArg.kind == vkBlock:
+          interp.pushWorkFrame(newWhileLoopFrame(true, receiverVal.blockVal, singleArg.blockVal, lsEvaluateCondition))
+          return true
+      of "whileFalse:":
+        if hasSingleArg and singleArg.kind == vkBlock:
+          interp.pushWorkFrame(newWhileLoopFrame(false, receiverVal.blockVal, singleArg.blockVal, lsEvaluateCondition))
+          return true
       else:
         discard  # Fall through to regular dispatch
 
     # ============================================================================
-    # FAST PATH: Tagged Integer Operations
-    # Skip Instance allocation for primitive integer operations
+    # FAST PATH: Integer Operations
+    # Skip method lookup and receiver materialization for common integer operations
     # ============================================================================
-    if receiverVal.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      let a = toTagged(receiverVal)
-      let b = toTagged(args[0])
-      var taggedResult: TaggedValue
-      var boolResult: bool
-      var isPrimitive = true
-      var isComparison = false
-
+    if receiverVal.kind == vkInt and hasSingleArg and singleArg.kind == vkInt:
+      let a = receiverVal.intVal
+      let b = singleArg.intVal
       case frame.selector
       of "+":
-        taggedResult = add(a, b)
-      of "-":
-        taggedResult = sub(a, b)
-      of "*":
-        taggedResult = mul(a, b)
-      of "//":
-        taggedResult = divInt(a, b)
-      of "%":
-        taggedResult = modInt(a, b)
-      of "=":
-        boolResult = intEquals(a, b)
-        isComparison = true
-      of "<":
-        boolResult = lessThan(a, b)
-        isComparison = true
-      of "<=":
-        boolResult = lessOrEqual(a, b)
-        isComparison = true
-      of ">":
-        boolResult = greaterThan(a, b)
-        isComparison = true
-      of ">=":
-        boolResult = greaterOrEqual(a, b)
-        isComparison = true
-      else:
-        isPrimitive = false  # Not a primitive integer operation
-
-      if isPrimitive:
-        if isComparison:
-          # Comparison returns boolean
-          interp.pushValue(NodeValue(kind: vkBool, boolVal: boolResult))
-        else:
-          # Arithmetic returns integer
-          interp.pushValue(toNodeValue(taggedResult))
+        interp.pushValue(NodeValue(kind: vkInt, intVal: a + b))
         return true
+      of "-":
+        interp.pushValue(NodeValue(kind: vkInt, intVal: a - b))
+        return true
+      of "*":
+        interp.pushValue(NodeValue(kind: vkInt, intVal: a * b))
+        return true
+      of "//":
+        if b == 0:
+          raise newException(DivByZeroDefect, "Integer division by zero")
+        interp.pushValue(NodeValue(kind: vkInt, intVal: a div b))
+        return true
+      of "%":
+        if b == 0:
+          raise newException(DivByZeroDefect, "Integer modulo by zero")
+        interp.pushValue(NodeValue(kind: vkInt, intVal: a mod b))
+        return true
+      of "=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a == b))
+        return true
+      of "<":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a < b))
+        return true
+      of "<=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a <= b))
+        return true
+      of ">":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a > b))
+        return true
+      of ">=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a >= b))
+        return true
+      else:
+        discard
 
     # ============================================================================
     # FAST PATH: Float Operations
     # Skip Instance allocation for primitive float operations
     # ============================================================================
-    if receiverVal.kind == vkFloat and args.len > 0 and args[0].kind == vkFloat:
+    if receiverVal.kind == vkFloat and hasSingleArg and singleArg.kind == vkFloat:
       let a = receiverVal.floatVal
-      let b = args[0].floatVal
-      var floatResult: float
-      var boolResult: bool
-      var isPrimitive = true
-      var isComparison = false
+      let b = singleArg.floatVal
 
       case frame.selector
       of "+":
-        floatResult = a + b
+        interp.pushValue(NodeValue(kind: vkFloat, floatVal: a + b))
+        return true
       of "-":
-        floatResult = a - b
+        interp.pushValue(NodeValue(kind: vkFloat, floatVal: a - b))
+        return true
       of "*":
-        floatResult = a * b
+        interp.pushValue(NodeValue(kind: vkFloat, floatVal: a * b))
+        return true
       of "/":
         if b == 0.0:
           raise newException(DivByZeroDefect, "Float division by zero")
-        floatResult = a / b
-      of "=":
-        boolResult = a == b
-        isComparison = true
-      of "<":
-        boolResult = a < b
-        isComparison = true
-      of "<=":
-        boolResult = a <= b
-        isComparison = true
-      of ">":
-        boolResult = a > b
-        isComparison = true
-      of ">=":
-        boolResult = a >= b
-        isComparison = true
-      else:
-        isPrimitive = false  # Not a primitive float operation
-
-      if isPrimitive:
-        if isComparison:
-          # Comparison returns boolean
-          interp.pushValue(NodeValue(kind: vkBool, boolVal: boolResult))
-        else:
-          # Arithmetic returns float
-          interp.pushValue(NodeValue(kind: vkFloat, floatVal: floatResult))
+        interp.pushValue(NodeValue(kind: vkFloat, floatVal: a / b))
         return true
+      of "=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a == b))
+        return true
+      of "<":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a < b))
+        return true
+      of "<=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a <= b))
+        return true
+      of ">":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a > b))
+        return true
+      of ">=":
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: a >= b))
+        return true
+      else:
+        discard
 
     # ============================================================================
     # QUICK PRIMITIVES: Boolean Control Flow
@@ -5197,19 +6019,19 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if receiverVal.kind == vkBool:
       case frame.selector
       of "ifTrue:":
-        if args.len > 0 and args[0].kind == vkBlock:
+        if hasSingleArg and singleArg.kind == vkBlock:
           if receiverVal.boolVal:
             # true ifTrue: [block] -> evaluate block
-            interp.pushWorkFrame(newApplyBlockFrame(args[0].blockVal, 0))
+            interp.pushWorkFrame(newApplyBlockFrame(singleArg.blockVal, 0))
           else:
             # false ifTrue: [block] -> return nil
             interp.pushValue(nilValue())
           return true
       of "ifFalse:":
-        if args.len > 0 and args[0].kind == vkBlock:
+        if hasSingleArg and singleArg.kind == vkBlock:
           if not receiverVal.boolVal:
             # false ifFalse: [block] -> evaluate block
-            interp.pushWorkFrame(newApplyBlockFrame(args[0].blockVal, 0))
+            interp.pushWorkFrame(newApplyBlockFrame(singleArg.blockVal, 0))
           else:
             # true ifFalse: [block] -> return nil
             interp.pushValue(nilValue())
@@ -5223,21 +6045,25 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             # false ifTrue: [tBlock] ifFalse: [fBlock] -> evaluate fBlock
             interp.pushWorkFrame(newApplyBlockFrame(args[1].blockVal, 0))
           return true
+      of "not":
+        if frame.argCount == 0:
+          interp.pushValue(NodeValue(kind: vkBool, boolVal: not receiverVal.boolVal))
+          return true
       of "and:":
-        if args.len > 0 and args[0].kind == vkBlock:
+        if hasSingleArg and singleArg.kind == vkBlock:
           # Short-circuit and: evaluate receiver, if false return false, else evaluate block
           if not receiverVal.boolVal:
             interp.pushValue(NodeValue(kind: vkBool, boolVal: false))
           else:
-            interp.pushWorkFrame(newApplyBlockFrame(args[0].blockVal, 0))
+            interp.pushWorkFrame(newApplyBlockFrame(singleArg.blockVal, 0))
           return true
       of "or:":
-        if args.len > 0 and args[0].kind == vkBlock:
+        if hasSingleArg and singleArg.kind == vkBlock:
           # Short-circuit or: evaluate receiver, if true return true, else evaluate block
           if receiverVal.boolVal:
             interp.pushValue(NodeValue(kind: vkBool, boolVal: true))
           else:
-            interp.pushWorkFrame(newApplyBlockFrame(args[0].blockVal, 0))
+            interp.pushWorkFrame(newApplyBlockFrame(singleArg.blockVal, 0))
           return true
       else:
         discard  # Fall through to normal dispatch for other boolean methods
@@ -5247,30 +6073,77 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Fast-path for class, isNil, notNil, ==, ~= before MIC/PIC
     # ============================================================================
     case frame.selector
+    of ",":
+      if hasSingleArg:
+        case receiverVal.kind
+        of vkString:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.strVal & singleArg.toString()))
+          return true
+        of vkSymbol:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.symVal & singleArg.toString()))
+          return true
+        else:
+          discard
+
+    of "asString":
+      if args.len == 0:
+        case receiverVal.kind
+        of vkString:
+          interp.pushValue(receiverVal)
+          return true
+        of vkSymbol:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.symVal))
+          return true
+        of vkInt, vkFloat, vkBool, vkNil:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString()))
+          return true
+        else:
+          discard
+
+    of "printString":
+      if args.len == 0:
+        case receiverVal.kind
+        of vkSymbol:
+          interp.pushValue(NodeValue(kind: vkString, strVal: "#" & receiverVal.symVal))
+          return true
+        of vkInt, vkFloat, vkBool, vkNil:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString()))
+          return true
+        else:
+          discard
+
+    of "size":
+      if args.len == 0:
+        case receiverVal.kind
+        of vkString:
+          interp.pushValue(NodeValue(kind: vkInt, intVal: receiverVal.strVal.len))
+          return true
+        of vkSymbol:
+          interp.pushValue(NodeValue(kind: vkInt, intVal: receiverVal.symVal.len))
+          return true
+        of vkArray:
+          interp.pushValue(NodeValue(kind: vkInt, intVal: receiverVal.arrayVal.len))
+          return true
+        else:
+          discard
+
+    of "name":
+      if args.len == 0 and receiverVal.kind == vkClass and receiverVal.classVal != nil:
+        interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.classVal.name))
+        return true
+
     of "class":
-      if receiverVal.kind == vkInstance:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: receiverVal.instVal.class))
-      elif receiverVal.kind == vkInt:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: integerClass))
-      elif receiverVal.kind == vkFloat:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: floatClass))
-      elif receiverVal.kind == vkString:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: stringClass))
-      elif receiverVal.kind == vkBool:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: if receiverVal.boolVal: trueClassCache else: falseClassCache))
-      elif receiverVal.kind == vkNil:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: undefinedObjectClass))
-      elif receiverVal.kind == vkArray:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: arrayClass))
-      elif receiverVal.kind == vkTable:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: tableClass))
-      elif receiverVal.kind == vkBlock:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: blockClass))
-      elif receiverVal.kind == vkClass:
+      if receiverVal.kind == vkClass:
         # For classes, return the class itself (matches original primitiveClassImpl behavior)
         interp.pushValue(receiverVal)
+      elif receiverVal.kind == vkBool and trueClassCache != nil and falseClassCache != nil:
+        interp.pushValue(NodeValue(kind: vkClass, classVal: if receiverVal.boolVal: trueClassCache else: falseClassCache))
       else:
-        interp.pushValue(nilValue())
+        let receiverClass = classOfValue(receiverVal)
+        if receiverClass != nil:
+          interp.pushValue(NodeValue(kind: vkClass, classVal: receiverClass))
+        else:
+          interp.pushValue(nilValue())
       return true
 
     of "isNil":
@@ -5282,55 +6155,40 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       return true
 
     of "==":
-      if args.len > 0:
-        interp.pushValue(NodeValue(kind: vkBool, boolVal: identityEqual(receiverVal, args[0])))
+      if hasSingleArg:
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: identityEqual(receiverVal, singleArg)))
         return true
 
     of "~=":
-      if args.len > 0:
-        interp.pushValue(NodeValue(kind: vkBool, boolVal: not identityEqual(receiverVal, args[0])))
+      if hasSingleArg:
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: not identityEqual(receiverVal, singleArg)))
+        return true
+
+    of "=":
+      if hasSingleArg and receiverVal.kind != vkInstance and receiverVal.kind != vkBlock and
+         singleArg.kind != vkInstance and singleArg.kind != vkBlock:
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: receiverVal.unwrap() == singleArg.unwrap()))
+        return true
+
+    of "<>":
+      if hasSingleArg and receiverVal.kind != vkInstance and receiverVal.kind != vkBlock and
+         singleArg.kind != vkInstance and singleArg.kind != vkBlock:
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: receiverVal.unwrap() != singleArg.unwrap()))
         return true
 
     else:
       discard  # Fall through to normal dispatch
 
     # Convert receiver to Instance for method lookup
+    if hasSingleArg:
+      args = @[singleArg]
+
     var receiver: Instance
     debug("VM: Converting receiverVal.kind=", $receiverVal.kind)
     case receiverVal.kind
     of vkInstance:
       receiver = receiverVal.instVal
       debug("VM: vkInstance receiver, class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
-    of vkInt:
-      receiver = newIntInstance(integerClass, receiverVal.intVal)
-      debug("VM: vkInt receiver created, class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
-    of vkFloat:
-      receiver = newFloatInstance(floatClass, receiverVal.floatVal)
-      debug("VM: vkFloat receiver created")
-    of vkString:
-      debug("VM: vkString receiver, stringClass ptr=", cast[int](stringClass), " stringClass name=", if stringClass != nil: stringClass.name else: "NIL")
-      receiver = newStringInstance(stringClass, receiverVal.strVal)
-      debug("VM: vkString receiver created, receiver ptr=", cast[int](receiver), " class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
-    of vkBool:
-      let p = cast[pointer](new(bool))
-      cast[ptr bool](p)[] = receiverVal.boolVal
-      receiver = Instance(
-        kind: ikObject,
-        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
-        slots: @[],
-        isNimProxy: true,
-        nimValue: p
-      )
-      debug("VM: vkBool receiver created")
-    of vkNil:
-      receiver = nilInstance
-      debug("VM: vkNil receiver")
-    of vkArray:
-      receiver = newArrayInstance(arrayClass, receiverVal.arrayVal)
-      debug("VM: vkArray receiver created")
-    of vkTable:
-      receiver = newTableInstance(tableClass, receiverVal.tableVal)
-      debug("VM: vkTable receiver created")
     of vkClass:
       # Class method lookup
       let cls = receiverVal.classVal
@@ -5338,29 +6196,29 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       if lookup.found:
         let currentMethod = lookup.currentMethod
 
+        if nativeValueImplIsSet(currentMethod):
+          interp.pushValue(callNativeValueMethod(interp, currentMethod, receiverVal, args))
+          return true
+
         # Handle native class methods
         if nativeImplIsSet(currentMethod):
-          let savedReceiver = interp.currentReceiver
-          # Create class receiver wrapper for consistent receiver handling
-          let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
-            nimValue: cast[pointer](cls))
-          # Set currentReceiver for consistent method context
-          interp.currentReceiver = classReceiver
-          try:
-            var resultVal: NodeValue
-            if currentMethod.hasInterpreterParam:
-              # Native method with interpreter - pass class receiver wrapper
+          var resultVal: NodeValue
+          if currentMethod.hasInterpreterParam:
+            let savedReceiver = interp.currentReceiver
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
+            interp.currentReceiver = classReceiver
+            try:
               type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
               let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
               resultVal = nativeProc(interp, classReceiver, args)
-            else:
-              # Direct class method without interpreter param
-              type ClassMethodProc = proc(self: Class, args: seq[NodeValue]): NodeValue {.nimcall.}
-              let nativeProc = cast[ClassMethodProc](currentMethod.nativeImpl)
-              resultVal = nativeProc(cls, args)
-            interp.pushValue(resultVal)
-          finally:
-            interp.currentReceiver = savedReceiver
+            finally:
+              interp.currentReceiver = savedReceiver
+          else:
+            type ClassMethodProc = proc(self: Class, args: seq[NodeValue]): NodeValue {.nimcall.}
+            let nativeProc = cast[ClassMethodProc](currentMethod.nativeImpl)
+            resultVal = nativeProc(cls, args)
+          interp.pushValue(resultVal)
           return true
 
         # Interpreted class method - create activation with class wrapper as receiver
@@ -5414,16 +6272,20 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         # Class method not found - try instance methods on the Class class
         # This allows methods like asSelfDo: to work on class receivers
-        let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
-          nimValue: cast[pointer](cls))
-        let instanceLookup = lookupMethod(interp, classReceiver, frame.selector)
+        let instanceLookup = lookupMethodOnClass(interp, cls, frame.selector)
 
         if instanceLookup.found:
           let currentMethod = instanceLookup.currentMethod
           debug("VM: Found instance method '", frame.selector, "' on Class class")
 
+          if nativeValueImplIsSet(currentMethod):
+            interp.pushValue(callNativeValueMethod(interp, currentMethod, receiverVal, args))
+            return true
+
           # Handle native implementations
           if nativeImplIsSet(currentMethod):
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
             let savedReceiver = interp.currentReceiver
             interp.currentReceiver = classReceiver
             try:
@@ -5447,6 +6309,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
               "Wrong number of arguments: expected " & $currentMethod.parameters.len &
               ", got " & $args.len)
 
+          let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+            nimValue: cast[pointer](cls))
           let activation = newActivation(currentMethod, classReceiver, interp.currentActivation, instanceLookup.definingClass)
 
           for i in 0..<currentMethod.parameters.len:
@@ -5495,28 +6359,29 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           if classMethodToRun != nil:
             debug("VM: Found class method '", frame.selector, "' for class ", cls.name)
-
-            # Create class receiver wrapper
-            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
-              nimValue: cast[pointer](cls))
+            if nativeValueImplIsSet(classMethodToRun):
+              interp.pushValue(callNativeValueMethod(interp, classMethodToRun, receiverVal, args))
+              return true
 
             # Handle native implementations
             if nativeImplIsSet(classMethodToRun):
-              let savedReceiver = interp.currentReceiver
-              interp.currentReceiver = classReceiver
-              try:
-                var resultVal: NodeValue
-                if classMethodToRun.hasInterpreterParam:
+              var resultVal: NodeValue
+              if classMethodToRun.hasInterpreterParam:
+                let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+                  nimValue: cast[pointer](cls))
+                let savedReceiver = interp.currentReceiver
+                interp.currentReceiver = classReceiver
+                try:
                   type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
                   let nativeProc = cast[NativeProcWithInterp](classMethodToRun.nativeImpl)
                   resultVal = nativeProc(interp, classReceiver, args)
-                else:
-                  type ClassMethodProc = proc(self: Class, args: seq[NodeValue]): NodeValue {.nimcall.}
-                  let nativeProc = cast[ClassMethodProc](classMethodToRun.nativeImpl)
-                  resultVal = nativeProc(cls, args)
-                interp.pushValue(resultVal)
-              finally:
-                interp.currentReceiver = savedReceiver
+                finally:
+                  interp.currentReceiver = savedReceiver
+              else:
+                type ClassMethodProc = proc(self: Class, args: seq[NodeValue]): NodeValue {.nimcall.}
+                let nativeProc = cast[ClassMethodProc](classMethodToRun.nativeImpl)
+                resultVal = nativeProc(cls, args)
+              interp.pushValue(resultVal)
               return true
 
             # Interpreted class method - create activation with class wrapper as receiver
@@ -5525,6 +6390,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
                 "Wrong number of arguments: expected " & $classMethodToRun.parameters.len &
                 ", got " & $args.len)
 
+            let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
+              nimValue: cast[pointer](cls))
             let activation = newActivation(classMethodToRun, classReceiver, interp.currentActivation, classMethodDefiningClass, isClassMethod = true)
 
             for i in 0..<classMethodToRun.parameters.len:
@@ -5566,12 +6433,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         isNimProxy: false,
         nimValue: cast[pointer](receiverVal.blockVal)
       )
-    of vkSymbol:
-      receiver = newStringInstance(symbolClassCache, receiverVal.symVal)
+    else:
+      discard
 
     # Special stackless handling for control flow primitives
     # Native builds only: nimValue pointer operations
-    if receiver.isNimProxy and receiver.kind == ikObject and receiver.class != nil:
+    if receiver != nil and receiver.isNimProxy and receiver.kind == ikObject and receiver.class != nil:
         # Boolean ifTrue:/ifFalse: - use stackless work frames
         if (receiver.class == trueClassCache or receiver.class == falseClassCache) and args.len > 0 and args[0].kind == vkBlock:
           case frame.selector
@@ -5597,7 +6464,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             discard  # Fall through to regular method dispatch
 
     # Special stackless handling for block whileTrue:/whileFalse:
-    if receiver.kind == ikObject and receiver.class == blockClass and not receiver.isNimProxy and args.len > 0 and args[0].kind == vkBlock:
+    if receiver != nil and receiver.kind == ikObject and receiver.class == blockClass and not receiver.isNimProxy and args.len > 0 and args[0].kind == vkBlock:
       let conditionBlock = cast[BlockNode](receiver.nimValue)
       let bodyBlock = args[0].blockVal
       case frame.selector
@@ -5612,9 +6479,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         discard  # Fall through to regular method dispatch
 
-    if receiver == nil:
+    var receiverClass = classOfValue(receiverVal)
+    if receiverVal.kind == vkBool and trueClassCache != nil and falseClassCache != nil:
+      receiverClass = if receiverVal.boolVal: trueClassCache else: falseClassCache
+    if receiverClass == nil and receiverVal.kind == vkSymbol:
+      receiverClass = symbolClassCache
+    if receiverClass == nil:
       printStackTrace(interp)
-      raise newException(ValueError, "Cannot send message to nil receiver for message: " & frame.selector)
+      raise newException(ValueError, "Cannot resolve receiver class for message: " & frame.selector)
 
     # ============================================================================
     # POLYMORPHIC INLINE CACHE (PIC) CHECK
@@ -5627,18 +6499,18 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if frame.msgNode != nil and not frame.msgNode.megamorphic:
       # Check Monomorphic Inline Cache (MIC) first
       if frame.msgNode.cachedClass != nil and
-         receiver.class == frame.msgNode.cachedClass and
-         receiver.class.version == frame.msgNode.cachedVersion:
+         receiverClass == frame.msgNode.cachedClass and
+         receiverClass.version == frame.msgNode.cachedVersion:
         # MIC hit! Use cached method
         currentMethod = frame.msgNode.cachedMethod
         definingClass = frame.msgNode.cachedClass
         cacheHit = true
-        debug("VM: MIC cache hit for '", frame.selector, "' on ", receiver.class.name)
+        debug("VM: MIC cache hit for '", frame.selector, "' on ", receiverClass.name)
       else:
         # MIC miss - check Polymorphic Inline Cache (PIC)
         for i in 0..<frame.msgNode.picCount:
-          if receiver.class == frame.msgNode.picEntries[i].cls and
-             receiver.class.version == frame.msgNode.picEntries[i].version:
+          if receiverClass == frame.msgNode.picEntries[i].cls and
+             receiverClass.version == frame.msgNode.picEntries[i].version:
             # PIC hit - promote to MIC (swap for LRU behavior)
             let oldMIC = (
               cls: frame.msgNode.cachedClass,
@@ -5655,42 +6527,44 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             if oldMIC.cls != nil:
               frame.msgNode.picEntries[i] = oldMIC
             cacheHit = true
-            debug("VM: PIC cache hit for '", frame.selector, "' on ", receiver.class.name, " at index ", $i, " (promoted to MIC)")
+            debug("VM: PIC cache hit for '", frame.selector, "' on ", receiverClass.name, " at index ", $i, " (promoted to MIC)")
             break
 
         if not cacheHit and frame.msgNode.cachedClass != nil:
           # Cache miss - will update cache after lookup
           debug("VM: PIC cache miss for '", frame.selector, "' expected ",
-                frame.msgNode.cachedClass.name, " got ", receiver.class.name)
+                frame.msgNode.cachedClass.name, " got ", receiverClass.name)
 
     if not cacheHit:
       # ============================================================================
       # SLOW PATH: Full method lookup
       # ============================================================================
-      debug("VM: Looking up method '", frame.selector, "' on ", (if receiver.class != nil: receiver.class.name else: "nil"), " isClassMethod=", $frame.isClassMethod)
+      debug("VM: Looking up method '", frame.selector, "' on ", receiverClass.name, " isClassMethod=", $frame.isClassMethod)
 
       var lookup: MethodResult
       if frame.isClassMethod:
         # For class method primitives, look in the receiver's class methods
-        if receiver.class == nil:
-          debug("VM: ERROR - receiver.class is nil for class method lookup")
-          raise newException(ValueError, "Cannot lookup class method on receiver with nil class")
-        lookup = lookupClassMethod(receiver.class, frame.selector)
+        lookup = lookupClassMethod(receiverClass, frame.selector)
       else:
-        lookup = lookupMethod(interp, receiver, frame.selector)
+        lookup = lookupMethodOnClass(interp, receiverClass, frame.selector)
       if not lookup.found:
         # Try doesNotUnderstand: before raising error
         debug("VM: Method not found, trying DNU for ", frame.selector)
-        let dnuLookup = lookupMethod(interp, receiver, "doesNotUnderstand:")
+        let dnuLookup = lookupMethodOnClass(interp, receiverClass, "doesNotUnderstand:")
         debug("VM: DNU lookup result: found=", $dnuLookup.found, " class=", (if dnuLookup.definingClass != nil: dnuLookup.definingClass.name else: "nil"))
         if dnuLookup.found:
+          if receiver == nil:
+            receiver = materializeReceiverForSend(receiverVal)
+          if receiver == nil:
+            printStackTrace(interp)
+            raise newException(ValueError, "Cannot materialize receiver for DNU: " & frame.selector)
           let selectorVal = NodeValue(kind: vkSymbol, symVal: frame.selector)
           let dnuResult = executeMethod(interp, dnuLookup.currentMethod, receiver, @[selectorVal], dnuLookup.definingClass)
           interp.pushValue(dnuResult)
           return true
         printStackTrace(interp)
         raise newException(ValueError, "Method not found: " & frame.selector & " on " &
-          (if receiver.class != nil: receiver.class.name else: "unknown"))
+          receiverClass.name)
 
       currentMethod = lookup.currentMethod
       definingClass = lookup.definingClass
@@ -5698,7 +6572,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       # Update inline cache for future calls (skip for megamorphic sites)
       if frame.msgNode != nil and not frame.msgNode.megamorphic:
         # If MIC already has a different class, move it to PIC (polymorphic cache)
-        if frame.msgNode.cachedClass != nil and frame.msgNode.cachedClass != receiver.class:
+        if frame.msgNode.cachedClass != nil and frame.msgNode.cachedClass != receiverClass:
           if frame.msgNode.picCount < frame.msgNode.picEntries.len:
             # Add old MIC entry to PIC
             frame.msgNode.picEntries[frame.msgNode.picCount] = (
@@ -5716,14 +6590,27 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
         # Update MIC with new class/method
         if not frame.msgNode.megamorphic:
-          frame.msgNode.cachedClass = receiver.class
+          frame.msgNode.cachedClass = receiverClass
           frame.msgNode.cachedMethod = currentMethod
-          frame.msgNode.cachedVersion = receiver.class.version
-          debug("VM: Updated MIC cache for '", frame.selector, "' with ", receiver.class.name)
+          frame.msgNode.cachedVersion = receiverClass.version
+          debug("VM: Updated MIC cache for '", frame.selector, "' with ", receiverClass.name)
 
     # Check for native implementation
     # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
-    debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod))
+    debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod), " nativeValue=", nativeValueImplIsSet(currentMethod))
+    if nativeValueImplIsSet(currentMethod):
+      let savedReceiver = interp.currentReceiver
+      try:
+        interp.pushValue(callNativeValueMethod(interp, currentMethod, receiverVal, args))
+      finally:
+        interp.currentReceiver = savedReceiver
+      return true
+
+    if receiver == nil:
+      receiver = materializeReceiverForSend(receiverVal)
+    if receiver == nil:
+      printStackTrace(interp)
+      raise newException(ValueError, "Cannot materialize receiver for message: " & frame.selector)
     if nativeImplIsSet(currentMethod):
       # Call native method
       debug("VM: receiver ptr=", cast[int](receiver), " receiver class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")

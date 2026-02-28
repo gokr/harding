@@ -9,6 +9,10 @@ template setNativeImpl*(meth: BlockNode, impl: untyped) =
   ## Set native implementation for native builds
   meth.nativeImpl = cast[pointer](impl)
 
+template setNativeValueImpl*(meth: BlockNode, impl: untyped) =
+  ## Set NodeValue-oriented native implementation for native builds
+  meth.nativeValueImpl = cast[pointer](impl)
+
 template registerMethod*(cls: Class, selector: string, impl: untyped, needsInterp: bool = true) =
   ## Register a native instance method on a class (both methods and allMethods)
   block:

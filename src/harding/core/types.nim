@@ -256,6 +256,7 @@ type
     isMethod*: bool                       # true if method definition
     selector*: string                     # method selector (name) - set when method is registered
     nativeImpl*: pointer                  # compiled implementation
+    nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
     capturedEnv*: Table[string, MutableCell]  # captured variables from outer scope
     capturedEnvInitialized*: bool         # flag to track if capturedEnv has been initialized
@@ -618,6 +619,34 @@ proc isNilValue*(val: NodeValue): bool =
     if val.instVal.class != nil and val.instVal.class == undefinedObjectClass:
       return true
   return false
+
+proc classOfValue*(val: NodeValue): Class =
+  ## Resolve the runtime class for a NodeValue without materializing wrappers.
+  case val.kind
+  of vkInstance:
+    if val.instVal != nil:
+      return val.instVal.class
+    return nil
+  of vkInt:
+    return integerClass
+  of vkFloat:
+    return floatClass
+  of vkString:
+    return stringClass
+  of vkBool:
+    return booleanClass
+  of vkNil:
+    return undefinedObjectClass
+  of vkArray:
+    return arrayClass
+  of vkTable:
+    return tableClass
+  of vkBlock:
+    return blockClass
+  of vkClass:
+    return val.classVal
+  of vkSymbol:
+    return nil
 
 proc toValue*(arr: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkArray, arrayVal: arr)
