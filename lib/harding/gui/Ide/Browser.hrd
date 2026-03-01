@@ -313,6 +313,12 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
     methods := classObj methods.
     definedMethods := classObj definedMethods.
     rawNames := Array new.
+    
+    # Debug: log what we found
+    Transcript showCr: ("DEBUG: methods array has " , (methods size printString) , " items").
+    methods do: [:s | 
+        ((s asString) = "doIt:") ifTrue: [ Transcript showCr: "DEBUG: found doIt: in methods" ]
+    ].
 
     (aCategory = "all") ifTrue: [
         methods do: [:selector | rawNames add: selector ]
@@ -338,11 +344,15 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
     ].
 
     methodNames := Array new.
+    Transcript showCr: ("DEBUG: rawNames has " , (rawNames size printString) , " items").
     rawNames do: [:selector |
         ((selector asString startsWith: "primitive") not) ifTrue: [
             methodNames add: selector
+        ] ifFalse: [
+            Transcript showCr: ("DEBUG: filtered out primitive: " , (selector asString))
         ]
     ].
+    Transcript showCr: ("DEBUG: methodNames has " , (methodNames size printString) , " items").
 
     stringNames := methodNames collect: [:selector | selector asString ].
     methodNames := [ stringNames sorted ]
