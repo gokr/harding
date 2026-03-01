@@ -82,24 +82,9 @@ String>>notEmpty [
   ^ self size > 0
 ]
 
-String>>startsWith: prefix [
-  # Check if string starts with prefix (0-based indexing).
-  | prefixSize |
-  prefixSize := prefix size.
-  (self size < prefixSize) ifTrue: [ ^ false ].
-  self size = 0 ifTrue: [ ^ prefixSize = 0 ].
-  ^ (self from: 0 to: (prefixSize - 1)) = prefix
-]
+String>>startsWith: prefix <primitive primitiveStartsWith: prefix>
 
-String>>endsWith: suffix [
-  # Check if string ends with suffix (0-based indexing).
-  | selfSize suffixSize start |
-  selfSize := self size.
-  suffixSize := suffix size.
-  (selfSize >= suffixSize) ifFalse: [ ^ false ].
-  start := selfSize - suffixSize.
-  ^ (self from: start to: (selfSize - 1)) = suffix
-]
+String>>endsWith: suffix <primitive primitiveEndsWith: suffix>
 
 String>>banana2 [
 

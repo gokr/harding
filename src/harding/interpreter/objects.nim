@@ -1683,6 +1683,58 @@ proc instStringLessThanImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
   return toValue(self.strVal < other)
 
+proc instStringStartsWithImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Check if string starts with prefix
+  if self.kind != ikString or args.len < 1:
+    return toValue(false)
+  
+  var prefix = ""
+  case args[0].kind
+  of vkString:
+    prefix = args[0].strVal
+  of vkSymbol:
+    prefix = args[0].symVal
+  of vkInstance:
+    if args[0].instVal != nil and args[0].instVal.kind == ikString:
+      prefix = args[0].instVal.strVal
+    else:
+      return toValue(false)
+  else:
+    return toValue(false)
+  
+  # Check if string is shorter than prefix
+  if self.strVal.len < prefix.len:
+    return toValue(false)
+  
+  # Compare substring
+  return toValue(self.strVal.startsWith(prefix))
+
+proc instStringEndsWithImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Check if string ends with suffix
+  if self.kind != ikString or args.len < 1:
+    return toValue(false)
+  
+  var suffix = ""
+  case args[0].kind
+  of vkString:
+    suffix = args[0].strVal
+  of vkSymbol:
+    suffix = args[0].symVal
+  of vkInstance:
+    if args[0].instVal != nil and args[0].instVal.kind == ikString:
+      suffix = args[0].instVal.strVal
+    else:
+      return toValue(false)
+  else:
+    return toValue(false)
+  
+  # Check if string is shorter than suffix
+  if self.strVal.len < suffix.len:
+    return toValue(false)
+  
+  # Compare substring
+  return toValue(self.strVal.endsWith(suffix))
+
 # Array primitives
 proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Array size

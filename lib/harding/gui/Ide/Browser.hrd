@@ -340,17 +340,7 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
     methodNames := Array new.
     
     rawNames do: [:selector |
-        | selStr isPrim |
-        selStr := selector asString.
-        
-        # Manual startsWith: check - compare first 9 characters
-        isPrim := (selStr size >= 9) and: [
-            (selStr from: 0 to: 8) = "primitive"
-        ].
-        
-        isPrim ifTrue: [
-            # Skip primitives
-        ] ifFalse: [
+        ((selector asString startsWith: "primitive") not) ifTrue: [
             methodNames add: selector
         ]
     ].

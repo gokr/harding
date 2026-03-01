@@ -3195,6 +3195,16 @@ proc initGlobals*(interp: var Interpreter) =
   stringCls.methods["primitiveLessThan:"] = stringLessThanMethod
   stringCls.allMethods["primitiveLessThan:"] = stringLessThanMethod
 
+  let stringStartsWithMethod = createCoreMethod("primitiveStartsWith:")
+  stringStartsWithMethod.setNativeImpl(instStringStartsWithImpl)
+  stringCls.methods["primitiveStartsWith:"] = stringStartsWithMethod
+  stringCls.allMethods["primitiveStartsWith:"] = stringStartsWithMethod
+
+  let stringEndsWithMethod = createCoreMethod("primitiveEndsWith:")
+  stringEndsWithMethod.setNativeImpl(instStringEndsWithImpl)
+  stringCls.methods["primitiveEndsWith:"] = stringEndsWithMethod
+  stringCls.allMethods["primitiveEndsWith:"] = stringEndsWithMethod
+
   let stringIncludesSubStringMethod = createCoreMethod("primitiveIncludesSubString:")
   stringIncludesSubStringMethod.setNativeImpl(instStringIncludesSubStringImpl)
   stringIncludesSubStringMethod.setNativeValueImpl(primitiveStringIncludesSubStringValueImpl)
