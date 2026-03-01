@@ -18,6 +18,7 @@ Historical planning notes are preserved in `docs/research/`.
 - Keep exception semantics stable (`resume`, `resume:`, `retry`, `pass`, `return:`).
 - Continue stackless VM cleanup and simplification where behavior is unchanged.
 - Improve diagnostics and error messages in parser/runtime hot paths.
+- Follow up indexed-locals fast paths so captured-cell writes stay coherent without dropping back to slow-path assignment.
 
 ### FFI and Ecosystem
 

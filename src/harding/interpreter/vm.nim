@@ -5934,7 +5934,19 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       let value = interp.popValue()
       # Fast path: indexed local assignment
       let localIdx = frame.argCount  # localIndex stored in argCount
-      if localIdx >= 0 and interp.currentActivation != nil and
+
+      var hasCapturedCell = false
+      if interp.currentActivation != nil:
+        if frame.selector in interp.currentActivation.capturedVars:
+          hasCapturedCell = true
+        else:
+          let currentMethod = interp.currentActivation.currentMethod
+          if currentMethod != nil and currentMethod.capturedEnvInitialized and
+             currentMethod.capturedEnv.len > 0 and
+             frame.selector in currentMethod.capturedEnv:
+            hasCapturedCell = true
+
+      if not hasCapturedCell and localIdx >= 0 and interp.currentActivation != nil and
          localIdx < interp.currentActivation.indexedLocals.len:
         interp.currentActivation.indexedLocals[localIdx] = value
         interp.currentActivation.locals[frame.selector] = value
