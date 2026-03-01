@@ -1,4 +1,4 @@
-import std/[tables, logging, hashes, strutils, strformat]
+import std/[tables, logging, hashes, strutils]
 import ./tagged  # Tagged value support for VM performance
 
 # ============================================================================
@@ -7,14 +7,10 @@ import ./tagged  # Tagged value support for VM performance
 # ============================================================================
 
 template debug*(args: varargs[untyped]) =
-  ## Debug logging that compiles to nothing in release mode
-  ## Use: debug("Message: ", value)
+  ## Debug logging that compiles to nothing in release mode.
+  ## In debug builds, delegates to debugEcho which handles varargs natively.
   when not defined(release):
-    var parts: seq[string] = @[]
-    for a in args:
-      parts.add($a)
-    let msg = "DEBUG: " & parts.join("")
-    debugEcho(msg)
+    debugEcho(args)
 
 # ============================================================================
 # Core Types for Harding
@@ -25,6 +21,13 @@ template debug*(args: varargs[untyped]) =
 # when objects form reference cycles (which is common in an interpreter).
 # See CLAUDE.md for details on ORC issues.
 type
+  # Node kind enum - defined before Node for use as stored field
+  NodeKind* = enum
+    nkLiteral, nkIdent, nkMessage, nkBlock, nkAssign, nkReturn,
+    nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkPrimitiveCall, nkCascade,
+    nkSlotAccess, nkSuperSend, nkPseudoVar,
+    nkIf, nkWhile  # Control flow specialization nodes
+
   Node* {.acyclic.} = ref object of RootObj
     line*, col*: int
 
@@ -172,6 +175,7 @@ type
   # Work frame for explicit stack VM execution
   WorkFrame* = ref object
     kind*: WorkFrameKind
+    skipRelease*: bool  # If true, frame was re-pushed onto queue and should not be released
     # For wfEvalNode
     node*: Node
     # For wfSendMessage
@@ -255,6 +259,7 @@ type
     body*: seq[Node]                      # AST statements
     isMethod*: bool                       # true if method definition
     selector*: string                     # method selector (name) - set when method is registered
+    localCount*: int                      # total indexed locals: 1(self) + params.len + temps.len
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
@@ -269,7 +274,8 @@ type
     currentMethod*: BlockNode         # current method
     definingObject*: Class            # class where method was found (for super)
     pc*: int                          # program counter
-    locals*: Table[string, NodeValue] # local variables
+    locals*: Table[string, NodeValue] # local variables (fallback for non-indexed lookups)
+    indexedLocals*: seq[NodeValue]    # fast indexed locals: [self, param0, param1, ..., temp0, temp1, ...]
     capturedVars*: Table[string, MutableCell]  # shared captured vars for sibling blocks
     returnValue*: NodeValue           # return value
     hasReturned*: bool                # non-local return flag
@@ -323,6 +329,7 @@ type
   AssignNode* = ref object of Node
     variable*: string
     expression*: Node
+    localIndex*: int  # Index into activation.indexedLocals (-1 = not a local)
 
   ReturnNode* = ref object of Node
     expression*: Node        # nil for self-return
@@ -349,6 +356,7 @@ type
   # Identifier node for variable lookup
   IdentNode* = ref object of Node
     name*: string
+    localIndex*: int  # Index into activation.indexedLocals (-1 = not a local, use name-based fallback)
 
   # Slot access node for efficient instance variable access
   SlotAccessNode* = ref object of Node
@@ -377,13 +385,6 @@ type
     condition*: Node        # Condition block or expression
     body*: Node             # Loop body (BlockNode)
     isWhileTrue*: bool      # true = whileTrue, false = whileFalse
-
-  # Node type enum for pattern matching
-  NodeKind* = enum
-    nkLiteral, nkIdent, nkMessage, nkBlock, nkAssign, nkReturn,
-    nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkPrimitiveCall, nkCascade,
-    nkSlotAccess, nkSuperSend, nkPseudoVar,
-    nkIf, nkWhile  # Control flow specialization nodes
 
   # Compiled method representation
   CompiledMethod* = ref object of RootObj
@@ -440,26 +441,117 @@ proc isTruthy*(val: NodeValue): bool =
 # ============================================================================
 # Node kind helper
 # ============================================================================
-proc kind*(node: Node): NodeKind =
-  ## Get the node kind for pattern matching
-  if node of LiteralNode: nkLiteral
-  elif node of IdentNode: nkIdent
+proc kind*(node: Node): NodeKind {.inline.} =
+  ## Get the node kind for pattern matching (ordered by frequency in hot loops)
+  if node of IdentNode: nkIdent
   elif node of MessageNode: nkMessage
+  elif node of LiteralNode: nkLiteral
   elif node of BlockNode: nkBlock
   elif node of AssignNode: nkAssign
   elif node of ReturnNode: nkReturn
+  elif node of WhileNode: nkWhile
+  elif node of IfNode: nkIf
+  elif node of PseudoVarNode: nkPseudoVar
+  elif node of SlotAccessNode: nkSlotAccess
+  elif node of PrimitiveCallNode: nkPrimitiveCall
+  elif node of SuperSendNode: nkSuperSend
+  elif node of CascadeNode: nkCascade
   elif node of ArrayNode: nkArray
   elif node of TableNode: nkTable
   elif node of ObjectLiteralNode: nkObjectLiteral
   elif node of PrimitiveNode: nkPrimitive
-  elif node of PrimitiveCallNode: nkPrimitiveCall
-  elif node of CascadeNode: nkCascade
-  elif node of SlotAccessNode: nkSlotAccess
-  elif node of SuperSendNode: nkSuperSend
-  elif node of PseudoVarNode: nkPseudoVar
-  elif node of IfNode: nkIf
-  elif node of WhileNode: nkWhile
   else: raise newException(ValueError, "Unknown node type")
+
+# ============================================================================
+# Local Index Resolution
+# Resolves IdentNode.localIndex for indexed locals fast path
+# ============================================================================
+
+proc resolveLocalIndices*(blk: BlockNode) =
+  ## Walk a BlockNode's body and set localIndex on IdentNodes that
+  ## reference parameters or temporaries. Layout:
+  ##   0: self
+  ##   1..N: parameters
+  ##   N+1..M: temporaries
+  ## Also sets blk.localCount.
+  if blk == nil:
+    return
+
+  # Build name -> index mapping
+  var nameToIndex: Table[string, int]
+  nameToIndex["self"] = 0
+  for i, p in blk.parameters:
+    nameToIndex[p] = i + 1
+  for i, t in blk.temporaries:
+    nameToIndex[t] = blk.parameters.len + 1 + i
+  blk.localCount = 1 + blk.parameters.len + blk.temporaries.len
+
+  proc resolveNode(node: Node) =
+    if node == nil:
+      return
+    if node of IdentNode:
+      let ident = cast[IdentNode](node)
+      if ident.name in nameToIndex:
+        ident.localIndex = nameToIndex[ident.name]
+      else:
+        ident.localIndex = -1  # Not a local; use name-based fallback
+    elif node of MessageNode:
+      let msg = cast[MessageNode](node)
+      resolveNode(msg.receiver)
+      for arg in msg.arguments:
+        resolveNode(arg)
+    elif node of AssignNode:
+      let assign = cast[AssignNode](node)
+      if assign.variable in nameToIndex:
+        assign.localIndex = nameToIndex[assign.variable]
+      else:
+        assign.localIndex = -1
+      resolveNode(assign.expression)
+    elif node of ReturnNode:
+      let ret = cast[ReturnNode](node)
+      resolveNode(ret.expression)
+    elif node of BlockNode:
+      # Don't descend into nested blocks - they have their own locals
+      # But DO resolve the nested block's own indices
+      resolveLocalIndices(cast[BlockNode](node))
+    elif node of CascadeNode:
+      let cascade = cast[CascadeNode](node)
+      resolveNode(cascade.receiver)
+      for msg in cascade.messages:
+        resolveNode(msg)
+    elif node of IfNode:
+      let ifN = cast[IfNode](node)
+      resolveNode(ifN.condition)
+      resolveNode(ifN.thenBranch)
+      resolveNode(ifN.elseBranch)
+    elif node of WhileNode:
+      let whileN = cast[WhileNode](node)
+      resolveNode(whileN.condition)
+      resolveNode(whileN.body)
+    elif node of ArrayNode:
+      let arr = cast[ArrayNode](node)
+      for elem in arr.elements:
+        resolveNode(elem)
+    elif node of TableNode:
+      let tbl = cast[TableNode](node)
+      for entry in tbl.entries:
+        resolveNode(entry.key)
+        resolveNode(entry.value)
+    elif node of SuperSendNode:
+      let ss = cast[SuperSendNode](node)
+      for arg in ss.arguments:
+        resolveNode(arg)
+    elif node of PrimitiveCallNode:
+      let pc = cast[PrimitiveCallNode](node)
+      for arg in pc.arguments:
+        resolveNode(arg)
+    elif node of SlotAccessNode:
+      let sa = cast[SlotAccessNode](node)
+      resolveNode(sa.valueExpr)
+    # LiteralNode, PseudoVarNode, PrimitiveNode: no children to resolve
+
+  for stmt in blk.body:
+    resolveNode(stmt)
 
 # Value conversion utilities
 proc formatValue(val: NodeValue, quoteStrings: bool): string =

@@ -1,7 +1,6 @@
 ## Frame Pool for WorkFrame Recycling
 ## Reduces GC pressure by reusing WorkFrame objects
 
-import std/[logging]
 import ../core/types
 
 const
@@ -18,61 +17,49 @@ type
 
 var globalFramePool: WorkFramePool
 
-proc clearFrame*(frame: WorkFrame) =
-  ## Clear all fields of a frame to prevent stale data and ARC leaks
-  if frame == nil:
-    return
+proc clearFrameRefs(frame: WorkFrame) {.inline.} =
+  ## Clear only ref-type fields to allow ARC to collect them.
+  ## Value-type fields (int, bool, enum) are left as-is since frame
+  ## constructors will overwrite them.
   frame.node = nil
-  frame.selector = ""
-  frame.argCount = 0
   frame.msgNode = nil
-  frame.isClassMethod = false
   frame.blockVal = nil
-  frame.blockArgs.setLen(0)
-  frame.pendingSelector = ""
-  frame.pendingArgs.setLen(0)
-  frame.currentArgIndex = 0
-  frame.returnValue = NodeValue(kind: vkNil)
-  frame.cascadeMessages.setLen(0)
-  frame.cascadeReceiver = NodeValue(kind: vkNil)
   frame.savedReceiver = nil
-  frame.isBlockActivation = false
-  frame.savedEvalStackDepth = 0
-  frame.conditionResult = false
   frame.thenBlock = nil
   frame.elseBlock = nil
-  frame.loopKind = false
   frame.conditionBlock = nil
   frame.bodyBlock = nil
-  frame.loopState = lsEvaluateCondition
   frame.exceptionClass = nil
   frame.handlerBlock = nil
   frame.exceptionInstance = nil
-  frame.handlerIndex = 0
   frame.protectedBlockForHandler = nil
+  # Clear seqs (release their backing arrays)
+  frame.blockArgs.setLen(0)
+  frame.pendingArgs.setLen(0)
+  frame.cascadeMessages.setLen(0)
+  # Clear strings (release their backing memory)
+  frame.selector = ""
+  frame.pendingSelector = ""
 
 proc initFramePool*() =
   ## Initialize the global frame pool with pre-allocated frames
   globalFramePool.frames = newSeqOfCap[WorkFrame](MaxPoolSize)
   for i in 0..<InitialPoolSize:
-    let frame = WorkFrame()
-    clearFrame(frame)  # Initialize all fields to nil
-    globalFramePool.frames.add(frame)
+    globalFramePool.frames.add(WorkFrame())
   globalFramePool.acquiredCount = 0
   globalFramePool.totalAllocations = InitialPoolSize
   globalFramePool.totalReleases = 0
   debug("Frame pool initialized with ", $InitialPoolSize, " frames")
 
-proc acquireFrame*(): WorkFrame =
-  ## Acquire a frame from the pool, or allocate new if pool is empty
+proc acquireFrame*(): WorkFrame {.inline.} =
+  ## Acquire a frame from the pool, or allocate new if pool is empty.
+  ## Ref fields are already cleared by releaseFrame; value fields will
+  ## be set by the frame constructor.
   if globalFramePool.frames.len > 0:
     result = globalFramePool.frames.pop()
-    clearFrame(result)
     globalFramePool.acquiredCount += 1
   else:
-    # Pool is empty, allocate new frame
     result = WorkFrame()
-    clearFrame(result)  # Initialize all to nil to avoid crashes in optimized builds
     globalFramePool.totalAllocations += 1
     globalFramePool.acquiredCount += 1
 
@@ -83,8 +70,9 @@ proc releaseFrame*(frame: WorkFrame) =
   globalFramePool.acquiredCount -= 1
   globalFramePool.totalReleases += 1
 
-  # Return to pool if not at max size
+  # Return to pool if not at max size, clearing refs first
   if globalFramePool.frames.len < MaxPoolSize:
+    clearFrameRefs(frame)
     globalFramePool.frames.add(frame)
 
 proc getFramePoolStats*(): tuple[available: int, inUse: int, totalAllocated: int, totalReleases: int] =

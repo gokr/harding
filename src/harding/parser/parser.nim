@@ -108,7 +108,7 @@ proc parsePrimitiveTagContent(tagContent: string): (string, seq[Node], string) =
       let argToken = tokens[pos]
       case argToken.kind
       of tkIdent:
-        arguments.add(IdentNode(name: argToken.value))
+        arguments.add(IdentNode(name: argToken.value, localIndex: -1))
         inc pos
       of tkInt:
         arguments.add(LiteralNode(value: NodeValue(kind: vkInt, intVal: parseInt(argToken.value))))
@@ -298,7 +298,7 @@ proc parsePrimary(parser: var Parser): Node =
       return PseudoVarNode(name: token.value)
 
     # Regular identifier - needs variable lookup at runtime
-    return IdentNode(name: token.value)
+    return IdentNode(name: token.value, localIndex: -1)
 
   of tkLParen:
     # Parenthesized expression
@@ -802,6 +802,7 @@ proc parseBlock*(parser: var Parser): BlockNode =
       break
 
   debug("parseBlock: returning with ", blk.body.len, " statements")
+  resolveLocalIndices(blk)
   return blk
 
 # Parse array literal #(...)
@@ -945,7 +946,7 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
       discard parser.next()  # consume :=
       let varName = expr.IdentNode.name
       let valueExpr = parser.parseExpression()
-      let assignNode = AssignNode(variable: varName, expression: valueExpr)
+      let assignNode = AssignNode(variable: varName, expression: valueExpr, localIndex: -1)
       return ReturnNode(expression: assignNode)
     return ReturnNode(expression: expr)
 
@@ -1004,7 +1005,7 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
         if cascaded != nil:
           finalExpr = cascaded
 
-      return AssignNode(variable: varName, expression: finalExpr)
+      return AssignNode(variable: varName, expression: finalExpr, localIndex: -1)
     else:
       parser.parseError("Can only assign to variable name (e.g., 'x := 10')")
       return nil
@@ -1131,7 +1132,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
       # Use method parameters as arguments instead of the parsed ones (to ensure they reference the right scope)
       var finalArguments: seq[Node] = @[]
       for param in params:
-        finalArguments.add(IdentNode(name: param))
+        finalArguments.add(IdentNode(name: param, localIndex: -1))
 
       blk = BlockNode(
         parameters: params,
@@ -1148,6 +1149,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
         capturedEnv: initTable[string, MutableCell](),
         capturedEnvInitialized: true
       )
+      resolveLocalIndices(blk)
     else:
       parser.parseError("Expected <primitive selector: ...> syntax in method body")
       return nil
@@ -1163,6 +1165,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
     # Set parameters if we have keyword/binary selector params
     if params.len > 0:
       blk.parameters = params
+      resolveLocalIndices(blk)  # Re-resolve with method params
 
   # Generate appropriate message based on method type
   let arg1: Node = LiteralNode(value: NodeValue(kind: vkSymbol, symVal: selector))

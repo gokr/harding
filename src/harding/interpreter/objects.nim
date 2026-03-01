@@ -1,4 +1,4 @@
-import std/[tables, strutils, sequtils, math, hashes, logging]
+import std/[tables, strutils, sequtils, math, hashes]
 import ../core/types
 
 # ============================================================================
@@ -1022,7 +1022,7 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
   let paramName = "aValue"
 
   # Create the parameter node as an IdentNode
-  let paramNode = IdentNode(name: paramName)
+  let paramNode = IdentNode(name: paramName, localIndex: -1)
 
   # Create SlotAccessNode for the slot assignment
   let slotAccess = SlotAccessNode(

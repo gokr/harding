@@ -21,21 +21,30 @@ proc newActivation*(blk: BlockNode,
   result.currentMethod = blk
   result.definingObject = definingClass
   result.pc = 0
-  # Tables are already cleared by acquireActivation; just ensure they're empty
-  result.locals.clear()
-  result.capturedVars.clear()
+  # Tables are already cleared by releaseActivation/clearActivation; skip double-clear
   result.returnValue = nilValue()
   result.hasReturned = false
   result.isClassMethod = isClassMethod
   # wasCaptured already false from pool
 
-  # Initialize 'self' for all activations (blocks invoked as methods need self)
-  # For class methods, self should return the Class object, not the wrapper Instance
-  if isClassMethod and receiver != nil and receiver.class != nil:
-    # This is a class method - return the Class object
-    result.locals["self"] = receiver.class.toValue()
+  # Initialize indexed locals if the block has been resolved
+  let selfVal = if isClassMethod and receiver != nil and receiver.class != nil:
+                  receiver.class.toValue()
+                else:
+                  receiver.toValue()
+
+  if blk != nil and blk.localCount > 0:
+    # Use indexed locals for fast access
+    result.indexedLocals.setLen(blk.localCount)
+    result.indexedLocals[0] = selfVal  # self at index 0
+    # Params and temps initialized to nil; caller will bind params
+    for i in 1..<blk.localCount:
+      result.indexedLocals[i] = nilValue()
   else:
-    result.locals["self"] = receiver.toValue()
+    result.indexedLocals.setLen(0)
+
+  # Also keep self in locals table for backward compat
+  result.locals["self"] = selfVal
 
   # Initialize 'super' in locals for super sends (as Class)
   if definingClass != nil and definingClass.superclasses.len > 0:

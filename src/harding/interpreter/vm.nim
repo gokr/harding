@@ -1,4 +1,4 @@
-import std/[tables, strutils, math, strformat, logging, os, random]
+import std/[tables, strutils, math, strformat, os, random]
 import ../core/types
 import ../parser/lexer
 import ../parser/parser
@@ -162,7 +162,7 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
   pkgSources[] = initTable[string, string]()
   result = Interpreter(
     globals: new(Table[string, NodeValue]),
-    activationStack: @[],
+    activationStack: newSeqOfCap[Activation](128),
     currentActivation: nil,
     currentReceiver: nil,
     maxStackDepth: maxStackDepth,
@@ -170,7 +170,9 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
     lastResult: nilValue(),
     rootObject: nil,
     commandLineArgs: @[],
-    packageSources: pkgSources
+    packageSources: pkgSources,
+    workQueue: newSeqOfCap[WorkFrame](256),
+    evalStack: newSeqOfCap[NodeValue](128)
   )
 
   # Initialize the heap-allocated globals table
@@ -198,7 +200,7 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
 
   result = Interpreter(
     globals: globals,
-    activationStack: @[],
+    activationStack: newSeqOfCap[Activation](128),
     currentActivation: nil,
     currentReceiver: nil,
     maxStackDepth: maxStackDepth,
@@ -208,7 +210,9 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
     exceptionHandlers: @[],
     schedulerContextPtr: nil,
     commandLineArgs: @[],
-    packageSources: pkgSources
+    packageSources: pkgSources,
+    workQueue: newSeqOfCap[WorkFrame](256),
+    evalStack: newSeqOfCap[NodeValue](128)
   )
 
   # Use the shared root class and root object
@@ -451,7 +455,48 @@ proc lookupVariable*(interp: Interpreter, name: string): NodeValue =
   ## Look up variable (returns nilValue if not found)
   lookupVariableWithStatus(interp, name).value
 
+proc bindParam*(activation: Activation, paramIndex: int, value: NodeValue) {.inline.} =
+  ## Bind a parameter value to both indexed locals and the table.
+  ## paramIndex is 0-based parameter index; stored at indexedLocals[paramIndex + 1].
+  let idx = paramIndex + 1  # index 0 is self
+  if idx < activation.indexedLocals.len:
+    activation.indexedLocals[idx] = value
+
+proc bindTemp*(activation: Activation, tempIndex: int, paramCount: int, value: NodeValue) {.inline.} =
+  ## Initialize a temporary in indexed locals.
+  ## tempIndex is 0-based; stored at indexedLocals[1 + paramCount + tempIndex].
+  let idx = 1 + paramCount + tempIndex
+  if idx < activation.indexedLocals.len:
+    activation.indexedLocals[idx] = value
+
 # Variable assignment
+proc syncIndexedLocal(activation: Activation, name: string, value: NodeValue) {.inline.} =
+  ## When setting a variable by name, also update indexedLocals if applicable.
+  ## This keeps the indexed fast path in sync with the table-based locals.
+  if activation.indexedLocals.len == 0:
+    return
+  let blk = activation.currentMethod
+  if blk == nil:
+    return
+  # Check if it's "self" (index 0)
+  if name == "self":
+    activation.indexedLocals[0] = value
+    return
+  # Check parameters (indices 1..N)
+  for i, p in blk.parameters:
+    if p == name:
+      let idx = i + 1
+      if idx < activation.indexedLocals.len:
+        activation.indexedLocals[idx] = value
+      return
+  # Check temporaries (indices N+1..M)
+  for i, t in blk.temporaries:
+    if t == name:
+      let idx = blk.parameters.len + 1 + i
+      if idx < activation.indexedLocals.len:
+        activation.indexedLocals[idx] = value
+      return
+
 proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
   ## Set variable in current activation, captured environment, or create global
   debug("setVariable: name=", name, " activation=", $( interp.currentActivation != nil))
@@ -465,8 +510,8 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     if currentMethod != nil and currentMethod.capturedEnvInitialized:
       if currentMethod.capturedEnv.len > 0 and name in currentMethod.capturedEnv:
         currentMethod.capturedEnv[name].value = value
-        # Also update the local copy to keep them in sync
         interp.currentActivation.locals[name] = value
+        syncIndexedLocal(interp.currentActivation, name, value)
         return
 
     # Check capturedVars on the activation - if a child block captured this
@@ -474,6 +519,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     if name in interp.currentActivation.capturedVars:
       interp.currentActivation.capturedVars[name].value = value
       interp.currentActivation.locals[name] = value
+      syncIndexedLocal(interp.currentActivation, name, value)
       debug("setVariable: storing ", name, " in capturedVars cell")
       return
 
@@ -481,6 +527,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     if name in interp.currentActivation.locals:
       debug("setVariable: storing ", name, " in locals")
       interp.currentActivation.locals[name] = value
+      syncIndexedLocal(interp.currentActivation, name, value)
       return
 
     # Walk up the sender chain to find existing variable in outer scopes
@@ -492,6 +539,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
         if parentActivation.currentMethod.capturedEnv.len > 0 and name in parentActivation.currentMethod.capturedEnv:
           parentActivation.currentMethod.capturedEnv[name].value = value
           parentActivation.locals[name] = value
+          syncIndexedLocal(parentActivation, name, value)
           debug("Variable updated in parent captured env: ", name, " = ", value.toString())
           return
 
@@ -499,12 +547,14 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
       if name in parentActivation.capturedVars:
         parentActivation.capturedVars[name].value = value
         parentActivation.locals[name] = value
+        syncIndexedLocal(parentActivation, name, value)
         debug("Variable updated in parent capturedVars: ", name, " = ", value.toString())
         return
 
       # Check locals in parent
       if name in parentActivation.locals:
         parentActivation.locals[name] = value
+        syncIndexedLocal(parentActivation, name, value)
         debug("Variable updated in parent activation: ", name, " = ", value.toString())
         return
 
@@ -824,6 +874,7 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
     let paramName = currentMethod.parameters[i]
     let argValue = arguments[i]
     activation.locals[paramName] = argValue
+    activation.bindParam(i, argValue)
 
   if currentMethod.isMethod and currentMethod.capturedEnvInitialized:
     currentMethod.capturedEnv.clear()
@@ -923,6 +974,7 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg
+    activation.bindParam(0, arg)
 
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
@@ -965,8 +1017,10 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
+    activation.bindParam(0, arg1)
   if blockNode.parameters.len > 1:
     activation.locals[blockNode.parameters[1]] = arg2
+    activation.bindParam(1, arg2)
 
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
@@ -1010,10 +1064,13 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
+    activation.bindParam(0, arg1)
   if blockNode.parameters.len > 1:
     activation.locals[blockNode.parameters[1]] = arg2
+    activation.bindParam(1, arg2)
   if blockNode.parameters.len > 2:
     activation.locals[blockNode.parameters[2]] = arg3
+    activation.bindParam(2, arg3)
 
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
@@ -1090,6 +1147,7 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
 
   for i in 0..<blockNode.parameters.len:
     activation.locals[blockNode.parameters[i]] = args[i]
+    activation.bindParam(i, args[i])
 
   for tempName in blockNode.temporaries:
     if tempName notin activation.locals:
@@ -1123,13 +1181,15 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
         if name in activation.locals and name in blockNode.capturedEnv:
           blockNode.capturedEnv[name].value = activation.locals[name]
 
-    # Also update parent activation's captured variables
+    # Also update parent activation's captured variables (both table and indexed)
     if savedActivation != nil:
       var parent = savedActivation
       while parent != nil:
         for name in capturedVarNames:
           if name in parent.locals and name in activation.locals:
-            parent.locals[name] = activation.locals[name]
+            let val = activation.locals[name]
+            parent.locals[name] = val
+            syncIndexedLocal(parent, name, val)
         parent = parent.sender
 
   finally:
@@ -3988,11 +4048,11 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     let source = readFile(actualBootstrapFile)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      warn("Failed to load bootstrap file ", actualBootstrapFile, ": ", err)
+      stderr.writeLine("WARNING: Failed to load bootstrap file ", actualBootstrapFile, ": ", err)
     else:
       debug("Successfully loaded bootstrap: ", actualBootstrapFile)
   else:
-    warn("Bootstrap file not found: ", actualBootstrapFile)
+    stderr.writeLine("WARNING: Bootstrap file not found: ", actualBootstrapFile)
 
   # Set up class caches for primitive types
   if "Number" in interp.globals[]:
@@ -5415,12 +5475,13 @@ proc newDiscardFrame*(): WorkFrame =
   result.kind = wfAfterArg
   result.pendingSelector = "discard"
 
-proc newAssignFrame*(variable: string): WorkFrame =
+proc newAssignFrame*(variable: string, localIndex: int = -1): WorkFrame =
   ## Create a work frame for variable assignment continuation
   result = acquireFrame()
   result.kind = wfAfterArg
   result.pendingSelector = "__assign__"
   result.selector = variable
+  result.argCount = localIndex  # Reuse argCount to store local index for fast path
   result.pendingArgs = @[]
   result.currentArgIndex = 0
 
@@ -5511,6 +5572,12 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
 
   of nkIdent:
     let ident = cast[IdentNode](node)
+    # Fast path: indexed local access (O(1) instead of hash table lookup)
+    if ident.localIndex >= 0 and interp.currentActivation != nil and
+       ident.localIndex < interp.currentActivation.indexedLocals.len:
+      interp.pushValue(interp.currentActivation.indexedLocals[ident.localIndex])
+      return true
+    # Slow path: name-based lookup
     let value = lookupVariable(interp, ident.name)
     interp.pushValue(value)
     return true
@@ -5572,7 +5639,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     # Variable assignment: evaluate expression, then assign
     let assign = cast[AssignNode](node)
     # Push continuation frame to handle assignment after expression is evaluated
-    interp.pushWorkFrame(newAssignFrame(assign.variable))
+    interp.pushWorkFrame(newAssignFrame(assign.variable, assign.localIndex))
     # Evaluate expression
     interp.pushWorkFrame(newEvalFrame(assign.expression))
     return true
@@ -5865,6 +5932,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Special case: assignment continuation
     if frame.pendingSelector == "__assign__":
       let value = interp.popValue()
+      # Fast path: indexed local assignment
+      let localIdx = frame.argCount  # localIndex stored in argCount
+      if localIdx >= 0 and interp.currentActivation != nil and
+         localIdx < interp.currentActivation.indexedLocals.len:
+        interp.currentActivation.indexedLocals[localIdx] = value
+        interp.currentActivation.locals[frame.selector] = value
+        interp.pushValue(value)
+        return true
+      # Slow path: name-based assignment
       setVariable(interp, frame.selector, value)
       interp.pushValue(value)
       return true
@@ -6248,6 +6324,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Bind parameters
         for i in 0..<currentMethod.parameters.len:
           activation.locals[currentMethod.parameters[i]] = args[i]
+          activation.bindParam(i, args[i])
 
         # Initialize temporaries
         for tempName in currentMethod.temporaries:
@@ -6326,6 +6403,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
           for i in 0..<currentMethod.parameters.len:
             activation.locals[currentMethod.parameters[i]] = args[i]
+            activation.bindParam(i, args[i])
 
           for tempName in currentMethod.temporaries:
             if tempName notin activation.locals:
@@ -6407,6 +6485,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
             for i in 0..<classMethodToRun.parameters.len:
               activation.locals[classMethodToRun.parameters[i]] = args[i]
+              activation.bindParam(i, args[i])
 
             for tempName in classMethodToRun.temporaries:
               if tempName notin activation.locals:
@@ -6660,6 +6739,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Bind parameters
     for i in 0..<currentMethod.parameters.len:
       activation.locals[currentMethod.parameters[i]] = args[i]
+      activation.bindParam(i, args[i])
 
     # Save current receiver to restore after method completes
     let savedReceiver = interp.currentReceiver
@@ -6719,9 +6799,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       for name, cell in blockNode.capturedEnv:
         activation.locals[name] = cell.value
 
-    # Bind parameters
+    # Bind parameters (both indexed and table-based)
     for i in 0..<blockNode.parameters.len:
       activation.locals[blockNode.parameters[i]] = args[i]
+      # Also store in indexed locals at index i+1 (0 is self)
+      let idx = i + 1
+      if idx < activation.indexedLocals.len:
+        activation.indexedLocals[idx] = args[i]
 
     # Initialize temporaries
     for tempName in blockNode.temporaries:
@@ -7230,10 +7314,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfWhileLoop:
     # Handle while loop (whileTrue: or whileFalse:)
+    # Reuses the current frame by mutating loopState and re-pushing
     case frame.loopState
     of lsEvaluateCondition:
-      # Push frame to check condition after it's evaluated
-      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsCheckCondition))
+      # Reuse frame for next state
+      frame.loopState = lsCheckCondition
+      frame.skipRelease = true
+      interp.pushWorkFrame(frame)
       frame.conditionBlock.homeActivation = interp.currentActivation
       if interp.currentActivation != nil:
         interp.currentActivation.wasCaptured = true
@@ -7246,8 +7333,10 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       let shouldContinue = if frame.loopKind: condBool else: not condBool
       discard interp.popValue()  # Clean up condition result
       if shouldContinue:
-        # Continue loop - execute body
-        interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsExecuteBody))
+        # Continue loop - reuse frame for body execution
+        frame.loopState = lsExecuteBody
+        frame.skipRelease = true
+        interp.pushWorkFrame(frame)
         # Update body block home activation for this invocation
         if interp.currentActivation != nil and not interp.currentActivation.hasReturned:
           frame.bodyBlock.homeActivation = interp.currentActivation
@@ -7258,13 +7347,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         interp.pushValue(nilValue())
       return true
     of lsExecuteBody:
-      # Transition to lsLoopBody state (will be used after body completes)
-      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsLoopBody))
+      # Transition to lsLoopBody state - reuse frame
+      frame.loopState = lsLoopBody
+      frame.skipRelease = true
+      interp.pushWorkFrame(frame)
       return true
     of lsLoopBody:
       # Body completed - discard body result and loop back to condition
       discard interp.popValue()
-      
+
       # Check if the body's home activation (the method) has returned
       # This handles the case where a nested block did a non-local return
       debug("lsLoopBody: bodyBlock.homeActivation=", if frame.bodyBlock.homeActivation != nil: $cast[int](frame.bodyBlock.homeActivation) else: "nil")
@@ -7273,8 +7364,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         if frame.bodyBlock.homeActivation.hasReturned:
           debug("lsLoopBody: non-local return detected in home activation, exiting loop")
           return true
-      
-      interp.pushWorkFrame(newWhileLoopFrame(frame.loopKind, frame.conditionBlock, frame.bodyBlock, lsEvaluateCondition))
+
+      # Loop back - reuse frame
+      frame.loopState = lsEvaluateCondition
+      frame.skipRelease = true
+      interp.pushWorkFrame(frame)
       return true
     of lsDone:
       return true
@@ -7360,27 +7454,36 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
         else:
           handleContinuation(interp, frame)
 
-      # Release frame back to pool for reuse
-      releaseFrame(frame)
+      # Release frame back to pool (unless it was re-pushed onto the queue)
+      if frame.skipRelease:
+        frame.skipRelease = false
+      else:
+        releaseFrame(frame)
 
       if not shouldContinue:
         break
     except ResumeException:
       # Resume was called - work queue and eval stack already restored
       # Just continue processing the restored work queue
-      releaseFrame(frame)
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
       debug("VM: ResumeException caught, continuing with restored work queue")
     except DivByZeroDefect as e:
-      releaseFrame(frame)
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
       # Convert Nim DivByZeroDefect to Harding DivisionByZero exception
       signalExceptionByName(interp, "DivisionByZero", e.msg)
       # Continue processing - signalExceptionByName schedules the handler
       continue
     except ValueError as e:
-      releaseFrame(frame)
+      if not frame.skipRelease:
+        releaseFrame(frame)
       return VMResult(status: vmError, error: e.msg)
     except Exception as e:
-      releaseFrame(frame)
+      if not frame.skipRelease:
+        releaseFrame(frame)
       return VMResult(status: vmError, error: "VM error: " & e.msg)
 
   # Execution complete
@@ -7407,8 +7510,9 @@ proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue =
   let savedEvalStack = interp.evalStack
 
   # Initialize fresh VM state for this evaluation
-  interp.workQueue = @[newEvalFrame(node)]
-  interp.evalStack = @[]
+  interp.workQueue = newSeqOfCap[WorkFrame](64)
+  interp.workQueue.add(newEvalFrame(node))
+  interp.evalStack = newSeqOfCap[NodeValue](32)
 
   # Run the VM
   let vmResult = interp.runASTInterpreter()

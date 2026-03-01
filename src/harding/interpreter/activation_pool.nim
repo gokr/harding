@@ -5,7 +5,7 @@
 ## returns) or stored in an ExceptionContext are pooled.  Captured activations
 ## have wasCaptured == true and are left to ARC's normal lifecycle.
 
-import std/[tables, logging]
+import std/[tables]
 import ../core/types
 
 const
@@ -30,6 +30,7 @@ proc clearActivation*(act: Activation) =
   act.definingObject = nil
   act.pc = 0
   act.locals.clear()
+  act.indexedLocals.setLen(0)
   act.capturedVars.clear()
   act.returnValue = NodeValue(kind: vkNil)
   act.hasReturned = false
