@@ -267,6 +267,7 @@ SystemBrowser>>inferCategoriesFor: aClassName [
     categories add: "all".
     categories add: "defined".
     categories add: "inherited".
+    categories add: "class".
     ^ categories
 ]
 
@@ -326,7 +327,12 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
                     ]
                 ]
             ] ifFalse: [
-                methods do: [:selector | rawNames add: selector ]
+                (aCategory = "class") ifTrue: [
+                    # Show class-side methods
+                    classObj allClassMethods do: [:selector | rawNames add: selector ]
+                ] ifFalse: [
+                    methods do: [:selector | rawNames add: selector ]
+                ]
             ]
         ]
     ].
