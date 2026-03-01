@@ -86,25 +86,9 @@ String>>startsWith: prefix <primitive primitiveStartsWith: prefix>
 
 String>>endsWith: suffix <primitive primitiveEndsWith: suffix>
 
-String>>banana2 [
 
-^ "banana2"
-]
 
-String>>gurka [
 
-^ 4
-]
-
-String>>burp [
-
-^ 99
-]
-
-String>>pup [
-
-^ "pup"
-]
 
 String>>pup [
 # H
@@ -127,9 +111,6 @@ String>>newMesthod [
 ^ 3
 ]
 
-String>>pupp [
-	^ 99
-]
 
 String>>pupp [
 	^ 99
@@ -148,17 +129,15 @@ String>>pupp [
 ^ nil
 ]
 
-String>>newMethod [
-
-^ nil
-]
 
 String>>newMethod [
 
 ^ nil
 ]
 
-String>>newwMesthod [
-# HWat
+
+
+String>>banana4 [
+
 ^ nil
 ]

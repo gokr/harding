@@ -22,6 +22,7 @@ import ./textbuffer
 import ./label
 import ./sourceview
 import ./eventcontroller
+import ./alertdialog
 
 ## Forward declarations
 proc initGtkBridge*(interp: var Interpreter)
@@ -232,6 +233,16 @@ proc initGtkBridge*(interp: var Interpreter) =
   buttonClickedMethod.hasInterpreterParam = true
   addMethodToClass(buttonCls, "clicked:", buttonClickedMethod)
 
+  let buttonIconNameMethod = createCoreMethod("iconName:")
+  buttonIconNameMethod.nativeImpl = cast[pointer](buttonSetIconNameImpl)
+  buttonIconNameMethod.hasInterpreterParam = true
+  addMethodToClass(buttonCls, "iconName:", buttonIconNameMethod)
+
+  let buttonLabelIconMethod = createCoreMethod("label:iconName:")
+  buttonLabelIconMethod.nativeImpl = cast[pointer](buttonSetLabelAndIconImpl)
+  buttonLabelIconMethod.hasInterpreterParam = true
+  addMethodToClass(buttonCls, "label:iconName:", buttonLabelIconMethod)
+
   interp.globals[]["GtkButton"] = buttonCls.toValue()
   debug("Registered GtkButton class")
 
@@ -435,6 +446,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   sourceViewSetTabWidthMethod.hasInterpreterParam = true
   addMethodToClass(sourceViewCls, "setTabWidth:", sourceViewSetTabWidthMethod)
 
+  let sourceViewBufferMethod = createCoreMethod("buffer")
+  sourceViewBufferMethod.nativeImpl = cast[pointer](sourceViewBufferImpl)
+  sourceViewBufferMethod.hasInterpreterParam = true
+  addMethodToClass(sourceViewCls, "buffer", sourceViewBufferMethod)
+
   interp.globals[]["GtkSourceView"] = sourceViewCls.toValue()
   debug("Registered GtkSourceView class")
 
@@ -502,8 +518,34 @@ proc initGtkBridge*(interp: var Interpreter) =
   textBufferDeleteToMethod.hasInterpreterParam = true
   addMethodToClass(textBufferCls, "delete:to:", textBufferDeleteToMethod)
 
+  let textBufferChangedMethod = createCoreMethod("changed:")
+  textBufferChangedMethod.nativeImpl = cast[pointer](textBufferChangedImpl)
+  textBufferChangedMethod.hasInterpreterParam = true
+  addMethodToClass(textBufferCls, "changed:", textBufferChangedMethod)
+
   interp.globals[]["GtkTextBuffer"] = textBufferCls.toValue()
   debug("Registered GtkTextBuffer class")
+
+  when not defined(gtk3):
+    # Create AlertDialog class (GTK4 only)
+    let alertDialogCls = newClass(superclasses = @[objectClass], name = "GtkAlertDialog")
+    alertDialogCls.tags = @["GTK", "AlertDialog", "Dialog"]
+    alertDialogCls.isNimProxy = true
+    alertDialogCls.hardingType = "GtkAlertDialog"
+
+    # Add AlertDialog class methods
+    let alertDialogShowMethod = createCoreMethod("showAlertDialog:message:onResponse:")
+    alertDialogShowMethod.nativeImpl = cast[pointer](alertDialogShowImpl)
+    alertDialogShowMethod.hasInterpreterParam = true
+    addMethodToClass(alertDialogCls, "showAlertDialog:message:onResponse:", alertDialogShowMethod, isClassMethod = true)
+
+    let alertDialogConfirmMethod = createCoreMethod("showConfirmDialog:message:onYes:onNo:")
+    alertDialogConfirmMethod.nativeImpl = cast[pointer](alertDialogConfirmImpl)
+    alertDialogConfirmMethod.hasInterpreterParam = true
+    addMethodToClass(alertDialogCls, "showConfirmDialog:message:onYes:onNo:", alertDialogConfirmMethod, isClassMethod = true)
+
+    interp.globals[]["GtkAlertDialog"] = alertDialogCls.toValue()
+    debug("Registered GtkAlertDialog class")
 
   when defined(gtk3):
     # Create MenuItem class (GTK3 only)

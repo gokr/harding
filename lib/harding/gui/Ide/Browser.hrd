@@ -4,7 +4,7 @@
 # With a source pane at the bottom for viewing/editing code
 # ============================================================================
 
-SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner)
+SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource)
 
 SystemBrowser>>initialize [
     currentLibrary := nil.
@@ -19,7 +19,85 @@ SystemBrowser>>initialize [
     currentMethodEndLine := nil.
     currentMethodHasBlock := false.
     owner := nil.
+    sourceModified := false.
+    originalSource := nil.
     ^ self
+]
+
+SystemBrowser>>markSourceClean [
+    sourceModified := false.
+    originalSource := sourceView text.
+]
+
+SystemBrowser>>markSourceModified [
+    sourceModified := true.
+]
+
+SystemBrowser>>hasUnsavedChanges [
+    ^ sourceModified and: [
+        originalSource notNil and: [
+            (sourceView text) ~= originalSource
+        ]
+    ]
+]
+
+SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
+    | dialog box label yesButton noButton buttonBox |
+    dialog := GtkWindow new.
+    dialog title: "Confirm".
+    dialog setDefaultSize: 400 height: 140.
+    dialog modal: true.
+    
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    
+    label := GtkLabel new: message.
+    label halignStart.
+    label wrap: true.
+    
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 8.
+    buttonBox halignEnd.
+    
+    noButton := GtkButton newLabel: "No".
+    noButton clicked: [
+        dialog close.
+        noBlock value
+    ].
+    
+    yesButton := GtkButton newLabel: "Yes".
+    yesButton addCssClass: "suggested-action".
+    yesButton clicked: [
+        dialog close.
+        yesBlock value
+    ].
+    
+    buttonBox append: noButton.
+    buttonBox append: yesButton.
+    
+    dialog setChild: box.
+    box append: label.
+    box append: buttonBox.
+    dialog present.
+]
+
+SystemBrowser>>checkUnsavedChangesThen: continueBlock [
+    self hasUnsavedChanges ifTrue: [
+        self showConfirmationDialog: "You have unsaved changes. Discard them?"
+            onYes: [
+                self markSourceClean.
+                continueBlock value
+            ]
+            onNo: [
+                # User chose not to discard, do nothing
+            ]
+    ] ifFalse: [
+        continueBlock value
+    ]
 ]
 
 SystemBrowser class>>open [
@@ -117,7 +195,7 @@ SystemBrowser>>openWindowFor: anOwner [
 ]
 
 SystemBrowser>>createSourceView [
-    | scrolled |
+    | scrolled buffer |
     scrolled := GtkScrolledWindow new.
     scrolled vexpand: true.
     scrolled hexpand: true.
@@ -130,6 +208,10 @@ SystemBrowser>>createSourceView [
 
     sourceView enableKeyboardShortcuts.
     sourceView onControlKey: "s" do: [ self saveCurrentMethod ].
+    
+    # Track modifications when user types
+    buffer := sourceView buffer.
+    buffer changed: [ self markSourceModified ].
 
     sourceScrolled := scrolled.
     scrolled setChild: sourceView.
@@ -193,29 +275,34 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 ]
 
 SystemBrowser>>selectClass: aClassName [
-    currentClass := aClassName.
-    Transcript showCr: ("Selected class: " , aClassName).
+    | targetClass |
+    targetClass := aClassName.
+    
+    self checkUnsavedChangesThen: [
+        currentClass := targetClass.
+        Transcript showCr: ("Selected class: " , targetClass).
 
-    currentMethod := nil.
-    currentMethodFile := nil.
-    currentMethodOwnerClass := nil.
-    currentMethodHeader := nil.
-    currentMethodStartLine := nil.
-    currentMethodEndLine := nil.
-    currentMethodHasBlock := false.
+        currentMethod := nil.
+        currentMethodFile := nil.
+        currentMethodOwnerClass := nil.
+        currentMethodHeader := nil.
+        currentMethodStartLine := nil.
+        currentMethodEndLine := nil.
+        currentMethodHasBlock := false.
 
-    categoryPane clear.
-    methodPane clear.
+        categoryPane clear.
+        methodPane clear.
 
-    self populateCategoriesFor: aClassName.
+        self populateCategoriesFor: targetClass.
 
-    currentCategory := "all".
-    Transcript showCr: "Auto-selecting category: all".
-    [ self populateMethodsFor: aClassName category: currentCategory ]
-        on: Exception
-        do: [:ex |
-            Transcript showCr: ("selectClass auto-populate error: " , ex printString)
-        ].
+        currentCategory := "all".
+        Transcript showCr: "Auto-selecting category: all".
+        [ self populateMethodsFor: targetClass category: currentCategory ]
+            on: Exception
+            do: [:ex |
+                Transcript showCr: ("selectClass auto-populate error: " , ex printString)
+            ]
+    ]
 ]
 
 SystemBrowser>>populateCategoriesFor: aClassName [
@@ -272,20 +359,25 @@ SystemBrowser>>inferCategoriesFor: aClassName [
 ]
 
 SystemBrowser>>selectCategory: aCategory [
-    currentCategory := aCategory.
-    Transcript showCr: ("Selected category: " , aCategory).
+    | targetCategory |
+    targetCategory := aCategory.
+    
+    self checkUnsavedChangesThen: [
+        currentCategory := targetCategory.
+        Transcript showCr: ("Selected category: " , targetCategory).
 
-    Transcript showCr: "Clearing method pane".
-    methodPane clear.
-    Transcript showCr: "Method pane cleared".
+        Transcript showCr: "Clearing method pane".
+        methodPane clear.
+        Transcript showCr: "Method pane cleared".
 
-    Transcript showCr: "Populating methods".
-    [ self populateMethodsFor: currentClass category: aCategory ]
-        on: Exception
-        do: [:ex |
-            Transcript showCr: ("selectCategory error: " , ex printString)
-        ].
-    Transcript showCr: "Finished populateMethodsFor call".
+        Transcript showCr: "Populating methods".
+        [ self populateMethodsFor: currentClass category: targetCategory ]
+            on: Exception
+            do: [:ex |
+                Transcript showCr: ("selectCategory error: " , ex printString)
+            ].
+        Transcript showCr: "Finished populateMethodsFor call".
+    ]
 ]
 
 SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
@@ -357,9 +449,14 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
 ]
 
 SystemBrowser>>selectMethod: aMethodName [
-    currentMethod := aMethodName.
-    Transcript showCr: ("Selected method: " , aMethodName).
-    self showMethodSource: aMethodName.
+    | targetMethod |
+    targetMethod := aMethodName.
+    
+    self checkUnsavedChangesThen: [
+        currentMethod := targetMethod.
+        Transcript showCr: ("Selected method: " , targetMethod).
+        self showMethodSource: targetMethod
+    ]
 ]
 
 SystemBrowser>>methodSourceInfoFor: aMethodName [
@@ -600,7 +697,8 @@ SystemBrowser>>linesToText: lines [
 
 SystemBrowser>>updateSourceView: aString [
     sourceView notNil ifTrue: [
-        sourceView text: aString
+        sourceView text: aString.
+        self markSourceClean
     ]
 ]
 
@@ -678,28 +776,30 @@ SystemBrowser>>createNewMethod [
         ^ self
     ].
 
-    resolvedFile := self resolveMethodFileForCurrentClass.
-    currentMethodFile := resolvedFile.
+    self checkUnsavedChangesThen: [
+        resolvedFile := self resolveMethodFileForCurrentClass.
+        currentMethodFile := resolvedFile.
 
-    currentMethodFile isNil ifTrue: [
-        Transcript showCr: "No .hrd file found for class; cannot create new method".
-        ^ self
-    ].
+        currentMethodFile isNil ifTrue: [
+            Transcript showCr: "No .hrd file found for class; cannot create new method".
+            ^ self
+        ].
 
-    currentMethodOwnerClass := currentClass.
-    currentMethod := "newMethod".
-    currentMethodHeader := currentClass , ">>newMethod".
-    currentMethodSuffix := "".
-    currentMethodStartLine := nil.
-    currentMethodEndLine := nil.
-    currentMethodHasBlock := true.
+        currentMethodOwnerClass := currentClass.
+        currentMethod := "newMethod".
+        currentMethodHeader := currentClass , ">>newMethod".
+        currentMethodSuffix := "".
+        currentMethodStartLine := nil.
+        currentMethodEndLine := nil.
+        currentMethodHasBlock := true.
 
-    self updateSourceView: "newMethod" , "\n\n^ nil".
-    Transcript showCr: ("Created new method stub for " , currentClass , " in " , currentMethodFile).
+        self updateSourceView: "newMethod" , "\n\n^ nil".
+        Transcript showCr: ("Created new method stub for " , currentClass , " in " , currentMethodFile).
+    ]
 ]
 
 SystemBrowser>>deleteCurrentMethod [
-    | fileText lines before after allLines savedText index confirmMessage |
+    | confirmMessage |
 
     currentMethod isNil ifTrue: [
         Transcript showCr: "No method selected to delete".
@@ -722,43 +822,52 @@ SystemBrowser>>deleteCurrentMethod [
     ].
 
     confirmMessage := "Delete method " , currentClass , ">>" , currentMethod , "?".
+    
+    self showConfirmationDialog: confirmMessage
+        onYes: [
+            | fileText lines before after allLines savedText index |
+            
+            fileText := File readAll: currentMethodFile.
+            lines := fileText split: "\n".
 
-    fileText := File readAll: currentMethodFile.
-    lines := fileText split: "\n".
+            before := Array new.
+            after := Array new.
 
-    before := Array new.
-    after := Array new.
+            index := 0.
+            [ index < (currentMethodStartLine - 1) ] whileTrue: [
+                before add: (lines at: index).
+                index := index + 1
+            ].
 
-    index := 0.
-    [ index < (currentMethodStartLine - 1) ] whileTrue: [
-        before add: (lines at: index).
-        index := index + 1
-    ].
+            index := currentMethodEndLine.
+            [ index < lines size ] whileTrue: [
+                after add: (lines at: index).
+                index := index + 1
+            ].
 
-    index := currentMethodEndLine.
-    [ index < lines size ] whileTrue: [
-        after add: (lines at: index).
-        index := index + 1
-    ].
+            allLines := Array new.
+            allLines addAll: before.
+            allLines addAll: after.
 
-    allLines := Array new.
-    allLines addAll: before.
-    allLines addAll: after.
+            savedText := self linesToText: allLines.
+            File write: savedText to: currentMethodFile.
 
-    savedText := self linesToText: allLines.
-    File write: savedText to: currentMethodFile.
+            self removeMethodFromClass: currentMethod.
 
-    self removeMethodFromClass: currentMethod.
+            Transcript showCr: ("Deleted method " , currentClass , ">>" , currentMethod).
 
-    Transcript showCr: ("Deleted method " , currentClass , ">>" , currentMethod).
+            currentMethod := nil.
+            currentMethodHeader := nil.
+            currentMethodStartLine := nil.
+            currentMethodEndLine := nil.
 
-    currentMethod := nil.
-    currentMethodHeader := nil.
-    currentMethodStartLine := nil.
-    currentMethodEndLine := nil.
-
-    self updateSourceView: "Method deleted. Select another method or create new.".
-    self populateMethodsFor: currentClass category: currentCategory.
+            self updateSourceView: "Method deleted. Select another method or create new.".
+            self populateMethodsFor: currentClass category: currentCategory
+        ]
+        onNo: [
+            # User cancelled, do nothing
+            Transcript showCr: "Delete cancelled"
+        ]
 ]
 
 SystemBrowser>>removeMethodFromClass: aSelector [

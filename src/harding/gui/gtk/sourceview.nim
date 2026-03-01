@@ -4,7 +4,6 @@
 
 import std/[logging, tables]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 import ./textbuffer
@@ -35,7 +34,7 @@ proc initSourceView*() =
 proc sourceViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Create a new source view with Harding syntax highlighting
   let widget = gtkSourceViewNew()
-  let proxy = newGtkSourceViewProxy(widget, addr(interp))
+  discard newGtkSourceViewProxy(widget, addr(interp))
 
   # Configure the source view
   gtkSourceViewSetShowLineNumbers(widget, 1)
@@ -210,4 +209,32 @@ proc sourceViewSetTabWidthImpl*(interp: var Interpreter, self: Instance, args: s
 
   let widget = cast[GtkSourceView](self.nimValue)
   gtkSourceViewSetTabWidth(widget, args[0].intVal.cuint)
+  return nilValue()
+
+## Native instance method: buffer
+proc sourceViewBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Get the text buffer from the source view
+  if not (self.isNimProxy and self.nimValue != nil):
+    return nilValue()
+
+  let widget = cast[GtkSourceView](self.nimValue)
+  let buffer = gtkTextViewGetBuffer(cast[GtkTextView](widget))
+  if buffer == nil:
+    return nilValue()
+
+  # Return the existing GtkTextBuffer proxy for this buffer
+  # First check if we already have a proxy for this buffer
+  if "GtkTextBuffer" in interp.globals[]:
+    let val = interp.globals[]["GtkTextBuffer"]
+    if val.kind == vkClass:
+      let cls = val.classVal
+      let obj = newInstance(cls)
+      obj.isNimProxy = true
+      
+      # Create or get the buffer proxy
+      let proxy = newGtkTextBufferProxy(buffer, addr(interp))
+      GC_ref(cast[ref RootObj](proxy))
+      obj.nimValue = cast[pointer](proxy)
+      return obj.toValue()
+
   return nilValue()

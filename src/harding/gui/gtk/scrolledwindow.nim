@@ -4,7 +4,6 @@
 
 import std/[logging, tables]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -31,7 +30,7 @@ proc scrolledWindowNewImpl*(interp: var Interpreter, self: Instance, args: seq[N
   else:
     let widget = gtkScrolledWindowNew(nil, nil)
 
-  let proxy = newGtkScrolledWindowProxy(widget, addr(interp))
+  discard newGtkScrolledWindowProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkScrolledWindow" in interp.globals[]:

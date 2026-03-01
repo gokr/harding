@@ -52,7 +52,7 @@ Launcher>>createHeaderBar [
   # Toolbar buttons with icons
   # Workspace button - text editor icon
   workspaceButton := GtkButton new.
-  workspaceButton label: "📝 Workspace".
+  workspaceButton label: "Workspace" iconName: "text-editor".
   workspaceButton vexpand: false.
   workspaceButton hexpand: false.
   workspaceButton clicked: [ self openWorkspace ].
@@ -64,7 +64,7 @@ Launcher>>createHeaderBar [
 
   # Transcript button - terminal/info icon  
   transcriptButton := GtkButton new.
-  transcriptButton label: "📋 Transcript".
+  transcriptButton label: "Transcript" iconName: "utilities-terminal".
   transcriptButton vexpand: false.
   transcriptButton hexpand: false.
   transcriptButton clicked: [ self openTranscript ].
@@ -76,7 +76,7 @@ Launcher>>createHeaderBar [
 
   # Browser button - search/explore icon
   browserButton := GtkButton new.
-  browserButton label: "🔍 Browser".
+  browserButton label: "Browser" iconName: "system-search".
   browserButton vexpand: false.
   browserButton hexpand: false.
   browserButton clicked: [ self openBrowser ].
@@ -90,7 +90,7 @@ Launcher>>createHeaderBar [
 
   # Quit button - exit icon (right side)
   quitButton := GtkButton new.
-  quitButton label: "🚪 Quit".
+  quitButton label: "Quit" iconName: "application-exit".
   quitButton vexpand: false.
   quitButton hexpand: false.
   quitButton clicked: [ self quit ].

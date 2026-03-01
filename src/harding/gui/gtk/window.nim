@@ -4,16 +4,8 @@
 
 import std/[logging, tables]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
-
-## Forward declaration for getGtkApplication (defined in bridge.nim)
-## Using proc type and cast to avoid circular imports
-proc getGtkApplicationImpl(): GtkApplication {.nimcall.} =
-  ## Forward declaration - implementation is in bridge.nim
-  ## This function is called via the global function pointer below
-  nil
 
 ## Global function pointer set during bridge initialization
 var getGtkApplicationPtr {.global.}: proc(): GtkApplication {.nimcall.} = nil

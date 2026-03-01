@@ -4,7 +4,6 @@
 
 import std/[logging, tables]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 import ./textbuffer
@@ -28,7 +27,7 @@ proc newGtkTextViewProxy*(widget: GtkTextView, interp: ptr Interpreter): GtkText
 proc textViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Create a new text view
   let widget = gtkTextViewNew()
-  let proxy = newGtkTextViewProxy(widget, addr(interp))
+  discard newGtkTextViewProxy(widget, addr(interp))
 
   var cls: Class = nil
   if "GtkTextView" in interp.globals[]:
@@ -104,27 +103,25 @@ proc textViewGetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[N
 
   let widget = cast[GtkTextView](self.nimValue)
 
-  let buffer = gtkTextViewGetBuffer(widget)
+  var buffer = gtkTextViewGetBuffer(widget)
   if buffer == nil:
-    let newBuffer = gtkTextBufferNew()
-    gtkTextViewSetBuffer(widget, newBuffer)
+    buffer = gtkTextBufferNew()
+    gtkTextViewSetBuffer(widget, buffer)
 
-    var cls: Class = nil
-    if "GtkTextBuffer" in interp.globals[]:
-      let val = interp.globals[]["GtkTextBuffer"]
-      if val.kind == vkClass:
-        cls = val.classVal
-    if cls == nil:
-      cls = objectClass
+  var cls: Class = nil
+  if "GtkTextBuffer" in interp.globals[]:
+    let val = interp.globals[]["GtkTextBuffer"]
+    if val.kind == vkClass:
+      cls = val.classVal
+  if cls == nil:
+    cls = objectClass
 
-    let wrapper = newGtkTextBufferProxy(newBuffer, addr(interp))
-    let obj = newInstance(cls)
-    obj.isNimProxy = true
-    obj.nimValue = cast[pointer](wrapper)
-    GC_ref(cast[ref RootObj](wrapper))
-    return obj.toValue()
-
-  nilValue()
+  let wrapper = newGtkTextBufferProxy(buffer, addr(interp))
+  let obj = newInstance(cls)
+  obj.isNimProxy = true
+  obj.nimValue = cast[pointer](wrapper)
+  GC_ref(cast[ref RootObj](wrapper))
+  return obj.toValue()
 
 ## Native instance method: setBuffer:
 proc textViewSetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
@@ -293,7 +290,7 @@ proc textViewGetSelectionEndImpl*(interp: var Interpreter, self: Instance, args:
   let endIter = cast[GtkTextIter](addr(endIterStorage[0]))
   let startIter = cast[GtkTextIter](addr(startIterStorage[0]))
 
-  let hasSelection = gtkTextBufferGetSelectionBounds(buffer, startIter, endIter)
+  discard gtkTextBufferGetSelectionBounds(buffer, startIter, endIter)
 
   # Use the cursor position (insert mark) as reference
   let insertMark = gtkTextBufferGetInsert(buffer)

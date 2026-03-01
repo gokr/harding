@@ -119,7 +119,7 @@ proc widgetOnKeyModifiersDoImpl*(interp: var Interpreter, self: Instance, args: 
     proxy = controllerTable[widget]
   else:
     # First handler - install the controller
-    let result = widgetInstallKeyControllerImpl(interp, self, @[])
+    let controllerResult = widgetInstallKeyControllerImpl(interp, self, @[])
     if widget notin controllerTable:
       warn("Failed to install key controller")
       return nilValue()

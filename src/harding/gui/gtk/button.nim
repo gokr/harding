@@ -2,11 +2,14 @@
 ## GtkButtonProxy - Button widget wrapper
 ## ============================================================================
 
-import std/[logging, tables]
+import std/tables
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
+
+when not defined(gtk3):
+  # GTK4 only: set child widget for button
+  proc gtkButtonSetChild*(button: GtkButton, child: GtkWidget) {.cdecl, importc: "gtk_button_set_child".}
 
 ## GtkButtonProxy extends GtkWidgetProxy
 type
@@ -117,5 +120,50 @@ proc buttonClickedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
   let gObject = cast[GObject](widget)
   discard gSignalConnect(gObject, "clicked",
                          cast[GCallback](signalCallbackProc), nil)
+
+  nilValue()
+
+## Native method: iconName:
+proc buttonSetIconNameImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set icon name for the button (replaces label with icon)
+  if args.len < 1 or args[0].kind != vkString:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let button = cast[GtkButton](self.nimValue)
+    let iconName = args[0].strVal
+    gtkButtonSetIconName(button, iconName.cstring)
+
+  nilValue()
+
+## Native method: label:iconName:
+proc buttonSetLabelAndIconImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set both label and icon for the button
+  ## Args: label (String), iconName (String)
+  if args.len < 2 or args[0].kind != vkString or args[1].kind != vkString:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let button = cast[GtkButton](self.nimValue)
+    let label = args[0].strVal
+    let iconName = args[1].strVal
+    
+    when not defined(gtk3):
+      # GTK4: Create box with image and label as child
+      let box = gtkBoxNew(0.cint, 6.cint)  # Horizontal, 6px spacing
+      let image = gtkImageNewFromIconName(iconName.cstring)
+      
+      # Create label
+      let labelWidget = gtkLabelNew(label.cstring)
+      
+      # Add to box
+      gtkBoxAppend(box, cast[GtkWidget](image))
+      gtkBoxAppend(box, cast[GtkWidget](labelWidget))
+      
+      # Set box as button child
+      gtkButtonSetChild(button, box)
+    else:
+      # GTK3 fallback: just set the label, icon not supported this way
+      gtkButtonSetLabel(button, label.cstring)
 
   nilValue()

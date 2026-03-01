@@ -4,7 +4,6 @@
 
 import std/[logging, tables]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -144,5 +143,40 @@ proc textBufferDeleteToImpl*(interp: var Interpreter, self: Instance, args: seq[
   gtkTextBufferDelete(proxy.buffer, startIter, endIter)
 
   debug("Deleted text from ", args[0].intVal, " to ", args[1].intVal, " in text buffer")
+
+  nilValue()
+
+## Native instance method: changed:
+proc textBufferChangedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Connect changed signal to a block
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  if not self.isNimProxy:
+    return nilValue()
+
+  if self.nimValue == nil:
+    return nilValue()
+
+  let proxy = cast[GtkTextBufferProxy](self.nimValue)
+  if proxy.buffer == nil:
+    return nilValue()
+
+  let blockVal = args[0]
+
+  # Create signal handler and store in proxy's GC-managed table
+  let handler = SignalHandler(
+    blockNode: blockVal.blockVal,
+    interp: addr(interp)
+  )
+
+  if "changed" notin proxy.signalHandlers:
+    proxy.signalHandlers["changed"] = @[]
+  proxy.signalHandlers["changed"].add(handler)
+
+  # Connect the signal
+  let gObject = cast[GObject](proxy.buffer)
+  discard gSignalConnect(gObject, "changed",
+                         cast[GCallback](signalCallbackProc), nil)
 
   nilValue()

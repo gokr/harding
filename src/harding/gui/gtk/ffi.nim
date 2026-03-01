@@ -42,6 +42,8 @@ type
   GMenuModel* = pointer
   GMenu* = pointer
   GMenuItem* = pointer
+  GtkAlertDialog* = pointer
+  GtkImage* = pointer
 
   GType* = csize_t
   GConnectFlags* = cint
@@ -99,8 +101,13 @@ else:
 # GTK Button
 proc gtkButtonNew*(): GtkButton {.cdecl, importc: "gtk_button_new".}
 proc gtkButtonNewWithLabel*(label: cstring): GtkButton {.cdecl, importc: "gtk_button_new_with_label".}
+proc gtkButtonNewFromIconName*(iconName: cstring): GtkButton {.cdecl, importc: "gtk_button_new_from_icon_name".}
 proc gtkButtonSetLabel*(button: GtkButton, label: cstring) {.cdecl, importc: "gtk_button_set_label".}
 proc gtkButtonGetLabel*(button: GtkButton): cstring {.cdecl, importc: "gtk_button_get_label".}
+proc gtkButtonSetIconName*(button: GtkButton, iconName: cstring) {.cdecl, importc: "gtk_button_set_icon_name".}
+
+# GTK Image
+proc gtkImageNewFromIconName*(iconName: cstring): GtkImage {.cdecl, importc: "gtk_image_new_from_icon_name".}
 
 # GTK Box
 proc gtkBoxNew*(orientation: cint, spacing: cint): GtkBox {.cdecl, importc: "gtk_box_new".}
@@ -314,6 +321,16 @@ when not defined(gtk3):
   proc gtkGestureClickNew*(): GtkGestureClick {.cdecl, importc: "gtk_gesture_click_new".}
   proc gtkGestureSingleSetButton*(gesture: GtkGestureClick, button: cuint) {.cdecl, importc: "gtk_gesture_single_set_button".}
     # button: 0 = any, 1 = left, 2 = middle, 3 = right
+
+# GTK4 AlertDialog (for simple confirmation dialogs)
+when not defined(gtk3):
+  proc gtkAlertDialogNew*(message: cstring): GtkAlertDialog {.cdecl, importc: "gtk_alert_dialog_new".}
+  proc gtkAlertDialogSetModal*(dialog: GtkAlertDialog, modal: cint) {.cdecl, importc: "gtk_alert_dialog_set_modal".}
+  proc gtkAlertDialogSetButtons*(dialog: GtkAlertDialog, labels: cstringArray, nLabels: csize_t) {.cdecl, importc: "gtk_alert_dialog_set_buttons".}
+  proc gtkAlertDialogSetCancelButton*(dialog: GtkAlertDialog, button: cint) {.cdecl, importc: "gtk_alert_dialog_set_cancel_button".}
+  proc gtkAlertDialogSetDefaultButton*(dialog: GtkAlertDialog, button: cint) {.cdecl, importc: "gtk_alert_dialog_set_default_button".}
+  proc gtkAlertDialogChoose*(dialog: GtkAlertDialog, parent: GtkWindow, cancellable: pointer, callback: pointer, userData: pointer) {.cdecl, importc: "gtk_alert_dialog_choose".}
+  proc gtkAlertDialogChooseFinish*(dialog: GtkAlertDialog, result: pointer): cint {.cdecl, importc: "gtk_alert_dialog_choose_finish".}
 
 # Key constants for event handling
 const
