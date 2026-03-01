@@ -283,6 +283,45 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
 
   return captures
 
+proc hasReturnNode(node: Node): bool =
+  ## Recursively check if node contains a return statement
+  if node == nil:
+    return false
+  if node of ReturnNode:
+    return true
+  
+  # Check different node types recursively
+  if node of BlockNode:
+    for stmt in node.BlockNode.body:
+      if hasReturnNode(stmt):
+        return true
+  elif node of MessageNode:
+    let msg = node.MessageNode
+    if hasReturnNode(msg.receiver):
+      return true
+    for arg in msg.arguments:
+      if hasReturnNode(arg):
+        return true
+  elif node of AssignNode:
+    return hasReturnNode(node.AssignNode.expression)
+  elif node of ArrayNode:
+    for elem in node.ArrayNode.elements:
+      if hasReturnNode(elem):
+        return true
+  elif node of TableNode:
+    for (key, val) in node.TableNode.entries:
+      if hasReturnNode(key) or hasReturnNode(val):
+        return true
+  elif node of CascadeNode:
+    let cas = node.CascadeNode
+    if hasReturnNode(cas.receiver):
+      return true
+    for msg in cas.messages:
+      if hasReturnNode(msg):
+        return true
+  
+  return false
+
 proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[string] = @[]): BlockProcInfo =
   ## Register a block for compilation and return its metadata
   let nimName = reg.generateBlockName()
@@ -291,10 +330,10 @@ proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[
   # Analyze captures
   let captures = analyzeCaptures(blockNode, knownGlobals)
 
-  # Check for non-local returns (^)
+  # Check for non-local returns (^) recursively in block body
   var hasNonLocalReturn = false
   for stmt in blockNode.body:
-    if stmt of ReturnNode:
+    if hasReturnNode(stmt):
       hasNonLocalReturn = true
       break
 
