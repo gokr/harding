@@ -13,8 +13,6 @@ requires "nim == 2.2.6"
 # FFI dependencies
 when defined(linux):
   requires "libffi"
-when defined(macosx):
-  passL "-ldl"
 
 # BitBarrel support (optional)
 when defined(bitbarrel):
