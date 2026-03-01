@@ -740,7 +740,8 @@ proc materializeReceiverForSend(receiverVal: NodeValue): Instance =
     let symClass = if symbolClassCache != nil: symbolClassCache else: stringClass
     return newStringInstance(symClass, receiverVal.symVal)
   of vkClass:
-    return Instance(kind: ikObject, class: receiverVal.classVal, slots: @[], isNimProxy: false, nimValue: nil)
+    return Instance(kind: ikObject, class: receiverVal.classVal, slots: @[], isNimProxy: true,
+      nimValue: cast[pointer](receiverVal.classVal))
 
 proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
   ## Look up class method in class (fast O(1) lookup)
