@@ -31,6 +31,22 @@ GtkWidget>>onRealize: aBlock [
     self connect: "realize" do: aBlock
 ].
 
+# Test/automation helpers
+GtkWidget>>emit: aSignalName [
+    # Emit a GTK signal programmatically (for automation)
+    self emitSignal: aSignalName
+].
+
+GtkWidget class>>flushEvents [
+    # Process pending GTK events
+    self pumpEvents
+].
+
+GtkWidget class>>flushEvents: count [
+    # Process pending GTK events multiple times
+    self pumpEvents: count
+].
+
 # Visibility conveniences
 GtkWidget>>showWidget [
     # Show the widget
@@ -51,6 +67,11 @@ GtkWidget>>addClass: aClassName [
 GtkWidget>>removeClass: aClassName [
     # Remove a CSS class
     self removeCssClass: aClassName
+].
+
+GtkWidget>>tooltip: aString [
+    # Set tooltip text
+    self setTooltipText: aString
 ].
 
 # Expand properties (GTK4 only) - control how widget fills available space

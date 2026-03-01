@@ -124,6 +124,7 @@ proc gtkWidgetHide*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_hide".}
 proc gtkWidgetShowAll*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_show_all".}
 proc gtkWidgetSetSizeRequest*(widget: GtkWidget, width: cint, height: cint) {.cdecl, importc: "gtk_widget_set_size_request".}
 proc gtkWidgetSetHalign*(widget: GtkWidget, align: cint) {.cdecl, importc: "gtk_widget_set_halign".}
+proc gtkWidgetSetTooltipText*(widget: GtkWidget, text: cstring) {.cdecl, importc: "gtk_widget_set_tooltip_text".}
 
 const
   GTKALIGNSTART* = 1.cint
@@ -140,6 +141,7 @@ proc gSignalConnectData*(instance: GObject, detailedSignal: cstring, cHandler: G
                          data: pointer, destroyData: GClosureNotify, connectFlags: GConnectFlags): culong {.cdecl, importc: "g_signal_connect_data".}
 
 proc gSignalEmit*(instance: GObject, signalId: cuint, detail: cuint) {.cdecl, importc: "g_signal_emit_by_name".}
+proc gSignalEmitByName*(instance: GObject, detailedSignal: cstring) {.cdecl, varargs, importc: "g_signal_emit_by_name".}
 
 # GTK Main Loop (GTK3 only)
 when defined(gtk3):
@@ -293,10 +295,6 @@ when not defined(gtk3):
 # GtkPopover and Menu (GTK4)
 when not defined(gtk3):
   proc gtkPopoverMenuNewFromModel*(model: GMenuModel): GtkPopoverMenu {.cdecl, importc: "gtk_popover_menu_new_from_model".}
-  proc gtkPopoverSetParent*(popover: GtkPopover, parent: GtkWidget) {.cdecl, importc: "gtk_popover_set_parent".}
-  proc gtkPopoverPopup*(popover: GtkPopover) {.cdecl, importc: "gtk_popover_popup".}
-  proc gtkPopoverSetPointingTo*(popover: GtkPopover, rect: pointer) {.cdecl, importc: "gtk_popover_set_pointing_to".}
-  proc gtkPopoverSetHasArrow*(popover: GtkPopover, hasArrow: cint) {.cdecl, importc: "gtk_popover_set_has_arrow".}
 
 # GMenu (GTK4 menu model)
 when not defined(gtk3):
@@ -316,11 +314,32 @@ when not defined(gtk3):
   type
     GtkGesture* = pointer
     GtkGestureClick* = pointer
-    GdkEventButton* = pointer
+    GdkEvent* = pointer
+    GdkRectangle* = object
+      x*: cint
+      y*: cint
+      width*: cint
+      height*: cint
 
   proc gtkGestureClickNew*(): GtkGestureClick {.cdecl, importc: "gtk_gesture_click_new".}
   proc gtkGestureSingleSetButton*(gesture: GtkGestureClick, button: cuint) {.cdecl, importc: "gtk_gesture_single_set_button".}
     # button: 0 = any, 1 = left, 2 = middle, 3 = right
+
+  # Gesture event handling
+  proc gtkGestureGetLastEvent*(gesture: GtkGesture, sequence: pointer): GdkEvent {.cdecl, importc: "gtk_gesture_get_last_event".}
+  proc gdkEventGetPosition*(event: GdkEvent, x: ptr cdouble, y: ptr cdouble): cint {.cdecl, importc: "gdk_event_get_position".}
+
+# GtkPopover (GTK4) - custom content popover for context menus
+when not defined(gtk3):
+  proc gtkPopoverNew*(): GtkPopover {.cdecl, importc: "gtk_popover_new".}
+  proc gtkPopoverNewFromWidget*(parent: GtkWidget): GtkPopover {.cdecl, importc: "gtk_popover_new".}
+  proc gtkPopoverSetChild*(popover: GtkPopover, child: GtkWidget) {.cdecl, importc: "gtk_popover_set_child".}
+  proc gtkWidgetSetParent*(widget: GtkWidget, parent: GtkWidget) {.cdecl, importc: "gtk_widget_set_parent".}
+  proc gtkPopoverPopup*(popover: GtkPopover) {.cdecl, importc: "gtk_popover_popup".}
+  proc gtkPopoverPopdown*(popover: GtkPopover) {.cdecl, importc: "gtk_popover_popdown".}
+  proc gtkPopoverSetPointingTo*(popover: GtkPopover, rect: ptr GdkRectangle) {.cdecl, importc: "gtk_popover_set_pointing_to".}
+  proc gtkPopoverSetHasArrow*(popover: GtkPopover, hasArrow: cint) {.cdecl, importc: "gtk_popover_set_has_arrow".}
+  proc gtkPopoverSetAutohide*(popover: GtkPopover, autohide: cint) {.cdecl, importc: "gtk_popover_set_autohide".}
 
 # GTK4 AlertDialog (for simple confirmation dialogs)
 when not defined(gtk3):

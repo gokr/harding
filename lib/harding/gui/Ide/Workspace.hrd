@@ -19,7 +19,7 @@ Workspace>>openWindow [
 ].
 
 Workspace>>openWindowFor: anOwner [
-    | buttonBox doItButton printItButton |
+    | buttonBox doItButton printItButton inspectItButton |
 
     # Create main window
     window := GtkWindow new.
@@ -48,17 +48,23 @@ Workspace>>openWindowFor: anOwner [
     buttonBox setSpacing: 5.
 
     # Create Do It button
-    doItButton := GtkButton newLabel: "Do It (Ctrl+D)".
+    doItButton := GtkButton new.
+    doItButton label: "Do It" iconName: "system-run".
+    doItButton tooltip: "Evaluate selection/current line (Ctrl+D)".
     doItButton clicked: [ self doItSelection ].
     buttonBox append: doItButton.
 
     # Create Print It button
-    printItButton := GtkButton newLabel: "Print It (Ctrl+P)".
+    printItButton := GtkButton new.
+    printItButton label: "Print It" iconName: "insert-text".
+    printItButton tooltip: "Evaluate and insert result (Ctrl+P)".
     printItButton clicked: [ self printItSelection ].
     buttonBox append: printItButton.
 
     # Create Inspect It button
-    inspectItButton := GtkButton newLabel: "Inspect It (Ctrl+I)".
+    inspectItButton := GtkButton new.
+    inspectItButton label: "Inspect It" iconName: "system-search".
+    inspectItButton tooltip: "Evaluate and open inspector (Ctrl+I)".
     inspectItButton clicked: [ self inspectItSelection ].
     buttonBox append: inspectItButton.
 
@@ -232,6 +238,15 @@ Workspace>>showError: messageText [
 
 Workspace>>showErrorDialog: messageText [
     | dialog box label okButton |
+
+    (Harding includesKey: "GtkAlertDialog") ifTrue: [
+        GtkAlertDialog
+            showAlertDialog: window
+            message: messageText
+            onResponse: [ nil ].
+        ^ self
+    ].
+
     dialog := GtkWindow new.
     dialog title: "Workspace Error".
     dialog setDefaultSize: 520 height: 140.

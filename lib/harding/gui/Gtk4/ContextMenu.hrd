@@ -1,0 +1,62 @@
+# ============================================================================
+# ContextMenu - High-level popup menu for GTK4
+# Wraps GtkPopover with custom button content for easy context menus
+# ============================================================================
+
+ContextMenu := Object derive: #(popover items).
+
+# ----------------------------------------------------------------------------
+# Class methods
+# ----------------------------------------------------------------------------
+
+ContextMenu class>>for: aWidget [
+    # Create a new context menu for a parent widget
+    ^ self new initializeFor: aWidget
+]
+
+# ----------------------------------------------------------------------------
+# Instance methods
+# ----------------------------------------------------------------------------
+
+ContextMenu>>initializeFor: aWidget [
+    # Initialize the context menu with a parent widget
+    popover := GtkPopover new: aWidget.
+    items := #().
+    ^ self
+]
+
+ContextMenu>>addItem: labelString do: aBlock [
+    # Add a menu item with a callback block
+    popover addItem: labelString do: aBlock.
+    items addLast: labelString.
+    ^ self
+]
+
+ContextMenu>>popupAtX: x y: y [
+    # Show the context menu at specific coordinates
+    popover popupAtX: x y: y.
+    ^ self
+]
+
+ContextMenu>>popup [
+    # Show the context menu at the default position (centered on parent)
+    popover popup.
+    ^ self
+]
+
+ContextMenu>>clear [
+    # Remove all menu items
+    popover clear.
+    items := #().
+    ^ self
+]
+
+ContextMenu>>isEmpty [
+    # Check if the menu has no items
+    ^ items isEmpty
+]
+
+ContextMenu>>itemCount [
+    # Return the number of menu items
+    ^ items size
+]

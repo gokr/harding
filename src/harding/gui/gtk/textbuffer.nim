@@ -4,6 +4,7 @@
 
 import std/[logging, tables]
 import harding/core/types
+import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -146,6 +147,36 @@ proc textBufferDeleteToImpl*(interp: var Interpreter, self: Instance, args: seq[
 
   nilValue()
 
+proc textBufferChangedCallbackProc(buffer: GtkTextBuffer, userData: pointer) {.cdecl.} =
+  ## Called by GTK when a text buffer emits "changed"
+  discard buffer
+  if userData == nil:
+    return
+
+  let proxy = cast[GtkTextBufferProxy](userData)
+  if proxy == nil or proxy.interp == nil:
+    return
+
+  if "changed" notin proxy.signalHandlers or proxy.signalHandlers["changed"].len == 0:
+    return
+
+  let handler = proxy.signalHandlers["changed"][0]
+  if handler.blockNode == nil:
+    return
+
+  try:
+    GC_ref(handler.blockNode)
+    let msgNode = MessageNode(
+      receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
+      selector: "value",
+      arguments: @[],
+      isCascade: false
+    )
+    discard evalWithVMCleanContext(proxy.interp[], msgNode)
+    GC_unref(handler.blockNode)
+  except Exception as e:
+    error("Error in text buffer changed callback: ", e.msg)
+
 ## Native instance method: changed:
 proc textBufferChangedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Connect changed signal to a block
@@ -177,6 +208,6 @@ proc textBufferChangedImpl*(interp: var Interpreter, self: Instance, args: seq[N
   # Connect the signal
   let gObject = cast[GObject](proxy.buffer)
   discard gSignalConnect(gObject, "changed",
-                         cast[GCallback](signalCallbackProc), nil)
+                         cast[GCallback](textBufferChangedCallbackProc), cast[pointer](proxy))
 
   nilValue()

@@ -112,24 +112,26 @@ BrowserPane>>addButtonFor: anItem [
     button clicked: [ self selectItem: anItem ].
 
     # Connect right-click handler for context menu
-    rightClickCallback notNil ifTrue: [
-        button onRightClick: [ self showContextMenuFor: anItem ]
+    contextMenuCallback notNil ifTrue: [
+        button onRightClick: [:point |
+            self showContextMenuFor: anItem atX: (point at: 0) y: (point at: 1)
+        ]
     ].
 
     containerBox append: button.
     buttons addLast: button.
 ]
 
-BrowserPane>>showContextMenuFor: anItem [
-    | menuModel menuItem deleteItem |
+BrowserPane>>showContextMenuFor: anItem atX: x y: y [
+    # Show context menu for an item at specific coordinates
+    | menu |
     contextMenuCallback isNil ifTrue: [ ^ self ].
 
-    menuModel := GMenu new.
-
-    deleteItem := GMenuItem new: "Delete" action: "".
-    menuModel appendItem: deleteItem.
-
-    contextMenuCallback value: anItem value: menuModel.
+    menu := ContextMenu for: scrolledWindow.
+    contextMenuCallback value: anItem value: menu.
+    menu isEmpty ifFalse: [
+        menu popupAtX: x y: y
+    ].
 ]
 
 BrowserPane>>onRightClick: aBlock [
@@ -142,8 +144,8 @@ BrowserPane>>onContextMenu: aBlock [
     ^ self
 ]
 
-BrowserPane>>selectItem: anItem [
-    # Select an item and notify callback
+BrowserPane>>highlightItem: anItem [
+    # Just update visual highlight without triggering callback
     selectedItem := anItem.
 
     # Highlight selected button (simplified - just update CSS)
@@ -151,12 +153,17 @@ BrowserPane>>selectItem: anItem [
         ((items at: index) = anItem)
             ifTrue: [ button addCssClass: "suggested-action" ]
             ifFalse: [ button removeCssClass: "suggested-action" ]
-    ].
+    ]
+].
+
+BrowserPane>>selectItem: anItem [
+    # Select an item and notify callback
+    self highlightItem: anItem.
 
     # Notify callback if set
     selectionCallback notNil ifTrue: [
         selectionCallback value: anItem
-    ].
+    ]
 ].
 
 BrowserPane>>onSelectionChanged: aBlock [

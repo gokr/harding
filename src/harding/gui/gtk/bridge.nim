@@ -23,6 +23,8 @@ import ./label
 import ./sourceview
 import ./eventcontroller
 import ./alertdialog
+import ./gesture
+import ./popover
 
 ## Forward declarations
 proc initGtkBridge*(interp: var Interpreter)
@@ -119,6 +121,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   widgetConnectDoMethod.hasInterpreterParam = true
   addMethodToClass(widgetCls, "connect:do:", widgetConnectDoMethod)
 
+  let widgetEmitSignalMethod = createCoreMethod("emitSignal:")
+  widgetEmitSignalMethod.nativeImpl = cast[pointer](widgetEmitSignalImpl)
+  widgetEmitSignalMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "emitSignal:", widgetEmitSignalMethod)
+
   let widgetSetVexpandMethod = createCoreMethod("setVexpand:")
   widgetSetVexpandMethod.nativeImpl = cast[pointer](widgetSetVexpandImpl)
   widgetSetVexpandMethod.hasInterpreterParam = true
@@ -133,6 +140,21 @@ proc initGtkBridge*(interp: var Interpreter) =
   widgetSetHalignStartMethod.nativeImpl = cast[pointer](widgetSetHalignStartImpl)
   widgetSetHalignStartMethod.hasInterpreterParam = true
   addMethodToClass(widgetCls, "setHalignStart", widgetSetHalignStartMethod)
+
+  let widgetSetTooltipTextMethod = createCoreMethod("setTooltipText:")
+  widgetSetTooltipTextMethod.nativeImpl = cast[pointer](widgetSetTooltipTextImpl)
+  widgetSetTooltipTextMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "setTooltipText:", widgetSetTooltipTextMethod)
+
+  let widgetPumpEventsMethod = createCoreMethod("pumpEvents")
+  widgetPumpEventsMethod.nativeImpl = cast[pointer](widgetPumpEventsImpl)
+  widgetPumpEventsMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "pumpEvents", widgetPumpEventsMethod, isClassMethod = true)
+
+  let widgetPumpEventsCountMethod = createCoreMethod("pumpEvents:")
+  widgetPumpEventsCountMethod.nativeImpl = cast[pointer](widgetPumpEventsImpl)
+  widgetPumpEventsCountMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "pumpEvents:", widgetPumpEventsCountMethod, isClassMethod = true)
 
   interp.globals[]["GtkWidget"] = widgetCls.toValue()
   debug("Registered GtkWidget class")
@@ -547,6 +569,50 @@ proc initGtkBridge*(interp: var Interpreter) =
     interp.globals[]["GtkAlertDialog"] = alertDialogCls.toValue()
     debug("Registered GtkAlertDialog class")
 
+    # Create GtkPopover class (GTK4 only) - custom popover with button content
+    let popoverCls = newClass(superclasses = @[widgetCls], name = "GtkPopover")
+    popoverCls.tags = @["GTK", "Popover", "Menu"]
+    popoverCls.isNimProxy = true
+    popoverCls.hardingType = "GtkPopover"
+
+    # Add Popover class methods
+    let popoverNewMethod = createCoreMethod("new:")
+    popoverNewMethod.nativeImpl = cast[pointer](popoverNewImpl)
+    popoverNewMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "new:", popoverNewMethod, isClassMethod = true)
+
+    # Add Popover instance methods
+    let popoverAddItemDoMethod = createCoreMethod("addItem:do:")
+    popoverAddItemDoMethod.nativeImpl = cast[pointer](popoverAddItemDoImpl)
+    popoverAddItemDoMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "addItem:do:", popoverAddItemDoMethod)
+
+    let popoverPopupAtXYMethod = createCoreMethod("popupAtX:y:")
+    popoverPopupAtXYMethod.nativeImpl = cast[pointer](popoverPopupAtXYImpl)
+    popoverPopupAtXYMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "popupAtX:y:", popoverPopupAtXYMethod)
+
+    let popoverPopupMethod = createCoreMethod("popup")
+    popoverPopupMethod.nativeImpl = cast[pointer](popoverPopupImpl)
+    popoverPopupMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "popup", popoverPopupMethod)
+
+    let popoverClearMethod = createCoreMethod("clear")
+    popoverClearMethod.nativeImpl = cast[pointer](popoverClearImpl)
+    popoverClearMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "clear", popoverClearMethod)
+
+    interp.globals[]["GtkPopover"] = popoverCls.toValue()
+    debug("Registered GtkPopover class")
+
+    # Register gesture click method on GtkWidget (GTK4 only)
+    let widgetOnRightClickMethod = createCoreMethod("onRightClick:")
+    widgetOnRightClickMethod.nativeImpl = cast[pointer](widgetOnRightClickImpl)
+    widgetOnRightClickMethod.hasInterpreterParam = true
+    addMethodToClass(widgetCls, "onRightClick:", widgetOnRightClickMethod)
+
+    debug("Registered onRightClick: method on GtkWidget")
+
   when defined(gtk3):
     # Create MenuItem class (GTK3 only)
     let menuItemCls = newClass(superclasses = @[widgetCls], name = "GtkMenuItem")
@@ -649,7 +715,8 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
     "TextView.hrd",
     "TextBuffer.hrd",
     "SourceView.hrd",
-    "EventController.hrd"
+    "EventController.hrd",
+    "ContextMenu.hrd"
   ]
 
   when defined(gtk3):

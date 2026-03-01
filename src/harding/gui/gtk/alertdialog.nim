@@ -14,7 +14,7 @@ import ./widget
 type
   AsyncDialogCallback* = object
     blockNode*: BlockNode
-    interp*: ptr Interpreter
+    interp*: Interpreter
     yesBlock*: BlockNode  # For yes/no dialogs
     noBlock*: BlockNode
 
@@ -66,7 +66,8 @@ proc alertDialogCallback*(sourceObject: pointer, result: pointer, userData: poin
         arguments: @[],
         isCascade: false
       )
-      discard evalWithVMCleanContext(callback.interp[], msgNode)
+      var callbackInterp = callback.interp
+      discard evalWithVMCleanContext(callbackInterp, msgNode)
       GC_unref(blockToRun)
     except Exception as e:
       error("Error in AlertDialog callback: ", e.msg)
@@ -100,7 +101,7 @@ proc alertDialogShowImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
   let dialogId = asyncDialogIdCounter
   asyncDialogRegistry[dialogId] = AsyncDialogCallback(
     blockNode: responseBlock,
-    interp: addr(interp)
+    interp: interp
   )
 
   # Show dialog
@@ -145,7 +146,7 @@ proc alertDialogConfirmImpl*(interp: var Interpreter, self: Instance, args: seq[
   asyncDialogRegistry[dialogId] = AsyncDialogCallback(
     yesBlock: yesBlock,
     noBlock: noBlock,
-    interp: addr(interp)
+    interp: interp
   )
 
   # Show dialog

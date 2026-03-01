@@ -252,6 +252,43 @@ proc widgetConnectDoImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
 
   nilValue()
 
+## Native method: emitSignal:
+proc widgetEmitSignalImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Programmatically emit a GTK signal by name (useful for tests)
+  discard interp
+  if args.len < 1 or args[0].kind != vkString:
+    return nilValue()
+
+  if not self.isNimProxy:
+    return nilValue()
+
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkWidget](self.nimValue)
+  if widget == nil:
+    return nilValue()
+
+  gSignalEmitByName(cast[GObject](widget), args[0].strVal.cstring)
+  return nilValue()
+
+## Native class method: pumpEvents / pumpEvents:
+proc widgetPumpEventsImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Process pending GTK events to drive callbacks in tests.
+  discard interp
+  discard self
+
+  var iterations = 1
+  if args.len > 0 and args[0].kind == vkInt and args[0].intVal > 0:
+    iterations = args[0].intVal
+
+  for _ in 0..<iterations:
+    when defined(gtk3):
+      discard gtkMainIterationDo(0)
+    else:
+      discard gMainContextIteration(nil, 0)
+
+  return nilValue()
+
 ## Native method: setVexpand:
 proc widgetSetVexpandImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set vertical expand property (GTK4 only)
@@ -290,3 +327,22 @@ proc widgetSetHalignStartImpl*(interp: var Interpreter, self: Instance, args: se
     gtkWidgetSetHalign(widget, GTKALIGNSTART)
 
   nilValue()
+
+## Native method: setTooltipText:
+proc widgetSetTooltipTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set widget tooltip text
+  discard interp
+  if args.len < 1 or args[0].kind != vkString:
+    return nilValue()
+
+  if not self.isNimProxy:
+    return nilValue()
+
+  var widget = getInstanceWidget(self)
+  if widget == nil and self.nimValue != nil:
+    widget = cast[GtkWidget](self.nimValue)
+  if widget == nil:
+    return nilValue()
+
+  gtkWidgetSetTooltipText(widget, args[0].strVal.cstring)
+  return nilValue()

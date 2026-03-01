@@ -4,7 +4,7 @@
 # With a source pane at the bottom for viewing/editing code
 # ============================================================================
 
-SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource)
+SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource ignoreTextChanges)
 
 SystemBrowser>>initialize [
     currentLibrary := nil.
@@ -21,6 +21,7 @@ SystemBrowser>>initialize [
     owner := nil.
     sourceModified := false.
     originalSource := nil.
+    ignoreTextChanges := false.
     ^ self
 ]
 
@@ -30,38 +31,45 @@ SystemBrowser>>markSourceClean [
 ]
 
 SystemBrowser>>markSourceModified [
+    ignoreTextChanges ifTrue: [
+        ^ self
+    ].
     sourceModified := true.
 ]
 
 SystemBrowser>>hasUnsavedChanges [
-    ^ sourceModified and: [
+    | hasChanges |
+    hasChanges := sourceModified and: [
         originalSource notNil and: [
             (sourceView text) ~= originalSource
         ]
-    ]
+    ].
+    ^ hasChanges
 ]
 
 SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
     | dialog box label yesButton noButton buttonBox |
+    (Harding includesKey: "GtkAlertDialog") ifTrue: [
+        GtkAlertDialog
+            showConfirmDialog: window
+            message: message
+            onYes: yesBlock
+            onNo: noBlock.
+        ^ self
+    ].
+
     dialog := GtkWindow new.
     dialog title: "Confirm".
     dialog setDefaultSize: 400 height: 140.
-    dialog modal: true.
     
     box := GtkBox vertical.
     box setSpacing: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
     
     label := GtkLabel new: message.
     label halignStart.
-    label wrap: true.
     
     buttonBox := GtkBox horizontal.
     buttonBox setSpacing: 8.
-    buttonBox halignEnd.
     
     noButton := GtkButton newLabel: "No".
     noButton clicked: [
@@ -275,10 +283,56 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 ]
 
 SystemBrowser>>selectClass: aClassName [
-    | targetClass |
+    | targetClass previousClass previousCategory previousMethod |
     targetClass := aClassName.
     
-    self checkUnsavedChangesThen: [
+    # Get the visually selected items BEFORE any changes
+    previousClass := classPane selectedItem.
+    previousCategory := categoryPane selectedItem.
+    previousMethod := methodPane selectedItem.
+    
+    self hasUnsavedChanges ifTrue: [
+        self showConfirmationDialog: "You have unsaved changes. Discard them?"
+            onYes: [
+                self markSourceClean.
+                currentClass := targetClass.
+                Transcript showCr: ("Selected class: " , targetClass).
+
+                currentMethod := nil.
+                currentMethodFile := nil.
+                currentMethodOwnerClass := nil.
+                currentMethodHeader := nil.
+                currentMethodStartLine := nil.
+                currentMethodEndLine := nil.
+                currentMethodHasBlock := false.
+
+                categoryPane clear.
+                methodPane clear.
+
+                self populateCategoriesFor: targetClass.
+
+                currentCategory := "all".
+                Transcript showCr: "Auto-selecting category: all".
+                [ self populateMethodsFor: targetClass category: currentCategory ]
+                    on: Exception
+                    do: [:ex |
+                        Transcript showCr: ("selectClass auto-populate error: " , ex printString)
+                    ]
+            ]
+            onNo: [
+                # Restore previous visual selections (without triggering callbacks)
+                previousClass notNil ifTrue: [
+                    classPane highlightItem: previousClass
+                ].
+                previousCategory notNil ifTrue: [
+                    categoryPane highlightItem: previousCategory
+                ].
+                previousMethod notNil ifTrue: [
+                    methodPane highlightItem: previousMethod
+                ].
+                Transcript showCr: "Selection cancelled, staying on current class"
+            ]
+    ] ifFalse: [
         currentClass := targetClass.
         Transcript showCr: ("Selected class: " , targetClass).
 
@@ -359,10 +413,43 @@ SystemBrowser>>inferCategoriesFor: aClassName [
 ]
 
 SystemBrowser>>selectCategory: aCategory [
-    | targetCategory |
+    | targetCategory previousCategory previousMethod |
     targetCategory := aCategory.
     
-    self checkUnsavedChangesThen: [
+    # Get the visually selected items BEFORE any changes
+    previousCategory := categoryPane selectedItem.
+    previousMethod := methodPane selectedItem.
+    
+    self hasUnsavedChanges ifTrue: [
+        self showConfirmationDialog: "You have unsaved changes. Discard them?"
+            onYes: [
+                self markSourceClean.
+                currentCategory := targetCategory.
+                Transcript showCr: ("Selected category: " , targetCategory).
+
+                Transcript showCr: "Clearing method pane".
+                methodPane clear.
+                Transcript showCr: "Method pane cleared".
+
+                Transcript showCr: "Populating methods".
+                [ self populateMethodsFor: currentClass category: targetCategory ]
+                    on: Exception
+                    do: [:ex |
+                        Transcript showCr: ("selectCategory error: " , ex printString)
+                    ].
+                Transcript showCr: "Finished populateMethodsFor call".
+            ]
+            onNo: [
+                # Restore previous visual selections (without triggering callbacks)
+                previousCategory notNil ifTrue: [
+                    categoryPane highlightItem: previousCategory
+                ].
+                previousMethod notNil ifTrue: [
+                    methodPane highlightItem: previousMethod
+                ].
+                Transcript showCr: "Selection cancelled, staying on current category"
+            ]
+    ] ifFalse: [
         currentCategory := targetCategory.
         Transcript showCr: ("Selected category: " , targetCategory).
 
@@ -449,12 +536,30 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
 ]
 
 SystemBrowser>>selectMethod: aMethodName [
-    | targetMethod |
+    | targetMethod previousMethod |
     targetMethod := aMethodName.
     
-    self checkUnsavedChangesThen: [
+    # Get the visually selected method BEFORE any changes
+    previousMethod := methodPane selectedItem.
+    
+    self hasUnsavedChanges ifTrue: [
+        self showConfirmationDialog: "You have unsaved changes. Discard them?"
+            onYes: [
+                self markSourceClean.
+                currentMethod := targetMethod.
+                Transcript showCr: "Selected method".
+                self showMethodSource: targetMethod
+            ]
+            onNo: [
+                # Restore previous visual selection (without triggering callback)
+                previousMethod notNil ifTrue: [
+                    methodPane highlightItem: previousMethod
+                ].
+                Transcript showCr: "Selection cancelled"
+            ]
+    ] ifFalse: [
         currentMethod := targetMethod.
-        Transcript showCr: ("Selected method: " , targetMethod).
+        Transcript showCr: "Selected method".
         self showMethodSource: targetMethod
     ]
 ]
@@ -697,8 +802,10 @@ SystemBrowser>>linesToText: lines [
 
 SystemBrowser>>updateSourceView: aString [
     sourceView notNil ifTrue: [
+        ignoreTextChanges := true.
         sourceView text: aString.
-        self markSourceClean
+        self markSourceClean.
+        ignoreTextChanges := false.
     ]
 ]
 
@@ -732,7 +839,9 @@ SystemBrowser>>close [
 
 SystemBrowser>>onDestroy [
     owner notNil ifTrue: [
-        owner removeWindow: self.
+        (owner respondsTo: #removeWindow:) ifTrue: [
+            owner removeWindow: self
+        ].
         owner := nil
     ].
     window := nil.
