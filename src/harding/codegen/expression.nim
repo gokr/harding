@@ -1073,14 +1073,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   var output = ""
 
   # Create new context for block body with its parameters
-  # Use a fresh blockRegistry to avoid double-registration of nested blocks
+  # Share the blockRegistry so nested blocks can be found during code generation
   var bodyCtx = GenContext(
     cls: ctx.cls,
     inBlock: true,
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
-    blockRegistry: newBlockRegistry(),
+    blockRegistry: ctx.blockRegistry,
     varTypes: ctx.varTypes
   )
   for param in blkNode.parameters:

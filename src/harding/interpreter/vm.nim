@@ -6574,8 +6574,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           interp.pushValue(dnuResult)
           return true
         printStackTrace(interp)
-        raise newException(ValueError, "Method not found: " & frame.selector & " on " &
-          receiverClass.name)
+        let receiverClassName = if receiverClass != nil: receiverClass.name else: "<nil>"
+        raise newException(ValueError, "Message not understood: #" & frame.selector & " (receiver class: " & receiverClassName & ")")
 
       currentMethod = lookup.currentMethod
       definingClass = lookup.definingClass

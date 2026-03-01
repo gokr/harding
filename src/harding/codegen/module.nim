@@ -549,6 +549,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate block procedure signatures and bodies using real code generation
   var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
+  blockGenCtx.blockRegistry = blockReg  # Share the registry so nested blocks can be found
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")

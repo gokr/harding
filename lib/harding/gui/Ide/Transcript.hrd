@@ -89,6 +89,7 @@ Transcript>>openWindowFor: anOwner [
   window := GtkWindow new.
   window title: "Transcript".
   window iconName: "harding".
+  window setDefaultSize: 800 height: 400.
   owner := anOwner.
 
 

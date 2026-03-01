@@ -190,7 +190,50 @@ Inspector>>addTreeItem: slotName value: slotValue to: aBox [
     # Connect click handler
     button clicked: [ self showValue: slotValue name: slotName ].
 
+    # Connect right-click handler for context menu
+    button onRightClick: [:point |
+        self showSlotContextMenu: slotName value: slotValue atX: (point at: 0) y: (point at: 1)
+    ].
+
     aBox append: button.
+]
+
+Inspector>>showSlotContextMenu: slotName value: slotValue atX: x y: y [
+    # Show context menu for a slot
+    | menu |
+    menu := ContextMenu for: window.
+
+    # Add "Inspect" option
+    slotValue notNil ifTrue: [
+        menu addItem: 'Inspect' do: [
+            self inspectSlotValue: slotValue
+        ].
+    ].
+
+    # Add "Copy Value" option
+    menu addItem: 'Copy Value' do: [
+        self copySlotValue: slotValue
+    ].
+
+    # Add "Print" option
+    menu addItem: 'Print in Transcript' do: [
+        Transcript showCr: (slotName , ": " , slotValue printString)
+    ].
+
+    menu popupAtX: x y: y.
+]
+
+Inspector>>inspectSlotValue: aValue [
+    # Open a new inspector on the slot value
+    aValue notNil ifTrue: [
+        Inspector openOn: aValue for: owner.
+    ].
+]
+
+Inspector>>copySlotValue: aValue [
+    # Copy the slot value to clipboard
+    # Note: This would require clipboard support - placeholder for now
+    Transcript showCr: ("Copied to clipboard: " , aValue printString).
 ]
 
 Inspector>>formatValue: aValue [
