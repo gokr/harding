@@ -702,4 +702,14 @@ proc getBlockEnvPtr*(blk: BlockNode): pointer =
     return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
   return nil
 
+# Generic helper to create a block with environment in expression context
+# This allocates the environment on the heap (memory leak, but works for now)
+template createBlockWithEnv*[T](procPtr: pointer, paramCount: int, env: T): NodeValue =
+  ## Create a block with an environment allocated on the heap
+  ## Note: This leaks memory - the environment is never freed.
+  ## This is a temporary solution until we refactor block creation.
+  let envPtr = alloc(sizeof(T))
+  copyMem(envPtr, unsafeAddr(env), sizeof(T))
+  createBlock(procPtr, paramCount, envPtr)
+
 """
