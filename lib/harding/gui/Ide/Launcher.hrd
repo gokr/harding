@@ -43,49 +43,54 @@ Launcher>>openInstance [
 Launcher>>createHeaderBar [
   # Create a header bar with menu buttons in a horizontal box
   # GTK4 style: buttons in header area instead of traditional menu bar
-  | headerBar fileMenuButton workspaceButton transcriptButton browserButton quitButton spacer |
+  | headerBar workspaceButton transcriptButton browserButton quitButton spacer |
 
   headerBar := GtkBox horizontal.
   headerBar setSpacing: 0.
   headerBar vexpand: false.
 
-  # Left section - File menu (using button with dropdown)
-  fileMenuButton := GtkButton newLabel: "File".
-  fileMenuButton vexpand: false.
-  fileMenuButton hexpand: false.
-  fileMenuButton clicked: [ self showFileMenu ].
-  headerBar append: fileMenuButton.
-
-  # Spacer for visual separation
-  spacer := GtkLabel new: "  ".
-  headerBar append: spacer.
-
-  # Middle section - Window controls
-  workspaceButton := GtkButton newLabel: "Workspace".
+  # Toolbar buttons with icons
+  # Workspace button - text editor icon
+  workspaceButton := GtkButton new.
+  workspaceButton label: "📝 Workspace".
   workspaceButton vexpand: false.
   workspaceButton hexpand: false.
   workspaceButton clicked: [ self openWorkspace ].
   headerBar append: workspaceButton.
 
-  transcriptButton := GtkButton newLabel: "Transcript".
+  # Spacer
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Transcript button - terminal/info icon  
+  transcriptButton := GtkButton new.
+  transcriptButton label: "📋 Transcript".
   transcriptButton vexpand: false.
   transcriptButton hexpand: false.
   transcriptButton clicked: [ self openTranscript ].
   headerBar append: transcriptButton.
 
-  browserButton := GtkButton newLabel: "Browser".
+  # Spacer
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Browser button - search/explore icon
+  browserButton := GtkButton new.
+  browserButton label: "🔍 Browser".
   browserButton vexpand: false.
   browserButton hexpand: false.
   browserButton clicked: [ self openBrowser ].
   headerBar append: browserButton.
 
-  # Right-aligned section with spacer
-  spacer := GtkLabel new: "  ".
+  # Flexible spacer to push Quit to the right
+  spacer := GtkLabel new: "".
   spacer vexpand: false.
   spacer hexpand: true.
+  headerBar append: spacer.
 
-  # Quit button (right side, distinct styling)
-  quitButton := GtkButton newLabel: "Quit".
+  # Quit button - exit icon (right side)
+  quitButton := GtkButton new.
+  quitButton label: "🚪 Quit".
   quitButton vexpand: false.
   quitButton hexpand: false.
   quitButton clicked: [ self quit ].
@@ -95,19 +100,14 @@ Launcher>>createHeaderBar [
   ^ headerBar
 ].
 
-Launcher>>showFileMenu [
-  # For now, just log - could be expanded to show a popover menu
-  Transcript showCr: "File menu: Use Workspace or Transcript buttons below".
-].
+
 
 Launcher>>addWindow: aWindow [
   windows add: aWindow.
-  Transcript showCr: ("Window added, count: " , (windows size printString))
 ].
 
 Launcher>>removeWindow: aWindow [
   windows := windows reject: [ :w | w == aWindow ].
-  Transcript showCr: ("Window removed, count: " , (windows size printString))
 ].
 
 Launcher>>openWorkspace [
