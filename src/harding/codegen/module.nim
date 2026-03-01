@@ -547,7 +547,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add(structDef)
       output.add("\n\n")
 
-  # Generate block procedure signatures and bodies using real code generation
+  # Generate forward declarations for block procedures first
+  # This allows blocks to reference each other regardless of definition order
+  for blockInfo in blockReg.getAllBlocks():
+    output.add(generateBlockProcSignature(blockInfo))
+    output.add("\n")
+  output.add("\n")
+
+  # Generate block procedure bodies using real code generation
   var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
   blockGenCtx.blockRegistry = blockReg  # Share the registry so nested blocks can be found
   for blockInfo in blockReg.getAllBlocks():
