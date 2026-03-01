@@ -708,8 +708,9 @@ template createBlockWithEnv*[T](procPtr: pointer, paramCount: int, env: T): Node
   ## Create a block with an environment allocated on the heap
   ## Note: This leaks memory - the environment is never freed.
   ## This is a temporary solution until we refactor block creation.
+  var envCopy = env  # Create a local variable we can take address of
   let envPtr = alloc(sizeof(T))
-  copyMem(envPtr, unsafeAddr(env), sizeof(T))
+  copyMem(envPtr, addr(envCopy), sizeof(T))
   createBlock(procPtr, paramCount, envPtr)
 
 """
