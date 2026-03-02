@@ -4,7 +4,7 @@
 ## ============================================================================
 
 when defined(bitbarrel):
-  import std/[logging, tables, strutils, net]
+  import std/[tables, strutils, net]
   import ../core/types
   import ../interpreter/objects
   import ../interpreter/vm
@@ -172,7 +172,6 @@ when defined(bitbarrel):
 
 else:
   # Stub implementation when BitBarrel is not enabled
-  import std/logging
   import ../core/types
   import ../interpreter/objects
 

@@ -4,7 +4,7 @@
 ## ============================================================================
 
 when defined(bitbarrel):
-  import std/[logging, tables, strutils]
+  import std/[tables, strutils]
   import ../core/types
   import ../interpreter/objects
   import ../interpreter/vm
@@ -203,7 +203,6 @@ when defined(bitbarrel):
     debug("Registered BarrelSortedTable class")
 
 else:
-  import std/logging
   import ../core/types
   import ../interpreter/objects
 
