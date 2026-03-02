@@ -802,7 +802,7 @@ See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for
 - AI integration hooks
 - Package manager and ecosystem
 
-## Current Status: v0.7.0
+## Current Status: v0.7.1
 
 **Implemented:**
 - Functional interpreter with green threads and synchronization primitives

@@ -166,7 +166,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Define method | `Point>>move: dx [ ... ]` |
 | Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
 
-## Current Status (v0.7.0)
+## Current Status (v0.7.1)
 
 **Working:**
 - Lexer, parser, stackless AST interpreter

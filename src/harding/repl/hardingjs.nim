@@ -18,7 +18,7 @@ import ../interpreter/vm
 import ../interpreter/objects
 import jslib  # Embedded library files
 
-const VERSION* = "0.3.0"  ## Harding version for JS builds
+const VERSION* = "0.7.1"  ## Harding version for JS builds
 
 # ============================================================================
 # Output Capture for JS Environment

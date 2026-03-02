@@ -41,7 +41,7 @@ license = "MIT"
 srcDir = "src"
 
 # Harding as a dependency (use direct git URL)
-requires "https://github.com/gokr/harding.git >= 0.7.0"
+requires "https://github.com/gokr/harding.git >= 0.7.1"
 
 # Optional: Other harding-* packages
 requires "https://github.com/user/harding-foo.git >= 1.0.0"
@@ -296,7 +296,7 @@ srcDir = "src"
 bin = @["myapp"]              # Binary name
 
 # Dependencies
-requires "https://github.com/gokr/harding.git >= 0.7.0"
+requires "https://github.com/gokr/harding.git >= 0.7.1"
 requires "https://github.com/user/harding-foo.git >= 1.0.0"
 
 import os
