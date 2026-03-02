@@ -3,7 +3,7 @@
 # Uses GtkListBox for proper list behavior with native selection
 # ============================================================================
 
-BrowserPane := Object derive: #(scrolledWindow listBox items selectedItem selectionCallback headerLabel contextMenuCallback rightClickCallback)
+BrowserPane := Object derive: #(scrolledWindow listBox items selectedItem selectionCallback headerLabel contextMenuCallback rightClickCallback containerBox isHandlingSelection)
 
 BrowserPane>>initialize [
     items := #().
@@ -12,10 +12,13 @@ BrowserPane>>initialize [
     headerLabel := nil.
     contextMenuCallback := nil.
     rightClickCallback := nil.
+    containerBox := nil.
+    isHandlingSelection := false.
     ^ self
 ]
 
 BrowserPane>>createWidgets [
+    | listBoxWidget |
     # Create the scrolled window containing a list box
     scrolledWindow := GtkScrolledWindow new.
     scrolledWindow vexpand: true.
@@ -29,23 +32,24 @@ BrowserPane>>createWidgets [
 
     scrolledWindow setChild: listBox.
 
-    # Connect to the row-selected signal to handle selection changes
-    # Note: This is handled by the Nim bridge via signal connection
-    # For now, we handle selection through row activation
+    # Connect row-selected signal for selection handling
+    listBox onRowSelected: [:index | self handleRowSelected: index].
+
+    # Connect right-click handler for context menu
+    # The scrolledWindow contains the listBox, so we attach to it
+    scrolledWindow onRightClick: [:point |
+        self handleRightClickAtX: (point at: 0) y: (point at: 1)
+    ].
 
     ^ scrolledWindow
 ]
 
 BrowserPane>>setLabel: aString [
-    # Set a header label for this pane (optional)
-    # Create a header row that's not selectable
+    # Set a header label above the list (not inside it)
     headerLabel := GtkLabel new: aString.
     headerLabel addCssClass: "header".
     headerLabel setHexpand: true.
     headerLabel setHalignStart.
-
-    # Add header as first item in list (index 0)
-    listBox prepend: headerLabel.
 ]
 
 BrowserPane>>items: anArray [
@@ -63,21 +67,26 @@ BrowserPane>>refreshDisplay [
 ]
 
 BrowserPane>>clearItemsOnly [
-    # Remove all items from the list box
+    # Remove all items from the list box (header is outside the list)
     listBox clear.
     selectedItem := nil.
-
-    # Re-add header if present
-    headerLabel notNil ifTrue: [
-        | headerText |
-        headerText := headerLabel text.
-        headerLabel := GtkLabel new: headerText.
-        headerLabel addCssClass: "header".
-        headerLabel setHexpand: true.
-        headerLabel setHalignStart.
-        listBox prepend: headerLabel.
-    ].
 ]
+
+BrowserPane>>handleRowSelected: index [
+    # Called from the native row-selected signal
+    # Don't update selectedItem before the callback so that callers
+    # can still query the previous selection (for unsaved-changes dialogs)
+    isHandlingSelection ifFalse: [
+        (index >= 0 and: [index < items size]) ifTrue: [
+            | item |
+            item := items at: index.
+            selectionCallback notNil ifTrue: [
+                selectionCallback value: item
+            ].
+            selectedItem := item.
+        ]
+    ]
+].
 
 BrowserPane>>clear [
     # Clear all items but preserve header
@@ -113,16 +122,33 @@ BrowserPane>>showContextMenuFor: anItem atX: x y: y [
     # Show context menu for an item at specific coordinates
     | menu |
     contextMenuCallback isNil ifTrue: [
-        Transcript showCr: "DEBUG: contextMenuCallback is nil".
         ^ self
     ].
-
-    Transcript showCr: ("DEBUG: showContextMenuFor: anItem=" , anItem printString).
 
     menu := ContextMenu for: scrolledWindow.
     contextMenuCallback value: anItem value: menu.
     menu isEmpty ifFalse: [
         menu popupAtX: x y: y
+    ].
+]
+
+BrowserPane>>handleRightClickAtX: x y: y [
+    # Handle right-click on the list box to show context menu
+    | rowIndex item listBoxWidget |
+
+    contextMenuCallback isNil ifTrue: [ ^ self ].
+
+    # Get the row index at the clicked y coordinate
+    # We need to account for scrolling by getting the listBox's position
+    listBoxWidget := scrolledWindow getChild.
+    listBoxWidget isNil ifTrue: [ ^ self ].
+
+    rowIndex := listBoxWidget rowIndexAtY: y.
+
+    # Validate index and get corresponding item
+    (rowIndex >= 0 and: [rowIndex < items size]) ifTrue: [
+        item := items at: rowIndex.
+        self showContextMenuFor: item atX: x y: y.
     ].
 ]
 
@@ -137,20 +163,15 @@ BrowserPane>>onContextMenu: aBlock [
 ]
 
 BrowserPane>>highlightItem: anItem [
-    # Update visual highlight and selection
+    # Update visual highlight and selection without triggering callback
     selectedItem := anItem.
-
-    # Select the row by finding its index
+    isHandlingSelection := true.
     items withIndexDo: [:item :index |
         (item = anItem) ifTrue: [
-            # Account for header row (index + 1 if header exists)
-            | rowIndex |
-            rowIndex := headerLabel notNil
-                ifTrue: [ index + 1 ]
-                ifFalse: [ index ].
-            listBox selectIndex: rowIndex.
+            listBox selectIndex: index.
         ]
     ].
+    isHandlingSelection := false.
 ].
 
 BrowserPane>>selectItem: anItem [
@@ -175,6 +196,15 @@ BrowserPane>>selectedItem [
 ]
 
 BrowserPane>>widget [
-    # Return the GTK widget for adding to containers
-    ^ scrolledWindow
+    # Build container with header label above the scrolled list
+    containerBox isNil ifTrue: [
+        containerBox := GtkBox vertical.
+        containerBox vexpand: true.
+        containerBox hexpand: true.
+        headerLabel notNil ifTrue: [
+            containerBox append: headerLabel.
+        ].
+        containerBox append: scrolledWindow.
+    ].
+    ^ containerBox
 ]

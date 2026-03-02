@@ -2,7 +2,7 @@
 ## GtkSourceViewProxy - Source code editor widget wrapper
 ## ============================================================================
 
-import std/[tables]
+import std/[os, tables]
 import harding/core/types
 import ./ffi
 import ./widget
@@ -46,6 +46,10 @@ proc sourceViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
   # Set up syntax highlighting for Harding
   let langManager = gtkSourceLanguageManagerGetDefault()
   if langManager != nil:
+    # Append our syntax directory so GtkSourceView can find harding.lang
+    let syntaxDir = interp.hardingHome / "lib" / "harding" / "syntax"
+    gtkSourceLanguageManagerAppendSearchPath(langManager, syntaxDir.cstring)
+
     # Try to find the Harding language definition
     var hardingLang = gtkSourceLanguageManagerGetLanguage(langManager, "harding")
 

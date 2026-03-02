@@ -114,7 +114,7 @@ Transcript>>openWindowFor: anOwner [
   buttonBox := GtkBox horizontal.
   buttonBox setSpacing: 5.
 
-  clearButton := GtkButton newLabel: "Clear".
+  clearButton := GtkButton newLabel: "Clear" iconName: "user-trash".
   clearButton clicked: [ self clear ].
   buttonBox append: clearButton.
 

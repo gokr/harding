@@ -6,20 +6,30 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-03-02
+
 ### Added
-- `System` stdlib class with `arguments`, `cwd`, and stdio accessors (`stdin`, `stdout`, `stderr`).
-- `File` stdlib convenience class (`readAll:`, `write:to:`, `append:to:`, `exists:`).
-- Package API for embedding Harding sources with Nim primitives (`src/harding/packages/package_api.nim`) and package-loading tutorial (`docs/NIM_PACKAGE_TUTORIAL.md`).
+- IDE Inspector rewritten with tree view and embedded workspace support.
+- System Browser context menus with method deletion capability.
+- GTK widget support: `GtkListBox`, `GtkPaned`, and separator support in `ContextMenu`.
+- `startsWith:` and `endsWith:` methods for `String` (implemented as Nim primitives).
+- Alert dialog integration and GTK automation hooks for IDE.
+- Comprehensive compiler block parity test suite.
 
 ### Changed
-- `FileStream` now uses native file primitives (`primitiveFileOpen:mode:`, `primitiveFileReadAll`, etc.) and exposes `Stdin`, `Stdout`, and `Stderr` globals.
-- CLI parsing now supports script/runtime args after `--`, and passes them into interpreter `System arguments`.
-- `load:` for `Harding` and `Library` now resolves both filesystem paths and embedded package sources.
-- Granite Application builds now inject command-line args into `main: args` via generated runtime setup.
+- Replaced button-based BrowserPane with `GtkListBox` for improved UX.
+- Browser save/reload workflow improvements with keyboard shortcuts.
+- `printIt` now inserts at cursor position and selects inserted text.
+- Improved debug/warn templates and removed unused logging imports.
 
-### Tests
-- Added stdlib/package coverage for system arguments, stream globals, file I/O convenience methods, and embedded package loading.
-- Added end-to-end CLI coverage verifying `--` argument forwarding for script mode and `-e` mode.
+### Fixed
+- Compiler nested block compilation with proper registry sharing and forward declarations.
+- Block compilation with captures and environment structs.
+- Recursive non-local return detection in blocks.
+- Preserved captured variable writes in indexed assignment fast path.
+
+### Performance
+- VM optimizations: indexed locals, frame pooling, and logging improvements.
 
 ## [0.7.0] - 2026-02-27
 
@@ -51,5 +61,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Expanded and stabilized tests for exceptions, stdlib, parser precedence, dynamic dispatch, and website examples.
 - Split large stdlib coverage into focused suites for faster diagnostics.
 
-[Unreleased]: https://github.com/gokr/harding/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/gokr/harding/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/gokr/harding/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/gokr/harding/compare/v0.6.0...v0.7.0

@@ -317,6 +317,31 @@ proc textViewScrollToEndImpl*(interp: var Interpreter, self: Instance, args: seq
 
   nilValue()
 
+## Native instance method: getCurrentLineEnd
+## Returns the offset position at the end of the current line (where cursor is)
+proc textViewGetCurrentLineEndImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Get the end position of the current line (where the cursor is)
+  ## This is useful for inserting text at the end of the current line
+  if not (self.isNimProxy and self.nimValue != nil):
+    return nilValue()
+
+  let widget = cast[GtkTextView](self.nimValue)
+  let buffer = gtkTextViewGetBuffer(widget)
+  if buffer == nil:
+    return nilValue()
+
+  var iterStorage: array[256, byte]
+  let iter = cast[GtkTextIter](addr(iterStorage[0]))
+
+  # Get cursor position
+  let insertMark = gtkTextBufferGetInsert(buffer)
+  gtkTextBufferGetIterAtMark(buffer, iter, insertMark)
+
+  # Move to end of current line
+  discard gtkTextIterForwardToLineEnd(iter)
+
+  result = NodeValue(kind: vkInt, intVal: gtkTextIterGetOffset(iter))
+
 ## Native instance method: setEditable:
 proc textViewSetEditableImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set whether the text view is editable

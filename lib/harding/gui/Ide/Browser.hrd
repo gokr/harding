@@ -4,7 +4,7 @@
 # With a source pane at the bottom for viewing/editing code
 # ============================================================================
 
-SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource ignoreTextChanges)
+SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource ignoreTextChanges pendingTarget pendingPrevClass pendingPrevCategory pendingPrevMethod pendingContinueBlock)
 
 SystemBrowser>>initialize [
     currentLibrary := nil.
@@ -93,18 +93,21 @@ SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
     dialog present.
 ]
 
-SystemBrowser>>checkUnsavedChangesThen: continueBlock [
+SystemBrowser>>checkUnsavedChangesThen: aBlock [
     self hasUnsavedChanges ifTrue: [
+        # Store in instance variable so dialog callback can access it
+        # (captured locals don't survive async dialog callbacks)
+        pendingContinueBlock := aBlock.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
                 self markSourceClean.
-                continueBlock value
+                pendingContinueBlock value
             ]
             onNo: [
                 # User chose not to discard, do nothing
             ]
     ] ifFalse: [
-        continueBlock value
+        aBlock value
     ]
 ]
 
@@ -210,19 +213,11 @@ SystemBrowser>>openWindowFor: anOwner [
     buttonBox := GtkBox horizontal.
     buttonBox setSpacing: 5.
 
-    closeButton := GtkButton newLabel: "Close".
-    closeButton clicked: [ self close ].
-    buttonBox append: closeButton.
-
-    refreshButton := GtkButton newLabel: "Refresh".
-    refreshButton clicked: [ self refresh ].
-    buttonBox append: refreshButton.
-
-    newMethodButton := GtkButton newLabel: "New Method".
+    newMethodButton := GtkButton newLabel: "New Method" iconName: "document-new".
     newMethodButton clicked: [ self createNewMethod ].
     buttonBox append: newMethodButton.
 
-    deleteMethodButton := GtkButton newLabel: "Delete Method".
+    deleteMethodButton := GtkButton newLabel: "Delete Method" iconName: "edit-delete".
     deleteMethodButton clicked: [ self deleteCurrentMethod ].
     buttonBox append: deleteMethodButton.
 
@@ -323,80 +318,57 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 ]
 
 SystemBrowser>>selectClass: aClassName [
-    | targetClass previousClass previousCategory previousMethod |
-    targetClass := aClassName.
-    
-    # Get the visually selected items BEFORE any changes
-    previousClass := classPane selectedItem.
-    previousCategory := categoryPane selectedItem.
-    previousMethod := methodPane selectedItem.
-    
     self hasUnsavedChanges ifTrue: [
+        # Store in instance variables (captured locals don't survive async dialog callbacks)
+        pendingTarget := aClassName.
+        pendingPrevClass := classPane selectedItem.
+        pendingPrevCategory := categoryPane selectedItem.
+        pendingPrevMethod := methodPane selectedItem.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
                 self markSourceClean.
-                currentClass := targetClass.
-                Transcript showCr: ("Selected class: " , targetClass).
-
-                currentMethod := nil.
-                currentMethodFile := nil.
-                currentMethodOwnerClass := nil.
-                currentMethodHeader := nil.
-                currentMethodStartLine := nil.
-                currentMethodEndLine := nil.
-                currentMethodHasBlock := false.
-
-                categoryPane clear.
-                methodPane clear.
-
-                self populateCategoriesFor: targetClass.
-
-                currentCategory := "all".
-                Transcript showCr: "Auto-selecting category: all".
-                [ self populateMethodsFor: targetClass category: currentCategory ]
-                    on: Exception
-                    do: [:ex |
-                        Transcript showCr: ("selectClass auto-populate error: " , ex printString)
-                    ]
+                self applyClassSelection: pendingTarget
             ]
             onNo: [
-                # Restore previous visual selections (without triggering callbacks)
-                previousClass notNil ifTrue: [
-                    classPane highlightItem: previousClass
+                pendingPrevClass notNil ifTrue: [
+                    classPane highlightItem: pendingPrevClass
                 ].
-                previousCategory notNil ifTrue: [
-                    categoryPane highlightItem: previousCategory
+                pendingPrevCategory notNil ifTrue: [
+                    categoryPane highlightItem: pendingPrevCategory
                 ].
-                previousMethod notNil ifTrue: [
-                    methodPane highlightItem: previousMethod
-                ].
-                Transcript showCr: "Selection cancelled, staying on current class"
+                pendingPrevMethod notNil ifTrue: [
+                    methodPane highlightItem: pendingPrevMethod
+                ]
             ]
     ] ifFalse: [
-        currentClass := targetClass.
-        Transcript showCr: ("Selected class: " , targetClass).
-
-        currentMethod := nil.
-        currentMethodFile := nil.
-        currentMethodOwnerClass := nil.
-        currentMethodHeader := nil.
-        currentMethodStartLine := nil.
-        currentMethodEndLine := nil.
-        currentMethodHasBlock := false.
-
-        categoryPane clear.
-        methodPane clear.
-
-        self populateCategoriesFor: targetClass.
-
-        currentCategory := "all".
-        Transcript showCr: "Auto-selecting category: all".
-        [ self populateMethodsFor: targetClass category: currentCategory ]
-            on: Exception
-            do: [:ex |
-                Transcript showCr: ("selectClass auto-populate error: " , ex printString)
-            ]
+        self applyClassSelection: aClassName
     ]
+]
+
+SystemBrowser>>applyClassSelection: aClassName [
+    currentClass := aClassName.
+    Transcript showCr: ("Selected class: " , aClassName).
+
+    currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
+
+    categoryPane clear.
+    methodPane clear.
+
+    self populateCategoriesFor: aClassName.
+
+    currentCategory := "all".
+    Transcript showCr: "Auto-selecting category: all".
+    [ self populateMethodsFor: aClassName category: currentCategory ]
+        on: Exception
+        do: [:ex |
+            Transcript showCr: ("selectClass auto-populate error: " , ex printString)
+        ]
 ]
 
 SystemBrowser>>populateCategoriesFor: aClassName [
@@ -453,58 +425,40 @@ SystemBrowser>>inferCategoriesFor: aClassName [
 ]
 
 SystemBrowser>>selectCategory: aCategory [
-    | targetCategory previousCategory previousMethod |
-    targetCategory := aCategory.
-    
-    # Get the visually selected items BEFORE any changes
-    previousCategory := categoryPane selectedItem.
-    previousMethod := methodPane selectedItem.
-    
     self hasUnsavedChanges ifTrue: [
+        # Store in instance variables (captured locals don't survive async dialog callbacks)
+        pendingTarget := aCategory.
+        pendingPrevCategory := categoryPane selectedItem.
+        pendingPrevMethod := methodPane selectedItem.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
                 self markSourceClean.
-                currentCategory := targetCategory.
-                Transcript showCr: ("Selected category: " , targetCategory).
-
-                Transcript showCr: "Clearing method pane".
-                methodPane clear.
-                Transcript showCr: "Method pane cleared".
-
-                Transcript showCr: "Populating methods".
-                [ self populateMethodsFor: currentClass category: targetCategory ]
-                    on: Exception
-                    do: [:ex |
-                        Transcript showCr: ("selectCategory error: " , ex printString)
-                    ].
-                Transcript showCr: "Finished populateMethodsFor call".
+                self applyCategorySelection: pendingTarget
             ]
             onNo: [
-                # Restore previous visual selections (without triggering callbacks)
-                previousCategory notNil ifTrue: [
-                    categoryPane highlightItem: previousCategory
+                pendingPrevCategory notNil ifTrue: [
+                    categoryPane highlightItem: pendingPrevCategory
                 ].
-                previousMethod notNil ifTrue: [
-                    methodPane highlightItem: previousMethod
-                ].
-                Transcript showCr: "Selection cancelled, staying on current category"
+                pendingPrevMethod notNil ifTrue: [
+                    methodPane highlightItem: pendingPrevMethod
+                ]
             ]
     ] ifFalse: [
-        currentCategory := targetCategory.
-        Transcript showCr: ("Selected category: " , targetCategory).
-
-        Transcript showCr: "Clearing method pane".
-        methodPane clear.
-        Transcript showCr: "Method pane cleared".
-
-        Transcript showCr: "Populating methods".
-        [ self populateMethodsFor: currentClass category: targetCategory ]
-            on: Exception
-            do: [:ex |
-                Transcript showCr: ("selectCategory error: " , ex printString)
-            ].
-        Transcript showCr: "Finished populateMethodsFor call".
+        self applyCategorySelection: aCategory
     ]
+]
+
+SystemBrowser>>applyCategorySelection: aCategory [
+    currentCategory := aCategory.
+    Transcript showCr: ("Selected category: " , aCategory).
+
+    methodPane clear.
+
+    [ self populateMethodsFor: currentClass category: aCategory ]
+        on: Exception
+        do: [:ex |
+            Transcript showCr: ("selectCategory error: " , ex printString)
+        ]
 ]
 
 SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
@@ -576,31 +530,27 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
 ]
 
 SystemBrowser>>selectMethod: aMethodName [
-    | targetMethod previousMethod |
-    targetMethod := aMethodName.
-    
-    # Get the visually selected method BEFORE any changes
-    previousMethod := methodPane selectedItem.
-    
     self hasUnsavedChanges ifTrue: [
+        # Store in instance variables so dialog callback blocks can access them
+        # (captured locals don't survive async dialog callbacks)
+        pendingTarget := aMethodName.
+        pendingPrevMethod := methodPane selectedItem.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
                 self markSourceClean.
-                currentMethod := targetMethod.
-                Transcript showCr: "Selected method".
-                self showMethodSource: targetMethod
+                currentMethod := pendingTarget.
+                pendingTarget notNil ifTrue: [
+                    self showMethodSource: pendingTarget
+                ]
             ]
             onNo: [
-                # Restore previous visual selection (without triggering callback)
-                previousMethod notNil ifTrue: [
-                    methodPane highlightItem: previousMethod
-                ].
-                Transcript showCr: "Selection cancelled"
+                pendingPrevMethod notNil ifTrue: [
+                    methodPane highlightItem: pendingPrevMethod
+                ]
             ]
     ] ifFalse: [
-        currentMethod := targetMethod.
-        Transcript showCr: "Selected method".
-        self showMethodSource: targetMethod
+        currentMethod := aMethodName.
+        self showMethodSource: aMethodName
     ]
 ]
 
@@ -610,6 +560,13 @@ SystemBrowser>>methodSourceInfoFor: aMethodName [
 
 SystemBrowser>>showMethodSource: aMethodName [
     | info found sourceText editorHeader |
+
+    aMethodName isNil ifTrue: [
+        Transcript showCr: "showMethodSource: aMethodName is nil!".
+        self updateSourceView: "Error: no method name provided".
+        ^ self
+    ].
+
     info := self methodSourceInfoFor: aMethodName.
     found := (info includesKey: "found")
         ifTrue: [ info at: "found" ]
@@ -624,7 +581,7 @@ SystemBrowser>>showMethodSource: aMethodName [
         currentMethodEndLine := nil.
         currentMethodHasBlock := false.
 
-        sourceText := aMethodName , "\n\nMethod source not found in .hrd files.".
+        sourceText := (aMethodName asString) , "\n\nMethod source not found in .hrd files.".
         self updateSourceView: sourceText.
         ^ self
     ].
@@ -652,9 +609,11 @@ SystemBrowser>>showMethodSource: aMethodName [
         ifFalse: [ false ].
 
     editorHeader := self editableHeaderFromMethodHeader: currentMethodHeader.
+    editorHeader isNil ifTrue: [ editorHeader := aMethodName asString ].
     sourceText := (info includesKey: "source")
         ifTrue: [ info at: "source" ]
         ifFalse: [ "" ].
+    sourceText isNil ifTrue: [ sourceText := "" ].
 
     currentMethodHasBlock ifTrue: [
         sourceText := editorHeader , "\n" , sourceText

@@ -1,5 +1,5 @@
 # Harding - Modern Smalltalk dialect
-version = "0.7.0"
+version = "0.7.1"
 author = "Göran Krampe"
 description = "Modern Smalltalk dialect written in Nim"
 license = "MIT"
@@ -13,8 +13,6 @@ requires "nim == 2.2.6"
 # FFI dependencies
 when defined(linux):
   requires "libffi"
-when defined(macosx):
-  passL "-ldl"
 
 # BitBarrel support (optional)
 when defined(bitbarrel):

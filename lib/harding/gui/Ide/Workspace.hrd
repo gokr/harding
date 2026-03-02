@@ -159,9 +159,9 @@ Workspace>>doItSelection [
 ]
 
 Workspace>>printItSelection [
-    # Print It - evaluate and insert result at cursor position
+    # Print It - evaluate and insert result after selection or at end of current line
     # The inserted text is then selected so it can be easily deleted
-    | code result resultString cursorPos insertedEnd |
+    | code result resultString insertPos insertedEnd selectedText |
     code := self evaluationSourceCode.
     code isEmpty ifTrue: [
         self showError: "No code selected/current line to evaluate".
@@ -180,17 +180,24 @@ Workspace>>printItSelection [
         ifTrue: [ "<class " , result name , ">" ]
         ifFalse: [ result printString ].
 
-    # Get cursor position (end of selection, or just cursor position)
-    cursorPos := sourceView getSelectionEnd.
+    # Check if there's a selection
+    selectedText := sourceView selectedText.
+    (selectedText isNil or: [ selectedText isEmpty ]) ifTrue: [
+        # No selection - insert at end of current line
+        insertPos := sourceView getCurrentLineEnd.
+    ] ifFalse: [
+        # Has selection - insert right after the selection
+        insertPos := sourceView getSelectionEnd.
+    ].
     
-    # Insert result at cursor position
-    sourceView insertText: resultString at: cursorPos.
+    # Insert result at the calculated position
+    sourceView insertText: resultString at: insertPos.
     
     # Calculate end position of inserted text
-    insertedEnd := cursorPos + resultString size.
+    insertedEnd := insertPos + resultString size.
     
     # Select the inserted text so it can be easily deleted
-    sourceView selectRangeFrom: cursorPos to: insertedEnd.
+    sourceView selectRangeFrom: insertPos to: insertedEnd.
     
     ^ result
 ]

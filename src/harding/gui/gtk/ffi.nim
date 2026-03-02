@@ -7,7 +7,12 @@
 when defined(gtk3):
   {.passl: "-lgtk-3 -lgtksourceview-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
 else:
-  {.passl: "-lgtk-4 -L/usr/lib/x86_64-linux-gnu -l:libgtksourceview-5.so.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+  when defined(macosx):
+    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 gio-2.0 gobject-2.0 glib-2.0").}
+  elif defined(linux):
+    {.passl: "-lgtk-4 -L/usr/lib/x86_64-linux-gnu -l:libgtksourceview-5.so.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+  else:
+    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 gio-2.0 gobject-2.0 glib-2.0").}
 
 ## Types
 type
@@ -280,6 +285,7 @@ when not defined(gtk3):
   proc gtkListBoxSelectRow*(box: GtkListBox, row: GtkListBoxRow) {.cdecl, importc: "gtk_list_box_select_row".}
   proc gtkListBoxSetSelectionMode*(box: GtkListBox, mode: cint) {.cdecl, importc: "gtk_list_box_set_selection_mode".}
   proc gtkListBoxGetRowAtIndex*(box: GtkListBox, index: cint): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_row_at_index".}
+  proc gtkListBoxGetRowAtY*(box: GtkListBox, y: cint): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_row_at_y".}
 else:
   proc gtkListBoxNew*(): GtkListBox {.cdecl, importc: "gtk_list_box_new".}
   proc gtkListBoxAppend*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_insert".}
@@ -334,6 +340,7 @@ proc gtkSourceLanguageManagerGetDefault*(): GtkSourceLanguageManager {.cdecl, im
 proc gtkSourceLanguageManagerGetLanguage*(manager: GtkSourceLanguageManager, id: cstring): GtkSourceLanguage {.cdecl, importc: "gtk_source_language_manager_get_language".}
 proc gtkSourceLanguageManagerGetLanguageIds*(manager: GtkSourceLanguageManager): ptr cstring {.cdecl, importc: "gtk_source_language_manager_get_language_ids".}
 proc gtkSourceLanguageManagerSetSearchPath*(manager: GtkSourceLanguageManager, dirs: ptr cstring) {.cdecl, importc: "gtk_source_language_manager_set_search_path".}
+proc gtkSourceLanguageManagerAppendSearchPath*(manager: GtkSourceLanguageManager, path: cstring) {.cdecl, importc: "gtk_source_language_manager_append_search_path".}
 
 # GtkEventController - Base for event controllers (GTK4)
 when not defined(gtk3):

@@ -416,6 +416,16 @@ proc initGtkBridge*(interp: var Interpreter) =
   listBoxSelectRowAtIndexMethod.hasInterpreterParam = true
   addMethodToClass(listBoxCls, "selectRowAtIndex:", listBoxSelectRowAtIndexMethod)
 
+  let listBoxRowIndexAtYMethod = createCoreMethod("rowIndexAtY:")
+  listBoxRowIndexAtYMethod.nativeImpl = cast[pointer](listBoxGetRowIndexAtYImpl)
+  listBoxRowIndexAtYMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "rowIndexAtY:", listBoxRowIndexAtYMethod)
+
+  let listBoxOnRowSelectedMethod = createCoreMethod("onRowSelected:")
+  listBoxOnRowSelectedMethod.nativeImpl = cast[pointer](listBoxOnRowSelectedImpl)
+  listBoxOnRowSelectedMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "onRowSelected:", listBoxOnRowSelectedMethod)
+
   interp.globals[]["GtkListBox"] = listBoxCls.toValue()
   debug("Registered GtkListBox class")
 
@@ -504,6 +514,10 @@ proc initGtkBridge*(interp: var Interpreter) =
   textViewGetSelectionEndMethod.nativeImpl = cast[pointer](textViewGetSelectionEndImpl)
   textViewGetSelectionEndMethod.hasInterpreterParam = true
   addMethodToClass(textViewCls, "getSelectionEnd", textViewGetSelectionEndMethod)
+  let textViewGetCurrentLineEndMethod = createCoreMethod("getCurrentLineEnd")
+  textViewGetCurrentLineEndMethod.nativeImpl = cast[pointer](textViewGetCurrentLineEndImpl)
+  textViewGetCurrentLineEndMethod.hasInterpreterParam = true
+  addMethodToClass(textViewCls, "getCurrentLineEnd", textViewGetCurrentLineEndMethod)
 
   let textViewScrollToEndMethod = createCoreMethod("scrollToEnd")
   textViewScrollToEndMethod.nativeImpl = cast[pointer](textViewScrollToEndImpl)

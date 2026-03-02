@@ -14,9 +14,15 @@
 # Class method constructor moved from Nim to Harding
 GtkButton class>>newLabel: aString [
     | btn |
-    # Create a new button with the given label
     btn := self new.
     btn label: aString.
+    ^btn
+].
+
+GtkButton class>>newLabel: aString iconName: anIconName [
+    | btn |
+    btn := self new.
+    btn label: aString iconName: anIconName.
     ^btn
 ].
 

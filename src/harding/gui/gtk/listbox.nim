@@ -4,6 +4,7 @@
 
 import std/[tables]
 import harding/core/types
+import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -127,6 +128,57 @@ proc listBoxGetSelectedRowIndexImpl*(interp: var Interpreter, self: Instance, ar
   let idx = gtkListBoxRowGetIndex(row)
   return NodeValue(kind: vkInt, intVal: idx.int)
 
+## Row-selected signal callback for GtkListBox
+## GTK signature: void callback(GtkListBox*, GtkListBoxRow*, gpointer)
+proc listBoxRowSelectedCallback(listBox: GtkListBox, row: GtkListBoxRow, userData: pointer) {.cdecl.} =
+  let proxy = proxyTable.getOrDefault(cast[GtkWidget](listBox), nil)
+  if proxy == nil or proxy.destroyed:
+    return
+  if "row-selected" notin proxy.signalHandlers or proxy.signalHandlers["row-selected"].len == 0:
+    return
+  let handler = proxy.signalHandlers["row-selected"][0]
+  let interp = proxy.interp
+  if interp == nil:
+    return
+  # Get row index (-1 if row is nil, meaning deselection)
+  let idx = if row != nil: gtkListBoxRowGetIndex(row).int else: -1
+  let indexVal = NodeValue(kind: vkInt, intVal: idx)
+  try:
+    GC_ref(handler.blockNode)
+    let msgNode = MessageNode(
+      receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
+      selector: "value:",
+      arguments: @[Node(LiteralNode(value: indexVal))],
+      isCascade: false
+    )
+    discard evalWithVMCleanContext(interp[], msgNode)
+    GC_unref(handler.blockNode)
+  except CatchableError as e:
+    error("Error in row-selected callback: ", e.msg)
+
+proc listBoxOnRowSelectedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Instance method: Connect a block to the row-selected signal
+  ## Block receives the row index (0-based, -1 if deselected)
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+  if not (self.isNimProxy and self.nimValue != nil):
+    return nilValue()
+
+  let listBox = cast[GtkListBox](self.nimValue)
+  let proxy = proxyTable.getOrDefault(cast[GtkWidget](listBox), nil)
+  if proxy == nil:
+    return nilValue()
+
+  let blockNode = args[0].blockVal
+  let handler = SignalHandler(blockNode: blockNode)
+  if "row-selected" notin proxy.signalHandlers:
+    proxy.signalHandlers["row-selected"] = @[]
+  proxy.signalHandlers["row-selected"].add(handler)
+
+  discard gSignalConnect(cast[GObject](listBox), "row-selected",
+                         cast[GCallback](listBoxRowSelectedCallback), nil)
+  nilValue()
+
 proc listBoxSelectRowAtIndexImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Instance method: Select row at given index
   if args.len < 1 or args[0].kind != vkInt:
@@ -141,3 +193,19 @@ proc listBoxSelectRowAtIndexImpl*(interp: var Interpreter, self: Instance, args:
     gtkListBoxSelectRow(listBox, row)
     debug("Selected row at index ", args[0].intVal)
   nilValue()
+
+proc listBoxGetRowIndexAtYImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Instance method: Get row index at y coordinate (for right-click context menus)
+  ## Returns -1 if no row at that y position
+  if args.len < 1 or args[0].kind != vkInt:
+    return NodeValue(kind: vkInt, intVal: -1)
+  if not (self.isNimProxy and self.nimValue != nil):
+    return NodeValue(kind: vkInt, intVal: -1)
+
+  let listBox = cast[GtkListBox](self.nimValue)
+  let y = args[0].intVal.cint
+  let row = gtkListBoxGetRowAtY(listBox, y)
+  if row == nil:
+    return NodeValue(kind: vkInt, intVal: -1)
+  let idx = gtkListBoxRowGetIndex(row)
+  return NodeValue(kind: vkInt, intVal: idx.int)
