@@ -197,13 +197,24 @@ proc listBoxSelectRowAtIndexImpl*(interp: var Interpreter, self: Instance, args:
 proc listBoxGetRowIndexAtYImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Instance method: Get row index at y coordinate (for right-click context menus)
   ## Returns -1 if no row at that y position
-  if args.len < 1 or args[0].kind != vkInt:
+  ## Accepts either Int or Float (from gesture coordinates)
+  if args.len < 1:
     return NodeValue(kind: vkInt, intVal: -1)
   if not (self.isNimProxy and self.nimValue != nil):
     return NodeValue(kind: vkInt, intVal: -1)
 
   let listBox = cast[GtkListBox](self.nimValue)
-  let y = args[0].intVal.cint
+  
+  # Convert y to int (gesture passes floats)
+  let yVal = case args[0].kind
+    of vkInt: args[0].intVal
+    of vkFloat: args[0].floatVal.int
+    else: -1
+  
+  if yVal < 0:
+    return NodeValue(kind: vkInt, intVal: -1)
+    
+  let y = yVal.cint
   let row = gtkListBoxGetRowAtY(listBox, y)
   if row == nil:
     return NodeValue(kind: vkInt, intVal: -1)

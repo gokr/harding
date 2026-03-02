@@ -149,16 +149,22 @@ BrowserPane>>handleRightClickAtX: x y: y [
         ^ self
     ].
 
-    # Get the row index at the clicked y coordinate
-    # We use the listBox instance variable directly
     listBox isNil ifTrue: [
         Transcript showCr: "DEBUG: listBox is nil, returning".
         ^ self
     ].
 
+    # Try to get the row at the clicked position
     Transcript showCr: ("DEBUG: Calling rowIndexAtY: " , y printString).
     rowIndex := listBox rowIndexAtY: y.
     Transcript showCr: ("DEBUG: Got rowIndex: " , rowIndex printString).
+
+    # If that didn't work, try using the currently selected row
+    (rowIndex < 0 or: [rowIndex >= items size]) ifTrue: [
+        Transcript showCr: "DEBUG: Trying selectedRowIndex instead".
+        rowIndex := listBox selectedRowIndex.
+        Transcript showCr: ("DEBUG: selectedRowIndex returned: " , rowIndex printString).
+    ].
 
     # Validate index and get corresponding item
     (rowIndex >= 0 and: [rowIndex < items size]) ifTrue: [
