@@ -1,0 +1,7 @@
+#!/usr/bin/env harding
+#
+# Notification.hrd - Notification class
+
+Notification := Exception derive
+
+Notification>>isResumable [ ^ true ]

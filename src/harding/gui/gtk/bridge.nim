@@ -830,8 +830,8 @@ proc initGtkBridge*(interp: var Interpreter) =
 
 ## Load Harding-side GTK wrapper files
 proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
-  ## Load the Harding-side GTK wrapper classes from lib/harding/gui/Gtk4/
-  let libPath = if basePath.len > 0: basePath / "lib" / "harding" / "gui" / "Gtk4" else: "lib" / "harding" / "gui" / "Gtk4"
+  ## Load the Harding-side GTK wrapper classes from lib/gui/gtk4/
+  let libPath = if basePath.len > 0: basePath / "lib" / "gui" / "gtk4" else: "lib" / "gui" / "gtk4"
 
   debug("Loading GTK wrapper files from: ", libPath)
 
@@ -887,8 +887,8 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
 
 ## Load IDE tool files
 proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
-  ## Load the IDE tool classes from lib/harding/gui/Ide/
-  let libPath = if basePath.len > 0: basePath / "lib" / "harding" / "gui" / "Ide" else: "lib" / "harding" / "gui" / "Ide"
+  ## Load the IDE tool classes from lib/gui/bona/
+  let libPath = if basePath.len > 0: basePath / "lib" / "gui" / "bona" else: "lib" / "gui" / "bona"
 
   debug("Loading IDE tool files from: ", libPath)
 

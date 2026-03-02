@@ -1,0 +1,37 @@
+#!/usr/bin/env harding
+#
+# Printable.hrd - Printable mixin
+
+Printable := Mixin derive.
+
+Printable>>printOn: stream [
+  stream show: (self class name).
+  stream show: "@".
+  stream show: (self identityHash printString)
+]
+
+Printable>>printString [
+  | stream |
+  stream := "" writeStream.
+  self printOn: stream.
+  ^ stream contents
+]
+
+Printable>>print [
+  Transcript show: self printString
+]
+
+Printable>>printCr [
+  Transcript showCr: self printString
+]
+
+Printable>>displayOn: stream [
+  self printOn: stream
+]
+
+Printable>>displayString [
+  | stream |
+  stream := "" writeStream.
+  self displayOn: stream.
+  ^ stream contents
+]

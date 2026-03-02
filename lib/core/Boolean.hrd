@@ -1,9 +1,8 @@
 #!/usr/bin/env harding
 #
-# Boolean.nt - Boolean class hierarchy extensions
-# Adds methods to the existing Boolean, True, and False classes
+# Boolean.nt - Boolean class extensions
 #
-# Note: Boolean, True, and False classes are defined in the interpreter.
+# Note: Boolean is defined in the interpreter.
 # This file extends them with additional methods using >> syntax.
 #
 
@@ -22,119 +21,4 @@ Boolean>>asString [
 
 Boolean>>ifFalse: falseBlock ifTrue: trueBlock [
   ^ self ifTrue: trueBlock ifFalse: falseBlock
-].
-
-#====================================================================
-# True class extensions
-#====================================================================
-
-True>>ifTrue: block [
-  # Evaluate the block and return its value.
-  ^ block value
-].
-
-True>>ifFalse: block [
-  # Return nil - don't evaluate the block.
-  ^ nil
-].
-
-True>>ifTrue: trueBlock ifFalse: falseBlock [
-  # Evaluate trueBlock and return its value.
-  ^ trueBlock value
-].
-
-True>>and: block [
-  # Evaluate block and return its value.
-  ^ block value
-].
-
-True>>or: block [
-  # Return true - short circuit.
-  ^ true
-].
-
-True>>not [
-  # Return false.
-  ^ false
-].
-
-True>>& other [
-  # Logical AND (non-short-circuit).
-  ^ other
-].
-
-True>>| other [
-  # Logical OR (non-short-circuit).
-  ^ true
-].
-
-True>>= other [
-  # Check if other is true.
-  ^ other == true
-].
-
-True>>printString [
-  ^ "true"
-].
-
-#====================================================================
-# False class extensions
-#====================================================================
-
-False>>ifTrue: block [
-  # Return nil - don't evaluate the block.
-  ^ nil
-].
-
-False>>ifFalse: block [
-  # Evaluate the block and return its value.
-  ^ block value
-].
-
-False>>ifTrue: trueBlock ifFalse: falseBlock [
-  # Evaluate falseBlock and return its value.
-  ^ falseBlock value
-].
-
-False>>and: block [
-  # Return false - short circuit.
-  ^ false
-].
-
-False>>or: block [
-  # Evaluate block and return its value.
-  ^ block value
-].
-
-False>>not [
-  # Return true.
-  ^ true
-].
-
-False>>& other [
-  # Logical AND (non-short-circuit).
-  ^ false
-].
-
-False>>| other [
-  # Logical OR (non-short-circuit).
-  ^ other
-].
-
-False>>= other [
-  # Check if other is false.
-  ^ other == false
-].
-
-False>>printString [
-  ^ "false"
-].
-
-#====================================================================
-# UndefinedObject class extensions
-#====================================================================
-
-UndefinedObject>>printString [
-  # The nil singleton should print as "nil"
-  ^ "nil"
 ].

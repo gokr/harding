@@ -1,0 +1,5 @@
+#!/usr/bin/env harding
+#
+# Error.hrd - Error class
+
+Error := Exception derive

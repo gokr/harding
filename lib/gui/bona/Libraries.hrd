@@ -5,27 +5,39 @@
 # Global registry of all libraries
 Libraries := Array new.
 
-# Create core libraries
+# Core library (classes loaded into Harding globals)
 CoreLib := Library new.
 CoreLib name: "Core".
 Libraries addLast: CoreLib.
 
-CollectionsLib := Library new.
-CollectionsLib name: "Collections".
-Libraries addLast: CollectionsLib.
+# Process/concurrency library (classes and related globals)
+ProcessLib := (Harding includesKey: "ProcessLibrary")
+    ifTrue: [ ProcessLibrary ]
+    ifFalse: [
+        | lib |
+        lib := Library new.
+        lib name: "Process".
+        lib
+    ].
+Libraries addLast: ProcessLib.
 
+# Standard and Granite libraries are created by bootstrap
+Libraries addLast: Standard.
+Libraries addLast: GraniteLib.
+
+# GUI/Bona libraries are IDE-local
 GUILib := Library new.
 GUILib name: "GUI".
 Libraries addLast: GUILib.
 
-IDELib := Library new.
-IDELib name: "IDE".
-Libraries addLast: IDELib.
+BonaLib := Library new.
+BonaLib name: "Bona".
+Libraries addLast: BonaLib.
 
 # Library class methods for accessing registered libraries
 Library class>>syncDynamicLibraries [
-    # Refresh GUI and IDE library entries from currently loaded globals
-    | obj ideNames index name |
+    # Refresh GUI and Bona library entries from currently loaded globals
+    | obj bonaNames index name |
 
     # GUI classes (all Gtk* classes loaded by the GTK bridge)
     Harding keys do: [:key |
@@ -37,16 +49,16 @@ Library class>>syncDynamicLibraries [
         ]
     ].
 
-    # IDE classes (loaded from lib/harding/gui/Ide/*.hrd)
+    # Bona classes (loaded from lib/gui/bona/*.hrd)
     # Keep this explicit so unrelated classes are not pulled in.
-    ideNames := #("Launcher" "Workspace" "Transcript" "SystemBrowser" "BrowserPane" "Inspector").
+    bonaNames := #("Launcher" "Workspace" "Transcript" "SystemBrowser" "BrowserPane" "Inspector").
     index := 0.
-    [ index < ideNames size ] whileTrue: [
-        name := ideNames at: index.
+    [ index < bonaNames size ] whileTrue: [
+        name := bonaNames at: index.
         (Harding includesKey: name) ifTrue: [
             obj := Harding at: name.
             (obj notNil and: [ obj isClass ]) ifTrue: [
-                IDELib at: name put: obj
+                BonaLib at: name put: obj
             ]
         ].
         index := index + 1
@@ -90,6 +102,8 @@ Library>>classNames [
 ].
 
 # Register core classes with CoreLib
+CoreLib at: "Root" put: Root.
+CoreLib at: "Mixin" put: Mixin.
 CoreLib at: "Object" put: Object.
 CoreLib at: "Class" put: Class.
 CoreLib at: "Block" put: Block.
@@ -105,16 +119,24 @@ CoreLib at: "True" put: True.
 CoreLib at: "False" put: False.
 CoreLib at: "UndefinedObject" put: UndefinedObject.
 CoreLib at: "Library" put: Library.
-CoreLib at: "Process" put: Process.
-CoreLib at: "Scheduler" put: Scheduler.
-CoreLib at: "Processor" put: Processor.
-CoreLib at: "Monitor" put: Monitor.
-CoreLib at: "Semaphore" put: Semaphore.
-CoreLib at: "SharedQueue" put: SharedQueue.
+CoreLib at: "Exception" put: Exception.
+CoreLib at: "Error" put: Error.
+CoreLib at: "Notification" put: Notification.
+CoreLib at: "MessageNotUnderstood" put: MessageNotUnderstood.
+CoreLib at: "SubscriptOutOfBounds" put: SubscriptOutOfBounds.
+CoreLib at: "DivisionByZero" put: DivisionByZero.
+CoreLib at: "UnhandledError" put: UnhandledError.
+CoreLib at: "Comparable" put: Comparable.
+CoreLib at: "Iterable" put: Iterable.
+CoreLib at: "Printable" put: Printable.
 
-# Register collection classes
-CollectionsLib at: "Interval" put: Interval.
-CollectionsLib at: "SortedCollection" put: SortedCollection.
+# Register process/concurrency classes and globals
+ProcessLib at: "Process" put: Process.
+ProcessLib at: "Scheduler" put: Scheduler.
+ProcessLib at: "Processor" put: Processor.
+ProcessLib at: "Monitor" put: Monitor.
+ProcessLib at: "Semaphore" put: Semaphore.
+ProcessLib at: "SharedQueue" put: SharedQueue.
+ProcessLib at: "Synchronizable" put: Synchronizable.
 
-# IDE classes are registered when the IDE files load
-# The IDE files will register themselves with IDELib
+# Bona classes are registered when the tool files load

@@ -47,7 +47,7 @@ proc sourceViewNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
   let langManager = gtkSourceLanguageManagerGetDefault()
   if langManager != nil:
     # Append our syntax directory so GtkSourceView can find harding.lang
-    let syntaxDir = interp.hardingHome / "lib" / "harding" / "syntax"
+    let syntaxDir = interp.hardingHome / "lib" / "syntax"
     gtkSourceLanguageManagerAppendSearchPath(langManager, syntaxDir.cstring)
 
     # Try to find the Harding language definition

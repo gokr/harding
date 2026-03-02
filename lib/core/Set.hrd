@@ -1,0 +1,25 @@
+#!/usr/bin/env harding
+#
+# Set.hrd - Set class methods
+
+Set>>new <primitive primitiveSetNew>
+
+Set>>add: element <primitive primitiveSetAdd: element>
+
+Set>>remove: element <primitive primitiveSetRemove: element>
+
+Set>>includes: element <primitive primitiveSetIncludes: element>
+
+Set>>size <primitive primitiveSetSize>
+
+Set>>isEmpty [
+  ^ self size = 0
+]
+
+Set>>union: otherSet <primitive primitiveSetUnion: otherSet>
+
+Set>>intersection: otherSet <primitive primitiveSetIntersection: otherSet>
+
+Set>>difference: otherSet <primitive primitiveSetDifference: otherSet>
+
+Set>>do: block <primitive primitiveSetDo: block>

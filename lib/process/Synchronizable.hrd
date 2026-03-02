@@ -1,0 +1,17 @@
+#!/usr/bin/env harding
+#
+# Synchronizable.hrd - Synchronization mixin
+
+Synchronizable := Mixin derive.
+
+Synchronizable>>critical: aBlock [
+  self subclassResponsibility
+]
+
+Synchronizable>>acquire [
+  self subclassResponsibility
+]
+
+Synchronizable>>release [
+  self subclassResponsibility
+]

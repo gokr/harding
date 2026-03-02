@@ -1,7 +1,7 @@
 #
 # test_set_operations.nim - Tests for Set class operations
 #
-# Set is fully implemented in objects.nim and declared in lib/core/Collections.hrd
+# Set is fully implemented in objects.nim and declared in lib/core/Set.hrd
 # Key selectors: new, add:, remove:, includes:, size, isEmpty, do:,
 #                union:, intersection:, difference:
 #

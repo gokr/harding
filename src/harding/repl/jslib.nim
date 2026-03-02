@@ -5,8 +5,9 @@
 # eliminating the need for file I/O in the browser environment.
 #
 # The library files are organized by category:
-# - Core: Object, Boolean, Block, Number, String, System (loaded into globals)
-# - Standard: Collections, SortedCollection, Interval, File, FileStream, Exception, TestCase (loaded into Standard)
+# - Core: fundamental classes and mixins (loaded into globals)
+# - Standard: extra collection and I/O classes (loaded into Standard)
+# - Granite: compiler support classes (loaded into GraniteLib)
 #
 
 import std/[tables, strutils]
@@ -18,25 +19,45 @@ import ../interpreter/objects
 # Embedded Library Files
 # ============================================================================
 
-# Core library files (loaded into globals via Harding load:)
+# Core library files (loaded into globals)
 const EmbeddedObjectHrd = staticRead("../../../lib/core/Object.hrd")
 const EmbeddedBooleanHrd = staticRead("../../../lib/core/Boolean.hrd")
+const EmbeddedTrueHrd = staticRead("../../../lib/core/True.hrd")
+const EmbeddedFalseHrd = staticRead("../../../lib/core/False.hrd")
+const EmbeddedUndefinedObjectHrd = staticRead("../../../lib/core/UndefinedObject.hrd")
 const EmbeddedBlockHrd = staticRead("../../../lib/core/Block.hrd")
+const EmbeddedLibraryHrd = staticRead("../../../lib/core/Library.hrd")
 const EmbeddedNumberHrd = staticRead("../../../lib/core/Number.hrd")
+const EmbeddedIntegerHrd = staticRead("../../../lib/core/Integer.hrd")
+const EmbeddedFloatHrd = staticRead("../../../lib/core/Float.hrd")
 const EmbeddedStringHrd = staticRead("../../../lib/core/String.hrd")
+const EmbeddedSymbolHrd = staticRead("../../../lib/core/Symbol.hrd")
+const EmbeddedArrayHrd = staticRead("../../../lib/core/Array.hrd")
+const EmbeddedTableHrd = staticRead("../../../lib/core/Table.hrd")
+const EmbeddedSetHrd = staticRead("../../../lib/core/Set.hrd")
 const EmbeddedSystemHrd = staticRead("../../../lib/core/System.hrd")
+const EmbeddedExceptionHrd = staticRead("../../../lib/core/Exception.hrd")
+const EmbeddedErrorHrd = staticRead("../../../lib/core/Error.hrd")
+const EmbeddedNotificationHrd = staticRead("../../../lib/core/Notification.hrd")
+const EmbeddedMessageNotUnderstoodHrd = staticRead("../../../lib/core/MessageNotUnderstood.hrd")
+const EmbeddedSubscriptOutOfBoundsHrd = staticRead("../../../lib/core/SubscriptOutOfBounds.hrd")
+const EmbeddedDivisionByZeroHrd = staticRead("../../../lib/core/DivisionByZero.hrd")
+const EmbeddedUnhandledErrorHrd = staticRead("../../../lib/core/UnhandledError.hrd")
+const EmbeddedComparableHrd = staticRead("../../../lib/core/Comparable.hrd")
+const EmbeddedIterableHrd = staticRead("../../../lib/core/Iterable.hrd")
+const EmbeddedPrintableHrd = staticRead("../../../lib/core/Printable.hrd")
+const EmbeddedSynchronizableHrd = staticRead("../../../lib/process/Synchronizable.hrd")
 
 # Standard library files (loaded into Standard Library)
-const EmbeddedCollectionsHrd = staticRead("../../../lib/core/Collections.hrd")
-const EmbeddedSortedCollectionHrd = staticRead("../../../lib/core/SortedCollection.hrd")
-const EmbeddedIntervalHrd = staticRead("../../../lib/core/Interval.hrd")
-const EmbeddedFileHrd = staticRead("../../../lib/core/File.hrd")
-const EmbeddedFileStreamHrd = staticRead("../../../lib/core/FileStream.hrd")
-const EmbeddedExceptionHrd = staticRead("../../../lib/core/Exception.hrd")
-const EmbeddedTestCaseHrd = staticRead("../../../lib/core/TestCase.hrd")
+const EmbeddedSortedCollectionHrd = staticRead("../../../lib/standard/SortedCollection.hrd")
+const EmbeddedIntervalHrd = staticRead("../../../lib/standard/Interval.hrd")
+const EmbeddedFileHrd = staticRead("../../../lib/standard/File.hrd")
+const EmbeddedFileStreamHrd = staticRead("../../../lib/standard/FileStream.hrd")
+const EmbeddedTestCaseHrd = staticRead("../../../lib/standard/TestCase.hrd")
 
-# Bootstrap code (entry point)
-const EmbeddedBootstrapHrd = staticRead("../../../lib/core/Bootstrap.hrd")
+# Granite library files (loaded into GraniteLib)
+const EmbeddedApplicationHrd = staticRead("../../../lib/granite/Application.hrd")
+const EmbeddedGraniteHrd = staticRead("../../../lib/granite/Granite.hrd")
 
 # ============================================================================
 # Library Loading
@@ -55,25 +76,59 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
   ## Load all embedded library files into the interpreter
   ## This replaces the file-based loadStdlib for JS environments
 
+  # Load core files into globals
+  loadEmbeddedSource(interp, EmbeddedObjectHrd, "Object.hrd")
+  loadEmbeddedSource(interp, EmbeddedBooleanHrd, "Boolean.hrd")
+  loadEmbeddedSource(interp, EmbeddedTrueHrd, "True.hrd")
+  loadEmbeddedSource(interp, EmbeddedFalseHrd, "False.hrd")
+  loadEmbeddedSource(interp, EmbeddedUndefinedObjectHrd, "UndefinedObject.hrd")
+  loadEmbeddedSource(interp, EmbeddedBlockHrd, "Block.hrd")
+  loadEmbeddedSource(interp, EmbeddedLibraryHrd, "Library.hrd")
+  loadEmbeddedSource(interp, EmbeddedNumberHrd, "Number.hrd")
+  loadEmbeddedSource(interp, EmbeddedIntegerHrd, "Integer.hrd")
+  loadEmbeddedSource(interp, EmbeddedFloatHrd, "Float.hrd")
+  loadEmbeddedSource(interp, EmbeddedStringHrd, "String.hrd")
+  loadEmbeddedSource(interp, EmbeddedSymbolHrd, "Symbol.hrd")
+  loadEmbeddedSource(interp, EmbeddedArrayHrd, "Array.hrd")
+  loadEmbeddedSource(interp, EmbeddedTableHrd, "Table.hrd")
+  loadEmbeddedSource(interp, EmbeddedSetHrd, "Set.hrd")
+  loadEmbeddedSource(interp, EmbeddedSystemHrd, "System.hrd")
+  loadEmbeddedSource(interp, EmbeddedExceptionHrd, "Exception.hrd")
+  loadEmbeddedSource(interp, EmbeddedErrorHrd, "Error.hrd")
+  loadEmbeddedSource(interp, EmbeddedNotificationHrd, "Notification.hrd")
+  loadEmbeddedSource(interp, EmbeddedMessageNotUnderstoodHrd, "MessageNotUnderstood.hrd")
+  loadEmbeddedSource(interp, EmbeddedSubscriptOutOfBoundsHrd, "SubscriptOutOfBounds.hrd")
+  loadEmbeddedSource(interp, EmbeddedDivisionByZeroHrd, "DivisionByZero.hrd")
+  loadEmbeddedSource(interp, EmbeddedUnhandledErrorHrd, "UnhandledError.hrd")
+  loadEmbeddedSource(interp, EmbeddedComparableHrd, "Comparable.hrd")
+  loadEmbeddedSource(interp, EmbeddedIterableHrd, "Iterable.hrd")
+  loadEmbeddedSource(interp, EmbeddedPrintableHrd, "Printable.hrd")
+
+  # Create Process library
+  discard interp.doit("ProcessLibrary := Library new.")
+  discard interp.doit("ProcessLibrary name: \"Process\".")
+  loadEmbeddedSource(interp, EmbeddedSynchronizableHrd, "Synchronizable.hrd")
+  discard interp.doit("ProcessLibrary at: \"Process\" put: Process.")
+  discard interp.doit("ProcessLibrary at: \"Scheduler\" put: Scheduler.")
+  discard interp.doit("ProcessLibrary at: \"Processor\" put: Processor.")
+  discard interp.doit("ProcessLibrary at: \"Monitor\" put: Monitor.")
+  discard interp.doit("ProcessLibrary at: \"Semaphore\" put: Semaphore.")
+  discard interp.doit("ProcessLibrary at: \"SharedQueue\" put: SharedQueue.")
+
   # Create Standard Library
   discard interp.doit("Standard := Library new.")
 
-  # Load core files into globals (via Harding load: simulation)
-  loadEmbeddedSource(interp, EmbeddedObjectHrd, "Object.hrd")
-  loadEmbeddedSource(interp, EmbeddedBooleanHrd, "Boolean.hrd")
-  loadEmbeddedSource(interp, EmbeddedBlockHrd, "Block.hrd")
-  loadEmbeddedSource(interp, EmbeddedNumberHrd, "Number.hrd")
-  loadEmbeddedSource(interp, EmbeddedStringHrd, "String.hrd")
-  loadEmbeddedSource(interp, EmbeddedSystemHrd, "System.hrd")
-
   # Load standard library files into Standard
-  loadEmbeddedSource(interp, EmbeddedCollectionsHrd, "Collections.hrd")
   loadEmbeddedSource(interp, EmbeddedSortedCollectionHrd, "SortedCollection.hrd")
   loadEmbeddedSource(interp, EmbeddedIntervalHrd, "Interval.hrd")
   loadEmbeddedSource(interp, EmbeddedFileHrd, "File.hrd")
   loadEmbeddedSource(interp, EmbeddedFileStreamHrd, "FileStream.hrd")
-  loadEmbeddedSource(interp, EmbeddedExceptionHrd, "Exception.hrd")
   loadEmbeddedSource(interp, EmbeddedTestCaseHrd, "TestCase.hrd")
+
+  # Create Granite library
+  discard interp.doit("GraniteLib := Library new.")
+  loadEmbeddedSource(interp, EmbeddedApplicationHrd, "Application.hrd")
+  loadEmbeddedSource(interp, EmbeddedGraniteHrd, "Granite.hrd")
 
   # Auto-import Standard for backward compatibility
   # Find Standard library instance and add to imported libraries
@@ -82,6 +137,18 @@ proc loadEmbeddedStdlib*(interp: var Interpreter) =
     if standardVal.kind == vkInstance and standardVal.instVal != nil:
       interp.importedLibraries.add(standardVal.instVal)
       debug("Auto-imported Standard library")
+
+  if "ProcessLibrary" in interp.globals[]:
+    let processVal = interp.globals[]["ProcessLibrary"]
+    if processVal.kind == vkInstance and processVal.instVal != nil:
+      interp.importedLibraries.add(processVal.instVal)
+      debug("Auto-imported Process library")
+
+  if "GraniteLib" in interp.globals[]:
+    let graniteVal = interp.globals[]["GraniteLib"]
+    if graniteVal.kind == vkInstance and graniteVal.instVal != nil:
+      interp.importedLibraries.add(graniteVal.instVal)
+      debug("Auto-imported GraniteLib library")
 
   # Set up class caches (similar to loadStdlib in vm.nim)
   if "Number" in interp.globals[]:

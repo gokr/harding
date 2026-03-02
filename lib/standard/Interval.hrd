@@ -230,8 +230,6 @@ Interval>>= anInterval [
     ]
 ]
 
-# Add to: and to:by: methods to Number for convenience
-
 Number>>to: stopNumber [
     ^Interval from: self to: stopNumber
 ]

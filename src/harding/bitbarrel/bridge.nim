@@ -36,8 +36,8 @@ when defined(bitbarrel):
 
   ## Load Harding-side BitBarrel wrapper files
   proc loadBitBarrelFiles*(interp: var Interpreter, basePath: string = "") =
-    ## Load the Harding-side BitBarrel wrapper classes from lib/harding/bitbarrel/
-    let libPath = if basePath.len > 0: basePath / "lib" / "harding" / "bitbarrel" else: "lib" / "harding" / "bitbarrel"
+    ## Load the Harding-side BitBarrel wrapper classes from lib/bitbarrel/
+    let libPath = if basePath.len > 0: basePath / "lib" / "bitbarrel" else: "lib" / "bitbarrel"
 
     debug("Loading BitBarrel files from: ", libPath)
 

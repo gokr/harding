@@ -1,0 +1,47 @@
+#!/usr/bin/env harding
+#
+# Comparable.hrd - Ordering comparison mixin
+#
+# Provides sort-order comparison methods. For equality, use Equalable mixin.
+# Comparable requires implementing compareTo: which returns:
+#   - negative if self < anObject
+#   - zero if self = anObject  
+#   - positive if self > anObject
+
+Comparable := Mixin derive.
+
+Comparable>>compareTo: anObject [
+  ^ self identityHash - anObject identityHash
+]
+
+Comparable>>< anObject [
+  ^ (self compareTo: anObject) < 0
+]
+
+Comparable>><= anObject [
+  ^ (self compareTo: anObject) <= 0
+]
+
+Comparable>> anObject [
+  ^ (self compareTo: anObject) > 0
+]
+
+Comparable>>>= anObject [
+  ^ (self compareTo: anObject) >= 0
+]
+
+Comparable>>between: min and: max [
+  ^ (self >= min) and: [ self <= max ]
+]
+
+Comparable>>min: anObject [
+  ^ (self < anObject) ifTrue: [ self ] ifFalse: [ anObject ]
+]
+
+Comparable>>max: anObject [
+  ^ (self > anObject) ifTrue: [ self ] ifFalse: [ anObject ]
+]
+
+Comparable>>clampTo: min max: max [
+  ^ (self min: max) max: min
+]

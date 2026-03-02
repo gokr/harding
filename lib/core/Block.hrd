@@ -38,3 +38,24 @@ Block>>repeat: count [
   # Execute this block count times
   count timesRepeat: [ self value ]
 ]
+
+# Exception handling
+Block>>on: exceptionClass do: handlerBlock <primitive primitiveOnDo: exceptionClass do: handlerBlock>
+
+Block>>ifError: errorBlock [
+  ^ self on: Error do: errorBlock
+]
+
+Block>>ifError: errorBlock ifNoError: normalBlock [
+  result := self on: Error do: [ :ex |
+    ^ errorBlock value: ex
+  ]
+  ^ normalBlock value: result
+]
+
+Block>>ensure: cleanupBlock [
+  | result |
+  result := self value
+  cleanupBlock value
+  ^ result
+]

@@ -7,7 +7,7 @@
 # Or:
 #   nim c -d:bitbarrel -o:harding src/harding/repl/harding.nim
 #
-# Then run in the REPL and use 'load: "lib/harding/bitbarrel/Bootstrap.hrd"'
+# Then run in the REPL and use 'load: "lib/bitbarrel/Bootstrap.hrd"'
 # to load the BitBarrel classes.
 #
 # This script cannot be run directly because BitBarrel requires special

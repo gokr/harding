@@ -1,0 +1,5 @@
+#!/usr/bin/env harding
+#
+# SubscriptOutOfBounds.hrd - SubscriptOutOfBounds class
+
+SubscriptOutOfBounds := Exception derive

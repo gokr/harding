@@ -32,13 +32,13 @@ Harding load: "lib/core/Iterable.hrd"
 Harding load: "lib/core/Printable.hrd"
 
 # Add mixins to collections (after mixin classes are loaded)
-Array addSuperclass: Iterable.
-Table addSuperclass: Iterable.
-Set addSuperclass: Iterable.
+(Array superclassNames includes: "Iterable") ifFalse: [ Array addSuperclass: Iterable ].
+(Table superclassNames includes: "Iterable") ifFalse: [ Table addSuperclass: Iterable ].
+(Set superclassNames includes: "Iterable") ifFalse: [ Set addSuperclass: Iterable ].
 
 # Add Comparable to number types
-Number addSuperclass: Comparable.
-String addSuperclass: Comparable.
+(Number superclassNames includes: "Comparable") ifFalse: [ Number addSuperclass: Comparable ].
+(String superclassNames includes: "Comparable") ifFalse: [ String addSuperclass: Comparable ].
 
 # Load optional higher-level libraries
 Harding load: "lib/process/Bootstrap.hrd"

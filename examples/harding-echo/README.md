@@ -97,7 +97,7 @@ Primitives follow the pattern: `primitive<ClassName><MethodName>`
 ### Embedding Sources
 
 ```nim
-const EchoHrd = staticRead("lib/harding/echo/Echo.hrd")
+const EchoHrd = staticRead("lib/echo/Echo.hrd")
 ```
 
 This embeds the Harding source file into the compiled Nim binary.
@@ -108,7 +108,7 @@ This embeds the Harding source file into the compiled Nim binary.
 let spec = HardingPackageSpec(
   name: "harding-echo",
   version: "0.1.0",
-  bootstrapPath: "lib/harding/echo/Bootstrap.hrd",
+  bootstrapPath: "lib/echo/Bootstrap.hrd",
   sources: @[...],
   registerPrimitives: registerEchoPrimitives
 )

@@ -1,0 +1,43 @@
+#!/usr/bin/env harding
+#
+# False.hrd - False class extensions
+
+False>>ifTrue: block [
+  ^ nil
+].
+
+False>>ifFalse: block [
+  ^ block value
+].
+
+False>>ifTrue: trueBlock ifFalse: falseBlock [
+  ^ falseBlock value
+].
+
+False>>and: block [
+  ^ false
+].
+
+False>>or: block [
+  ^ block value
+].
+
+False>>not [
+  ^ true
+].
+
+False>>& other [
+  ^ false
+].
+
+False>>| other [
+  ^ other
+].
+
+False>>= other [
+  ^ other == false
+].
+
+False>>printString [
+  ^ "false"
+].

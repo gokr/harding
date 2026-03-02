@@ -1,0 +1,5 @@
+#!/usr/bin/env harding
+#
+# DivisionByZero.hrd - DivisionByZero class
+
+DivisionByZero := Exception derive

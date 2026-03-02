@@ -1,0 +1,85 @@
+#!/usr/bin/env harding
+#
+# Iterable.hrd - Iterable mixin
+
+Iterable := Mixin derive.
+
+Iterable>>collect: block [
+  | result |
+  result := Array new.
+  self do: [ :each | result add: (block value: each) ].
+  ^ result
+]
+
+Iterable>>select: block [
+  | result |
+  result := Array new.
+  self do: [ :each |
+    (block value: each) ifTrue: [ result add: each ]
+  ].
+  ^ result
+]
+
+Iterable>>reject: block [
+  | result |
+  result := Array new.
+  self do: [ :each |
+    (block value: each) ifFalse: [ result add: each ]
+  ].
+  ^ result
+]
+
+Iterable>>detect: block [
+  self do: [ :each |
+    (block value: each) ifTrue: [ ^ each ]
+  ].
+  ^ nil
+]
+
+Iterable>>detect: block ifNone: noneBlock [
+  self do: [ :each |
+    (block value: each) ifTrue: [ ^ each ]
+  ].
+  ^ noneBlock value
+]
+
+Iterable>>inject: initialValue into: block [
+  | result |
+  result := initialValue.
+  self do: [ :each | result := block value: result value: each ].
+  ^ result
+]
+
+Iterable>>anySatisfy: block [
+  self do: [ :each |
+    (block value: each) ifTrue: [ ^ true ]
+  ].
+  ^ false
+]
+
+Iterable>>allSatisfy: block [
+  self do: [ :each |
+    (block value: each) ifFalse: [ ^ false ]
+  ].
+  ^ true
+]
+
+Iterable>>noneSatisfy: block [
+  self do: [ :each |
+    (block value: each) ifTrue: [ ^ false ]
+  ].
+  ^ true
+]
+
+Iterable>>sum [
+  ^ self inject: 0 into: [ :sum :each | sum + each ]
+]
+
+Iterable>>count: block [
+  | count |
+  count := 0.
+  self do: [ :each |
+    (block value: each) ifTrue: [ count := count + 1 ]
+  ].
+  ^ count
+]

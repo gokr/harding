@@ -191,6 +191,101 @@ Array>>indexOf: element [
     ^ nil
 ]
 
+Array>>indexOf: element ifAbsent: absentBlock [
+    | index |
+    index := self indexOf: element.
+    index isNil ifTrue: [ ^ absentBlock value ].
+    ^ index
+]
+
+Array>>withIndexDo: block [
+    | index size |
+    index := 0.
+    size := self size.
+    [ index < size ] whileTrue: [
+        block value: (self at: index) value: index.
+        index := index + 1
+    ].
+    ^ self
+]
+
+Array>>copyFrom: start to: stop [
+    | result index |
+    result := Array new.
+    index := start.
+    [ index <= stop ] whileTrue: [
+        result add: (self at: index).
+        index := index + 1
+    ].
+    ^ result
+]
+
+Array>>with: otherArray do: block [
+    | index size |
+    index := 0.
+    size := self size.
+    (size = otherArray size) ifFalse: [ self error: "Collections must be same size for with:do:" ].
+    [ index < size ] whileTrue: [
+        block value: (self at: index) value: (otherArray at: index).
+        index := index + 1
+    ].
+    ^ self
+]
+
+Array>>addFirst: element [
+    | newArray |
+    newArray := Array new.
+    newArray add: element.
+    self do: [ :each | newArray add: each ].
+    self removeAll.
+    newArray do: [ :each | self add: each ].
+    ^ element
+]
+
+Array>>addLast: element [
+    ^ self add: element
+]
+
+Array>>removeFirst [
+    | first |
+    first := self first.
+    self removeAt: 0.
+    ^ first
+]
+
+Array>>removeLast [
+    | last index |
+    index := self size - 1.
+    last := self at: index.
+    self removeAt: index.
+    ^ last
+]
+
+Array>>remove: anObject [
+    ^ self remove: anObject ifAbsent: [ nil ]
+]
+
+Array>>remove: anObject ifAbsent: absentBlock [
+    | index |
+    index := self indexOf: anObject.
+    index notNil ifTrue: [
+        self removeAt: index.
+        ^ anObject
+    ].
+    ^ absentBlock value
+]
+
+Array>>addAll: collection [
+    collection do: [ :each | self add: each ].
+    ^ collection
+]
+
+Array>>removeAll [
+    [ self isEmpty ] whileFalse: [ self removeAt: 0 ].
+    ^ self
+]
+
+
 #====================================================================
 # Array sorting
 #====================================================================
@@ -201,25 +296,31 @@ Array>>sorted [
 ]
 
 Array>>sorted: sortBlock [
-    # Return a new Array sorted using the provided sort block
-    # Uses simple insertion sort for simplicity
-    | result size i j temp |
+    # Return a new Array with elements sorted using the given sort block
+    # Uses insertion sort (positions 0 to size-1)
+    | result size i j key temp done |
+    size := self size.
     result := Array new.
-    self do: [:each | result add: each].
-    size := result size.
 
-    # Insertion sort (0-based indexing)
+    self do: [:each | result add: each].
+
     i := 1.
     [ i < size ] whileTrue: [
         j := i.
-        [ j > 0 and: [ sortBlock value: (result at: j) value: (result at: (j - 1)) not ] ] whileTrue: [
-            # Swap elements
-            temp := result at: j.
-            result at: j put: (result at: (j - 1)).
-            result at: (j - 1) put: temp.
-            j := j - 1
+        key := result at: i.
+        done := false.
+        [ (j > 0) and: [ done not ] ] whileTrue: [
+            temp := result at: (j - 1).
+            (sortBlock value: key value: temp) ifTrue: [
+                result at: j put: temp.
+                j := j - 1
+            ] ifFalse: [
+                done := true
+            ]
         ].
+        result at: j put: key.
         i := i + 1
     ].
+
     ^ result
 ]

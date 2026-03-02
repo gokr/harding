@@ -1,0 +1,5 @@
+#!/usr/bin/env harding
+#
+# MessageNotUnderstood.hrd - MessageNotUnderstood class
+
+MessageNotUnderstood := Exception derive

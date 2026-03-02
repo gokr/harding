@@ -5,5 +5,5 @@
 # This file sets up the Echo package and imports it into Harding
 
 EchoLib := Library new.
-EchoLib load: "lib/harding/echo/Echo.hrd".
+EchoLib load: "lib/echo/Echo.hrd".
 Harding import: EchoLib.

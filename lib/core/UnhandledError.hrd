@@ -1,0 +1,5 @@
+#!/usr/bin/env harding
+#
+# UnhandledError.hrd - UnhandledError class
+
+UnhandledError := Error derive

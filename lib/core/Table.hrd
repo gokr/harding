@@ -62,6 +62,17 @@ Table>>includes: value [
     ^ false
 ]
 
+Table>>printString [
+    | result isFirst |
+    result := "#{".
+    isFirst := true.
+    self keys do: [:key |
+        isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ].
+        result := result , (key printString) , " -> " , ((self at: key) printString)
+    ].
+    ^ result , "}"
+]
+
 Table>>size [
     # Return number of entries
     ^ self keys size
@@ -90,6 +101,16 @@ Table>>at: key ifAbsentPut: block [
         self at: key put: value.
         ^ value
     ]
+]
+
+Table>>at: key ifPresent: presentBlock [
+    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ].
+    ^ nil
+]
+
+Table>>at: key ifPresent: presentBlock ifAbsent: absentBlock [
+    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ].
+    ^ absentBlock value
 ]
 
 Table>>removeKey: key ifAbsent: block [
