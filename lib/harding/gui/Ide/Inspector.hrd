@@ -1,13 +1,11 @@
 # ============================================================================
-# Inspector - Object Inspector for Harding
-# Two-pane layout: slot tree | slot values
-# Allows drilling down into object structure
+# Inspector - Smalltalk-style Object Inspector for Harding
+# Two-pane layout: tree view with expand/collapse | embedded workspace
 # ============================================================================
 
-Inspector := Object derive: #(window mainBox splitBox leftPane rightPane slotTree valueView inspectedObject owner)
+Inspector := Object derive: #(window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel inspectedObject selectedObject selectedSlotName expandedPaths owner)
 
 Inspector class>>openOn: anObject [
-    # Open an inspector on anObject
     | inspector |
     inspector := self new.
     inspector inspect: anObject.
@@ -15,7 +13,6 @@ Inspector class>>openOn: anObject [
 ]
 
 Inspector class>>openOn: anObject for: anOwner [
-    # Open an inspector on anObject with an owner
     | inspector |
     inspector := self new.
     inspector inspect: anObject.
@@ -24,13 +21,16 @@ Inspector class>>openOn: anObject for: anOwner [
 
 Inspector>>initialize [
     inspectedObject := nil.
+    selectedObject := nil.
+    selectedSlotName := nil.
+    expandedPaths := Table new.
     owner := nil.
     ^ self
 ]
 
 Inspector>>inspect: anObject [
-    # Set the object to inspect
     inspectedObject := anObject.
+    selectedObject := anObject.
     ^ self
 ]
 
@@ -39,7 +39,7 @@ Inspector>>openWindow [
 ]
 
 Inspector>>openWindowFor: anOwner [
-    | buttonBox closeButton refreshButton |
+    | buttonBox closeButton refreshButton inspectButton |
 
     owner := anOwner.
 
@@ -47,29 +47,34 @@ Inspector>>openWindowFor: anOwner [
     window := GtkWindow new.
     window title: ("Inspector: " , (inspectedObject printString)).
     window iconName: "harding".
-    window setDefaultSize: 600 height: 500.
+    window setDefaultSize: 750 height: 500.
 
     # Create vertical box layout
     mainBox := GtkBox vertical.
-    mainBox setSpacing: 5.
+    mainBox setSpacing: 2.
 
-    # Create horizontal split for slot tree and value view
-    splitBox := GtkBox horizontal.
-    splitBox setSpacing: 5.
-    splitBox vexpand: true.
+    # Create horizontal paned split
+    paned := GtkPaned horizontal.
+    paned setPosition: 300.
+    paned setShrinkStartChild: false.
+    paned setShrinkEndChild: false.
+    paned setVexpand: true.
+    paned setHexpand: true.
 
-    # Left pane - slot tree
-    leftPane := self createSlotTree.
-    leftPane hexpand: true.
-    leftPane vexpand: true.
+    # Left pane - tree view in scrolled window
+    treeScroll := GtkScrolledWindow new.
+    treeScroll setVexpand: true.
+    treeScroll setHexpand: true.
 
-    # Right pane - value view
-    rightPane := self createValueView.
-    rightPane hexpand: true.
-    rightPane vexpand: true.
+    treeBox := GtkBox vertical.
+    treeBox setSpacing: 0.
+    treeScroll setChild: treeBox.
 
-    splitBox append: leftPane.
-    splitBox append: rightPane.
+    # Right pane - workspace
+    workspaceBox := self createWorkspacePane.
+
+    paned setStartChild: treeScroll.
+    paned setEndChild: workspaceBox.
 
     # Create button box
     buttonBox := GtkBox horizontal.
@@ -83,9 +88,13 @@ Inspector>>openWindowFor: anOwner [
     refreshButton clicked: [ self refresh ].
     buttonBox append: refreshButton.
 
+    inspectButton := GtkButton newLabel: "Inspect Selected".
+    inspectButton clicked: [ self inspectSelected ].
+    buttonBox append: inspectButton.
+
     # Assemble the UI
     window setChild: mainBox.
-    mainBox append: splitBox.
+    mainBox append: paned.
     mainBox append: buttonBox.
 
     # Connect destroy signal
@@ -96,214 +105,366 @@ Inspector>>openWindowFor: anOwner [
 
     window present.
 
-    # Populate the slot tree
-    self populateSlotTree.
+    # Populate the tree
+    self renderTree.
+    self updateWorkspaceLabel.
 
-    Transcript showCr: ("Inspector opened on: " , (inspectedObject printString)).
     ^ self
 ]
 
-Inspector>>createSlotTree [
-    # Create a scrolled window with slot list
-    | scrolled treeBox |
+Inspector>>createWorkspacePane [
+    | box scrolled |
+    box := GtkBox vertical.
+    box setSpacing: 2.
+
+    # Label showing selected value info
+    workspaceLabel := GtkLabel new: (inspectedObject printString).
+    workspaceLabel setHexpand: true.
+    workspaceLabel setHalignStart.
+    box append: workspaceLabel.
+
+    # Embedded workspace sourceview
     scrolled := GtkScrolledWindow new.
-    scrolled vexpand: true.
-    scrolled hexpand: true.
+    scrolled setVexpand: true.
+    scrolled setHexpand: true.
 
-    treeBox := GtkBox vertical.
-    treeBox setSpacing: 1.
+    workspaceSourceView := GtkSourceView new.
+    workspaceSourceView showLineNumbers: false.
+    workspaceSourceView setText: "self printString".
 
-    scrolled setChild: treeBox.
-    ^ scrolled
+    scrolled setChild: workspaceSourceView.
+    box append: scrolled.
+
+    self installWorkspaceShortcuts.
+
+    ^ box
 ]
 
-Inspector>>createValueView [
-    # Create a scrolled window for value display
-    | scrolled label |
-    scrolled := GtkScrolledWindow new.
-    scrolled vexpand: true.
-    scrolled hexpand: true.
-
-    label := GtkLabel new: "Select a slot to view its value".
-    label addCssClass: "dim-label".
-
-    scrolled setChild: label.
-    ^ scrolled
+Inspector>>installWorkspaceShortcuts [
+    workspaceSourceView enableKeyboardShortcuts.
+    workspaceSourceView onControlKey: "d" do: [ self doItInWorkspace ].
+    workspaceSourceView onControlKey: "p" do: [ self printItInWorkspace ].
+    workspaceSourceView onControlKey: "i" do: [ self inspectItInWorkspace ].
 ]
 
-Inspector>>populateSlotTree [
-    # Populate the slot tree with the object's slots
-    | treeBox slotNames |
+# ============================================================================
+# Tree rendering
+# ============================================================================
 
-    # Get the tree box from the scrolled window
-    treeBox := leftPane getChild ifNil: [ ^ self ].
-
-    # Clear existing content
+Inspector>>renderTree [
+    # Clear and rebuild the tree
     treeBox := GtkBox vertical.
-    treeBox setSpacing: 1.
-    leftPane setChild: treeBox.
+    treeBox setSpacing: 0.
+    treeScroll setChild: treeBox.
 
-    # Add header with object info
-    self addTreeHeader: (inspectedObject className) to: treeBox.
+    # Add self header
+    self addTreeHeader: ("self (" , (inspectedObject className) , ")") to: treeBox.
 
-    # Get slot names
-    slotNames := inspectedObject slotNames.
+    # Render the inspected object's slots
+    self renderSlotsOf: inspectedObject atDepth: 0 pathPrefix: "root" into: treeBox.
+]
 
-    slotNames isEmpty ifTrue: [
-        # Object has no slots
-        self addTreeItem: "(no slots)" value: nil to: treeBox.
-    ] ifFalse: [
-        slotNames do: [:slotName |
-            | slotValue |
-            slotValue := inspectedObject at: slotName ifAbsent: [ nil ].
-            self addTreeItem: slotName value: slotValue to: treeBox.
+Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
+    | slotNames |
+
+    # Handle different object types
+    (anObject isKindOf: Array) ifTrue: [
+        ^ self renderArraySlots: anObject atDepth: depth pathPrefix: prefix into: box
+    ].
+    (anObject isKindOf: Table) ifTrue: [
+        ^ self renderTableSlots: anObject atDepth: depth pathPrefix: prefix into: box
+    ].
+
+    # Regular object - show named slots
+    slotNames := anObject allSlotNames.
+    slotNames do: [:name |
+        | value path expanded |
+        value := anObject instVarAt: name.
+        path := prefix , "." , name.
+        expanded := expandedPaths at: path ifAbsent: [ false ].
+
+        self addTreeButton: name
+             value: value
+             depth: depth
+             expanded: expanded
+             expandable: (self isExpandable: value)
+             path: path
+             into: box.
+
+        # If expanded, render children recursively
+        expanded ifTrue: [
+            self renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
         ].
     ].
 
-    # Add properties section
-    self addTreeHeader: "Properties" to: treeBox.
-    self addTreeItem: "class" value: (inspectedObject class) to: treeBox.
-    self addTreeItem: "printString" value: (inspectedObject printString) to: treeBox.
+    # If no slots, show a note
+    slotNames isEmpty ifTrue: [
+        self addLeafItem: "(no slots)" depth: depth into: box.
+    ].
+]
+
+Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box [
+    | idx |
+    idx := 0.
+    anArray do: [:element |
+        | name path expanded |
+        name := "[" , (idx printString) , "]".
+        path := prefix , "." , name.
+        expanded := expandedPaths at: path ifAbsent: [ false ].
+
+        self addTreeButton: name
+             value: element
+             depth: depth
+             expanded: expanded
+             expandable: (self isExpandable: element)
+             path: path
+             into: box.
+
+        expanded ifTrue: [
+            self renderSlotsOf: element atDepth: depth + 1 pathPrefix: path into: box.
+        ].
+
+        idx := idx + 1.
+    ].
+
+    anArray isEmpty ifTrue: [
+        self addLeafItem: "(empty array)" depth: depth into: box.
+    ].
+]
+
+Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box [
+    aTable keysAndValuesDo: [:key :value |
+        | name path expanded |
+        name := key printString.
+        path := prefix , "." , name.
+        expanded := expandedPaths at: path ifAbsent: [ false ].
+
+        self addTreeButton: name
+             value: value
+             depth: depth
+             expanded: expanded
+             expandable: (self isExpandable: value)
+             path: path
+             into: box.
+
+        expanded ifTrue: [
+            self renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
+        ].
+    ].
+
+    aTable isEmpty ifTrue: [
+        self addLeafItem: "(empty table)" depth: depth into: box.
+    ].
+]
+
+Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box [
+    | button label indent icon |
+    button := GtkButton new.
+    button setHexpand: true.
+    button addCssClass: "flat".
+
+    # Build indentation
+    indent := "".
+    depth timesRepeat: [ indent := indent , "    " ].
+
+    # Build icon prefix
+    expandable ifTrue: [
+        icon := expanded ifTrue: [ "▼ " ] ifFalse: [ "▶ " ].
+    ] ifFalse: [
+        icon := "   ".
+    ].
+
+    # Build label
+    label := indent , icon , name , ": " , (self formatValue: value).
+    button label: label.
+
+    # Click handler: toggle expansion and select
+    button clicked: [
+        expandable ifTrue: [
+            self togglePath: path.
+        ].
+        self selectValue: value name: name.
+    ].
+
+    box append: button.
+]
+
+Inspector>>addLeafItem: text depth: depth into: box [
+    | label indent |
+    indent := "".
+    depth timesRepeat: [ indent := indent , "    " ].
+    label := GtkLabel new: (indent , text).
+    label setHexpand: true.
+    label setHalignStart.
+    label addCssClass: "dim-label".
+    box append: label.
 ]
 
 Inspector>>addTreeHeader: headerText to: aBox [
-    # Add a header label to the tree
     | header |
-    header := GtkLabel new: ("[" , headerText , "]").
+    header := GtkLabel new: headerText.
     header addCssClass: "heading".
-    header hexpand: true.
+    header setHexpand: true.
+    header setHalignStart.
     aBox append: header.
 ]
 
-Inspector>>addTreeItem: slotName value: slotValue to: aBox [
-    # Add an item to the slot tree
-    | button valueString |
-    button := GtkButton new.
-
-    # Build display string
-    valueString := self formatValue: slotValue.
-    button label: (slotName , ": " , valueString).
-
-    button hexpand: true.
-    button addCssClass: "flat".
-
-    # Connect click handler
-    button clicked: [ self showValue: slotValue name: slotName ].
-
-    # Connect right-click handler for context menu
-    button onRightClick: [:point |
-        self showSlotContextMenu: slotName value: slotValue atX: (point at: 0) y: (point at: 1)
+Inspector>>togglePath: path [
+    | current |
+    current := expandedPaths at: path ifAbsent: [ false ].
+    current ifTrue: [
+        expandedPaths removeKey: path.
+    ] ifFalse: [
+        expandedPaths at: path put: true.
     ].
-
-    aBox append: button.
+    self renderTree.
 ]
 
-Inspector>>showSlotContextMenu: slotName value: slotValue atX: x y: y [
-    # Show context menu for a slot
-    | menu |
-    menu := ContextMenu for: window.
-
-    # Add "Inspect" option
-    slotValue notNil ifTrue: [
-        menu addItem: 'Inspect' do: [
-            self inspectSlotValue: slotValue
-        ].
-    ].
-
-    # Add "Copy Value" option
-    menu addItem: 'Copy Value' do: [
-        self copySlotValue: slotValue
-    ].
-
-    # Add "Print" option
-    menu addItem: 'Print in Transcript' do: [
-        Transcript showCr: (slotName , ": " , slotValue printString)
-    ].
-
-    menu popupAtX: x y: y.
+Inspector>>selectValue: value name: name [
+    selectedObject := value.
+    selectedSlotName := name.
+    self updateWorkspaceLabel.
 ]
 
-Inspector>>inspectSlotValue: aValue [
-    # Open a new inspector on the slot value
-    aValue notNil ifTrue: [
-        Inspector openOn: aValue for: owner.
+Inspector>>updateWorkspaceLabel [
+    | text |
+    selectedSlotName notNil ifTrue: [
+        text := selectedSlotName , ": " , (self formatValue: selectedObject).
+    ] ifFalse: [
+        text := inspectedObject printString.
     ].
+    workspaceLabel text: text.
 ]
 
-Inspector>>copySlotValue: aValue [
-    # Copy the slot value to clipboard
-    # Note: This would require clipboard support - placeholder for now
-    Transcript showCr: ("Copied to clipboard: " , aValue printString).
-]
+# ============================================================================
+# Value formatting and type checks
+# ============================================================================
 
 Inspector>>formatValue: aValue [
-    # Format a value for display in the tree
     aValue isNil ifTrue: [ ^ "nil" ].
-    (aValue isKindOf: String) ifTrue: [ ^ ("'" , aValue , "'") ].
+    (aValue isKindOf: String) ifTrue: [
+        aValue size > 50 ifTrue: [
+            ^ ("\"" , (aValue copyFrom: 0 to: 47) , "...\"")
+        ].
+        ^ ("\"" , aValue , "\"")
+    ].
     (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ].
     (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ].
+    (aValue isKindOf: Boolean) ifTrue: [ ^ aValue printString ].
     (aValue isKindOf: Array) ifTrue: [
         ^ ("Array(" , (aValue size printString) , ")")
     ].
     (aValue isKindOf: Table) ifTrue: [
         ^ ("Table(" , (aValue size printString) , ")")
     ].
-    ^ (aValue className , ": " , (aValue printString))
+    ^ aValue className
 ]
 
-Inspector>>showValue: aValue name: aName [
-    # Display the selected value in the right pane
-    | scrolled textView content |
-
-    scrolled := GtkScrolledWindow new.
-    scrolled vexpand: true.
-    scrolled hexpand: true.
-
-    textView := GtkSourceView new.
-    textView showLineNumbers: false.
-    textView editable: false.
-
-    content := self buildValueDisplay: aValue name: aName.
-    textView text: content.
-
-    scrolled setChild: textView.
-
-    rightPane := scrolled.
+Inspector>>isExpandable: aValue [
+    aValue isNil ifTrue: [ ^ false ].
+    (aValue isKindOf: Boolean) ifTrue: [ ^ false ].
+    (aValue isKindOf: Integer) ifTrue: [ ^ false ].
+    (aValue isKindOf: Float) ifTrue: [ ^ false ].
+    (aValue isKindOf: String) ifTrue: [ ^ false ].
+    (aValue isKindOf: Array) ifTrue: [ ^ aValue isEmpty not ].
+    (aValue isKindOf: Table) ifTrue: [ ^ aValue isEmpty not ].
+    # Regular object: expandable if it has slots
+    ^ aValue allSlotNames isEmpty not
 ]
 
-Inspector>>buildValueDisplay: aValue name: aName [
-    # Build a detailed display of a value
-    | result |
+# ============================================================================
+# Workspace evaluation with self binding
+# ============================================================================
 
-    result := ("Slot: " , aName , "\n==========\n\n").
-
-    aValue isNil ifTrue: [
-        result := result , "nil".
-    ] ifFalse: [
-        result := result , "Class: " , (aValue className) , "\n" , "PrintString: " , (aValue printString) , "\n\n".
-
-        # Show slots if object has them
-        (aValue respondsTo: #slotNames) ifTrue: [
-            | slotNames |
-            slotNames := aValue slotNames.
-            slotNames isEmpty not ifTrue: [
-                result := result , "Slots:\n".
-                slotNames do: [:slot |
-                    | slotVal |
-                    slotVal := aValue at: slot ifAbsent: [ nil ].
-                    result := result , "  " , slot , ": " , (self formatValue: slotVal) , "\n".
-                ].
-            ].
-        ].
+Inspector>>evaluationSourceCode [
+    | code |
+    code := workspaceSourceView selectedText.
+    (code isNil or: [ code isEmpty ]) ifTrue: [
+        code := workspaceSourceView getText
     ].
+    code isNil ifTrue: [ ^ "" ].
+    ^ code trim
+]
 
+Inspector>>evalInContext: codeString [
+    | wrappedCode |
+    # Bind self to the selected object in the evaluated code
+    Harding at: "_inspectorSelf" put: selectedObject.
+    wrappedCode := "| self |
+self := Harding at: \"_inspectorSelf\".
+" , codeString.
+    ^ [ Object eval: wrappedCode ]
+        on: Exception
+        do: [:ex | "Error: " , ex printString ]
+]
+
+Inspector>>isErrorResult: aResult [
+    (aResult isKindOf: String) ifFalse: [ ^ false ].
+    (aResult startsWith: "Error:") ifTrue: [ ^ true ].
+    (aResult startsWith: "IDE_ERROR:") ifTrue: [ ^ true ].
+    (aResult startsWith: "Runtime error:") ifTrue: [ ^ true ].
+    (aResult startsWith: "Parse error:") ifTrue: [ ^ true ].
+    ^ false
+]
+
+Inspector>>doItInWorkspace [
+    | code result |
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [ ^ nil ].
+    result := self evalInContext: code.
+    (self isErrorResult: result) ifTrue: [
+        window title: result.
+    ] ifFalse: [
+        window title: ("Inspector: " , (inspectedObject printString)).
+    ].
     ^ result
 ]
 
+Inspector>>printItInWorkspace [
+    | code result resultString cursorPos insertedEnd |
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [ ^ nil ].
+    result := self evalInContext: code.
+    (self isErrorResult: result) ifTrue: [
+        window title: result.
+        ^ nil
+    ].
+
+    # Convert result to string
+    resultString := " " , (result printString).
+
+    # Insert at selection end
+    cursorPos := workspaceSourceView getSelectionEnd.
+    workspaceSourceView insertText: resultString at: cursorPos.
+    insertedEnd := cursorPos + resultString size.
+    workspaceSourceView selectRangeFrom: cursorPos to: insertedEnd.
+]
+
+Inspector>>inspectItInWorkspace [
+    | code result |
+    code := self evaluationSourceCode.
+    code isEmpty ifTrue: [ ^ nil ].
+    result := self evalInContext: code.
+    (self isErrorResult: result) ifTrue: [
+        window title: result.
+        ^ nil
+    ].
+    result inspect.
+]
+
+# ============================================================================
+# Actions
+# ============================================================================
+
+Inspector>>inspectSelected [
+    selectedObject notNil ifTrue: [
+        Inspector openOn: selectedObject for: owner.
+    ].
+]
+
 Inspector>>refresh [
-    # Refresh the inspector
-    self populateSlotTree.
-    Transcript showCr: "Inspector refreshed".
+    self renderTree.
+    self updateWorkspaceLabel.
 ]
 
 Inspector>>close [
