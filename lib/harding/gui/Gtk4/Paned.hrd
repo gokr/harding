@@ -1,0 +1,5 @@
+# GTK Paned - Split pane container widget
+# Note: GtkPaned class is registered by Nim bridge
+
+GtkPaned class>>horizontal [ ^ self new: 0 ].
+GtkPaned class>>vertical [ ^ self new: 1 ].

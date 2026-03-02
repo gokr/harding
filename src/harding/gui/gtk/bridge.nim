@@ -3,7 +3,7 @@
 ## Registers all GTK wrapper classes with Harding globals
 ## ============================================================================
 
-import std/[logging, os, tables]
+import std/[os, tables]
 import harding/core/types
 import harding/interpreter/objects
 import harding/interpreter/vm
@@ -25,6 +25,8 @@ import ./eventcontroller
 import ./alertdialog
 import ./gesture
 import ./popover
+import ./paned
+import ./listbox
 
 ## Forward declarations
 proc initGtkBridge*(interp: var Interpreter)
@@ -328,6 +330,95 @@ proc initGtkBridge*(interp: var Interpreter) =
   interp.globals[]["GtkScrolledWindow"] = scrolledWindowCls.toValue()
   debug("Registered GtkScrolledWindow class")
 
+  # Create Paned class (for split pane containers)
+  let panedCls = newClass(superclasses = @[widgetCls], name = "GtkPaned")
+  panedCls.tags = @["GTK", "Paned", "Container"]
+  panedCls.isNimProxy = true
+  panedCls.hardingType = "GtkPaned"
+
+  # Add Paned class methods
+  let panedNewMethod = createCoreMethod("new:")
+  panedNewMethod.nativeImpl = cast[pointer](panedNewImpl)
+  panedNewMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "new:", panedNewMethod, isClassMethod = true)
+
+  # Note: horizontal and vertical class methods are implemented in Harding (Paned.hrd)
+
+  # Add Paned instance methods
+  let panedSetStartChildMethod = createCoreMethod("setStartChild:")
+  panedSetStartChildMethod.nativeImpl = cast[pointer](panedSetStartChildImpl)
+  panedSetStartChildMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "setStartChild:", panedSetStartChildMethod)
+
+  let panedSetEndChildMethod = createCoreMethod("setEndChild:")
+  panedSetEndChildMethod.nativeImpl = cast[pointer](panedSetEndChildImpl)
+  panedSetEndChildMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "setEndChild:", panedSetEndChildMethod)
+
+  let panedSetPositionMethod = createCoreMethod("setPosition:")
+  panedSetPositionMethod.nativeImpl = cast[pointer](panedSetPositionImpl)
+  panedSetPositionMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "setPosition:", panedSetPositionMethod)
+
+  let panedSetShrinkStartChildMethod = createCoreMethod("setShrinkStartChild:")
+  panedSetShrinkStartChildMethod.nativeImpl = cast[pointer](panedSetShrinkStartChildImpl)
+  panedSetShrinkStartChildMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "setShrinkStartChild:", panedSetShrinkStartChildMethod)
+
+  let panedSetShrinkEndChildMethod = createCoreMethod("setShrinkEndChild:")
+  panedSetShrinkEndChildMethod.nativeImpl = cast[pointer](panedSetShrinkEndChildImpl)
+  panedSetShrinkEndChildMethod.hasInterpreterParam = true
+  addMethodToClass(panedCls, "setShrinkEndChild:", panedSetShrinkEndChildMethod)
+
+  interp.globals[]["GtkPaned"] = panedCls.toValue()
+  debug("Registered GtkPaned class")
+
+  # Create ListBox class (for scrollable lists)
+  let listBoxCls = newClass(superclasses = @[widgetCls], name = "GtkListBox")
+  listBoxCls.tags = @["GTK", "ListBox", "List"]
+  listBoxCls.isNimProxy = true
+  listBoxCls.hardingType = "GtkListBox"
+
+  # Add ListBox class methods
+  let listBoxNewMethod = createCoreMethod("new")
+  listBoxNewMethod.nativeImpl = cast[pointer](listBoxNewImpl)
+  listBoxNewMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "new", listBoxNewMethod, isClassMethod = true)
+
+  # Add ListBox instance methods
+  let listBoxAppendMethod = createCoreMethod("append:")
+  listBoxAppendMethod.nativeImpl = cast[pointer](listBoxAppendImpl)
+  listBoxAppendMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "append:", listBoxAppendMethod)
+
+  let listBoxPrependMethod = createCoreMethod("prepend:")
+  listBoxPrependMethod.nativeImpl = cast[pointer](listBoxPrependImpl)
+  listBoxPrependMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "prepend:", listBoxPrependMethod)
+
+  let listBoxRemoveAllMethod = createCoreMethod("removeAll")
+  listBoxRemoveAllMethod.nativeImpl = cast[pointer](listBoxRemoveAllImpl)
+  listBoxRemoveAllMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "removeAll", listBoxRemoveAllMethod)
+
+  let listBoxSetSelectionModeMethod = createCoreMethod("setSelectionMode:")
+  listBoxSetSelectionModeMethod.nativeImpl = cast[pointer](listBoxSetSelectionModeImpl)
+  listBoxSetSelectionModeMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "setSelectionMode:", listBoxSetSelectionModeMethod)
+
+  let listBoxSelectedRowIndexMethod = createCoreMethod("selectedRowIndex")
+  listBoxSelectedRowIndexMethod.nativeImpl = cast[pointer](listBoxGetSelectedRowIndexImpl)
+  listBoxSelectedRowIndexMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "selectedRowIndex", listBoxSelectedRowIndexMethod)
+
+  let listBoxSelectRowAtIndexMethod = createCoreMethod("selectRowAtIndex:")
+  listBoxSelectRowAtIndexMethod.nativeImpl = cast[pointer](listBoxSelectRowAtIndexImpl)
+  listBoxSelectRowAtIndexMethod.hasInterpreterParam = true
+  addMethodToClass(listBoxCls, "selectRowAtIndex:", listBoxSelectRowAtIndexMethod)
+
+  interp.globals[]["GtkListBox"] = listBoxCls.toValue()
+  debug("Registered GtkListBox class")
+
   # Create Label class (for display widgets)
   let labelCls = newClass(superclasses = @[widgetCls], name = "GtkLabel")
   labelCls.tags = @["GTK", "Label", "Display"]
@@ -602,6 +693,11 @@ proc initGtkBridge*(interp: var Interpreter) =
     popoverClearMethod.hasInterpreterParam = true
     addMethodToClass(popoverCls, "clear", popoverClearMethod)
 
+    let popoverAddSeparatorMethod = createCoreMethod("addSeparator")
+    popoverAddSeparatorMethod.nativeImpl = cast[pointer](popoverAddSeparatorImpl)
+    popoverAddSeparatorMethod.hasInterpreterParam = true
+    addMethodToClass(popoverCls, "addSeparator", popoverAddSeparatorMethod)
+
     interp.globals[]["GtkPopover"] = popoverCls.toValue()
     debug("Registered GtkPopover class")
 
@@ -710,6 +806,8 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
     "Window.hrd",
     "Button.hrd",
     "Box.hrd",
+    "Paned.hrd",
+    "ListBox.hrd",
     "ScrolledWindow.hrd",
     "Label.hrd",
     "TextView.hrd",

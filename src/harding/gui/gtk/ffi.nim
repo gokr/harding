@@ -31,6 +31,9 @@ type
   GtkTextMark* = pointer
   GtkAdjustment* = pointer
   GtkScrolledWindow* = pointer
+  GtkPaned* = pointer
+  GtkListBox* = pointer
+  GtkListBoxRow* = pointer
   GtkSourceView* = pointer
   GtkSourceBuffer* = pointer
   GtkSourceLanguage* = pointer
@@ -251,6 +254,51 @@ when not defined(gtk3):
 else:
   proc gtkScrolledWindowNew*(hadjustment: GtkAdjustment, vadjustment: GtkAdjustment): GtkScrolledWindow {.cdecl, importc: "gtk_scrolled_window_new".}
 
+# Paned (for split pane containers)
+when not defined(gtk3):
+  proc gtkPanedNew*(orientation: cint): GtkPaned {.cdecl, importc: "gtk_paned_new".}
+  proc gtkPanedSetStartChild*(paned: GtkPaned, child: GtkWidget) {.cdecl, importc: "gtk_paned_set_start_child".}
+  proc gtkPanedSetEndChild*(paned: GtkPaned, child: GtkWidget) {.cdecl, importc: "gtk_paned_set_end_child".}
+  proc gtkPanedSetPosition*(paned: GtkPaned, position: cint) {.cdecl, importc: "gtk_paned_set_position".}
+  proc gtkPanedSetShrinkStartChild*(paned: GtkPaned, shrink: cint) {.cdecl, importc: "gtk_paned_set_shrink_start_child".}
+  proc gtkPanedSetShrinkEndChild*(paned: GtkPaned, shrink: cint) {.cdecl, importc: "gtk_paned_set_shrink_end_child".}
+else:
+  proc gtkPanedNew*(orientation: cint): GtkPaned {.cdecl, importc: "gtk_paned_new".}
+  proc gtkPanedPack1*(paned: GtkPaned, child: GtkWidget, resize: cint, shrink: cint) {.cdecl, importc: "gtk_paned_pack1".}
+  proc gtkPanedPack2*(paned: GtkPaned, child: GtkWidget, resize: cint, shrink: cint) {.cdecl, importc: "gtk_paned_pack2".}
+  proc gtkPanedSetPosition*(paned: GtkPaned, position: cint) {.cdecl, importc: "gtk_paned_set_position".}
+
+# ListBox (for scrollable lists)
+when not defined(gtk3):
+  proc gtkListBoxNew*(): GtkListBox {.cdecl, importc: "gtk_list_box_new".}
+  proc gtkListBoxAppend*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_append".}
+  proc gtkListBoxPrepend*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_prepend".}
+  proc gtkListBoxInsert*(box: GtkListBox, child: GtkWidget, position: cint) {.cdecl, importc: "gtk_list_box_insert".}
+  proc gtkListBoxRemove*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_remove".}
+  proc gtkListBoxRemoveAll*(box: GtkListBox) {.cdecl, importc: "gtk_list_box_remove_all".}
+  proc gtkListBoxGetSelectedRow*(box: GtkListBox): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_selected_row".}
+  proc gtkListBoxSelectRow*(box: GtkListBox, row: GtkListBoxRow) {.cdecl, importc: "gtk_list_box_select_row".}
+  proc gtkListBoxSetSelectionMode*(box: GtkListBox, mode: cint) {.cdecl, importc: "gtk_list_box_set_selection_mode".}
+  proc gtkListBoxGetRowAtIndex*(box: GtkListBox, index: cint): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_row_at_index".}
+else:
+  proc gtkListBoxNew*(): GtkListBox {.cdecl, importc: "gtk_list_box_new".}
+  proc gtkListBoxAppend*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_insert".}
+  proc gtkListBoxPrepend*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_insert".}
+  proc gtkListBoxInsert*(box: GtkListBox, child: GtkWidget, position: cint) {.cdecl, importc: "gtk_list_box_insert".}
+  proc gtkListBoxRemove*(box: GtkListBox, child: GtkWidget) {.cdecl, importc: "gtk_list_box_remove".}
+  proc gtkListBoxGetSelectedRow*(box: GtkListBox): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_selected_row".}
+  proc gtkListBoxSelectRow*(box: GtkListBox, row: GtkListBoxRow) {.cdecl, importc: "gtk_list_box_select_row".}
+  proc gtkListBoxSetSelectionMode*(box: GtkListBox, mode: cint) {.cdecl, importc: "gtk_list_box_set_selection_mode".}
+  proc gtkListBoxGetRowAtIndex*(box: GtkListBox, index: cint): GtkListBoxRow {.cdecl, importc: "gtk_list_box_get_row_at_index".}
+
+# ListBoxRow (items in a list)
+proc gtkListBoxRowNew*(): GtkListBoxRow {.cdecl, importc: "gtk_list_box_row_new".}
+proc gtkListBoxRowSetChild*(row: GtkListBoxRow, child: GtkWidget) {.cdecl, importc: "gtk_list_box_row_set_child".}
+proc gtkListBoxRowGetChild*(row: GtkListBoxRow): GtkWidget {.cdecl, importc: "gtk_list_box_row_get_child".}
+proc gtkListBoxRowGetIndex*(row: GtkListBoxRow): cint {.cdecl, importc: "gtk_list_box_row_get_index".}
+proc gtkListBoxRowSetActivatable*(row: GtkListBoxRow, activatable: cint) {.cdecl, importc: "gtk_list_box_row_set_activatable".}
+proc gtkListBoxRowSetSelectable*(row: GtkListBoxRow, selectable: cint) {.cdecl, importc: "gtk_list_box_row_set_selectable".}
+
 # GtkSourceView - Source code editor widget
 when not defined(gtk3):
   proc gtkSourceViewNew*(): GtkSourceView {.cdecl, importc: "gtk_source_view_new".}
@@ -350,6 +398,11 @@ when not defined(gtk3):
   proc gtkAlertDialogSetDefaultButton*(dialog: GtkAlertDialog, button: cint) {.cdecl, importc: "gtk_alert_dialog_set_default_button".}
   proc gtkAlertDialogChoose*(dialog: GtkAlertDialog, parent: GtkWindow, cancellable: pointer, callback: pointer, userData: pointer) {.cdecl, importc: "gtk_alert_dialog_choose".}
   proc gtkAlertDialogChooseFinish*(dialog: GtkAlertDialog, result: pointer): cint {.cdecl, importc: "gtk_alert_dialog_choose_finish".}
+
+# GtkSeparator (for menu dividers)
+when not defined(gtk3):
+  type GtkSeparator* = pointer
+  proc gtkSeparatorNew*(orientation: cint): GtkSeparator {.cdecl, importc: "gtk_separator_new".}
 
 # Key constants for event handling
 const
