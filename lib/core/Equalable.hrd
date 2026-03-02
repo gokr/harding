@@ -1,0 +1,13 @@
+#!/usr/bin/env harding
+#
+# Equalable.hrd - Equality comparison mixin
+
+Equalable := Mixin derive.
+
+Equalable>>= anObject [
+  ^ (self compareTo: anObject) = 0
+]
+
+Equalable>>~= anObject [
+  ^ (self compareTo: anObject) ~= 0
+]

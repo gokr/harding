@@ -30,7 +30,7 @@ Float>>= other <primitive primitiveEquals: other>
 
 Float>><= other <primitive primitiveLessOrEq: other>
 
-Float>>> other <primitive primitiveGreaterOrEq: other>
+Float>>>= other <primitive primitiveGreaterOrEq: other>
 
 Float>><> other <primitive primitiveNotEquals: other>
 
@@ -41,3 +41,13 @@ Float>><> other <primitive primitiveNotEquals: other>
 Float>>sqrt <primitive primitiveSqrt>
 
 Float>>printString <primitive primitivePrintString>
+
+Float>>abs [
+  self < 0.0
+    ifTrue: [ ^ 0.0 - self ].
+  ^ self
+].
+
+Float>>negated [
+  ^ 0.0 - self
+].
