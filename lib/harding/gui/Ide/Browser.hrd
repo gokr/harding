@@ -158,6 +158,46 @@ SystemBrowser>>openWindowFor: anOwner [
     methodPane setLabel: "Methods".
     methodPane onSelectionChanged: [:meth | self selectMethod: meth ].
 
+    # Add context menus
+    methodPane onContextMenu: [:method :menu |
+        menu addItem: "Print" do: [
+            method notNil ifTrue: [
+                Transcript showCr: ("Method: " , method).
+            ].
+        ].
+        menu addSeparator.
+        menu addItem: "Delete Method" do: [
+            Transcript showCr: "DEBUG: Delete Method menu clicked".
+            method notNil ifTrue: [
+                Transcript showCr: ("DEBUG: Preparing to delete: " , method).
+                # Prepare method for deletion (sets up instance variables)
+                self prepareMethodForDelete: method.
+                Transcript showCr: ("DEBUG: currentMethodFile = " , currentMethodFile printString).
+                Transcript showCr: ("DEBUG: currentMethodStartLine = " , currentMethodStartLine printString).
+                # Then delete it
+                self deleteCurrentMethod.
+            ] ifFalse: [
+                Transcript showCr: "DEBUG: method is nil!".
+            ].
+        ].
+    ].
+
+    classPane onContextMenu: [:class :menu |
+        menu addItem: "Print" do: [
+            class notNil ifTrue: [
+                Transcript showCr: ("Class: " , class).
+            ].
+        ].
+    ].
+
+    libraryPane onContextMenu: [:lib :menu |
+        menu addItem: "Print" do: [
+            lib notNil ifTrue: [
+                Transcript showCr: ("Library: " , lib).
+            ].
+        ].
+    ].
+
     panesBox append: (libraryPane widget).
     panesBox append: (classPane widget).
     panesBox append: (categoryPane widget).
@@ -977,6 +1017,54 @@ SystemBrowser>>deleteCurrentMethod [
             # User cancelled, do nothing
             Transcript showCr: "Delete cancelled"
         ]
+]
+
+SystemBrowser>>prepareMethodForDelete: aMethodName [
+    # Set up method context for deletion without showing source
+    # This sets currentMethod and loads its metadata
+    | info found |
+    
+    currentMethod := aMethodName.
+    
+    info := self methodSourceInfoFor: aMethodName.
+    found := (info includesKey: "found")
+        ifTrue: [ info at: "found" ]
+        ifFalse: [ false ].
+
+    found ifFalse: [
+        currentMethodFile := nil.
+        currentMethodOwnerClass := nil.
+        currentMethodHeader := nil.
+        currentMethodSuffix := "".
+        currentMethodStartLine := nil.
+        currentMethodEndLine := nil.
+        currentMethodHasBlock := false.
+        ^ false
+    ].
+
+    currentMethodFile := (info includesKey: "file")
+        ifTrue: [ info at: "file" ]
+        ifFalse: [ nil ].
+    currentMethodOwnerClass := (info includesKey: "ownerClass")
+        ifTrue: [ info at: "ownerClass" ]
+        ifFalse: [ currentClass ].
+    currentMethodHeader := (info includesKey: "header")
+        ifTrue: [ info at: "header" ]
+        ifFalse: [ nil ].
+    currentMethodSuffix := (info includesKey: "suffix")
+        ifTrue: [ info at: "suffix" ]
+        ifFalse: [ "" ].
+    currentMethodStartLine := (info includesKey: "startLine")
+        ifTrue: [ info at: "startLine" ]
+        ifFalse: [ nil ].
+    currentMethodEndLine := (info includesKey: "endLine")
+        ifTrue: [ info at: "endLine" ]
+        ifFalse: [ nil ].
+    currentMethodHasBlock := (info includesKey: "hasBlock")
+        ifTrue: [ info at: "hasBlock" ]
+        ifFalse: [ false ].
+    
+    ^ true
 ]
 
 SystemBrowser>>removeMethodFromClass: aSelector [
