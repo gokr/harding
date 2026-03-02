@@ -343,20 +343,19 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
 
   # First check current activation (for block execution or method locals)
   if activation != nil:
-    # Check locals FIRST - this includes block parameters which should take
-    # precedence over captured variables from outer scope. This is critical
-    # for exception handlers where :ex parameter shadows any captured 'ex'.
-    if name in activation.locals:
-      let val = activation.locals[name]
-      debug("lookupVariable: found ", name, " in locals kind=", $val.kind)
-      return (true, val)
-
-    # Check capturedVars on the activation - these are shared MutableCells for
-    # variables captured by child blocks. Reading from the cell ensures we see
-    # updates made by nested block executions.
+    # Check capturedVars FIRST - these are shared MutableCells for variables
+    # captured by child blocks. Reading from the cell ensures we see updates
+    # made by nested block executions (e.g., assignments inside ifTrue: blocks).
     if name in activation.capturedVars:
       let val = activation.capturedVars[name].value
       debug("lookupVariable: found ", name, " in capturedVars kind=", $val.kind)
+      return (true, val)
+
+    # Check locals - this includes block parameters which should take
+    # precedence over captured variables from outer scope (capturedEnv).
+    if name in activation.locals:
+      let val = activation.locals[name]
+      debug("lookupVariable: found ", name, " in locals kind=", $val.kind)
       return (true, val)
 
     # Then check captured environment - captured variables from outer lexical scope
@@ -644,6 +643,11 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
     # Capture all locals from this activation (except 'self', 'super', and block parameters)
     for name, value in activation.locals:
       if name != "self" and name != "super" and name notin blockNode.parameters:
+          # Skip variables already inherited from parent's capturedEnv (step above).
+          # The inherited MutableCell is shared with the outer method's capturedVars,
+          # so overwriting it would break the shared mutation chain.
+          if name in blockNode.capturedEnv:
+            continue
           # Check if this activation already has a captured cell for this variable
           # (from a sibling block created earlier in the same activation)
           var cell: MutableCell
@@ -679,6 +683,21 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
       blockNode.homeActivation = interp.currentActivation
       if interp.currentActivation != nil:
         interp.currentActivation.wasCaptured = true
+
+proc prepareBlockForApplication(interp: var Interpreter, origBlock: BlockNode): BlockNode =
+  ## Create a runtime copy of a parser block and capture its environment.
+  ## Used by IfNode/WhileNode handlers to ensure proper closure capture.
+  result = BlockNode(
+    parameters: origBlock.parameters,
+    temporaries: origBlock.temporaries,
+    body: origBlock.body,
+    isMethod: origBlock.isMethod,
+    localCount: origBlock.localCount,
+    capturedEnv: initTable[string, MutableCell](),
+    capturedEnvInitialized: true,
+    homeActivation: interp.currentActivation
+  )
+  captureEnvironment(interp, result)
 
 # Method lookup and dispatch
 type
@@ -1175,11 +1194,13 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
         blockResult = savedHomeActivation.returnValue
         break
 
-    # Save back captured variables to their shared cells
+    # Sync captured variable values from cells back to locals.
+    # The cell is the source of truth - nested blocks (via IfNode/WhileNode)
+    # may have updated cells directly without updating this activation's locals.
     if capturedVarNames.len > 0:
       for name in capturedVarNames:
-        if name in activation.locals and name in blockNode.capturedEnv:
-          blockNode.capturedEnv[name].value = activation.locals[name]
+        if name in blockNode.capturedEnv:
+          activation.locals[name] = blockNode.capturedEnv[name].value
 
     # Also update parent activation's captured variables (both table and indexed)
     if savedActivation != nil:
@@ -2333,6 +2354,17 @@ proc initGlobals*(interp: var Interpreter) =
   else:
     # Use the Object class already created by initCoreClasses
     objectCls = objectClass
+
+  # Use existing Mixin class from initCoreClasses if available
+  var mixinCls: Class
+  if mixinClass == nil:
+    # Fallback: create Mixin class if initCoreClasses was not called
+    mixinCls = newClass(superclasses = @[objectCls], name = "Mixin")
+    mixinCls.tags = @["Mixin", "Object"]
+    mixinClass = mixinCls
+  else:
+    # Use the Mixin class already created by initCoreClasses
+    mixinCls = mixinClass
 
   # Register Object class methods (Object new)
   proc objectClassNewImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
@@ -3801,7 +3833,7 @@ proc initGlobals*(interp: var Interpreter) =
   blockCls.methods["primitiveOnDo:do:"] = primitiveOnDoMethod
   blockCls.allMethods["primitiveOnDo:do:"] = primitiveOnDoMethod
 
-  # Register Set primitive selectors (used by lib/core/Collections.hrd)
+  # Register Set primitive selectors (used by lib/core/Set.hrd)
   # The Set class itself was created in initCoreClasses (objects.nim)
   if types.setClass != nil:
     let setCls = types.setClass
@@ -3966,6 +3998,7 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["Block"] = blockCls.toValue()
   interp.globals[]["UndefinedObject"] = undefinedObjCls.toValue()
   interp.globals[]["Library"] = libraryClass.toValue()
+  interp.globals[]["Mixin"] = mixinCls.toValue()
 
   # Create Class class (metaclass) - derives from Object like all classes
   # This allows isKindOf: Class to work properly
@@ -4115,9 +4148,11 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       if lib.kind == ikObject and lib.class == libraryClass:
         let bindingsVal = lib.slots[0]
         if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
-          let classVal = bindingsVal.instVal.entries[toValue(name)]
-          if classVal.kind == vkClass:
-            return classVal.classVal
+          let key = toValue(name)
+          if key in bindingsVal.instVal.entries:
+            let classVal = bindingsVal.instVal.entries[key]
+            if classVal.kind == vkClass:
+              return classVal.classVal
     return nil
 
   let fileStreamCls = if "FileStream" in interp.globals[]:
@@ -5573,9 +5608,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
   of nkIdent:
     let ident = cast[IdentNode](node)
     # Fast path: indexed local access (O(1) instead of hash table lookup)
+    # Must check capturedVars first - if a child block captured this variable,
+    # the MutableCell may have been updated and indexedLocals would be stale.
     if ident.localIndex >= 0 and interp.currentActivation != nil and
        ident.localIndex < interp.currentActivation.indexedLocals.len:
-      interp.pushValue(interp.currentActivation.indexedLocals[ident.localIndex])
+      if ident.name in interp.currentActivation.capturedVars:
+        interp.pushValue(interp.currentActivation.capturedVars[ident.name].value)
+      else:
+        interp.pushValue(interp.currentActivation.indexedLocals[ident.localIndex])
       return true
     # Slow path: name-based lookup
     let value = lookupVariable(interp, ident.name)
@@ -5627,6 +5667,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       temporaries: origBlock.temporaries,
       body: origBlock.body,
       isMethod: origBlock.isMethod,
+      localCount: origBlock.localCount,
       capturedEnv: initTable[string, MutableCell](),
       capturedEnvInitialized: true,
       homeActivation: interp.currentActivation
@@ -5879,26 +5920,22 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       if lit.value.kind == vkBool:
         let condResult = lit.value.boolVal
         if condResult and ifNode.thenBranch != nil:
-          let blk = cast[BlockNode](ifNode.thenBranch)
-          if blk.homeActivation == nil:
-            blk.homeActivation = interp.currentActivation
-            if interp.currentActivation != nil:
-              interp.currentActivation.wasCaptured = true
+          let blk = prepareBlockForApplication(interp, cast[BlockNode](ifNode.thenBranch))
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         elif not condResult and ifNode.elseBranch != nil:
-          let blk = cast[BlockNode](ifNode.elseBranch)
-          if blk.homeActivation == nil:
-            blk.homeActivation = interp.currentActivation
-            if interp.currentActivation != nil:
-              interp.currentActivation.wasCaptured = true
+          let blk = prepareBlockForApplication(interp, cast[BlockNode](ifNode.elseBranch))
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         else:
           interp.pushValue(nilValue())
         return true
     # General case: evaluate condition and create continuation
     # Push continuation frame that will check condition result from stack
-    let thenBlk = if ifNode.thenBranch of BlockNode: cast[BlockNode](ifNode.thenBranch) else: nil
-    let elseBlk = if ifNode.elseBranch of BlockNode: cast[BlockNode](ifNode.elseBranch) else: nil
+    let thenBlk = if ifNode.thenBranch of BlockNode:
+        prepareBlockForApplication(interp, cast[BlockNode](ifNode.thenBranch))
+      else: nil
+    let elseBlk = if ifNode.elseBranch of BlockNode:
+        prepareBlockForApplication(interp, cast[BlockNode](ifNode.elseBranch))
+      else: nil
     var contFrame = WorkFrame(kind: wfIfNodeContinuation)
     contFrame.thenBlock = thenBlk
     contFrame.elseBlock = elseBlk
@@ -5909,8 +5946,8 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
   of nkWhile:
     # Control Flow Specialization: WhileNode - evaluate condition, then body
     let whileNode = cast[WhileNode](node)
-    let condBlk = cast[BlockNode](whileNode.condition)
-    let bodyBlk = cast[BlockNode](whileNode.body)
+    let condBlk = prepareBlockForApplication(interp, cast[BlockNode](whileNode.condition))
+    let bodyBlk = prepareBlockForApplication(interp, cast[BlockNode](whileNode.body))
     interp.pushWorkFrame(newWhileLoopFrame(whileNode.isWhileTrue, condBlk, bodyBlk, lsEvaluateCondition))
     return true
 
@@ -6229,6 +6266,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of "name":
       if args.len == 0 and receiverVal.kind == vkClass and receiverVal.classVal != nil:
         interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.classVal.name))
+        return true
+
+    of "isClass":
+      if args.len == 0 and receiverVal.kind == vkClass:
+        interp.pushValue(trueValue)
         return true
 
     of "class":
@@ -7285,27 +7327,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfIfNodeContinuation:
     # IfNode specialization: condition result is on evalStack, execute appropriate branch
+    # Blocks are already prepared with capturedEnv and homeActivation by the nkIf handler
     let condValue = interp.popValue()
     let condResult = condValue.isTruthy()
     if condResult and frame.thenBlock != nil:
-      debug("wfIfNodeContinuation: setting thenBlock.homeActivation from current selector=",
-        if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
-          interp.currentActivation.currentMethod.selector
-        else:
-          "nil")
-      frame.thenBlock.homeActivation = interp.currentActivation
-      if interp.currentActivation != nil:
-        interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.thenBlock, 0))
     elif not condResult and frame.elseBlock != nil:
-      debug("wfIfNodeContinuation: setting elseBlock.homeActivation from current selector=",
-        if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
-          interp.currentActivation.currentMethod.selector
-        else:
-          "nil")
-      frame.elseBlock.homeActivation = interp.currentActivation
-      if interp.currentActivation != nil:
-        interp.currentActivation.wasCaptured = true
       interp.pushWorkFrame(newApplyBlockFrame(frame.elseBlock, 0))
     else:
       interp.pushValue(nilValue())
