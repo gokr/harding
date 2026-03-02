@@ -237,7 +237,7 @@ code := sourceView selectedText.
 
 ### Workspace - Code Editor and Evaluation
 
-The Workspace (`lib/harding/gui/Ide/Workspace.hrd`) provides a source code editor with interactive evaluation:
+The Workspace (`lib/gui/bona/Workspace.hrd`) provides a source code editor with interactive evaluation:
 
 ```harding
 # Create a workspace

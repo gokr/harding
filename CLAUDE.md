@@ -254,6 +254,6 @@ Declarative form: arguments must match method parameter names. Inline form: argu
 
 BitBarrel is a Bitcask-style key-value storage engine. Build with `nimble harding_bitbarrel`. Requires `whisky` WebSocket library.
 
-Classes: `Barrel` (connection), `BarrelTable` (hash-based persistent storage), `BarrelSortedTable` (ordered storage with range queries). Load via `load: "lib/harding/bitbarrel/Bootstrap.hrd"`.
+Classes: `Barrel` (connection), `BarrelTable` (hash-based persistent storage), `BarrelSortedTable` (ordered storage with range queries). Load via `load: "lib/bitbarrel/Bootstrap.hrd"`.
 
 Native methods are conditionally compiled with `when defined(bitbarrel):`.

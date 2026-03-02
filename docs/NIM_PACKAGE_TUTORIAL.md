@@ -37,7 +37,7 @@ Echo class>>value <primitive primitiveEchoValue>
 
 ```smalltalk
 EchoLib := Library new.
-EchoLib load: "lib/harding/echo/Echo.hrd".
+EchoLib load: "lib/echo/Echo.hrd".
 Harding import: EchoLib.
 ```
 
@@ -63,8 +63,8 @@ import harding/packages/package_api
 
 import ./primitives
 
-const BootstrapHrd = staticRead("../../lib/harding/echo/Bootstrap.hrd")
-const EchoHrd = staticRead("../../lib/harding/echo/Echo.hrd")
+const BootstrapHrd = staticRead("../../lib/echo/Bootstrap.hrd")
+const EchoHrd = staticRead("../../lib/echo/Echo.hrd")
 
 proc registerEchoPrimitives(interp: var Interpreter) {.nimcall.} =
   if "Echo" notin interp.globals[]:
@@ -82,10 +82,10 @@ proc installEchoPackage*(interp: var Interpreter): bool =
   let spec = HardingPackageSpec(
     name: "Echo",
     version: "0.1.0",
-    bootstrapPath: "lib/harding/echo/Bootstrap.hrd",
+    bootstrapPath: "lib/echo/Bootstrap.hrd",
     sources: @[
-      (path: "lib/harding/echo/Bootstrap.hrd", source: BootstrapHrd),
-      (path: "lib/harding/echo/Echo.hrd", source: EchoHrd)
+      (path: "lib/echo/Bootstrap.hrd", source: BootstrapHrd),
+      (path: "lib/echo/Echo.hrd", source: EchoHrd)
     ],
     registerPrimitives: registerEchoPrimitives
   )

@@ -202,8 +202,8 @@ src/harding/gui/
 │
 └── ide.nim                     # IDE entry point - loads Harding GUI code
 
-lib/harding/gui/                # GUI tools written in Harding
-├── Gtk4/                       # GTK4 wrapper classes (Harding)
+lib/gui/                        # GUI tools written in Harding
+├── gtk4/                       # GTK4 wrapper classes (Harding)
 │   ├── Widget.harding               # Base widget class
 │   ├── Window.harding               # Window wrapper
 │   ├── Button.harding               # Button wrapper
@@ -215,7 +215,7 @@ lib/harding/gui/                # GUI tools written in Harding
 │   ├── HeaderBar.harding            # Header bar wrapper
 │   └── Application.harding          # Application wrapper
 │
-├── Ide/                        # IDE tool implementations
+├── bona/                       # IDE tool implementations
 │   ├── BaseTool.harding             # Base class for all tools
 │   ├── Launcher.harding             # Main launcher window
 │   ├── Transcript.harding           # Transcript tool
@@ -617,7 +617,7 @@ This is where the actual IDE tools live. All written in Harding - fully malleabl
 
 ### 6.1 GTK4 Base Classes (Harding)
 
-**File:** `lib/harding/gui/Gtk4/Widget.harding`
+**File:** `lib/gui/gtk4/Widget.harding`
 
 ```smalltalk
 "Base class for all GTK widgets
@@ -665,7 +665,7 @@ GtkWidget at: #addCssClass: put: [ :className |
 
 ### 6.2 Window Class (Harding)
 
-**File:** `lib/harding/gui/Gtk4/Window.harding`
+**File:** `lib/gui/gtk4/Window.harding`
 
 ```smalltalk
 "GTK Window - top-level window"
@@ -722,7 +722,7 @@ GtkWindow at: #defaultSize: put: [ :aPoint |
 
 ### 6.3 Button Class (Harding)
 
-**File:** `lib/harding/gui/Gtk4/Button.harding`
+**File:** `lib/gui/gtk4/Button.harding`
 
 ```smalltalk
 "GTK Button widget"
@@ -773,7 +773,7 @@ GtkButton at: #clicked: put: [ :aBlock |
 
 ### 6.4 Box Layout (Harding)
 
-**File:** `lib/harding/gui/Gtk4/Box.harding`
+**File:** `lib/gui/gtk4/Box.harding`
 
 ```smalltalk
 "GTK Box - layout container"
@@ -827,7 +827,7 @@ GtkBox at: #remove: put: [ :aWidget |
 
 ### 7.1 Launcher Window
 
-**File:** `lib/harding/gui/Ide/Launcher.harding`
+**File:** `lib/gui/bona/Launcher.harding`
 
 ```smalltalk
 "Main IDE launcher window with Transcript"
@@ -926,7 +926,7 @@ IdeLauncher at: #showLine: put: [ :text |
 
 ### 7.2 Workspace Window
 
-**File:** `lib/harding/gui/Ide/Workspace.harding`
+**File:** `lib/gui/bona/Workspace.harding`
 
 ```smalltalk
 "Workspace - code editor with Do It / Print It / Inspect It"
@@ -1037,7 +1037,7 @@ IdeWorkspace at: #clear put: [
 
 ### 7.3 Inspector Window
 
-**File:** `lib/harding/gui/Ide/Inspector.harding`
+**File:** `lib/gui/bona/Inspector.harding`
 
 ```smalltalk
 "Inspector - view object internals"
@@ -1150,19 +1150,19 @@ proc initGtkBridge(interp: var Interpreter) =
 proc loadGuiCode(interp: var Interpreter) =
   ## Load all Harding GUI files
   let guiFiles = [
-    "lib/harding/gui/Gtk4/Widget.harding",
-    "lib/harding/gui/Gtk4/Window.harding",
-    "lib/harding/gui/Gtk4/Button.harding",
-    "lib/harding/gui/Gtk4/Box.harding",
-    "lib/harding/gui/Gtk4/TextView.harding",
-    "lib/harding/gui/Gtk4/TreeView.harding",
-    "lib/harding/gui/Ide/BaseTool.harding",
-    "lib/harding/gui/Ide/Launcher.harding",
-    "lib/harding/gui/Ide/Workspace.harding",
-    "lib/harding/gui/Ide/Inspector.harding",
-    "lib/harding/gui/Ide/Browser.harding",
-    "lib/harding/gui/Ide/Debugger.harding",
-    "lib/harding/gui/main.harding"  # Entry point
+    "lib/gui/gtk4/Widget.harding",
+    "lib/gui/gtk4/Window.harding",
+    "lib/gui/gtk4/Button.harding",
+    "lib/gui/gtk4/Box.harding",
+    "lib/gui/gtk4/TextView.harding",
+    "lib/gui/gtk4/TreeView.harding",
+    "lib/gui/bona/BaseTool.harding",
+    "lib/gui/bona/Launcher.harding",
+    "lib/gui/bona/Workspace.harding",
+    "lib/gui/bona/Inspector.harding",
+    "lib/gui/bona/Browser.harding",
+    "lib/gui/bona/Debugger.harding",
+    "lib/gui/main.harding"  # Entry point
   ]
 
   for file in guiFiles:
@@ -1294,7 +1294,7 @@ The same bridge supports:
 
 For visual UI design, add support for Glade XML files:
 
-**File:** `lib/harding/gui/Gtk4/Builder.harding`
+**File:** `lib/gui/gtk4/Builder.harding`
 
 ```smalltalk
 "GtkBuilder - load UIs from Glade XML"
@@ -1334,7 +1334,7 @@ GtkBuilder at: #connectSignals: put: [ :signalDict |
 ```smalltalk
 "Load a Glade-designed UI"
 builder := GtkBuilder new.
-builder addFromFile: 'lib/harding/gui/glade/Workspace.glade'.
+builder addFromFile: 'lib/gui/glade/Workspace.glade'.
 
 "Get widgets by ID"
 window := builder getObject: 'workspaceWindow'.

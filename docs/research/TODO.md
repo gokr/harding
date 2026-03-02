@@ -128,7 +128,7 @@ This document tracks current work items and future directions for Harding develo
 - [x] Ordered persistent storage with range queries (`BarrelSortedTable`)
 - [x] Collection protocol support (do:, select:, collect:, keys, size)
 - [x] Conditional compilation with `-d:bitbarrel` flag
-- [x] Harding-side class definitions in `lib/harding/bitbarrel/`
+- [x] Harding-side class definitions in `lib/bitbarrel/`
 
 ### Code Cleanup - JS Support Removal (2026-02-16)
 - [x] Removed all 9 `when defined(js)` conditionals from core files
@@ -244,11 +244,11 @@ harding --loglevel ERROR script.harding    # Errors only (default)
 ### Current Status (2026-02-10)
 
 **Completed:**
-- ✅ Application base class (lib/core/Application.hrd)
+- ✅ Application base class (lib/granite/Application.hrd)
   - `name` and `libraries` slots
   - `main: args` entry point method
   - `build` method that calls `Granite build: self`
-- ✅ Granite compiler class (lib/core/Granite.hrd)
+- ✅ Granite compiler class (lib/granite/Granite.hrd)
   - `compile:` primitive - generates Nim code from Harding source
   - `build:` primitive - fully functional application building
   - Helper methods for transitive class collection

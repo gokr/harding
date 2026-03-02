@@ -334,15 +334,24 @@ Point >> compareTo: other [
 
 #### Class Hierarchy
 
+Harding has a three-tier class hierarchy rooted in `Root`:
+
 ```
-Root
-  ├── Object    # Base for all regular classes (has slots)
-  └── Mixin     # Base for behavior-only composition (no slots)
+Root (top - zero methods, used for DNU proxies/wrappers)
+  ├── Object    # The "working" base class with all standard methods
+  │     └── All regular classes (String, Integer, Array, etc.)
+  │
+  └── Mixin     # Slotless sibling for behavior composition (no slots)
+        └── Mixins like Comparable, Iterable, Printable
 ```
+
+- **Root**: The absolute base of the hierarchy. Has zero methods. Only used internally for DNU proxies and as the parent of Object and Mixin.
+- **Object**: The standard base class for all regular classes. Provides methods like `clone`, `printString`, `initialize`, `=`, `==`, etc.
+- **Mixin**: A special sibling to Object for behavior composition. Can be added to any class via `addSuperclass:` without affecting instance type.
 
 #### Built-in Mixins
 
-The standard library provides these mixins in `lib/harding/core/Mixins.hrd`:
+The core and process libraries provide these mixins in `lib/core/Comparable.hrd`, `lib/core/Iterable.hrd`, `lib/core/Printable.hrd`, and `lib/process/Synchronizable.hrd`:
 
 | Mixin | Requires | Provides |
 |-------|----------|----------|
@@ -1026,20 +1035,20 @@ SharedKey  # Returns 2 (Lib2 was imported last)
 The Standard Library is pre-loaded with common classes and utilities:
 
 ```smalltalk
-Standard load: "lib/core/Collections.hrd"      # Set
-Standard load: "lib/core/Interval.hrd"         # Interval
-Standard load: "lib/core/File.hrd"             # File convenience API
-Standard load: "lib/core/FileStream.hrd"       # Stream I/O
-Standard load: "lib/core/Exception.hrd"        # Exception hierarchy
+Harding load: "lib/core/Set.hrd"               # Set
+Harding load: "lib/core/Exception.hrd"         # Exception hierarchy
+Standard load: "lib/standard/Interval.hrd"     # Interval
+Standard load: "lib/standard/File.hrd"         # File convenience API
+Standard load: "lib/standard/FileStream.hrd"   # Stream I/O
 ```
 
-The Standard Library is automatically imported at startup, so these classes are accessible by default:
+Core and Standard are loaded at startup, so these classes are accessible by default:
 
 ```smalltalk
-Set new                # Set collection (from Standard)
+Set new                # Set collection (from Core)
 1 to: 10               # Interval (from Standard)
 File readAll: "README.md"
-Error error: "oops"    # Exception class (from Standard)
+Error error: "oops"    # Exception class (from Core)
 ```
 
 Global system utilities are also available by default:
@@ -1664,7 +1673,7 @@ Requires building with `-d:bitbarrel` flag.
 
 ```smalltalk
 # Load BitBarrel library
-load: "lib/harding/bitbarrel/Bootstrap.hrd".
+load: "lib/bitbarrel/Bootstrap.hrd".
 
 # Create persistent table
 users := BarrelTable create: "users".

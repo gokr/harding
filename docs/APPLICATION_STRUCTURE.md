@@ -353,7 +353,7 @@ harding-mypackage/
 ├── src/harding_mypackage/
 │   ├── package.nim          # Registration
 │   ├── primitives.nim       # Nim implementations
-│   └── lib/harding/mypackage/
+│   └── lib/mypackage/
 │       ├── Bootstrap.hrd
 │       └── API.hrd
 └── examples/

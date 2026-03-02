@@ -43,8 +43,8 @@ Root (empty - for DNU proxies/wrappers)
 | `Block` | Closures/anonymous functions | `lib/core/Block.hrd` |
 | `Boolean` | Base class for true/false | `lib/core/Boolean.hrd` |
 | `Library` | FFI library bindings | various .hrd files |
-| `Set` | Unordered collections | `lib/core/Collections.hrd` |
-| `Symbol` | Interned strings | `lib/core/Symbol.hrd` (in stdlib) |
+| `Set` | Unordered collections | `lib/core/Set.hrd` |
+| `Symbol` | Interned strings | `lib/core/Symbol.hrd` |
 
 ## Bootstrap Methods (Required in Nim)
 
@@ -111,26 +111,39 @@ Integer>>+ other <primitive primitivePlus: other>
 
 ## Stdlib Loading Order
 
-The `lib/core/Bootstrap.hrd` file loads the core library in the correct order:
+The `lib/core/Bootstrap.hrd` file loads core, standard, and granite layers in order:
 
 ```harding
 Harding load: "lib/core/Object.hrd"
 Harding load: "lib/core/Boolean.hrd"
+Harding load: "lib/core/True.hrd"
+Harding load: "lib/core/False.hrd"
+Harding load: "lib/core/UndefinedObject.hrd"
+Harding load: "lib/core/Block.hrd"
+Harding load: "lib/core/Library.hrd"
 Harding load: "lib/core/Number.hrd"
 Harding load: "lib/core/Integer.hrd"
 Harding load: "lib/core/Float.hrd"
 Harding load: "lib/core/String.hrd"
 Harding load: "lib/core/Symbol.hrd"
-Harding load: "lib/core/Table.hrd"
 Harding load: "lib/core/Array.hrd"
-Harding load: "lib/core/Block.hrd"
+Harding load: "lib/core/Table.hrd"
+Harding load: "lib/core/Set.hrd"
 Harding load: "lib/core/System.hrd"
+Harding load: "lib/core/Exception.hrd"
+Harding load: "lib/core/Error.hrd"
+Harding load: "lib/core/Notification.hrd"
+Harding load: "lib/core/MessageNotUnderstood.hrd"
+Harding load: "lib/core/SubscriptOutOfBounds.hrd"
+Harding load: "lib/core/DivisionByZero.hrd"
+Harding load: "lib/core/UnhandledError.hrd"
+Harding load: "lib/core/Comparable.hrd"
+Harding load: "lib/core/Iterable.hrd"
+Harding load: "lib/core/Printable.hrd"
+Harding load: "lib/process/Bootstrap.hrd"
 
-Standard load: "lib/core/Collections.hrd"
-Standard load: "lib/core/Interval.hrd"
-Standard load: "lib/core/File.hrd"
-Standard load: "lib/core/FileStream.hrd"
-Standard load: "lib/core/Exception.hrd"
+Harding load: "lib/standard/Bootstrap.hrd"
+Harding load: "lib/granite/Bootstrap.hrd"
 ```
 
 Loading order matters because:

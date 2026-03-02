@@ -13,19 +13,19 @@ To make Harding syntax highlighting available to all users and applications:
 **For GtkSourceView 5 (latest, used by GNOME 45+):**
 
 ```bash
-sudo cp lib/harding/syntax/harding.lang /usr/share/gtksourceview-5/language-specs/
+sudo cp lib/syntax/harding.lang /usr/share/gtksourceview-5/language-specs/
 ```
 
 **For GtkSourceView 4 (GNOME 40-44):**
 
 ```bash
-sudo cp lib/harding/syntax/harding.lang /usr/share/gtksourceview-4/language-specs/
+sudo cp lib/syntax/harding.lang /usr/share/gtksourceview-4/language-specs/
 ```
 
 For older systems using GtkSourceView 3:
 
 ```bash
-sudo cp lib/harding/syntax/harding.lang /usr/share/gtksourceview-3.0/language-specs/
+sudo cp lib/syntax/harding.lang /usr/share/gtksourceview-3.0/language-specs/
 ```
 
 ### User Installation (no sudo required)
@@ -36,21 +36,21 @@ To install only for your user:
 
 ```bash
 mkdir -p ~/.local/share/gtksourceview-5/language-specs/
-cp lib/harding/syntax/harding.lang ~/.local/share/gtksourceview-5/language-specs/
+cp lib/syntax/harding.lang ~/.local/share/gtksourceview-5/language-specs/
 ```
 
 **For GtkSourceView 4:**
 
 ```bash
 mkdir -p ~/.local/share/gtksourceview-4/language-specs/
-cp lib/harding/syntax/harding.lang ~/.local/share/gtksourceview-4/language-specs/
+cp lib/syntax/harding.lang ~/.local/share/gtksourceview-4/language-specs/
 ```
 
 For GtkSourceView 3:
 
 ```bash
 mkdir -p ~/.local/share/gtksourceview-3.0/language-specs/
-cp lib/harding/syntax/harding.lang ~/.local/share/gtksourceview-3.0/language-specs/
+cp lib/syntax/harding.lang ~/.local/share/gtksourceview-3.0/language-specs/
 ```
 
 ### Verifying Installation
@@ -67,7 +67,7 @@ After installation, restart your text editor. Open a `.harding` file and verify:
 The syntax file is located at:
 
 ```
-lib/harding/syntax/harding.lang
+lib/syntax/harding.lang
 ```
 
 ## Features

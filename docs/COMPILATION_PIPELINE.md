@@ -20,7 +20,7 @@ Granite is the Harding-to-Nim compiler. There are two entry points:
 - Produces binaries 30-200x faster than interpreted code
 
 ### Harding Granite (in-VM)
-- Entry: `lib/core/Granite.hrd` with primitives
+- Entry: `lib/granite/Granite.hrd` with primitives
 - Primitives: `primitiveGraniteCompile:`, `primitiveGraniteBuild:`
 - Has full access to loaded classes, methods, and object graph
 - Located in: `src/harding/compiler/compiler_primitives.nim`
@@ -103,7 +103,7 @@ Binary
 
 ### Harding-Specific
 - `src/harding/compiler/compiler_primitives.nim` - Primitive implementations
-- `lib/core/Granite.hrd` - Harding-side API
+- `lib/granite/Granite.hrd` - Harding-side API
 
 ## Block Compilation Implementation
 
@@ -255,8 +255,8 @@ Benefits:
 
 - `src/harding/compiler/granite.nim` - CLI entry point
 - `src/harding/compiler/compiler_primitives.nim` - Primitive implementations
-- `lib/core/Granite.hrd` - Harding-side Granite class
-- `lib/core/Application.hrd` - Application build support
+- `lib/granite/Granite.hrd` - Harding-side Granite class
+- `lib/granite/Application.hrd` - Application build support
 - `src/harding/codegen/module.nim` - Main code generation
 - `src/harding/codegen/blocks.nim` - Block compilation
 - `src/harding/codegen/expression.nim` - Expression generation with inline control flow
