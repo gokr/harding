@@ -136,8 +136,3 @@ String>>newMethod [
 ]
 
 
-
-String>>banana4 [
-
-^ nil
-]
