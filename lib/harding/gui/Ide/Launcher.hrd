@@ -28,6 +28,10 @@ Launcher>>openInstance [
   # Create main layout box (vertical)
   mainBox := GtkBox vertical.
   mainBox setSpacing: 0.
+  mainBox marginStart: 5.
+  mainBox marginEnd: 5.
+  mainBox marginTop: 5.
+  mainBox marginBottom: 5.
 
   # Create header bar with menu buttons (GTK4 style)
   headerBar := self createHeaderBar.

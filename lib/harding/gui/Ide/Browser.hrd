@@ -135,6 +135,10 @@ SystemBrowser>>openWindowFor: anOwner [
 
     mainBox := GtkBox vertical.
     mainBox setSpacing: 5.
+    mainBox marginStart: 5.
+    mainBox marginEnd: 5.
+    mainBox marginTop: 5.
+    mainBox marginBottom: 5.
 
     panesBox := GtkBox horizontal.
     panesBox setSpacing: 8.

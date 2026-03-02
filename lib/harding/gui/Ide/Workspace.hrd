@@ -30,6 +30,10 @@ Workspace>>openWindowFor: anOwner [
     # Create vertical box layout
     box := GtkBox vertical.
     box setSpacing: 5.
+    box marginStart: 5.
+    box marginEnd: 5.
+    box marginTop: 5.
+    box marginBottom: 5.
 
     # Create scrolled window for source view
     scrolledWindow := GtkScrolledWindow new.

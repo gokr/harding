@@ -134,16 +134,15 @@ BrowserPane>>showContextMenuFor: anItem atX: x y: y [
 
 BrowserPane>>handleRightClickAtX: x y: y [
     # Handle right-click on the list box to show context menu
-    | rowIndex item listBoxWidget |
+    | rowIndex item |
 
     contextMenuCallback isNil ifTrue: [ ^ self ].
 
     # Get the row index at the clicked y coordinate
-    # We need to account for scrolling by getting the listBox's position
-    listBoxWidget := scrolledWindow getChild.
-    listBoxWidget isNil ifTrue: [ ^ self ].
+    # We use the listBox instance variable directly
+    listBox isNil ifTrue: [ ^ self ].
 
-    rowIndex := listBoxWidget rowIndexAtY: y.
+    rowIndex := listBox rowIndexAtY: y.
 
     # Validate index and get corresponding item
     (rowIndex >= 0 and: [rowIndex < items size]) ifTrue: [

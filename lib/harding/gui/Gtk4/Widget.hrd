@@ -9,6 +9,7 @@
 # - addCssClass: (add CSS class for styling)
 # - removeCssClass: (remove CSS class)
 # - connect:do: (connect a signal to a block)
+# - marginStart: / marginEnd: / marginTop: / marginBottom: (set margins)
 
 # Signal connection conveniences
 GtkWidget>>onDestroy: aBlock [

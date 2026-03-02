@@ -328,6 +328,54 @@ proc widgetSetHalignStartImpl*(interp: var Interpreter, self: Instance, args: se
 
   nilValue()
 
+## Native method: marginStart:
+proc widgetMarginStartImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set margin on the start side of the widget
+  if args.len < 1 or args[0].kind != vkInt:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let widget = cast[GtkWidget](self.nimValue)
+    gtkWidgetSetMarginStart(widget, args[0].intVal.cint)
+
+  nilValue()
+
+## Native method: marginEnd:
+proc widgetMarginEndImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set margin on the end side of the widget
+  if args.len < 1 or args[0].kind != vkInt:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let widget = cast[GtkWidget](self.nimValue)
+    gtkWidgetSetMarginEnd(widget, args[0].intVal.cint)
+
+  nilValue()
+
+## Native method: marginTop:
+proc widgetMarginTopImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set margin on the top side of the widget
+  if args.len < 1 or args[0].kind != vkInt:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let widget = cast[GtkWidget](self.nimValue)
+    gtkWidgetSetMarginTop(widget, args[0].intVal.cint)
+
+  nilValue()
+
+## Native method: marginBottom:
+proc widgetMarginBottomImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Set margin on the bottom side of the widget
+  if args.len < 1 or args[0].kind != vkInt:
+    return nilValue()
+
+  if self.isNimProxy and self.nimValue != nil:
+    let widget = cast[GtkWidget](self.nimValue)
+    gtkWidgetSetMarginBottom(widget, args[0].intVal.cint)
+
+  nilValue()
+
 ## Native method: setTooltipText:
 proc widgetSetTooltipTextImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Set widget tooltip text

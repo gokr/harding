@@ -96,10 +96,6 @@ String>>pup [
 ]
 
 
-String>>newMesthod [
-# HWat
-^ nil
-]
 
 String>>newMesthod [
 

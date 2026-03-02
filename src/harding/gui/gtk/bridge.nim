@@ -148,6 +148,26 @@ proc initGtkBridge*(interp: var Interpreter) =
   widgetSetTooltipTextMethod.hasInterpreterParam = true
   addMethodToClass(widgetCls, "setTooltipText:", widgetSetTooltipTextMethod)
 
+  let widgetMarginStartMethod = createCoreMethod("marginStart:")
+  widgetMarginStartMethod.nativeImpl = cast[pointer](widgetMarginStartImpl)
+  widgetMarginStartMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "marginStart:", widgetMarginStartMethod)
+
+  let widgetMarginEndMethod = createCoreMethod("marginEnd:")
+  widgetMarginEndMethod.nativeImpl = cast[pointer](widgetMarginEndImpl)
+  widgetMarginEndMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "marginEnd:", widgetMarginEndMethod)
+
+  let widgetMarginTopMethod = createCoreMethod("marginTop:")
+  widgetMarginTopMethod.nativeImpl = cast[pointer](widgetMarginTopImpl)
+  widgetMarginTopMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "marginTop:", widgetMarginTopMethod)
+
+  let widgetMarginBottomMethod = createCoreMethod("marginBottom:")
+  widgetMarginBottomMethod.nativeImpl = cast[pointer](widgetMarginBottomImpl)
+  widgetMarginBottomMethod.hasInterpreterParam = true
+  addMethodToClass(widgetCls, "marginBottom:", widgetMarginBottomMethod)
+
   let widgetPumpEventsMethod = createCoreMethod("pumpEvents")
   widgetPumpEventsMethod.nativeImpl = cast[pointer](widgetPumpEventsImpl)
   widgetPumpEventsMethod.hasInterpreterParam = true

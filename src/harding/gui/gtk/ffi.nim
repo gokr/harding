@@ -133,6 +133,10 @@ proc gtkWidgetShowAll*(widget: GtkWidget) {.cdecl, importc: "gtk_widget_show_all
 proc gtkWidgetSetSizeRequest*(widget: GtkWidget, width: cint, height: cint) {.cdecl, importc: "gtk_widget_set_size_request".}
 proc gtkWidgetSetHalign*(widget: GtkWidget, align: cint) {.cdecl, importc: "gtk_widget_set_halign".}
 proc gtkWidgetSetTooltipText*(widget: GtkWidget, text: cstring) {.cdecl, importc: "gtk_widget_set_tooltip_text".}
+proc gtkWidgetSetMarginStart*(widget: GtkWidget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_start".}
+proc gtkWidgetSetMarginEnd*(widget: GtkWidget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_end".}
+proc gtkWidgetSetMarginTop*(widget: GtkWidget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_top".}
+proc gtkWidgetSetMarginBottom*(widget: GtkWidget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_bottom".}
 
 const
   GTKALIGNSTART* = 1.cint
