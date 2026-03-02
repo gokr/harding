@@ -1,4 +1,4 @@
-import std/[strutils, logging, tables]
+import std/[strutils, tables]
 import ../parser/lexer
 import ../core/types
 
@@ -815,7 +815,14 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
   array.elements = @[]
 
   # Parse elements until closing )
-  while not parser.expect(tkRParen):
+  while true:
+    # Skip newlines before checking for closing paren
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+
+    if parser.expect(tkRParen):
+      break
+
     if parser.peek().kind == tkEOF:
       parser.parseError("Unclosed array literal - expected ')'")
       return nil
@@ -826,8 +833,6 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
       parser.parseError("Expected array element")
       return nil
     array.elements.add(element)
-
-    # Skip optional whitespace (already handled by lexer)
 
   return array
 
@@ -841,7 +846,14 @@ proc parseTableLiteral(parser: var Parser): TableNode =
   table.entries = @[]
 
   # Parse entries until closing }
-  while not (parser.peek().kind == tkSpecial and parser.peek().value == "}"):
+  while true:
+    # Skip newlines before checking for closing brace
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      break
+
     if parser.peek().kind == tkEOF:
       parser.parseError("Unclosed table literal - expected '}'")
       return nil

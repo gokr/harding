@@ -1,0 +1,121 @@
+#
+# test_literals_newlines.nim - Tests for newlines in array and table literals
+#
+
+import std/unittest
+import ../src/harding/core/types
+import ../src/harding/interpreter/vm
+import ./stdlib_test_support
+
+# Shared interpreter initialized once for all suites
+var sharedInterp = newSharedStdlibInterpreter()
+
+suite "Array Literals with Newlines":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "array literal with newline between elements":
+    let result = interp.evalStatements("""
+      Arr := #(
+        1
+        2
+        3
+      ).
+      Result := Arr size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+  test "array literal with mixed newlines and spaces":
+    let result = interp.evalStatements("""
+      Arr := #(1
+        2 3
+        4).
+      Result := Arr size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 4)
+
+  test "array literal with elements on separate lines":
+    let result = interp.evalStatements("""
+      Arr := #(
+        "first"
+        "second"
+        "third"
+      ).
+      Result := Arr size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+  test "nested array literal with newlines":
+    let result = interp.evalStatements("""
+      Arr := #(
+        #(1 2)
+        #(3 4)
+        #(5 6)
+      ).
+      Result := Arr size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+suite "Table Literals with Newlines":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "table literal with newline between entries":
+    let result = interp.evalStatements("""
+      T := #{
+        "a" -> 1
+        "b" -> 2
+        "c" -> 3
+      }.
+      Result := T size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+  test "table literal with mixed newlines and commas":
+    let result = interp.evalStatements("""
+      T := #{ "a" -> 1,
+        "b" -> 2,
+        "c" -> 3 }.
+      Result := T size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+  test "table literal with entries on separate lines":
+    let result = interp.evalStatements("""
+      T := #{
+        "name" -> "Alice"
+        "age" -> 30
+      }.
+      Result := T size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 2)
+
+  test "nested table literal with newlines":
+    let result = interp.evalStatements("""
+      T := #{
+        "first" -> #{ "x" -> 1 }
+        "second" -> #{ "y" -> 2 }
+      }.
+      Result := T size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 2)
