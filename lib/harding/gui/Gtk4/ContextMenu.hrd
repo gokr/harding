@@ -20,7 +20,9 @@ ContextMenu class>>for: aWidget [
 
 ContextMenu>>initializeFor: aWidget [
     # Initialize the context menu with a parent widget
+    # Clear any existing items since popovers are cached
     popover := GtkPopover new: aWidget.
+    popover clear.
     items := #().
     ^ self
 ]
@@ -29,6 +31,12 @@ ContextMenu>>addItem: labelString do: aBlock [
     # Add a menu item with a callback block
     popover addItem: labelString do: aBlock.
     items addLast: labelString.
+    ^ self
+]
+
+ContextMenu>>addSeparator [
+    # Add a horizontal separator line between menu items
+    popover addSeparator.
     ^ self
 ]
 
