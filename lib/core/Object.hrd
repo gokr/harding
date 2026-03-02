@@ -160,6 +160,12 @@ Object>>superclassNames <primitive primitiveSuperclassNames>
 
 Object>>respondsTo: selector <primitive primitiveRespondsTo: selector>
 
+Object>>isMixin <primitive primitiveIsMixin>
+
+Object>>implements: interfaceOrMixin [
+  ^ self class implements: interfaceOrMixin
+]
+
 Object class>>methods [
   ^ self primitiveMethods
 ]
@@ -306,6 +312,42 @@ Object class>>extendClass: aBlock [
 ]
 
 Object class>>name <primitive primitiveClassName>
+
+Object class>>implements: thing [
+  # Check if this class implements an interface, mixin, or set of selectors.
+  # thing can be:
+  #   - A Symbol: checks respondsTo: that selector
+  #   - An Array of Symbols: checks respondsTo: for all selectors
+  #   - A Mixin class: checks if all methods defined in the mixin are implemented
+  |
+  result |
+  result := true.
+  
+  # Handle Symbol
+  (thing isKindOf: Symbol) ifTrue: [
+    ^ self respondsTo: thing
+  ].
+  
+  # Handle Array of Symbols
+  (thing isKindOf: Array) ifTrue: [
+    # Check if all selectors are responded to
+    thing do: [:selector |
+      (self respondsTo: selector) ifFalse: [ ^ false ]
+    ].
+    ^ true
+  ].
+  
+  # Handle Mixin (class that derives from Mixin) - use isClass check
+  (thing isClass) ifTrue: [
+    # Get all methods defined in the mixin class (not inherited)
+    thing definedMethods do: [:selector |
+      (self respondsTo: selector) ifFalse: [ ^ false ]
+    ].
+    ^ true
+  ].
+  
+  ^ self error: "implements: requires Symbol, Array of Symbols, or Mixin class"
+]
 
 # Note: Object>>print and Object>>println are registered as native methods
 # in the interpreter, so they don't need to be defined here

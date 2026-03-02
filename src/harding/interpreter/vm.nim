@@ -2060,14 +2060,37 @@ proc primitiveIsKindOfImpl(interp: var Interpreter, self: Instance, args: seq[No
   if args.len < 1 or args[0].kind != vkClass:
     return falseValue
   let targetClass = args[0].classVal
-  var currentClass: Class = self.class
-  while currentClass != nil:
+  if self.class == nil or targetClass == nil:
+    return falseValue
+
+  var work: seq[Class] = @[self.class]
+  var visited: seq[Class] = @[]
+
+  while work.len > 0:
+    let currentClass = work.pop()
+    if currentClass == nil:
+      continue
     if currentClass == targetClass:
       return trueValue
-    if currentClass.superclasses.len > 0:
-      currentClass = currentClass.superclasses[0]
-    else:
-      break
+    if currentClass in visited:
+      continue
+    visited.add(currentClass)
+    for parent in currentClass.superclasses:
+      work.add(parent)
+
+  falseValue
+
+proc primitiveIsMixinImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Check if self is a Mixin (using isMixin function from types.nim)
+  var targetClass: Class = nil
+  
+  if self.class != nil:
+    targetClass = self.class
+  elif self.nimValue != nil:
+    targetClass = cast[Class](self.nimValue)
+  
+  if targetClass != nil and isMixin(targetClass):
+    return trueValue
   falseValue
 
 proc primitiveEqualsImpl(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2514,6 +2537,14 @@ proc initGlobals*(interp: var Interpreter) =
   objIsKindOfMethod.hasInterpreterParam = true
   objectCls.methods["primitiveIsKindOf:"] = objIsKindOfMethod
   objectCls.allMethods["primitiveIsKindOf:"] = objIsKindOfMethod
+
+  # Add primitiveIsMixin for isMixin implementation
+  let objIsMixinMethod = createCoreMethod("primitiveIsMixin")
+  objIsMixinMethod.setNativeImpl(primitiveIsMixinImpl)
+  setNativeValueFromInstanceWithInterp(objIsMixinMethod, primitiveIsMixinImpl)
+  objIsMixinMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveIsMixin"] = objIsMixinMethod
+  objectCls.allMethods["primitiveIsMixin"] = objIsMixinMethod
 
   # Add slotNames for class introspection - returns slot names of this class
   let objSlotNamesMethod = createCoreMethod("slotNames")
@@ -3966,6 +3997,7 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["Block"] = blockCls.toValue()
   interp.globals[]["UndefinedObject"] = undefinedObjCls.toValue()
   interp.globals[]["Library"] = libraryClass.toValue()
+  interp.globals[]["Mixin"] = mixinClass.toValue()
 
   # Create Class class (metaclass) - derives from Object like all classes
   # This allows isKindOf: Class to work properly
@@ -4115,9 +4147,11 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       if lib.kind == ikObject and lib.class == libraryClass:
         let bindingsVal = lib.slots[0]
         if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
-          let classVal = bindingsVal.instVal.entries[toValue(name)]
-          if classVal.kind == vkClass:
-            return classVal.classVal
+          let key = toValue(name)
+          if key in bindingsVal.instVal.entries:
+            let classVal = bindingsVal.instVal.entries[key]
+            if classVal.kind == vkClass:
+              return classVal.classVal
     return nil
 
   let fileStreamCls = if "FileStream" in interp.globals[]:

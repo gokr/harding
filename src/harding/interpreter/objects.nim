@@ -588,8 +588,9 @@ proc initCoreClasses*(): Class =
 
   # Create Root class (empty - for DNU proxies/wrappers)
   discard initRootClass()
+  addGlobal("Root", NodeValue(kind: vkClass, classVal: rootClass))
 
-  # Create Object class (inherits from Root)
+  # Create Object class (inherits from Root) - MUST be before Mixin
   # Core bootstrap methods are registered here; other methods are in lib/core/Object.hrd
   if objectClass == nil:
     objectClass = initObjectClass()
@@ -638,6 +639,12 @@ proc initCoreClasses*(): Class =
 
     addGlobal("Object", NodeValue(kind: vkClass, classVal: objectClass))
 
+  # Create Mixin class (slotless, can be mixed into other classes) - AFTER Object is initialized
+  discard initMixinClass()
+  addGlobal("Mixin", NodeValue(kind: vkClass, classVal: mixinClass))
+  # Rebuild Mixin's method tables to inherit Object's class methods
+  rebuildAllTables(mixinClass)
+
   # Create Integer class
   # Methods are defined in lib/core/Integer.hrd using <primitive> syntax
   if integerClass == nil:
@@ -683,7 +690,7 @@ proc initCoreClasses*(): Class =
     addGlobal("Library", NodeValue(kind: vkClass, classVal: libraryClass))
 
   # Create Set class (using a Table internally for element storage)
-  # Methods are defined in lib/core/Collections.hrd using <primitive> syntax
+    # Methods are defined in lib/core/Set.hrd using <primitive> syntax
   if setClass == nil:
     setClass = newClass(superclasses = @[objectClass], name = "Set")
     setClass.tags = @["Set", "Collection"]

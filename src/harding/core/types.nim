@@ -874,14 +874,12 @@ proc initObjectClass*(): Class =
   return objectClass
 
 proc initMixinClass*(): Class =
-  ## Initialize the global Mixin class (inherits from Root, sibling to Object)
+  ## Initialize the global Mixin class (inherits from Object)
   ## Mixin is a slotless class that can be mixed into any other class type
   ## Use Mixin derive: methods: [...] to create reusable trait/mixin classes
   if mixinClass == nil:
-    # Ensure Root exists first
-    discard initRootClass()
-    mixinClass = newClass(superclasses = @[rootClass], name = "Mixin")
-    mixinClass.tags = @["Mixin", "Object"]  # Mark as Mixin for type compatibility
+    mixinClass = newClass(superclasses = @[objectClass], name = "Mixin")
+    mixinClass.tags = @["Mixin", "Object"]
   return mixinClass
 
 # ============================================================================
@@ -889,9 +887,24 @@ proc initMixinClass*(): Class =
 # ============================================================================
 
 proc isMixin*(cls: Class): bool =
-  ## Check if a class is a mixin (has no slots at all, can't define slots)
-  ## A mixin can be used as additional parent classes without affecting instance type
-  return "Mixin" in cls.tags or cls.allSlotNames.len == 0
+  ## Check if a class is a mixin class.
+  ## A class is considered a mixin when it is tagged as Mixin or when its
+  ## primary superclass chain reaches Mixin (e.g., Comparable := Mixin derive).
+  ## This excludes regular classes that only include mixins as additional parents.
+  if cls == nil:
+    return false
+  if "Mixin" in cls.tags:
+    return true
+
+  var current = cls
+  while current != nil:
+    if current.name == "Mixin":
+      return true
+    if current.superclasses.len > 0:
+      current = current.superclasses[0]
+    else:
+      break
+  return false
 
 proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class =
   ## Create a new Class with given superclasses and slot names
