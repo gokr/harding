@@ -4,7 +4,7 @@
 # JSON-RPC over stdio (standard LSP transport)
 #
 
-import std/[json, strutils, tables, os, streams, logging]
+import std/[json, strutils, tables, os, streams]
 import ../core/types
 import ../parser/lexer
 import ../parser/parser

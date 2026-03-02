@@ -2,7 +2,7 @@
 ## GtkScrolledWindowProxy - Scrolled window container wrapper
 ## ============================================================================
 
-import std/[logging, tables]
+import std/[tables]
 import harding/core/types
 import ./ffi
 import ./widget

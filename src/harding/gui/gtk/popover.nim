@@ -3,7 +3,7 @@
 ## Uses GtkPopover with button content instead of GMenu actions
 ## ============================================================================
 
-import std/[logging, tables, strformat]
+import std/[tables, strformat]
 import harding/core/types
 import harding/interpreter/vm
 import ./ffi
@@ -231,6 +231,35 @@ proc popoverPopupImpl*(interp: var Interpreter, self: Instance, args: seq[NodeVa
     gtkPopoverPopup(popover)
 
     debug("Shown popover with default positioning")
+
+  nilValue()
+
+## Native method: addSeparator - Add a horizontal separator line
+proc popoverAddSeparatorImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Add a separator line between menu items
+  when not defined(gtk3):
+    if not (self.isNimProxy and self.nimValue != nil):
+      return nilValue()
+
+    let popover = cast[GtkPopover](self.nimValue)
+
+    # Find the proxy for this popover
+    var proxy: GtkPopoverProxy = nil
+    for parentWidget, p in popoverTable:
+      if p.widget == cast[GtkWidget](popover):
+        proxy = p
+        break
+
+    if proxy == nil:
+      return nilValue()
+
+    # Create separator (orientation 0 = horizontal)
+    let separator = gtkSeparatorNew(0.cint)
+
+    # Add to content box
+    gtkBoxAppend(proxy.contentBox, cast[GtkWidget](separator))
+
+    debug("Added menu separator")
 
   nilValue()
 

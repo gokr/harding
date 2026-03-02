@@ -1,4 +1,4 @@
-import std/[tables, strformat, os, logging]
+import std/[tables, strformat, os]
 import ../core/types
 import ../core/scheduler
 import ../interpreter/vm

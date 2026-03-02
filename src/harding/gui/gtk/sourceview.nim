@@ -2,7 +2,7 @@
 ## GtkSourceViewProxy - Source code editor widget wrapper
 ## ============================================================================
 
-import std/[logging, tables]
+import std/[tables]
 import harding/core/types
 import ./ffi
 import ./widget

@@ -2,15 +2,23 @@ import std/[tables, logging, hashes, strutils]
 import ./tagged  # Tagged value support for VM performance
 
 # ============================================================================
-# Debug Logging Template
-# Completely eliminated in release builds (-d:release)
+# Logging Templates
+# debug/warn: eliminated in release builds, controlled by --loglevel in debug
+# error: always active (errors should always be logged)
+# These wrap std/logging so other modules don't need to import it directly.
 # ============================================================================
 
-template debug*(args: varargs[untyped]) =
-  ## Debug logging that compiles to nothing in release mode.
-  ## In debug builds, delegates to debugEcho which handles varargs natively.
-  when not defined(release):
-    debugEcho(args)
+when defined(release):
+  template debug*(args: varargs[string, `$`]) = discard
+  template warn*(args: varargs[string, `$`]) = discard
+else:
+  template debug*(args: varargs[string, `$`]) =
+    logging.debug(args)
+  template warn*(args: varargs[string, `$`]) =
+    logging.warn(args)
+
+template error*(args: varargs[string, `$`]) =
+  logging.error(args)
 
 # ============================================================================
 # Core Types for Harding

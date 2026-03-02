@@ -11,7 +11,7 @@
 when not defined(js):
   {.error: "This module is only for JavaScript compilation. Use harding.nim for native builds.".}
 
-import std/[tables, strutils, logging]
+import std/[tables, strutils]
 import ../core/types
 import ../parser/[lexer, parser]
 import ../interpreter/vm

@@ -1,4 +1,4 @@
-import std/[tables, deques, logging]
+import std/[tables, deques]
 import ../core/types
 import ../core/process
 import ../interpreter/objects

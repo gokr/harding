@@ -9,7 +9,7 @@
 # - Standard: Collections, SortedCollection, Interval, File, FileStream, Exception, TestCase (loaded into Standard)
 #
 
-import std/[tables, strutils, logging]
+import std/[tables, strutils]
 import ../core/types
 import ../interpreter/vm
 import ../interpreter/objects

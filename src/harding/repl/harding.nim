@@ -3,7 +3,7 @@
 # Harding REPL - Main entry point
 #
 
-import std/[os, strutils, logging]
+import std/[os, strutils]
 import ../repl/doit
 import ../repl/cli
 import ../core/types

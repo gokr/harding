@@ -4,7 +4,7 @@
 ## Provides native GTK4 AlertDialog with async callback support
 ## Uses a registry to map async operations to Harding blocks
 
-import std/[logging, tables, hashes]
+import std/[tables, hashes]
 import harding/core/types
 import harding/interpreter/vm
 import ./ffi

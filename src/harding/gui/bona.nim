@@ -3,7 +3,7 @@
 ## Initializes the interpreter, loads GTK bridge, and launches the IDE
 ## ============================================================================
 
-import std/[os, logging]
+import std/[os]
 import harding/core/types
 import harding/core/scheduler
 import harding/interpreter/vm

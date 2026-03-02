@@ -1,4 +1,4 @@
-import std/[tables, logging]
+import std/[tables]
 import ../core/types
 import ../interpreter/vm
 
