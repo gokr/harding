@@ -294,9 +294,9 @@ Builder>>refreshAppList [
 ].
 
 Builder>>isApplicationSubclass: aClass [
-  # Check if aClass is an Application subclass
-  # We check by looking for Application-specific methods like main:
-  ^ (aClass respondsTo: #"main:") and: [ aClass name ~= "Application" ].
+  # Check if aClass is likely an Application subclass
+  # For now, accept any class - user can select what they want
+  ^ true.
 ].
 
 Builder>>findApplicationSubclasses [
