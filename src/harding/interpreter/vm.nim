@@ -3108,6 +3108,9 @@ proc initGlobals*(interp: var Interpreter) =
   isClassMethod.hasInterpreterParam = true
   objectCls.methods["isClass"] = isClassMethod
   objectCls.allMethods["isClass"] = isClassMethod
+  # Also expose on class side so class objects answer true for isClass
+  objectCls.classMethods["isClass"] = isClassMethod
+  objectCls.allClassMethods["isClass"] = isClassMethod
   # Also add primitiveIsClass for <primitive: #primitiveIsClass> syntax
   objectCls.methods["primitiveIsClass"] = isClassMethod
   objectCls.allMethods["primitiveIsClass"] = isClassMethod
@@ -6263,6 +6266,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of "name":
       if args.len == 0 and receiverVal.kind == vkClass and receiverVal.classVal != nil:
         interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.classVal.name))
+        return true
+
+    of "isClass":
+      if args.len == 0 and receiverVal.kind == vkClass:
+        interp.pushValue(trueValue)
         return true
 
     of "class":

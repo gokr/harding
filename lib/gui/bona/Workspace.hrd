@@ -193,6 +193,10 @@ Workspace>>printItSelection [
         # Has selection - insert right after the selection
         insertPos := sourceView getSelectionEnd.
     ].
+
+    # Defensive fallback for nil cursor positions from native bridge
+    insertPos isNil ifTrue: [ insertPos := sourceView getSelectionEnd ].
+    insertPos isNil ifTrue: [ insertPos := sourceView text size ].
     
     # Insert result at the calculated position
     sourceView insertText: resultString at: insertPos.

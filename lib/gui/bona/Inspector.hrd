@@ -39,7 +39,7 @@ Inspector>>openWindow [
 ]
 
 Inspector>>openWindowFor: anOwner [
-    | buttonBox closeButton refreshButton inspectButton |
+    | buttonBox inspectButton |
 
     owner := anOwner.
 
@@ -51,7 +51,11 @@ Inspector>>openWindowFor: anOwner [
 
     # Create vertical box layout
     mainBox := GtkBox vertical.
-    mainBox setSpacing: 2.
+    mainBox setSpacing: 5.
+    mainBox marginStart: 5.
+    mainBox marginEnd: 5.
+    mainBox marginTop: 5.
+    mainBox marginBottom: 5.
 
     # Create horizontal paned split
     paned := GtkPaned horizontal.
@@ -80,15 +84,8 @@ Inspector>>openWindowFor: anOwner [
     buttonBox := GtkBox horizontal.
     buttonBox setSpacing: 5.
 
-    closeButton := GtkButton newLabel: "Close".
-    closeButton clicked: [ self close ].
-    buttonBox append: closeButton.
-
-    refreshButton := GtkButton newLabel: "Refresh".
-    refreshButton clicked: [ self refresh ].
-    buttonBox append: refreshButton.
-
     inspectButton := GtkButton newLabel: "Inspect Selected".
+    inspectButton tooltip: "Open a new Inspector on the currently selected value".
     inspectButton clicked: [ self inspectSelected ].
     buttonBox append: inspectButton.
 
@@ -118,7 +115,7 @@ Inspector>>createWorkspacePane [
     box setSpacing: 2.
 
     # Label showing selected value info
-    workspaceLabel := GtkLabel new: (inspectedObject printString).
+    workspaceLabel := GtkLabel new: "Selected: self".
     workspaceLabel setHexpand: true.
     workspaceLabel setHalignStart.
     box append: workspaceLabel.
@@ -176,7 +173,7 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
     ].
 
     # Regular object - show named slots
-    slotNames := anObject allSlotNames.
+    slotNames := anObject slotNames.
     slotNames do: [:name |
         | value path expanded |
         value := anObject instVarAt: name.
@@ -369,7 +366,7 @@ Inspector>>isExpandable: aValue [
     (aValue isKindOf: Array) ifTrue: [ ^ aValue isEmpty not ].
     (aValue isKindOf: Table) ifTrue: [ ^ aValue isEmpty not ].
     # Regular object: expandable if it has slots
-    ^ aValue allSlotNames isEmpty not
+    ^ aValue slotNames isEmpty not
 ]
 
 # ============================================================================
@@ -435,6 +432,7 @@ Inspector>>printItInWorkspace [
 
     # Insert at selection end
     cursorPos := workspaceSourceView getSelectionEnd.
+    cursorPos isNil ifTrue: [ cursorPos := workspaceSourceView text size ].
     workspaceSourceView insertText: resultString at: cursorPos.
     insertedEnd := cursorPos + resultString size.
     workspaceSourceView selectRangeFrom: cursorPos to: insertedEnd.
