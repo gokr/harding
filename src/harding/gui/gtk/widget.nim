@@ -2,7 +2,7 @@
 ## GtkWidgetProxy - Base widget wrapper
 ## ============================================================================
 
-import std/[tables]
+import std/[tables, strutils]
 import harding/core/types
 import harding/interpreter/vm
 import ./ffi

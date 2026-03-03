@@ -96,6 +96,8 @@ proc primitiveSystemArgumentsImpl(interp: var Interpreter, self: Instance,
                                   args: seq[NodeValue]): NodeValue {.nimcall.}
 proc primitiveSystemCwdImpl(interp: var Interpreter, self: Instance,
                             args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveGetenvImpl(interp: var Interpreter, self: Instance,
+                         args: seq[NodeValue]): NodeValue {.nimcall.}
 proc resolveLoadInput(interp: Interpreter,
                       requestedPath: string): tuple[ok: bool, source: string, displayPath: string]
 proc makeStandardFileStreamInstance(fileStreamCls: Class,
@@ -437,7 +439,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
       debug("Found table property on self: ", name)
       return (true, val)
 
-  # Check if it's a slot on self (for ikObject instances with declared instance variables)
+  # Check if it's a slot on self (for ikObject instances with declared slots)
   if interp.currentReceiver != nil and interp.currentReceiver.kind == ikObject:
     let idx = getSlotIndex(interp.currentReceiver.class, name)
     if idx >= 0:
@@ -568,7 +570,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
       debug("Global updated: ", name, " = ", value.toString())
       return
 
-    # Check if it's a slot on self (for ikObject instances with declared instance variables)
+    # Check if it's a slot on self (for ikObject instances with declared slots)
     if interp.currentReceiver != nil and interp.currentReceiver.kind == ikObject:
       let idx = getSlotIndex(interp.currentReceiver.class, name)
       if idx >= 0:
@@ -2151,8 +2153,8 @@ proc primitiveSuperclassNamesImpl(interp: var Interpreter, self: Instance, args:
     superClassNames.add(toValue(sc.name))
   return newArrayInstance(arrayClass, superClassNames).toValue()
 
-proc primitiveInstVarAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Get instance variable by name (symbol or string)
+proc primitiveSlotAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get slot value by name (symbol or string)
   if self.kind != ikObject or self.class == nil or args.len < 1:
     return nilValue()
 
@@ -2169,8 +2171,8 @@ proc primitiveInstVarAtImpl(interp: var Interpreter, self: Instance, args: seq[N
     return self.slots[idx]
   return nilValue()
 
-proc primitiveInstVarAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Set instance variable by name (symbol or string)
+proc primitiveSlotAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Set slot value by name (symbol or string)
   if self.kind != ikObject or self.class == nil or args.len < 2:
     return args[1]
 
@@ -2609,21 +2611,21 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.methods["primitiveSlotNames"] = objSlotNamesMethod
   objectCls.allMethods["primitiveSlotNames"] = objSlotNamesMethod
 
-  # Add instVarAt: for accessing instance variables by name
-  let objInstVarAtMethod = createCoreMethod("instVarAt:")
-  objInstVarAtMethod.setNativeImpl(primitiveInstVarAtImpl)
-  setNativeValueFromInstanceWithInterp(objInstVarAtMethod, primitiveInstVarAtImpl)
-  objInstVarAtMethod.hasInterpreterParam = true
-  objectCls.methods["instVarAt:"] = objInstVarAtMethod
-  objectCls.allMethods["instVarAt:"] = objInstVarAtMethod
+  # Add slotAt: for accessing slots by name
+  let objSlotAtMethod = createCoreMethod("slotAt:")
+  objSlotAtMethod.setNativeImpl(primitiveSlotAtImpl)
+  setNativeValueFromInstanceWithInterp(objSlotAtMethod, primitiveSlotAtImpl)
+  objSlotAtMethod.hasInterpreterParam = true
+  objectCls.methods["slotAt:"] = objSlotAtMethod
+  objectCls.allMethods["slotAt:"] = objSlotAtMethod
 
-  # Add instVarAt:put: for setting instance variables by name
-  let objInstVarAtPutMethod = createCoreMethod("instVarAt:put:")
-  objInstVarAtPutMethod.setNativeImpl(primitiveInstVarAtPutImpl)
-  setNativeValueFromInstanceWithInterp(objInstVarAtPutMethod, primitiveInstVarAtPutImpl)
-  objInstVarAtPutMethod.hasInterpreterParam = true
-  objectCls.methods["instVarAt:put:"] = objInstVarAtPutMethod
-  objectCls.allMethods["instVarAt:put:"] = objInstVarAtPutMethod
+  # Add slotAt:put: for setting slots by name
+  let objSlotAtPutMethod = createCoreMethod("slotAt:put:")
+  objSlotAtPutMethod.setNativeImpl(primitiveSlotAtPutImpl)
+  setNativeValueFromInstanceWithInterp(objSlotAtPutMethod, primitiveSlotAtPutImpl)
+  objSlotAtPutMethod.hasInterpreterParam = true
+  objectCls.methods["slotAt:put:"] = objSlotAtPutMethod
+  objectCls.allMethods["slotAt:put:"] = objSlotAtPutMethod
   objectCls.allMethods["primitiveSlotNames"] = objSlotNamesMethod
 
   # Add superclassNames for class introspection - returns names of superclasses
@@ -4314,6 +4316,12 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     systemCls.classMethods["primitiveSystemCwd"] = systemCwdMethod
     systemCls.allClassMethods["primitiveSystemCwd"] = systemCwdMethod
 
+    let systemGetenvMethod = createCoreMethod("primitiveGetenv:")
+    systemGetenvMethod.setNativeImpl(primitiveGetenvImpl)
+    systemGetenvMethod.hasInterpreterParam = true
+    systemCls.classMethods["primitiveGetenv:"] = systemGetenvMethod
+    systemCls.allClassMethods["primitiveGetenv:"] = systemGetenvMethod
+
     debug("Registered native System primitive methods")
 
   let fileCls = if "File" in interp.globals[]:
@@ -4783,6 +4791,21 @@ proc primitiveSystemCwdImpl(interp: var Interpreter,
     toValue(getCurrentDir())
   except CatchableError:
     nilValue()
+
+proc primitiveGetenvImpl(interp: var Interpreter,
+                         self: Instance,
+                         args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard interp
+  discard self
+  if args.len < 1:
+    return nilValue()
+  let varName = args[0].toString()
+  if varName.len == 0:
+    return nilValue()
+  let value = getEnv(varName)
+  if value.len == 0:
+    return nilValue()
+  return toValue(value)
 
 proc resolveLoadInput(interp: Interpreter,
                       requestedPath: string): tuple[ok: bool, source: string, displayPath: string] =
@@ -5773,7 +5796,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     return true
 
   of nkSlotAccess:
-    # Slot access - O(1) direct instance variable access by index
+    # Slot access - O(1) direct slot access by index
     let slotNode = cast[SlotAccessNode](node)
     if interp.currentReceiver != nil and interp.currentReceiver.kind == ikObject:
       let inst = interp.currentReceiver

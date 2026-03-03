@@ -226,12 +226,12 @@ Builder>>createEditorPane [
 
   outputView := GtkTextView new.
   outputView vexpand: false.
-  outputView heightRequest: 100.
+  outputView setSizeRequest: -1 height: 100.
   outputView editable: false.
 
   scroll := GtkScrolledWindow new.
   scroll vexpand: false.
-  scroll heightRequest: 100.
+  scroll setSizeRequest: -1 height: 100.
   scroll setChild: outputView.
 
   box append: scroll.
