@@ -30,7 +30,7 @@ Builder>>openInstance [
   window := GtkWindow new.
   window title: "Application Builder".
   window setDefaultSize: 900 height: 600.
-  window connectDestroy: [ self onClose ].
+  window onClose: [ self onClose ].
 
   # Main layout
   mainBox := GtkBox vertical.
@@ -142,7 +142,7 @@ Builder>>createAppListPane [
   # Create list box for applications
   appList := GtkListBox new.
   appList vexpand: true.
-  appList connectRowSelected: [ :row | self onAppSelected: row ].
+  appList onRowSelected: [ :row | self onAppSelected: row ].
 
   scroll := GtkScrolledWindow new.
   scroll vexpand: true.
