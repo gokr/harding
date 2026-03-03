@@ -294,22 +294,9 @@ Builder>>refreshAppList [
 ].
 
 Builder>>isApplicationSubclass: aClass [
-  # Check if aClass is a subclass of Application using superclassNames
-  | clsName isAppClass |
-  clsName := aClass name.
-  isAppClass := false.
-  
-  [ clsName notNil and: [ isAppClass not ] ] whileTrue: [
-    | superNames |
-    clsName = "Application" ifTrue: [ isAppClass := true ].
-    # Get superclass names and continue with first one
-    superNames := (Harding at: clsName) superclassNames.
-    superNames isEmpty
-      ifTrue: [ clsName := nil ]
-      ifFalse: [ clsName := superNames at: 0 ].
-  ].
-  
-  ^ isAppClass.
+  # Check if aClass is an Application subclass
+  # We check by looking for Application-specific methods like main:
+  ^ (aClass respondsTo: #"main:") and: [ aClass name ~= "Application" ].
 ].
 
 Builder>>findApplicationSubclasses [
