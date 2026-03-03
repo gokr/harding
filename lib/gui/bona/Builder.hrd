@@ -301,13 +301,17 @@ Builder>>findApplicationSubclasses [
     | obj |
     obj := Harding at: key.
     (obj notNil and: [ obj isClass ]) ifTrue: [
-      # Check if this class is a subclass of Application using superclass chain
-      | cls isAppClass |
-      cls := obj.
+      # Check if this class is a subclass of Application using superclassNames
+      | clsName superNames isAppClass |
+      clsName := obj name.
       isAppClass := false.
-      [ cls notNil and: [ isAppClass not ] ] whileTrue: [
-        cls name = "Application" ifTrue: [ isAppClass := true ].
-        cls := cls superclass.
+      [ clsName notNil and: [ isAppClass not ] ] whileTrue: [
+        clsName = "Application" ifTrue: [ isAppClass := true ].
+        # Get superclass names and continue with first one
+        superNames := (Harding at: clsName) superclassNames.
+        superNames isEmpty
+          ifTrue: [ clsName := nil ]
+          ifFalse: [ clsName := superNames at: 0 ].
       ].
       isAppClass ifTrue: [
         (obj name ~= "Application") ifTrue: [
