@@ -103,10 +103,10 @@ proc initGtkBridge*(interp: var Interpreter) =
   widgetHideMethod.hasInterpreterParam = true
   addMethodToClass(widgetCls, "hide", widgetHideMethod)
 
-  let widgetSetSizeRequestMethod = createCoreMethod("setSizeRequest:")
+  let widgetSetSizeRequestMethod = createCoreMethod("setSizeRequest:height:")
   widgetSetSizeRequestMethod.nativeImpl = cast[pointer](widgetSetSizeRequestImpl)
   widgetSetSizeRequestMethod.hasInterpreterParam = true
-  addMethodToClass(widgetCls, "setSizeRequest:", widgetSetSizeRequestMethod)
+  addMethodToClass(widgetCls, "setSizeRequest:height:", widgetSetSizeRequestMethod)
 
   let widgetAddCssClassMethod = createCoreMethod("addCssClass:")
   widgetAddCssClassMethod.nativeImpl = cast[pointer](widgetAddCssClassImpl)
