@@ -686,18 +686,31 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
 
 proc prepareBlockForApplication(interp: var Interpreter, origBlock: BlockNode): BlockNode =
   ## Create a runtime copy of a parser block and capture its environment.
-  ## Used by IfNode/WhileNode handlers to ensure proper closure capture.
+  ## Used by IfNode/WhileNode handlers when the block contains nested blocks
+  ## that need closure capture.
   result = BlockNode(
     parameters: origBlock.parameters,
     temporaries: origBlock.temporaries,
     body: origBlock.body,
     isMethod: origBlock.isMethod,
     localCount: origBlock.localCount,
+    containsNestedBlocks: origBlock.containsNestedBlocks,
     capturedEnv: initTable[string, MutableCell](),
     capturedEnvInitialized: true,
     homeActivation: interp.currentActivation
   )
   captureEnvironment(interp, result)
+
+proc prepareControlFlowBlock(interp: var Interpreter, origBlock: BlockNode): BlockNode =
+  ## Prepare a block for IfNode/WhileNode execution. Uses the fast path
+  ## (just set homeActivation) when the block doesn't contain nested blocks,
+  ## or full capture when it does.
+  if origBlock.containsNestedBlocks:
+    return prepareBlockForApplication(interp, origBlock)
+  origBlock.homeActivation = interp.currentActivation
+  if interp.currentActivation != nil:
+    interp.currentActivation.wasCaptured = true
+  return origBlock
 
 # Method lookup and dispatch
 type
@@ -5920,10 +5933,10 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       if lit.value.kind == vkBool:
         let condResult = lit.value.boolVal
         if condResult and ifNode.thenBranch != nil:
-          let blk = prepareBlockForApplication(interp, cast[BlockNode](ifNode.thenBranch))
+          let blk = prepareControlFlowBlock(interp, cast[BlockNode](ifNode.thenBranch))
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         elif not condResult and ifNode.elseBranch != nil:
-          let blk = prepareBlockForApplication(interp, cast[BlockNode](ifNode.elseBranch))
+          let blk = prepareControlFlowBlock(interp, cast[BlockNode](ifNode.elseBranch))
           interp.pushWorkFrame(newApplyBlockFrame(blk, 0))
         else:
           interp.pushValue(nilValue())
@@ -5931,10 +5944,10 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     # General case: evaluate condition and create continuation
     # Push continuation frame that will check condition result from stack
     let thenBlk = if ifNode.thenBranch of BlockNode:
-        prepareBlockForApplication(interp, cast[BlockNode](ifNode.thenBranch))
+        prepareControlFlowBlock(interp, cast[BlockNode](ifNode.thenBranch))
       else: nil
     let elseBlk = if ifNode.elseBranch of BlockNode:
-        prepareBlockForApplication(interp, cast[BlockNode](ifNode.elseBranch))
+        prepareControlFlowBlock(interp, cast[BlockNode](ifNode.elseBranch))
       else: nil
     var contFrame = WorkFrame(kind: wfIfNodeContinuation)
     contFrame.thenBlock = thenBlk
@@ -5946,8 +5959,8 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
   of nkWhile:
     # Control Flow Specialization: WhileNode - evaluate condition, then body
     let whileNode = cast[WhileNode](node)
-    let condBlk = prepareBlockForApplication(interp, cast[BlockNode](whileNode.condition))
-    let bodyBlk = prepareBlockForApplication(interp, cast[BlockNode](whileNode.body))
+    let condBlk = prepareControlFlowBlock(interp, cast[BlockNode](whileNode.condition))
+    let bodyBlk = prepareControlFlowBlock(interp, cast[BlockNode](whileNode.body))
     interp.pushWorkFrame(newWhileLoopFrame(whileNode.isWhileTrue, condBlk, bodyBlk, lsEvaluateCondition))
     return true
 
