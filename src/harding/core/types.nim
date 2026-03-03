@@ -271,6 +271,7 @@ type
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
+    containsNestedBlocks*: bool           # true if body contains nkBlock nodes (needs closure capture)
     capturedEnv*: Table[string, MutableCell]  # captured variables from outer scope
     capturedEnvInitialized*: bool         # flag to track if capturedEnv has been initialized
     homeActivation*: Activation           # for non-local returns: method that created this block
@@ -494,6 +495,20 @@ proc resolveLocalIndices*(blk: BlockNode) =
     nameToIndex[t] = blk.parameters.len + 1 + i
   blk.localCount = 1 + blk.parameters.len + blk.temporaries.len
 
+  var foundNestedBlock = false
+
+  proc resolveBranch(branch: Node) =
+    ## Resolve an IfNode/WhileNode branch block without counting it as a
+    ## standalone nested block. Propagate its containsNestedBlocks flag up.
+    if branch == nil:
+      return
+    if branch of BlockNode:
+      let branchBlk = cast[BlockNode](branch)
+      resolveLocalIndices(branchBlk)
+      if branchBlk.containsNestedBlocks:
+        foundNestedBlock = true
+    # Non-BlockNode branches are handled by the caller via resolveNode
+
   proc resolveNode(node: Node) =
     if node == nil:
       return
@@ -519,8 +534,8 @@ proc resolveLocalIndices*(blk: BlockNode) =
       let ret = cast[ReturnNode](node)
       resolveNode(ret.expression)
     elif node of BlockNode:
-      # Don't descend into nested blocks - they have their own locals
-      # But DO resolve the nested block's own indices
+      # Standalone block in body - will create a closure at runtime
+      foundNestedBlock = true
       resolveLocalIndices(cast[BlockNode](node))
     elif node of CascadeNode:
       let cascade = cast[CascadeNode](node)
@@ -530,12 +545,27 @@ proc resolveLocalIndices*(blk: BlockNode) =
     elif node of IfNode:
       let ifN = cast[IfNode](node)
       resolveNode(ifN.condition)
-      resolveNode(ifN.thenBranch)
-      resolveNode(ifN.elseBranch)
+      # IfNode branches are not standalone blocks; resolve separately
+      # and propagate containsNestedBlocks flag up
+      if ifN.thenBranch of BlockNode:
+        resolveBranch(ifN.thenBranch)
+      else:
+        resolveNode(ifN.thenBranch)
+      if ifN.elseBranch of BlockNode:
+        resolveBranch(ifN.elseBranch)
+      else:
+        resolveNode(ifN.elseBranch)
     elif node of WhileNode:
       let whileN = cast[WhileNode](node)
-      resolveNode(whileN.condition)
-      resolveNode(whileN.body)
+      # WhileNode condition/body are not standalone blocks
+      if whileN.condition of BlockNode:
+        resolveBranch(whileN.condition)
+      else:
+        resolveNode(whileN.condition)
+      if whileN.body of BlockNode:
+        resolveBranch(whileN.body)
+      else:
+        resolveNode(whileN.body)
     elif node of ArrayNode:
       let arr = cast[ArrayNode](node)
       for elem in arr.elements:
@@ -560,6 +590,7 @@ proc resolveLocalIndices*(blk: BlockNode) =
 
   for stmt in blk.body:
     resolveNode(stmt)
+  blk.containsNestedBlocks = foundNestedBlock
 
 # Value conversion utilities
 proc formatValue(val: NodeValue, quoteStrings: bool): string =

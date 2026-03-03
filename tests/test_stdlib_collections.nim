@@ -39,7 +39,7 @@ suite "Stdlib: Arrays - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 0)
+    check(result[0][^1].intVal == 3)
 
   test "copyFrom:to: extracts subarray":
     let result = interp.evalStatements("""
@@ -189,7 +189,7 @@ suite "Stdlib: Tables - Advanced":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 0)
+    check(result[0][^1].intVal == 6)
 
   test "values returns array of all values":
     let result = interp.evalStatements("""
