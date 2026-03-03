@@ -260,7 +260,11 @@ Builder>>createEditorPane [
 # ].
 
 Builder>>refreshAppList [
-  | apps |
+  | apps labelClass rowClass |
+
+  # Capture GTK classes in local variables to avoid closure lookup issues
+  labelClass := GtkLabel.
+  rowClass := GtkListBoxRow.
 
   # Clear existing items
   appList clear.
@@ -270,10 +274,10 @@ Builder>>refreshAppList [
 
   apps do: [:appClass |
     | row label |
-    label := GtkLabel new: (appClass name).
+    label := labelClass new: (appClass name).
     label setHalignStart.
 
-    row := GtkListBoxRow new.
+    row := rowClass new.
     row setChild: label.
     row setName: (appClass name).
 
@@ -282,10 +286,10 @@ Builder>>refreshAppList [
 
   apps isEmpty ifTrue: [
     | label row |
-    label := GtkLabel new: "(no applications found)".
+    label := labelClass new: "(no applications found)".
     label setHalignStart.
 
-    row := GtkListBoxRow new.
+    row := rowClass new.
     row setChild: label.
     appList append: row.
   ].
