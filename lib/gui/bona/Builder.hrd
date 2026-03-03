@@ -133,7 +133,7 @@ Builder>>createAppListPane [
   box setSpacing: 5.
   box hexpand: false.
   box vexpand: true.
-  box widthRequest: 200.
+  box setSizeRequest: 200 height: -1.
 
   label := GtkLabel new: "Applications".
   label setHalignStart.
