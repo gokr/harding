@@ -2,7 +2,7 @@
 #
 # Comparable.hrd - Ordering comparison mixin
 #
-# Provides sort-order comparison methods. For equality, use Equalable mixin.
+# Provides sort-order comparison methods. For equality, use Equatable mixin.
 # Comparable requires implementing compareTo: which returns:
 #   - negative if self < anObject
 #   - zero if self = anObject  

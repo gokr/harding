@@ -118,6 +118,8 @@ proc libraryKeysImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc libraryIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc libraryNameImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc libraryNameSetImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc libraryAllNamesClassImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
+proc libraryNamedClassImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 # String primitives (Instance-based)
 proc instStringConcatImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringSizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue
@@ -687,6 +689,7 @@ proc initCoreClasses*(): Class =
                             slotNames = @["bindings", "imports", "name"],
                             name = "Library")
     libraryClass.tags = @["Library", "Namespace"]
+    libraryClass.hardingType = "Library"
     addGlobal("Library", NodeValue(kind: vkClass, classVal: libraryClass))
 
   # Create Set class (using a Table internally for element storage)
@@ -1903,6 +1906,40 @@ proc libraryBindingsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Note: This is typically accessed via slot access (lib bindings), not via this primitive
   if self.kind == ikObject and self.slots.len > 0:
     return self.slots[0]
+  return nilValue()
+
+proc libraryAllNamesClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Library class>>allNames - return all library names in the system
+  var names: seq[NodeValue] = @[]
+  names.add("Harding".toValue())
+  
+  for key in interp.globals[].keys:
+    if key != "Harding" and key != "GlobalTable":
+      let val = interp.globals[][key]
+      if val.kind == vkInstance and val.instVal != nil:
+        if val.instVal.class != nil and val.instVal.class.hardingType == "Library":
+          names.add(key.toValue())
+  
+  return newArrayInstance(arrayClass, names).toValue()
+
+proc libraryNamedClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Library class>>named: - return a library by name from globals
+  if args.len == 0:
+    return nilValue()
+  
+  let name = if args[0].kind == vkString: args[0].strVal
+             elif args[0].kind == vkSymbol: args[0].symVal
+             else: ""
+  
+  if name == "Harding":
+    return interp.globals[]["Harding"]
+  
+  if name.len > 0 and name in interp.globals[]:
+    let val = interp.globals[][name]
+    if val.kind == vkInstance and val.instVal != nil:
+      if val.instVal.class != nil and val.instVal.class.hardingType == "Library":
+        return val
+  
   return nilValue()
 
 # Set primitives (storing elements in a table at slot 0)

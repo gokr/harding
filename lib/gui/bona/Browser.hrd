@@ -195,6 +195,23 @@ SystemBrowser>>openWindowFor: anOwner [
                 Transcript showCr: ("Class: " , class).
             ].
         ].
+        menu addItem: "Show Class Info" do: [
+            class notNil ifTrue: [
+                self showClassInfo: class
+            ].
+        ].
+        menu addSeparator.
+        menu addItem: "Add Mixin..." do: [
+            class notNil ifTrue: [
+                self showAddMixinDialog: class
+            ].
+        ].
+        menu addSeparator.
+        menu addItem: "Delete Class" do: [
+            class notNil ifTrue: [
+                self confirmDeleteClass: class
+            ].
+        ].
     ].
 
     libraryPane onContextMenu: [:lib :menu |
@@ -202,6 +219,10 @@ SystemBrowser>>openWindowFor: anOwner [
             lib notNil ifTrue: [
                 Transcript showCr: ("Library: " , lib).
             ].
+        ].
+        menu addSeparator.
+        menu addItem: "Find Class..." do: [
+            self showFindClassDialog
         ].
     ].
 
@@ -217,12 +238,19 @@ SystemBrowser>>openWindowFor: anOwner [
     buttonBox := GtkBox horizontal.
     buttonBox setSpacing: 5.
 
+    newClassButton := GtkButton newLabel: "New Class" iconName: "list-add".
+    newClassButton clicked: [ self createNewClass ].
+    newClassButton tooltip: "Create a new class (Ctrl+N)".
+    buttonBox append: newClassButton.
+
     newMethodButton := GtkButton newLabel: "New Method" iconName: "document-new".
     newMethodButton clicked: [ self createNewMethod ].
+    newMethodButton tooltip: "Create a new method in the selected class".
     buttonBox append: newMethodButton.
 
     deleteMethodButton := GtkButton newLabel: "Delete Method" iconName: "edit-delete".
     deleteMethodButton clicked: [ self deleteCurrentMethod ].
+    deleteMethodButton tooltip: "Delete the selected method".
     buttonBox append: deleteMethodButton.
 
     window setChild: mainBox.
@@ -315,8 +343,29 @@ SystemBrowser>>populateClassesFor: aLibraryName [
         ^ self
     ].
 
-    classNames := libb classNames.
-    Transcript showCr: ("Library " , libraryName , " has " , (classNames size printString) , " classes").
+libraryName = "Harding" ifTrue: [
+        | names keysResult i |
+        names := Array new.
+        keysResult := Harding keys.
+        (keysResult notNil and: [keysResult respondsTo: #size]) ifTrue: [
+            i := 0.
+            [ i < keysResult size ] whileTrue: [
+                | k |
+                k := keysResult at: i.
+                ((Harding at: k) isClass) ifTrue: [
+                    names add: k
+                ].
+                i := i + 1
+            ]
+        ].
+        classNames := names
+    ] ifFalse: [
+        libb isNil ifTrue: [
+            classNames := #()
+        ] ifFalse: [
+            classNames := libb classNames.
+        ]
+    ].
 
     classPane items: classNames.
 ]
@@ -1040,4 +1089,556 @@ SystemBrowser>>removeMethodFromClass: aSelector [
 
     classObj removeMethod: aSelector.
     Transcript showCr: ("Removed method " , aSelector , " from class " , currentClass).
+]
+
+SystemBrowser>>showFindClassDialog [
+    | dialog box label inputBox inputField searchButton cancelButton result |
+    
+    dialog := GtkWindow new.
+    dialog title: "Find Class".
+    dialog setDefaultSize: 350 height: 120.
+    
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+    
+    label := GtkLabel new: "Class name (or partial name):".
+    label halignStart.
+    
+    inputBox := GtkBox horizontal.
+    inputBox setSpacing: 8.
+    
+    inputField := GtkEntry new.
+    inputField hexpand: true.
+    inputField placeholderText: "e.g. Array or Col".
+    
+    searchButton := GtkButton newLabel: "Find".
+    searchButton addCssClass: "suggested-action".
+    
+    cancelButton := GtkButton newLabel: "Cancel".
+    
+    searchButton clicked: [
+        | searchText |
+        searchText := inputField text trim.
+        searchText isEmpty ifFalse: [
+            dialog close.
+            self findAndSelectClass: searchText
+        ]
+    ].
+    
+    cancelButton clicked: [
+        dialog close
+    ].
+    
+    inputField activate: [
+        searchButton clicked
+    ].
+    
+    inputBox append: inputField.
+    inputBox append: searchButton.
+    inputBox append: cancelButton.
+    
+    dialog setChild: box.
+    box append: label.
+    box append: inputBox.
+    
+    dialog present.
+]
+
+SystemBrowser>>findAndSelectClass: aPattern [
+    | libraryNames matchedLib matchedClass li li2 |
+    
+    libraryNames := Library allNames.
+    matchedLib := nil.
+    matchedClass := nil.
+    
+    libraryNames isNil ifFalse: [
+        li := 0.
+        [ li < libraryNames size and: [matchedClass isNil] ] whileTrue: [
+            | libName lib classNames |
+            libName := libraryNames at: li.
+            lib := Library named: libName.
+            lib notNil ifTrue: [
+libName = "Harding" ifTrue: [
+                    | names keysResult |
+                    names := Array new.
+                    (Harding respondsTo: #keys) ifTrue: [
+                        keysResult := Harding keys.
+                        keysResult isNil ifFalse: [
+                            keysResult do: [:k |
+                                ((Harding at: k) isClass) ifTrue: [
+                                    names add: k
+                                ]
+                            ]
+                        ]
+                    ].
+                    classNames := names
+                ] ifFalse: [
+                    classNames := lib classNames.
+                ].
+                classNames isNil ifFalse: [
+                    li2 := 0.
+                    [ li2 < classNames size and: [matchedClass isNil] ] whileTrue: [
+                        | className |
+                        className := classNames at: li2.
+                        ((className asString) findString: aPattern ignoreCase: true) >= 0 ifTrue: [
+                            matchedLib := libName.
+                            matchedClass := className
+                        ].
+                        li2 := li2 + 1
+                    ]
+                ]
+            ].
+            li := li + 1
+        ]
+    ].
+    
+    matchedClass isNil ifTrue: [
+        Transcript showCr: ("No class found matching: " , aPattern).
+        ^ self
+    ].
+    
+    Transcript showCr: ("Found: " , matchedClass , " in " , matchedLib).
+    
+    self selectLibrary: matchedLib.
+    classPane selectItem: matchedClass.
+    self applyClassSelection: matchedClass.
+]
+
+SystemBrowser>>createNewClass [
+    | dialog box nameLabel nameField parentLabel parentDropdown slotsLabel slotsField mixinCheckbox buttonBox createButton cancelButton |
+    
+    currentLibrary isNil ifTrue: [
+        Transcript showCr: "Select a library first before creating a class".
+        ^ self
+    ].
+    
+    dialog := GtkWindow new.
+    dialog title: "Create New Class".
+    dialog setDefaultSize: 400 height: 280.
+    
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+    
+    nameLabel := GtkLabel new: "Class name:".
+    nameLabel halignStart.
+    nameField := GtkEntry new.
+    nameField placeholderText: "e.g. MyClass".
+    
+    parentLabel := GtkLabel new: "Parent class:".
+    parentLabel halignStart.
+    parentDropdown := GtkComboBoxText new.
+    parentDropdown append: "Object".
+    parentDropdown append: "Mixin".
+    parentDropdown append: "Root".
+    parentDropdown activeId: "Object".
+    
+    slotsLabel := GtkLabel new: "Slots (space-separated):".
+    slotsLabel halignStart.
+    slotsField := GtkEntry new.
+    slotsField placeholderText: "e.g. x y color".
+    
+    mixinCheckbox := GtkCheckButton newWithLabel: "Create as Mixin".
+    mixinCheckbox clicked: [
+        | isMixin |
+        isMixin := mixinCheckbox active.
+        slotsField sensitive: isMixin not.
+        parentDropdown activeId: (isMixin ifTrue: ["Mixin"] ifFalse: ["Object"])
+    ].
+    
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 8.
+    buttonBox hexpand: true.
+    
+    cancelButton := GtkButton newLabel: "Cancel".
+    createButton := GtkButton newLabel: "Create".
+    createButton addCssClass: "suggested-action".
+    
+    buttonBox append: cancelButton.
+    buttonBox append: createButton.
+    
+    createButton clicked: [
+        | className parentName slots slotsArray result fileName filePath classDefCode |
+        className := (nameField text) trim.
+        className isEmpty ifTrue: [
+            Transcript showCr: "Class name cannot be empty".
+            ^ self
+        ].
+        
+        parentName := parentDropdown activeId.
+        slots := (slotsField text) trim.
+        slotsArray := slots isEmpty 
+            ifTrue: [#()] 
+            ifFalse: [(slots split: " ") select: [:s | s trim notEmpty ]].
+        
+        dialog close.
+        
+        result := [ 
+            parentName = "Mixin" ifTrue: [
+                Mixin derive: slotsArray
+            ] ifFalse: [
+                Object derive: slotsArray
+            ]
+        ] on: Exception do: [:ex | "ERROR: " , ex printString ].
+        
+        (result isKindOf: String) ifTrue: [
+            result startsWith: "ERROR:" ifTrue: [
+                Transcript showCr: ("Failed to create class: " , result).
+                ^ self
+            ]
+        ].
+        
+        currentLibrary notNil ifTrue: [
+            | lib |
+            lib := Library named: currentLibrary.
+            lib notNil ifTrue: [
+                lib at: className put: result
+            ]
+        ].
+        
+        classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray.
+        fileName := className , ".hrd".
+        filePath := self resolveClassFilePath: className defaultName: fileName.
+        
+        filePath isNil ifTrue: [
+            Transcript showCr: ("Cannot determine file path for class: " , className).
+        ] ifFalse: [
+            self writeClassDefinition: classDefCode toFile: filePath forClass: className.
+            currentMethodFile := filePath.
+            currentMethodOwnerClass := className.
+            currentMethodStartLine := nil.
+            currentMethodEndLine := nil.
+            currentMethodHasBlock := false.
+        ].
+        
+        Transcript showCr: ("Created class: " , className).
+        
+        classPane items: (lib classNames).
+        classPane selectItem: className.
+        self applyClassSelection: className.
+    ].
+    
+    cancelButton clicked: [
+        dialog close
+    ].
+    
+    dialog setChild: box.
+    box append: nameLabel.
+    box append: nameField.
+    box append: parentLabel.
+    box append: parentDropdown.
+    box append: slotsLabel.
+    box append: slotsField.
+    box append: mixinCheckbox.
+    box append: buttonBox.
+    
+    dialog present.
+]
+
+SystemBrowser>>showClassInfo: aClassName [
+    | classObj infoText superclasses slots isMixin methodCount |
+    
+    classObj := self classForName: aClassName.
+    classObj isNil ifTrue: [
+        Transcript showCr: ("Class not found: " , aClassName).
+        ^ self
+    ].
+    
+    superclasses := classObj superclassNames.
+    slots := classObj instanceVariables.
+    isMixin := classObj isMixin.
+    methodCount := classObj definedMethods size.
+    
+    infoText := aClassName , (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"]).
+    infoText := infoText , "\n\n".
+    infoText := infoText , "Superclasses: " , (superclasses isEmpty ifTrue: ["(none)"] ifFalse: [superclasses join: ", "]).
+    infoText := infoText , "\n".
+    infoText := infoText , "Slots: " , (slots isEmpty ifTrue: ["(none)"] ifFalse: [slots join: ", "]).
+    infoText := infoText , "\n".
+    infoText := infoText , "Defined Methods: " , methodCount printString.
+    infoText := infoText , "\n\n".
+    isMixin ifFalse: [
+        infoText := infoText , "Right-click class to add mixins."
+    ] ifTrue: [
+        infoText := infoText , "Mixins cannot be modified (library-provided)."
+    ].
+    
+    self updateSourceView: infoText.
+    Transcript showCr: ("Showing info for class: " , aClassName).
+]
+
+SystemBrowser>>showAddMixinDialog: aClassName [
+    | dialog box label mixinList addButton cancelButton selectedMixin |
+    
+    aClassName isNil ifTrue: [
+        ^ self
+    ].
+    
+    selectedMixin := nil.
+    
+    dialog := GtkWindow new.
+    dialog title: "Add Mixin to " , aClassName.
+    dialog setDefaultSize: 350 height: 250.
+    
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+    
+    label := GtkLabel new: "Select a mixin to add:".
+    label halignStart.
+    
+    mixinList := GtkListBox new.
+    mixinList append: "Comparable".
+    mixinList append: "Equatable".
+    mixinList append: "Iterable".
+    mixinList append: "Printable".
+    
+    mixinList onRowSelected: [:row |
+        selectedMixin := row label.
+    ].
+    
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 8.
+    buttonBox hexpand: true.
+    
+    cancelButton := GtkButton newLabel: "Cancel".
+    addButton := GtkButton newLabel: "Add".
+    addButton addCssClass: "suggested-action".
+    
+    addButton clicked: [
+        selectedMixin isNil ifTrue: [
+            Transcript showCr: "Select a mixin first".
+            ^ self
+        ].
+        
+        dialog close.
+        self addMixinToClass: aClassName mixinName: selectedMixin.
+    ].
+    
+    cancelButton clicked: [
+        dialog close
+    ].
+    
+    buttonBox append: cancelButton.
+    buttonBox append: addButton.
+    
+    dialog setChild: box.
+    box append: label.
+    box append: mixinList.
+    box append: buttonBox.
+    
+    dialog present.
+]
+
+SystemBrowser>>addMixinToClass: aClassName mixinName: aMixinName [
+    | classObj mixinClass result |
+    
+    classObj := self classForName: aClassName.
+    classObj isNil ifTrue: [
+        Transcript showCr: ("Class not found: " , aClassName).
+        ^ self
+    ].
+    
+    classObj isMixin ifTrue: [
+        Transcript showCr: "Cannot add mixins to a Mixin class".
+        ^ self
+    ].
+    
+    mixinClass := Harding at: aMixinName.
+    mixinClass isNil ifTrue: [
+        Transcript showCr: ("Mixin not found: " , aMixinName).
+        ^ self
+    ].
+    
+    result := [ classObj addSuperclass: mixinClass ]
+        on: Exception 
+        do: [:ex | "ERROR: " , ex printString ].
+    
+    (result isKindOf: String) ifTrue: [
+        result startsWith: "ERROR:" ifTrue: [
+            Transcript showCr: ("Failed to add mixin: " , result).
+            ^ self
+        ]
+    ].
+    
+    Transcript showCr: ("Added " , aMixinName , " to " , aClassName).
+    self showClassInfo: aClassName.
+]
+
+SystemBrowser>>confirmDeleteClass: aClassName [
+    | dialog box label info dependentsBox buttonBox deleteButton cancelButton hasDependents |
+    
+    aClassName isNil ifTrue: [
+        ^ self
+    ].
+    
+    (aClassName = "Object" or: [aClassName = "Root"] or: [aClassName = "Mixin"]) ifTrue: [
+        Transcript showCr: "Cannot delete built-in classes: " , aClassName.
+        ^ self
+    ].
+    
+    dialog := GtkWindow new.
+    dialog title: "Delete Class: " , aClassName.
+    dialog setDefaultSize: 400 height: 200.
+    
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+    
+    label := GtkLabel new: ("Are you sure you want to delete class " , aClassName , "?").
+    label halignStart.
+    label wrap: true.
+    
+    info := GtkLabel new: "Note: This will NOT delete the .hrd file, just the class definition in memory.".
+    info halignStart.
+    info addCssClass: "dim-label".
+    
+    buttonBox := GtkBox horizontal.
+    buttonBox setSpacing: 8.
+    buttonBox hexpand: true.
+    
+    cancelButton := GtkButton newLabel: "Cancel".
+    deleteButton := GtkButton newLabel: "Delete".
+    deleteButton addCssClass: "destructive-action".
+    
+    deleteButton clicked: [
+        dialog close.
+        self deleteClass: aClassName.
+    ].
+    
+    cancelButton clicked: [
+        dialog close
+    ].
+    
+    buttonBox append: cancelButton.
+    buttonBox append: deleteButton.
+    
+    dialog setChild: box.
+    box append: label.
+    box append: info.
+    box append: buttonBox.
+    
+    dialog present.
+]
+
+SystemBrowser>>deleteClass: aClassName [
+    | classObj result |
+    
+    classObj := self classForName: aClassName.
+    classObj isNil ifTrue: [
+        Transcript showCr: ("Class not found: " , aClassName).
+        ^ self
+    ].
+    
+    result := [ classObj become: Object ]
+        on: Exception
+        do: [:ex | "ERROR: " , ex printString ].
+    
+    (result isKindOf: String) ifTrue: [
+        result startsWith: "ERROR:" ifTrue: [
+            Transcript showCr: ("Failed to delete class: " , result).
+            ^ self
+        ]
+    ].
+    
+    currentLibrary notNil ifTrue: [
+        | lib |
+        lib := Library named: currentLibrary.
+        lib notNil ifTrue: [
+            lib keys do: [:key |
+                ((lib at: key) = classObj) ifTrue: [
+                    lib at: key put: Object
+                ]
+            ]
+        ]
+    ].
+    
+    Transcript showCr: ("Deleted class: " , aClassName).
+    
+    currentClass := nil.
+    self updateSourceView: "Class deleted. Select another class.".
+    self populateClassesFor: currentLibrary.
+]
+
+SystemBrowser>>generateClassDefinition: className parent: parentName slots: slotsArray [
+    | code parentClass |
+    
+    parentClass := parentName = "Mixin" 
+        ifTrue: ["Mixin"] 
+        ifFalse: [parentName = "Root" ifTrue: ["Root"] ifFalse: ["Object"]].
+    
+    code := "# " , className , ".hrd - " , className , " class definition".
+    code := code , "\n\n".
+    
+    slotsArray isEmpty ifTrue: [
+        code := code , className , " := " , parentClass , " derive"
+    ] ifFalse: [
+        code := code , className , " := " , parentClass , " derive: #(".
+        slotsArray do: [:slot |
+            code := code , slot , " "
+        ].
+        code := code trimRight , ")"
+    ].
+    
+    code := code , ".\n\n".
+    code := code , "# Methods\n".
+    code := code , className , ">>printOn: stream [\n".
+    code := code , "    stream show: \"" , className , "\".\n".
+    code := code , "]\n".
+    
+    ^ code
+]
+
+SystemBrowser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
+    | lib libPath classDir candidatePath |
+    
+    currentLibrary isNil ifTrue: [ ^ nil ].
+    
+    lib := Library named: currentLibrary.
+    lib isNil ifTrue: [ ^ nil ].
+    
+    libPath := System cwd.
+    
+    classDir := libPath , "/lib/" , (currentLibrary asString toLowercase).
+    
+    (File exists: classDir) ifFalse: [
+        classDir := libPath , "/lib/" , (currentLibrary asString asLowercase).
+    ].
+    
+    (File exists: classDir) ifFalse: [
+        classDir := libPath
+    ].
+    
+    candidatePath := classDir , "/" , defaultFileName.
+    
+    ^ candidatePath
+]
+
+SystemBrowser>>writeClassDefinition: code toFile: filePath forClass: className [
+    | dirPath |
+    
+    dirPath := filePath allButLast: (filePath size - (filePath findLast: "/") - 1).
+    
+    (File exists: dirPath) ifFalse: [
+        Transcript showCr: ("Creating directory: " , dirPath).
+    ].
+    
+    File write: code to: filePath.
+    
+    Transcript showCr: ("Wrote class definition to: " , filePath).
+    
+    self reloadCurrentMethodFile.
 ]

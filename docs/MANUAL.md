@@ -351,14 +351,17 @@ Root (top - zero methods, used for DNU proxies/wrappers)
 
 #### Built-in Mixins
 
-The core and process libraries provide these mixins in `lib/core/Comparable.hrd`, `lib/core/Iterable.hrd`, `lib/core/Printable.hrd`, and `lib/process/Synchronizable.hrd`:
+The core and process libraries provide these mixins in `lib/core/Comparable.hrd`, `lib/core/Equatable.hrd`, `lib/core/Iterable.hrd`, `lib/core/Printable.hrd`, and `lib/process/Synchronizable.hrd`:
 
 | Mixin | Requires | Provides |
 |-------|----------|----------|
 | `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:`, `clampTo:max:` |
-| `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:`, `anySatisfy:`, `allSatisfy:`, `count:`, `sum` |
+| `Equatable` | `compareTo:` | `=`, `~=` |
+| `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:`, `anySatisfy:`, `allSatisfy:`, `noneSatisfy:`, `count:`, `sum` |
 | `Printable` | `printOn:` | `printString`, `print`, `printCr`, `displayString` |
 | `Synchronizable` | — | `critical:`, `acquire`, `release` |
+
+**Combining Comparable and Equatable**: Use both mixins together when you need both ordering and equality. Comparable provides ordering operators (`<`, `>`, etc.) while Equatable provides equality operators (`=`, `~=`). Both require `compareTo:` to be implemented.
 
 #### Using Multiple Mixins
 

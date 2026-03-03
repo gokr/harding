@@ -291,7 +291,7 @@ Point := Object derive: #(x y)
 Point addSuperclass: Comparable
 ```
 
-**Built-in mixins**: `Comparable`, `Iterable`, `Printable`, `Synchronizable`
+**Built-in mixins**: `Comparable`, `Equatable`, `Iterable`, `Printable`, `Synchronizable`
 
 ## Green Processes
 
@@ -621,6 +621,10 @@ obj respondsTo: #greet ifTrue: [obj greet]
 MyLib := Library new
 MyLib at: "MyClass" put: SomeClass
 MyLib at: "Constant" put: 42
+
+# Named library (useful for debugging)
+Standard := Library new
+Standard name: "Standard"
 ```
 
 ### Library Operations
@@ -630,6 +634,9 @@ MyLib at: "Constant"                # Get binding (returns 42)
 MyLib at: "NewKey" put: "value"      # Set binding
 MyLib includesKey: "MyClass"        # Check if key exists (true)
 MyLib keys                           # Get all binding names
+MyLib name                           # Get library name
+MyLib name: "MyLibrary"              # Set library name
+MyLib bindings                       # Get bindings table (read-only)
 ```
 
 ### Loading Code into a Library

@@ -2151,6 +2151,44 @@ proc primitiveSuperclassNamesImpl(interp: var Interpreter, self: Instance, args:
     superClassNames.add(toValue(sc.name))
   return newArrayInstance(arrayClass, superClassNames).toValue()
 
+proc primitiveInstVarAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get instance variable by name (symbol or string)
+  if self.kind != ikObject or self.class == nil or args.len < 1:
+    return nilValue()
+
+  let slotName = case args[0].kind
+    of vkSymbol: args[0].symVal
+    of vkString: args[0].strVal
+    else: ""
+
+  if slotName.len == 0:
+    return nilValue()
+
+  let idx = self.class.getSlotIndex(slotName)
+  if idx >= 0 and idx < self.slots.len:
+    return self.slots[idx]
+  return nilValue()
+
+proc primitiveInstVarAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Set instance variable by name (symbol or string)
+  if self.kind != ikObject or self.class == nil or args.len < 2:
+    return args[1]
+
+  let slotName = case args[0].kind
+    of vkSymbol: args[0].symVal
+    of vkString: args[0].strVal
+    else: ""
+
+  if slotName.len == 0:
+    return args[1]
+
+  let idx = self.class.getSlotIndex(slotName)
+  if idx >= 0:
+    while self.slots.len <= idx:
+      self.slots.add(nilValue())
+    self.slots[idx] = args[1]
+  return args[1]
+
 # Block value methods
 proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Evaluate this block with no arguments
@@ -2569,6 +2607,23 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.allMethods["slotNames"] = objSlotNamesMethod
   # Also register with primitiveSlotNames for <primitive: #primitiveSlotNames> syntax
   objectCls.methods["primitiveSlotNames"] = objSlotNamesMethod
+  objectCls.allMethods["primitiveSlotNames"] = objSlotNamesMethod
+
+  # Add instVarAt: for accessing instance variables by name
+  let objInstVarAtMethod = createCoreMethod("instVarAt:")
+  objInstVarAtMethod.setNativeImpl(primitiveInstVarAtImpl)
+  setNativeValueFromInstanceWithInterp(objInstVarAtMethod, primitiveInstVarAtImpl)
+  objInstVarAtMethod.hasInterpreterParam = true
+  objectCls.methods["instVarAt:"] = objInstVarAtMethod
+  objectCls.allMethods["instVarAt:"] = objInstVarAtMethod
+
+  # Add instVarAt:put: for setting instance variables by name
+  let objInstVarAtPutMethod = createCoreMethod("instVarAt:put:")
+  objInstVarAtPutMethod.setNativeImpl(primitiveInstVarAtPutImpl)
+  setNativeValueFromInstanceWithInterp(objInstVarAtPutMethod, primitiveInstVarAtPutImpl)
+  objInstVarAtPutMethod.hasInterpreterParam = true
+  objectCls.methods["instVarAt:put:"] = objInstVarAtPutMethod
+  objectCls.allMethods["instVarAt:put:"] = objInstVarAtPutMethod
   objectCls.allMethods["primitiveSlotNames"] = objSlotNamesMethod
 
   # Add superclassNames for class introspection - returns names of superclasses
@@ -3755,6 +3810,25 @@ proc initGlobals*(interp: var Interpreter) =
   libraryNewMethod.hasInterpreterParam = false  # libraryNewImpl doesn't take interpreter param
   libraryCls.classMethods["new"] = libraryNewMethod
   libraryCls.allClassMethods["new"] = libraryNewMethod
+
+  # Register Library class>>allNames and Library class>>named:
+  let libraryAllNamesMethod = createCoreMethod("primitiveLibraryAllNames")
+  libraryAllNamesMethod.setNativeImpl(libraryAllNamesClassImpl)
+  setNativeValueFromInstanceWithInterp(libraryAllNamesMethod, libraryAllNamesClassImpl)
+  libraryAllNamesMethod.hasInterpreterParam = true
+  libraryCls.classMethods["primitiveLibraryAllNames"] = libraryAllNamesMethod
+  libraryCls.allClassMethods["primitiveLibraryAllNames"] = libraryAllNamesMethod
+  libraryCls.classMethods["allNames"] = libraryAllNamesMethod
+  libraryCls.allClassMethods["allNames"] = libraryAllNamesMethod
+
+  let libraryNamedMethod = createCoreMethod("primitiveLibraryNamed:")
+  libraryNamedMethod.setNativeImpl(libraryNamedClassImpl)
+  setNativeValueFromInstanceWithInterp(libraryNamedMethod, libraryNamedClassImpl)
+  libraryNamedMethod.hasInterpreterParam = true
+  libraryCls.classMethods["primitiveLibraryNamed:"] = libraryNamedMethod
+  libraryCls.allClassMethods["primitiveLibraryNamed:"] = libraryNamedMethod
+  libraryCls.classMethods["named:"] = libraryNamedMethod
+  libraryCls.allClassMethods["named:"] = libraryNamedMethod
 
   # Create Boolean class (derives from Object)
   # Methods are defined in lib/core/Boolean.hrd

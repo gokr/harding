@@ -97,27 +97,18 @@ BrowserPane>>clear [
 ]
 
 BrowserPane>>addRowFor: anItem [
-    # Add a row representing an item to the list box
-    | label itemString row |
-
-    # Get string representation of item
+    | label itemString |
+    
     itemString := (anItem isKindOf: String)
         ifTrue: [ anItem ]
         ifFalse: [ anItem printString ].
-
-    # Create label for the row
+    
     label := GtkLabel new: itemString.
     label setHexpand: true.
     label setHalignStart.
-
-    # Add to list box - GtkListBox automatically wraps in a row
+    
     listBox append: label.
-
-    # Connect click handler for selection
-    # In GTK4, we use the row-activated signal on the list box
-    # For now, we handle this through the button's clicked signal on the label
-    # Note: This needs native signal handling in the Nim bridge
-].
+]
 
 BrowserPane>>showContextMenuFor: anItem atX: x y: y [
     # Show context menu for an item at specific coordinates

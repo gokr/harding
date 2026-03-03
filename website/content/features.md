@@ -149,6 +149,7 @@ Point >> compareTo: other [
 | Mixin | Requires | Provides |
 |-------|----------|----------|
 | `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:` |
+| `Equatable` | `compareTo:` | `=`, `~=` |
 | `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:` |
 | `Printable` | `printOn:` | `printString`, `print`, `printCr` |
 | `Synchronizable` | — | `critical:`, `acquire`, `release` |

@@ -47,7 +47,7 @@ Launcher>>openInstance [
 Launcher>>createHeaderBar [
   # Create a header bar with menu buttons in a horizontal box
   # GTK4 style: buttons in header area instead of traditional menu bar
-  | headerBar workspaceButton transcriptButton browserButton quitButton spacer |
+  | headerBar workspaceButton transcriptButton browserButton builderButton quitButton spacer |
 
   headerBar := GtkBox horizontal.
   headerBar setSpacing: 0.
@@ -60,6 +60,7 @@ Launcher>>createHeaderBar [
   workspaceButton vexpand: false.
   workspaceButton hexpand: false.
   workspaceButton clicked: [ self openWorkspace ].
+  workspaceButton tooltip: "Open Workspace (text editor)".
   headerBar append: workspaceButton.
 
   # Spacer
@@ -72,6 +73,7 @@ Launcher>>createHeaderBar [
   transcriptButton vexpand: false.
   transcriptButton hexpand: false.
   transcriptButton clicked: [ self openTranscript ].
+  transcriptButton tooltip: "Open Transcript (console output)".
   headerBar append: transcriptButton.
 
   # Spacer
@@ -84,7 +86,21 @@ Launcher>>createHeaderBar [
   browserButton vexpand: false.
   browserButton hexpand: false.
   browserButton clicked: [ self openBrowser ].
+  browserButton tooltip: "Open System Browser (class/method browser)".
   headerBar append: browserButton.
+
+  # Spacer
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Builder button - compile/build icon
+  builderButton := GtkButton new.
+  builderButton label: "Builder" iconName: "applications-engineering".
+  builderButton vexpand: false.
+  builderButton hexpand: false.
+  builderButton clicked: [ self openBuilder ].
+  builderButton tooltip: "Open Application Builder (Granite compiler)".
+  headerBar append: builderButton.
 
   # Flexible spacer to push Quit to the right
   spacer := GtkLabel new: "".
@@ -98,6 +114,7 @@ Launcher>>createHeaderBar [
   quitButton vexpand: false.
   quitButton hexpand: false.
   quitButton clicked: [ self quit ].
+  quitButton tooltip: "Quit the application".
   headerBar append: quitButton.
 
   Transcript showCr: "Created header bar".
@@ -128,6 +145,12 @@ Launcher>>openTranscript [
 Launcher>>openBrowser [
   Transcript showCr: "Opening system browser...".
   SystemBrowser openFor: self.
+  ^ self
+].
+
+Launcher>>openBuilder [
+  Transcript showCr: "Opening application builder...".
+  Builder openFor: self.
   ^ self
 ].
 

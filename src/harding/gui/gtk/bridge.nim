@@ -899,7 +899,8 @@ proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
     "Inspector.hrd",
     "Transcript.hrd",
     "Workspace.hrd",
-    "Launcher.hrd"
+    "Launcher.hrd",
+    "Builder.hrd"
   ]
 
   for filename in toolFiles:

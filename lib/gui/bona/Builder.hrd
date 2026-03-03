@@ -1,0 +1,662 @@
+# ============================================================================
+# Builder - Granite Application Builder for Bona IDE
+# ============================================================================
+#
+# A GUI tool for creating, editing, and compiling Harding Applications
+# using the Granite compiler. All work is captured in Application subclasses
+# and auto-saved to .hrd files like the SystemBrowser.
+
+Builder := Object derive: #(owner window appList appEditor outputView currentApp).
+
+Builder class>>open [
+  ^ self new openInstance
+].
+
+Builder class>>openFor: anOwner [
+  | instance |
+  instance := self new.
+  instance owner: anOwner.
+  ^ instance openInstance
+].
+
+Builder>>owner: anOwner [
+  owner := anOwner.
+].
+
+Builder>>openInstance [
+  | mainBox headerBar contentBox leftPane rightPane paned |
+
+  # Create window
+  window := GtkWindow new.
+  window title: "Application Builder".
+  window setDefaultSize: 900 height: 600.
+  window connectDestroy: [ self onClose ].
+
+  # Main layout
+  mainBox := GtkBox vertical.
+  mainBox setSpacing: 0.
+
+  # Header bar with buttons
+  headerBar := self createHeaderBar.
+  mainBox append: headerBar.
+
+  # Content area with paned layout
+  contentBox := GtkBox vertical.
+  contentBox vexpand: true.
+  contentBox setSpacing: 5.
+  contentBox marginStart: 5.
+  contentBox marginEnd: 5.
+  contentBox marginTop: 5.
+  contentBox marginBottom: 5.
+
+  paned := GtkPaned horizontal.
+  paned vexpand: true.
+
+  # Left pane: Application list
+  leftPane := self createAppListPane.
+  paned setStartChild: leftPane.
+
+  # Right pane: Editor and build output
+  rightPane := self createEditorPane.
+  paned setEndChild: rightPane.
+
+  contentBox append: paned.
+  mainBox append: contentBox.
+
+  window setChild: mainBox.
+
+  # Populate application list
+  self refreshAppList.
+
+  # Register with owner
+  owner notNil ifTrue: [ owner addWindow: window ].
+
+  window present.
+
+  Transcript showCr: "Application Builder opened".
+  ^ self
+].
+
+Builder>>createHeaderBar [
+  | headerBar newButton buildButton runButton refreshButton spacer |
+
+  headerBar := GtkBox horizontal.
+  headerBar setSpacing: 0.
+  headerBar vexpand: false.
+
+  # New Application button
+  newButton := GtkButton new.
+  newButton label: "New" iconName: "document-new".
+  newButton tooltip: "Create new Application subclass".
+  newButton clicked: [ self createNewApp ].
+  headerBar append: newButton.
+
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Refresh button
+  refreshButton := GtkButton new.
+  refreshButton label: "Refresh" iconName: "view-refresh".
+  refreshButton tooltip: "Refresh application list".
+  refreshButton clicked: [ self refreshAppList ].
+  headerBar append: refreshButton.
+
+  spacer := GtkLabel new: "".
+  spacer vexpand: false.
+  spacer hexpand: true.
+  headerBar append: spacer.
+
+  # Build button
+  buildButton := GtkButton new.
+  buildButton label: "Build" iconName: "system-run".
+  buildButton tooltip: "Compile selected Application to binary".
+  buildButton clicked: [ self buildCurrentApp ].
+  headerBar append: buildButton.
+
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Run button
+  runButton := GtkButton new.
+  runButton label: "Run" iconName: "media-playback-start".
+  runButton tooltip: "Run the built binary".
+  runButton clicked: [ self runCurrentApp ].
+  headerBar append: runButton.
+
+  ^ headerBar
+].
+
+Builder>>createAppListPane [
+  | box label scroll |
+
+  box := GtkBox vertical.
+  box setSpacing: 5.
+  box hexpand: false.
+  box vexpand: true.
+  box widthRequest: 200.
+
+  label := GtkLabel new: "Applications".
+  label setHalignStart.
+  box append: label.
+
+  # Create list box for applications
+  appList := GtkListBox new.
+  appList vexpand: true.
+  appList connectRowSelected: [ :row | self onAppSelected: row ].
+
+  scroll := GtkScrolledWindow new.
+  scroll vexpand: true.
+  scroll setChild: appList.
+
+  box append: scroll.
+
+  # Templates section
+  label := GtkLabel new: "Templates".
+  label setHalignStart.
+  label marginTop: 10.
+  box append: label.
+
+  self addTemplateButtons: box.
+
+  ^ box
+].
+
+Builder>>addTemplateButtons: box [
+  | button |
+
+  # HelloWorld template
+  button := GtkButton newLabel: "HelloWorld".
+  button tooltip: "Create HelloWorld application".
+  button clicked: [ self createTemplateApp: #HelloWorld ].
+  box append: button.
+
+  # SimpleGUI template
+  button := GtkButton newLabel: "SimpleGUI".
+  button tooltip: "Create GUI application with window".
+  button clicked: [ self createTemplateApp: #SimpleGUI ].
+  box append: button.
+
+  # CounterApp template
+  button := GtkButton newLabel: "CounterApp".
+  button tooltip: "Create counter application".
+  button clicked: [ self createTemplateApp: #CounterApp ].
+  box append: button.
+].
+
+Builder>>createEditorPane [
+  | box label scroll |
+
+  box := GtkBox vertical.
+  box setSpacing: 5.
+  box vexpand: true.
+
+  # Application name field
+  label := GtkLabel new: "Application: (none selected)".
+  label setHalignStart.
+  box append: label.
+
+  # Libraries section
+  label := GtkLabel new: "Libraries:".
+  label setHalignStart.
+  label marginTop: 5.
+  box append: label.
+
+  box append: self createLibraryCheckboxes.
+
+  # Main method editor
+  label := GtkLabel new: "main: method:".
+  label setHalignStart.
+  label marginTop: 10.
+  box append: label.
+
+  appEditor := GtkSourceView new.
+  appEditor showLineNumbers: true.
+  appEditor setTabWidth: 2.
+  appEditor vexpand: true.
+
+  scroll := GtkScrolledWindow new.
+  scroll vexpand: true.
+  scroll setChild: appEditor.
+
+  box append: scroll.
+
+  # Build output
+  label := GtkLabel new: "Build Output:".
+  label setHalignStart.
+  label marginTop: 10.
+  box append: label.
+
+  outputView := GtkTextView new.
+  outputView vexpand: false.
+  outputView heightRequest: 100.
+  outputView editable: false.
+
+  scroll := GtkScrolledWindow new.
+  scroll vexpand: false.
+  scroll heightRequest: 100.
+  scroll setChild: outputView.
+
+  box append: scroll.
+
+  ^ box
+].
+
+Builder>>createLibraryCheckboxes [
+  | box libraries |
+
+  box := GtkBox horizontal.
+  box setSpacing: 10.
+  box vexpand: false.
+
+  libraries := #(Core Standard Process Granite GUI Bona BitBarrel).
+
+  libraries do: [:libName |
+    | check |
+    check := GtkCheckButton newWithLabel: libName.
+    check setName: libName.
+    box append: check.
+  ].
+
+  ^ box
+].
+
+Builder>>refreshAppList [
+  | apps |
+
+  # Clear existing items
+  appList clear.
+
+  # Find all Application subclasses
+  apps := self findApplicationSubclasses.
+
+  apps do: [:appClass |
+    | row label |
+    label := GtkLabel new: (appClass name).
+    label setHalignStart.
+
+    row := GtkListBoxRow new.
+    row setChild: label.
+    row setName: (appClass name).
+
+    appList append: row.
+  ].
+
+  apps isEmpty ifTrue: [
+    | label row |
+    label := GtkLabel new: "(no applications found)".
+    label setHalignStart.
+
+    row := GtkListBoxRow new.
+    row setChild: label.
+    appList append: row.
+  ].
+
+  Transcript showCr: ("Found ", (apps size printString), " applications").
+].
+
+Builder>>findApplicationSubclasses [
+  | result |
+  result := Array new.
+
+  Harding keys do: [:key |
+    | obj |
+    obj := Harding at: key.
+    (obj notNil and: [ obj isClass ]) ifTrue: [
+      (obj isKindOf: Application) ifTrue: [
+        (obj ~= Application) ifTrue: [
+          result add: obj.
+        ].
+      ].
+    ].
+  ].
+
+  ^ result sorted: [:a :b | a name < b name].
+].
+
+Builder>>onAppSelected: row [
+  | appName appClass |
+
+  row isNil ifTrue: [ ^ self ].
+
+  appName := row getName.
+  (appName isNil or: [ appName = "" ]) ifTrue: [ ^ self ].
+
+  # Load the application class
+  appClass := Harding at: appName.
+  appClass isNil ifTrue: [
+    self showOutput: ("Error: Could not find class ", appName).
+    ^ self.
+  ].
+
+  currentApp := appClass.
+  self loadApp: appClass.
+].
+
+Builder>>loadApp: appClass [
+  | mainMethod source libraries |
+
+  # Update window title
+  window title: ("Application Builder - ", appClass name).
+
+  # Get main: method source
+  mainMethod := appClass methodAt: #main:.
+  source := mainMethod notNil
+    ifTrue: [ self methodSource: mainMethod ]
+    ifFalse: [ self defaultMainSource ].
+
+  appEditor text: source.
+
+  # Set library checkboxes
+  libraries := self getLibrariesFor: appClass.
+  self setLibraryCheckboxes: libraries.
+
+  Transcript showCr: ("Loaded application: ", appClass name).
+].
+
+Builder>>getLibrariesFor: appClass [
+  | appInstance |
+
+  # Try to get libraries from an instance
+  [ appInstance := appClass new ] on: Error do: [ ^ Array new ].
+
+  ^ appInstance libraries notNil
+    ifTrue: [ appInstance libraries ]
+    ifFalse: [ Array new ].
+].
+
+Builder>>setLibraryCheckboxes: libraries [
+  # This would iterate through checkboxes and set their state
+  # based on the libraries array
+].
+
+Builder>>defaultMainSource [
+  ^ "main: args [
+  Transcript showCr: 'Hello from Granite!'.
+  ^ 0
+]"
+].
+
+Builder>>methodSource: method [
+  # This would extract the source code from the method
+  # For now, return a placeholder
+  ^ self defaultMainSource
+].
+
+Builder>>buildCurrentApp [
+  | result output |
+
+  currentApp isNil ifTrue: [
+    self showOutput: "Error: No application selected".
+    ^ self.
+  ].
+
+  self showOutput: ("Building ", currentApp name, "...").
+
+  # Save current edits first
+  self saveCurrentApp.
+
+  # Call Granite build
+  result := Granite build: (currentApp new).
+
+  output := result isKindOf: String
+    ifTrue: [ result ]
+    ifFalse: [ "Build completed" ].
+
+  self showOutput: output.
+].
+
+Builder>>saveCurrentApp [
+  | source libraries |
+
+  currentApp isNil ifTrue: [ ^ self ].
+
+  # Get source from editor
+  source := appEditor text.
+
+  # Get selected libraries
+  libraries := self getSelectedLibraries.
+
+  # Compile and install new method
+  self compileMethod: source for: currentApp.
+
+  # Save libraries preference
+  self saveLibraries: libraries for: currentApp.
+
+  Transcript showCr: ("Saved ", currentApp name).
+].
+
+Builder>>getSelectedLibraries [
+  | result |
+  result := Array new.
+  # This would iterate through checkboxes and collect selected ones
+  ^ result
+].
+
+Builder>>saveLibraries: libraries for: appClass [
+  # Save libraries to application instance
+  # This would be stored in the application's libraries slot
+].
+
+Builder>>compileMethod: source for: appClass [
+  | fullSource |
+
+  # Wrap the source in proper method syntax
+  fullSource := appClass name, ">>main: args [", source, "]".
+
+  # Compile and install
+  appClass compile: fullSource.
+].
+
+Builder>>runCurrentApp [
+  | binaryPath cmd |
+
+  currentApp isNil ifTrue: [
+    self showOutput: "Error: No application selected".
+    ^ self.
+  ].
+
+  binaryPath := "./build/", currentApp name.
+
+  self showOutput: ("Running: ", binaryPath).
+
+  # Run the binary
+  cmd := binaryPath, " &".
+  System perform: cmd.
+].
+
+Builder>>createNewApp [
+  | dialog name appClass source |
+
+  # Simple dialog to get application name
+  # In a real implementation, this would show a proper dialog
+  name := "MyApp".
+
+  # Check if class already exists
+  (Harding includesKey: name) ifTrue: [
+    self showOutput: ("Error: Class ", name, " already exists").
+    ^ self.
+  ].
+
+  # Create the Application subclass
+  source := name, " := Application derive: #().
+
+", name, ">>initialize [
+  super initialize.
+  name := '", name, "'.
+  libraries := #(Core Standard).
+].
+
+", name, ">>main: args [
+  Transcript showCr: 'Hello from ", name, "!'.
+  ^ 0
+].
+".
+
+  # Compile and install the class
+  Harding compile: source.
+
+  # Refresh the list
+  self refreshAppList.
+
+  # Select the new app
+  appClass := Harding at: name.
+  currentApp := appClass.
+  self loadApp: appClass.
+
+  self showOutput: ("Created new application: ", name).
+].
+
+Builder>>createTemplateApp: templateName [
+  templateName = #HelloWorld ifTrue: [ ^ self createHelloWorldApp ].
+  templateName = #SimpleGUI ifTrue: [ ^ self createSimpleGUIApp ].
+  templateName = #CounterApp ifTrue: [ ^ self createCounterApp ].
+].
+
+Builder>>createHelloWorldApp [
+  | name source appClass |
+
+  name := self uniqueAppName: "HelloWorld".
+
+  source := name, " := Application derive: #().
+
+", name, ">>initialize [
+  super initialize.
+  name := '", name, "'.
+  libraries := #(Core Standard).
+].
+
+", name, ">>main: args [
+  Transcript showCr: 'Hello, World!'.
+  args size > 0 ifTrue: [
+    Transcript showCr: ('Arguments: ' , (args printString)).
+  ].
+  ^ 0
+].
+".
+
+  Harding compile: source.
+  self refreshAppList.
+
+  appClass := Harding at: name.
+  currentApp := appClass.
+  self loadApp: appClass.
+
+  self showOutput: ("Created HelloWorld application: ", name).
+].
+
+Builder>>createSimpleGUIApp [
+  | name source appClass |
+
+  name := self uniqueAppName: "SimpleGUI".
+
+  source := name, " := Application derive: #().
+
+", name, ">>initialize [
+  super initialize.
+  name := '", name, "'.
+  libraries := #(Core Standard GUI).
+].
+
+", name, ">>main: args [
+  | window button |
+  window := GtkWindow new.
+  window title: '", name, "'.
+  window setDefaultSize: 400 height: 300.
+
+  button := GtkButton newLabel: 'Click Me!'.
+  button clicked: [ Transcript showCr: 'Button clicked!' ].
+
+  window setChild: button.
+  window present.
+
+  # Start GTK main loop
+  GtkWidget main.
+  ^ 0
+].
+".
+
+  Harding compile: source.
+  self refreshAppList.
+
+  appClass := Harding at: name.
+  currentApp := appClass.
+  self loadApp: appClass.
+
+  self showOutput: ("Created SimpleGUI application: ", name).
+].
+
+Builder>>createCounterApp [
+  | name source appClass |
+
+  name := self uniqueAppName: "CounterApp".
+
+  source := name, " := Application derive: #(count).
+
+", name, ">>initialize [
+  super initialize.
+  name := '", name, "'.
+  libraries := #(Core Standard).
+  count := 0.
+].
+
+", name, ">>main: args [
+  | window label incrementButton |
+  window := GtkWindow new.
+  window title: 'Counter Application'.
+  window setDefaultSize: 300 height: 200.
+
+  label := GtkLabel new: 'Count: 0'.
+
+  incrementButton := GtkButton newLabel: 'Increment'.
+  incrementButton clicked: [
+    count := count + 1.
+    label label: ('Count: ' , (count printString)).
+  ].
+
+  window setChild: label.
+  window present.
+
+  GtkWidget main.
+  ^ 0
+].
+".
+
+  Harding compile: source.
+  self refreshAppList.
+
+  appClass := Harding at: name.
+  currentApp := appClass.
+  self loadApp: appClass.
+
+  self showOutput: ("Created CounterApp application: ", name).
+].
+
+Builder>>uniqueAppName: baseName [
+  | counter name |
+  counter := 1.
+  name := baseName.
+
+  [ Harding includesKey: name ] whileTrue: [
+    counter := counter + 1.
+    name := baseName , (counter printString).
+  ].
+
+  ^ name
+].
+
+Builder>>showOutput: text [
+  | buffer |
+  buffer := outputView buffer.
+  buffer insert: text atEnd: true.
+  buffer insert: "\n" atEnd: true.
+].
+
+Builder>>onClose [
+  # Save any pending changes
+  self saveCurrentApp.
+
+  # Unregister from owner
+  owner notNil ifTrue: [ owner removeWindow: window ].
+
+  Transcript showCr: "Application Builder closed".
+].

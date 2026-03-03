@@ -84,6 +84,7 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
   except Exception as e:
     # Log error but don't crash the GUI
     error("Error in signal callback: ", e.msg)
+    printStackTrace(interp[])
 
 ## C callback for GTK destroy signals
 proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =

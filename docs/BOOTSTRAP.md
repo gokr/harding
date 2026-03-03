@@ -17,16 +17,22 @@ The `initCoreClasses()` procedure in `src/harding/interpreter/objects.nim` creat
 
 ```
 Root (empty - for DNU proxies/wrappers)
-  └── Object (core methods)
-        ├── Integer
-        ├── Float
-        ├── String
-        ├── Array
-        ├── Table
-        ├── Block
-        ├── Boolean (parent for True and False)
-        ├── Library
-        └── Set
+  ├── Object (core methods)
+  │     ├── Integer
+  │     ├── Float
+  │     ├── String
+  │     ├── Array
+  │     ├── Table
+  │     ├── Block
+  │     ├── Boolean (parent for True and False)
+  │     ├── Library
+  │     └── Set
+  │
+  └── Mixin (slotless - for behavior composition)
+        ├── Comparable
+        ├── Equatable
+        ├── Iterable
+        └── Printable
 ```
 
 ### Classes Created in `initCoreClasses()`
@@ -138,6 +144,7 @@ Harding load: "lib/core/SubscriptOutOfBounds.hrd"
 Harding load: "lib/core/DivisionByZero.hrd"
 Harding load: "lib/core/UnhandledError.hrd"
 Harding load: "lib/core/Comparable.hrd"
+Harding load: "lib/core/Equatable.hrd"
 Harding load: "lib/core/Iterable.hrd"
 Harding load: "lib/core/Printable.hrd"
 Harding load: "lib/process/Bootstrap.hrd"

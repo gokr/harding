@@ -116,6 +116,7 @@ Transcript>>openWindowFor: anOwner [
 
   clearButton := GtkButton newLabel: "Clear" iconName: "user-trash".
   clearButton clicked: [ self clear ].
+  clearButton tooltip: "Clear all transcript output".
   buttonBox append: clearButton.
 
   # Assemble the UI
