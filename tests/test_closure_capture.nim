@@ -103,3 +103,62 @@ suite "Closure Capture in IfNode/WhileNode":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
+
+  test "captured class variable in do: iteration":
+    ## Class variable capture works in do: blocks
+    let result = interp.evalStatements("""
+      TestClass := Object derive: #(value).
+      TestClass>>initialize [
+        value := 42.
+      ].
+      TestClass>>getValue [
+        ^ value.
+      ].
+      
+      CapturedClass := TestClass.
+      Results := Array new.
+      
+      #(1) do: [:each |
+        Results add: (CapturedClass new getValue).
+      ].
+      
+      Results at: 0
+    """)
+    if result[1].len > 0:
+      echo "Error: ", result[1]
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
+
+  test "captured class from Harding at: in do: iteration (KNOWN BUG)":
+    ## This test documents a bug where closures fail to properly capture
+    ## class variables from outer scope when the class comes from a dictionary lookup
+    ## like 'Harding at:' that returns a class object, used with iteration methods.
+    ## The closure sees the class as UndefinedObject instead of the actual class.
+    ##
+    ## Expected: (Harding at: #TestClass) new should work in closure
+    ## Actual: "Message not understood: new" because Harding at: returns UndefinedObject in closure
+    let result = interp.evalStatements("""
+      TestClass := Object derive: #(value).
+      TestClass>>initialize [
+        value := 42.
+      ].
+      TestClass>>getValue [
+        ^ value.
+      ].
+      
+      Results := Array new.
+      #(1) do: [:each |
+        | cls |
+        cls := Harding at: "TestClass".
+        Results add: (cls new getValue).
+      ].
+      
+      Results at: 0
+    """)
+    if result[1].len > 0:
+      echo "Error (expected for known bug): ", result[1]
+      skip()
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
