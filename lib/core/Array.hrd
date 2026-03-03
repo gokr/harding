@@ -212,7 +212,7 @@ Array>>sorted: sortBlock [
     i := 1.
     [ i < size ] whileTrue: [
         j := i.
-        [ j > 0 and: [ sortBlock value: (result at: j) value: (result at: (j - 1)) not ] ] whileTrue: [
+        [ j > 0 and: [ (sortBlock value: (result at: j) value: (result at: (j - 1))) not ] ] whileTrue: [
             # Swap elements
             temp := result at: j.
             result at: j put: (result at: (j - 1)).
