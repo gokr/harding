@@ -11,8 +11,9 @@ Launcher class>>open [
 Launcher>>openInstance [
   | mainBox headerBar |
 
-  # Initialize window collection
+  # Initialize window collection and workspace ID counter
   windows := #().
+  nextWorkspaceId := 1.
 
   # Set up the window
   self title: "Bonadventure IDE".
@@ -131,9 +132,28 @@ Launcher>>removeWindow: aWindow [
   windows := windows reject: [ :w | w == aWindow ].
 ].
 
+Launcher>>nextWorkspaceId [
+  # Find the lowest available workspace ID by checking file existence
+  | candidate filename |
+  candidate := 1.
+  [candidate <= 100] whileTrue: [
+    filename := "workspace-" , (candidate asString) , ".hrd".
+    Transcript showCr: ("Checking: " , filename).
+    (File exists: filename) ifFalse: [
+      Transcript showCr: ("Found available ID: " , (candidate asString)).
+      ^ candidate
+    ].
+    candidate := candidate + 1.
+  ].
+  Transcript showCr: "ERROR: Could not find available workspace ID".
+  ^ 1
+].
+
 Launcher>>openWorkspace [
+  | id |
   Transcript showCr: "Opening workspace...".
-  Workspace openFor: self.
+  id := self nextWorkspaceId.
+  Workspace openFor: self id: id.
   ^ self
 ].
 
@@ -150,6 +170,12 @@ Launcher>>openBrowser [
 
 Launcher>>openBuilder [
   Transcript showCr: "Opening application builder...".
+  # Debug: Check if Builder class exists
+  (Harding includesKey: "Builder") ifFalse: [
+    Transcript showCr: "ERROR: Builder class not found in Harding".
+    ^ self
+  ].
+  Transcript showCr: "Builder class found, opening...".
   Builder openFor: self.
   ^ self
 ].
