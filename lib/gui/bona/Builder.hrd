@@ -259,10 +259,34 @@ Builder>>createEditorPane [
 #   ^ box
 # ].
 
+Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
+  # Helper method to add a row without closures
+  | row label |
+  label := labelClass new: (appClass name).
+  label setHalignStart.
+
+  row := rowClass new.
+  row setChild: label.
+  row setName: (appClass name).
+
+  appList append: row.
+].
+
+Builder>>addEmptyRowWithLabel: labelClass withRow: rowClass [
+  # Helper method to add empty row without closures
+  | row label |
+  label := labelClass new: "(no applications found)".
+  label setHalignStart.
+
+  row := rowClass new.
+  row setChild: label.
+  appList append: row.
+].
+
 Builder>>refreshAppList [
   | apps labelClass rowClass |
 
-  # Capture GTK classes in local variables to avoid closure lookup issues
+  # Get GTK classes
   labelClass := GtkLabel.
   rowClass := GtkListBoxRow.
 
@@ -272,26 +296,19 @@ Builder>>refreshAppList [
   # Find all Application subclasses
   apps := self findApplicationSubclasses.
 
-  apps do: [:appClass |
-    | row label |
-    label := labelClass new: (appClass name).
-    label setHalignStart.
-
-    row := rowClass new.
-    row setChild: label.
-    row setName: (appClass name).
-
-    appList append: row.
+  # Use whileTrue: loop instead of do: to avoid closure capture issues
+  | i size |
+  i := 0.
+  size := apps size.
+  [ i < size ] whileTrue: [
+    | appClass |
+    appClass := apps at: i.
+    self addAppRow: appClass withLabel: labelClass withRow: rowClass.
+    i := i + 1.
   ].
 
   apps isEmpty ifTrue: [
-    | label row |
-    label := labelClass new: "(no applications found)".
-    label setHalignStart.
-
-    row := rowClass new.
-    row setChild: label.
-    appList append: row.
+    self addEmptyRowWithLabel: labelClass withRow: rowClass.
   ].
 
   Transcript showCr: ("Found ", (apps size printString), " applications").
