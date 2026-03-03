@@ -301,8 +301,16 @@ Builder>>findApplicationSubclasses [
     | obj |
     obj := Harding at: key.
     (obj notNil and: [ obj isClass ]) ifTrue: [
-      (obj isKindOf: Application) ifTrue: [
-        (obj ~= Application) ifTrue: [
+      # Check if this class is a subclass of Application using superclass chain
+      | cls isAppClass |
+      cls := obj.
+      isAppClass := false.
+      [ cls notNil and: [ isAppClass not ] ] whileTrue: [
+        cls name = "Application" ifTrue: [ isAppClass := true ].
+        cls := cls superclass.
+      ].
+      isAppClass ifTrue: [
+        (obj name ~= "Application") ifTrue: [
           result add: obj.
         ].
       ].
@@ -397,7 +405,7 @@ Builder>>buildCurrentApp [
   # Call Granite build
   result := Granite build: (currentApp new).
 
-  output := result isKindOf: String
+  output := (result class name = "String")
     ifTrue: [ result ]
     ifFalse: [ "Build completed" ].
 
