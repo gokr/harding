@@ -293,6 +293,25 @@ Builder>>refreshAppList [
   Transcript showCr: ("Found ", (apps size printString), " applications").
 ].
 
+Builder>>isApplicationSubclass: aClass [
+  # Check if aClass is a subclass of Application using superclassNames
+  | clsName isAppClass |
+  clsName := aClass name.
+  isAppClass := false.
+  
+  [ clsName notNil and: [ isAppClass not ] ] whileTrue: [
+    | superNames |
+    clsName = "Application" ifTrue: [ isAppClass := true ].
+    # Get superclass names and continue with first one
+    superNames := (Harding at: clsName) superclassNames.
+    superNames isEmpty
+      ifTrue: [ clsName := nil ]
+      ifFalse: [ clsName := superNames at: 0 ].
+  ].
+  
+  ^ isAppClass.
+].
+
 Builder>>findApplicationSubclasses [
   | result |
   result := Array new.
@@ -301,19 +320,8 @@ Builder>>findApplicationSubclasses [
     | obj |
     obj := Harding at: key.
     (obj notNil and: [ obj isClass ]) ifTrue: [
-      # Check if this class is a subclass of Application using superclassNames
-      | clsName superNames isAppClass |
-      clsName := obj name.
-      isAppClass := false.
-      [ clsName notNil and: [ isAppClass not ] ] whileTrue: [
-        clsName = "Application" ifTrue: [ isAppClass := true ].
-        # Get superclass names and continue with first one
-        superNames := (Harding at: clsName) superclassNames.
-        superNames isEmpty
-          ifTrue: [ clsName := nil ]
-          ifFalse: [ clsName := superNames at: 0 ].
-      ].
-      isAppClass ifTrue: [
+      # Check if this class is a subclass of Application
+      (self isApplicationSubclass: obj) ifTrue: [
         (obj name ~= "Application") ifTrue: [
           result add: obj.
         ].
