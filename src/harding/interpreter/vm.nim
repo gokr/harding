@@ -92,6 +92,8 @@ proc primitiveFileAtEndImpl(self: Instance, args: seq[NodeValue]): NodeValue {.n
 proc primitiveFileReadAllImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
 proc primitiveFileExistsImpl(interp: var Interpreter, self: Instance,
                              args: seq[NodeValue]): NodeValue {.nimcall.}
+proc primitiveFileDeleteImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.}
 proc primitiveSystemArgumentsImpl(interp: var Interpreter, self: Instance,
                                   args: seq[NodeValue]): NodeValue {.nimcall.}
 proc primitiveSystemCwdImpl(interp: var Interpreter, self: Instance,
@@ -4336,6 +4338,12 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     fileExistsMethod.hasInterpreterParam = true
     fileCls.classMethods["primitiveFileExists:"] = fileExistsMethod
     fileCls.allClassMethods["primitiveFileExists:"] = fileExistsMethod
+
+    let fileDeleteMethod = createCoreMethod("primitiveFileDelete:")
+    fileDeleteMethod.setNativeImpl(primitiveFileDeleteImpl)
+    fileDeleteMethod.hasInterpreterParam = true
+    fileCls.classMethods["primitiveFileDelete:"] = fileDeleteMethod
+    fileCls.allClassMethods["primitiveFileDelete:"] = fileDeleteMethod
     debug("Registered native File primitive methods")
 
   # Force rebuild of all method tables after stdlib loading completes
@@ -4768,6 +4776,31 @@ proc primitiveFileExistsImpl(interp: var Interpreter,
   if interp.packageSources != nil and
      (requestedPath in interp.packageSources[] or resolvedPath in interp.packageSources[]):
     return toValue(true)
+
+  return toValue(false)
+
+proc primitiveFileDeleteImpl(interp: var Interpreter,
+                            self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  discard self
+  if args.len < 1:
+    return toValue(false)
+
+  let requestedPath = extractPathArg(args[0])
+  if requestedPath.len == 0:
+    return toValue(false)
+
+  let resolvedPath = if requestedPath.isAbsolute:
+                       requestedPath
+                     else:
+                       interp.hardingHome / requestedPath
+
+  if fileExists(resolvedPath):
+    try:
+      removeFile(resolvedPath)
+      return toValue(true)
+    except CatchableError:
+      return toValue(false)
 
   return toValue(false)
 

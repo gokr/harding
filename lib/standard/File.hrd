@@ -29,3 +29,5 @@ File class>>append: content to: path [
 ]
 
 File class>>exists: path <primitive primitiveFileExists: path>
+
+File class>>delete: path <primitive primitiveFileDelete: path>

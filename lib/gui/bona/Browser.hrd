@@ -95,7 +95,7 @@ SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
 
 SystemBrowser>>checkUnsavedChangesThen: aBlock [
     self hasUnsavedChanges ifTrue: [
-        # Store in instance variable so dialog callback can access it
+        # Store in slot so dialog callback can access it
         # (captured locals don't survive async dialog callbacks)
         pendingContinueBlock := aBlock.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
@@ -177,7 +177,7 @@ SystemBrowser>>openWindowFor: anOwner [
             Transcript showCr: "DEBUG: Delete Method menu clicked".
             method notNil ifTrue: [
                 Transcript showCr: ("DEBUG: Preparing to delete: " , method).
-                # Prepare method for deletion (sets up instance variables)
+                # Prepare method for deletion (sets up slots)
                 self prepareMethodForDelete: method.
                 Transcript showCr: ("DEBUG: currentMethodFile = " , currentMethodFile printString).
                 Transcript showCr: ("DEBUG: currentMethodStartLine = " , currentMethodStartLine printString).
@@ -294,9 +294,18 @@ SystemBrowser>>createSourceView [
 ]
 
 SystemBrowser>>populateLibraries [
-    | libraryNames |
+    | libraryNames unique i name |
     libraryNames := Library allNames.
-    libraryPane items: libraryNames.
+    unique := Array new.
+    i := 0.
+    [ i < libraryNames size ] whileTrue: [
+        name := libraryNames at: i.
+        (unique includes: name) ifFalse: [
+            unique add: name
+        ].
+        i := i + 1
+    ].
+    libraryPane items: unique.
 ]
 
 SystemBrowser>>selectLibrary: aLibraryName [
@@ -321,7 +330,7 @@ SystemBrowser>>selectLibrary: aLibraryName [
 ]
 
 SystemBrowser>>populateClassesFor: aLibraryName [
-    | libb classNames libraryName |
+    | libb classNames libraryName keysResult i |
     aLibraryName isNil ifTrue: [
         classPane items: #().
         ^ self
@@ -335,44 +344,52 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 
     libb := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName ]
-        ifFalse: [ Library named: libraryName ].
-
-    libb isNil ifTrue: [
-        Transcript showCr: ("Library not found: " , libraryName).
-        classPane items: #().
-        ^ self
-    ].
-
-libraryName = "Harding" ifTrue: [
-        | names keysResult i |
-        names := Array new.
-        keysResult := Harding keys.
-        (keysResult notNil and: [keysResult respondsTo: #size]) ifTrue: [
-            i := 0.
-            [ i < keysResult size ] whileTrue: [
-                | k |
-                k := keysResult at: i.
-                ((Harding at: k) isClass) ifTrue: [
-                    names add: k
-                ].
-                i := i + 1
-            ]
+        ifFalse: [
+            | lib |
+            lib := Library named: libraryName.
+            (lib isNil or: [(lib isKindOf: Library) not]) ifTrue: [
+                lib := Harding at: libraryName.
+                ((lib isKindOf: Library) not) ifTrue: [
+                    lib := nil
+                ]
+            ].
+            lib
         ].
-        classNames := names
+
+    classNames := Array new.
+
+    libraryName = "Harding" ifTrue: [
+        keysResult := Harding keys
     ] ifFalse: [
         libb isNil ifTrue: [
-            classNames := #()
-        ] ifFalse: [
-            classNames := libb classNames.
+            Transcript showCr: ("Library not found: " , libraryName).
+            classPane items: #().
+            ^ self
+        ].
+        keysResult := libb keys
+    ].
+
+    keysResult notNil ifTrue: [
+        [
+            Transcript showCr: ("Keys count for " , libraryName , ": " , (keysResult size printString)).
+            i := 0.
+            [ i < keysResult size ] whileTrue: [
+                classNames add: (keysResult at: i).
+                i := i + 1
+            ]
+        ] on: Exception do: [:ex |
+            Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
         ]
     ].
+
+    Transcript showCr: ("Class list count for " , libraryName , ": " , (classNames size printString)).
 
     classPane items: classNames.
 ]
 
 SystemBrowser>>selectClass: aClassName [
     self hasUnsavedChanges ifTrue: [
-        # Store in instance variables (captured locals don't survive async dialog callbacks)
+        # Store in slots (captured locals don't survive async dialog callbacks)
         pendingTarget := aClassName.
         pendingPrevClass := classPane selectedItem.
         pendingPrevCategory := categoryPane selectedItem.
@@ -441,9 +458,17 @@ SystemBrowser>>classForName: aClassName [
             classObj notNil ifTrue: [ found := classObj ].
 
             found isNil ifTrue: [
-                lib keys do: [:key |
-                    (((key asString) = (aClassName asString)) and: [ found isNil ]) ifTrue: [
-                        found := lib at: key
+                | libKeys i |
+                libKeys := lib keys.
+                libKeys isNil ifFalse: [
+                    i := 0.
+                    [ i < libKeys size ] whileTrue: [
+                        | key |
+                        key := libKeys at: i.
+                        ((key asString) = (aClassName asString) and: [found isNil]) ifTrue: [
+                            found := lib at: key
+                        ].
+                        i := i + 1
                     ]
                 ]
             ]
@@ -457,9 +482,17 @@ SystemBrowser>>classForName: aClassName [
     ].
 
     found isNil ifTrue: [
-        Harding keys do: [:key |
-            (((key asString) = (aClassName asString)) and: [ found isNil ]) ifTrue: [
-                found := Harding at: key
+        | hKeys i |
+        hKeys := Harding keys.
+        hKeys isNil ifFalse: [
+            i := 0.
+            [ i < hKeys size ] whileTrue: [
+                | key |
+                key := hKeys at: i.
+                ((key asString) = (aClassName asString) and: [found isNil]) ifTrue: [
+                    found := Harding at: key
+                ].
+                i := i + 1
             ]
         ]
     ].
@@ -479,7 +512,7 @@ SystemBrowser>>inferCategoriesFor: aClassName [
 
 SystemBrowser>>selectCategory: aCategory [
     self hasUnsavedChanges ifTrue: [
-        # Store in instance variables (captured locals don't survive async dialog callbacks)
+        # Store in slots (captured locals don't survive async dialog callbacks)
         pendingTarget := aCategory.
         pendingPrevCategory := categoryPane selectedItem.
         pendingPrevMethod := methodPane selectedItem.
@@ -537,6 +570,16 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
     ].
 
     methods := classObj methods.
+    methods isNil ifTrue: [
+        Transcript showCr: "methods is nil!".
+        methodPane items: #().
+        ^ self
+    ].
+    (methods respondsTo: #do:) ifFalse: [
+        Transcript showCr: ("methods doesn't respond to do:, class = " , (classObj className)).
+        methodPane items: #().
+        ^ self
+    ].
     definedMethods := classObj definedMethods.
     rawNames := Array new.
 
@@ -584,7 +627,7 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
 
 SystemBrowser>>selectMethod: aMethodName [
     self hasUnsavedChanges ifTrue: [
-        # Store in instance variables so dialog callback blocks can access them
+        # Store in slots so dialog callback blocks can access them
         # (captured locals don't survive async dialog callbacks)
         pendingTarget := aMethodName.
         pendingPrevMethod := methodPane selectedItem.
@@ -1163,16 +1206,18 @@ SystemBrowser>>findAndSelectClass: aPattern [
             lib := Library named: libName.
             lib notNil ifTrue: [
 libName = "Harding" ifTrue: [
-                    | names keysResult |
+                    | names keysResult i2 |
                     names := Array new.
-                    (Harding respondsTo: #keys) ifTrue: [
-                        keysResult := Harding keys.
-                        keysResult isNil ifFalse: [
-                            keysResult do: [:k |
-                                ((Harding at: k) isClass) ifTrue: [
-                                    names add: k
-                                ]
-                            ]
+                    keysResult := Harding keys.
+                    keysResult isNil ifFalse: [
+                        i2 := 0.
+                        [ i2 < keysResult size ] whileTrue: [
+                            | k |
+                            k := keysResult at: i2.
+                            ((Harding at: k) isClass) ifTrue: [
+                                names add: k
+                            ].
+                            i2 := i2 + 1
                         ]
                     ].
                     classNames := names
@@ -1555,12 +1600,19 @@ SystemBrowser>>deleteClass: aClassName [
     ].
     
     currentLibrary notNil ifTrue: [
-        | lib |
+        | lib libKeys i |
         lib := Library named: currentLibrary.
         lib notNil ifTrue: [
-            lib keys do: [:key |
-                ((lib at: key) = classObj) ifTrue: [
-                    lib at: key put: Object
+            libKeys := lib keys.
+            libKeys isNil ifFalse: [
+                i := 0.
+                [ i < libKeys size ] whileTrue: [
+                    | key |
+                    key := libKeys at: i.
+                    ((lib at: key) = classObj) ifTrue: [
+                        lib at: key put: Object
+                    ].
+                    i := i + 1
                 ]
             ]
         ]

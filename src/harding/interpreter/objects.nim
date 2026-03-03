@@ -1910,20 +1910,34 @@ proc libraryBindingsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
 proc libraryAllNamesClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library class>>allNames - return all library names in the system
+  proc isLibraryInstance(val: NodeValue): bool =
+    val.kind == vkInstance and val.instVal != nil and val.instVal.class != nil and
+      (val.instVal.class.hardingType == "Library" or val.instVal.class.name == "Library")
+
   var names: seq[NodeValue] = @[]
   names.add("Harding".toValue())
   
   for key in interp.globals[].keys:
     if key != "Harding" and key != "GlobalTable":
       let val = interp.globals[][key]
-      if val.kind == vkInstance and val.instVal != nil:
-        if val.instVal.class != nil and val.instVal.class.hardingType == "Library":
-          names.add(key.toValue())
+      if isLibraryInstance(val):
+          # Use the library's name property if available
+          var libName = key.toValue()
+          if val.instVal.slots.len > 2:
+            let nameVal = val.instVal.slots[2]
+            let resolvedName = nameVal.toString()
+            if resolvedName.len > 0:
+              libName = resolvedName.toValue()
+          names.add(libName)
   
   return newArrayInstance(arrayClass, names).toValue()
 
 proc libraryNamedClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library class>>named: - return a library by name from globals
+  proc isLibraryInstance(val: NodeValue): bool =
+    val.kind == vkInstance and val.instVal != nil and val.instVal.class != nil and
+      (val.instVal.class.hardingType == "Library" or val.instVal.class.name == "Library")
+
   if args.len == 0:
     return nilValue()
   
@@ -1934,11 +1948,21 @@ proc libraryNamedClassImpl(interp: var Interpreter, self: Instance, args: seq[No
   if name == "Harding":
     return interp.globals[]["Harding"]
   
+  # First try looking up by global key
   if name.len > 0 and name in interp.globals[]:
     let val = interp.globals[][name]
-    if val.kind == vkInstance and val.instVal != nil:
-      if val.instVal.class != nil and val.instVal.class.hardingType == "Library":
-        return val
+    if isLibraryInstance(val):
+      return val
+  
+  # Then try looking up by library's name property
+  for key in interp.globals[].keys:
+    let val = interp.globals[][key]
+    if isLibraryInstance(val):
+        # Check if library's name slot matches
+        if val.instVal.slots.len > 2:
+          let libName = val.instVal.slots[2].toString()
+          if libName == name:
+            return val
   
   return nilValue()
 

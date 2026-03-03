@@ -155,6 +155,7 @@ proc listBoxRowSelectedCallback(listBox: GtkListBox, row: GtkListBoxRow, userDat
     GC_unref(handler.blockNode)
   except CatchableError as e:
     error("Error in row-selected callback: ", e.msg)
+    printStackTrace(interp[])
 
 proc listBoxOnRowSelectedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Instance method: Connect a block to the row-selected signal

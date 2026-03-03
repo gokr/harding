@@ -1,13 +1,13 @@
-# Harding Slot-based Instance Variables Tests
+# Harding Slot Tests
 #
-# Tests for the new class-based object model with declared instance variables
+# Tests for the new class-based object model with declared slots
 #
 
 import std/[unittest, tables]
 import ../src/harding/interpreter/objects
 import ../src/harding/core/types
 
-suite "Slot-based Instance Variables (class-based model)":
+suite "Slots (class-based model)":
   setup:
     # Clean state before each test - reinitialize globals
     initGlobals()  # This will only reset if empty, but needed for clean slate
@@ -30,7 +30,7 @@ suite "Slot-based Instance Variables (class-based model)":
     check obj.slotNames.len == 0
     check obj.allSlotNames.len == 0
 
-  test "can create class with instance variables":
+  test "can create class with slots":
     discard initRootClass()
     let personClass = newClass(superclasses = @[rootClass], slotNames = @["name", "age"], name = "Person")
 
@@ -50,7 +50,7 @@ suite "Slot-based Instance Variables (class-based model)":
     check person.slots[0].kind == vkNil
     check person.slots[1].kind == vkNil
 
-  test "instance variables initialize to nil":
+  test "slots initialize to nil":
     discard initRootClass()
     let personClass = newClass(superclasses = @[rootClass], slotNames = @["name", "age"], name = "Person")
     let person = newInstance(personClass)

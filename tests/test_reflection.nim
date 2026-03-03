@@ -115,6 +115,28 @@ suite "Reflection: slotNames":
     check(results[0][^1].kind == vkInt)
     check(results[0][^1].intVal == 2)
 
+  test "slotAt: returns slot value":
+    let results = interp.evalStatements("""
+      Person := Object derive: #(name age)
+      p := Person new
+      p slotAt: #name put: "Alice"
+      Result := p slotAt: #name
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkString)
+    check(results[0][^1].strVal == "Alice")
+
+  test "slotAt:put: sets slot value":
+    let results = interp.evalStatements("""
+      Person := Object derive: #(name age)
+      p := Person new
+      p slotAt: #age put: 30
+      Result := p slotAt: #age
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkInt)
+    check(results[0][^1].intVal == 30)
+
 suite "Reflection: hasProperty: and properties":
   var interp {.used.}: Interpreter
 

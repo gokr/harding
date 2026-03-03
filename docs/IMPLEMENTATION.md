@@ -414,7 +414,7 @@ Represents a class instance:
 type
   InstanceObj = object
     class*: Class
-    slots*: seq[NodeValue]        # Indexed slots (instance variables)
+    slots*: seq[NodeValue]        # Indexed slots (slots)
     properties*: Table[string, NodeValue]  # Dynamic properties
 
   Instance* = ref InstanceObj
@@ -661,7 +661,7 @@ Non-local return follows sender chain to find method activation
 
 ### Design
 
-When a class defines instance variables:
+When a class defines slots:
 
 ```smalltalk
 Point := Object derive: #(x y)

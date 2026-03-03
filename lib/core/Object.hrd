@@ -16,7 +16,7 @@
 # Class-based objects with slot accessors.
 #
 # Object class>>derive - Create a subclass with no slots
-# Object class>>derive: - Create a subclass with declared instance variables
+# Object class>>derive: - Create a subclass with declared slots
 # Object class>>new - Create a new instance of the class
 #
 # Usage: Point := Object derive: #(x y).
@@ -42,7 +42,7 @@ Object class>>derive: slotsArray methods: methodBlock [
 ]
 
 Object class>>derive: slotArray superclasses: superclassArray methods: methodBlock [
-  # Create a subclass with instance variables, additional superclasses and define methods in one expression.
+  # Create a subclass with slots, additional superclasses and define methods in one expression.
   # The receiver class determines the instance type (Integer, Float, String, Array, Table, etc.).
   # Other superclasses must be compatible (usually Mixin subclasses with only methods, no conflicting slots).
   #

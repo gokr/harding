@@ -203,7 +203,7 @@ Person>>birthday [
 
 ```smalltalk
 Person>>initialize [
-  name := "Anonymous"                   # Direct ivar assignment
+  name := "Anonymous"                   # Direct slot assignment
   age := 0
 ]
 
@@ -384,7 +384,7 @@ MyClass extendClass: [
 ].
 
 #=== Combined Creation (derive:methods:) =====
-MyClass := Object derive: #(#ivar) methods: [
+MyClass := Object derive: #(#slot) methods: [
   self >> method [ ^ result ]                 # Create class with methods
 ].
 

@@ -139,7 +139,7 @@ See [VSCODE.md](docs/VSCODE.md) for full details.
 | Required period end-of-statement | Optional - newline or period both work |
 | Double quotes for comments | Hash `#` for comments |
 | Single quotes for strings | Double quotes for strings |
-| Classes define structure via class definition | Class construction using derive: `Object derive: #(ivars)` |
+| Classes define structure via class definition | Class construction using derive: `Object derive: #(slots)` |
 | Manual accessor definition | Auto-generated accessors via `deriveWithAccessors:` |
 | Image-based persistence | Source files loaded on startup, git friendly source format, normal Unix workflow |
 | VM execution | Interprets AST directly, native compiler via Nim (in development) |
@@ -152,7 +152,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Type | Convention | Example |
 |------|------------|---------|
 | Globals (class names, global variables) | Uppercase first | `Point`, `MyGlobal` |
-| Locals (instance variables, temporaries, parameters, block params) | Lowercase first | `temp`, `index`, `value` |
+| Locals (slots, temporaries, parameters, block params) | Lowercase first | `temp`, `index`, `value` |
 
 ### Key Syntax Differences
 

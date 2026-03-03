@@ -9,7 +9,7 @@ type
   SymbolKind* = enum
     skClass          ## Class name
     skMethod         ## Method selector
-    skSlot           ## Slot/instance variable
+    skSlot           ## Slot
     skParameter      ## Method parameter
     skTemporary      ## Local temporary
     skGlobal         ## Global variable

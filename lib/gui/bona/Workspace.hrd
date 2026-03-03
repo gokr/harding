@@ -4,26 +4,43 @@
 # Now using GtkSourceView for syntax highlighting
 # ============================================================================
 
-Workspace := Object derive: #(window box scrolledWindow sourceView owner)
+Workspace := Object derive: #(window box scrolledWindow sourceView owner workspaceId filePath)
 
 Workspace class>>open [
-    ^self new openWindow
+    ^self openFor: nil
 ].
 
 Workspace class>>openFor: anOwner [
-    ^self new openWindowFor: anOwner
+    ^self openFor: anOwner id: 1
+].
+
+Workspace class>>openFor: anOwner id: anId [
+    Transcript showCr: ("DEBUG: Workspace class>>openFor:id: called with id = " , (anId asString)).
+    ^self new openWindowFor: anOwner id: anId
 ].
 
 Workspace>>openWindow [
-    ^self openWindowFor: nil
+    ^self openWindowFor: nil id: 1
 ].
 
 Workspace>>openWindowFor: anOwner [
-    | buttonBox doItButton printItButton inspectItButton |
+    ^self openWindowFor: anOwner id: 1
+].
+
+Workspace>>openWindowFor: anOwner id: anId [
+    | buttonBox doItButton printItButton inspectItButton saveButton |
+
+    Transcript showCr: ("DEBUG: openWindowFor called with id = " , (anId asString)).
+    
+    # Set workspace ID and file path
+    workspaceId := anId.
+    filePath := "workspace-" , (workspaceId asString) , ".hrd".
+    
+    Transcript showCr: ("DEBUG: filePath = " , filePath).
 
     # Create main window
     window := GtkWindow new.
-    window title: "Workspace".
+    window title: ("Workspace #" , (workspaceId printString)).
     window iconName: "harding".
     window setDefaultSize: 800 height: 600.
 
@@ -72,6 +89,13 @@ Workspace>>openWindowFor: anOwner [
     inspectItButton clicked: [ self inspectItSelection ].
     buttonBox append: inspectItButton.
 
+    # Create Save button
+    saveButton := GtkButton new.
+    saveButton label: "Save" iconName: "document-save".
+    saveButton tooltip: "Save workspace content (Ctrl+S)".
+    saveButton clicked: [ self saveContent ].
+    buttonBox append: saveButton.
+
     # Set owner
     owner := anOwner.
 
@@ -90,9 +114,14 @@ Workspace>>openWindowFor: anOwner [
     # Register with owner
     anOwner notNil ifTrue: [ anOwner addWindow: self ].
 
+    # Load existing content if file exists
+    Transcript showCr: "DEBUG: about to loadContent".
+    self loadContent.
+
+    Transcript showCr: "DEBUG: about to present window".
     window present.
 
-    Transcript showCr: "Workspace opened (with syntax highlighting)".
+    Transcript showCr: ("Workspace #" , (workspaceId asString) , " opened").
     ^self
 ].
 
@@ -109,6 +138,9 @@ Workspace>>installKeyboardShortcuts [
 
     # Ctrl+I - Inspect It
     sourceView onControlKey: "i" do: [ self inspectItSelection ].
+
+    # Ctrl+S - Save
+    sourceView onControlKey: "s" do: [ self saveContent ].
 ].
 
 Workspace>>showContextMenu [
@@ -119,6 +151,8 @@ Workspace>>showContextMenu [
 ].
 
 Workspace>>onDestroy [
+    # Save content before closing
+    self saveContent.
     owner notNil ifTrue: [ owner removeWindow: self ]
 ].
 
@@ -341,6 +375,45 @@ Workspace>>text [
 Workspace>>text: aString [
     # Set all text in the editor
     sourceView text: aString
+].
+
+Workspace>>loadContent [
+    # Load content from file if it exists
+    Transcript showCr: ("DEBUG: loadContent called, filePath = " , (filePath asString)).
+    filePath notNil ifTrue: [
+        Transcript showCr: ("DEBUG: checking if file exists: " , filePath).
+        (File exists: filePath) ifTrue: [
+            | content |
+            Transcript showCr: "DEBUG: file exists, reading...".
+            content := File readAll: filePath.
+            sourceView text: content.
+            Transcript showCr: ("Loaded workspace #" , (workspaceId asString) , " from " , filePath).
+        ] ifFalse: [
+            Transcript showCr: "DEBUG: file does not exist, skipping load".
+        ].
+    ] ifFalse: [
+        Transcript showCr: "DEBUG: filePath is nil".
+    ].
+].
+
+Workspace>>saveContent [
+    # Save content to file, delete if empty
+    | content |
+    filePath isNil ifTrue: [ ^self ].
+    
+    content := sourceView text.
+    (content isNil or: [content isEmpty]) ifTrue: [
+        # Delete file if content is empty
+        (File exists: filePath) ifTrue: [
+            File delete: filePath.
+            Transcript showCr: ("Deleted empty workspace file: " , filePath).
+        ].
+        ^self
+    ].
+    
+    # Write content to file
+    File write: content to: filePath.
+    Transcript showCr: ("Saved workspace #" , (workspaceId printString) , " to " , filePath).
 ].
 
 Workspace>>checkSourceView [

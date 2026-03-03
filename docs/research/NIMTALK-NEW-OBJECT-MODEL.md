@@ -182,8 +182,8 @@ dict at: "name"
 
 | Operation | Property Bag | Declared Ivars | Speedup |
 |-----------|--------------|----------------|---------|
-| Read ivar | Hash lookup | Direct access | 10-100x |
-| Write ivar | Hash store | Direct write | 10-100x |
+| Read slot | Hash lookup | Direct access | 10-100x |
+| Write slot | Hash store | Direct write | 10-100x |
 | Method call | Same | Same | No change |
 | Memory | Hash table | Sequential | More compact |
 

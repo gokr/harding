@@ -4,7 +4,7 @@ This document describes the **actual implemented syntax** in the current Harding
 - ✅ Slot-based instance variable system fully implemented (149x performance improvement)
 - ✅ Binary operators implemented as regular messages
 - ✅ Cascade syntax working (`;` operator)
-- ✅ Direct ivar access inside methods
+- ✅ Direct slot access inside methods
 - ✅ `>>` method definition syntax fully implemented
 - ✅ `super` keyword for method chaining
 - ✅ `self` keyword for receiver reference

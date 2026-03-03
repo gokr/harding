@@ -86,7 +86,7 @@ AssignmentNode(
 #### Code Modifications:
 - `src/core/types.nim` - Add DictionaryObj type with property bag
 - `src/interpreter/objects.nim` - Handle Dictionary derivation
-- `src/interpreter/evaluator.nim` - Handle direct ivar access
+- `src/interpreter/evaluator.nim` - Handle direct slot access
 
 #### Object Structure:
 ```nim
@@ -105,10 +105,10 @@ type DictionaryObj = object of ProtoObject
 **Week 3**
 
 #### Tasks:
-1. Generate default accessor methods for each declared ivar
+1. Generate default accessor methods for each declared slot
 2. Implement direct slot access (no dictionary lookup)
 3. Support custom accessor overrides
-4. Add error handling for undeclared ivar access
+4. Add error handling for undeclared slot access
 
 #### Code Modifications:
 - `src/interpreter/objects.nim` - Add accessor generation
@@ -311,18 +311,18 @@ Person := load: "models/Person.harding"
 # Create prototype with ivars
 proc deriveWithIVars(proto: ProtoObject, ivars: seq[string]): ProtoObject
 
-# Access ivar by name
+# Access slot by name
 proc getIvar(obj: ProtoObject, name: string): NodeValue
 proc setIvar(obj: ProtoObject, name: string, value: NodeValue)
 
-# Access ivar by slot index (fast)
+# Access slot by slot index (fast)
 proc getSlot(obj: ProtoObject, index: int): NodeValue
 proc setSlot(obj: ProtoObject, index: int, value: NodeValue)
 
 # Generate default accessors
 proc generateAccessor(prototype: ProtoObject, ivarName: string)
 
-# Check if ivar is declared
+# Check if slot is declared
 proc hasIvar(proto: ProtoObject, name: string): bool
 ```
 
@@ -383,7 +383,7 @@ test "can declare instance variables":
   check person.hasIvar("name")
   check person.hasIvar("age")
 
-test "direct ivar access in methods":
+test "direct slot access in methods":
   let code = """
     Person := Object derive: #(name)
     Person>>getName [ ^ name ]
@@ -438,7 +438,7 @@ check result.hasMethod("greet")
 
 ✅ All implementation complete (exceeded expectations!)
 ✅ `derive:` works as native message (no parser changes needed)
-✅ Direct ivar access is **149x faster** than property bag (exceeded 10x goal!)
+✅ Direct slot access is **149x faster** than property bag (exceeded 10x goal!)
 ✅ All 22+ new tests pass plus integration tests
 ✅ 100% code coverage for new functionality
 ✅ Examples updated to use new syntax (demo_slots.harding, lib/)

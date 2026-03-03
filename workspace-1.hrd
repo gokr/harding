@@ -1,0 +1,4 @@
+Person := Object deriveWithAccessors: #(name age)
+p := Person new
+p name: "Goran"
+p

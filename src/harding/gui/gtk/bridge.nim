@@ -812,7 +812,7 @@ proc initGtkBridge*(interp: var Interpreter) =
     debug("Registered GtkMenuBar class")
 
   # Register Launcher class (derived from GtkWindow)
-  let launcherCls = newClass(superclasses = @[windowCls], slotNames = @["windows"], name = "Launcher")
+  let launcherCls = newClass(superclasses = @[windowCls], slotNames = @["windows", "nextWorkspaceId"], name = "Launcher")
   launcherCls.tags = @["GTK", "Window", "Launcher", "IDE"]
   launcherCls.isNimProxy = true
   launcherCls.hardingType = "Launcher"

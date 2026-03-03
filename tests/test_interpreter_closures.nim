@@ -178,7 +178,7 @@ Add5and10 value: 15
     check(err.len == 0)
     check(result.intVal == 30)
 
-  test "closures as object methods capture instance variables":
+  test "closures as object methods capture slots":
     skip()  # Complex closure behavior needs review
 
   test "closures outlive their defining scope":

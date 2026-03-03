@@ -4,6 +4,7 @@
 
 Standard := Library new.
 Standard name: "Standard".
+Harding at: "StandardLibrary" put: Standard.
 
 Standard load: "lib/standard/SortedCollection.hrd"
 Standard load: "lib/standard/Interval.hrd"

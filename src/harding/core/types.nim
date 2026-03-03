@@ -74,7 +74,7 @@ type
     tags*: seq[string]                      # Type tags
     isNimProxy*: bool                       # Class wraps Nim type
     hardingType*: string                    # Nim type name for FFI
-    hasSlots*: bool                         # Has any instance variables
+    hasSlots*: bool                         # Has any slots
 
     # Lazy rebuilding flag
     methodsDirty*: bool                     # True if method tables need rebuilding
@@ -367,7 +367,7 @@ type
     name*: string
     localIndex*: int  # Index into activation.indexedLocals (-1 = not a local, use name-based fallback)
 
-  # Slot access node for efficient instance variable access
+  # Slot access node for efficient slot access
   SlotAccessNode* = ref object of Node
     slotName*: string      # Name for debugging
     slotIndex*: int        # Index in allSlotNames (updated on layout change)

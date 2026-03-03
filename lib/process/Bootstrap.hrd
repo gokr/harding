@@ -4,6 +4,7 @@
 
 ProcessLibrary := Library new.
 ProcessLibrary name: "Process".
+Harding at: "ProcessLibrary" put: ProcessLibrary.
 
 ProcessLibrary load: "lib/process/Synchronizable.hrd".
 

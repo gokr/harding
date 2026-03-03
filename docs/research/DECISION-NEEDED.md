@@ -12,7 +12,7 @@
 
 ### 2. Instance Variable Access Syntax
 **Current State**: ✅ Automatic getter/setter generation for declared ivars
-**Proposal**: Add direct slot access syntax like Smalltalk (just use ivar name)
+**Proposal**: Add direct slot access syntax like Smalltalk (just use slot name)
 **Decision Needed**: What syntax for slot access? `person name` vs `person@name` vs keep `person at: "name"`
 **Status**: ✅ Core types implemented with direct slot access, syntax design complete (automatic accessors)
 

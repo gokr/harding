@@ -153,7 +153,9 @@ Launcher>>openWorkspace [
   | id |
   Transcript showCr: "Opening workspace...".
   id := self nextWorkspaceId.
+  Transcript showCr: ("DEBUG: About to call Workspace openFor:id: with id = " , (id asString)).
   Workspace openFor: self id: id.
+  Transcript showCr: "DEBUG: Workspace openFor:id: returned".
   ^ self
 ].
 

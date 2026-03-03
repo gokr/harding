@@ -4,6 +4,7 @@
 
 GraniteLib := Library new.
 GraniteLib name: "Granite".
+Harding at: "GraniteLibrary" put: GraniteLib.
 
 GraniteLib load: "lib/granite/Application.hrd"
 GraniteLib load: "lib/granite/Granite.hrd"

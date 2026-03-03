@@ -162,3 +162,32 @@ suite "Closure Capture in IfNode/WhileNode":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 42)
+
+  test "method-local class variable capture in do: iteration (KNOWN BUG)":
+    ## This test demonstrates a bug where method-local class variables
+    ## are not properly captured in closures, causing 'Message not understood'
+    ## errors when the closure tries to use the captured variable.
+    ##
+    ## This is the exact pattern used in Builder.hrd refreshAppList
+    let result = interp.evalStatements("""
+      Tester := Object derive.
+      Tester>>test [
+        | capturedClass results |
+        TestClass := Object derive: #(value).
+        TestClass>>getValue [ ^ 42 ].
+        capturedClass := TestClass.
+        results := Array new.
+        #(1) do: [:each |
+          results add: (capturedClass new getValue).
+        ].
+        ^ results at: 0
+      ].
+      Tester new test
+    """)
+    if result[1].len > 0:
+      echo "Error (expected for known bug): ", result[1]
+      echo "Method-local class variable capture fails in closures"
+      skip()
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)

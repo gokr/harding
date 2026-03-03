@@ -28,7 +28,7 @@ Harding is a class-based Smalltalk dialect that compiles to Nim. It preserves Sm
 - **Class-based object system** with multiple inheritance
 - **Message-passing semantics** (unary, binary, keyword)
 - **Block closures** with lexical scoping and non-local returns
-- **Direct slot access** for declared instance variables (O(1) access)
+- **Direct slot access** for declared slots (O(1) access)
 - **Method definition syntax** using `>>` operator
 - **Libraries** for namespace isolation and modular code organization
 - **Green threads** for cooperative multitasking
@@ -215,7 +215,7 @@ chmod +x script.hrd
 ### Creating Classes
 
 ```smalltalk
-# Create a class with instance variables (no accessors)
+# Create a class with slots (no accessors)
 Point := Object derive: #(x y)
 
 # Create a class with automatic accessors
@@ -307,7 +307,7 @@ Shape3D := ColoredPoint derive: #(depth)
 
 ### Mixins
 
-Mixin is a slotless class designed for behavior composition. It derives from Root (alongside Object) and carries no instance variables, which avoids diamond-problem conflicts when mixed into other classes.
+Mixin is a slotless class designed for behavior composition. It derives from Root (alongside Object) and carries no slots, which avoids diamond-problem conflicts when mixed into other classes.
 
 ```smalltalk
 # Create a mixin
@@ -384,7 +384,7 @@ MyCollection >> printOn: stream [
 
 ### Direct Slot Access
 
-Inside methods, instance variables are accessed directly by name. This provides O(1) performance compared to named property access.
+Inside methods, slots are accessed directly by name. This provides O(1) performance compared to named property access.
 
 Performance comparison (per 100k ops):
 - Direct slot access: ~0.8ms
@@ -623,7 +623,7 @@ p := Person newNamed: "Alice" aged: 30
 
 ### Combined Class Creation (derive:methods:)
 
-Create a class with instance variables AND define methods in one expression:
+Create a class with slots AND define methods in one expression:
 
 ```smalltalk
 Person := Object derive: #(name age) methods: [

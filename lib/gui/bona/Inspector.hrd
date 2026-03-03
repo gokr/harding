@@ -174,19 +174,23 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
 
     # Regular object - show named slots
     slotNames := anObject slotNames.
+    Transcript showCr: ("DEBUG: slotNames size = " , (slotNames size printString)).
+    pathsTable := expandedPaths.
     slotNames do: [:name |
         | value path expanded |
-        value := anObject instVarAt: name.
+        Transcript showCr: ("DEBUG: processing slot: " , (name asString)).
+        value := anObject slotAt: name.
         path := prefix , "." , name.
-        expanded := expandedPaths at: path ifAbsent: [ false ].
-
-        self addTreeButton: name
-             value: value
-             depth: depth
-             expanded: expanded
-             expandable: (self isExpandable: value)
-             path: path
-             into: box.
+        # Workaround: avoid at:ifAbsent: block due to self binding issue
+        expanded := (pathsTable includesKey: path)
+            ifTrue: [ pathsTable at: path ]
+            ifFalse: [ false ].
+        
+        Transcript showCr: ("DEBUG: about to call addTreeButton for " , (name asString)).
+        
+        # Try addTreeButton with isExpandable evaluated separately
+        expandable := self isExpandable: value.
+        self addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box.
 
         # If expanded, render children recursively
         expanded ifTrue: [
@@ -201,13 +205,17 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
 ]
 
 Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box [
-    | idx |
+    | idx pathsTable |
+    pathsTable := expandedPaths.
     idx := 0.
     anArray do: [:element |
         | name path expanded |
         name := "[" , (idx printString) , "]".
         path := prefix , "." , name.
-        expanded := expandedPaths at: path ifAbsent: [ false ].
+        # Workaround: avoid at:ifAbsent: block due to self binding issue
+        expanded := (pathsTable includesKey: path)
+            ifTrue: [ pathsTable at: path ]
+            ifFalse: [ false ].
 
         self addTreeButton: name
              value: element
@@ -230,11 +238,16 @@ Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box
 ]
 
 Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box [
+    | pathsTable |
+    pathsTable := expandedPaths.
     aTable keysAndValuesDo: [:key :value |
         | name path expanded |
         name := key printString.
         path := prefix , "." , name.
-        expanded := expandedPaths at: path ifAbsent: [ false ].
+        # Workaround: avoid at:ifAbsent: block due to self binding issue
+        expanded := (pathsTable includesKey: path)
+            ifTrue: [ pathsTable at: path ]
+            ifFalse: [ false ].
 
         self addTreeButton: name
              value: value
@@ -256,6 +269,7 @@ Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box 
 
 Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box [
     | button label indent icon |
+    Transcript showCr: ("DEBUG: addTreeButton for " , name).
     button := GtkButton new.
     button setHexpand: true.
     button addCssClass: "flat".
@@ -284,6 +298,17 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
     ].
 
     box append: button.
+    button show.
+]
+
+Inspector>>addSimpleItem: name value: value depth: depth into: box [
+    | label |
+    Transcript showCr: ("DEBUG: addSimpleItem for " , name).
+    label := GtkLabel new: (name , ": " , (value printString)).
+    label setHexpand: true.
+    label setHalignStart.
+    box append: label.
+    label show.
 ]
 
 Inspector>>addLeafItem: text depth: depth into: box [

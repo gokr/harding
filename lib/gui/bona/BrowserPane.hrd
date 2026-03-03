@@ -61,10 +61,27 @@ BrowserPane>>items: anArray [
 
 BrowserPane>>refreshDisplay [
     # Clear existing items and rebuild the list
+    | i |
     self clearItemsOnly.
-    items do: [:item |
-        self addRowFor: item
+    items isNil ifTrue: [ ^ self ].
+
+    (items respondsTo: #do:) ifTrue: [
+        items do: [:item |
+            self addRowFor: item
+        ].
+        ^ self
     ].
+
+    ((items respondsTo: #size) and: [items respondsTo: #at:]) ifTrue: [
+        i := 0.
+        [ i < items size ] whileTrue: [
+            self addRowFor: (items at: i).
+            i := i + 1
+        ].
+        ^ self
+    ].
+
+    Transcript showCr: "BrowserPane refreshDisplay: items not iterable".
 ]
 
 BrowserPane>>clearItemsOnly [
@@ -101,7 +118,11 @@ BrowserPane>>addRowFor: anItem [
     
     itemString := (anItem isKindOf: String)
         ifTrue: [ anItem ]
-        ifFalse: [ anItem printString ].
+        ifFalse: [
+            (anItem respondsTo: #asString)
+                ifTrue: [ anItem asString ]
+                ifFalse: [ "<item>" ]
+        ].
     
     label := GtkLabel new: itemString.
     label setHexpand: true.

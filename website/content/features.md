@@ -49,7 +49,7 @@ Create classes dynamically with slots and methods:
 # Declare a temporary variable to hold an instance
 | p |
 
-# Create a new class with two instance variables
+# Create a new class with two slots
 Point := Object derive: #(x y)
 
 # Add methods using >> syntax and direct slot access
@@ -416,7 +416,7 @@ Comparable := Mixin derive
 ```harding
 obj class           # Get the class of an object
 obj class name      # Get class name
-obj slotNames       # Get list of instance variable names
+obj slotNames       # Get list of slot names
 ```
 
 ## Runtime Features

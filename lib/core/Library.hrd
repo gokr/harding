@@ -31,11 +31,15 @@ Library class>>allNames <primitive primitiveLibraryAllNames>
 Library class>>named: aString <primitive primitiveLibraryNamed: aString>
 
 Library>>classNames [
-    | names |
+    | names keys i key |
     names := Array new.
-    self keys do: [:key |
-        ((self at: key) isKindOf: Class) ifTrue: [
-            names add: key
+    keys := self keys.
+    keys isNil ifFalse: [
+        i := 0.
+        [ i < keys size ] whileTrue: [
+            key := keys at: i.
+            names add: key.
+            i := i + 1
         ]
     ].
     ^ names
