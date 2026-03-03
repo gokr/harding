@@ -195,13 +195,11 @@ Builder>>createEditorPane [
   label setHalignStart.
   box append: label.
 
-  # Libraries section
-  label := GtkLabel new: "Libraries:".
+  # Libraries section (simplified - shown as label for now)
+  label := GtkLabel new: "Libraries: Core, Standard".
   label setHalignStart.
   label marginTop: 5.
   box append: label.
-
-  box append: self createLibraryCheckboxes.
 
   # Main method editor
   label := GtkLabel new: "main: method:".
@@ -241,24 +239,25 @@ Builder>>createEditorPane [
   ^ box
 ].
 
-Builder>>createLibraryCheckboxes [
-  | box libraries |
-
-  box := GtkBox horizontal.
-  box setSpacing: 10.
-  box vexpand: false.
-
-  libraries := #(Core Standard Process Granite GUI Bona BitBarrel).
-
-  libraries do: [:libName |
-    | check |
-    check := GtkCheckButton newWithLabel: libName.
-    check setName: libName.
-    box append: check.
-  ].
-
-  ^ box
-].
+# Library checkboxes temporarily disabled - GtkCheckButton not yet implemented
+# Builder>>createLibraryCheckboxes [
+#   | box libraries |
+#
+#   box := GtkBox horizontal.
+#   box setSpacing: 10.
+#   box vexpand: false.
+#
+#   libraries := #(Core Standard Process Granite GUI Bona BitBarrel).
+#
+#   libraries do: [:libName |
+#     | check |
+#     check := GtkCheckButton newWithLabel: libName.
+#     check setName: libName.
+#     box append: check.
+#   ].
+#
+#   ^ box
+# ].
 
 Builder>>refreshAppList [
   | apps |
