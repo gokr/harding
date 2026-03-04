@@ -301,10 +301,12 @@ Builder>>refreshAppList [
   # Use whileTrue: loop instead of do: to avoid closure capture issues
   i := 0.
   size := apps size.
-  Transcript showCr: ("refreshAppList: labelClass=", (labelClass printString)).
+  Transcript showCr: ("refreshAppList BEFORE LOOP: labelClass=", (labelClass printString), " rowClass=", (rowClass printString)).
   [ i < size ] whileTrue: [
     appClass := apps at: i.
-    Transcript showCr: ("Loop: appClass=", (appClass printString), " labelClass=", (labelClass printString)).
+    Transcript showCr: ("Loop i=", (i printString), " appClass=", (appClass printString)).
+    Transcript showCr: ("About to call addAppRow:withLabel:withRow:").
+    Transcript showCr: ("  labelClass=", (labelClass printString), " rowClass=", (rowClass printString)).
     self addAppRow: appClass withLabel: labelClass withRow: rowClass.
     i := i + 1.
   ].
