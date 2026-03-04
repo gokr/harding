@@ -26,6 +26,9 @@ Builder>>owner: anOwner [
 Builder>>openInstance [
   | mainBox headerBar contentBox leftPane rightPane paned |
 
+  "=== Builder openInstance START ===" println.
+  Transcript showCr: "Builder openInstance START".
+  
   # Create window
   window := GtkWindow new.
   window title: "Application Builder".
@@ -66,7 +69,9 @@ Builder>>openInstance [
   window setChild: mainBox.
 
   # Populate application list
+  Transcript showCr: "Builder about to call refreshAppList".
   self refreshAppList.
+  Transcript showCr: "Builder refreshAppList completed".
 
   # Register with owner
   owner notNil ifTrue: [ owner addWindow: window ].
@@ -263,6 +268,7 @@ Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   # Helper method to add a row without closures
   | row label |
   # Debug
+  ("addAppRow: labelClass=" , (labelClass printString) , " rowClass=" , (rowClass printString)) println.
   Transcript showCr: ("addAppRow: labelClass=", (labelClass printString)).
   label := labelClass new: (appClass name).
   label setHalignStart.
@@ -301,9 +307,11 @@ Builder>>refreshAppList [
   # Use whileTrue: loop instead of do: to avoid closure capture issues
   i := 0.
   size := apps size.
+  ("refreshAppList: size=" , (size printString)) println.
   Transcript showCr: ("refreshAppList BEFORE LOOP: labelClass=", (labelClass printString), " rowClass=", (rowClass printString)).
   [ i < size ] whileTrue: [
     appClass := apps at: i.
+    ("Loop i=" , (i printString) , " appClass=" , (appClass printString)) println.
     Transcript showCr: ("Loop i=", (i printString), " appClass=", (appClass printString)).
     Transcript showCr: ("About to call addAppRow:withLabel:withRow:").
     Transcript showCr: ("  labelClass=", (labelClass printString), " rowClass=", (rowClass printString)).
