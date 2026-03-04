@@ -278,8 +278,12 @@ Builder>>addAppRow: appClass [
   # Use explicit Harding lookup instead of direct reference
   labelClass := Harding at: "GtkLabel".
   "labelClass assigned from Harding" println.
+  ("labelClass isNil: " , (labelClass isNil printString)) println.
+  ("labelClass class: " , (labelClass class name)) println.
   rowClass := Harding at: "GtkListBoxRow".
   "rowClass assigned from Harding" println.
+  ("rowClass isNil: " , (rowClass isNil printString)) println.
+  "About to call new:" println.
   label := labelClass new: (appClass name).
   label setHalignStart.
 
