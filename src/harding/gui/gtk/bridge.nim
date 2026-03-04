@@ -870,7 +870,9 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
       let source = readFile(filepath)
       let (_, err) = interp.evalStatements(source)
       if err.len > 0:
-        warn("Failed to load ", filepath, ": ", err)
+        error("Failed to load ", filepath, ": ", err)
+        error("Bona cannot start due to errors loading GTK wrappers. Please fix the errors above.")
+        quit(1)
       else:
         debug("Successfully loaded: ", filepath)
     else:
@@ -884,7 +886,9 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
         let source = readFile(filepath)
         let (_, err) = interp.evalStatements(source)
         if err.len > 0:
-          warn("Failed to load ", filepath, ": ", err)
+          error("Failed to load ", filepath, ": ", err)
+          error("Bona cannot start due to errors loading GTK3 wrappers. Please fix the errors above.")
+          quit(1)
         else:
           debug("Successfully loaded: ", filepath)
       else:
@@ -903,7 +907,6 @@ proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
   debug("Loading IDE tool files from: ", libPath)
 
   let toolFiles = [
-    "Libraries.hrd",
     "BrowserPane.hrd",
     "Browser.hrd",
     "Inspector.hrd",
@@ -920,7 +923,9 @@ proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
       let source = readFile(filepath)
       let (_, err) = interp.evalStatements(source)
       if err.len > 0:
-        warn("Failed to load ", filepath, ": ", err)
+        error("Failed to load ", filepath, ": ", err)
+        error("Bona cannot start due to errors loading IDE tools. Please fix the errors above.")
+        quit(1)
       else:
         debug("Successfully loaded: ", filepath)
     else:
