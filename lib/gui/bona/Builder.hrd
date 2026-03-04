@@ -264,10 +264,12 @@ Builder>>createEditorPane [
 #   ^ box
 # ].
 
-Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
-  # Helper method to add a row without closures
-  | row label |
+Builder>>addAppRow: appClass [
+  # Helper method to add a row - accesses GTK classes from globals directly
+  | row label labelClass rowClass |
   "addAppRow: START" println.
+  labelClass := GtkLabel.
+  rowClass := GtkListBoxRow.
   label := labelClass new: (appClass name).
   label setHalignStart.
 
@@ -279,9 +281,11 @@ Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   "addAppRow: END" println.
 ].
 
-Builder>>addEmptyRowWithLabel: labelClass withRow: rowClass [
-  # Helper method to add empty row without closures
-  | row label |
+Builder>>addEmptyRow [
+  # Helper method to add empty row - accesses GTK classes from globals directly
+  | row label labelClass rowClass |
+  labelClass := GtkLabel.
+  rowClass := GtkListBoxRow.
   label := labelClass new: "(no applications found)".
   label setHalignStart.
 
@@ -291,14 +295,9 @@ Builder>>addEmptyRowWithLabel: labelClass withRow: rowClass [
 ].
 
 Builder>>refreshAppList [
-  | apps labelClass rowClass |
+  | apps |
 
-  # Get GTK classes
-  labelClass := GtkLabel.
-  rowClass := GtkListBoxRow.
-  
   "=== refreshAppList START ===" println.
-  "Got GTK classes" println.
 
   # Clear existing items
   appList clear.
@@ -307,9 +306,9 @@ Builder>>refreshAppList [
   apps := self findApplicationSubclasses.
   ("Found " , (apps size printString) , " apps") println.
 
-  # Add a single test row directly (no closures)
+  # Add a single test row directly (no closures, no parameters)
   "About to call addAppRow" println.
-  self addAppRow: Object withLabel: labelClass withRow: rowClass.
+  self addAppRow: Object.
   "addAppRow completed" println.
   
   Transcript showCr: ("Found ", (apps size printString), " applications").
