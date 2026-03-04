@@ -266,10 +266,19 @@ Builder>>createEditorPane [
 
 Builder>>addAppRow: appClass [
   # Helper method to add a row - accesses GTK classes from globals directly
-  | row label labelClass rowClass |
+  | row label labelClass rowClass testVal |
   "addAppRow: START" println.
+  # Check if GTK classes exist
+  testVal := Harding at: "GtkLabel".
+  (testVal isNil) ifTrue: [
+    "ERROR: GtkLabel is nil" println.
+    ^ self
+  ].
+  "GtkLabel found, assigning..." println.
   labelClass := GtkLabel.
+  "labelClass assigned" println.
   rowClass := GtkListBoxRow.
+  "rowClass assigned" println.
   label := labelClass new: (appClass name).
   label setHalignStart.
 
