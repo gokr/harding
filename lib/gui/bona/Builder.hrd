@@ -267,9 +267,7 @@ Builder>>createEditorPane [
 Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   # Helper method to add a row without closures
   | row label |
-  # Debug
-  ("addAppRow: labelClass=" , (labelClass printString) , " rowClass=" , (rowClass printString)) println.
-  Transcript showCr: ("addAppRow: labelClass=", (labelClass printString)).
+  "addAppRow: START" println.
   label := labelClass new: (appClass name).
   label setHalignStart.
 
@@ -278,6 +276,7 @@ Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   row setName: (appClass name).
 
   appList append: row.
+  "addAppRow: END" println.
 ].
 
 Builder>>addEmptyRowWithLabel: labelClass withRow: rowClass [
