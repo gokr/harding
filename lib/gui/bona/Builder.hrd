@@ -268,17 +268,18 @@ Builder>>addAppRow: appClass [
   # Helper method to add a row - accesses GTK classes from globals directly
   | row label labelClass rowClass testVal |
   "addAppRow: START" println.
-  # Check if GTK classes exist
+  # Check if GTK classes exist via explicit Harding lookup
   testVal := Harding at: "GtkLabel".
   (testVal isNil) ifTrue: [
     "ERROR: GtkLabel is nil" println.
     ^ self
   ].
-  "GtkLabel found, assigning..." println.
-  labelClass := GtkLabel.
-  "labelClass assigned" println.
-  rowClass := GtkListBoxRow.
-  "rowClass assigned" println.
+  "GtkLabel found via Harding at:" println.
+  # Use explicit Harding lookup instead of direct reference
+  labelClass := Harding at: "GtkLabel".
+  "labelClass assigned from Harding" println.
+  rowClass := Harding at: "GtkListBoxRow".
+  "rowClass assigned from Harding" println.
   label := labelClass new: (appClass name).
   label setHalignStart.
 
