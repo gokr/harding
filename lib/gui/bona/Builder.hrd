@@ -299,8 +299,7 @@ Builder>>refreshAppList [
   rowClass := GtkListBoxRow.
   
   "=== refreshAppList START ===" println.
-  ("labelClass=" , (labelClass printString)) println.
-  ("rowClass=" , (rowClass printString)) println.
+  "Got GTK classes" println.
 
   # Clear existing items
   appList clear.
@@ -310,7 +309,9 @@ Builder>>refreshAppList [
   ("Found " , (apps size printString) , " apps") println.
 
   # Add a single test row directly (no closures)
+  "About to call addAppRow" println.
   self addAppRow: Object withLabel: labelClass withRow: rowClass.
+  "addAppRow completed" println.
   
   Transcript showCr: ("Found ", (apps size printString), " applications").
   "=== refreshAppList END ===" println.
