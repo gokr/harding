@@ -76,9 +76,9 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
       arguments: @[],
       isCascade: false
     )
-    # Use clean context evaluation to prevent stale activation from interfering
-    # with block value: invocations (e.g., detect:ifNone: using do:)
-    let result = evalWithVMCleanContext(interp[], msgNode)
+    # Evaluate with the current activation context - DO NOT use clean context
+    # because signal callbacks need proper activation context for method calls
+    let result = interp[].evalWithVM(msgNode)
     GC_unref(handler.blockNode)
     discard result  # Signal callbacks generally ignore return values
   except Exception as e:
