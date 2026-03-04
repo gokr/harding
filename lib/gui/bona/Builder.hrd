@@ -262,6 +262,8 @@ Builder>>createEditorPane [
 Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   # Helper method to add a row without closures
   | row label |
+  # Debug
+  Transcript showCr: ("addAppRow: labelClass=", (labelClass printString)).
   label := labelClass new: (appClass name).
   label setHalignStart.
 
@@ -299,8 +301,10 @@ Builder>>refreshAppList [
   # Use whileTrue: loop instead of do: to avoid closure capture issues
   i := 0.
   size := apps size.
+  Transcript showCr: ("refreshAppList: labelClass=", (labelClass printString)).
   [ i < size ] whileTrue: [
     appClass := apps at: i.
+    Transcript showCr: ("Loop: appClass=", (appClass printString), " labelClass=", (labelClass printString)).
     self addAppRow: appClass withLabel: labelClass withRow: rowClass.
     i := i + 1.
   ].
