@@ -65,7 +65,10 @@ BrowserPane>>refreshDisplay [
     self clearItemsOnly.
     items isNil ifTrue: [ ^ self ].
 
+    Transcript showCr: ("BrowserPane refresh: " , title , " item source set").
+
     (items respondsTo: #do:) ifTrue: [
+        Transcript showCr: ("BrowserPane refresh: " , title , " using do:").
         items do: [:item |
             self addRowFor: item
         ].
@@ -73,6 +76,7 @@ BrowserPane>>refreshDisplay [
     ].
 
     ((items respondsTo: #size) and: [items respondsTo: #at:]) ifTrue: [
+        Transcript showCr: ("BrowserPane refresh: " , title , " using size/at:").
         i := 0.
         [ i < items size ] whileTrue: [
             self addRowFor: (items at: i).

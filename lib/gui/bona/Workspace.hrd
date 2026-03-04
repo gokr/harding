@@ -15,7 +15,6 @@ Workspace class>>openFor: anOwner [
 ].
 
 Workspace class>>openFor: anOwner id: anId [
-    Transcript showCr: ("DEBUG: Workspace class>>openFor:id: called with id = " , (anId asString)).
     ^self new openWindowFor: anOwner id: anId
 ].
 
@@ -30,13 +29,9 @@ Workspace>>openWindowFor: anOwner [
 Workspace>>openWindowFor: anOwner id: anId [
     | buttonBox doItButton printItButton inspectItButton saveButton |
 
-    Transcript showCr: ("DEBUG: openWindowFor called with id = " , (anId asString)).
-    
     # Set workspace ID and file path
     workspaceId := anId.
     filePath := "workspace-" , (workspaceId asString) , ".hrd".
-    
-    Transcript showCr: ("DEBUG: filePath = " , filePath).
 
     # Create main window
     window := GtkWindow new.
@@ -115,13 +110,9 @@ Workspace>>openWindowFor: anOwner id: anId [
     anOwner notNil ifTrue: [ anOwner addWindow: self ].
 
     # Load existing content if file exists
-    Transcript showCr: "DEBUG: about to loadContent".
     self loadContent.
 
-    Transcript showCr: "DEBUG: about to present window".
     window present.
-
-    Transcript showCr: ("Workspace #" , (workspaceId asString) , " opened").
     ^self
 ].
 
@@ -379,20 +370,12 @@ Workspace>>text: aString [
 
 Workspace>>loadContent [
     # Load content from file if it exists
-    Transcript showCr: ("DEBUG: loadContent called, filePath = " , (filePath asString)).
     filePath notNil ifTrue: [
-        Transcript showCr: ("DEBUG: checking if file exists: " , filePath).
         (File exists: filePath) ifTrue: [
             | content |
-            Transcript showCr: "DEBUG: file exists, reading...".
             content := File readAll: filePath.
             sourceView text: content.
-            Transcript showCr: ("Loaded workspace #" , (workspaceId asString) , " from " , filePath).
-        ] ifFalse: [
-            Transcript showCr: "DEBUG: file does not exist, skipping load".
         ].
-    ] ifFalse: [
-        Transcript showCr: "DEBUG: filePath is nil".
     ].
 ].
 

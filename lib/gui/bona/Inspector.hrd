@@ -176,21 +176,21 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
     slotNames := anObject slotNames.
     Transcript showCr: ("DEBUG: slotNames size = " , (slotNames size printString)).
     pathsTable := expandedPaths.
-    slotNames do: [:name |
-        | value path expanded |
-        Transcript showCr: ("DEBUG: processing slot: " , (name asString)).
-        value := anObject slotAt: name.
-        path := prefix , "." , name.
+    slotNames do: [:slotName |
+        | slotValue slotPath expanded expandable |
+        Transcript showCr: ("DEBUG: processing slot: " , (slotName asString)).
+        slotValue := anObject slotAt: slotName.
+        slotPath := prefix , "." , slotName.
         # Workaround: avoid at:ifAbsent: block due to self binding issue
-        expanded := (pathsTable includesKey: path)
-            ifTrue: [ pathsTable at: path ]
+        expanded := (pathsTable includesKey: slotPath)
+            ifTrue: [ pathsTable at: slotPath ]
             ifFalse: [ false ].
         
-        Transcript showCr: ("DEBUG: about to call addTreeButton for " , (name asString)).
+        Transcript showCr: ("DEBUG: about to call addTreeButton for " , (slotName asString)).
         
         # Try addTreeButton with isExpandable evaluated separately
-        expandable := self isExpandable: value.
-        self addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box.
+        expandable := self isExpandable: slotValue.
+        self addTreeButton: slotName value: slotValue depth: depth expanded: expanded expandable: expandable path: slotPath into: box.
 
         # If expanded, render children recursively
         expanded ifTrue: [

@@ -4938,84 +4938,47 @@ proc initHardingGlobal*(interp: var Interpreter) =
 # Special handling for GlobalTable - modify Table methods to access globals
 proc globalTableAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable at: - access global variable
-  let proxy = if self.isNimProxy and self.class.hardingType == "GlobalTable" and nimValueIsSet(self.nimValue):
-                cast[GlobalTableProxy](self.nimValue)
-              else:
-                nil
-
-  if proxy != nil and proxy.globals != nil:
-    # This is a GlobalTable proxy - access the globals table
-    let key = if args.len > 0:
-                if args[0].kind == vkString: args[0].strVal
-                elif args[0].kind == vkSymbol: args[0].symVal
-                else: ""
-              else:
-                ""
-    if key.len > 0 and key in proxy.globals[]:
-      return proxy.globals[][key]
-    return nilValue()
-  else:
-    # Fall through to regular Table behavior
-    return tableAtImpl(self, args)
+  discard self
+  let key = if args.len > 0:
+              if args[0].kind == vkString: args[0].strVal
+              elif args[0].kind == vkSymbol: args[0].symVal
+              else: ""
+            else:
+              ""
+  if key.len > 0 and key in interp.globals[]:
+    return interp.globals[][key]
+  return nilValue()
 
 proc globalTableAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable at:put: - set global variable
-  let proxy = if self.isNimProxy and self.class.hardingType == "GlobalTable" and nimValueIsSet(self.nimValue):
-                cast[GlobalTableProxy](self.nimValue)
-              else:
-                nil
-
-  if proxy != nil and proxy.globals != nil:
-    # This is a GlobalTable proxy - access the globals table
-    if args.len >= 2:
-      let key = if args[0].kind == vkString: args[0].strVal
-                elif args[0].kind == vkSymbol: args[0].symVal
-                else: ""
-      if key.len > 0:
-        proxy.globals[][key] = args[1]
-        return args[1]
-    return nilValue()
-  else:
-    # Fall through to regular Table behavior
-    return tableAtPutImpl(self, args)
+  discard self
+  if args.len >= 2:
+    let key = if args[0].kind == vkString: args[0].strVal
+              elif args[0].kind == vkSymbol: args[0].symVal
+              else: ""
+    if key.len > 0:
+      interp.globals[][key] = args[1]
+      return args[1]
+  return nilValue()
 
 proc globalTableKeysImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable keys - get all global names as array
-  let proxy = if self.isNimProxy and self.class.hardingType == "GlobalTable" and nimValueIsSet(self.nimValue):
-                cast[GlobalTableProxy](self.nimValue)
-              else:
-                nil
-
-  if proxy != nil and proxy.globals != nil:
-    # This is a GlobalTable proxy - access the globals table
-    if proxy.globals != nil:  # Double-check before dereferencing
-      var elements: seq[NodeValue] = @[]
-      for key in proxy.globals[].keys():
-        elements.add(toValue(key))
-      return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, elements))
-  else:
-    # Fall through to regular Table behavior
-    return tableKeysImpl(self, args)
+  discard self
+  discard args
+  var elements: seq[NodeValue] = @[]
+  for key in interp.globals[].keys():
+    elements.add(toValue(key))
+  return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, elements))
 
 proc globalTableIncludesKeyImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable includesKey: - check if global exists
-  let proxy = if self.isNimProxy and self.class.hardingType == "GlobalTable" and nimValueIsSet(self.nimValue):
-                cast[GlobalTableProxy](self.nimValue)
-              else:
-                nil
-
-  if proxy != nil and proxy.globals != nil:
-    # This is a GlobalTable proxy - access the globals table
-    if args.len > 0:
-      let key = if args[0].kind == vkString: args[0].strVal
-                elif args[0].kind == vkSymbol: args[0].symVal
-                else: ""
-      if proxy.globals != nil:  # Double-check before dereferencing
-        return toValue(key in proxy.globals[])
-    return toValue(false)
-  else:
-    # Fall through to regular Table behavior
-    return tableIncludesKeyImpl(self, args)
+  discard self
+  if args.len > 0:
+    let key = if args[0].kind == vkString: args[0].strVal
+              elif args[0].kind == vkSymbol: args[0].symVal
+              else: ""
+    return toValue(key in interp.globals[])
+  return toValue(false)
 
 proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable load: - load and evaluate a Harding file

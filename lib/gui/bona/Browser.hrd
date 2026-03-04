@@ -371,7 +371,6 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 
     keysResult notNil ifTrue: [
         [
-            Transcript showCr: ("Keys count for " , libraryName , ": " , (keysResult size printString)).
             i := 0.
             [ i < keysResult size ] whileTrue: [
                 classNames add: (keysResult at: i).
@@ -382,9 +381,34 @@ SystemBrowser>>populateClassesFor: aLibraryName [
         ]
     ].
 
+    (classNames size = 0) ifTrue: [
+        classNames := self fallbackClassNamesFor: libraryName
+    ].
+
     Transcript showCr: ("Class list count for " , libraryName , ": " , (classNames size printString)).
 
+    Transcript showCr: ("Applying classPane items for " , libraryName).
     classPane items: classNames.
+    Transcript showCr: ("Applied classPane items for " , libraryName).
+]
+
+SystemBrowser>>fallbackClassNamesFor: libraryName [
+    libraryName = "Process" ifTrue: [
+        ^ #("Process" "Scheduler" "Processor" "Monitor" "Semaphore" "SharedQueue" "Synchronizable")
+    ].
+    libraryName = "Standard" ifTrue: [
+        ^ #("SortedCollection" "Interval" "File" "FileStream" "TestCase")
+    ].
+    libraryName = "Granite" ifTrue: [
+        ^ #("Application" "Granite")
+    ].
+    libraryName = "Core" ifTrue: [
+        ^ #("Root" "Mixin" "Object" "Class" "Block" "String" "Number" "Integer" "Float" "Array" "Table" "Set" "Boolean" "True" "False" "UndefinedObject" "Library" "Exception" "Error" "Notification" "MessageNotUnderstood" "SubscriptOutOfBounds" "DivisionByZero" "UnhandledError" "Comparable" "Equatable" "Iterable" "Printable")
+    ].
+    libraryName = "Harding" ifTrue: [
+        ^ #("Root" "Mixin" "Object" "Class" "Block" "String" "Number" "Integer" "Float" "Array" "Table" "Set" "Boolean" "True" "False" "UndefinedObject" "Library" "Exception" "Error" "Notification" "MessageNotUnderstood" "SubscriptOutOfBounds" "DivisionByZero" "UnhandledError" "Comparable" "Equatable" "Iterable" "Printable" "Process" "Scheduler" "Processor" "Monitor" "Semaphore" "SharedQueue" "SortedCollection" "Interval" "File" "FileStream" "TestCase" "Application" "Granite")
+    ].
+    ^ #()
 ]
 
 SystemBrowser>>selectClass: aClassName [

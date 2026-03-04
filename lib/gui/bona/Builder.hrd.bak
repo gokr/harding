@@ -26,9 +26,6 @@ Builder>>owner: anOwner [
 Builder>>openInstance [
   | mainBox headerBar contentBox leftPane rightPane paned |
 
-  "=== Builder openInstance START ===" println.
-  Transcript showCr: "Builder openInstance START".
-  
   # Create window
   window := GtkWindow new.
   window title: "Application Builder".
@@ -69,9 +66,7 @@ Builder>>openInstance [
   window setChild: mainBox.
 
   # Populate application list
-  Transcript showCr: "Builder about to call refreshAppList".
   self refreshAppList.
-  Transcript showCr: "Builder refreshAppList completed".
 
   # Register with owner
   owner notNil ifTrue: [ owner addWindow: window ].
@@ -268,7 +263,6 @@ Builder>>addAppRow: appClass withLabel: labelClass withRow: rowClass [
   # Helper method to add a row without closures
   | row label |
   # Debug
-  ("addAppRow: labelClass=" , (labelClass printString) , " rowClass=" , (rowClass printString)) println.
   Transcript showCr: ("addAppRow: labelClass=", (labelClass printString)).
   label := labelClass new: (appClass name).
   label setHalignStart.
@@ -292,28 +286,34 @@ Builder>>addEmptyRowWithLabel: labelClass withRow: rowClass [
 ].
 
 Builder>>refreshAppList [
-  | apps labelClass rowClass |
+  | apps labelClass rowClass i size appClass |
 
   # Get GTK classes
   labelClass := GtkLabel.
   rowClass := GtkListBoxRow.
-  
-  "=== refreshAppList START ===" println.
-  ("labelClass=" , (labelClass printString)) println.
-  ("rowClass=" , (rowClass printString)) println.
 
   # Clear existing items
   appList clear.
 
   # Find all Application subclasses
   apps := self findApplicationSubclasses.
-  ("Found " , (apps size printString) , " apps") println.
 
-  # Add a single test row directly (no closures)
-  self addAppRow: Object withLabel: labelClass withRow: rowClass.
-  
+  # Use whileTrue: loop instead of do: to avoid closure capture issues
+  i := 0.
+  size := apps size.
+  Transcript showCr: ("refreshAppList: labelClass=", (labelClass printString)).
+  [ i < size ] whileTrue: [
+    appClass := apps at: i.
+    Transcript showCr: ("Loop: appClass=", (appClass printString), " labelClass=", (labelClass printString)).
+    self addAppRow: appClass withLabel: labelClass withRow: rowClass.
+    i := i + 1.
+  ].
+
+  apps isEmpty ifTrue: [
+    self addEmptyRowWithLabel: labelClass withRow: rowClass.
+  ].
+
   Transcript showCr: ("Found ", (apps size printString), " applications").
-  "=== refreshAppList END ===" println.
 ].
 
 Builder>>isApplicationSubclass: aClass [

@@ -157,8 +157,7 @@ suite "Closure Capture in IfNode/WhileNode":
       Results at: 0
     """)
     if result[1].len > 0:
-      echo "Error (expected for known bug): ", result[1]
-      skip()
+      echo "BUG CONFIRMED: ", result[1]
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 42)

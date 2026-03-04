@@ -133,29 +133,38 @@ Launcher>>removeWindow: aWindow [
 ].
 
 Launcher>>nextWorkspaceId [
-  # Find the lowest available workspace ID by checking file existence
-  | candidate filename |
-  candidate := 1.
-  [candidate <= 100] whileTrue: [
-    filename := "workspace-" , (candidate asString) , ".hrd".
-    Transcript showCr: ("Checking: " , filename).
-    (File exists: filename) ifFalse: [
-      Transcript showCr: ("Found available ID: " , (candidate asString)).
-      ^ candidate
+  # Find the lowest available workspace ID not currently in use
+  | usedIds candidate found |
+  usedIds := #().
+  found := nil.
+  
+  # Collect IDs from open windows that have workspaceId
+  windows do: [ :w |
+    (w respondsTo: #workspaceId) ifTrue: [
+      usedIds add: (w workspaceId)
     ].
-    candidate := candidate + 1.
   ].
-  Transcript showCr: "ERROR: Could not find available workspace ID".
-  ^ 1
+  Transcript showCr: "Used workspace IDs: " , (usedIds asString).
+  # Find lowest unused ID starting from 1
+  candidate := 1.
+  100 timesRepeat: [
+    found isNil ifTrue: [
+      (usedIds includes: candidate) ifFalse: [
+        found := candidate.
+      ] ifTrue: [
+        candidate := candidate + 1.
+      ].
+    ].
+  ].
+  
+  found isNil ifTrue: [ found := 1 ].
+  ^ found
 ].
 
 Launcher>>openWorkspace [
   | id |
-  Transcript showCr: "Opening workspace...".
   id := self nextWorkspaceId.
-  Transcript showCr: ("DEBUG: About to call Workspace openFor:id: with id = " , (id asString)).
   Workspace openFor: self id: id.
-  Transcript showCr: "DEBUG: Workspace openFor:id: returned".
   ^ self
 ].
 
