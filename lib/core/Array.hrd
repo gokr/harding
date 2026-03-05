@@ -191,6 +191,40 @@ Array>>indexOf: element [
     ^ nil
 ]
 
+Array>>withIndexDo: aBlock [
+    # Iterate over elements with 0-based index
+    | index size |
+    index := 0.
+    size := self size.
+    [ index < size ] whileTrue: [
+        aBlock value: (self at: index) value: index.
+        index := index + 1
+    ].
+    ^ self
+]
+
+Array>>copyFrom: startIndex to: endIndex [
+    # Return a new Array containing elements from startIndex to endIndex (inclusive, 0-based)
+    | result i |
+    result := Array new.
+    i := startIndex.
+    [ i <= endIndex ] whileTrue: [
+        result add: (self at: i).
+        i := i + 1
+    ].
+    ^ result
+]
+
+Array>>removeFirst [
+    # Remove and return the first element
+    ^ self removeAt: 0
+]
+
+Array>>removeLast [
+    # Remove and return the last element
+    ^ self removeAt: (self size - 1)
+]
+
 #====================================================================
 # Array sorting
 #====================================================================
@@ -212,7 +246,7 @@ Array>>sorted: sortBlock [
     i := 1.
     [ i < size ] whileTrue: [
         j := i.
-        [ j > 0 and: [ (sortBlock value: (result at: j) value: (result at: (j - 1))) not ] ] whileTrue: [
+        [ j > 0 and: [ sortBlock value: (result at: j) value: (result at: (j - 1)) ] ] whileTrue: [
             # Swap elements
             temp := result at: j.
             result at: j put: (result at: (j - 1)).

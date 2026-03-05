@@ -1759,12 +1759,14 @@ proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return self.toValue()
 
 proc arrayRemoveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Remove element at index
+  ## Remove element at index and return the removed element
   if self.kind == ikArray and args.len > 0:
     let (ok, val) = args[0].tryGetInt()
     if ok and val >= 0 and val < self.elements.len:
+      let removed = self.elements[val]
       self.elements.delete(val)
-  return self.toValue()
+      return removed
+  return nilValue()
 
 proc arrayIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if array includes element
