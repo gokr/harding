@@ -138,13 +138,13 @@ Launcher>>nextWorkspaceId [
   usedIds := #().
   found := nil.
   
-  # Collect IDs from open windows that have workspaceId
+  # Collect IDs from open windows that are Workspaces by checking class name
   windows do: [ :w |
-    (w respondsTo: #workspaceId) ifTrue: [
-      usedIds add: (w workspaceId)
+    (w class name = "Workspace") ifTrue: [
+      usedIds add: w workspaceId.
     ].
   ].
-  Transcript showCr: "Used workspace IDs: " , (usedIds asString).
+  
   # Find lowest unused ID starting from 1
   candidate := 1.
   100 timesRepeat: [

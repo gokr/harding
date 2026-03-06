@@ -6,17 +6,21 @@
 # using the Granite compiler. All work is captured in Application subclasses
 # and auto-saved to .hrd files like the SystemBrowser.
 
-Builder := Object derive: #(owner window appList appEditor outputView currentApp).
+Builder := Object derive: #(owner window appList appEditor outputView currentApp appClasses).
 
 Builder class>>open [
-  ^ self new openInstance
+  | builder |
+  builder := Builder new.
+  builder openInstance.
+  ^ builder
 ].
 
 Builder class>>openFor: anOwner [
-  | instance |
-  instance := self new.
-  instance owner: anOwner.
-  ^ instance openInstance
+  | builder |
+  builder := Builder new.
+  builder owner: anOwner.
+  builder openInstance.
+  ^ builder
 ].
 
 Builder>>owner: anOwner [
@@ -25,9 +29,6 @@ Builder>>owner: anOwner [
 
 Builder>>openInstance [
   | mainBox headerBar contentBox leftPane rightPane paned |
-
-  "=== Builder openInstance START ===" println.
-  Transcript showCr: "Builder openInstance START".
   
   # Create window
   window := GtkWindow new.
@@ -68,15 +69,15 @@ Builder>>openInstance [
 
   window setChild: mainBox.
 
-  # Populate application list
-  Transcript showCr: "Builder about to call refreshAppList".
-  self refreshAppList.
-  Transcript showCr: "Builder refreshAppList completed".
-
   # Register with owner
   owner notNil ifTrue: [ owner addWindow: window ].
 
   window present.
+
+  # Populate application list after window is visible
+  [ self refreshAppList ] on: Exception do: [:ex |
+    Transcript showCr: ("Builder refresh failed: " , ex printString)
+  ].
 
   Transcript showCr: "Application Builder opened".
   ^ self
@@ -147,21 +148,13 @@ Builder>>createAppListPane [
   # Create list box for applications
   appList := GtkListBox new.
   appList vexpand: true.
-  appList onRowSelected: [ :row | self onAppSelected: row ].
+  appList onRowSelected: [ :index | self onAppSelected: index ].
 
   scroll := GtkScrolledWindow new.
   scroll vexpand: true.
   scroll setChild: appList.
 
   box append: scroll.
-
-  # Templates section
-  label := GtkLabel new: "Templates".
-  label setHalignStart.
-  label marginTop: 10.
-  box append: label.
-
-  self addTemplateButtons: box.
 
   ^ box
 ].
@@ -265,74 +258,53 @@ Builder>>createEditorPane [
 # ].
 
 Builder>>addAppRow: appClass [
-  # Helper method to add a row - accesses GTK classes from globals directly
-  | row label labelClass rowClass testVal |
-  "addAppRow: START" println.
-  # Check if GTK classes exist via explicit Harding lookup
-  testVal := Harding at: "GtkLabel".
-  (testVal isNil) ifTrue: [
-    "ERROR: GtkLabel is nil" println.
-    ^ self
-  ].
-  "GtkLabel found via Harding at:" println.
-  # Use explicit Harding lookup instead of direct reference
-  labelClass := Harding at: "GtkLabel".
-  "labelClass assigned from Harding" println.
-  ("labelClass isNil: " , (labelClass isNil printString)) println.
-  ("labelClass class: " , (labelClass class name)) println.
-  rowClass := Harding at: "GtkListBoxRow".
-  "rowClass assigned from Harding" println.
-  ("rowClass isNil: " , (rowClass isNil printString)) println.
-  "About to call new:" println.
-  label := labelClass new: (appClass name).
+  # Helper method to add a row label to the list box.
+  | label |
+  label := GtkLabel new: (appClass name).
   label setHalignStart.
-
-  row := rowClass new.
-  row setChild: label.
-  row setName: (appClass name).
-
-  appList append: row.
-  "addAppRow: END" println.
+  appList append: label.
 ].
 
 Builder>>addEmptyRow [
-  # Helper method to add empty row - accesses GTK classes from globals directly
-  | row label labelClass rowClass |
-  labelClass := GtkLabel.
-  rowClass := GtkListBoxRow.
-  label := labelClass new: "(no applications found)".
+  # Helper method to add empty row label
+  | label |
+  label := GtkLabel new: "(no applications found)".
   label setHalignStart.
-
-  row := rowClass new.
-  row setChild: label.
-  appList append: row.
+  appList append: label.
 ].
 
 Builder>>refreshAppList [
   | apps |
-
-  "=== refreshAppList START ===" println.
 
   # Clear existing items
   appList clear.
 
   # Find all Application subclasses
   apps := self findApplicationSubclasses.
-  ("Found " , (apps size printString) , " apps") println.
+  appClasses := apps.
 
-  # Add a single test row directly (no closures, no parameters)
-  "About to call addAppRow" println.
-  self addAppRow: Object.
-  "addAppRow completed" println.
-  
+  apps isEmpty
+    ifTrue: [
+      self addEmptyRow
+    ]
+    ifFalse: [
+      apps do: [:appClass |
+        self addAppRow: appClass
+      ]
+    ].
+
   Transcript showCr: ("Found ", (apps size printString), " applications").
-  "=== refreshAppList END ===" println.
+  ^ self
 ].
 
 Builder>>isApplicationSubclass: aClass [
-  # Check if aClass is likely an Application subclass
-  # For now, accept any class - user can select what they want
-  ^ true.
+  # True when class inherits from Application.
+  | supers |
+  aClass isNil ifTrue: [ ^ false ].
+  (aClass name = "Application") ifTrue: [ ^ false ].
+
+  supers := aClass superclassNames.
+  ^ (supers includes: "Application") or: [ supers includes: #Application ]
 ].
 
 Builder>>findApplicationSubclasses [
@@ -355,18 +327,18 @@ Builder>>findApplicationSubclasses [
   ^ result sorted: [:a :b | a name < b name].
 ].
 
-Builder>>onAppSelected: row [
-  | appName appClass |
+Builder>>onAppSelected: index [
+  | appClass |
 
-  row isNil ifTrue: [ ^ self ].
+  index isNil ifTrue: [ ^ self ].
+  (index isKindOf: Integer) ifFalse: [ ^ self ].
+  index < 0 ifTrue: [ ^ self ].
 
-  appName := row getName.
-  (appName isNil or: [ appName = "" ]) ifTrue: [ ^ self ].
+  (appClasses isNil or: [ index >= appClasses size ]) ifTrue: [ ^ self ].
 
-  # Load the application class
-  appClass := Harding at: appName.
+  appClass := appClasses at: index.
   appClass isNil ifTrue: [
-    self showOutput: ("Error: Could not find class ", appName).
+    self showOutput: "Error: Could not find selected application class".
     ^ self.
   ].
 
@@ -380,8 +352,18 @@ Builder>>loadApp: appClass [
   # Update window title
   window title: ("Application Builder - ", appClass name).
 
-  # Get main: method source
-  mainMethod := appClass methodAt: #main:.
+  # Get main: method source (methodAt: is not universally available)
+  mainMethod := nil.
+  [
+    | methods |
+    methods := appClass methods.
+    methods notNil ifTrue: [
+      mainMethod := methods at: "main:" ifAbsent: [ nil ].
+      mainMethod isNil ifTrue: [
+        mainMethod := methods at: #main: ifAbsent: [ nil ]
+      ].
+    ]
+  ] on: Exception do: [:ex | mainMethod := nil ].
   source := mainMethod notNil
     ifTrue: [ self methodSource: mainMethod ]
     ifFalse: [ self defaultMainSource ].
@@ -522,12 +504,6 @@ Builder>>createNewApp [
   # Create the Application subclass
   source := name, " := Application derive: #().
 
-", name, ">>initialize [
-  super initialize.
-  name := '", name, "'.
-  libraries := #(Core Standard).
-].
-
 ", name, ">>main: args [
   Transcript showCr: 'Hello from ", name, "!'.
   ^ 0
@@ -549,9 +525,13 @@ Builder>>createNewApp [
 ].
 
 Builder>>createTemplateApp: templateName [
-  templateName = #HelloWorld ifTrue: [ ^ self createHelloWorldApp ].
-  templateName = #SimpleGUI ifTrue: [ ^ self createSimpleGUIApp ].
-  templateName = #CounterApp ifTrue: [ ^ self createCounterApp ].
+  | name |
+  name := templateName asString.
+  name = "HelloWorld" ifTrue: [ ^ self createHelloWorldApp ].
+  name = "SimpleGUI" ifTrue: [ ^ self createSimpleGUIApp ].
+  name = "CounterApp" ifTrue: [ ^ self createCounterApp ].
+  self showOutput: ("Unknown template: " , name).
+  ^ self.
 ].
 
 Builder>>createHelloWorldApp [
@@ -560,12 +540,6 @@ Builder>>createHelloWorldApp [
   name := self uniqueAppName: "HelloWorld".
 
   source := name, " := Application derive: #().
-
-", name, ">>initialize [
-  super initialize.
-  name := '", name, "'.
-  libraries := #(Core Standard).
-].
 
 ", name, ">>main: args [
   Transcript showCr: 'Hello, World!'.
@@ -592,12 +566,6 @@ Builder>>createSimpleGUIApp [
   name := self uniqueAppName: "SimpleGUI".
 
   source := name, " := Application derive: #().
-
-", name, ">>initialize [
-  super initialize.
-  name := '", name, "'.
-  libraries := #(Core Standard GUI).
-].
 
 ", name, ">>main: args [
   | window button |
@@ -636,8 +604,6 @@ Builder>>createCounterApp [
 
 ", name, ">>initialize [
   super initialize.
-  name := '", name, "'.
-  libraries := #(Core Standard).
   count := 0.
 ].
 
@@ -689,8 +655,8 @@ Builder>>uniqueAppName: baseName [
 Builder>>showOutput: text [
   | buffer |
   buffer := outputView buffer.
-  buffer insert: text atEnd: true.
-  buffer insert: "\n" atEnd: true.
+  buffer append: text.
+  buffer append: "\n".
 ].
 
 Builder>>onClose [

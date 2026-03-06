@@ -2,7 +2,7 @@
 ## GtkWidgetProxy - Base widget wrapper
 ## ============================================================================
 
-import std/[tables, strutils]
+import std/[tables]
 import harding/core/types
 import harding/interpreter/vm
 import ./ffi
@@ -24,6 +24,39 @@ type
 ## Global proxy table - maps widget pointers to their proxies
 ## This avoids storing ref objects as raw pointers (which GC can move)
 var proxyTable* {.global.}: Table[GtkWidget, GtkWidgetProxy] = initTable[GtkWidget, GtkWidgetProxy]()
+
+type
+  PendingGtkCallback* = object
+    interp*: ptr Interpreter
+    blockNode*: BlockNode
+    args*: seq[NodeValue]
+
+var pendingGtkCallbacks* {.global.}: seq[PendingGtkCallback] = @[]
+
+proc enqueueGtkCallback*(interp: ptr Interpreter, blockNode: BlockNode, args: seq[NodeValue]) =
+  if interp == nil or blockNode == nil:
+    return
+  GC_ref(blockNode)
+  pendingGtkCallbacks.add(PendingGtkCallback(interp: interp, blockNode: blockNode, args: args))
+
+proc drainPendingGtkCallbacks*(targetInterp: ptr Interpreter = nil) =
+  var idx = 0
+  while idx < pendingGtkCallbacks.len:
+    let callback = pendingGtkCallbacks[idx]
+    if targetInterp != nil and callback.interp != targetInterp:
+      idx += 1
+      continue
+
+    pendingGtkCallbacks.delete(idx)
+
+    try:
+      discard invokeBlock(callback.interp[], callback.blockNode, callback.args)
+    except Exception as e:
+      error("Error in deferred GTK callback: ", e.msg)
+      dumpVmState(callback.interp[], "deferred GTK callback error")
+      printStackTrace(callback.interp[])
+    finally:
+      GC_unref(callback.blockNode)
 
 ## C callback for GTK signals - receives widget and user data
 proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
@@ -64,27 +97,17 @@ proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
   if not found or handler.blockNode == nil:
     return
 
-  # Invoke the Harding block with empty args (typical for signal callbacks)
-  # The block captures the widget/variables it needs via closure
+  let savedDepth = interp[].activationStack.len
   try:
-    # Keep the handler alive during invocation to prevent GC collection
-    # of captured variables
     GC_ref(handler.blockNode)
-    let msgNode = MessageNode(
-      receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
-      selector: "value",
-      arguments: @[],
-      isCascade: false
-    )
-    # Evaluate with the current activation context - DO NOT use clean context
-    # because signal callbacks need proper activation context for method calls
-    let result = interp[].evalWithVM(msgNode)
-    GC_unref(handler.blockNode)
-    discard result  # Signal callbacks generally ignore return values
+    discard invokeBlock(interp[], handler.blockNode, @[])
   except Exception as e:
-    # Log error but don't crash the GUI
+    restoreActivationStackTo(interp[], savedDepth)
     error("Error in signal callback: ", e.msg)
+    dumpVmState(interp[], "signalCallback error")
     printStackTrace(interp[])
+  finally:
+    GC_unref(handler.blockNode)
 
 ## C callback for GTK destroy signals
 proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
@@ -96,26 +119,25 @@ proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
   if proxy.interp == nil:
     return
 
-  if "destroy" notin proxy.signalHandlers or proxy.signalHandlers["destroy"].len == 0:
-    return
+  if "destroy" in proxy.signalHandlers and proxy.signalHandlers["destroy"].len > 0:
+    let handler = proxy.signalHandlers["destroy"][0]
+    if handler.blockNode != nil:
+      let savedDepth = proxy.interp[].activationStack.len
+      try:
+        GC_ref(handler.blockNode)
+        discard invokeBlock(proxy.interp[], handler.blockNode, @[])
+      except Exception as e:
+        restoreActivationStackTo(proxy.interp[], savedDepth)
+        error("Error in destroy callback: ", e.msg)
+        dumpVmState(proxy.interp[], "destroyCallback error")
+        printStackTrace(proxy.interp[])
+      finally:
+        GC_unref(handler.blockNode)
 
-  let handler = proxy.signalHandlers["destroy"][0]
-  if handler.blockNode == nil:
-    return
-
-  try:
-    GC_ref(handler.blockNode)
-    let msgNode = MessageNode(
-      receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
-      selector: "value",
-      arguments: @[],
-      isCascade: false
-    )
-    let result = evalWithVMCleanContext(proxy.interp[], msgNode)
-    GC_unref(handler.blockNode)
-    discard result
-  except Exception as e:
-    error("Error in destroy callback: ", e.msg)
+  # Always mark and remove proxy to avoid stale signal handlers
+  proxy.destroyed = true
+  if widget in proxyTable:
+    proxyTable.del(widget)
 
 ## Create a new widget proxy - stores in global table instead of raw pointer
 proc newGtkWidgetProxy*(widget: GtkWidget, interp: ptr Interpreter): GtkWidgetProxy =
@@ -287,6 +309,7 @@ proc widgetPumpEventsImpl*(interp: var Interpreter, self: Instance, args: seq[No
       discard gtkMainIterationDo(0)
     else:
       discard gMainContextIteration(nil, 0)
+    drainPendingGtkCallbacks()
 
   return nilValue()
 

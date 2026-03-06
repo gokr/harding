@@ -1,0 +1,16 @@
+SimpleGUI := Application derive: #().
+
+SimpleGUI>>main: args [
+  | window button |
+  window := GtkWindow new.
+  window title: "SimpleGUI".
+  window setDefaultSize: 400 height: 300.
+
+  button := GtkButton newLabel: "Click Me!".
+  button clicked: [ Transcript showCr: "Button clicked!" ].
+
+  window setChild: button.
+  window present.
+  GtkWidget main.
+  ^ 0
+].

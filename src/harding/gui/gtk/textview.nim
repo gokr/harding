@@ -13,6 +13,30 @@ type
 
   GtkTextViewProxy* = ref GtkTextViewProxyObj
 
+proc nodeValueToStringArg(val: NodeValue): string =
+  case val.kind
+  of vkString:
+    val.strVal
+  of vkInstance:
+    if val.instVal != nil and val.instVal.kind == ikString:
+      val.instVal.strVal
+    else:
+      ""
+  else:
+    ""
+
+proc nodeValueToIntArg(val: NodeValue): int =
+  case val.kind
+  of vkInt:
+    val.intVal
+  of vkInstance:
+    if val.instVal != nil and val.instVal.kind == ikInt:
+      val.instVal.intVal
+    else:
+      -1
+  else:
+    -1
+
 ## Factory: Create new text view proxy
 proc newGtkTextViewProxy*(widget: GtkTextView, interp: ptr Interpreter): GtkTextViewProxy =
   result = GtkTextViewProxy(
@@ -151,7 +175,12 @@ proc textViewSetBufferImpl*(interp: var Interpreter, self: Instance, args: seq[N
 ## Native instance method: insertText:at:
 proc textViewInsertTextAtImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Insert text at a specific position in the text view
-  if args.len < 2 or args[0].kind != vkString or args[1].kind != vkInt:
+  if args.len < 2:
+    return nilValue()
+
+  let text = nodeValueToStringArg(args[0])
+  let offset = nodeValueToIntArg(args[1])
+  if offset < 0:
     return nilValue()
 
   if not (self.isNimProxy and self.nimValue != nil):
@@ -166,16 +195,20 @@ proc textViewInsertTextAtImpl*(interp: var Interpreter, self: Instance, args: se
   var iterStorage: array[256, byte]
   let iter = cast[GtkTextIter](addr(iterStorage[0]))
 
-  gtkTextBufferGetIterAtOffset(buffer, iter, args[1].intVal.cint)
+  gtkTextBufferGetIterAtOffset(buffer, iter, offset.cint)
 
-  gtkTextBufferInsert(buffer, iter, args[0].strVal.cstring, -1)
+  gtkTextBufferInsert(buffer, iter, text.cstring, -1)
 
   nilValue()
 
 ## Native instance method: insertTextAtEnd:
 proc textViewInsertTextAtEndImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Insert text at the end of the text buffer
-  if args.len < 1 or args[0].kind != vkString:
+  if args.len < 1:
+    return nilValue()
+
+  let text = nodeValueToStringArg(args[0])
+  if text.len == 0:
     return nilValue()
 
   if not (self.isNimProxy and self.nimValue != nil):
@@ -192,7 +225,7 @@ proc textViewInsertTextAtEndImpl*(interp: var Interpreter, self: Instance, args:
   let endIter = cast[GtkTextIter](addr(endIterStorage[0]))
 
   gtkTextBufferGetEndIter(buffer, endIter)
-  gtkTextBufferInsert(buffer, endIter, args[0].strVal.cstring, -1)
+  gtkTextBufferInsert(buffer, endIter, text.cstring, -1)
 
   # Get some buffer content to identify which widget this is
   var startIterStorage: array[256, byte]
@@ -205,7 +238,7 @@ proc textViewInsertTextAtEndImpl*(interp: var Interpreter, self: Instance, args:
     if contentPreview.len > 30:
       contentPreview = contentPreview[0..<30] & "..."
 
-  debug("insertTextAtEnd: Inserted '", args[0].strVal, "' into widget ", repr(cast[int](widget)), " buffer now: '", contentPreview, "'")
+  debug("insertTextAtEnd: Inserted '", text, "' into widget ", repr(cast[int](widget)), " buffer now: '", contentPreview, "'")
 
   nilValue()
 
@@ -239,7 +272,11 @@ proc textViewSelectRangeFromToImpl*(interp: var Interpreter, self: Instance, arg
 ## Native instance method: insertTextAtSelectedEnd:
 proc textViewInsertTextAtSelectedEndImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Insert text after the end of the current selection
-  if args.len < 1 or args[0].kind != vkString:
+  if args.len < 1:
+    return nilValue()
+
+  let text = nodeValueToStringArg(args[0])
+  if text.len == 0:
     return nilValue()
 
   if not (self.isNimProxy and self.nimValue != nil):
@@ -269,7 +306,7 @@ proc textViewInsertTextAtSelectedEndImpl*(interp: var Interpreter, self: Instanc
 
   # Insert the text
   gtkTextBufferGetIterAtOffset(buffer, endIter, insertPos)
-  gtkTextBufferInsert(buffer, endIter, args[0].strVal.cstring, -1)
+  gtkTextBufferInsert(buffer, endIter, text.cstring, -1)
 
   # Return the position where text was inserted
   NodeValue(kind: vkInt, intVal: insertPos)

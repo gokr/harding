@@ -159,6 +159,84 @@ proc printStackTrace*(interp: var Interpreter) =
       let methodDisplay = if selector.len > 0: selector else: methodType
       writeStderr(fmt("  {interp.activationStack.len - 1 - i}: {className}>>{methodDisplay} (self: {receiverClass})"))
 
+proc activationIsOnStack(interp: Interpreter, target: Activation): bool =
+  if target == nil:
+    return false
+  for act in interp.activationStack:
+    if act == target:
+      return true
+  return false
+
+proc dumpVmState*(interp: var Interpreter, label: string = "") =
+  ## Print detailed VM state for debugging.
+  let banner = if label.len > 0: label else: "(no label)"
+  writeStderr("\n=== VM DUMP: " & banner & " ===\n")
+  writeStderr("activationStack.len=" & $interp.activationStack.len & "\n")
+  writeStderr("workQueue.len=" & $interp.workQueue.len & "\n")
+  writeStderr("evalStack.len=" & $interp.evalStack.len & "\n")
+
+  if interp.currentActivation != nil:
+    let recvClass = if interp.currentActivation.receiver != nil and interp.currentActivation.receiver.class != nil:
+                      interp.currentActivation.receiver.class.name
+                    else:
+                      "(nil)"
+    writeStderr("currentActivation.receiverClass=" & recvClass & "\n")
+  else:
+    writeStderr("currentActivation=(nil)\n")
+
+  if interp.evalStack.len > 0:
+    let topVal = interp.evalStack[^1]
+    writeStderr("evalStack.top=" & topVal.toString() & " kind=" & $topVal.kind & "\n")
+
+  if interp.workQueue.len > 0:
+    writeStderr("workQueue tail:\n")
+    let startIdx = max(0, interp.workQueue.len - 5)
+    for i in startIdx..<interp.workQueue.len:
+      let wf = interp.workQueue[i]
+      writeStderr("  [" & $i & "] kind=" & $wf.kind & " selector=" & wf.selector & "\n")
+
+  if interp.activationStack.len > 0:
+    writeStderr("activationStack:\n")
+    for i in countdown(interp.activationStack.len - 1, 0):
+      let act = interp.activationStack[i]
+      let className = if act.definingObject != nil:
+                        act.definingObject.name
+                      elif act.receiver != nil and act.receiver.class != nil:
+                        act.receiver.class.name
+                      else:
+                        "(unknown)"
+      let recvClass = if act.receiver != nil and act.receiver.class != nil:
+                        act.receiver.class.name
+                      else:
+                        "(nil)"
+      let selector = if act.currentMethod != nil and act.currentMethod.isMethod:
+                       findSelectorForMethod(act.definingObject, act.currentMethod, act.isClassMethod)
+                     elif act.currentMethod != nil:
+                       "(block)"
+                     else:
+                       "(nil)"
+      writeStderr(fmt("  [{i}] class={className} recv={recvClass} selector={selector} returned={act.hasReturned}\n"))
+
+      if act.currentMethod != nil and act.currentMethod.capturedEnvInitialized and act.currentMethod.capturedEnv.len > 0:
+        var capturedNames: seq[string] = @[]
+        for name, _ in act.currentMethod.capturedEnv:
+          capturedNames.add(name)
+        writeStderr("      block.capturedEnv=" & capturedNames.join(",") & "\n")
+
+      if act.capturedVars.len > 0:
+        var capturedVarNames: seq[string] = @[]
+        for name, _ in act.capturedVars:
+          capturedVarNames.add(name)
+        writeStderr("      activation.capturedVars=" & capturedVarNames.join(",") & "\n")
+
+      if act.locals.len > 0:
+        var localNames: seq[string] = @[]
+        for name, _ in act.locals:
+          localNames.add(name)
+        writeStderr("      locals=" & localNames.join(",") & "\n")
+
+  writeStderr("=== END VM DUMP ===\n")
+
 # Initialize interpreter
 proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpreter =
   ## Create a new interpreter instance
@@ -1200,14 +1278,14 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
     for stmt in blockNode.body:
       
       # Check for non-local return: if home activation has returned, stop iteration
-      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
         blockResult = savedHomeActivation.returnValue
         break
       
       blockResult = interp.evalWithVM(stmt)
       
       # Check again after evalWithVM in case non-local return happened
-      if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+      if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
         blockResult = savedHomeActivation.returnValue
         break
 
@@ -2322,7 +2400,7 @@ proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
     lastResult = interp.invokeBlock(blockNode, @[elem])
     
     # Check for non-local return: if home activation has returned, stop iteration
-    if savedHomeActivation != nil and savedHomeActivation.hasReturned:
+    if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
       lastResult = savedHomeActivation.returnValue
       break
 
@@ -4095,6 +4173,15 @@ proc initGlobals*(interp: var Interpreter) =
   # This allows isKindOf: Class to work properly
   let classCls = newClass(superclasses = @[objectCls], name = "Class")
   classCls.tags = @["Class", "Object"]
+
+  # Ensure all class objects (instances of Class) can use core class-side
+  # bootstrap constructors like derive/new, not just Object.
+  for selector in ["derive", "derive:", "deriveWithAccessors:", "derive:getters:setters:", "new", "basicNew"]:
+    if selector in objectCls.classMethods:
+      let meth = objectCls.classMethods[selector]
+      classCls.methods[selector] = meth
+      classCls.allMethods[selector] = meth
+
   classClass = classCls  # Set global variable
   interp.globals[]["Class"] = classCls.toValue()
 
@@ -5044,6 +5131,13 @@ proc globalTableMainImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
   return nilValue()
 
+proc globalTableDumpVMImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Harding dumpVM / dumpVM: - print VM state to stderr.
+  discard self
+  let label = if args.len > 0: args[0].toString() else: ""
+  dumpVmState(interp, label)
+  return nilValue()
+
 # ============================================================================
 # Library methods (need interpreter access)
 # ============================================================================
@@ -5473,6 +5567,28 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   )
   mainMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "main:", mainMethod)
+
+  let dumpVmMethod = createCoreMethod("dumpVM")
+  dumpVmMethod.setNativeImpl(globalTableDumpVMImpl)
+  dumpVmMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableDumpVMImpl(interp, receiver, args)
+  )
+  dumpVmMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "dumpVM", dumpVmMethod)
+
+  let dumpVmWithLabelMethod = createCoreMethod("dumpVM:")
+  dumpVmWithLabelMethod.setNativeImpl(globalTableDumpVMImpl)
+  dumpVmWithLabelMethod.setNativeValueImpl(proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let receiver = materializeReceiverForSend(self)
+    if receiver == nil:
+      return nilValue()
+    return globalTableDumpVMImpl(interp, receiver, args)
+  )
+  dumpVmWithLabelMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "dumpVM:", dumpVmWithLabelMethod)
 
   let methodSourceInfoMethod = createCoreMethod("methodSourceInfoForClass:selector:")
   methodSourceInfoMethod.setNativeImpl(globalTableMethodSourceInfoImpl)
@@ -6144,6 +6260,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       args = interp.popValues(frame.argCount)
       receiverVal = interp.popValue()
 
+    # Some primitive-compiled sends can come through with a leading '#'
+    # in the selector symbol form; normalize to plain selector text.
+    if frame.selector.len > 0 and frame.selector[0] == '#':
+      frame.selector = frame.selector[1..^1]
+
     # Handle block invocation
     if receiverVal.kind == vkBlock:
       case frame.selector
@@ -6520,7 +6641,9 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         # Class method not found - try instance methods on the Class class
         # This allows methods like asSelfDo: to work on class receivers
-        let instanceLookup = lookupMethodOnClass(interp, cls, frame.selector)
+        var instanceLookup = lookupMethodOnClass(interp, classClass, frame.selector)
+        if not instanceLookup.found:
+          instanceLookup = lookupMethodOnClass(interp, objectClass, frame.selector)
 
         if instanceLookup.found:
           let currentMethod = instanceLookup.currentMethod
@@ -6797,6 +6920,17 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         lookup = lookupClassMethod(receiverClass, frame.selector)
       else:
         lookup = lookupMethodOnClass(interp, receiverClass, frame.selector)
+
+      # Class wrappers are represented as nimProxy instances and can receive
+      # Object/Class instance-side reflection methods (e.g. superclassNames).
+      # If normal lookup misses on the wrapped class, try Class/Object tables.
+      if not lookup.found and receiverVal.kind == vkInstance and receiverVal.instVal != nil and receiverVal.instVal.isNimProxy:
+        var classLookup = lookupMethodOnClass(interp, classClass, frame.selector)
+        if not classLookup.found:
+          classLookup = lookupMethodOnClass(interp, objectClass, frame.selector)
+        if classLookup.found:
+          lookup = classLookup
+
       if not lookup.found:
         # Try doesNotUnderstand: before raising error
         debug("VM: Method not found, trying DNU for ", frame.selector)
@@ -7695,15 +7829,18 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
   interp.currentActivation = nil
   interp.currentReceiver = nil
 
-  # Evaluate with clean context
-  let evalResult = interp.evalWithVM(node)
-
-  # Restore activation context
-  interp.activationStack = savedActivationStack
-  interp.currentActivation = savedCurrentActivation
-  interp.currentReceiver = savedCurrentReceiver
-
-  return evalResult
+  # Evaluate with clean context and always restore on error
+  try:
+    let evalResult = interp.evalWithVM(node)
+    interp.activationStack = savedActivationStack
+    interp.currentActivation = savedCurrentActivation
+    interp.currentReceiver = savedCurrentReceiver
+    return evalResult
+  except Exception:
+    interp.activationStack = savedActivationStack
+    interp.currentActivation = savedCurrentActivation
+    interp.currentReceiver = savedCurrentReceiver
+    raise
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM

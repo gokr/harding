@@ -174,32 +174,19 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
 
     # Regular object - show named slots
     slotNames := anObject slotNames.
-    Transcript showCr: ("DEBUG: slotNames size = " , (slotNames size printString)).
-    pathsTable := expandedPaths.
-    slotNames do: [:slotName |
-        | slotValue slotPath expanded expandable |
-        Transcript showCr: ("DEBUG: processing slot: " , (slotName asString)).
-        slotValue := anObject slotAt: slotName.
-        slotPath := prefix , "." , slotName.
-        # Workaround: avoid at:ifAbsent: block due to self binding issue
-        expanded := (pathsTable includesKey: slotPath)
-            ifTrue: [ pathsTable at: slotPath ]
-            ifFalse: [ false ].
-        
-        Transcript showCr: ("DEBUG: about to call addTreeButton for " , (slotName asString)).
-        
-        # Try addTreeButton with isExpandable evaluated separately
-        expandable := self isExpandable: slotValue.
-        self addTreeButton: slotName value: slotValue depth: depth expanded: expanded expandable: expandable path: slotPath into: box.
+    (slotNames size = 0) ifTrue: [
+        slotNames := (Harding at: (anObject className)) slotNames.
+    ].
 
-        # If expanded, render children recursively
-        expanded ifTrue: [
-            self renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
-        ].
+    slotNames do: [:slotName |
+        | slotNameString slotValue |
+        slotNameString := slotName asString.
+        slotValue := anObject slotAt: slotName.
+        self addLeafItem: (slotNameString , ": " , (self formatValue: slotValue)) depth: depth into: box.
     ].
 
     # If no slots, show a note
-    slotNames isEmpty ifTrue: [
+    (slotNames size = 0) ifTrue: [
         self addLeafItem: "(no slots)" depth: depth into: box.
     ].
 ]
@@ -269,7 +256,6 @@ Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box 
 
 Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box [
     | button label indent icon |
-    Transcript showCr: ("DEBUG: addTreeButton for " , name).
     button := GtkButton new.
     button setHexpand: true.
     button addCssClass: "flat".
@@ -303,7 +289,6 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
 
 Inspector>>addSimpleItem: name value: value depth: depth into: box [
     | label |
-    Transcript showCr: ("DEBUG: addSimpleItem for " , name).
     label := GtkLabel new: (name , ": " , (value printString)).
     label setHexpand: true.
     label setHalignStart.
@@ -383,15 +368,18 @@ Inspector>>formatValue: aValue [
 ]
 
 Inspector>>isExpandable: aValue [
+    | slotNames |
     aValue isNil ifTrue: [ ^ false ].
     (aValue isKindOf: Boolean) ifTrue: [ ^ false ].
     (aValue isKindOf: Integer) ifTrue: [ ^ false ].
     (aValue isKindOf: Float) ifTrue: [ ^ false ].
     (aValue isKindOf: String) ifTrue: [ ^ false ].
-    (aValue isKindOf: Array) ifTrue: [ ^ aValue isEmpty not ].
-    (aValue isKindOf: Table) ifTrue: [ ^ aValue isEmpty not ].
+    (aValue isKindOf: Array) ifTrue: [ ^ aValue size > 0 ].
+    (aValue isKindOf: Table) ifTrue: [ ^ aValue size > 0 ].
+
     # Regular object: expandable if it has slots
-    ^ aValue slotNames isEmpty not
+    slotNames := aValue slotNames.
+    ^ slotNames size > 0
 ]
 
 # ============================================================================

@@ -147,6 +147,14 @@ Workspace>>onDestroy [
     owner notNil ifTrue: [ owner removeWindow: self ]
 ].
 
+Workspace>>workspaceId [
+    ^ workspaceId
+].
+
+Workspace>>workspaceId: anId [
+    workspaceId := anId
+].
+
 Workspace>>doIt: codeString [
     ^ [ Object eval: codeString ]
         on: Exception
@@ -190,7 +198,7 @@ Workspace>>doItSelection [
 Workspace>>printItSelection [
     # Print It - evaluate and insert result after selection or at end of current line
     # The inserted text is then selected so it can be easily deleted
-    | code result resultString insertPos insertedEnd selectedText |
+    | code result resultString insertPos insertedEnd |
     code := self evaluationSourceCode.
     code isEmpty ifTrue: [
         self showError: "No code selected/current line to evaluate".
@@ -209,28 +217,19 @@ Workspace>>printItSelection [
         ifTrue: [ "<class " , result name , ">" ]
         ifFalse: [ result printString ].
 
-    # Check if there's a selection
-    selectedText := sourceView selectedText.
-    (selectedText isNil or: [ selectedText isEmpty ]) ifTrue: [
-        # No selection - insert at end of current line
-        insertPos := sourceView getCurrentLineEnd.
-    ] ifFalse: [
-        # Has selection - insert right after the selection
-        insertPos := sourceView getSelectionEnd.
+    # Insert result after selection or at end of current line
+    insertPos := sourceView insertTextAtSelectedEnd: resultString.
+    
+    # Calculate end position based on inserted text length only
+    insertPos isNil ifTrue: [
+        insertPos := sourceView getSelectionEnd
     ].
-
-    # Defensive fallback for nil cursor positions from native bridge
-    insertPos isNil ifTrue: [ insertPos := sourceView getSelectionEnd ].
-    insertPos isNil ifTrue: [ insertPos := sourceView text size ].
-    
-    # Insert result at the calculated position
-    sourceView insertText: resultString at: insertPos.
-    
-    # Calculate end position of inserted text
-    insertedEnd := insertPos + resultString size.
+    insertedEnd := insertPos + (resultString size).
     
     # Select the inserted text so it can be easily deleted
-    sourceView selectRangeFrom: insertPos to: insertedEnd.
+    insertPos notNil ifTrue: [
+        sourceView selectRangeFrom: insertPos to: insertedEnd
+    ].
     
     ^ result
 ]

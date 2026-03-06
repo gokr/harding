@@ -112,11 +112,17 @@ SystemBrowser>>checkUnsavedChangesThen: aBlock [
 ]
 
 SystemBrowser class>>open [
-    ^ self new openWindow
+    | browser |
+    browser := self new.
+    browser openWindow.
+    ^ browser
 ]
 
 SystemBrowser class>>openFor: anOwner [
-    ^ self new openWindowFor: anOwner
+    | browser |
+    browser := self new.
+    browser openWindowFor: anOwner.
+    ^ browser
 ]
 
 SystemBrowser>>openWindow [
@@ -299,7 +305,7 @@ SystemBrowser>>populateLibraries [
     unique := Array new.
     i := 0.
     [ i < libraryNames size ] whileTrue: [
-        name := libraryNames at: i.
+        name := (libraryNames at: i) asString.
         (unique includes: name) ifFalse: [
             unique add: name
         ].
@@ -336,11 +342,9 @@ SystemBrowser>>populateClassesFor: aLibraryName [
         ^ self
     ].
 
-    libraryName := (aLibraryName isKindOf: String)
-        ifTrue: [ aLibraryName ]
-        ifFalse: [ aLibraryName name ].
-
-    Transcript showCr: ("Populating classes for library: " , libraryName).
+    libraryName := (aLibraryName isKindOf: Library)
+        ifTrue: [ aLibraryName name asString ]
+        ifFalse: [ aLibraryName asString ].
 
     libb := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName ]
@@ -358,57 +362,127 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 
     classNames := Array new.
 
-    libraryName = "Harding" ifTrue: [
-        keysResult := Harding keys
-    ] ifFalse: [
-        libb isNil ifTrue: [
-            Transcript showCr: ("Library not found: " , libraryName).
-            classPane items: #().
-            ^ self
-        ].
-        keysResult := libb keys
+    libraryName = "Process" ifTrue: [
+        classNames add: "Process".
+        classNames add: "Scheduler".
+        classNames add: "Processor".
+        classNames add: "Monitor".
+        classNames add: "Semaphore".
+        classNames add: "SharedQueue".
+        classNames add: "Synchronizable".
     ].
-
-    keysResult notNil ifTrue: [
-        [
-            i := 0.
-            [ i < keysResult size ] whileTrue: [
-                classNames add: (keysResult at: i).
-                i := i + 1
-            ]
-        ] on: Exception do: [:ex |
-            Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
-        ]
+    libraryName = "Standard" ifTrue: [
+        classNames add: "SortedCollection".
+        classNames add: "Interval".
+        classNames add: "File".
+        classNames add: "FileStream".
+        classNames add: "TestCase".
+    ].
+    libraryName = "Granite" ifTrue: [
+        classNames add: "Application".
+        classNames add: "Granite".
+    ].
+    libraryName = "Core" ifTrue: [
+        classNames add: "Root".
+        classNames add: "Mixin".
+        classNames add: "Object".
+        classNames add: "Class".
+        classNames add: "Block".
+        classNames add: "String".
+        classNames add: "Number".
+        classNames add: "Integer".
+        classNames add: "Float".
+        classNames add: "Array".
+        classNames add: "Table".
+        classNames add: "Set".
+        classNames add: "Boolean".
+        classNames add: "True".
+        classNames add: "False".
+        classNames add: "UndefinedObject".
+        classNames add: "Library".
+        classNames add: "Exception".
+        classNames add: "Error".
+        classNames add: "Notification".
+        classNames add: "MessageNotUnderstood".
+        classNames add: "SubscriptOutOfBounds".
+        classNames add: "DivisionByZero".
+        classNames add: "UnhandledError".
+        classNames add: "Comparable".
+        classNames add: "Equatable".
+        classNames add: "Iterable".
+        classNames add: "Printable".
+    ].
+    libraryName = "Harding" ifTrue: [
+        classNames add: "Root".
+        classNames add: "Mixin".
+        classNames add: "Object".
+        classNames add: "Class".
+        classNames add: "Block".
+        classNames add: "String".
+        classNames add: "Number".
+        classNames add: "Integer".
+        classNames add: "Float".
+        classNames add: "Array".
+        classNames add: "Table".
+        classNames add: "Set".
+        classNames add: "Boolean".
+        classNames add: "True".
+        classNames add: "False".
+        classNames add: "UndefinedObject".
+        classNames add: "Library".
+        classNames add: "Exception".
+        classNames add: "Error".
+        classNames add: "Notification".
+        classNames add: "MessageNotUnderstood".
+        classNames add: "SubscriptOutOfBounds".
+        classNames add: "DivisionByZero".
+        classNames add: "UnhandledError".
+        classNames add: "Comparable".
+        classNames add: "Equatable".
+        classNames add: "Iterable".
+        classNames add: "Printable".
+        classNames add: "Process".
+        classNames add: "Scheduler".
+        classNames add: "Processor".
+        classNames add: "Monitor".
+        classNames add: "Semaphore".
+        classNames add: "SharedQueue".
+        classNames add: "SortedCollection".
+        classNames add: "Interval".
+        classNames add: "File".
+        classNames add: "FileStream".
+        classNames add: "TestCase".
+        classNames add: "Application".
+        classNames add: "Granite".
     ].
 
     (classNames size = 0) ifTrue: [
-        classNames := self fallbackClassNamesFor: libraryName
+        libraryName = "Harding" ifTrue: [
+            keysResult := Harding keys
+        ] ifFalse: [
+            libb isNil ifTrue: [
+                classPane items: #().
+                ^ self
+            ].
+            keysResult := libb keys
+        ].
+
+        keysResult notNil ifTrue: [
+            [
+                i := 0.
+                [ i < keysResult size ] whileTrue: [
+                    classNames add: ((keysResult at: i) asString).
+                    i := i + 1
+                ]
+            ] on: Exception do: [:ex |
+                Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
+            ]
+        ]
     ].
 
-    Transcript showCr: ("Class list count for " , libraryName , ": " , (classNames size printString)).
+    Transcript showCr: ("Class count for " , libraryName , ": " , (classNames size printString)).
 
-    Transcript showCr: ("Applying classPane items for " , libraryName).
     classPane items: classNames.
-    Transcript showCr: ("Applied classPane items for " , libraryName).
-]
-
-SystemBrowser>>fallbackClassNamesFor: libraryName [
-    libraryName = "Process" ifTrue: [
-        ^ #("Process" "Scheduler" "Processor" "Monitor" "Semaphore" "SharedQueue" "Synchronizable")
-    ].
-    libraryName = "Standard" ifTrue: [
-        ^ #("SortedCollection" "Interval" "File" "FileStream" "TestCase")
-    ].
-    libraryName = "Granite" ifTrue: [
-        ^ #("Application" "Granite")
-    ].
-    libraryName = "Core" ifTrue: [
-        ^ #("Root" "Mixin" "Object" "Class" "Block" "String" "Number" "Integer" "Float" "Array" "Table" "Set" "Boolean" "True" "False" "UndefinedObject" "Library" "Exception" "Error" "Notification" "MessageNotUnderstood" "SubscriptOutOfBounds" "DivisionByZero" "UnhandledError" "Comparable" "Equatable" "Iterable" "Printable")
-    ].
-    libraryName = "Harding" ifTrue: [
-        ^ #("Root" "Mixin" "Object" "Class" "Block" "String" "Number" "Integer" "Float" "Array" "Table" "Set" "Boolean" "True" "False" "UndefinedObject" "Library" "Exception" "Error" "Notification" "MessageNotUnderstood" "SubscriptOutOfBounds" "DivisionByZero" "UnhandledError" "Comparable" "Equatable" "Iterable" "Printable" "Process" "Scheduler" "Processor" "Monitor" "Semaphore" "SharedQueue" "SortedCollection" "Interval" "File" "FileStream" "TestCase" "Application" "Granite")
-    ].
-    ^ #()
 ]
 
 SystemBrowser>>selectClass: aClassName [
@@ -596,11 +670,6 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
     methods := classObj methods.
     methods isNil ifTrue: [
         Transcript showCr: "methods is nil!".
-        methodPane items: #().
-        ^ self
-    ].
-    (methods respondsTo: #do:) ifFalse: [
-        Transcript showCr: ("methods doesn't respond to do:, class = " , (classObj className)).
         methodPane items: #().
         ^ self
     ].
@@ -958,9 +1027,7 @@ SystemBrowser>>close [
 
 SystemBrowser>>onDestroy [
     owner notNil ifTrue: [
-        (owner respondsTo: #removeWindow:) ifTrue: [
-            owner removeWindow: self
-        ].
+        [ owner removeWindow: self ] on: Exception do: [:ex | nil ].
         owner := nil
     ].
     window := nil.
@@ -1278,137 +1345,64 @@ libName = "Harding" ifTrue: [
 ]
 
 SystemBrowser>>createNewClass [
-    | dialog box nameLabel nameField parentLabel parentDropdown slotsLabel slotsField mixinCheckbox buttonBox createButton cancelButton |
-    
+    | className parentName slotsArray result fileName filePath classDefCode lib |
+
     currentLibrary isNil ifTrue: [
         Transcript showCr: "Select a library first before creating a class".
         ^ self
     ].
-    
-    dialog := GtkWindow new.
-    dialog title: "Create New Class".
-    dialog setDefaultSize: 400 height: 280.
-    
-    box := GtkBox vertical.
-    box setSpacing: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
-    
-    nameLabel := GtkLabel new: "Class name:".
-    nameLabel halignStart.
-    nameField := GtkEntry new.
-    nameField placeholderText: "e.g. MyClass".
-    
-    parentLabel := GtkLabel new: "Parent class:".
-    parentLabel halignStart.
-    parentDropdown := GtkComboBoxText new.
-    parentDropdown append: "Object".
-    parentDropdown append: "Mixin".
-    parentDropdown append: "Root".
-    parentDropdown activeId: "Object".
-    
-    slotsLabel := GtkLabel new: "Slots (space-separated):".
-    slotsLabel halignStart.
-    slotsField := GtkEntry new.
-    slotsField placeholderText: "e.g. x y color".
-    
-    mixinCheckbox := GtkCheckButton newWithLabel: "Create as Mixin".
-    mixinCheckbox clicked: [
-        | isMixin |
-        isMixin := mixinCheckbox active.
-        slotsField sensitive: isMixin not.
-        parentDropdown activeId: (isMixin ifTrue: ["Mixin"] ifFalse: ["Object"])
-    ].
-    
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 8.
-    buttonBox hexpand: true.
-    
-    cancelButton := GtkButton newLabel: "Cancel".
-    createButton := GtkButton newLabel: "Create".
-    createButton addCssClass: "suggested-action".
-    
-    buttonBox append: cancelButton.
-    buttonBox append: createButton.
-    
-    createButton clicked: [
-        | className parentName slots slotsArray result fileName filePath classDefCode |
-        className := (nameField text) trim.
-        className isEmpty ifTrue: [
-            Transcript showCr: "Class name cannot be empty".
+
+    className := self nextAutoClassName.
+    parentName := "Object".
+    slotsArray := #().
+
+    result := [ Object derive: slotsArray ]
+        on: Exception
+        do: [:ex | "ERROR: " , ex printString ].
+
+    (result isKindOf: String) ifTrue: [
+        result startsWith: "ERROR:" ifTrue: [
+            Transcript showCr: ("Failed to create class: " , result).
             ^ self
-        ].
-        
-        parentName := parentDropdown activeId.
-        slots := (slotsField text) trim.
-        slotsArray := slots isEmpty 
-            ifTrue: [#()] 
-            ifFalse: [(slots split: " ") select: [:s | s trim notEmpty ]].
-        
-        dialog close.
-        
-        result := [ 
-            parentName = "Mixin" ifTrue: [
-                Mixin derive: slotsArray
-            ] ifFalse: [
-                Object derive: slotsArray
-            ]
-        ] on: Exception do: [:ex | "ERROR: " , ex printString ].
-        
-        (result isKindOf: String) ifTrue: [
-            result startsWith: "ERROR:" ifTrue: [
-                Transcript showCr: ("Failed to create class: " , result).
-                ^ self
-            ]
-        ].
-        
-        currentLibrary notNil ifTrue: [
-            | lib |
-            lib := Library named: currentLibrary.
-            lib notNil ifTrue: [
-                lib at: className put: result
-            ]
-        ].
-        
-        classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray.
-        fileName := className , ".hrd".
-        filePath := self resolveClassFilePath: className defaultName: fileName.
-        
-        filePath isNil ifTrue: [
-            Transcript showCr: ("Cannot determine file path for class: " , className).
-        ] ifFalse: [
-            self writeClassDefinition: classDefCode toFile: filePath forClass: className.
-            currentMethodFile := filePath.
-            currentMethodOwnerClass := className.
-            currentMethodStartLine := nil.
-            currentMethodEndLine := nil.
-            currentMethodHasBlock := false.
-        ].
-        
-        Transcript showCr: ("Created class: " , className).
-        
-        classPane items: (lib classNames).
-        classPane selectItem: className.
-        self applyClassSelection: className.
+        ]
     ].
-    
-    cancelButton clicked: [
-        dialog close
+
+    lib := Library named: currentLibrary.
+    lib notNil ifTrue: [
+        lib at: className put: result
     ].
-    
-    dialog setChild: box.
-    box append: nameLabel.
-    box append: nameField.
-    box append: parentLabel.
-    box append: parentDropdown.
-    box append: slotsLabel.
-    box append: slotsField.
-    box append: mixinCheckbox.
-    box append: buttonBox.
-    
-    dialog present.
+
+    classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray.
+    fileName := className , ".hrd".
+    filePath := self resolveClassFilePath: className defaultName: fileName.
+
+    filePath isNil ifTrue: [
+        Transcript showCr: ("Cannot determine file path for class: " , className).
+    ] ifFalse: [
+        self writeClassDefinition: classDefCode toFile: filePath forClass: className.
+        currentMethodFile := filePath.
+        currentMethodOwnerClass := className.
+        currentMethodStartLine := nil.
+        currentMethodEndLine := nil.
+        currentMethodHasBlock := false.
+    ].
+
+    Transcript showCr: ("Created class: " , className , " (default parent: Object)").
+
+    self populateClassesFor: currentLibrary.
+    classPane selectItem: className.
+    self applyClassSelection: className.
+]
+
+SystemBrowser>>nextAutoClassName [
+    | i name |
+    i := 1.
+    name := "NewClass".
+    [ Harding includesKey: name ] whileTrue: [
+        i := i + 1.
+        name := "NewClass" , (i printString)
+    ].
+    ^ name
 ]
 
 SystemBrowser>>showClassInfo: aClassName [
@@ -1688,10 +1682,10 @@ SystemBrowser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     
     libPath := System cwd.
     
-    classDir := libPath , "/lib/" , (currentLibrary asString toLowercase).
+    classDir := libPath , "/lib/" , (currentLibrary asString lowercase).
     
     (File exists: classDir) ifFalse: [
-        classDir := libPath , "/lib/" , (currentLibrary asString asLowercase).
+        classDir := libPath , "/lib/" , (currentLibrary asString lowercase).
     ].
     
     (File exists: classDir) ifFalse: [
@@ -1704,14 +1698,6 @@ SystemBrowser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
 ]
 
 SystemBrowser>>writeClassDefinition: code toFile: filePath forClass: className [
-    | dirPath |
-    
-    dirPath := filePath allButLast: (filePath size - (filePath findLast: "/") - 1).
-    
-    (File exists: dirPath) ifFalse: [
-        Transcript showCr: ("Creating directory: " , dirPath).
-    ].
-    
     File write: code to: filePath.
     
     Transcript showCr: ("Wrote class definition to: " , filePath).

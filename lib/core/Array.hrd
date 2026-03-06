@@ -225,6 +225,15 @@ Array>>removeLast [
     ^ self removeAt: (self size - 1)
 ]
 
+Array>>addAll: aCollection [
+    # Append all elements from another collection
+    aCollection isNil ifTrue: [ ^ self ].
+    aCollection do: [:each |
+        self add: each
+    ].
+    ^ self
+]
+
 #====================================================================
 # Array sorting
 #====================================================================

@@ -36,23 +36,27 @@ proc keyPressedCallback(controller: GtkEventControllerKey, keyval: cuint, keycod
     return 0
 
   # Check if this key combination has a handler
+  # Use bitmask matching for modifiers since GTK state may include extra bits
+  # (e.g. lock/group), not just the exact requested modifier mask.
   for handler in proxy.keyHandlers:
-    if handler.keyVal == keyval and handler.modifiers == state:
+    let keyMatches = handler.keyVal == keyval
+    let modsMatch = (state and handler.modifiers) == handler.modifiers
+    if keyMatches and modsMatch:
       # Found matching handler, invoke the block
+      let savedDepth = proxy.interp[].activationStack.len
       try:
         GC_ref(handler.blockNode)
-        let msgNode = MessageNode(
-          receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
-          selector: "value",
-          arguments: @[],
-          isCascade: false
-        )
-        discard evalWithVMCleanContext(proxy.interp[], msgNode)
-        GC_unref(handler.blockNode)
+        try:
+          discard invokeBlock(proxy.interp[], handler.blockNode, @[])
+        finally:
+          GC_unref(handler.blockNode)
         # Stop propagation to prevent GTK from inserting the character
         return 1  # Handled, stop propagation
       except Exception as e:
+        restoreActivationStackTo(proxy.interp[], savedDepth)
         error("Error in key handler: ", e.msg)
+        dumpVmState(proxy.interp[], "keyPressedCallback error")
+        printStackTrace(proxy.interp[])
         return 1  # Stop propagation even on error
 
   return 0  # Not handled, propagate
@@ -150,6 +154,10 @@ proc eventControllerGetGdkKeyImpl*(interp: var Interpreter, self: Instance, args
   case keyName:
     of "d", "D":
       return NodeValue(kind: vkInt, intVal: GDKKEYD.int)
+    of "i", "I":
+      return NodeValue(kind: vkInt, intVal: GDKKEYI.int)
+    of "n", "N":
+      return NodeValue(kind: vkInt, intVal: GDKKEYN.int)
     of "p", "P":
       return NodeValue(kind: vkInt, intVal: GDKKEYP.int)
     of "s", "S":

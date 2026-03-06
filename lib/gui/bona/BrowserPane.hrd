@@ -62,30 +62,16 @@ BrowserPane>>items: anArray [
 BrowserPane>>refreshDisplay [
     # Clear existing items and rebuild the list
     | i |
+    isHandlingSelection := true.
     self clearItemsOnly.
-    items isNil ifTrue: [ ^ self ].
-
-    Transcript showCr: ("BrowserPane refresh: " , title , " item source set").
-
-    (items respondsTo: #do:) ifTrue: [
-        Transcript showCr: ("BrowserPane refresh: " , title , " using do:").
-        items do: [:item |
-            self addRowFor: item
-        ].
-        ^ self
-    ].
-
-    ((items respondsTo: #size) and: [items respondsTo: #at:]) ifTrue: [
-        Transcript showCr: ("BrowserPane refresh: " , title , " using size/at:").
+    items notNil ifTrue: [
         i := 0.
         [ i < items size ] whileTrue: [
             self addRowFor: (items at: i).
             i := i + 1
-        ].
-        ^ self
+        ]
     ].
-
-    Transcript showCr: "BrowserPane refreshDisplay: items not iterable".
+    isHandlingSelection := false.
 ]
 
 BrowserPane>>clearItemsOnly [
@@ -122,11 +108,7 @@ BrowserPane>>addRowFor: anItem [
     
     itemString := (anItem isKindOf: String)
         ifTrue: [ anItem ]
-        ifFalse: [
-            (anItem respondsTo: #asString)
-                ifTrue: [ anItem asString ]
-                ifFalse: [ "<item>" ]
-        ].
+        ifFalse: [ anItem asString ].
     
     label := GtkLabel new: itemString.
     label setHexpand: true.

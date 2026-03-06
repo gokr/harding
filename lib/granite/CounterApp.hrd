@@ -1,0 +1,30 @@
+CounterApp := Application derive: #(count).
+
+CounterApp>>initialize [
+  super initialize.
+  count := 0.
+].
+
+CounterApp>>main: args [
+  | window label button box |
+  window := GtkWindow new.
+  window title: "CounterApp".
+  window setDefaultSize: 300 height: 180.
+
+  box := GtkBox vertical.
+  box setSpacing: 8.
+
+  label := GtkLabel new: "Count: 0".
+  button := GtkButton newLabel: "Increment".
+  button clicked: [
+    count := count + 1.
+    label label: ("Count: " , (count printString)).
+  ].
+
+  box append: label.
+  box append: button.
+  window setChild: box.
+  window present.
+  GtkWidget main.
+  ^ 0
+].

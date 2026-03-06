@@ -143,18 +143,17 @@ proc listBoxRowSelectedCallback(listBox: GtkListBox, row: GtkListBoxRow, userDat
   # Get row index (-1 if row is nil, meaning deselection)
   let idx = if row != nil: gtkListBoxRowGetIndex(row).int else: -1
   let indexVal = NodeValue(kind: vkInt, intVal: idx)
+  let savedDepth = interp[].activationStack.len
   try:
     GC_ref(handler.blockNode)
-    let msgNode = MessageNode(
-      receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: handler.blockNode)),
-      selector: "value:",
-      arguments: @[Node(LiteralNode(value: indexVal))],
-      isCascade: false
-    )
-    discard evalWithVMCleanContext(interp[], msgNode)
-    GC_unref(handler.blockNode)
+    try:
+      discard invokeBlock(interp[], handler.blockNode, @[indexVal])
+    finally:
+      GC_unref(handler.blockNode)
   except CatchableError as e:
+    restoreActivationStackTo(interp[], savedDepth)
     error("Error in row-selected callback: ", e.msg)
+    dumpVmState(interp[], "listBoxRowSelectedCallback error")
     printStackTrace(interp[])
 
 proc listBoxOnRowSelectedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =

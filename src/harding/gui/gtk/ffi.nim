@@ -433,6 +433,8 @@ const
   GDKKEYPAGEUP* = 65365.cuint
   GDKKEYA* = 97.cuint
   GDKKEYD* = 100.cuint
+  GDKKEYI* = 105.cuint
+  GDKKEYN* = 110.cuint
   GDKKEYP* = 112.cuint
   GDKKEYS* = 115.cuint
 
