@@ -25,6 +25,21 @@ p distanceFromOrigin println  # Prints: 5.0
 
 ## Installation
 
+### Prerequisites
+
+Install libraries gtk4 gtksourceview5
+
+#### linux:
+```bash
+apt-get install gtk4 gtksourceview5
+```
+
+#### macos
+```bash
+brew install gtk4 gtksourceview5 pkg-config
+```
+
+### Download and build Harding
 ```bash
 git clone https://github.com/gokr/harding.git
 cd harding
