@@ -24,6 +24,7 @@ proc newGtkButtonProxy*(button: GtkButton, interp: ptr Interpreter): GtkButtonPr
     widget: button,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   # Store in global table keyed by widget pointer (cast to base type)
@@ -116,10 +117,7 @@ proc buttonClickedImpl*(interp: var Interpreter, self: Instance, args: seq[NodeV
     proxy.signalHandlers["clicked"] = @[]
   proxy.signalHandlers["clicked"].add(handler)
 
-  # Connect the signal - no userData needed, we look up by widget
-  let gObject = cast[GObject](widget)
-  discard gSignalConnect(gObject, "clicked",
-                         cast[GCallback](signalCallbackProc), nil)
+  connectProxySignal(proxy, "clicked", cast[GCallback](signalCallbackProc))
 
   nilValue()
 

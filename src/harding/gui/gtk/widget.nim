@@ -17,6 +17,7 @@ type
     widget*: GtkWidget
     interp*: ptr Interpreter
     signalHandlers*: Table[string, seq[SignalHandler]]
+    connectedSignals*: Table[string, bool]
     destroyed*: bool
 
   GtkWidgetProxy* = ref GtkWidgetProxyObj
@@ -32,6 +33,52 @@ type
     args*: seq[NodeValue]
 
 var pendingGtkCallbacks* {.global.}: seq[PendingGtkCallback] = @[]
+
+type
+  SignalConnection* = object
+    widget*: GtkWidget
+    signalName*: string
+
+var signalConnectionTable* {.global.}: Table[int, SignalConnection] = initTable[int, SignalConnection]()
+var nextSignalConnectionId* {.global.}: int = 0
+
+proc invokeGtkCallbackBlock*(interp: ptr Interpreter, blockNode: BlockNode, args: seq[NodeValue]) =
+  if interp == nil or blockNode == nil:
+    return
+
+  let savedDepth = interp[].activationStack.len
+  try:
+    discard invokeBlock(interp[], blockNode, args)
+  except Exception:
+    restoreActivationStackTo(interp[], savedDepth)
+    raise
+
+proc invokeGtkSignalHandlers*(interp: ptr Interpreter, handlers: seq[SignalHandler], args: seq[NodeValue]) =
+  if interp == nil:
+    return
+
+  for handler in handlers:
+    if handler.blockNode == nil:
+      continue
+    try:
+      GC_ref(handler.blockNode)
+      invokeGtkCallbackBlock(interp, handler.blockNode, args)
+    finally:
+      GC_unref(handler.blockNode)
+
+proc connectProxySignal*(proxy: GtkWidgetProxy, signalName: string, callback: GCallback) =
+  if proxy == nil or proxy.widget == nil or signalName.len == 0:
+    return
+  if signalName in proxy.connectedSignals:
+    return
+
+  nextSignalConnectionId += 1
+  signalConnectionTable[nextSignalConnectionId] = SignalConnection(
+    widget: proxy.widget,
+    signalName: signalName
+  )
+  discard gSignalConnect(cast[GObject](proxy.widget), signalName.cstring, callback, cast[pointer](nextSignalConnectionId))
+  proxy.connectedSignals[signalName] = true
 
 proc enqueueGtkCallback*(interp: ptr Interpreter, blockNode: BlockNode, args: seq[NodeValue]) =
   if interp == nil or blockNode == nil:
@@ -50,7 +97,7 @@ proc drainPendingGtkCallbacks*(targetInterp: ptr Interpreter = nil) =
     pendingGtkCallbacks.delete(idx)
 
     try:
-      discard invokeBlock(callback.interp[], callback.blockNode, callback.args)
+      invokeGtkCallbackBlock(callback.interp, callback.blockNode, callback.args)
     except Exception as e:
       error("Error in deferred GTK callback: ", e.msg)
       dumpVmState(callback.interp[], "deferred GTK callback error")
@@ -61,53 +108,34 @@ proc drainPendingGtkCallbacks*(targetInterp: ptr Interpreter = nil) =
 ## C callback for GTK signals - receives widget and user data
 proc signalCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
   ## Called by GTK when a signal is emitted
-  ## We look up the handler by widget from the proxy table
-  # Look up the proxy for this widget
+  ## We look up the handler by widget and signal token.
   if widget notin proxyTable:
+    return
+
+  if userData == nil:
+    return
+
+  let connectionId = cast[int](userData)
+  if connectionId notin signalConnectionTable:
+    return
+
+  let connection = signalConnectionTable[connectionId]
+  if connection.widget != widget:
     return
 
   let proxy = proxyTable[widget]
   if proxy.interp == nil:
     return
 
-  let interp = proxy.interp
-
-  # Debug: check if globals are accessible
-  if interp.globals == nil:
-    debug("signalCallback: interp.globals is nil!")
-    return
-  if "GtkBox" in interp.globals[]:
-    let boxVal = interp.globals[]["GtkBox"]
-    debug("signalCallback: GtkBox in globals kind=", $boxVal.kind)
-  else:
-    debug("signalCallback: GtkBox NOT in globals!")
-
-  # For clicked signals, use the "clicked" handler
-  # We check both "clicked" and "activate" since GTK3/GTK4 use different names
-  var handler: SignalHandler
-  var found = false
-
-  if "clicked" in proxy.signalHandlers and proxy.signalHandlers["clicked"].len > 0:
-    handler = proxy.signalHandlers["clicked"][0]
-    found = true
-  elif "activate" in proxy.signalHandlers and proxy.signalHandlers["activate"].len > 0:
-    handler = proxy.signalHandlers["activate"][0]
-    found = true
-
-  if not found or handler.blockNode == nil:
+  if connection.signalName notin proxy.signalHandlers or proxy.signalHandlers[connection.signalName].len == 0:
     return
 
-  let savedDepth = interp[].activationStack.len
   try:
-    GC_ref(handler.blockNode)
-    discard invokeBlock(interp[], handler.blockNode, @[])
+    invokeGtkSignalHandlers(proxy.interp, proxy.signalHandlers[connection.signalName], @[])
   except Exception as e:
-    restoreActivationStackTo(interp[], savedDepth)
     error("Error in signal callback: ", e.msg)
-    dumpVmState(interp[], "signalCallback error")
-    printStackTrace(interp[])
-  finally:
-    GC_unref(handler.blockNode)
+    dumpVmState(proxy.interp[], "signalCallback error")
+    printStackTrace(proxy.interp[])
 
 ## C callback for GTK destroy signals
 proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
@@ -120,19 +148,12 @@ proc destroyCallbackProc*(widget: GtkWidget, userData: pointer) {.cdecl.} =
     return
 
   if "destroy" in proxy.signalHandlers and proxy.signalHandlers["destroy"].len > 0:
-    let handler = proxy.signalHandlers["destroy"][0]
-    if handler.blockNode != nil:
-      let savedDepth = proxy.interp[].activationStack.len
-      try:
-        GC_ref(handler.blockNode)
-        discard invokeBlock(proxy.interp[], handler.blockNode, @[])
-      except Exception as e:
-        restoreActivationStackTo(proxy.interp[], savedDepth)
-        error("Error in destroy callback: ", e.msg)
-        dumpVmState(proxy.interp[], "destroyCallback error")
-        printStackTrace(proxy.interp[])
-      finally:
-        GC_unref(handler.blockNode)
+    try:
+      invokeGtkSignalHandlers(proxy.interp, proxy.signalHandlers["destroy"], @[])
+    except Exception as e:
+      error("Error in destroy callback: ", e.msg)
+      dumpVmState(proxy.interp[], "destroyCallback error")
+      printStackTrace(proxy.interp[])
 
   # Always mark and remove proxy to avoid stale signal handlers
   proxy.destroyed = true
@@ -145,6 +166,7 @@ proc newGtkWidgetProxy*(widget: GtkWidget, interp: ptr Interpreter): GtkWidgetPr
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   # Store in global table keyed by widget pointer
@@ -266,10 +288,13 @@ proc widgetConnectDoImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
     proxy.signalHandlers[signalStr] = @[]
   proxy.signalHandlers[signalStr].add(handler)
 
-  # Connect the signal - no userData needed, we look up by widget
-  let gObject = cast[GObject](widget)
-  discard gSignalConnect(gObject, signalStr.cstring,
-                         cast[GCallback](signalCallbackProc), nil)
+  if signalStr == "destroy":
+    if signalStr notin proxy.connectedSignals:
+      discard gSignalConnect(cast[GObject](widget), signalStr.cstring,
+                             cast[GCallback](destroyCallbackProc), nil)
+      proxy.connectedSignals[signalStr] = true
+  else:
+    connectProxySignal(proxy, signalStr, cast[GCallback](signalCallbackProc))
 
   debug("Connected signal '", signalStr, "' on widget")
 

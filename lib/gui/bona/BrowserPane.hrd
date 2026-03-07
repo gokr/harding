@@ -38,7 +38,6 @@ BrowserPane>>createWidgets [
     # Connect right-click handler for context menu
     # Attach to the listBox itself so it captures events on the list items
     listBox onRightClick: [:point |
-        Transcript showCr: ("DEBUG: Right-click at x=" , (point at: 0) printString , " y=" , (point at: 1) printString).
         self handleRightClickAtX: (point at: 0) y: (point at: 1)
     ].
 
@@ -120,17 +119,12 @@ BrowserPane>>addRowFor: anItem [
 BrowserPane>>showContextMenuFor: anItem atX: x y: y [
     # Show context menu for an item at specific coordinates
     | menu |
-    Transcript showCr: ("DEBUG: showContextMenuFor: " , anItem printString).
-    
     contextMenuCallback isNil ifTrue: [
-        Transcript showCr: "DEBUG: contextMenuCallback is nil in showContextMenuFor:".
         ^ self
     ].
 
     menu := ContextMenu for: scrolledWindow.
-    Transcript showCr: ("DEBUG: Created menu, calling callback with item").
     contextMenuCallback value: anItem value: menu.
-    Transcript showCr: ("DEBUG: Callback returned, menu isEmpty: " , menu isEmpty printString).
     menu isEmpty ifFalse: [
         menu popupAtX: x y: y
     ].
@@ -140,37 +134,26 @@ BrowserPane>>handleRightClickAtX: x y: y [
     # Handle right-click on the list box to show context menu
     | rowIndex item |
 
-    Transcript showCr: "DEBUG: handleRightClickAtX:y: called".
-    
     contextMenuCallback isNil ifTrue: [
-        Transcript showCr: "DEBUG: contextMenuCallback is nil, returning".
         ^ self
     ].
 
     listBox isNil ifTrue: [
-        Transcript showCr: "DEBUG: listBox is nil, returning".
         ^ self
     ].
 
     # Try to get the row at the clicked position
-    Transcript showCr: ("DEBUG: Calling rowIndexAtY: " , y printString).
     rowIndex := listBox rowIndexAtY: y.
-    Transcript showCr: ("DEBUG: Got rowIndex: " , rowIndex printString).
 
     # If that didn't work, try using the currently selected row
     (rowIndex < 0 or: [rowIndex >= items size]) ifTrue: [
-        Transcript showCr: "DEBUG: Trying selectedRowIndex instead".
         rowIndex := listBox selectedRowIndex.
-        Transcript showCr: ("DEBUG: selectedRowIndex returned: " , rowIndex printString).
     ].
 
     # Validate index and get corresponding item
     (rowIndex >= 0 and: [rowIndex < items size]) ifTrue: [
-        Transcript showCr: ("DEBUG: Valid row, getting item at index " , rowIndex printString).
         item := items at: rowIndex.
-        self showContextMenuFor: item atX: x y: y.
-    ] ifFalse: [
-        Transcript showCr: ("DEBUG: Invalid rowIndex: " , rowIndex printString , " items size: " , items size printString).
+        self showContextMenuFor: item atX: x y: y
     ].
 ]
 

@@ -325,11 +325,11 @@ Harding uses Smalltalk-style exception handling that preserves the signal point 
    - `evalStackDepth`: Evaluation stack depth
    - `protectedBlock`: Reference to the protected block (for `retry`)
 
-3. **Exception Signaling**: `primitiveSignalImpl` creates an `ExceptionContext` capturing the full signal point state, then truncates VM state to the handler's checkpoint:
-   - Creates `ExceptionContext` with activation stack snapshot, work queue depth, eval stack depth
-   - Truncates work queue to handler's saved depth
-   - Truncates eval stack to handler's saved depth
-   - Pops activation stack to handler's saved depth
+3. **Exception Signaling**: `primitiveSignalImpl` creates an `ExceptionContext` capturing the full signal point state, then truncates the work queue and eval stack to the handler's checkpoint while keeping activation records available for debugging/resume:
+    - Creates `ExceptionContext` with activation stack snapshot, work queue depth, eval stack depth
+    - Truncates work queue to handler's saved depth
+    - Truncates eval stack to handler's saved depth
+    - Preserves activation records and clears transient return markers above the handler
 
 4. **Handler Execution**: Schedules handler block with exception as argument
 

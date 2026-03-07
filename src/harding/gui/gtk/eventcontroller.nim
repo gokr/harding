@@ -43,21 +43,18 @@ proc keyPressedCallback(controller: GtkEventControllerKey, keyval: cuint, keycod
     let modsMatch = (state and handler.modifiers) == handler.modifiers
     if keyMatches and modsMatch:
       # Found matching handler, invoke the block
-      let savedDepth = proxy.interp[].activationStack.len
       try:
         GC_ref(handler.blockNode)
-        try:
-          discard invokeBlock(proxy.interp[], handler.blockNode, @[])
-        finally:
-          GC_unref(handler.blockNode)
+        invokeGtkCallbackBlock(proxy.interp, handler.blockNode, @[])
         # Stop propagation to prevent GTK from inserting the character
         return 1  # Handled, stop propagation
       except Exception as e:
-        restoreActivationStackTo(proxy.interp[], savedDepth)
         error("Error in key handler: ", e.msg)
         dumpVmState(proxy.interp[], "keyPressedCallback error")
         printStackTrace(proxy.interp[])
         return 1  # Stop propagation even on error
+      finally:
+        GC_unref(handler.blockNode)
 
   return 0  # Not handled, propagate
 
@@ -89,6 +86,7 @@ proc widgetInstallKeyControllerImpl*(interp: var Interpreter, self: Instance, ar
         widget: widget,
         interp: addr(interp),
         signalHandlers: initTable[string, seq[SignalHandler]](),
+        connectedSignals: initTable[string, bool](),
         destroyed: false,
         keyHandlers: @[]
       )
@@ -123,7 +121,7 @@ proc widgetOnKeyModifiersDoImpl*(interp: var Interpreter, self: Instance, args: 
     proxy = controllerTable[widget]
   else:
     # First handler - install the controller
-    let controllerResult = widgetInstallKeyControllerImpl(interp, self, @[])
+    discard widgetInstallKeyControllerImpl(interp, self, @[])
     if widget notin controllerTable:
       warn("Failed to install key controller")
       return nilValue()

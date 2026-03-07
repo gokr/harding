@@ -19,6 +19,7 @@ proc newGtkMenuBarProxy*(widget: GtkMenuBar, interp: ptr Interpreter): GtkMenuBa
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

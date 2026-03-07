@@ -159,6 +159,23 @@ suite "Stdlib: Tables - Advanced":
     check(result[0][^1].kind == vkString)
     check(result[0][^1].strVal == "default")
 
+  test "at:ifAbsent: preserves self inside absent block":
+    let result = interp.evalStatements("""
+      Probe := Object derive: #(table).
+      Probe>>initialize [
+        table := Table new.
+        ^ self
+      ].
+      Probe>>lookupMissing [
+        ^ table at: "missing" ifAbsent: [ self className ]
+      ].
+
+      Result := Probe new initialize lookupMissing
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Probe")
+
   test "at:ifPresent: evaluates block when key present":
     let result = interp.evalStatements("""
       T := Table new.

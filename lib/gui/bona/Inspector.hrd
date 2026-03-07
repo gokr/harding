@@ -162,7 +162,8 @@ Inspector>>renderTree [
 ]
 
 Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
-    | slotNames |
+    | slotNames inspector |
+    inspector := self.
 
     # Handle different object types
     (anObject isKindOf: Array) ifTrue: [
@@ -182,75 +183,71 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
         | slotNameString slotValue |
         slotNameString := slotName asString.
         slotValue := anObject slotAt: slotName.
-        self addLeafItem: (slotNameString , ": " , (self formatValue: slotValue)) depth: depth into: box.
+        inspector addLeafItem: (slotNameString , ": " , (inspector formatValue: slotValue)) depth: depth into: box.
     ].
 
     # If no slots, show a note
     (slotNames size = 0) ifTrue: [
-        self addLeafItem: "(no slots)" depth: depth into: box.
+        inspector addLeafItem: "(no slots)" depth: depth into: box.
     ].
 ]
 
 Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box [
-    | idx pathsTable |
+    | idx pathsTable inspector |
+    inspector := self.
     pathsTable := expandedPaths.
     idx := 0.
     anArray do: [:element |
         | name path expanded |
         name := "[" , (idx printString) , "]".
         path := prefix , "." , name.
-        # Workaround: avoid at:ifAbsent: block due to self binding issue
-        expanded := (pathsTable includesKey: path)
-            ifTrue: [ pathsTable at: path ]
-            ifFalse: [ false ].
+        expanded := pathsTable at: path ifAbsent: [ false ].
 
-        self addTreeButton: name
+        inspector addTreeButton: name
              value: element
              depth: depth
              expanded: expanded
-             expandable: (self isExpandable: element)
+             expandable: (inspector isExpandable: element)
              path: path
              into: box.
 
         expanded ifTrue: [
-            self renderSlotsOf: element atDepth: depth + 1 pathPrefix: path into: box.
+            inspector renderSlotsOf: element atDepth: depth + 1 pathPrefix: path into: box.
         ].
 
         idx := idx + 1.
     ].
 
     anArray isEmpty ifTrue: [
-        self addLeafItem: "(empty array)" depth: depth into: box.
+        inspector addLeafItem: "(empty array)" depth: depth into: box.
     ].
 ]
 
 Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box [
-    | pathsTable |
+    | pathsTable inspector |
+    inspector := self.
     pathsTable := expandedPaths.
     aTable keysAndValuesDo: [:key :value |
         | name path expanded |
         name := key printString.
         path := prefix , "." , name.
-        # Workaround: avoid at:ifAbsent: block due to self binding issue
-        expanded := (pathsTable includesKey: path)
-            ifTrue: [ pathsTable at: path ]
-            ifFalse: [ false ].
+        expanded := pathsTable at: path ifAbsent: [ false ].
 
-        self addTreeButton: name
+        inspector addTreeButton: name
              value: value
              depth: depth
              expanded: expanded
-             expandable: (self isExpandable: value)
+             expandable: (inspector isExpandable: value)
              path: path
              into: box.
 
         expanded ifTrue: [
-            self renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
+            inspector renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
         ].
     ].
 
     aTable isEmpty ifTrue: [
-        self addLeafItem: "(empty table)" depth: depth into: box.
+        inspector addLeafItem: "(empty table)" depth: depth into: box.
     ].
 ]
 

@@ -95,8 +95,7 @@ SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
 
 SystemBrowser>>checkUnsavedChangesThen: aBlock [
     self hasUnsavedChanges ifTrue: [
-        # Store in slot so dialog callback can access it
-        # (captured locals don't survive async dialog callbacks)
+        # Store continuation state on the browser so the async dialog can resume it.
         pendingContinueBlock := aBlock.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
@@ -180,17 +179,11 @@ SystemBrowser>>openWindowFor: anOwner [
         ].
         menu addSeparator.
         menu addItem: "Delete Method" do: [
-            Transcript showCr: "DEBUG: Delete Method menu clicked".
             method notNil ifTrue: [
-                Transcript showCr: ("DEBUG: Preparing to delete: " , method).
                 # Prepare method for deletion (sets up slots)
                 self prepareMethodForDelete: method.
-                Transcript showCr: ("DEBUG: currentMethodFile = " , currentMethodFile printString).
-                Transcript showCr: ("DEBUG: currentMethodStartLine = " , currentMethodStartLine printString).
                 # Then delete it
-                self deleteCurrentMethod.
-            ] ifFalse: [
-                Transcript showCr: "DEBUG: method is nil!".
+                self deleteCurrentMethod
             ].
         ].
     ].
@@ -487,7 +480,7 @@ SystemBrowser>>populateClassesFor: aLibraryName [
 
 SystemBrowser>>selectClass: aClassName [
     self hasUnsavedChanges ifTrue: [
-        # Store in slots (captured locals don't survive async dialog callbacks)
+        # Store pending selection state for the async confirmation dialog.
         pendingTarget := aClassName.
         pendingPrevClass := classPane selectedItem.
         pendingPrevCategory := categoryPane selectedItem.
@@ -610,7 +603,7 @@ SystemBrowser>>inferCategoriesFor: aClassName [
 
 SystemBrowser>>selectCategory: aCategory [
     self hasUnsavedChanges ifTrue: [
-        # Store in slots (captured locals don't survive async dialog callbacks)
+        # Store pending selection state for the async confirmation dialog.
         pendingTarget := aCategory.
         pendingPrevCategory := categoryPane selectedItem.
         pendingPrevMethod := methodPane selectedItem.
@@ -720,8 +713,7 @@ SystemBrowser>>populateMethodsFor: aClassName category: aCategory [
 
 SystemBrowser>>selectMethod: aMethodName [
     self hasUnsavedChanges ifTrue: [
-        # Store in slots so dialog callback blocks can access them
-        # (captured locals don't survive async dialog callbacks)
+        # Store pending method state for the async confirmation dialog.
         pendingTarget := aMethodName.
         pendingPrevMethod := methodPane selectedItem.
         self showConfirmationDialog: "You have unsaved changes. Discard them?"

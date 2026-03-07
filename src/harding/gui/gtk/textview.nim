@@ -43,6 +43,7 @@ proc newGtkTextViewProxy*(widget: GtkTextView, interp: ptr Interpreter): GtkText
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

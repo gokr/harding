@@ -18,6 +18,7 @@ proc newGtkScrolledWindowProxy*(widget: GtkScrolledWindow, interp: ptr Interpret
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

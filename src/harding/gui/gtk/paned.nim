@@ -17,6 +17,7 @@ proc newGtkPanedProxy*(widget: GtkPaned, interp: ptr Interpreter): GtkPanedProxy
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

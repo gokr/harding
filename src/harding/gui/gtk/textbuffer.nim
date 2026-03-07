@@ -14,6 +14,7 @@ type
     buffer*: GtkTextBuffer
     interp*: ptr Interpreter
     signalHandlers*: Table[string, seq[SignalHandler]]
+    connectedSignals*: Table[string, bool]
     destroyed*: bool
 
   GtkTextBufferProxy* = ref GtkTextBufferProxyObj
@@ -22,6 +23,7 @@ type
 proc newGtkTextBufferProxy*(buffer: GtkTextBuffer, interp: ptr Interpreter): GtkTextBufferProxy =
   result = GtkTextBufferProxy(buffer: buffer, interp: interp,
                              signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
                              destroyed: false)
 
 ## Native class method: new
@@ -205,9 +207,10 @@ proc textBufferChangedImpl*(interp: var Interpreter, self: Instance, args: seq[N
     proxy.signalHandlers["changed"] = @[]
   proxy.signalHandlers["changed"].add(handler)
 
-  # Connect the signal
-  let gObject = cast[GObject](proxy.buffer)
-  discard gSignalConnect(gObject, "changed",
-                         cast[GCallback](textBufferChangedCallbackProc), cast[pointer](proxy))
+  if "changed" notin proxy.connectedSignals:
+    let gObject = cast[GObject](proxy.buffer)
+    discard gSignalConnect(gObject, "changed",
+                           cast[GCallback](textBufferChangedCallbackProc), cast[pointer](proxy))
+    proxy.connectedSignals["changed"] = true
 
   nilValue()

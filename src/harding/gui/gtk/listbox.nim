@@ -18,6 +18,7 @@ proc newGtkListBoxProxy*(listBox: GtkListBox, interp: ptr Interpreter): GtkListB
     widget: listBox,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](listBox)] = result
@@ -136,22 +137,15 @@ proc listBoxRowSelectedCallback(listBox: GtkListBox, row: GtkListBoxRow, userDat
     return
   if "row-selected" notin proxy.signalHandlers or proxy.signalHandlers["row-selected"].len == 0:
     return
-  let handler = proxy.signalHandlers["row-selected"][0]
   let interp = proxy.interp
   if interp == nil:
     return
   # Get row index (-1 if row is nil, meaning deselection)
   let idx = if row != nil: gtkListBoxRowGetIndex(row).int else: -1
   let indexVal = NodeValue(kind: vkInt, intVal: idx)
-  let savedDepth = interp[].activationStack.len
   try:
-    GC_ref(handler.blockNode)
-    try:
-      discard invokeBlock(interp[], handler.blockNode, @[indexVal])
-    finally:
-      GC_unref(handler.blockNode)
+    invokeGtkSignalHandlers(interp, proxy.signalHandlers["row-selected"], @[indexVal])
   except CatchableError as e:
-    restoreActivationStackTo(interp[], savedDepth)
     error("Error in row-selected callback: ", e.msg)
     dumpVmState(interp[], "listBoxRowSelectedCallback error")
     printStackTrace(interp[])
@@ -170,13 +164,15 @@ proc listBoxOnRowSelectedImpl*(interp: var Interpreter, self: Instance, args: se
     return nilValue()
 
   let blockNode = args[0].blockVal
-  let handler = SignalHandler(blockNode: blockNode)
+  let handler = SignalHandler(blockNode: blockNode, interp: addr(interp))
   if "row-selected" notin proxy.signalHandlers:
     proxy.signalHandlers["row-selected"] = @[]
   proxy.signalHandlers["row-selected"].add(handler)
 
-  discard gSignalConnect(cast[GObject](listBox), "row-selected",
-                         cast[GCallback](listBoxRowSelectedCallback), nil)
+  if "row-selected" notin proxy.connectedSignals:
+    discard gSignalConnect(cast[GObject](listBox), "row-selected",
+                           cast[GCallback](listBoxRowSelectedCallback), nil)
+    proxy.connectedSignals["row-selected"] = true
   nilValue()
 
 proc listBoxSelectRowAtIndexImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =

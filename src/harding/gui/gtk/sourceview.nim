@@ -19,6 +19,7 @@ proc newGtkSourceViewProxy*(widget: GtkSourceView, interp: ptr Interpreter): Gtk
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

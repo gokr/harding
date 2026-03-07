@@ -33,6 +33,7 @@ proc newGtkWindowProxy*(window: GtkWindow, interp: ptr Interpreter): GtkWindowPr
     widget: window,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](window)] = result

@@ -4,9 +4,8 @@
 ## Provides native GTK4 AlertDialog with async callback support
 ## Uses a registry to map async operations to Harding blocks
 
-import std/[tables, hashes]
+import std/tables
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -57,20 +56,13 @@ proc alertDialogCallback*(sourceObject: pointer, result: pointer, userData: poin
 
   if blockToRun != nil and callback.interp != nil:
     debug("AlertDialog: executing block")
-    # Invoke the block using evalWithVMCleanContext (similar to signal callbacks)
     try:
       GC_ref(blockToRun)
-      let msgNode = MessageNode(
-        receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: blockToRun)),
-        selector: "value",
-        arguments: @[],
-        isCascade: false
-      )
-      var callbackInterp = callback.interp
-      discard evalWithVMCleanContext(callbackInterp, msgNode)
-      GC_unref(blockToRun)
+      invokeGtkCallbackBlock(addr(callback.interp), blockToRun, @[])
     except Exception as e:
       error("Error in AlertDialog callback: ", e.msg)
+    finally:
+      GC_unref(blockToRun)
   else:
     debug("AlertDialog: no block or interpreter (blockToRun=", cast[int](blockToRun), ", interp=", cast[int](callback.interp), ")")
 

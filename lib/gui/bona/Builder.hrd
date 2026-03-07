@@ -6,7 +6,7 @@
 # using the Granite compiler. All work is captured in Application subclasses
 # and auto-saved to .hrd files like the SystemBrowser.
 
-Builder := Object derive: #(owner window appList appEditor outputView currentApp appClasses).
+Builder := Object derive: #(owner window appList appEditor outputView currentApp appClasses isRefreshing).
 
 Builder class>>open [
   | builder |
@@ -39,6 +39,10 @@ Builder>>openInstance [
   # Main layout
   mainBox := GtkBox vertical.
   mainBox setSpacing: 0.
+  mainBox marginStart: 5.
+  mainBox marginEnd: 5.
+  mainBox marginTop: 5.
+  mainBox marginBottom: 5.
 
   # Header bar with buttons
   headerBar := self createHeaderBar.
@@ -259,8 +263,9 @@ Builder>>createEditorPane [
 
 Builder>>addAppRow: appClass [
   # Helper method to add a row label to the list box.
-  | label |
-  label := GtkLabel new: (appClass name).
+  | label appName |
+  appName := self appDisplayName: appClass.
+  label := GtkLabel new: appName.
   label setHalignStart.
   appList append: label.
 ].
@@ -275,6 +280,8 @@ Builder>>addEmptyRow [
 
 Builder>>refreshAppList [
   | apps |
+
+  isRefreshing := true.
 
   # Clear existing items
   appList clear.
@@ -294,7 +301,12 @@ Builder>>refreshAppList [
     ].
 
   Transcript showCr: ("Found ", (apps size printString), " applications").
+  isRefreshing := false.
   ^ self
+].
+
+Builder>>appDisplayName: appClass [
+  ^ [ appClass name asString ] on: Exception do: [ appClass className asString ]
 ].
 
 Builder>>isApplicationSubclass: aClass [
@@ -324,12 +336,13 @@ Builder>>findApplicationSubclasses [
     ].
   ].
 
-  ^ result sorted: [:a :b | a name < b name].
+  ^ result
 ].
 
 Builder>>onAppSelected: index [
   | appClass |
 
+  isRefreshing ifTrue: [ ^ self ].
   index isNil ifTrue: [ ^ self ].
   (index isKindOf: Integer) ifFalse: [ ^ self ].
   index < 0 ifTrue: [ ^ self ].
@@ -347,20 +360,25 @@ Builder>>onAppSelected: index [
 ].
 
 Builder>>loadApp: appClass [
-  | mainMethod source libraries |
+  | mainMethod source libraries methods appName |
+
+  appName := self appDisplayName: appClass.
 
   # Update window title
-  window title: ("Application Builder - ", appClass name).
+  window title: ("Application Builder - ", appName).
 
   # Get main: method source (methodAt: is not universally available)
   mainMethod := nil.
   [
-    | methods |
     methods := appClass methods.
     methods notNil ifTrue: [
-      mainMethod := methods at: "main:" ifAbsent: [ nil ].
+      (methods includesKey: "main:") ifTrue: [
+        mainMethod := methods at: "main:"
+      ].
       mainMethod isNil ifTrue: [
-        mainMethod := methods at: #main: ifAbsent: [ nil ]
+        (methods includesKey: #main:) ifTrue: [
+          mainMethod := methods at: #main:
+        ]
       ].
     ]
   ] on: Exception do: [:ex | mainMethod := nil ].
@@ -374,18 +392,13 @@ Builder>>loadApp: appClass [
   libraries := self getLibrariesFor: appClass.
   self setLibraryCheckboxes: libraries.
 
-  Transcript showCr: ("Loaded application: ", appClass name).
+  Transcript showCr: ("Loaded application: ", appName).
 ].
 
 Builder>>getLibrariesFor: appClass [
-  | appInstance |
-
-  # Try to get libraries from an instance
-  [ appInstance := appClass new ] on: Error do: [ ^ Array new ].
-
-  ^ appInstance libraries notNil
-    ifTrue: [ appInstance libraries ]
-    ifFalse: [ Array new ].
+  # Library checkboxes are currently disabled in the UI.
+  # Keep this method side-effect free to avoid callback-time instantiation issues.
+  ^ Array new
 ].
 
 Builder>>setLibraryCheckboxes: libraries [
@@ -407,14 +420,15 @@ Builder>>methodSource: method [
 ].
 
 Builder>>buildCurrentApp [
-  | result output |
+  | result output appName |
 
   currentApp isNil ifTrue: [
     self showOutput: "Error: No application selected".
     ^ self.
   ].
 
-  self showOutput: ("Building ", currentApp name, "...").
+  appName := self appDisplayName: currentApp.
+  self showOutput: ("Building ", appName, "...").
 
   # Save current edits first
   self saveCurrentApp.
@@ -430,7 +444,7 @@ Builder>>buildCurrentApp [
 ].
 
 Builder>>saveCurrentApp [
-  | source libraries |
+  | source libraries appName |
 
   currentApp isNil ifTrue: [ ^ self ].
 
@@ -446,7 +460,8 @@ Builder>>saveCurrentApp [
   # Save libraries preference
   self saveLibraries: libraries for: currentApp.
 
-  Transcript showCr: ("Saved ", currentApp name).
+  appName := self appDisplayName: currentApp.
+  Transcript showCr: ("Saved ", appName).
 ].
 
 Builder>>getSelectedLibraries [
@@ -462,24 +477,26 @@ Builder>>saveLibraries: libraries for: appClass [
 ].
 
 Builder>>compileMethod: source for: appClass [
-  | fullSource |
+  | fullSource appName |
 
   # Wrap the source in proper method syntax
-  fullSource := appClass name, ">>main: args [", source, "]".
+  appName := self appDisplayName: appClass.
+  fullSource := appName, ">>main: args [", source, "]".
 
   # Compile and install
   appClass compile: fullSource.
 ].
 
 Builder>>runCurrentApp [
-  | binaryPath cmd |
+  | binaryPath cmd appName |
 
   currentApp isNil ifTrue: [
     self showOutput: "Error: No application selected".
     ^ self.
   ].
 
-  binaryPath := "./build/", currentApp name.
+  appName := self appDisplayName: currentApp.
+  binaryPath := "./build/", appName.
 
   self showOutput: ("Running: ", binaryPath).
 
@@ -489,14 +506,14 @@ Builder>>runCurrentApp [
 ].
 
 Builder>>createNewApp [
-  | dialog name appClass source |
+  | name appClass source |
 
   # Simple dialog to get application name
   # In a real implementation, this would show a proper dialog
-  name := "MyApp".
+  name := self uniqueAppName: "MyApp".
 
   # Check if class already exists
-  (Harding includesKey: name) ifTrue: [
+  ((Harding at: name ifAbsent: [ nil ]) notNil) ifTrue: [
     self showOutput: ("Error: Class ", name, " already exists").
     ^ self.
   ].
@@ -505,13 +522,16 @@ Builder>>createNewApp [
   source := name, " := Application derive: #().
 
 ", name, ">>main: args [
-  Transcript showCr: 'Hello from ", name, "!'.
+  Transcript showCr: \"Hello from ", name, "!\".
   ^ 0
 ].
 ".
 
   # Compile and install the class
-  Harding compile: source.
+  [ Object eval: source ] on: Exception do: [:ex |
+    self showOutput: ("Error creating application: " , ex printString).
+    ^ self
+  ].
 
   # Refresh the list
   self refreshAppList.
@@ -519,7 +539,9 @@ Builder>>createNewApp [
   # Select the new app
   appClass := Harding at: name.
   currentApp := appClass.
-  self loadApp: appClass.
+  [ self loadApp: appClass ] on: Exception do: [:ex |
+    self showOutput: ("Created app but failed to load editor: " , ex printString)
+  ].
 
   self showOutput: ("Created new application: ", name).
 ].
@@ -542,20 +564,25 @@ Builder>>createHelloWorldApp [
   source := name, " := Application derive: #().
 
 ", name, ">>main: args [
-  Transcript showCr: 'Hello, World!'.
+  Transcript showCr: \"Hello, World!\".
   args size > 0 ifTrue: [
-    Transcript showCr: ('Arguments: ' , (args printString)).
+    Transcript showCr: (\"Arguments: \" , (args printString)).
   ].
   ^ 0
 ].
 ".
 
-  Harding compile: source.
+  [ Object eval: source ] on: Exception do: [:ex |
+    self showOutput: ("Error creating template: " , ex printString).
+    ^ self
+  ].
   self refreshAppList.
 
   appClass := Harding at: name.
   currentApp := appClass.
-  self loadApp: appClass.
+  [ self loadApp: appClass ] on: Exception do: [:ex |
+    self showOutput: ("Created template but failed to load editor: " , ex printString)
+  ].
 
   self showOutput: ("Created HelloWorld application: ", name).
 ].
@@ -570,11 +597,11 @@ Builder>>createSimpleGUIApp [
 ", name, ">>main: args [
   | window button |
   window := GtkWindow new.
-  window title: '", name, "'.
+  window title: \"", name, "\".
   window setDefaultSize: 400 height: 300.
 
-  button := GtkButton newLabel: 'Click Me!'.
-  button clicked: [ Transcript showCr: 'Button clicked!' ].
+  button := GtkButton newLabel: \"Click Me!\".
+  button clicked: [ Transcript showCr: \"Button clicked!\" ].
 
   window setChild: button.
   window present.
@@ -585,12 +612,17 @@ Builder>>createSimpleGUIApp [
 ].
 ".
 
-  Harding compile: source.
+  [ Object eval: source ] on: Exception do: [:ex |
+    self showOutput: ("Error creating template: " , ex printString).
+    ^ self
+  ].
   self refreshAppList.
 
   appClass := Harding at: name.
   currentApp := appClass.
-  self loadApp: appClass.
+  [ self loadApp: appClass ] on: Exception do: [:ex |
+    self showOutput: ("Created template but failed to load editor: " , ex printString)
+  ].
 
   self showOutput: ("Created SimpleGUI application: ", name).
 ].
@@ -610,15 +642,15 @@ Builder>>createCounterApp [
 ", name, ">>main: args [
   | window label incrementButton |
   window := GtkWindow new.
-  window title: 'Counter Application'.
+  window title: \"Counter Application\".
   window setDefaultSize: 300 height: 200.
 
-  label := GtkLabel new: 'Count: 0'.
+  label := GtkLabel new: \"Count: 0\".
 
-  incrementButton := GtkButton newLabel: 'Increment'.
+  incrementButton := GtkButton newLabel: \"Increment\".
   incrementButton clicked: [
     count := count + 1.
-    label label: ('Count: ' , (count printString)).
+    label label: (\"Count: \" , (count printString)).
   ].
 
   window setChild: label.
@@ -629,12 +661,17 @@ Builder>>createCounterApp [
 ].
 ".
 
-  Harding compile: source.
+  [ Object eval: source ] on: Exception do: [:ex |
+    self showOutput: ("Error creating template: " , ex printString).
+    ^ self
+  ].
   self refreshAppList.
 
   appClass := Harding at: name.
   currentApp := appClass.
-  self loadApp: appClass.
+  [ self loadApp: appClass ] on: Exception do: [:ex |
+    self showOutput: ("Created template but failed to load editor: " , ex printString)
+  ].
 
   self showOutput: ("Created CounterApp application: ", name).
 ].
@@ -644,7 +681,7 @@ Builder>>uniqueAppName: baseName [
   counter := 1.
   name := baseName.
 
-  [ Harding includesKey: name ] whileTrue: [
+  [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
     counter := counter + 1.
     name := baseName , (counter printString).
   ].

@@ -98,6 +98,7 @@ proc widgetOnRightClickImpl*(interp: var Interpreter, self: Instance, args: seq[
         widget: widget,
         interp: addr(interp),
         signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
         destroyed: false,
         gestureHandlers: @[]
       )

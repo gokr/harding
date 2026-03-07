@@ -918,11 +918,13 @@ For debugging, exception handlers can inspect the signal point:
 
 ### Ensure (Finally)
 
-Use `ensure:` to guarantee cleanup code runs regardless of exceptions:
+`ensure:` currently runs cleanup after normal completion of the protected block:
 
 ```smalltalk
 [ riskyOperation ] ensure: [ cleanup ]
 ```
+
+It does not yet guarantee cleanup after Harding exceptions or non-local returns.
 
 ### Convenience Methods
 

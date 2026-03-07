@@ -147,7 +147,7 @@ Point>>moveTo: newPoint [
 ]
 ```
 
-If no `^`, method returns `self`.
+If no `^`, a method returns the last evaluated expression.
 
 ## Method Definition
 

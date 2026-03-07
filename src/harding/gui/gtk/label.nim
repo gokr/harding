@@ -18,6 +18,7 @@ proc newGtkLabelProxy*(widget: GtkLabel, interp: ptr Interpreter): GtkLabelProxy
     widget: widget,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](widget)] = result

@@ -20,6 +20,7 @@ proc newGtkBoxProxy*(box: GtkBox, interp: ptr Interpreter): GtkBoxProxy =
     widget: box,
     interp: interp,
     signalHandlers: initTable[string, seq[SignalHandler]](),
+    connectedSignals: initTable[string, bool](),
     destroyed: false
   )
   proxyTable[cast[GtkWidget](box)] = result

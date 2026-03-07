@@ -5,7 +5,6 @@
 
 import std/[tables, strformat]
 import harding/core/types
-import harding/interpreter/vm
 import ./ffi
 import ./widget
 
@@ -14,6 +13,7 @@ type
     label*: string
     blockNode*: BlockNode
     interp*: ptr Interpreter
+    buttonWidget*: GtkWidget
 
   GtkPopoverProxyObj* = object of GtkWidgetProxyObj
     menuItems*: seq[PopoverMenuItem]
@@ -29,30 +29,23 @@ var popoverTable* {.global.}: Table[GtkWidget, GtkPopoverProxy] = initTable[GtkW
 ## C callback for menu item clicks
 proc menuItemCallback(widget: GtkWidget, userData: pointer) {.cdecl.} =
   ## Called when a menu item button is clicked
-  let itemIndex = cast[int](userData)
+  discard userData
 
-  # Find the popover that owns this menu item
-  for parentWidget, proxy in popoverTable:
-    if itemIndex >= 0 and itemIndex < proxy.menuItems.len:
-      let item = proxy.menuItems[itemIndex]
+  for _, proxy in popoverTable:
+    for item in proxy.menuItems:
+      if item.buttonWidget != widget:
+        continue
       if item.blockNode != nil and item.interp != nil:
         try:
           GC_ref(item.blockNode)
-          let msgNode = MessageNode(
-            receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: item.blockNode)),
-            selector: "value",
-            arguments: @[],
-            isCascade: false
-          )
-          discard evalWithVMCleanContext(item.interp[], msgNode)
-          GC_unref(item.blockNode)
+          invokeGtkCallbackBlock(item.interp, item.blockNode, @[])
         except Exception as e:
           error("Error in menu item callback: ", e.msg)
+        finally:
+          GC_unref(item.blockNode)
 
-        # Hide the popover after selection
-        let popover = cast[GtkPopover](proxy.widget)
-        gtkPopoverPopdown(popover)
-        return
+      gtkPopoverPopdown(cast[GtkPopover](proxy.widget))
+      return
 
 ## Native method: popoverNew - Create a new popover menu for a parent widget
 proc popoverNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
@@ -96,6 +89,7 @@ proc popoverNewImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValu
       widget: cast[GtkWidget](popover),
       interp: addr(interp),
       signalHandlers: initTable[string, seq[SignalHandler]](),
+      connectedSignals: initTable[string, bool](),
       destroyed: false,
       menuItems: @[],
       parentWidget: parentWidget,
@@ -151,18 +145,18 @@ proc popoverAddItemDoImpl*(interp: var Interpreter, self: Instance, args: seq[No
     gtkBoxAppend(proxy.contentBox, cast[GtkWidget](button))
 
     # Store menu item with callback
-    let itemIndex = proxy.menuItems.len
     let item = PopoverMenuItem(
       label: label,
       blockNode: args[1].blockVal,
-      interp: addr(interp)
+      interp: addr(interp),
+      buttonWidget: cast[GtkWidget](button)
     )
     proxy.menuItems.add(item)
 
     # Connect clicked signal
     let gObject = cast[GObject](button)
     discard gSignalConnect(gObject, "clicked",
-                           cast[GCallback](menuItemCallback), cast[pointer](itemIndex))
+                           cast[GCallback](menuItemCallback), nil)
 
     debug(fmt("Added menu item: {label}"))
 
