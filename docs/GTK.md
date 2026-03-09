@@ -307,20 +307,17 @@ When a GTK widget is destroyed:
 
 ## Error Handling
 
-Signal handlers use safe evaluation via the stackless VM. GTK callbacks invoke Harding blocks through the VM's block-entry path and restore transient activation-stack state on errors, instead of leaving the interrupted interpreter state partially unwound.
+Signal handlers use safe evaluation via the stackless VM. GTK callbacks construct a block message send (`value`, `value:`, and so on) and evaluate it through `evalWithVMCleanContext`, so the callback runs in an isolated activation context instead of reusing whatever interpreter stack was active when GTK re-entered.
 
 ```nim
 # Signal handlers evaluate blocks through the stackless VM
-try:
-  discard invokeBlock(interp[], blockNode, args)
-except Exception:
-  restoreActivationStackTo(interp[], savedDepth)
-  raise
+let msgNode = newBlockCallbackMessage(blockNode, args)
+discard evalWithVMCleanContext(interp[], msgNode)
 ```
 
 Signal connections are tracked per widget and per signal name, so multiple Harding handlers can be attached to the same GTK signal without registering duplicate native signal hooks.
 
-**Implication**: Harding exceptions in signal handlers will not crash the GTK event loop, and failed callbacks restore the interpreter's transient activation state before control returns to GTK.
+**Implication**: Harding exceptions in signal handlers will not crash the GTK event loop, and callback execution does not inherit unrelated activation-stack state from the interrupted Harding evaluation.
 
 ## Current Status
 

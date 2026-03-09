@@ -42,16 +42,31 @@ type
 var signalConnectionTable* {.global.}: Table[int, SignalConnection] = initTable[int, SignalConnection]()
 var nextSignalConnectionId* {.global.}: int = 0
 
+proc newBlockCallbackMessage(blockNode: BlockNode, args: seq[NodeValue]): MessageNode =
+  let selector = case args.len
+    of 0: "value"
+    of 1: "value:"
+    of 2: "value:value:"
+    of 3: "value:value:value:"
+    else:
+      raise newException(ValueError, "GTK callback only supports up to 3 arguments")
+
+  var argNodes: seq[Node] = @[]
+  for arg in args:
+    argNodes.add(Node(LiteralNode(value: arg)))
+
+  MessageNode(
+    receiver: Node(LiteralNode(value: NodeValue(kind: vkBlock, blockVal: blockNode))),
+    selector: selector,
+    arguments: argNodes,
+    isCascade: false
+  )
+
 proc invokeGtkCallbackBlock*(interp: ptr Interpreter, blockNode: BlockNode, args: seq[NodeValue]) =
   if interp == nil or blockNode == nil:
     return
 
-  let savedDepth = interp[].activationStack.len
-  try:
-    discard invokeBlock(interp[], blockNode, args)
-  except Exception:
-    restoreActivationStackTo(interp[], savedDepth)
-    raise
+  discard evalWithVMCleanContext(interp[], newBlockCallbackMessage(blockNode, args))
 
 proc invokeGtkSignalHandlers*(interp: ptr Interpreter, handlers: seq[SignalHandler], args: seq[NodeValue]) =
   if interp == nil:
