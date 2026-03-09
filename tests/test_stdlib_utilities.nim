@@ -404,9 +404,14 @@ suite "Stdlib: Source tracking":
     interp = sharedInterp
 
   test "methodSourceInfo refreshes line offsets after file edits":
-    let tmpDir = getCurrentDir() / "lib" / "tmp"
+    let tmpDir = getTempDir() / "harding-test-stdlib-utilities-source"
     createDir(tmpDir)
     let filePath = tmpDir / "TrackedSource.hrd"
+    defer:
+      if fileExists(filePath):
+        removeFile(filePath)
+      if dirExists(tmpDir):
+        removeDir(tmpDir)
 
     writeFile(filePath, "TrackedSource := Object derive.\nTrackedSource>>alpha [\n  ^ 1\n].\nTrackedSource>>beta [\n  ^ 2\n].\n")
     discard interp.evalStatements("Harding load: \"" & filePath & "\".")
@@ -429,9 +434,14 @@ suite "Stdlib: Source tracking":
     check(second[0][^1].intVal > first[0][^1].intVal)
 
   test "class definition source is indexed":
-    let tmpDir = getCurrentDir() / "lib" / "tmp"
+    let tmpDir = getTempDir() / "harding-test-stdlib-utilities-classdef"
     createDir(tmpDir)
     let filePath = tmpDir / "TrackedClassDef.hrd"
+    defer:
+      if fileExists(filePath):
+        removeFile(filePath)
+      if dirExists(tmpDir):
+        removeDir(tmpDir)
 
     writeFile(filePath, "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().\n")
     discard interp.evalStatements("Harding load: \"" & filePath & "\".")
