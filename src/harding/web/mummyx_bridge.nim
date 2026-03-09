@@ -1,0 +1,759 @@
+## ============================================================================
+## MummyX Bridge for Harding
+## Provides HTTP server capabilities via MummyX with channel-based dispatch
+## to the main Harding interpreter thread.
+##
+## Architecture:
+##   - MummyX runs on a background Nim thread
+##   - Worker threads package requests and send them via Channel
+##   - Main thread processes requests by invoking Harding handler blocks
+##   - Responses are sent back via per-request response Channels
+##   - Compatible with Bona (live development) and standalone use
+##
+## Build: nim c -d:mummyx --threads:on --mm:orc ...
+## ============================================================================
+
+import std/[tables, os, strutils, options]
+import mummy, mummy/routers
+import ../core/types
+import ../interpreter/objects
+
+# ============================================================================
+# Types
+# ============================================================================
+
+type
+  PendingResponse* = object
+    statusCode*: int
+    headers*: seq[(string, string)]
+    body*: string
+
+  PendingRequest* = object
+    httpMethod*: string
+    uri*: string
+    path*: string
+    body*: string
+    remoteAddress*: string
+    headers*: seq[(string, string)]
+    queryParams*: seq[(string, string)]
+    pathParams*: seq[(string, string)]
+    responseChan*: ptr Channel[PendingResponse]
+
+  HardingRoute* = object
+    httpMethod*: string  # "GET", "POST", etc. or "*" for all
+    pattern*: string     # e.g., "/", "/users/@id"
+    parts*: seq[string]  # split pattern parts for matching
+    handlerBlock*: NodeValue  # The Harding block (vkBlock)
+
+  ServerProxy* = ref object
+    routes*: seq[HardingRoute]
+    running*: bool
+    port*: int
+    address*: string
+
+  RouterProxy* = ref object
+    routes*: seq[HardingRoute]
+
+  RequestProxy* = ref object
+    httpMethod*: string
+    uri*: string
+    path*: string
+    body*: string
+    remoteAddress*: string
+    headers*: seq[(string, string)]
+    queryParams*: seq[(string, string)]
+    pathParams*: seq[(string, string)]
+    responseChan*: ptr Channel[PendingResponse]
+    responded*: bool
+
+# Keep proxies alive for ARC
+var serverProxies*: seq[ServerProxy] = @[]
+var routerProxies*: seq[RouterProxy] = @[]
+var requestProxies*: seq[RequestProxy] = @[]
+
+# Global class references for MummyX types
+var httpServerClass*: Class = nil
+var httpRequestClass*: Class = nil
+var routerClass*: Class = nil
+
+# Global request channel for the MummyX handler (one server per process)
+var globalRequestChan*: Channel[PendingRequest]
+var globalRequestChanOpen* = false
+
+type
+  ServerThreadArgs = object
+    port: int
+    address: string
+
+# ============================================================================
+# Route Matching
+# ============================================================================
+
+proc matchRoute(route: HardingRoute, httpMethod: string, path: string,
+                pathParams: var seq[(string, string)]): bool =
+  ## Match a request against a route pattern.
+  ## Supports @param named parameters and * / ** wildcards.
+  if route.httpMethod != "*" and route.httpMethod != httpMethod:
+    return false
+
+  let requestParts = path.strip(chars = {'/'}).split('/')
+  let routeParts = route.parts
+
+  if routeParts.len == 0 and requestParts.len == 0:
+    return true
+  if routeParts.len == 0 and requestParts == @[""]:
+    return true
+
+  var ri = 0
+  var pi = 0
+  pathParams = @[]
+
+  while ri < routeParts.len and pi < requestParts.len:
+    let rp = routeParts[ri]
+    let pp = requestParts[pi]
+
+    if rp.startsWith("@"):
+      # Named parameter
+      pathParams.add((rp[1..^1], pp))
+      inc ri
+      inc pi
+    elif rp == "**":
+      # Multi-segment wildcard - matches rest
+      return true
+    elif rp == "*":
+      # Single segment wildcard
+      inc ri
+      inc pi
+    else:
+      # Exact match
+      if rp != pp:
+        return false
+      inc ri
+      inc pi
+
+  return ri == routeParts.len and pi == requestParts.len
+
+proc findRoute(routes: seq[HardingRoute], httpMethod: string, path: string,
+               pathParams: var seq[(string, string)]): Option[HardingRoute] =
+  for route in routes:
+    if matchRoute(route, httpMethod, path, pathParams):
+      return some(route)
+  return none(HardingRoute)
+
+# ============================================================================
+# MummyX Request Handler (runs on worker threads)
+# ============================================================================
+
+proc mummyxRequestHandler(request: Request) {.gcsafe.} =
+  ## Called by MummyX on worker threads. Packages the request and sends it
+  ## to the main Harding interpreter thread via channel.
+  if not globalRequestChanOpen:
+    request.respond(503, emptyHttpHeaders(), "Server not initialized")
+    return
+
+  # Copy request data into a PendingRequest
+  var pending = PendingRequest(
+    httpMethod: request.httpMethod,
+    uri: request.uri,
+    path: request.path,
+    body: request.body,
+    remoteAddress: request.remoteAddress,
+  )
+
+  # Copy headers
+  for (key, value) in request.headers:
+    pending.headers.add((key, value))
+
+  # Copy query params
+  for (key, value) in request.queryParams:
+    pending.queryParams.add((key, value))
+
+  # Copy path params
+  for (key, value) in request.pathParams:
+    pending.pathParams.add((key, value))
+
+  # Create per-request response channel
+  var respChan: Channel[PendingResponse]
+  respChan.open()
+  pending.responseChan = addr respChan
+
+  # Send to main thread
+  globalRequestChan.send(pending)
+
+  # Block until Harding handler produces a response
+  let response = respChan.recv()
+  respChan.close()
+
+  # Send HTTP response via MummyX
+  var httpHeaders: HttpHeaders
+  for (k, v) in response.headers:
+    httpHeaders[k] = v
+  request.respond(response.statusCode, httpHeaders, response.body)
+
+# ============================================================================
+# Server Thread
+# ============================================================================
+
+var activeServer: Server
+
+proc serverThreadProc(args: ServerThreadArgs) {.thread.} =
+  ## Background thread that runs the MummyX event loop
+  {.gcsafe.}:
+    let server = newServer(mummyxRequestHandler)
+    activeServer = server
+    try:
+      server.serve(Port(args.port), args.address)
+    except:
+      discard
+
+# ============================================================================
+# Block Invocation Helper
+# ============================================================================
+
+# Callback for VM evaluation - set by vm.nim during initialization
+# to break the circular dependency (vm imports bridge, bridge needs vm's eval)
+var evalCleanContextProc*: proc(interp: var Interpreter, node: Node): NodeValue = nil
+
+proc invokeBlockWithArg*(interp: var Interpreter, blockVal: NodeValue,
+                          arg: NodeValue): NodeValue =
+  ## Invoke a Harding block with a single argument using the VM.
+  ## Creates a synthetic message send: block value: arg
+  if evalCleanContextProc == nil:
+    raise newException(ValueError, "MummyX bridge not fully initialized (evalCleanContextProc is nil)")
+  let receiverLiteral = LiteralNode(value: blockVal, line: 0, col: 0)
+  let argLiteral = LiteralNode(value: arg, line: 0, col: 0)
+  let msgNode = MessageNode(
+    receiver: receiverLiteral,
+    selector: "value:",
+    arguments: @[Node(argLiteral)],
+    line: 0, col: 0
+  )
+  return evalCleanContextProc(interp, msgNode)
+
+# ============================================================================
+# Process Pending Requests (main thread)
+# ============================================================================
+
+proc processRequestsBatch*(interp: var Interpreter, routes: seq[HardingRoute],
+                            maxRequests: int = 10): int =
+  ## Process up to maxRequests pending requests from the global channel.
+  ## Returns the number of requests processed.
+  ## Must be called from the main interpreter thread.
+  result = 0
+
+  for i in 0..<maxRequests:
+    let (hasData, pending) = globalRequestChan.tryRecv()
+    if not hasData:
+      break
+
+    inc result
+
+    # Find matching route
+    var pathParams: seq[(string, string)] = @[]
+    let route = findRoute(routes, pending.httpMethod, pending.path, pathParams)
+
+    if route.isNone:
+      # 404 Not Found
+      pending.responseChan[].send(PendingResponse(
+        statusCode: 404,
+        headers: @[("Content-Type", "text/plain")],
+        body: "Not Found"
+      ))
+      continue
+
+    # Create HttpRequest instance
+    let reqProxy = RequestProxy(
+      httpMethod: pending.httpMethod,
+      uri: pending.uri,
+      path: pending.path,
+      body: pending.body,
+      remoteAddress: pending.remoteAddress,
+      headers: pending.headers,
+      queryParams: pending.queryParams,
+      pathParams: pathParams,
+      responseChan: pending.responseChan,
+      responded: false
+    )
+    requestProxies.add(reqProxy)
+
+    let reqInst = newInstance(httpRequestClass)
+    reqInst.isNimProxy = true
+    reqInst.nimValue = cast[pointer](reqProxy)
+
+    # Invoke handler block with request as argument
+    try:
+      discard invokeBlockWithArg(interp, route.get.handlerBlock, reqInst.toValue())
+    except Exception as e:
+      # Handler raised an error
+      if not reqProxy.responded:
+        pending.responseChan[].send(PendingResponse(
+          statusCode: 500,
+          headers: @[("Content-Type", "text/plain")],
+          body: "Internal Server Error: " & e.msg
+        ))
+        reqProxy.responded = true
+
+    # If handler didn't respond, send 500
+    if not reqProxy.responded:
+      pending.responseChan[].send(PendingResponse(
+        statusCode: 500,
+        headers: @[("Content-Type", "text/plain")],
+        body: "Handler did not produce a response"
+      ))
+      reqProxy.responded = true
+
+# ============================================================================
+# Native Method Implementations - HttpServer
+# ============================================================================
+
+proc serverNewImpl(interp: var Interpreter, self: Instance,
+                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer class>>new
+  let inst = newInstance(httpServerClass)
+  inst.isNimProxy = true
+  let proxy = ServerProxy(
+    routes: @[],
+    running: false,
+    port: 8080,
+    address: "localhost"
+  )
+  serverProxies.add(proxy)
+  inst.nimValue = cast[pointer](proxy)
+  return inst.toValue()
+
+proc serverRouterImpl(interp: var Interpreter, self: Instance,
+                      args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>router: aRouter
+  if self.nimValue == nil:
+    return nilValue()
+  let serverProxy = cast[ServerProxy](self.nimValue)
+  if args.len > 0 and args[0].kind == vkInstance:
+    let routerInst = args[0].instVal
+    if routerInst.nimValue != nil:
+      let routerProxy = cast[RouterProxy](routerInst.nimValue)
+      serverProxy.routes = routerProxy.routes
+  return self.toValue()
+
+proc serverStartImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>start: port
+  ## Starts MummyX on a background thread. Non-blocking.
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  if proxy.running:
+    return self.toValue()
+
+  if args.len > 0 and args[0].kind == vkInt:
+    proxy.port = args[0].intVal
+
+  globalRequestChan.open()
+  globalRequestChanOpen = true
+  proxy.running = true
+
+  var thread: Thread[ServerThreadArgs]
+  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+
+  return self.toValue()
+
+proc serverStartAddressImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>start: port address: address
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  if proxy.running:
+    return self.toValue()
+
+  if args.len > 0 and args[0].kind == vkInt:
+    proxy.port = args[0].intVal
+  if args.len > 1 and args[1].kind == vkString:
+    proxy.address = args[1].strVal
+
+  globalRequestChan.open()
+  globalRequestChanOpen = true
+  proxy.running = true
+
+  var thread: Thread[ServerThreadArgs]
+  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+
+  return self.toValue()
+
+proc serverProcessRequestsImpl(interp: var Interpreter, self: Instance,
+                                args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>processRequests
+  ## Process pending requests on the main thread. Call this periodically.
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  let count = processRequestsBatch(interp, proxy.routes)
+  return NodeValue(kind: vkInt, intVal: count)
+
+proc serverServeForeverImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>serveForever: port
+  ## Starts server and enters a blocking processing loop.
+  ## For standalone use (not Bona).
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+
+  if args.len > 0 and args[0].kind == vkInt:
+    proxy.port = args[0].intVal
+
+  globalRequestChan.open()
+  globalRequestChanOpen = true
+  proxy.running = true
+
+  # Start MummyX on background thread
+  var thread: Thread[ServerThreadArgs]
+  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+
+  # Enter processing loop on main thread
+  while proxy.running:
+    let count = processRequestsBatch(interp, proxy.routes)
+    if count == 0:
+      sleep(1)
+
+  return nilValue()
+
+proc serverIsRunningImpl(interp: var Interpreter, self: Instance,
+                         args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>isRunning
+  if self.nimValue == nil:
+    return NodeValue(kind: vkBool, boolVal: false)
+  let proxy = cast[ServerProxy](self.nimValue)
+  return NodeValue(kind: vkBool, boolVal: proxy.running)
+
+proc serverStopImpl(interp: var Interpreter, self: Instance,
+                    args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>stop
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  proxy.running = false
+  try:
+    activeServer.close()
+  except:
+    discard
+  globalRequestChanOpen = false
+  return self.toValue()
+
+proc serverPortImpl(interp: var Interpreter, self: Instance,
+                    args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpServer>>port
+  if self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  return NodeValue(kind: vkInt, intVal: proxy.port)
+
+# ============================================================================
+# Native Method Implementations - Router
+# ============================================================================
+
+proc routerNewImpl(interp: var Interpreter, self: Instance,
+                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router class>>new
+  let inst = newInstance(routerClass)
+  inst.isNimProxy = true
+  let proxy = RouterProxy(routes: @[])
+  routerProxies.add(proxy)
+  inst.nimValue = cast[pointer](proxy)
+  return inst.toValue()
+
+proc addRouteImpl(interp: var Interpreter, self: Instance,
+                  httpMethod: string, args: seq[NodeValue]): NodeValue =
+  ## Common route registration logic
+  if self == nil or self.nimValue == nil or args.len < 2:
+    return nilValue()
+  let proxy = cast[RouterProxy](self.nimValue)
+
+  let pattern = if args[0].kind == vkString: args[0].strVal else: ""
+  let handler = args[1]
+
+  if pattern.len == 0 or handler.kind != vkBlock:
+    return nilValue()
+
+  let parts = pattern.strip(chars = {'/'}).split('/')
+  proxy.routes.add(HardingRoute(
+    httpMethod: httpMethod,
+    pattern: pattern,
+    parts: if pattern == "/": @[] else: parts,
+    handlerBlock: handler
+  ))
+  return self.toValue()
+
+proc routerGetDoImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>get: path do: handler
+  return addRouteImpl(interp, self, "GET", args)
+
+proc routerPostDoImpl(interp: var Interpreter, self: Instance,
+                      args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>post: path do: handler
+  return addRouteImpl(interp, self, "POST", args)
+
+proc routerPutDoImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>put: path do: handler
+  return addRouteImpl(interp, self, "PUT", args)
+
+proc routerDeleteDoImpl(interp: var Interpreter, self: Instance,
+                        args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>delete: path do: handler
+  return addRouteImpl(interp, self, "DELETE", args)
+
+proc routerPatchDoImpl(interp: var Interpreter, self: Instance,
+                       args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>patch: path do: handler
+  return addRouteImpl(interp, self, "PATCH", args)
+
+proc routerAnyDoImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Router>>any: path do: handler (matches any HTTP method)
+  return addRouteImpl(interp, self, "*", args)
+
+# ============================================================================
+# Native Method Implementations - HttpRequest
+# ============================================================================
+
+proc requestMethodImpl(interp: var Interpreter, self: Instance,
+                       args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: proxy.httpMethod)
+
+proc requestUriImpl(interp: var Interpreter, self: Instance,
+                    args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: proxy.uri)
+
+proc requestPathImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: proxy.path)
+
+proc requestBodyImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: proxy.body)
+
+proc requestRemoteAddressImpl(interp: var Interpreter, self: Instance,
+                              args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: proxy.remoteAddress)
+
+proc requestHeaderImpl(interp: var Interpreter, self: Instance,
+                       args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>header: name
+  if self.nimValue == nil or args.len < 1: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let name = if args[0].kind == vkString: args[0].strVal else: ""
+  for (k, v) in proxy.headers:
+    if k.toLowerAscii() == name.toLowerAscii():
+      return NodeValue(kind: vkString, strVal: v)
+  return nilValue()
+
+proc requestQueryParamImpl(interp: var Interpreter, self: Instance,
+                           args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>queryParam: name
+  if self.nimValue == nil or args.len < 1: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let name = if args[0].kind == vkString: args[0].strVal else: ""
+  for (k, v) in proxy.queryParams:
+    if k == name:
+      return NodeValue(kind: vkString, strVal: v)
+  return nilValue()
+
+proc requestPathParamImpl(interp: var Interpreter, self: Instance,
+                          args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>pathParam: name
+  if self.nimValue == nil or args.len < 1: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let name = if args[0].kind == vkString: args[0].strVal else: ""
+  for (k, v) in proxy.pathParams:
+    if k == name:
+      return NodeValue(kind: vkString, strVal: v)
+  return nilValue()
+
+proc requestHeadersImpl(interp: var Interpreter, self: Instance,
+                        args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>headers - returns a Table of headers
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let tbl = newInstance(tableClass)
+  for (k, v) in proxy.headers:
+    tbl.entries[NodeValue(kind: vkString, strVal: k)] = NodeValue(kind: vkString, strVal: v)
+  return tbl.toValue()
+
+proc requestQueryParamsImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>queryParams - returns a Table of query params
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let tbl = newInstance(tableClass)
+  for (k, v) in proxy.queryParams:
+    tbl.entries[NodeValue(kind: vkString, strVal: k)] = NodeValue(kind: vkString, strVal: v)
+  return tbl.toValue()
+
+proc requestPathParamsImpl(interp: var Interpreter, self: Instance,
+                           args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>pathParams - returns a Table of path params
+  if self.nimValue == nil: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let tbl = newInstance(tableClass)
+  for (k, v) in proxy.pathParams:
+    tbl.entries[NodeValue(kind: vkString, strVal: k)] = NodeValue(kind: vkString, strVal: v)
+  return tbl.toValue()
+
+# Response methods
+
+proc requestRespondBodyImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>respond: statusCode body: body
+  if self.nimValue == nil or args.len < 2: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  if proxy.responded:
+    return nilValue()
+
+  let statusCode = if args[0].kind == vkInt: args[0].intVal else: 200
+  let body = if args[1].kind == vkString: args[1].strVal else: args[1].toString()
+
+  proxy.responseChan[].send(PendingResponse(
+    statusCode: statusCode,
+    headers: @[("Content-Type", "text/plain")],
+    body: body
+  ))
+  proxy.responded = true
+  return self.toValue()
+
+proc requestRespondHeadersBodyImpl(interp: var Interpreter, self: Instance,
+                                    args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>respond: statusCode headers: headers body: body
+  if self.nimValue == nil or args.len < 3: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  if proxy.responded:
+    return nilValue()
+
+  let statusCode = if args[0].kind == vkInt: args[0].intVal else: 200
+
+  # Convert headers Table to seq
+  var headerSeq: seq[(string, string)] = @[]
+  if args[1].kind == vkInstance and args[1].instVal.kind == ikTable:
+    for k, v in args[1].instVal.entries:
+      let key = if k.kind == vkString: k.strVal else: k.toString()
+      let val = if v.kind == vkString: v.strVal else: v.toString()
+      headerSeq.add((key, val))
+
+  let body = if args[2].kind == vkString: args[2].strVal else: args[2].toString()
+
+  proxy.responseChan[].send(PendingResponse(
+    statusCode: statusCode,
+    headers: headerSeq,
+    body: body
+  ))
+  proxy.responded = true
+  return self.toValue()
+
+proc requestRespondImpl(interp: var Interpreter, self: Instance,
+                        args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>respond: statusCode
+  if self.nimValue == nil or args.len < 1: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  if proxy.responded:
+    return nilValue()
+
+  let statusCode = if args[0].kind == vkInt: args[0].intVal else: 200
+
+  proxy.responseChan[].send(PendingResponse(
+    statusCode: statusCode,
+    headers: @[],
+    body: ""
+  ))
+  proxy.responded = true
+  return self.toValue()
+
+proc requestRespondJsonImpl(interp: var Interpreter, self: Instance,
+                            args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## HttpRequest>>respondJson: body
+  if self.nimValue == nil or args.len < 1: return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  if proxy.responded:
+    return nilValue()
+
+  let body = if args[0].kind == vkString: args[0].strVal else: args[0].toString()
+
+  proxy.responseChan[].send(PendingResponse(
+    statusCode: 200,
+    headers: @[("Content-Type", "application/json")],
+    body: body
+  ))
+  proxy.responded = true
+  return self.toValue()
+
+# ============================================================================
+# Bridge Initialization
+# ============================================================================
+
+proc initMummyxBridge*(interp: var Interpreter) =
+  ## Initialize MummyX bridge - creates classes and registers native methods.
+  ## Call this before loading lib/mummyx/Bootstrap.hrd.
+
+  # ---- HttpServer class ----
+  httpServerClass = newClass(superclasses = @[objectClass], name = "HttpServer")
+  httpServerClass.isNimProxy = true
+  httpServerClass.hardingType = "HttpServer"
+
+  httpServerClass.registerClassMethod("new", serverNewImpl, needsInterp = true)
+  httpServerClass.registerMethod("router:", serverRouterImpl)
+  httpServerClass.registerMethod("start:", serverStartImpl)
+  httpServerClass.registerMethod("start:address:", serverStartAddressImpl)
+  httpServerClass.registerMethod("processRequests", serverProcessRequestsImpl)
+  httpServerClass.registerMethod("serveForever:", serverServeForeverImpl)
+  httpServerClass.registerMethod("isRunning", serverIsRunningImpl)
+  httpServerClass.registerMethod("stop", serverStopImpl)
+  httpServerClass.registerMethod("port", serverPortImpl)
+
+  interp.globals[]["HttpServer"] = httpServerClass.toValue()
+
+  # ---- Router class ----
+  routerClass = newClass(superclasses = @[objectClass], name = "Router")
+  routerClass.isNimProxy = true
+  routerClass.hardingType = "Router"
+
+  routerClass.registerClassMethod("new", routerNewImpl, needsInterp = true)
+  routerClass.registerMethod("get:do:", routerGetDoImpl)
+  routerClass.registerMethod("post:do:", routerPostDoImpl)
+  routerClass.registerMethod("put:do:", routerPutDoImpl)
+  routerClass.registerMethod("delete:do:", routerDeleteDoImpl)
+  routerClass.registerMethod("patch:do:", routerPatchDoImpl)
+  routerClass.registerMethod("any:do:", routerAnyDoImpl)
+
+  interp.globals[]["Router"] = routerClass.toValue()
+
+  # ---- HttpRequest class ----
+  httpRequestClass = newClass(superclasses = @[objectClass], name = "HttpRequest")
+  httpRequestClass.isNimProxy = true
+  httpRequestClass.hardingType = "HttpRequest"
+
+  httpRequestClass.registerMethod("method", requestMethodImpl)
+  httpRequestClass.registerMethod("uri", requestUriImpl)
+  httpRequestClass.registerMethod("path", requestPathImpl)
+  httpRequestClass.registerMethod("body", requestBodyImpl)
+  httpRequestClass.registerMethod("remoteAddress", requestRemoteAddressImpl)
+  httpRequestClass.registerMethod("header:", requestHeaderImpl)
+  httpRequestClass.registerMethod("queryParam:", requestQueryParamImpl)
+  httpRequestClass.registerMethod("pathParam:", requestPathParamImpl)
+  httpRequestClass.registerMethod("headers", requestHeadersImpl)
+  httpRequestClass.registerMethod("queryParams", requestQueryParamsImpl)
+  httpRequestClass.registerMethod("pathParams", requestPathParamsImpl)
+  httpRequestClass.registerMethod("respond:", requestRespondImpl)
+  httpRequestClass.registerMethod("respond:body:", requestRespondBodyImpl)
+  httpRequestClass.registerMethod("respond:headers:body:", requestRespondHeadersBodyImpl)
+  httpRequestClass.registerMethod("respondJson:", requestRespondJsonImpl)
+
+  interp.globals[]["HttpRequest"] = httpRequestClass.toValue()

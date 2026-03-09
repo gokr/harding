@@ -14,6 +14,10 @@ requires "nim == 2.2.6"
 when defined(linux):
   requires "libffi"
 
+# MummyX HTTP server support (optional)
+when defined(mummyx):
+  requires "mummy >= 0.4.6"
+
 # BitBarrel support (optional)
 when defined(bitbarrel):
   requires "whisky >= 0.2.0"
@@ -162,6 +166,26 @@ task vsix, "Build the VS Code extension (vsix file)":
   echo "Packaging extension..."
   exec "cd " & extDir & " && vsce package"
   echo "VSIX file built successfully in " & extDir
+
+task harding_mummyx, "Build harding with MummyX HTTP server support":
+  ## Build REPL with MummyX HTTP/WebSocket server support
+  exec "nim c -d:mummyx --threads:on --mm:orc -o:harding src/harding/repl/harding.nim"
+  echo "Binary available as ./harding (with MummyX support)"
+
+task harding_mummyx_release, "Build harding with MummyX support (release)":
+  ## Build REPL with MummyX support in release mode
+  exec "nim c -d:mummyx -d:release --threads:on --mm:orc -o:harding src/harding/repl/harding.nim"
+  echo "Binary available as ./harding (release with MummyX support)"
+
+task bona_mummyx, "Build bona IDE with MummyX support (debug)":
+  ## Build GUI IDE with GTK4 and MummyX HTTP server support
+  exec "nim c -d:gtk4 -d:mummyx --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  echo "Binary available as ./bona (with MummyX support)"
+
+task bona_mummyx_release, "Build bona IDE with MummyX support (release)":
+  ## Build GUI IDE with GTK4 and MummyX support in release mode
+  exec "nim c -d:gtk4 -d:mummyx -d:release --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  echo "Binary available as ./bona (release with MummyX support)"
 
 task harding_bitbarrel, "Build harding with BitBarrel support":
   ## Build REPL with BitBarrel database support
