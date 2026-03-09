@@ -33,6 +33,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+workspace-*.hrd
 
 # Test outputs
 *.out
