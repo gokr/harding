@@ -282,25 +282,29 @@ Builder>>refreshAppList [
   | apps |
 
   isRefreshing := true.
+  [
+    # Clear existing items
+    appList clear.
 
-  # Clear existing items
-  appList clear.
+    # Find all Application subclasses
+    apps := self findApplicationSubclasses.
+    appClasses := apps.
 
-  # Find all Application subclasses
-  apps := self findApplicationSubclasses.
-  appClasses := apps.
-
-  apps isEmpty
-    ifTrue: [
-      self addEmptyRow
-    ]
-    ifFalse: [
-      apps do: [:appClass |
-        self addAppRow: appClass
+    apps isEmpty
+      ifTrue: [
+        self addEmptyRow
       ]
-    ].
+      ifFalse: [
+        apps do: [:appClass |
+          self addAppRow: appClass
+        ]
+      ].
 
-  Transcript showCr: ("Found ", (apps size printString), " applications").
+    Transcript showCr: ("Found ", (apps size printString), " applications").
+  ] on: Exception do: [:ex |
+    Transcript showCr: ("Builder refresh failed: " , ex printString).
+  ].
+
   isRefreshing := false.
   ^ self
 ].
@@ -311,11 +315,13 @@ Builder>>appDisplayName: appClass [
 
 Builder>>isApplicationSubclass: aClass [
   # True when class inherits from Application.
-  | supers |
+  | supers className |
   aClass isNil ifTrue: [ ^ false ].
-  (aClass name = "Application") ifTrue: [ ^ false ].
 
-  supers := aClass superclassNames.
+  className := [ aClass name asString ] on: Exception do: [ aClass className asString ].
+  className = "Application" ifTrue: [ ^ false ].
+
+  supers := [ aClass superclassNames ] on: Exception do: [ Array new ].
   ^ (supers includes: "Application") or: [ supers includes: #Application ]
 ].
 
@@ -360,31 +366,16 @@ Builder>>onAppSelected: index [
 ].
 
 Builder>>loadApp: appClass [
-  | mainMethod source libraries methods appName |
+  | source libraries appName |
 
   appName := self appDisplayName: appClass.
 
   # Update window title
   window title: ("Application Builder - ", appName).
 
-  # Get main: method source (methodAt: is not universally available)
-  mainMethod := nil.
-  [
-    methods := appClass methods.
-    methods notNil ifTrue: [
-      (methods includesKey: "main:") ifTrue: [
-        mainMethod := methods at: "main:"
-      ].
-      mainMethod isNil ifTrue: [
-        (methods includesKey: #main:) ifTrue: [
-          mainMethod := methods at: #main:
-        ]
-      ].
-    ]
-  ] on: Exception do: [:ex | mainMethod := nil ].
-  source := mainMethod notNil
-    ifTrue: [ self methodSource: mainMethod ]
-    ifFalse: [ self defaultMainSource ].
+  # Method source extraction is currently placeholder-based.
+  # appClass methods returns an Array of selectors, not a method table.
+  source := self defaultMainSource.
 
   appEditor text: source.
 
@@ -434,7 +425,9 @@ Builder>>buildCurrentApp [
   self saveCurrentApp.
 
   # Call Granite build
-  result := Granite build: (currentApp new).
+  result := [ Granite build: (currentApp new) ] on: Exception do: [:ex |
+    "Error: " , ex printString , " (Granite build primitive may be unavailable in this bona build)"
+  ].
 
   output := (result class name = "String")
     ifTrue: [ result ]
@@ -479,12 +472,21 @@ Builder>>saveLibraries: libraries for: appClass [
 Builder>>compileMethod: source for: appClass [
   | fullSource appName |
 
-  # Wrap the source in proper method syntax
   appName := self appDisplayName: appClass.
-  fullSource := appName, ">>main: args [", source, "]".
 
-  # Compile and install
-  appClass compile: fullSource.
+  # Normalize editor text to a full class method definition.
+  fullSource := (source includesSubString: ">>")
+    ifTrue: [ source ]
+    ifFalse: [
+      (source startsWith: "main:")
+        ifTrue: [ appName, ">>", source ]
+        ifFalse: [ appName, ">>main: args [", source, "]" ]
+    ].
+
+  # Compile and install in interpreter mode.
+  [ Object eval: fullSource ] on: Exception do: [:ex |
+    self showOutput: ("Error compiling method: " , ex printString)
+  ].
 ].
 
 Builder>>runCurrentApp [
@@ -506,7 +508,10 @@ Builder>>runCurrentApp [
 ].
 
 Builder>>createNewApp [
-  | name appClass source |
+  | name appClass source idx found |
+
+  Transcript showCr: "Builder: creating new application".
+  self showOutput: "Creating new application...".
 
   # Simple dialog to get application name
   # In a real implementation, this would show a proper dialog
@@ -528,22 +533,49 @@ Builder>>createNewApp [
 ".
 
   # Compile and install the class
-  [ Object eval: source ] on: Exception do: [:ex |
+  appClass := [ Object eval: source ] on: Exception do: [:ex |
     self showOutput: ("Error creating application: " , ex printString).
     ^ self
+  ].
+
+  (appClass isClass) ifFalse: [
+    appClass := Harding at: name ifAbsent: [ nil ]
+  ].
+
+  appClass notNil ifTrue: [
+    Harding at: name put: appClass
   ].
 
   # Refresh the list
   self refreshAppList.
 
   # Select the new app
-  appClass := Harding at: name.
+  appClass := Harding at: name ifAbsent: [ appClass ].
+  appClass isNil ifTrue: [
+    self showOutput: ("Error: Created source but class not registered: " , name).
+    ^ self
+  ].
+
   currentApp := appClass.
+
+  # Select the new app in the list when possible.
+  idx := 0.
+  found := false.
+  [ (idx < appClasses size) and: [ found not ] ] whileTrue: [
+    ((appClasses at: idx) == appClass) ifTrue: [
+      appList selectIndex: idx.
+      found := true
+    ] ifFalse: [
+      idx := idx + 1
+    ].
+  ].
+
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created app but failed to load editor: " , ex printString)
   ].
 
   self showOutput: ("Created new application: ", name).
+  Transcript showCr: ("Builder: created new application " , name).
 ].
 
 Builder>>createTemplateApp: templateName [
@@ -572,13 +604,22 @@ Builder>>createHelloWorldApp [
 ].
 ".
 
-  [ Object eval: source ] on: Exception do: [:ex |
+  appClass := [ Object eval: source ] on: Exception do: [:ex |
     self showOutput: ("Error creating template: " , ex printString).
     ^ self
   ].
+
+  (appClass isClass) ifFalse: [
+    appClass := Harding at: name ifAbsent: [ nil ]
+  ].
+
+  appClass notNil ifTrue: [
+    Harding at: name put: appClass
+  ].
+
   self refreshAppList.
 
-  appClass := Harding at: name.
+  appClass := Harding at: name ifAbsent: [ appClass ].
   currentApp := appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)
@@ -612,13 +653,22 @@ Builder>>createSimpleGUIApp [
 ].
 ".
 
-  [ Object eval: source ] on: Exception do: [:ex |
+  appClass := [ Object eval: source ] on: Exception do: [:ex |
     self showOutput: ("Error creating template: " , ex printString).
     ^ self
   ].
+
+  (appClass isClass) ifFalse: [
+    appClass := Harding at: name ifAbsent: [ nil ]
+  ].
+
+  appClass notNil ifTrue: [
+    Harding at: name put: appClass
+  ].
+
   self refreshAppList.
 
-  appClass := Harding at: name.
+  appClass := Harding at: name ifAbsent: [ appClass ].
   currentApp := appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)
@@ -661,13 +711,22 @@ Builder>>createCounterApp [
 ].
 ".
 
-  [ Object eval: source ] on: Exception do: [:ex |
+  appClass := [ Object eval: source ] on: Exception do: [:ex |
     self showOutput: ("Error creating template: " , ex printString).
     ^ self
   ].
+
+  (appClass isClass) ifFalse: [
+    appClass := Harding at: name ifAbsent: [ nil ]
+  ].
+
+  appClass notNil ifTrue: [
+    Harding at: name put: appClass
+  ].
+
   self refreshAppList.
 
-  appClass := Harding at: name.
+  appClass := Harding at: name ifAbsent: [ appClass ].
   currentApp := appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)

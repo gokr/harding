@@ -4,7 +4,7 @@ Application>>initialize [
   # Initialize application with defaults
   super initialize.
   name := "Application".
-  libraries := Array new: 0
+  libraries := Array new
 ]
 
 Application>>main: args [

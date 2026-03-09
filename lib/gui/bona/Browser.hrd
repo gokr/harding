@@ -529,7 +529,30 @@ SystemBrowser>>applyClassSelection: aClassName [
         on: Exception
         do: [:ex |
             Transcript showCr: ("selectClass auto-populate error: " , ex printString)
-        ]
+        ].
+
+    self showClassDefinition: aClassName
+]
+
+SystemBrowser>>showClassDefinition: aClassName [
+    | info found sourceText |
+    info := Harding methodSourceInfoForClass: aClassName selector: "<classDefinition>".
+    found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+
+    currentMethod := "<classDefinition>".
+    currentMethodOwnerClass := aClassName.
+    currentMethodFile := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ].
+    currentMethodHeader := (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ nil ].
+    currentMethodStartLine := (info includesKey: "startLine") ifTrue: [ info at: "startLine" ] ifFalse: [ nil ].
+    currentMethodEndLine := (info includesKey: "endLine") ifTrue: [ info at: "endLine" ] ifFalse: [ nil ].
+    currentMethodHasBlock := false.
+
+    found ifTrue: [
+        sourceText := (info includesKey: "source") ifTrue: [ info at: "source" ] ifFalse: [ "" ].
+        self updateSourceView: sourceText.
+    ] ifFalse: [
+        self showClassInfo: aClassName
+    ]
 ]
 
 SystemBrowser>>populateCategoriesFor: aClassName [
@@ -815,11 +838,123 @@ SystemBrowser>>editableHeaderFromMethodHeader: aHeader [
     ^ (aHeader from: (sep + 2) to: (aHeader size - 1)) trim
 ]
 
+SystemBrowser>>refreshCurrentMethodLocation [
+    | selector info found |
+    currentMethodOwnerClass isNil ifTrue: [ ^ false ].
+    selector := currentMethod.
+    selector isNil ifTrue: [
+        currentMethodHeader notNil ifTrue: [
+            selector := self editableHeaderFromMethodHeader: currentMethodHeader
+        ]
+    ].
+    selector isNil ifTrue: [ ^ false ].
+
+    info := Harding methodSourceInfoForClass: currentMethodOwnerClass selector: selector.
+    found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+    found ifFalse: [ ^ false ].
+
+    currentMethodFile := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ currentMethodFile ].
+    currentMethodHeader := (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ currentMethodHeader ].
+    currentMethodSuffix := (info includesKey: "suffix") ifTrue: [ info at: "suffix" ] ifFalse: [ currentMethodSuffix ].
+    currentMethodStartLine := (info includesKey: "startLine") ifTrue: [ info at: "startLine" ] ifFalse: [ currentMethodStartLine ].
+    currentMethodEndLine := (info includesKey: "endLine") ifTrue: [ info at: "endLine" ] ifFalse: [ currentMethodEndLine ].
+    currentMethodHasBlock := (info includesKey: "hasBlock") ifTrue: [ info at: "hasBlock" ] ifFalse: [ currentMethodHasBlock ].
+    ^ true
+]
+
+SystemBrowser>>methodTextFromInfo: info [
+    | header source suffix hasBlock |
+    header := (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ "" ].
+    source := (info includesKey: "source") ifTrue: [ info at: "source" ] ifFalse: [ "" ].
+    suffix := (info includesKey: "suffix") ifTrue: [ info at: "suffix" ] ifFalse: [ "" ].
+    hasBlock := (info includesKey: "hasBlock") ifTrue: [ info at: "hasBlock" ] ifFalse: [ false ].
+
+    hasBlock ifTrue: [
+        ^ header , " [\n" , source , "\n]" , suffix
+    ].
+    ^ header
+]
+
+SystemBrowser>>managedMethodInfosForCurrentClass [
+    | infos i entries info file selector |
+    infos := Array new.
+    currentClass isNil ifTrue: [ ^ infos ].
+    currentMethodFile isNil ifTrue: [ ^ infos ].
+
+    entries := Harding sourceEntriesForClass: currentClass.
+    i := 0.
+    [ i < entries size ] whileTrue: [
+        info := entries at: i.
+        file := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ].
+        selector := (info includesKey: "selector") ifTrue: [ info at: "selector" ] ifFalse: [ nil ].
+        ((file = currentMethodFile) and: [ selector ~= "<classDefinition>" ]) ifTrue: [
+            infos add: info
+        ].
+        i := i + 1
+    ].
+
+    ^ infos
+]
+
+SystemBrowser>>rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: overrideSelector methodText: overrideMethodText removeSelector: removeSelector [
+    | infos parts i info selector replaced text |
+    infos := self managedMethodInfosForCurrentClass.
+    parts := Array new.
+    replaced := false.
+
+    classDefText notNil ifTrue: [
+        classDefText trim isEmpty ifFalse: [
+            parts add: classDefText trim
+        ]
+    ].
+
+    i := 0.
+    [ i < infos size ] whileTrue: [
+        info := infos at: i.
+        selector := (info includesKey: "header")
+            ifTrue: [ self editableHeaderFromMethodHeader: (info at: "header") ]
+            ifFalse: [ nil ].
+
+        selector = removeSelector ifFalse: [
+            selector = overrideSelector
+                ifTrue: [
+                    overrideMethodText notNil ifTrue: [ parts add: overrideMethodText trim ].
+                    replaced := true
+                ]
+                ifFalse: [ parts add: (self methodTextFromInfo: info) trim ]
+        ].
+        i := i + 1
+    ].
+
+    (overrideSelector notNil and: [ overrideMethodText notNil and: [ replaced not ] ]) ifTrue: [
+        parts add: overrideMethodText trim
+    ].
+
+    text := self linesToText: parts.
+    File write: text to: currentMethodFile.
+    self reloadCurrentMethodFile.
+    ^ text
+]
+
 SystemBrowser>>saveCurrentMethod [
-    | fileText lines before after replacement editorLines bodyLines allLines savedText index selectorLine fullHeader originalHeader creatingNew |
+    | editorLines bodyLines selectorLine fullHeader originalHeader creatingNew methodText classDefText index |
 
     currentMethodFile isNil ifTrue: [
         Transcript showCr: "No method source selected to save".
+        ^ self
+    ].
+
+    (currentMethod = "<classDefinition>") ifTrue: [
+        | classText refreshed |
+        classText := sourceView text.
+        (self refreshCurrentMethodLocation) ifFalse: [
+            Transcript showCr: "Could not refresh class definition location; save aborted".
+            ^ self
+        ].
+        self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil.
+        refreshed := self refreshCurrentMethodLocation.
+        refreshed ifTrue: [ self updateSourceView: classText ].
+        Transcript showCr: ("Saved class definition for " , currentClass , " to " , currentMethodFile).
         ^ self
     ].
 
@@ -832,9 +967,6 @@ SystemBrowser>>saveCurrentMethod [
         Transcript showCr: "Method header is missing; cannot save".
         ^ self
     ].
-
-    fileText := File readAll: currentMethodFile.
-    lines := fileText split: "\n".
 
     editorLines := sourceView text split: "\n".
     editorLines isEmpty ifTrue: [
@@ -852,6 +984,13 @@ SystemBrowser>>saveCurrentMethod [
     originalHeader := self editableHeaderFromMethodHeader: currentMethodHeader.
     creatingNew := currentMethodStartLine isNil or: [ (selectorLine = originalHeader) not ].
 
+    creatingNew ifFalse: [
+        (self refreshCurrentMethodLocation) ifFalse: [
+            Transcript showCr: "Could not refresh method source location; save aborted".
+            ^ self
+        ]
+    ].
+
     bodyLines := Array new.
     index := 1.
     [ index < editorLines size ] whileTrue: [
@@ -859,41 +998,17 @@ SystemBrowser>>saveCurrentMethod [
         index := index + 1
     ].
 
-    replacement := Array new.
-    replacement add: (fullHeader , " [").
-    replacement addAll: bodyLines.
-    replacement add: ("]" , currentMethodSuffix).
-
-    allLines := Array new.
-    creatingNew ifTrue: [
-        allLines addAll: lines.
-        (allLines isEmpty not and: [ (allLines last) trim isEmpty not ]) ifTrue: [
-            allLines add: ""
-        ].
-        allLines addAll: replacement
-    ] ifFalse: [
-        before := Array new.
-        after := Array new.
-
-        index := 0.
-        [ index < (currentMethodStartLine - 1) ] whileTrue: [
-            before add: (lines at: index).
-            index := index + 1
-        ].
-
-        index := currentMethodEndLine.
-        [ index < lines size ] whileTrue: [
-            after add: (lines at: index).
-            index := index + 1
-        ].
-
-        allLines addAll: before.
-        allLines addAll: replacement.
-        allLines addAll: after
+    methodText := fullHeader , " [\n" , (self linesToText: bodyLines) , "\n]" , currentMethodSuffix.
+    classDefText := self sourceView text.
+    (currentClass notNil and: [ currentMethodFile notNil ]) ifTrue: [
+        | classInfo |
+        classInfo := Harding methodSourceInfoForClass: currentClass selector: "<classDefinition>".
+        ((classInfo includesKey: "found") and: [ classInfo at: "found" ]) ifTrue: [
+            classDefText := classInfo at: "source"
+        ]
     ].
 
-    savedText := self linesToText: allLines.
-    File write: savedText to: currentMethodFile.
+    self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: selectorLine methodText: methodText removeSelector: nil.
 
     self installMethodInImage: fullHeader bodyLines: bodyLines.
     self reloadCurrentMethodFile.
@@ -1103,6 +1218,11 @@ SystemBrowser>>deleteCurrentMethod [
         ^ self
     ].
 
+    (self refreshCurrentMethodLocation) ifFalse: [
+        Transcript showCr: "Could not refresh method source location; cannot delete".
+        ^ self
+    ].
+
     currentMethodStartLine isNil ifTrue: [
         Transcript showCr: "Method is new and not saved yet; nothing to delete".
         ^ self
@@ -1112,32 +1232,13 @@ SystemBrowser>>deleteCurrentMethod [
     
     self showConfirmationDialog: confirmMessage
         onYes: [
-            | fileText lines before after allLines savedText index |
-            
-            fileText := File readAll: currentMethodFile.
-            lines := fileText split: "\n".
-
-            before := Array new.
-            after := Array new.
-
-            index := 0.
-            [ index < (currentMethodStartLine - 1) ] whileTrue: [
-                before add: (lines at: index).
-                index := index + 1
+            | classDefText classInfo |
+            classDefText := "".
+            classInfo := Harding methodSourceInfoForClass: currentClass selector: "<classDefinition>".
+            ((classInfo includesKey: "found") and: [ classInfo at: "found" ]) ifTrue: [
+                classDefText := classInfo at: "source"
             ].
-
-            index := currentMethodEndLine.
-            [ index < lines size ] whileTrue: [
-                after add: (lines at: index).
-                index := index + 1
-            ].
-
-            allLines := Array new.
-            allLines addAll: before.
-            allLines addAll: after.
-
-            savedText := self linesToText: allLines.
-            File write: savedText to: currentMethodFile.
+            self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: currentMethod.
 
             self removeMethodFromClass: currentMethod.
 
@@ -1644,18 +1745,21 @@ SystemBrowser>>generateClassDefinition: className parent: parentName slots: slot
     
     code := "# " , className , ".hrd - " , className , " class definition".
     code := code , "\n\n".
-    
-    slotsArray isEmpty ifTrue: [
-        code := code , className , " := " , parentClass , " derive"
-    ] ifFalse: [
-        code := code , className , " := " , parentClass , " derive: #(".
-        slotsArray do: [:slot |
-            code := code , slot , " "
-        ].
-        code := code trimRight , ")"
+
+    code := code , className , " := " , parentClass , " derive: #(".
+    slotsArray do: [:slot |
+        code := code , slot , " "
     ].
-    
-    code := code , ".\n\n".
+    code := code trimRight , ") read: #(".
+    slotsArray do: [:slot |
+        code := code , slot , " "
+    ].
+    code := code trimRight , ") write: #(".
+    slotsArray do: [:slot |
+        code := code , slot , " "
+    ].
+    code := code trimRight , ") superclasses: #().\n\n".
+
     code := code , "# Methods\n".
     code := code , className , ">>printOn: stream [\n".
     code := code , "    stream show: \"" , className , "\".\n".

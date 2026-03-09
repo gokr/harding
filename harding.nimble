@@ -14,9 +14,8 @@ requires "nim == 2.2.6"
 when defined(linux):
   requires "libffi"
 
-# MummyX HTTP server support (optional)
-when defined(mummyx):
-  requires "mummy >= 0.4.6"
+# MummyX HTTP server support (compile with -d:mummyx to enable)
+requires "mummy >= 0.4.6"
 
 # BitBarrel support (optional)
 when defined(bitbarrel):
@@ -46,13 +45,13 @@ task harding_release, "Build harding REPL (release) in repo root":
   echo "Binary available as ./harding (release)"
 
 task bona, "Build bona IDE (debug) in repo root":
-  # Build GUI IDE in debug mode with GTK4 (default), output to repo root
-  exec "nim c -d:gtk4 -o:bona src/harding/gui/bona.nim"
+  # Build GUI IDE in debug mode with GTK4 + Granite primitives, output to repo root
+  exec "nim c -d:gtk4 -d:granite -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (debug)"
 
 task bona_release, "Build bona IDE (release) in repo root":
-  # Build GUI IDE in release mode with GTK4, output to repo root
-  exec "nim c -d:release -d:gtk4 -o:bona src/harding/gui/bona.nim"
+  # Build GUI IDE in release mode with GTK4 + Granite primitives, output to repo root
+  exec "nim c -d:release -d:gtk4 -d:granite -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (release)"
 
 task install_bona, "Install bona binary and desktop integration (.desktop file and icon)":
