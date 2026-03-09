@@ -8,6 +8,11 @@ import ../src/harding/gui/gtk/widget
 import ../src/harding/gui/gtk/popover
 import ../src/harding/gui/gtk/ffi
 
+var sharedGuiInterp: Interpreter
+var sharedGuiInterpReady = false
+var sharedIdeInterp: Interpreter
+var sharedIdeInterpReady = false
+
 proc hasGuiDisplay(): bool =
   existsEnv("DISPLAY") or existsEnv("WAYLAND_DISPLAY")
 
@@ -18,6 +23,28 @@ proc newGuiInterpreter(): Interpreter =
   loadStdlib(result)
   initGtkBridge(result)
   loadGtkWrapperFiles(result)
+
+proc resetGuiHarnessState() =
+  proxyTable.clear()
+  pendingGtkCallbacks.setLen(0)
+  signalConnectionTable.clear()
+  nextSignalConnectionId = 0
+  popoverTable.clear()
+
+proc guiInterp(): ptr Interpreter =
+  if not sharedGuiInterpReady:
+    sharedGuiInterp = newGuiInterpreter()
+    sharedGuiInterpReady = true
+  resetGuiHarnessState()
+  addr(sharedGuiInterp)
+
+proc ideInterp(): ptr Interpreter =
+  if not sharedIdeInterpReady:
+    sharedIdeInterp = newGuiInterpreter()
+    loadIdeToolFiles(sharedIdeInterp)
+    sharedIdeInterpReady = true
+  resetGuiHarnessState()
+  addr(sharedIdeInterp)
 
 proc arrayElements(value: NodeValue): seq[NodeValue] =
   case value.kind
@@ -36,8 +63,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       GtkEventController key: "i"
     """)
 
@@ -49,8 +76,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Clicked := false.
       Btn := GtkButton newLabel: "Run".
       Btn clicked: [ Clicked := true ].
@@ -67,8 +94,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Captured := nil.
       LocalClass := Object derive.
       Btn := GtkButton newLabel: "Run".
@@ -88,8 +115,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Captured := nil.
       Btn := GtkButton newLabel: "Run".
       Btn clicked: [
@@ -110,8 +137,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Probe := Object derive: #(buttons results).
       Probe>>initialize [
         buttons := Array new.
@@ -157,8 +184,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Probe := Object derive: #(button total).
       Probe>>initialize [
         total := 0.
@@ -191,8 +218,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       Probe := Object derive: #(listBox seen).
       Probe>>initialize [
         seen := Array new.
@@ -229,8 +256,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       A := 0.
       B := 0.
       Btn := GtkButton newLabel: "Run".
@@ -249,8 +276,8 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    let (result, err) = interp.doit("""
+    let interp = guiInterp()
+    let (result, err) = interp[].doit("""
       A := 0.
       B := 0.
       Btn := GtkButton newLabel: "Run".
@@ -266,8 +293,8 @@ suite "GTK automation helpers":
     check(result.intVal == 11)
 
   test "deferred GTK callback queue preserves escaped captures":
-    var interp = newGuiInterpreter()
-    let (_, err) = interp.doit("""
+    let interp = guiInterp()
+    let (_, err) = interp[].doit("""
       DeferredResult := 0.
       DeferredBlock := [
         | base |
@@ -277,15 +304,15 @@ suite "GTK automation helpers":
     """)
 
     check(err.len == 0)
-    check("DeferredBlock" in interp.globals[])
+    check("DeferredBlock" in interp[].globals[])
 
-    let blockVal = interp.globals[]["DeferredBlock"]
+    let blockVal = interp[].globals[]["DeferredBlock"]
     check(blockVal.kind == vkBlock)
 
-    enqueueGtkCallback(addr(interp), blockVal.blockVal, @[])
-    drainPendingGtkCallbacks(addr(interp))
+    enqueueGtkCallback(interp, blockVal.blockVal, @[])
+    drainPendingGtkCallbacks(interp)
 
-    let (result, verifyErr) = interp.doit("""
+    let (result, verifyErr) = interp[].doit("""
       DeferredResult
     """)
 
@@ -298,8 +325,8 @@ suite "GTK automation helpers":
       skip()
 
     popoverTable.clear()
-    var interp = newGuiInterpreter()
-    let (_, err) = interp.doit("""
+    let interp = guiInterp()
+    let (_, err) = interp[].doit("""
       FirstCount := 0.
       SecondCount := 0.
       BtnOne := GtkButton newLabel: "One".
@@ -322,7 +349,7 @@ suite "GTK automation helpers":
     check(targetButton != nil)
     gSignalEmitByName(cast[GObject](targetButton), "clicked")
 
-    let (result, verifyErr) = interp.doit("""
+    let (result, verifyErr) = interp[].doit("""
       (FirstCount * 10) + SecondCount
     """)
 
@@ -334,10 +361,9 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    loadIdeToolFiles(interp)
+    let interp = ideInterp()
 
-    let (result, err) = interp.doit("""
+    let (result, err) = interp[].doit("""
       TestOwner := Object derive: #(removed).
       TestOwner>>initialize [
         removed := false.
@@ -370,10 +396,9 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    loadIdeToolFiles(interp)
+    let interp = ideInterp()
 
-    let (result, err) = interp.doit("""
+    let (result, err) = interp[].doit("""
       Probe := Object derive.
       Probe>>run [
         | pane |
@@ -398,10 +423,9 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    loadIdeToolFiles(interp)
+    let interp = ideInterp()
 
-    let (result, err) = interp.doit("""
+    let (result, err) = interp[].doit("""
       TestOwner := Object derive.
       TestOwner>>addWindow: aWindow [ ^ self ].
       TestOwner>>removeWindow: aWindow [ ^ self ].
@@ -421,10 +445,9 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    loadIdeToolFiles(interp)
+    let interp = ideInterp()
 
-    let (result, err) = interp.doit("""
+    let (result, err) = interp[].doit("""
       Person := Object derive: #(name age).
       Obj := Person new.
       Insp := Inspector openOn: Obj.
@@ -440,10 +463,9 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
-    var interp = newGuiInterpreter()
-    loadIdeToolFiles(interp)
+    let interp = ideInterp()
 
-    let (result, err) = interp.doit("""
+    let (result, err) = interp[].doit("""
       Obj := #{
         "items" -> #(1 #{"inner" -> 2})
       }.
