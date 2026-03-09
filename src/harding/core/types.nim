@@ -33,7 +33,7 @@ type
   NodeKind* = enum
     nkLiteral, nkIdent, nkMessage, nkBlock, nkAssign, nkReturn,
     nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkPrimitiveCall, nkCascade,
-    nkSlotAccess, nkSuperSend, nkPseudoVar,
+    nkSlotAccess, nkNamedAccess, nkSuperSend, nkPseudoVar,
     nkIf, nkWhile  # Control flow specialization nodes
 
   Node* {.acyclic.} = ref object of RootObj
@@ -64,6 +64,8 @@ type
     # Slots
     slotNames*: seq[string]                 # Slot names defined on this class only
     allSlotNames*: seq[string]              # All slots including inherited (instance layout)
+    readableSlotNames*: seq[string]         # Slots readable through direct access syntax
+    writableSlotNames*: seq[string]         # Slots writable through direct access syntax
 
     # Inheritance
     superclasses*: seq[Class]               # Direct superclasses
@@ -75,6 +77,8 @@ type
     isNimProxy*: bool                       # Class wraps Nim type
     hardingType*: string                    # Nim type name for FFI
     hasSlots*: bool                         # Has any slots
+    conflictSelectors*: seq[string]         # Instance selectors with parent conflicts
+    classConflictSelectors*: seq[string]    # Class selectors with parent conflicts
 
     # Lazy rebuilding flag
     methodsDirty*: bool                     # True if method tables need rebuilding
@@ -227,6 +231,19 @@ type
     # For wfPushHandler (carry protected block for retry)
     protectedBlockForHandler*: BlockNode
 
+  SourceEntry* = object
+    found*: bool
+    filePath*: string
+    ownerClass*: string
+    header*: string
+    source*: string
+    suffix*: string
+    startLine*: int
+    endLine*: int
+    hasBlock*: bool
+    selector*: string
+    side*: string
+
   # Interpreter type defined here to avoid circular dependency between scheduler and evaluator
   Interpreter* = ref object
     globals*: ref Table[string, NodeValue]
@@ -243,6 +260,7 @@ type
     hardingHome*: string  # Home directory for loading libraries
     shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch
     methodTableDeferRebuild*: bool  # Defers method table rebuilds during batch loading
+    implicitMethodDefinitionClassSide*: bool  # Treat `>>` definitions inside helper blocks as class-side methods
     # VM work queue and value stack
     workQueue*: seq[WorkFrame]  # Work queue for AST interpreter
     evalStack*: seq[NodeValue]  # Value stack for expression results
@@ -250,6 +268,8 @@ type
     importedLibraries*: seq[Instance]  # Stack of imported Library instances for namespace search
     commandLineArgs*: seq[string]  # Command-line arguments available to Harding code
     packageSources*: ref Table[string, string]  # Embedded source files keyed by virtual path
+    sourceIndex*: ref Table[string, SourceEntry]  # Source entries keyed by class/side/selector
+    sourceFileKeys*: ref Table[string, seq[string]]  # Reverse index for file invalidation
     # Debugger support
     when defined(debugger):
       debugMode*: bool              # Whether debugger is attached
@@ -374,6 +394,12 @@ type
     isAssignment*: bool    # true for slot := value, false for slot read
     valueExpr*: Node       # Expression to evaluate for assignment (nil for reads)
 
+  NamedAccessNode* = ref object of Node
+    receiver*: Node
+    memberName*: string
+    isAssignment*: bool
+    valueExpr*: Node
+
   # Super send node for calling parent class methods
   SuperSendNode* = ref object of Node
     selector*: string      # Method selector to lookup
@@ -462,6 +488,7 @@ proc kind*(node: Node): NodeKind {.inline.} =
   elif node of IfNode: nkIf
   elif node of PseudoVarNode: nkPseudoVar
   elif node of SlotAccessNode: nkSlotAccess
+  elif node of NamedAccessNode: nkNamedAccess
   elif node of PrimitiveCallNode: nkPrimitiveCall
   elif node of SuperSendNode: nkSuperSend
   elif node of CascadeNode: nkCascade
@@ -586,6 +613,10 @@ proc resolveLocalIndices*(blk: BlockNode) =
     elif node of SlotAccessNode:
       let sa = cast[SlotAccessNode](node)
       resolveNode(sa.valueExpr)
+    elif node of NamedAccessNode:
+      let na = cast[NamedAccessNode](node)
+      resolveNode(na.receiver)
+      resolveNode(na.valueExpr)
     # LiteralNode, PseudoVarNode, PrimitiveNode: no children to resolve
 
   for stmt in blk.body:
@@ -884,7 +915,8 @@ type
     mainProcess*: Process  ## The initial/main process
 
 # Forward declarations
-proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class
+proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = "",
+               readableSlotNames: seq[string] = @[], writableSlotNames: seq[string] = @[]): Class
 
 proc initRootClass*(): Class =
   ## Initialize the global root class
@@ -937,7 +969,8 @@ proc isMixin*(cls: Class): bool =
       break
   return false
 
-proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = ""): Class =
+proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = "",
+               readableSlotNames: seq[string] = @[], writableSlotNames: seq[string] = @[]): Class =
   ## Create a new Class with given superclasses and slot names
   ## Pre-size method tables to avoid enlargement overhead
   let expectedMethods = max(superclasses.len * 4, 8)  # Expect at least 8 methods for typical classes
@@ -948,6 +981,8 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   result.allClassMethods = initTable[string, BlockNode](expectedMethods)
   result.slotNames = slotNames
   result.allSlotNames = @[]
+  result.readableSlotNames = readableSlotNames
+  result.writableSlotNames = writableSlotNames
   result.superclasses = superclasses
   result.subclasses = @[]
   result.name = name
@@ -955,6 +990,8 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   result.isNimProxy = false
   result.hardingType = ""
   result.hasSlots = slotNames.len > 0
+  result.conflictSelectors = @[]
+  result.classConflictSelectors = @[]
 
   # Check for slot name conflicts from superclasses
   var seenSlotNames: seq[string] = @[]
@@ -975,21 +1012,6 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
       raise newException(ValueError, "Slot name conflict: '" & slotName & "' declared multiple times")
     seenSlotNames.add(slotName)
 
-  # Check for method selector conflicts between superclasses (only for directly-defined methods)
-  # Inherited methods should not cause conflicts
-  # Note: use derive:parents:slots:methods: to specify method overrides
-  var seenInstanceMethods: seq[string] = @[]
-  var seenClassMethods: seq[string] = @[]
-  for parent in superclasses:
-    for selector in parent.methods.keys:  # Only check directly-defined instance methods
-      if selector in seenInstanceMethods:
-        raise newException(ValueError, "Method selector conflict: '" & selector & "' exists in multiple superclasses (use derive:parents:slots:methods: to specify method overrides)")
-      seenInstanceMethods.add(selector)
-    for selector in parent.classMethods.keys:  # Only check directly-defined class methods
-      if selector in seenClassMethods:
-        raise newException(ValueError, "Class method selector conflict: '" & selector & "' exists in multiple superclasses")
-      seenClassMethods.add(selector)
-
   # Add to superclasses' subclasses lists and inherit methods
   for parent in superclasses:
     parent.subclasses.add(result)
@@ -1007,19 +1029,47 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
       parent.methodsDirty = false
     # Inherit instance methods (unless child overrides)
     for selector, methodBlock in parent.allMethods:
-      if selector notin result.methods:  # Only inherit if not overridden
+      if selector in result.allMethods and selector notin result.methods:
+        if selector in parent.methods and selector notin result.conflictSelectors:
+          result.conflictSelectors.add(selector)
+      elif selector notin result.methods:  # Only inherit if not overridden
         result.allMethods[selector] = methodBlock
     # Inherit class methods
     for selector, methodBlock in parent.allClassMethods:
-      result.allClassMethods[selector] = methodBlock
+      if selector in result.allClassMethods and selector notin result.classMethods:
+        if selector in parent.classMethods and selector notin result.classConflictSelectors:
+          result.classConflictSelectors.add(selector)
+      elif selector notin result.classMethods:
+        result.allClassMethods[selector] = methodBlock
     # Inherit slot names
     for slotName in parent.allSlotNames:
       if slotName notin result.allSlotNames:
         result.allSlotNames.add(slotName)
+
+  var allowMethodConflicts = true
+  for parent in superclasses:
+    if not parent.isMixin:
+      allowMethodConflicts = false
+      break
+  if not allowMethodConflicts and result.conflictSelectors.len > 0:
+    raise newException(ValueError,
+      "Method conflict: '" & result.conflictSelectors[0] & "' exists in multiple superclasses")
+  if not allowMethodConflicts and result.classConflictSelectors.len > 0:
+    raise newException(ValueError,
+      "Class method conflict: '" & result.classConflictSelectors[0] & "' exists in multiple superclasses")
+
   # Add own slot names
   for slotName in slotNames:
     if slotName notin result.allSlotNames:
       result.allSlotNames.add(slotName)
+
+  for slotName in result.readableSlotNames:
+    if slotName notin result.allSlotNames:
+      raise newException(ValueError, "Readable slot '" & slotName & "' is not declared on class '" & name & "'")
+
+  for slotName in result.writableSlotNames:
+    if slotName notin result.allSlotNames:
+      raise newException(ValueError, "Writable slot '" & slotName & "' is not declared on class '" & name & "'")
 
 proc addSuperclass*(cls: Class, parent: Class) =
   ## Add a parent to an existing class
@@ -1032,30 +1082,24 @@ proc addSuperclass*(cls: Class, parent: Class) =
     if slotName in cls.allSlotNames and slotName notin cls.slotNames:
       raise newException(ValueError, "Slot name conflict: '" & slotName & "' already exists in existing parent hierarchy")
 
-  # Check for method selector conflicts (only for directly-defined methods on this parent)
-  # Only error if child doesn't override
-  for selector in parent.methods.keys:  # Only check directly-defined instance methods
-    if selector in cls.allMethods and selector notin cls.methods:
-      # Child inherits this method from another parent but it conflicts with this parent's directly-defined method
-      raise newException(ValueError, "Method selector conflict: '" & selector & "' exists in existing parent (override in child class first)")
-
-  for selector in parent.classMethods.keys:  # Only check directly-defined class methods
-    if selector in cls.allClassMethods and selector notin cls.classMethods:
-      # Child inherits this class method from another parent but it conflicts with this parent's directly-defined method
-      raise newException(ValueError, "Class method selector conflict: '" & selector & "' exists in existing parent (override in child class first)")
-
   # Add parent
   cls.superclasses.add(parent)
   parent.subclasses.add(cls)
 
   # Inherit instance methods (unless child overrides)
   for selector, methodBlock in parent.allMethods:
-    if selector notin cls.methods and selector notin cls.allMethods:
+    if selector in cls.allMethods and selector notin cls.methods:
+      if selector in parent.methods and selector notin cls.conflictSelectors:
+        cls.conflictSelectors.add(selector)
+    elif selector notin cls.methods and selector notin cls.allMethods:
       cls.allMethods[selector] = methodBlock
 
   # Inherit class methods
   for selector, methodBlock in parent.allClassMethods:
-    if selector notin cls.classMethods and selector notin cls.allClassMethods:
+    if selector in cls.allClassMethods and selector notin cls.classMethods:
+      if selector in parent.classMethods and selector notin cls.classConflictSelectors:
+        cls.classConflictSelectors.add(selector)
+    elif selector notin cls.classMethods and selector notin cls.allClassMethods:
       cls.allClassMethods[selector] = methodBlock
 
   # Inherit slot names

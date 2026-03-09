@@ -153,6 +153,10 @@ Object>>slotNames <primitive primitiveSlotNames>
 
 Object>>superclassNames <primitive primitiveSuperclassNames>
 
+Object>>conflictSelectors <primitive primitiveConflictSelectors>
+
+Object>>classConflictSelectors <primitive primitiveClassConflictSelectors>
+
 
 #====================================================================
 # Method management
@@ -308,7 +312,7 @@ Object class>>extendClass: aBlock [
   #   self >> newNamed: name [ ... create and return instance ... ]
   #   self >> withName: name age: age [ ... factory method ... ]
   # ]
-  ^ self asSelfDo: aBlock
+  ^ self primitiveAsClassSelfDo: aBlock
 ]
 
 Object class>>name <primitive primitiveClassName>

@@ -1,4 +1,4 @@
-import std/[tables, strutils, math, strformat, os, random]
+import std/[tables, strutils, math, strformat, os, random, algorithm]
 import ../core/types
 import ../parser/lexer
 import ../parser/parser
@@ -20,6 +20,7 @@ when defined(mummyx):
 
 # Forward declarations - implementations are in objects.nim
 # Note: These are imported from objects.nim via the import statement above
+proc reindexSourceFile(interp: var Interpreter, filePath: string)
 
 # ============================================================================
 # Platform-Specific Output Helpers
@@ -245,6 +246,10 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
   ## Create a new interpreter instance
   var pkgSources = new(Table[string, string])
   pkgSources[] = initTable[string, string]()
+  var srcIndex = new(Table[string, SourceEntry])
+  srcIndex[] = initTable[string, SourceEntry]()
+  var srcFileKeys = new(Table[string, seq[string]])
+  srcFileKeys[] = initTable[string, seq[string]]()
   result = Interpreter(
     globals: new(Table[string, NodeValue]),
     activationStack: newSeqOfCap[Activation](128),
@@ -256,6 +261,8 @@ proc newInterpreter*(trace: bool = false, maxStackDepth: int = 10000): Interpret
     rootObject: nil,
     commandLineArgs: @[],
     packageSources: pkgSources,
+    sourceIndex: srcIndex,
+    sourceFileKeys: srcFileKeys,
     workQueue: newSeqOfCap[WorkFrame](256),
     evalStack: newSeqOfCap[NodeValue](128)
   )
@@ -282,6 +289,10 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
   if pkgSources == nil:
     pkgSources = new(Table[string, string])
     pkgSources[] = initTable[string, string]()
+  var srcIndex = new(Table[string, SourceEntry])
+  srcIndex[] = initTable[string, SourceEntry]()
+  var srcFileKeys = new(Table[string, seq[string]])
+  srcFileKeys[] = initTable[string, seq[string]]()
 
   result = Interpreter(
     globals: globals,
@@ -296,6 +307,8 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
     schedulerContextPtr: nil,
     commandLineArgs: @[],
     packageSources: pkgSources,
+    sourceIndex: srcIndex,
+    sourceFileKeys: srcFileKeys,
     workQueue: newSeqOfCap[WorkFrame](256),
     evalStack: newSeqOfCap[NodeValue](128)
   )
@@ -1554,6 +1567,18 @@ proc primitiveAsSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[No
     # Restore original receiver
     interp.currentReceiver = savedReceiver
 
+proc primitiveAsClassSelfDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Evaluate a block with self rebound and implicit `>>` targeting class-side methods.
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+
+  let savedClassSide = interp.implicitMethodDefinitionClassSide
+  interp.implicitMethodDefinitionClassSide = true
+  try:
+    return primitiveAsSelfDoImpl(interp, self, args)
+  finally:
+    interp.implicitMethodDefinitionClassSide = savedClassSide
+
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
 proc newPopHandlerFrame*(): WorkFrame
@@ -2236,6 +2261,72 @@ proc primitiveSuperclassNamesImpl(interp: var Interpreter, self: Instance, args:
     superClassNames.add(toValue(sc.name))
   return newArrayInstance(arrayClass, superClassNames).toValue()
 
+proc primitiveConflictSelectorsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return instance selectors that have direct-parent conflicts.
+  if self.kind != ikObject or self.class == nil:
+    return newArrayInstance(arrayClass, @[]).toValue()
+
+  var selectors: seq[NodeValue] = @[]
+  for sel in self.class.conflictSelectors:
+    selectors.add(toValue(sel))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveClassConflictSelectorsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return class selectors that have direct-parent conflicts.
+  if self.kind != ikObject or self.class == nil:
+    return newArrayInstance(arrayClass, @[]).toValue()
+
+  var selectors: seq[NodeValue] = @[]
+  for sel in self.class.classConflictSelectors:
+    selectors.add(toValue(sel))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): bool =
+  ## Evaluate :: access with slot fast path and at:/at:put: fallback.
+  if namedNode.receiver == nil:
+    interp.pushValue(nilValue())
+    return true
+
+  let receiverVal = evalWithVM(interp, namedNode.receiver).unwrap()
+  if receiverVal.kind != vkInstance or receiverVal.instVal == nil:
+    interp.pushValue(nilValue())
+    return true
+
+  let inst = receiverVal.instVal
+  let memberKey = NodeValue(kind: vkSymbol, symVal: namedNode.memberName)
+
+  if inst.kind == ikObject and inst.class != nil:
+    let slotIdx = inst.class.getSlotIndex(namedNode.memberName)
+    if slotIdx >= 0 and slotIdx < inst.slots.len:
+      if namedNode.isAssignment:
+        if namedNode.memberName in inst.class.writableSlotNames:
+          let valueVal = if namedNode.valueExpr != nil: evalWithVM(interp, namedNode.valueExpr).unwrap() else: nilValue()
+          inst.slots[slotIdx] = valueVal
+          interp.pushValue(valueVal)
+          return true
+      elif namedNode.memberName in inst.class.readableSlotNames:
+        interp.pushValue(inst.slots[slotIdx])
+        return true
+
+  let msg = if namedNode.isAssignment:
+    MessageNode(
+      receiver: LiteralNode(value: receiverVal),
+      selector: "at:put:",
+      arguments: @[cast[Node](LiteralNode(value: memberKey)), namedNode.valueExpr],
+      isCascade: false
+    )
+  else:
+    MessageNode(
+      receiver: LiteralNode(value: receiverVal),
+      selector: "at:",
+      arguments: @[cast[Node](LiteralNode(value: memberKey))],
+      isCascade: false
+    )
+
+  interp.pushValue(evalWithVM(interp, cast[Node](msg)).unwrap())
+  return true
+
+
 proc primitiveSlotAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get slot value by name (symbol or string)
   if self.kind != ikObject or self.class == nil or args.len < 1:
@@ -2583,6 +2674,13 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.classMethods["primitiveAsSelfDo:"] = objAsSelfDoMethod
   objectCls.allClassMethods["primitiveAsSelfDo:"] = objAsSelfDoMethod
 
+  let objAsClassSelfDoMethod = createCoreMethod("primitiveAsClassSelfDo:")
+  objAsClassSelfDoMethod.setNativeImpl(primitiveAsClassSelfDoImpl)
+  setNativeValueFromInstanceWithInterp(objAsClassSelfDoMethod, primitiveAsClassSelfDoImpl)
+  objAsClassSelfDoMethod.hasInterpreterParam = true
+  objectCls.classMethods["primitiveAsClassSelfDo:"] = objAsClassSelfDoMethod
+  objectCls.allClassMethods["primitiveAsClassSelfDo:"] = objAsClassSelfDoMethod
+
   # Add primitiveHasProperty: for hasProperty: implementation
   let objHasPropertyMethod = createCoreMethod("primitiveHasProperty:")
   objHasPropertyMethod.setNativeImpl(primitiveHasPropertyImpl)
@@ -2721,6 +2819,32 @@ proc initGlobals*(interp: var Interpreter) =
   # Also register with primitiveSuperclassNames for <primitive: #primitiveSuperclassNames> syntax
   objectCls.methods["primitiveSuperclassNames"] = objSuperclassNamesMethod
   objectCls.allMethods["primitiveSuperclassNames"] = objSuperclassNamesMethod
+
+  let objConflictSelectorsMethod = createCoreMethod("conflictSelectors")
+  objConflictSelectorsMethod.setNativeImpl(primitiveConflictSelectorsImpl)
+  setNativeValueFromInstanceWithInterp(objConflictSelectorsMethod, primitiveConflictSelectorsImpl)
+  objConflictSelectorsMethod.hasInterpreterParam = true
+  objectCls.methods["conflictSelectors"] = objConflictSelectorsMethod
+  objectCls.allMethods["conflictSelectors"] = objConflictSelectorsMethod
+  objectCls.methods["primitiveConflictSelectors"] = objConflictSelectorsMethod
+  objectCls.allMethods["primitiveConflictSelectors"] = objConflictSelectorsMethod
+  objectCls.classMethods["conflictSelectors"] = objConflictSelectorsMethod
+  objectCls.allClassMethods["conflictSelectors"] = objConflictSelectorsMethod
+  objectCls.classMethods["primitiveConflictSelectors"] = objConflictSelectorsMethod
+  objectCls.allClassMethods["primitiveConflictSelectors"] = objConflictSelectorsMethod
+
+  let objClassConflictSelectorsMethod = createCoreMethod("classConflictSelectors")
+  objClassConflictSelectorsMethod.setNativeImpl(primitiveClassConflictSelectorsImpl)
+  setNativeValueFromInstanceWithInterp(objClassConflictSelectorsMethod, primitiveClassConflictSelectorsImpl)
+  objClassConflictSelectorsMethod.hasInterpreterParam = true
+  objectCls.methods["classConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.allMethods["classConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.methods["primitiveClassConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.allMethods["primitiveClassConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.classMethods["classConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.allClassMethods["classConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.classMethods["primitiveClassConflictSelectors"] = objClassConflictSelectorsMethod
+  objectCls.allClassMethods["primitiveClassConflictSelectors"] = objClassConflictSelectorsMethod
 
   # Add className for Class - returns the class name
   proc primitiveClassNameImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -4179,7 +4303,7 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Ensure all class objects (instances of Class) can use core class-side
   # bootstrap constructors like derive/new, not just Object.
-  for selector in ["derive", "derive:", "deriveWithAccessors:", "derive:getters:setters:", "new", "basicNew"]:
+  for selector in ["derive", "derive:", "derivePublic:", "derive:read:write:", "derive:read:write:superclasses:", "deriveWithAccessors:", "derive:getters:setters:", "new", "basicNew"]:
     if selector in objectCls.classMethods:
       let meth = objectCls.classMethods[selector]
       classCls.methods[selector] = meth
@@ -5109,6 +5233,7 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     # Rebuild all method tables after batch loading
     rebuildAllMethodTables()
     interp.methodTableDeferRebuild = false
+    reindexSourceFile(interp, displayPath)
 
     debug("Successfully loaded: ", displayPath)
     return toValue(true)
@@ -5203,6 +5328,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     # Rebuild all method tables after batch loading
     rebuildAllMethodTables()
     interp.methodTableDeferRebuild = false
+    reindexSourceFile(interp, displayPath)
 
     debug("Successfully loaded into library: ", displayPath)
     return toValue(true)
@@ -5231,18 +5357,6 @@ proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[No
   debug("Imported library, total imports: ", $interp.importedLibraries.len)
   return toValue(true)
 
-type
-  MethodSourceInfo = object
-    found: bool
-    filePath: string
-    ownerClass: string
-    header: string
-    source: string
-    suffix: string
-    startLine: int
-    endLine: int
-    hasBlock: bool
-
 proc parseSelectorFromMethodHeader(header: string): string =
   let tokens = header.splitWhitespace()
   if tokens.len == 0:
@@ -5265,32 +5379,80 @@ proc collectClassNamesForLookup(cls: Class, names: var seq[string]) =
   for parent in cls.superclasses:
     collectClassNamesForLookup(parent, names)
 
-proc findMethodInFile(filePath, className, selector: string): MethodSourceInfo =
+proc sourceIndexKey(className, selector: string, side: string = "instance"): string =
+  className & "|" & side & "|" & selector
+
+proc parseClassDefinitionOwner(line: string): string =
+  let assignIdx = line.find(":=")
+  if assignIdx < 0:
+    return ""
+  result = line[0..<assignIdx].strip()
+
+proc clearSourceEntriesForFile(interp: var Interpreter, filePath: string) =
+  if interp.sourceFileKeys == nil or interp.sourceIndex == nil:
+    return
+  if filePath in interp.sourceFileKeys[]:
+    for key in interp.sourceFileKeys[][filePath]:
+      if key in interp.sourceIndex[]:
+        interp.sourceIndex[].del(key)
+    interp.sourceFileKeys[].del(filePath)
+
+proc registerSourceEntry(interp: var Interpreter, entry: SourceEntry) =
+  if interp.sourceIndex == nil or interp.sourceFileKeys == nil:
+    return
+  let key = sourceIndexKey(entry.ownerClass, entry.selector, entry.side)
+  interp.sourceIndex[][key] = entry
+  if entry.filePath notin interp.sourceFileKeys[]:
+    interp.sourceFileKeys[][entry.filePath] = @[]
+  if key notin interp.sourceFileKeys[][entry.filePath]:
+    interp.sourceFileKeys[][entry.filePath].add(key)
+
+proc reindexSourceFile(interp: var Interpreter, filePath: string) =
   if not fileExists(filePath):
-    return result
+    return
+
+  clearSourceEntriesForFile(interp, filePath)
 
   let lines = readFile(filePath).splitLines()
-  for i in 0..<lines.len:
+  var i = 0
+  while i < lines.len:
     let rawLine = lines[i]
     let line = rawLine.strip()
     if line.len == 0 or line.startsWith("#"):
+      inc(i)
+      continue
+
+    let classDefOwner = parseClassDefinitionOwner(line)
+    if classDefOwner.len > 0 and line.find(" derive") >= 0:
+      registerSourceEntry(interp, SourceEntry(
+        found: true,
+        filePath: filePath,
+        ownerClass: classDefOwner,
+        header: line,
+        source: line,
+        suffix: "",
+        startLine: i + 1,
+        endLine: i + 1,
+        hasBlock: false,
+        selector: "<classDefinition>",
+        side: "classdef"
+      ))
+      inc(i)
       continue
 
     let sepIdx = line.find(">>")
     if sepIdx < 0:
+      inc(i)
       continue
 
     let headerClass = line[0..<sepIdx].strip()
-    if headerClass != className:
-      continue
-
     var rest = line[(sepIdx + 2)..^1].strip()
     if rest.len == 0:
+      inc(i)
       continue
 
     let primitiveIdx = rest.find("<primitive")
     let bracketIdx = rest.find('[')
-
     var selectorHeader = rest
     if primitiveIdx >= 0 and (bracketIdx < 0 or primitiveIdx < bracketIdx):
       selectorHeader = rest[0..<primitiveIdx].strip()
@@ -5298,18 +5460,26 @@ proc findMethodInFile(filePath, className, selector: string): MethodSourceInfo =
       selectorHeader = rest[0..<bracketIdx].strip()
 
     let parsedSelector = parseSelectorFromMethodHeader(selectorHeader)
-    if parsedSelector != selector:
+    if parsedSelector.len == 0:
+      inc(i)
       continue
 
-    result.found = true
-    result.filePath = filePath
-    result.ownerClass = className
-    result.startLine = i + 1
+    var entry = SourceEntry(
+      found: true,
+      filePath: filePath,
+      ownerClass: headerClass,
+      header: "",
+      source: "",
+      suffix: "",
+      startLine: i + 1,
+      endLine: i + 1,
+      hasBlock: false,
+      selector: parsedSelector,
+      side: if headerClass.endsWith(" class"): "class" else: "instance"
+    )
 
     if primitiveIdx >= 0 and (bracketIdx < 0 or primitiveIdx < bracketIdx):
-      result.hasBlock = false
-      result.header = rawLine.strip()
-
+      entry.header = rawLine.strip()
       var commentLines: seq[string] = @[]
       var endLineIdx = i + 1
       while endLineIdx < lines.len:
@@ -5322,71 +5492,80 @@ proc findMethodInFile(filePath, className, selector: string): MethodSourceInfo =
           inc(endLineIdx)
         else:
           break
-
-      result.endLine = endLineIdx
-      if commentLines.len > 0:
-        result.source = commentLines.join("\n")
-      else:
-        result.source = ""
-      result.suffix = ""
-      return result
+      entry.endLine = endLineIdx
+      entry.source = if commentLines.len > 0: commentLines.join("\n") else: ""
+      registerSourceEntry(interp, entry)
+      i = endLineIdx
+      continue
 
     let openIdx = rawLine.find('[')
     if openIdx < 0:
-      result.hasBlock = false
-      result.endLine = i + 1
-      result.header = rawLine.strip()
-      result.source = rawLine.strip()
-      result.suffix = ""
-      return result
+      entry.header = rawLine.strip()
+      entry.source = rawLine.strip()
+      registerSourceEntry(interp, entry)
+      inc(i)
+      continue
 
-    result.hasBlock = true
-    result.header = rawLine[0..<openIdx].strip(trailing = true, leading = false)
-
+    entry.hasBlock = true
+    entry.header = rawLine[0..<openIdx].strip(trailing = true, leading = false)
     var depth = 1
     var bodyLines: seq[string] = @[]
     var endLineIdx = i
     var suffix = ""
-
     var currentLine = if openIdx + 1 <= rawLine.high: rawLine[(openIdx + 1)..^1] else: ""
     var closed = false
-
     while true:
       var extracted = ""
       var j = 0
       while j < currentLine.len:
         let ch = currentLine[j]
         if ch == '[':
-          depth += 1
+          inc(depth)
           extracted.add(ch)
         elif ch == ']':
           if depth == 1:
-            depth -= 1
+            dec(depth)
             closed = true
             if j + 1 <= currentLine.high:
               suffix = currentLine[(j + 1)..^1]
             break
           else:
-            depth -= 1
+            dec(depth)
             extracted.add(ch)
         else:
           extracted.add(ch)
         inc(j)
-
       bodyLines.add(extracted)
       if closed:
         break
-
       inc(endLineIdx)
       if endLineIdx >= lines.len:
         break
       currentLine = lines[endLineIdx]
-    result.endLine = endLineIdx + 1
-    result.source = bodyLines.join("\n").strip(chars = {'\n', '\r'})
-    result.suffix = suffix
+    entry.endLine = endLineIdx + 1
+    entry.source = bodyLines.join("\n").strip(chars = {'\n', '\r'})
+    entry.suffix = suffix
+    registerSourceEntry(interp, entry)
+    i = endLineIdx + 1
+
+proc findIndexedSourceInfo(interp: var Interpreter, className, selector: string): SourceEntry =
+  for side in ["instance", "class", "classdef"]:
+    let key = sourceIndexKey(className, selector, side)
+    if interp.sourceIndex != nil and key in interp.sourceIndex[]:
+      let entry = interp.sourceIndex[][key]
+      reindexSourceFile(interp, entry.filePath)
+      if key in interp.sourceIndex[]:
+        return interp.sourceIndex[][key]
+
+proc findMethodInFile(interp: var Interpreter, filePath, className, selector: string): SourceEntry =
+  reindexSourceFile(interp, filePath)
+  result = findIndexedSourceInfo(interp, className, selector)
+
+proc findMethodSourceInfo(interp: var Interpreter, className, selector: string): SourceEntry =
+  result = findIndexedSourceInfo(interp, className, selector)
+  if result.found:
     return result
 
-proc findMethodSourceInfo(interp: var Interpreter, className, selector: string): MethodSourceInfo =
   var classNames: seq[string] = @[className]
   var resolvedClass: Class = nil
 
@@ -5416,9 +5595,33 @@ proc findMethodSourceInfo(interp: var Interpreter, className, selector: string):
 
   for candidateClass in classNames:
     for filePath in files:
-      let info = findMethodInFile(filePath, candidateClass, selector)
+      let info = findMethodInFile(interp, filePath, candidateClass, selector)
       if info.found:
         return info
+
+proc sourceEntriesForClass(interp: var Interpreter, className: string): seq[SourceEntry] =
+  if interp.sourceIndex == nil:
+    return @[]
+
+  var filesSeen: seq[string] = @[]
+  for _, entry in interp.sourceIndex[].pairs:
+    if entry.ownerClass == className and entry.filePath notin filesSeen:
+      filesSeen.add(entry.filePath)
+
+  for filePath in filesSeen:
+    reindexSourceFile(interp, filePath)
+
+  for _, entry in interp.sourceIndex[].pairs:
+    if entry.ownerClass == className:
+      result.add(entry)
+
+  result.sort(proc(a, b: SourceEntry): int =
+    if a.startLine < b.startLine: -1
+    elif a.startLine > b.startLine: 1
+    elif a.selector < b.selector: -1
+    elif a.selector > b.selector: 1
+    else: 0
+  )
 
 proc globalTableMethodSourceInfoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Harding methodSourceInfoForClass:selector:
@@ -5458,6 +5661,36 @@ proc globalTableMethodSourceInfoImpl(interp: var Interpreter, self: Instance, ar
     setTableValue(infoTable, toValue("suffix"), toValue(info.suffix))
 
   return infoTable.toValue()
+
+proc globalTableSourceEntriesForClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let entriesArray = newArrayInstance(arrayClass, @[])
+  if args.len < 1:
+    return entriesArray.toValue()
+
+  let className = case args[0].kind
+    of vkString: args[0].strVal
+    of vkSymbol: args[0].symVal
+    else: ""
+
+  if className.len == 0:
+    return entriesArray.toValue()
+
+  for entry in sourceEntriesForClass(interp, className):
+    let infoTable = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+    setTableValue(infoTable, toValue("found"), toValue(entry.found))
+    setTableValue(infoTable, toValue("file"), toValue(entry.filePath))
+    setTableValue(infoTable, toValue("ownerClass"), toValue(entry.ownerClass))
+    setTableValue(infoTable, toValue("header"), toValue(entry.header))
+    setTableValue(infoTable, toValue("source"), toValue(entry.source))
+    setTableValue(infoTable, toValue("startLine"), toValue(entry.startLine))
+    setTableValue(infoTable, toValue("endLine"), toValue(entry.endLine))
+    setTableValue(infoTable, toValue("hasBlock"), toValue(entry.hasBlock))
+    setTableValue(infoTable, toValue("suffix"), toValue(entry.suffix))
+    setTableValue(infoTable, toValue("selector"), toValue(entry.selector))
+    setTableValue(infoTable, toValue("side"), toValue(entry.side))
+    entriesArray.elements.add(infoTable.toValue())
+
+  return entriesArray.toValue()
 
 proc installLibraryMethods*() =
   ## Install Library methods that need interpreter access
@@ -5602,6 +5835,11 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   methodSourceInfoMethod.setNativeImpl(globalTableMethodSourceInfoImpl)
   methodSourceInfoMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "methodSourceInfoForClass:selector:", methodSourceInfoMethod)
+
+  let sourceEntriesForClassMethod = createCoreMethod("sourceEntriesForClass:")
+  sourceEntriesForClassMethod.setNativeImpl(globalTableSourceEntriesForClassImpl)
+  sourceEntriesForClassMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "sourceEntriesForClass:", sourceEntriesForClassMethod)
 
 # ============================================================================
 # Explicit Stack AST Interpreter (VM)
@@ -5937,6 +6175,9 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           return true
     interp.pushValue(nilValue())
     return true
+
+  of nkNamedAccess:
+    return evaluateNamedAccess(interp, cast[NamedAccessNode](node))
 
   of nkMessage:
     # Message send - will be implemented in Phase 3

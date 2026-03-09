@@ -143,6 +143,11 @@ proc instanceCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 # Class derivation methods
 proc classDeriveWithAccessorsImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classDeriveReadWriteParentsImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
+                        writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class
 
 # Slot accessors are implemented in vm.nim to avoid circular import
 
@@ -610,20 +615,40 @@ proc initCoreClasses*(): Class =
     classSelectorPutMethod.setNativeImpl(classAddClassMethodImpl)
     addMethodToClass(objectClass, "classSelector:put:", classSelectorPutMethod, isClassMethod = true)
 
-    # derive: - create class with slots (no accessors, use deriveWithAccessors: for that)
+    # derive: - create class with slots (no direct access metadata)
     let deriveWithSlotsMethod = createCoreMethod("derive:")
     deriveWithSlotsMethod.setNativeImpl(classDeriveImpl)
     addMethodToClass(objectClass, "derive:", deriveWithSlotsMethod, isClassMethod = true)
 
-    # deriveWithAccessors: - create class with slots and auto-generate accessors
+    # deriveWithAccessors: - legacy alias for derivePublic:
     let deriveWithAccessorsMethod = createCoreMethod("deriveWithAccessors:")
     deriveWithAccessorsMethod.setNativeImpl(classDeriveWithAccessorsImpl)
     addMethodToClass(objectClass, "deriveWithAccessors:", deriveWithAccessorsMethod, isClassMethod = true)
 
-    # derive:getters:setters: - create class with slots and selective accessor generation
+    # derivePublic: - preferred alias for fully-readable/writable slots
+    let derivePublicMethod = createCoreMethod("derivePublic:")
+    derivePublicMethod.setNativeImpl(classDerivePublicImpl)
+    addMethodToClass(objectClass, "derivePublic:", derivePublicMethod, isClassMethod = true)
+
+    # derive:getters:setters: - legacy alias for derive:read:write:
     let deriveGettersSettersMethod = createCoreMethod("derive:getters:setters:")
     deriveGettersSettersMethod.setNativeImpl(classDeriveGettersSettersImpl)
     addMethodToClass(objectClass, "derive:getters:setters:", deriveGettersSettersMethod, isClassMethod = true)
+
+    # derive:read:write: - preferred selective direct-access API
+    let deriveReadWriteMethod = createCoreMethod("derive:read:write:")
+    deriveReadWriteMethod.setNativeImpl(classDeriveReadWriteImpl)
+    addMethodToClass(objectClass, "derive:read:write:", deriveReadWriteMethod, isClassMethod = true)
+
+    # derive:read:write:superclasses: - canonical derivation API
+    let deriveReadWriteParentsMethod = createCoreMethod("derive:read:write:superclasses:")
+    deriveReadWriteParentsMethod.setNativeImpl(classDeriveReadWriteParentsImpl)
+    addMethodToClass(objectClass, "derive:read:write:superclasses:", deriveReadWriteParentsMethod, isClassMethod = true)
+
+    # Temporary compatibility alias
+    let deriveReadWriteParentsAliasMethod = createCoreMethod("derive:read:write:parents:")
+    deriveReadWriteParentsAliasMethod.setNativeImpl(classDeriveReadWriteParentsImpl)
+    addMethodToClass(objectClass, "derive:read:write:parents:", deriveReadWriteParentsAliasMethod, isClassMethod = true)
 
     # derive - create class without slots
     let deriveMethod = createCoreMethod("derive")
@@ -977,8 +1002,7 @@ proc classDeriveImpl*(self: Class, args: seq[NodeValue]): NodeValue =
     for slot in slotNameValues:
       if slot.kind == vkSymbol:
         slotNames.add(slot.symVal)
-  let className = if self.name.len > 0: self.name & "+Derived" else: "Anonymous"
-  let newClass = newClass(superclasses = @[self], slotNames = slotNames, name = className)
+  let newClass = createDerivedClass(self, slotNames, @[], @[])
   return NodeValue(kind: vkClass, classVal: newClass)
 
 proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
@@ -990,6 +1014,35 @@ proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
         result.add(elem.symVal)
       elif elem.kind == vkString:
         result.add(elem.strVal)
+
+proc classNameForDerived(self: Class): string =
+  if self.name.len > 0: self.name & "+Derived" else: "Anonymous"
+
+proc extractParentClasses(arr: NodeValue): seq[Class] =
+  result = @[]
+  if arr.kind == vkInstance and arr.instVal.kind == ikArray:
+    for elem in arr.instVal.elements:
+      if elem.kind == vkClass and elem.classVal != nil:
+        result.add(elem.classVal)
+      elif elem.kind == vkSymbol:
+        let parentVal = getGlobal(elem.symVal)
+        if parentVal.kind == vkClass and parentVal.classVal != nil:
+          result.add(parentVal.classVal)
+      elif elem.kind == vkString:
+        let parentVal = getGlobal(elem.strVal)
+        if parentVal.kind == vkClass and parentVal.classVal != nil:
+          result.add(parentVal.classVal)
+
+proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
+                        writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class =
+  let parents = @[self] & extraParents
+  newClass(
+    superclasses = parents,
+    slotNames = slotNames,
+    name = classNameForDerived(self),
+    readableSlotNames = readableSlotNames,
+    writableSlotNames = writableSlotNames
+  )
 
 proc createGetterMethod*(cls: Class, slotName: string): BlockNode =
   ## Create a getter method for a slot: slotName [ ^slotName ]
@@ -1055,30 +1108,13 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
   return meth
 
 proc classDeriveWithAccessorsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
-  ## Create a new subclass with slot names and auto-generate accessors
+  ## Compatibility wrapper for derivePublic:.
   ## args[0]: array of slot names
-  ## Generates both getters and setters for each slot
   var slotNames: seq[string] = @[]
   if args.len > 0:
     slotNames = extractSlotNamesFromArray(args[0])
 
-  let className = if self.name.len > 0: self.name & "+Derived" else: "Anonymous"
-  let newCls = newClass(superclasses = @[self], slotNames = slotNames, name = className)
-
-  # Generate getters and setters for each slot
-  for slotName in slotNames:
-    # Create and add getter: slotName
-    let getter = createGetterMethod(newCls, slotName)
-    if getter != nil:
-      addMethodToClass(newCls, slotName, getter, isClassMethod = false)
-
-    # Create and add setter: slotName:
-    let setterName = slotName & ":"
-    let setter = createSetterMethod(newCls, slotName)
-    if setter != nil:
-      addMethodToClass(newCls, setterName, setter, isClassMethod = false)
-
-  return NodeValue(kind: vkClass, classVal: newCls)
+  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, slotNames, slotNames, slotNames))
 
 proc refreshSlotIndicesInNode(node: Node, cls: Class) =
   ## Recursively scan AST and update SlotAccessNode indices to match current class layout
@@ -1143,7 +1179,7 @@ proc refreshAllSlotIndices*(cls: Class) =
       refreshSlotIndicesInNode(cast[Node](meth), cls)
 
 proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValue =
-  ## Create a new subclass with selective accessor generation
+  ## Compatibility wrapper for derive:read:write:.
   ## args[0]: array of all slot names
   ## args[1]: array of slot names to generate getters for
   ## args[2]: array of slot names to generate setters for
@@ -1159,23 +1195,45 @@ proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValu
   # Extract setter slot names
   let setterSlotNames = extractSlotNamesFromArray(args[2])
 
-  let className = if self.name.len > 0: self.name & "+Derived" else: "Anonymous"
-  let newCls = newClass(superclasses = @[self], slotNames = allSlotNames, name = className)
+  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, allSlotNames, getterSlotNames, setterSlotNames))
 
-  # Generate getters for specified slots
-  for slotName in getterSlotNames:
-    let getter = createGetterMethod(newCls, slotName)
-    if getter != nil:
-      addMethodToClass(newCls, slotName, getter, isClassMethod = false)
+proc classDeriveReadWriteParentsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  ## Canonical class derivation entry point.
+  ## args[0]: all slot names
+  ## args[1]: readable slot names
+  ## args[2]: writable slot names
+  ## args[3]: extra parent classes
+  if args.len < 4:
+    return nilValue()
 
-  # Generate setters for specified slots
-  for slotName in setterSlotNames:
-    let setterName = slotName & ":"
-    let setter = createSetterMethod(newCls, slotName)
-    if setter != nil:
-      addMethodToClass(newCls, setterName, setter, isClassMethod = false)
+  let slotNames = extractSlotNamesFromArray(args[0])
+  let readableSlotNames = extractSlotNamesFromArray(args[1])
+  let writableSlotNames = extractSlotNamesFromArray(args[2])
+  let extraParents = extractParentClasses(args[3])
 
-  return NodeValue(kind: vkClass, classVal: newCls)
+  return NodeValue(
+    kind: vkClass,
+    classVal: createDerivedClass(self, slotNames, readableSlotNames, writableSlotNames, extraParents)
+  )
+
+proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  ## Create a new subclass with all declared slots readable and writable.
+  var slotNames: seq[string] = @[]
+  if args.len > 0:
+    slotNames = extractSlotNamesFromArray(args[0])
+
+  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, slotNames, slotNames, slotNames))
+
+proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  ## Preferred selective direct-access wrapper.
+  if args.len < 3:
+    return nilValue()
+
+  let allSlotNames = extractSlotNamesFromArray(args[0])
+  let readableSlotNames = extractSlotNamesFromArray(args[1])
+  let writableSlotNames = extractSlotNamesFromArray(args[2])
+
+  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, allSlotNames, readableSlotNames, writableSlotNames))
 
 proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Create a new class with multiple parents and define methods
@@ -1454,7 +1512,9 @@ proc classAddMethodImpl*(interp: var Interpreter, self: Instance, args: seq[Node
                    else: ""
     let meth: BlockNode = if args[1].kind == vkBlock: args[1].blockVal else: nil
     if selector.len > 0 and meth != nil:
-      addMethodToClass(self.class, selector, meth, deferRebuild=interp.methodTableDeferRebuild)
+      addMethodToClass(self.class, selector, meth,
+        isClassMethod = interp.implicitMethodDefinitionClassSide,
+        deferRebuild = interp.methodTableDeferRebuild)
   return self.class.toValue()
 
 proc classAddClassMethodImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2095,6 +2155,10 @@ proc rebuildAllTables*(cls: Class) =
 
   var allMethods = initTable[string, BlockNode](expectedSize)
   var allClassMethods = initTable[string, BlockNode](expectedSize)
+  var conflictSelectors: seq[string] = @[]
+  var classConflictSelectors: seq[string] = @[]
+  var inheritedOwners = initTable[string, string]()
+  var inheritedClassOwners = initTable[string, string]()
   
   # Also inherit slot names from parents
   var allSlotNames = cls.slotNames
@@ -2113,6 +2177,25 @@ proc rebuildAllTables*(cls: Class) =
   for sel, m in cls.classMethods:
     allClassMethods[sel] = m
 
+  # Detect direct-parent conflicts before inheritance; first parent wins.
+  for parent in cls.superclasses:
+    for sel, _ in parent.methods:
+      if sel in cls.methods:
+        continue
+      if sel in inheritedOwners:
+        if sel notin conflictSelectors:
+          conflictSelectors.add(sel)
+      else:
+        inheritedOwners[sel] = parent.name
+    for sel, _ in parent.classMethods:
+      if sel in cls.classMethods:
+        continue
+      if sel in inheritedClassOwners:
+        if sel notin classConflictSelectors:
+          classConflictSelectors.add(sel)
+      else:
+        inheritedClassOwners[sel] = parent.name
+
   # For parent classes, use allMethods (includes what they inherited)
   # This ensures we pick up manually-added methods from tests
   for parent in cls.superclasses:
@@ -2128,6 +2211,8 @@ proc rebuildAllTables*(cls: Class) =
   # Rebuild tables
   cls.allMethods = allMethods
   cls.allClassMethods = allClassMethods
+  cls.conflictSelectors = conflictSelectors
+  cls.classConflictSelectors = classConflictSelectors
 
   # Mark all subclasses as dirty too - they need to rebuild from new parent tables
   for subclass in cls.subclasses:
