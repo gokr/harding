@@ -2,19 +2,19 @@
 #
 # Multiple Inheritance Example
 #
-# Harding supports multiple inheritance via addSuperclass:
+# Harding supports ordered multiple inheritance via addSuperclass:
 
 "=== Multiple Inheritance ===" println
 
 # Define parent classes
-Animal := Object deriveWithAccessors: #(name)
+Animal := Object derivePublic: #(name)
 Animal>>speak [
   ^ "Some generic animal sound"
 ]
 
-Pet := Object deriveWithAccessors: #(owner)
+Pet := Object derivePublic: #(owner)
 Pet>>greet [
-  ^ "Hello, " , self owner , "!"
+  ^ "Hello, " , owner , "!"
 ]
 
 Pet>>speak [
@@ -22,10 +22,9 @@ Pet>>speak [
 ]
 
 # Create a class with multiple parents using addSuperclass:
-Dog := Object deriveWithAccessors: #(breed)  
+Dog := Object derivePublic: #(breed)
 
-# Override any conflicting methods before adding parents to avoid
-# method selector conflict error, both Animal and Pet have a 'speak' method
+# Both Animal and Pet define #speak. The first parent wins, and conflicts are tracked.
 Dog>>speak [
   ^ "Woof!"
 ]
@@ -35,16 +34,16 @@ Dog addSuperclass: Pet
 
 # Create an instance
 MyDog := Dog new
-MyDog name: "Buddy"
-MyDog owner: "Alice"
-MyDog breed: "Golden Retriever"
+MyDog::name := "Buddy"
+MyDog::owner := "Alice"
+MyDog::breed := "Golden Retriever"
 
 "" println
 "=== Testing inherited methods ===" println
 
-("Name: " , MyDog name) println
-("Owner: " , MyDog owner) println
-("Breed: " , MyDog breed) println
+("Name: " , MyDog::name) println
+("Owner: " , MyDog::owner) println
+("Breed: " , MyDog::breed) println
 
 "" println
 ("Speak: " , MyDog speak) println

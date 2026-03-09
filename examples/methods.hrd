@@ -37,13 +37,13 @@ result3 := calc factorial: 5
 "" println
 "=== Method Definition with >> ===" println
 
-GreeterClass := Object deriveWithAccessors: #(greeting)
+GreeterClass := Object derivePublic: #(greeting)
 
 GreeterClass>>greet: name [
-  ^ (self greeting) , ", " , name , "!"
+  ^ greeting , ", " , name , "!"
 ]
 
 Greeter := GreeterClass new
-Greeter greeting: "Hello"
+Greeter::greeting := "Hello"
 
 ("Greeting: " , (Greeter greet: "World")) println

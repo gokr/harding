@@ -6,22 +6,22 @@
 "=== Basic Single Inheritance ===" println
 
 # Define base class with slots
-Animal := Object deriveWithAccessors: #(name)
+Animal := Object derivePublic: #(name)
 
 Animal>>initialize [
   name := "Unknown"
 ]
 
 Animal>>speak [
-  ^ (self name) , " makes a sound"
+  ^ name , " makes a sound"
 ]
 
 Animal>>describe [
-  ^ "Animal: " , (self name)
+  ^ "Animal: " , name
 ]
 
 # Define subclass with super support
-Dog := Animal deriveWithAccessors: #(breed)
+Dog := Animal derivePublic: #(breed)
 
 Dog>>initialize [
   super initialize
@@ -29,25 +29,25 @@ Dog>>initialize [
 ]
 
 Dog>>speak [
-  ^ (self name) , " barks"
+  ^ name , " barks"
 ]
 
 Dog>>describe [
-  ^ super describe , " (Breed: " , (self breed) , ")"
+  ^ super describe , " (Breed: " , breed , ")"
 ]
 
 "" println
 "=== Creating Instances ===" println
 
 animal := Animal new initialize
-animal name: "Generic Animal"
+animal::name := "Generic Animal"
 
 ("Animal speak: " , animal speak) println
 ("Animal describe: " , animal describe) println
 
 dog := Dog new initialize
-dog name: "Buddy"
-dog breed: "Labrador"
+dog::name := "Buddy"
+dog::breed := "Labrador"
 
 "" println
 ("Dog speak: " , dog speak) println
@@ -64,7 +64,7 @@ dog breed: "Labrador"
 "=== Inheritance Chain ===" println
 
 # Define another subclass
-Cat := Animal deriveWithAccessors: #(color)
+Cat := Animal derivePublic: #(color)
 
 Cat>>initialize [
   super initialize
@@ -76,17 +76,17 @@ Cat>>speak [
 ]
 
 Cat>>describe [
-  ^ super describe , " (Color: " , (self color) , ")"
+  ^ super describe , " (Color: " , color , ")"
 ]
 
 # Create instances
 myCat := Cat new initialize
-myCat name: "Whiskers"
-myCat color: "orange"
+myCat::name := "Whiskers"
+myCat::color := "orange"
 
 "" println
-("Cat name: " , myCat name) println
-("Cat color: " , myCat color) println
+("Cat name: " , myCat::name) println
+("Cat color: " , myCat::color) println
 ("Cat speaks: " , myCat speak) println
 ("Cat describes: " , myCat describe) println
 

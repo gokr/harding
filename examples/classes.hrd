@@ -5,7 +5,7 @@
 
 "=== Class with Instance Variables ===" println
 
-Person := Object deriveWithAccessors: #(name age)
+Person := Object derivePublic: #(name age)
 
 "Person class created" println
 
@@ -13,33 +13,33 @@ Person := Object deriveWithAccessors: #(name age)
 "=== Creating Instances ===" println
 
 person1 := Person new
-person1 name: "Alice"
-person1 age: 30
+person1::name := "Alice"
+person1::age := 30
 
 person2 := Person new
-person2 name: "Bob"
-person2 age: 25
+person2::name := "Bob"
+person2::age := 25
 
-("Person 1: " , (person1 name) , ", " , (person1 age) asString) println
-("Person 2: " , (person2 name) , ", " , (person2 age) asString) println
+("Person 1: " , (person1::name) , ", " , (person1::age) asString) println
+("Person 2: " , (person2::name) , ", " , (person2::age) asString) println
 
 "" println
 "=== Independent Instances ===" println
 
-("After creation, person1 age: " , (person1 age) asString) println
+("After creation, person1 age: " , (person1::age) asString) println
 ("Changing person2 does not affect person1" println)
 
 "" println
 "=== Chained Class Creation ===" println
 
-Point := Object deriveWithAccessors: #(x y)
+Point := Object derivePublic: #(x y)
 
 Point>>printString [
-  ^ "(" , (self x asString) , ", " , (self y asString) , ")"
+  ^ "(" , (x asString) , ", " , (y asString) , ")"
 ]
 
 P := Point new
-P x: 10
-P y: 20
+P::x := 10
+P::y := 20
 
 ("Point: " , P printString) println

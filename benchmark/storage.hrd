@@ -5,16 +5,16 @@
 #
 # This benchmark creates a tree structure and counts node visits.
 
-SomRandom := Object deriveWithAccessors: #(seed).
+SomRandom := Object derivePublic: #(seed).
 
 SomRandom>>initialize [
-  self seed: 74755
+  seed := 74755
 ]
 
 SomRandom>>next [
   | newSeed |
-  newSeed := (self seed * 16807) % 2147483647.
-  self seed: newSeed.
+  newSeed := (seed * 16807) % 2147483647.
+  seed := newSeed.
   ^ newSeed
 ]
 
@@ -22,18 +22,18 @@ SomRandom>>next: max [
   ^ (self next) % max
 ]
 
-Storage := Object deriveWithAccessors: #(count).
+Storage := Object derivePublic: #(count).
 
 Storage>>initialize [
-  self count: 0
+  count := 0
 ]
 
 Storage>>benchmark [
   | random |
-  self count: 0.
+  count := 0.
   random := SomRandom new.
   self buildTreeDepth: 7 with: random.
-  ^ self count
+  ^ count
 ]
 
 Storage>>verifyResult: result [
@@ -41,7 +41,7 @@ Storage>>verifyResult: result [
 ]
 
 Storage>>buildTreeDepth: depth with: random [
-  self count: (self count + 1).
+  count := (count + 1).
   depth = 0 ifTrue: [
     ^ Array new: ((random next) % 10 + 1) withAll: 0
   ] ifFalse: [

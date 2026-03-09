@@ -3,26 +3,26 @@
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
 # Expected result: true (successful move of 13 disks)
 
-TowersDisk := Object deriveWithAccessors: #(diskSize nextDisk).
+TowersDisk := Object derivePublic: #(diskSize nextDisk).
 
 TowersDisk>>initialize: aSize [
-  self diskSize: aSize.
-  self nextDisk: nil
+  diskSize := aSize.
+  nextDisk := nil
 ]
 
-TowersDisk>>size [ ^ self diskSize ]
+TowersDisk>>size [ ^ diskSize ]
 
 # Tower class manages a peg with a stack of disks
-Tower := Object deriveWithAccessors: #(towerIndex heldDisk).
+Tower := Object derivePublic: #(towerIndex heldDisk).
 
 Tower>>initialize: anIndex [
-  self towerIndex: anIndex.
-  self heldDisk: nil
+  towerIndex := anIndex.
+  heldDisk := nil
 ]
 
 Tower>>initialize: anIndex withDisks: numDisks [
-  self towerIndex: anIndex.
-  self heldDisk: nil.
+  towerIndex := anIndex.
+  heldDisk := nil.
   self addDisks: numDisks
 ]
 
@@ -39,17 +39,17 @@ Tower>>addDisks: numDisks [
 
 Tower>>addDisk: disk [
   disk notNil ifTrue: [
-    disk nextDisk: self heldDisk.
-    self heldDisk: disk
+    disk::nextDisk := heldDisk.
+    heldDisk := disk
   ]
 ]
 
 Tower>>removeDisk [
   | disk nextDiskRef |
-  disk := self heldDisk.
+  disk := heldDisk.
   disk notNil ifTrue: [
-    nextDiskRef := disk nextDisk.
-    self heldDisk: nextDiskRef
+    nextDiskRef := disk::nextDisk.
+    heldDisk := nextDiskRef
   ].
   ^ disk
 ]
@@ -74,7 +74,7 @@ Tower>>moveTo: destination using: helper disks: numDisks [
 
 Tower>>verify: expectedDisks [
   | current count expectedSize dsize |
-  current := self heldDisk.
+  current := heldDisk.
   count := 0.
   expectedSize := 1.
   
@@ -85,7 +85,7 @@ Tower>>verify: expectedDisks [
     ].
     count := count + 1.
     expectedSize := expectedSize + 1.
-    current := current nextDisk
+    current := current::nextDisk
   ].
   
   ^ count = expectedDisks

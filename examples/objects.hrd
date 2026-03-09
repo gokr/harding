@@ -5,27 +5,27 @@
 
 "=== Creating a Class with Slots ===" println
 
-Person := Object deriveWithAccessors: #(name age)
+Person := Object derivePublic: #(name age)
 
-"Person class created with automatic accessors" println
+"Person class created with direct slot access" println
 
 "" println
 "=== Creating Instances ===" println
 
 person1 := Person new
-person1 name: "Alice"
-person1 age: 30
+person1::name := "Alice"
+person1::age := 30
 
 person2 := Person new
-person2 name: "Bob"
-person2 age: 25
+person2::name := "Bob"
+person2::age := 25
 
-("Person 1: " , (person1 name) , ", age: " , (person1 age) asString) println
-("Person 2: " , (person2 name) , ", age: " , (person2 age) asString) println
+("Person 1: " , (person1::name) , ", age: " , (person1::age) asString) println
+("Person 2: " , (person2::name) , ", age: " , (person2::age) asString) println
 
 "" println
 "=== Reading Properties ===" println
 
-("person1 name: " , person1 name) println
-("person1 age as string: " , (person1 age asString)) println
-("person2 name: " , person2 name) println
+("person1 name: " , person1::name) println
+("person1 age as string: " , (person1::age asString)) println
+("person2 name: " , person2::name) println

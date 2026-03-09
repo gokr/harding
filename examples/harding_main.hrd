@@ -1,34 +1,30 @@
 #!/usr/bin/env harding
 #
-# Test method conflict resolution - methods MUST be overridden BEFORE addSuperclass:
-#
-# In multiple inheritance, if both parent classes have the same method selector,
-# the child class MUST define its own version to avoid ambiguity.
+# Test method conflict resolution with ordered multiple inheritance.
 #
 # This example demonstrates:
 # 1. Animal has a greet method
 # 2. Pet has the SAME greet method
-# 3. Dog MUST define greet before addSuperclass: to resolve the conflict
+# 3. Dog defines greet locally, which still wins over inherited parents
 
 Harding compile: [
     # Base class with a greet method
-    Animal := Object deriveWithAccessors: #(name)
+    Animal := Object derivePublic: #(name)
     
     Animal>>greet [
         ^ "Hello from Animal"
     ]
     
     # Another base with the SAME greet method
-    Pet := Object deriveWithAccessors: #(owner)
+    Pet := Object derivePublic: #(owner)
     
     Pet>>greet [
         ^ "Hello from Pet"
     ]
     
-    # Dog inherits from BOTH - must have its OWN greet to resolve conflict!
-    Dog := Object deriveWithAccessors: #(breed)
+    Dog := Object derivePublic: #(breed)
     
-    # This override is REQUIRED when inheriting from multiple parents with same method
+    # Local override still wins over inherited parent methods
     Dog>>greet [
         ^ "Woof! Hello!"
     ]
@@ -40,12 +36,12 @@ Harding compile: [
 
 Harding main: [
     MyDog := Dog new
-    MyDog name: "Buddy"
-    MyDog owner: "Alice"
-    MyDog breed: "Golden Retriever"
+    MyDog::name := "Buddy"
+    MyDog::owner := "Alice"
+    MyDog::breed := "Golden Retriever"
     
-    ("Name: " , MyDog name) println
-    ("Owner: " , MyDog owner) println
-    ("Breed: " , MyDog breed) println
+    ("Name: " , MyDog::name) println
+    ("Owner: " , MyDog::owner) println
+    ("Breed: " , MyDog::breed) println
     ("Greet: " , MyDog greet) println
 ]

@@ -3,7 +3,7 @@
 # Ported from SOM benchmark suite (https://github.com/smarr/SOM)
 # 
 # This is a simplified version that validates Harding language features:
-# - Class definition with deriveWithAccessors:
+# - Class definition with derivePublic:
 # - Array creation and manipulation (at:, at:put:)
 # - While loops (whileTrue:)
 # - Method definition with parameters
@@ -16,10 +16,10 @@
 | Queens solver arr result count i |
 
 # Define a Queens class
-Queens := Object deriveWithAccessors: #(positions).
+Queens := Object derivePublic: #(positions).
 
 Queens>>initialize [
-  self positions: (Array new: 8)
+  positions := (Array new: 8)
 ]
 
 Queens>>solve [
@@ -29,7 +29,7 @@ Queens>>solve [
   i := 1.
   valid := 1.
   [ i <= 8 ] whileTrue: [
-    self positions at: i put: i.
+    positions at: i put: i.
     i := i + 1
   ].
   
@@ -37,7 +37,7 @@ Queens>>solve [
   i := 1.
   count := 0.
   [ i <= 8 ] whileTrue: [
-    (self positions at: i) > 0 ifTrue: [
+    (positions at: i) > 0 ifTrue: [
       count := count + 1
     ].
     i := i + 1
