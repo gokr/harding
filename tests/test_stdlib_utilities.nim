@@ -35,99 +35,184 @@ suite "Stdlib: Object utilities":
     check(result[0][^1].kind == vkBool)
     check(result[0][^1].boolVal == true)
 
-suite "Stdlib: Accessor Generation":
+suite "Stdlib: Direct Access":
   var interp {.used.}: Interpreter
 
   setup:
     interp = sharedInterp
 
-  test "deriveWithAccessors: generates getters and setters":
+  test "derivePublic: allows readable and writable slots":
     let result = interp.evalStatements("""
-      Auto := Object deriveWithAccessors: #(x y).
+      Auto := Object derivePublic: #(x y).
       AutoInst := Auto new.
-      AutoInst x: 10.
-      AutoInst y: 20.
-      Sum := AutoInst x + AutoInst y.
+      AutoInst::x := 10.
+      AutoInst::y := 20.
+      Sum := AutoInst::x + AutoInst::y.
       Result := Sum
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 30)
 
-  test "deriveWithAccessors: getter returns correct value":
+  test "derivePublic: slot read returns correct value":
     let result = interp.evalStatements("""
-      Auto := Object deriveWithAccessors: #(name).
+      Auto := Object derivePublic: #(name).
       AutoInst := Auto new.
-      AutoInst name: "Test".
-      Result := AutoInst name
+      AutoInst::name := "Test".
+      Result := AutoInst::name
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkString)
     check(result[0][^1].strVal == "Test")
 
-  test "derive:getters:setters: generates selective accessors":
+  test "derive:read:write: stores selective direct access":
     let result = interp.evalStatements("""
       Selective := Object derive: #(x y)
-                              getters: #(x y)
-                              setters: #(x).
+                              read: #(x y)
+                              write: #(x).
       SelInst := Selective new.
-      SelInst x: 5.
-      XValue := SelInst x.
+      SelInst::x := 5.
+      XValue := SelInst::x.
       Result := XValue
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 5)
 
-  test "derive:getters:setters: only generates specified accessors":
+  test "derive:read:write: only grants specified direct access":
     let result = interp.evalStatements("""
       Selective := Object derive: #(x y)
-                              getters: #(x)
-                              setters: #(x).
+                              read: #(x)
+                              write: #(x).
       SelInst := Selective new.
-      SelInst x: 5.
-      XValue := SelInst x.
+      SelInst::x := 5.
+      XValue := SelInst::x.
       Result := XValue
     """)
     check(result[0][^1].intVal == 5)
 
-  test "deriveWithAccessors: works with multiple slots":
+  test "derivePublic: works with multiple slots":
     let result = interp.evalStatements("""
-      Multi := Object deriveWithAccessors: #(a b c d).
+      Multi := Object derivePublic: #(a b c d).
       MultiInst := Multi new.
-      MultiInst a: 1.
-      MultiInst b: 2.
-      MultiInst c: 3.
-      MultiInst d: 4.
-      Total := MultiInst a + MultiInst b + MultiInst c + MultiInst d.
+      MultiInst::a := 1.
+      MultiInst::b := 2.
+      MultiInst::c := 3.
+      MultiInst::d := 4.
+      Total := MultiInst::a + MultiInst::b + MultiInst::c + MultiInst::d.
       Result := Total
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 10)
 
-  test "deriveWithAccessors: works with string slots":
+  test "derivePublic: works with string slots":
     let result = interp.evalStatements("""
-      Person := Object deriveWithAccessors: #(name age).
+      Person := Object derivePublic: #(name age).
       PersonInst := Person new.
-      PersonInst name: "Alice".
-      PersonInst age: 30.
-      Greeting := PersonInst name.
+      PersonInst::name := "Alice".
+      PersonInst::age := 30.
+      Greeting := PersonInst::name.
       Result := Greeting
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkString)
     check(result[0][^1].strVal == "Alice")
 
-  test "deriveWithAccessors: getter returns nil for unset slot":
+  test "derivePublic: unread slot defaults to nil":
     let result = interp.evalStatements("""
-      Thing := Object deriveWithAccessors: #(value).
+      Thing := Object derivePublic: #(value).
       ThingInst := Thing new.
-      Result := ThingInst value
+      Result := ThingInst::value
     """)
     check(result[1].len == 0)
     # In Harding, nil is represented as an instance of UndefinedObject
     check(result[0][^1].kind == vkInstance)
+
+  test "derivePublic: creates readable and writable slot metadata":
+    let result = interp.evalStatements("""
+      PublicThing := Object derivePublic: #(name age).
+      Result := PublicThing
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkClass)
+    check(result[0][^1].classVal.readableSlotNames == @[
+      "name", "age"
+    ])
+    check(result[0][^1].classVal.writableSlotNames == @[
+      "name", "age"
+    ])
+
+  test "derive:read:write: stores direct access metadata":
+    let result = interp.evalStatements("""
+      Selective2 := Object derive: #(x y z)
+                               read: #(x z)
+                               write: #(y).
+      Result := Selective2
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkClass)
+    check(result[0][^1].classVal.readableSlotNames == @[
+      "x", "z"
+    ])
+    check(result[0][^1].classVal.writableSlotNames == @[
+      "y"
+    ])
+
+  test "derive:read:write:superclasses: stores ordered superclasses":
+    let result = interp.evalStatements("""
+      P1 := Object derive.
+      P2 := Mixin derive.
+      Parents := Array new.
+      Parents add: P2.
+      Child := P1 derive: #(value)
+                  read: #(value)
+                  write: #()
+                  superclasses: Parents.
+      Result := Child
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkClass)
+    check(result[0][^1].classVal.superclasses.len == 2)
+    check(result[0][^1].classVal.superclasses[0].name == "P1")
+    check(result[0][^1].classVal.superclasses[1].name == "P2")
+
+  test "multiple inheritance keeps first parent method and records conflict":
+    let result = interp.evalStatements("""
+      P1 := Mixin derive.
+      P1>>greet [ ^ "from P1" ].
+      P2 := Mixin derive.
+      P2>>greet [ ^ "from P2" ].
+      Parents := Array new.
+      Parents add: P2.
+      Child := P1 derive: #()
+                  read: #()
+                  write: #()
+                  superclasses: Parents.
+      Result := Array new.
+      Result add: ((Child new) greet).
+      Result add: (Child conflictSelectors size).
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInstance)
+    let arr = result[0][^1].instVal.elements
+    check(arr[0].kind == vkString)
+    check(arr[0].strVal == "from P1")
+    check(arr[1].kind == vkInt)
+    check(arr[1].intVal == 1)
+
+  test ":: reads and writes declared public slots":
+    let result = interp.evalStatements("""
+      Point := Object derivePublic: #(x y).
+      P := Point new.
+      P::x := 10.
+      P::y := 20.
+      Result := P::x + P::y
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 30)
 
 suite "Stdlib: Library":
   var interp {.used.}: Interpreter
@@ -183,6 +268,26 @@ suite "Stdlib: Library":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkBool)
     check(result[0][^1].boolVal == false)
+
+  test ":: reads and writes table-style bindings on Library":
+    let result = interp.evalStatements("""
+      Lib := Library new.
+      Lib::Thing := 42.
+      Result := Lib::Thing
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
+
+  test ":: reads and writes table keys":
+    let result = interp.evalStatements("""
+      Tbl := Table new.
+      Tbl::answer := 99.
+      Result := Tbl::answer
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 99)
 
   test "Harding import: makes Library bindings accessible":
     var freshInterp = newInterpreter()
@@ -285,12 +390,71 @@ suite "Stdlib: Library":
       "Lib load: \"" & testFile & "\".\n" &
       "Harding import: Lib.\n" &
       "Inst := LibTestClass new.\n" &
-      "Inst value: 99.\n" &
-      "Result := Inst value\n"
+      "Inst::value := 99.\n" &
+      "Result := Inst::value\n"
     )
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 99)
+
+suite "Stdlib: Source tracking":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "methodSourceInfo refreshes line offsets after file edits":
+    let tmpDir = getCurrentDir() / "lib" / "tmp"
+    createDir(tmpDir)
+    let filePath = tmpDir / "TrackedSource.hrd"
+
+    writeFile(filePath, "TrackedSource := Object derive.\nTrackedSource>>alpha [\n  ^ 1\n].\nTrackedSource>>beta [\n  ^ 2\n].\n")
+    discard interp.evalStatements("Harding load: \"" & filePath & "\".")
+
+    let first = interp.evalStatements("""
+      Info := Harding methodSourceInfoForClass: "TrackedSource" selector: "beta".
+      Result := Info at: "startLine"
+    """)
+    check(first[1].len == 0)
+    check(first[0][^1].kind == vkInt)
+
+    writeFile(filePath, "TrackedSource := Object derive.\nTrackedSource>>alpha [\n  ^ 1\n].\n\n\nTrackedSource>>beta [\n  ^ 2\n].\n")
+
+    let second = interp.evalStatements("""
+      Info := Harding methodSourceInfoForClass: "TrackedSource" selector: "beta".
+      Result := Info at: "startLine"
+    """)
+    check(second[1].len == 0)
+    check(second[0][^1].kind == vkInt)
+    check(second[0][^1].intVal > first[0][^1].intVal)
+
+  test "class definition source is indexed":
+    let tmpDir = getCurrentDir() / "lib" / "tmp"
+    createDir(tmpDir)
+    let filePath = tmpDir / "TrackedClassDef.hrd"
+
+    writeFile(filePath, "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().\n")
+    discard interp.evalStatements("Harding load: \"" & filePath & "\".")
+
+    let result = interp.evalStatements("""
+      Info := Harding methodSourceInfoForClass: "TrackedClassDef" selector: "<classDefinition>".
+      Result := Info at: "source"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().")
+
+  test "sourceEntriesForClass returns ordered entries including class definition":
+    let result = interp.evalStatements("""
+      Entries := Harding sourceEntriesForClass: "TrackedClassDef".
+      Result := Array new.
+      Result add: (Entries size).
+      Result add: ((Entries at: 0) at: "selector").
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInstance)
+    check(result[0][^1].instVal.elements[0].intVal >= 1)
+    check(result[0][^1].instVal.elements[1].strVal == "<classDefinition>")
 
 suite "Stdlib: Number - Advanced":
   var interp {.used.}: Interpreter

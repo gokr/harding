@@ -102,8 +102,8 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
   if deriveMsg == nil:
     return
   
-  # Handle derive: and deriveWithAccessors:
-  if deriveMsg.selector notin ["derive:", "derive", "deriveWithAccessors:", "deriveWithAccessors"]:
+  # Handle canonical class derivation selectors.
+  if deriveMsg.selector notin ["derive:", "derive", "derivePublic:", "derivePublic", "derive:read:write:", "derive:read:write:superclasses:", "deriveWithAccessors:", "deriveWithAccessors"]:
     return
   
   # Extract parent from receiver of derive message

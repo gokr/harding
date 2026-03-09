@@ -23,7 +23,7 @@
 #   - Accessor patterns (deriveWithAccessors)
 #   - nil handling (isNil, class)
 #   - Multiple inheritance (addSuperclass:)
-#   - Selective accessors (derive:getters:setters:)
+#   - Selective direct access (derive:read:write:)
 #   - Super sends (unqualified and qualified)
 #   - Introspection (superclassNames, respondsTo:, slotNames, class)
 #   - Arithmetic exceptions (DivisionByZero)
@@ -307,28 +307,32 @@ suite "Website Examples - Accessor Patterns":
   setup:
     interp = sharedInterp
 
-  test "deriveWithAccessors creates getters and setters":
+  test "derivePublic creates direct slot access":
     let results = interp.evalStatements("""
-      PointA := Object deriveWithAccessors: #(x y)
+      PointA := Object derivePublic: #(x y)
       p := PointA new
-      p x: 100
-      p y: 200
-      Result := p x
+      p::x := 100
+      p::y := 200
+      Result := p::x
     """)
     check(results[1].len == 0)
     check(results[0][^1].intVal == 100)
 
   test "Point + operator with aPoint x accessor access":
     let results = interp.evalStatements("""
-      PointA2 := Object deriveWithAccessors: #(x y)
+      PointA2 := Object derivePublic: #(x y)
       PointA2 >>+ aPoint [
-          x := x + aPoint x
-          y := y + aPoint y
+          x := x + aPoint::x
+          y := y + aPoint::y
       ]
-      p1 := PointA2 new x: 10; y: 20
-      p2 := PointA2 new x: 5; y: 10
+      p1 := PointA2 new.
+      p1::x := 10.
+      p1::y := 20.
+      p2 := PointA2 new.
+      p2::x := 5.
+      p2::y := 10.
       p1 + p2
-      Result := p1 x
+      Result := p1::x
     """)
     check(results[1].len == 0)
     check(results[0][^1].intVal == 15)
@@ -427,14 +431,14 @@ suite "Website Examples - Multiple Inheritance":
     else:
       check(results[0][^1].intVal >= 1)
 
-  test "derive:getters:setters: for selective accessors":
+  test "derive:read:write: for selective direct access":
     let results = interp.evalStatements("""
       Account := Object derive: #(balance owner)
-                             getters: #(balance owner)
-                             setters: #(balance)
+                             read: #(balance owner)
+                             write: #(balance)
       acc := Account new
-      acc balance: 100
-      Result := acc balance
+      acc::balance := 100
+      Result := acc::balance
     """)
     check(results[1].len == 0)
     check(results[0][^1].intVal == 100)

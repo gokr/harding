@@ -60,13 +60,13 @@ suite "Interpreter: Method Execution with Parameters":
 
   test "executes methods with multiple keyword parameters":
     let result = interp.evalStatements("""
-      Point := Object deriveWithAccessors: #(x y).
+      Point := Object derivePublic: #(x y).
       Point>>setX: newX setY: newY [
-        self x: newX.
-        self y: newY
+        x := newX.
+        y := newY
       ].
-      Point>>getX [ ^self x ].
-      Point>>getY [ ^self y ].
+      Point>>getX [ ^x ].
+      Point>>getY [ ^y ].
 
       Point2 := Point new.
       Point2 setX: 10 setY: 20.
@@ -82,13 +82,13 @@ suite "Interpreter: Method Execution with Parameters":
 
   test "methods can access self and slots":
     let result = interp.evalStatements("""
-      Person := Object deriveWithAccessors: #(name age).
-      Person >> getName [ ^self name ].
-      Person >> getAge [ ^self age ].
+      Person := Object derivePublic: #(name age).
+      Person >> getName [ ^name ].
+      Person >> getAge [ ^age ].
 
       Alice := Person new.
-      Alice name: "Alice".
-      Alice age: 30.
+      Alice::name := "Alice".
+      Alice::age := 30.
       Name := Alice getName.
       Age := Alice getAge.
       Result := Name
@@ -102,17 +102,17 @@ suite "Interpreter: Method Execution with Parameters":
 
   test "methods with complex body execute all statements":
     let result = interp.evalStatements("""
-      Counter := Object deriveWithAccessors: #(count).
+      Counter := Object derivePublic: #(count).
       Counter >> add: amount [
         | oldValue newValue |
-        oldValue := self count.
+        oldValue := count.
         newValue := oldValue + amount.
-        self count: newValue.
+        count := newValue.
         ^newValue
       ].
 
       Counter2 := Counter new.
-      Counter2 count: 0.
+      Counter2::count := 0.
       Result := Counter2 add: 5
     """)
 

@@ -72,13 +72,13 @@ suite "Interpreter: Loops":
 
   test "whileTrue: executes while condition is true":
     let result = interp.evalStatements("""
-    Counter := Object deriveWithAccessors: #(count).
-    Counter >> increment [ self count: (self count + 1) ].
+    Counter := Object derivePublic: #(count).
+    Counter >> increment [ count := (count + 1) ].
 
     C := Counter new.
-    C count: 0.
-    [ C count < 5 ] whileTrue: [ C increment ].
-    Result := C count
+    C::count := 0.
+    [ C::count < 5 ] whileTrue: [ C increment ].
+    Result := C::count
     """)
 
     check(result[1].len == 0)
@@ -86,13 +86,13 @@ suite "Interpreter: Loops":
 
   test "whileFalse: executes while condition is false":
     let result = interp.evalStatements("""
-    Counter := Object deriveWithAccessors: #(value).
-    Counter >> increment [ self value: (self value + 1) ].
+    Counter := Object derivePublic: #(value).
+    Counter >> increment [ value := (value + 1) ].
 
     C := Counter new.
-    C value: 0.
-    [ C value >= 5 ] whileFalse: [ C increment ].
-    Result := C value
+    C::value := 0.
+    [ C::value >= 5 ] whileFalse: [ C increment ].
+    Result := C::value
     """)
 
     check(result[1].len == 0)
@@ -100,13 +100,13 @@ suite "Interpreter: Loops":
 
   test "timesRepeat: executes n times":
     let result = interp.evalStatements("""
-    Counter := Object deriveWithAccessors: #(count).
-    Counter >> increment [ self count: (self count + 1) ].
+    Counter := Object derivePublic: #(count).
+    Counter >> increment [ count := (count + 1) ].
 
     C := Counter new.
-    C count: 0.
+    C::count := 0.
     5 timesRepeat: [ C increment ].
-    Result := C count
+    Result := C::count
     """)
 
     check(result[1].len == 0)

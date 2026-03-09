@@ -174,9 +174,9 @@ suite "Self Keyword Support":
 
   test "self can access instance variables with accessors":
     let result = interp.evalStatements("""
-    Person := Object deriveWithAccessors: #(name).
-    Person>>setName: n [ self name: n ].
-    Person>>getName [ ^self name ].
+    Person := Object derivePublic: #(name).
+    Person>>setName: n [ name := n ].
+    Person>>getName [ ^name ].
     p := Person new.
     p setName: "Alice".
     p getName
@@ -186,9 +186,9 @@ suite "Self Keyword Support":
 
   test "self can send messages to itself":
     let result = interp.evalStatements("""
-    Builder := Object deriveWithAccessors: #(prefix).
-    Builder>>setPrefix: p [ self prefix: p ].
-    Builder>>build [ ^self prefix ].
+    Builder := Object derivePublic: #(prefix).
+    Builder>>setPrefix: p [ prefix := p ].
+    Builder>>build [ ^prefix ].
     b := Builder new.
     b setPrefix: "Hello".
     b build
@@ -198,9 +198,9 @@ suite "Self Keyword Support":
 
   test "self works with >> syntax":
     let result = interp.evalStatements("""
-    Box := Object deriveWithAccessors: #(item).
-    Box>>store: x [ self item: x ].
-    Box>>retrieve [ ^self item ].
+    Box := Object derivePublic: #(item).
+    Box>>store: x [ item := x ].
+    Box>>retrieve [ ^item ].
     b := Box new.
     b store: "test".
     b retrieve

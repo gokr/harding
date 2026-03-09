@@ -784,6 +784,15 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     else:
       return fmt("self.slots[{slotNode.slotIndex}]")
 
+  of nkNamedAccess:
+    let namedNode = node.NamedAccessNode
+    let recvCode = genExpression(ctx, namedNode.receiver)
+    if namedNode.isAssignment and namedNode.valueExpr != nil:
+      let valCode = genExpression(ctx, namedNode.valueExpr)
+      return fmt("sendMessageHybrid({recvCode}, \"at:put:\", @[NodeValue(kind: vkSymbol, symVal: \"{namedNode.memberName}\"), {valCode}])")
+    else:
+      return fmt("sendMessageHybrid({recvCode}, \"at:\", @[NodeValue(kind: vkSymbol, symVal: \"{namedNode.memberName}\")])")
+
   else:
     return "NodeValue(kind: vkNil)"
 

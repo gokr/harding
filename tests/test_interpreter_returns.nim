@@ -62,9 +62,9 @@ suite "Interpreter: Non-Local Returns":
 
   test "implicit return of self when no explicit return":
     let result = interp.evalStatements("""
-    Builder := Object deriveWithAccessors: #(value).
+    Builder := Object derivePublic: #(value).
     Builder >> setValue: v [
-      self value: v
+      value := v
     ].
 
     B := Builder new.

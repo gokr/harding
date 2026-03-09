@@ -261,7 +261,7 @@ proc handleTextDocumentCompletion(server: LspServer, params: JsonNode): JsonNode
 
   # Common Harding selectors
   let selectors = @[
-    "new", "clone", "derive:", "deriveWithAccessors:", "extend:", "extendClass:",
+    "new", "clone", "derive:", "derivePublic:", "derive:read:write:", "derive:read:write:superclasses:", "extend:", "extendClass:",
     "at:", "at:put:", "do:", "select:", "collect:", "size", "isEmpty", "notEmpty",
     "keys", "values", "includesKey:", "ifTrue:", "ifFalse:", "ifTrue:ifFalse:",
     "whileTrue:", "whileFalse:", "value", "value:", "value:value:", "class",

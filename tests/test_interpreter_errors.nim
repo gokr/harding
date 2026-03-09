@@ -69,10 +69,10 @@ suite "Interpreter: Complex Error Scenarios":
 
   test "nested message send with undefined method":
     let result = interp.evalStatements("""
-    Container := Object deriveWithAccessors: #(inner).
+    Container := Object derivePublic: #(inner).
     C := Container new.
-    C inner: Object new.
-    Result := C inner undefinedMethod
+    C::inner := Object new.
+    Result := C::inner undefinedMethod
     """)
 
     check(result[1].len > 0)
@@ -96,11 +96,11 @@ suite "Interpreter: Special Values":
 
   test "nil is a valid value":
     let result = interp.evalStatements("""
-    Box := Object deriveWithAccessors: #(value).
+    Box := Object derivePublic: #(value).
 
     Obj := Box new.
-    Obj value: nil.
-    Result := Obj value
+    Obj::value := nil.
+    Result := Obj::value
     """)
 
     check(result[1].len == 0)

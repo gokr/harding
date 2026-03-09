@@ -90,12 +90,12 @@ suite "Method Batching (extend:":
 
   test "extend: works with accessors":
     let result = interp.evalStatements("""
-      MyClass := Object deriveWithAccessors: #(value).
+      MyClass := Object derivePublic: #(value).
       MyClass extend: [
-        self >> doubled [ ^self value * 2 ]
+        self >> doubled [ ^value * 2 ]
       ].
       obj := MyClass new.
-      obj value: 21.
+      obj::value := 21.
       Result := obj doubled
     """)
     check(result[1].len == 0)

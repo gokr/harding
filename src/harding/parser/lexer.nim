@@ -10,7 +10,7 @@ type
     tkLParen, tkRParen, tkLBracket, tkRBracket
     tkAssign, tkReturn, tkPeriod, tkSeparator
     tkSpecial  # ; & | etc
-    tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon
+    tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon, tkDoubleColon
     tkTag, tkNimCode
     tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
     tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq  # Multi-character binary operators: // \\ <= >= ~=
@@ -79,7 +79,7 @@ proc parseIdent(lexer: var Lexer): Token =
   while lexer.peek().isAlphaNum:
     value.add(lexer.next())
   # Check if it's followed by colon (keyword)
-  if lexer.peek() == ':':
+  if lexer.peek() == ':' and not (lexer.pos + 1 < lexer.input.len and lexer.input[lexer.pos + 1] == ':'):
     value.add(lexer.next())
     # Continue collecting keyword segments (Smalltalk keywords like 'at:put:')
     while lexer.peek().isAlpha:
@@ -412,11 +412,14 @@ proc nextToken*(lexer: var Lexer): Token =
     discard lexer.next()
     return Token(kind: tkAmpersand, value: "&", line: startLine, col: startCol)
   of ':':
-    # Assignment operator := or colon for object literals
+    # Assignment operator :=, named access ::, or colon for object literals
     discard lexer.next()
     if lexer.peek() == '=':
       discard lexer.next()
       return Token(kind: tkAssign, value: ":=", line: startLine, col: startCol)
+    elif lexer.peek() == ':':
+      discard lexer.next()
+      return Token(kind: tkDoubleColon, value: "::", line: startLine, col: startCol)
     else:
       return Token(kind: tkColon, value: ":", line: startLine, col: startCol)
   of '"':

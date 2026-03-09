@@ -59,10 +59,10 @@ suite "Nil isNil/notNil":
 
   test "slot with nil value - notNil returns false":
     let result = interp.evalStatements("""
-    TestClass := Object deriveWithAccessors: #(slotValue).
+    TestClass := Object derivePublic: #(slotValue).
     
     Obj := TestClass new.
-    Result := Obj slotValue notNil
+    Result := Obj::slotValue notNil
     """)
 
     check(result[1].len == 0)
@@ -71,11 +71,11 @@ suite "Nil isNil/notNil":
 
   test "slot with object value - notNil returns true":
     let result = interp.evalStatements("""
-    TestClass := Object deriveWithAccessors: #(slotValue).
+    TestClass := Object derivePublic: #(slotValue).
     
     Obj := TestClass new.
-    Obj slotValue: "something".
-    Result := Obj slotValue notNil
+    Obj::slotValue := "something".
+    Result := Obj::slotValue notNil
     """)
 
     check(result[1].len == 0)
@@ -84,10 +84,10 @@ suite "Nil isNil/notNil":
 
   test "slot with nil - isNil returns true":
     let result = interp.evalStatements("""
-    TestClass := Object deriveWithAccessors: #(slotValue).
+    TestClass := Object derivePublic: #(slotValue).
     
     Obj := TestClass new.
-    Result := Obj slotValue isNil
+    Result := Obj::slotValue isNil
     """)
 
     check(result[1].len == 0)

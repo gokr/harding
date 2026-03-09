@@ -73,7 +73,7 @@ proc isCompileTimeDefNode(node: Node): bool =
     let assign = node.AssignNode
     if assign.expression != nil and assign.expression.kind == nkMessage:
       let msg = assign.expression.MessageNode
-      return msg.selector in ["derive", "derive:", "deriveWithAccessors", "deriveWithAccessors:"]
+      return msg.selector in ["derive", "derive:", "derivePublic", "derivePublic:", "derive:read:write:", "derive:read:write:superclasses:", "deriveWithAccessors", "deriveWithAccessors:"]
     return false
 
   of nkMessage:

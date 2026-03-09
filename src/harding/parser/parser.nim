@@ -49,6 +49,7 @@ type
 
 # Forward declarations
 proc parseBinaryOperators*(parser: var Parser, left: Node): Node
+proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node
 
 # Helper to parse primitive tag content as keyword message syntax
 # Input: "primitiveAt: key put: value" or "primitiveClone"
@@ -383,6 +384,16 @@ proc parsePrimaryUnaryOnly(parser: var Parser): Node =
     return primary
   return result
 
+proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node =
+  result = receiver
+  while parser.peek().kind == tkDoubleColon:
+    discard parser.next()
+    if parser.peek().kind != tkIdent:
+      parser.parseError("Expected identifier after ::")
+      return result
+    let memberName = parser.next().value
+    result = NamedAccessNode(receiver: result, memberName: memberName, isAssignment: false, valueExpr: nil)
+
 # Forward declaration for control flow transformation
 proc transformControlFlow(msg: MessageNode): Node
 
@@ -521,6 +532,8 @@ proc parseBinaryOperators(parser: var Parser, left: Node): Node =
       parser.parseError("Expected expression after binary operator")
       return expr
 
+    right = parser.parseNamedAccessChain(right)
+
     # Handle unary messages on right side
     while parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
       let unaryToken = parser.next()
@@ -552,9 +565,11 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
   if primary == nil:
     return nil
 
+  let accessedPrimary = parser.parseNamedAccessChain(primary)
+
   # Check for messages
   if parseMessages:
-    var current: Node = primary
+    var current: Node = accessedPrimary
 
     # First check what's immediately next (on same line)
     var next = parser.peek()
@@ -574,18 +589,18 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
       # Only continue across newlines for keyword messages
       if next.kind != tkKeyword:
         # Not a keyword - restore position and return
-        parser.pos = savePos
-        return primary
+          parser.pos = savePos
+          return accessedPrimary
 
     case next.kind
     of tkKeyword:
       # Keyword message (lowest precedence, parsed last)
-      current = parser.parseKeywordMessage(primary)
+      current = parser.parseKeywordMessage(accessedPrimary)
       return current
     of tkIdent:
       if next.value[0].isLowerAscii():
         # Unary message chain first
-        current = parser.parseBinaryMessage(primary)
+        current = parser.parseBinaryMessage(accessedPrimary)
         # After unary messages, check for binary operators
         if parser.peek().kind in BinaryOpTokens:
           current = parser.parseBinaryOperators(current)
@@ -603,11 +618,11 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
           parser.pos = savePos
         return current
       else:
-        return primary
+        return accessedPrimary
     of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
        tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
       # Binary operator directly after primary
-      current = parser.parseBinaryOperators(primary)
+      current = parser.parseBinaryOperators(accessedPrimary)
       # Check for keyword messages (may be on next line)
       if parser.peek().kind == tkKeyword:
         return parser.parseKeywordMessage(current)
@@ -622,10 +637,10 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
         parser.pos = savePos
       return current
     else:
-      return primary
+      return accessedPrimary
   else:
     # Don't parse any messages, just return the primary
-    return primary
+    return accessedPrimary
 
 # Parse cascade messages
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
@@ -993,7 +1008,7 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
     discard parser.next()
     debug("parseStatement: after consuming :=, pos=", parser.pos, " peek.kind=", parser.peek().kind, " value=", parser.peek().value)
 
-    # Left side must be an identifier
+    # Left side must be an identifier or named access
     if expr of IdentNode:
       let varName = expr.IdentNode.name
       let valueExpr = parser.parseExpression()
@@ -1018,8 +1033,20 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node =
           finalExpr = cascaded
 
       return AssignNode(variable: varName, expression: finalExpr, localIndex: -1)
+    elif expr of NamedAccessNode:
+      let valueExpr = parser.parseExpression()
+      if valueExpr == nil:
+        parser.parseError("Expected expression after :=")
+        return nil
+      let named = expr.NamedAccessNode
+      return NamedAccessNode(
+        receiver: named.receiver,
+        memberName: named.memberName,
+        isAssignment: true,
+        valueExpr: valueExpr
+      )
     else:
-      parser.parseError("Can only assign to variable name (e.g., 'x := 10')")
+      parser.parseError("Can only assign to variable name or :: access")
       return nil
   else:
     # Consume optional trailing period (statement separator)
@@ -1435,6 +1462,19 @@ proc printAST*(node: Node, indent: int = 0): string =
     if slotNode.isAssignment:
       res.add(" :=")
     res.add(")\n")
+    return res
+
+  of nkNamedAccess:
+    let namedNode = node.NamedAccessNode
+    var res = spaces & "NamedAccess(::" & namedNode.memberName
+    if namedNode.isAssignment:
+      res.add(" :=")
+    res.add(")\n")
+    res.add(spaces & "  receiver:\n")
+    res.add(printAST(namedNode.receiver, indent + 2))
+    if namedNode.valueExpr != nil:
+      res.add(spaces & "  value:\n")
+      res.add(printAST(namedNode.valueExpr, indent + 2))
     return res
 
   else:
