@@ -1,0 +1,37 @@
+# MummyX Hello World - Simple HTTP server example
+# Build: nimble harding_mummyx
+# Run:   ./harding examples/mummyx_hello.hrd
+# Test:  curl http://localhost:8080/
+
+Harding load: "lib/mummyx/Bootstrap.hrd".
+
+Server := HttpServer new.
+Router := Router new.
+
+Router get: "/" do: [:req |
+  req respondHtml: "<h1>Hello from Harding!</h1><p>MummyX-powered HTTP server.</p>"
+].
+
+Router get: "/api/hello" do: [:req |
+  req respondJson: "{\"message\": \"Hello, World!\"}"
+].
+
+Router get: "/api/greet/@name" do: [:req |
+  | name |
+  name := req pathParam: "name".
+  req respondJson: "{\"greeting\": \"Hello, " , name , "!\"}"
+].
+
+Router post: "/api/echo" do: [:req |
+  req respond: 200 body: req body
+].
+
+Server router: Router.
+
+"Starting server on http://localhost:8080" println.
+"Try: curl http://localhost:8080/" println.
+"     curl http://localhost:8080/api/hello" println.
+"     curl http://localhost:8080/api/greet/World" println.
+"     curl -X POST -d test http://localhost:8080/api/echo" println.
+
+Server serveForever: 8080.

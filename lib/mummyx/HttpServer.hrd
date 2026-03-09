@@ -1,0 +1,30 @@
+# HttpServer - MummyX HTTP server wrapper
+#
+# Native methods (registered by mummyx_bridge.nim):
+#   HttpServer class>>new
+#   HttpServer>>router: aRouter
+#   HttpServer>>start: port                    (non-blocking, for Bona)
+#   HttpServer>>start: port address: address   (non-blocking, explicit bind address)
+#   HttpServer>>processRequests                (process pending requests, call periodically)
+#   HttpServer>>serveForever: port             (blocking, for standalone scripts)
+#   HttpServer>>isRunning
+#   HttpServer>>stop
+#   HttpServer>>port
+
+# Convenience: start on 0.0.0.0 (externally accessible)
+HttpServer>>startPublic: port [
+  self start: port address: "0.0.0.0"
+]
+
+# Convenience: serve forever on 0.0.0.0
+HttpServer>>servePublic: port [
+  self start: port address: "0.0.0.0".
+  [self isRunning] whileTrue: [
+    self processRequests.
+    # Yield briefly to avoid busy-waiting
+  ]
+]
+
+HttpServer>>printString [
+  ^ "<HttpServer port: " , self port printString , ">"
+]

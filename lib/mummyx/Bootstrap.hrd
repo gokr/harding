@@ -1,0 +1,19 @@
+# MummyX HTTP Server Library for Harding
+# Provides HTTP server, routing, and request handling via MummyX.
+#
+# Requires: harding built with -d:mummyx
+#
+# Usage:
+#   Harding load: "lib/mummyx/Bootstrap.hrd".
+#   server := HttpServer new.
+#   router := Router new.
+#   router get: "/" do: [:req | req respond: 200 body: "Hello!"].
+#   server router: router.
+#   server serveForever: 8080.
+
+# Load Harding-side class extensions
+Harding load: "lib/mummyx/HttpServer.hrd".
+Harding load: "lib/mummyx/HttpRequest.hrd".
+Harding load: "lib/mummyx/Router.hrd".
+
+# MummyX library loaded

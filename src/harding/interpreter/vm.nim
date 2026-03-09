@@ -13,6 +13,9 @@ when defined(granite):
 when defined(debugger):
   import ../debugger/bridge
 
+when defined(mummyx):
+  import ../web/mummyx_bridge
+
 # Class caches are defined in objects.nim and shared across the interpreter
 
 # Forward declarations - implementations are in objects.nim
@@ -4248,6 +4251,11 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     # Scheduler is already initialized, classes should be available
     discard
 
+  # Initialize MummyX bridge if compiled with -d:mummyx
+  when defined(mummyx):
+    initMummyxBridge(interp)
+    debug("MummyX bridge initialized")
+
   # Use lib/core/Bootstrap.hrd as default if no bootstrapFile provided
   let actualBootstrapFile = if bootstrapFile.len > 0 and fileExists(bootstrapFile):
                              bootstrapFile
@@ -7842,6 +7850,10 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
     interp.currentActivation = savedCurrentActivation
     interp.currentReceiver = savedCurrentReceiver
     raise
+
+# Wire up MummyX callback now that evalWithVMCleanContext is defined
+when defined(mummyx):
+  mummyx_bridge.evalCleanContextProc = evalWithVMCleanContext
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM

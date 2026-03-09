@@ -1,0 +1,20 @@
+# Router - HTTP route registration
+#
+# Native methods (registered by mummyx_bridge.nim):
+#   Router class>>new
+#   Router>>get: path do: handler
+#   Router>>post: path do: handler
+#   Router>>put: path do: handler
+#   Router>>delete: path do: handler
+#   Router>>patch: path do: handler
+#   Router>>any: path do: handler      (matches any HTTP method)
+#
+# Path patterns:
+#   "/users"         - exact match
+#   "/users/@id"     - named parameter (accessible via req pathParam: "id")
+#   "/files/*"       - single segment wildcard
+#   "/docs/**"       - multi-segment wildcard
+
+Router>>printString [
+  ^ "<Router>"
+]
