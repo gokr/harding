@@ -7035,6 +7035,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       activation.locals[currentMethod.parameters[i]] = args[i]
       activation.bindParam(i, args[i])
 
+    # Initialize temporaries before any nested block can capture them.
+    for tempName in currentMethod.temporaries:
+      if tempName notin activation.locals:
+        activation.locals[tempName] = nilValue()
+
     # Save current receiver to restore after method completes
     let savedReceiver = interp.currentReceiver
 
@@ -7282,6 +7287,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     debug("wfReturnValue: targetActivation nil?=", $(targetActivation == nil), " targetOnStack=", $targetOnStack)
     var found = false
     var targetEvalStackDepth = 0
+    var preservedTargetCleanup = false
     
     # First, unwind the work queue
     while interp.workQueue.len > 0 and not found:
@@ -7311,7 +7317,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           targetActivation.hasReturned = true
           targetActivation.returnValue = returnVal
 
-          # DON'T pop the target activation - let wfPopActivation or executeMethod handle it
+          # Preserve the target cleanup frame so it runs before caller work resumes.
+          interp.pushWorkFrame(wf)
+          preservedTargetCleanup = true
+
+          # DON'T pop the target activation - let wfPopActivation handle it
           found = true
         else:
           # Pop intermediate activation (block)
@@ -7354,24 +7364,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       targetActivation.returnValue = returnVal
       found = true
     
-    # After handling a non-local return, we need to clear any remaining work frames
-    # that were scheduled after the return point. These frames are no longer
-    # valid since we've unwound to the target activation.
-    # For normal method returns, we don't clear the queue - the remaining frames
-    # (like wfPopActivation) need to execute to properly clean up.
-    if found and isNonLocalReturn:
-      # Clear remaining work frames for non-local returns only
-      while interp.workQueue.len > 0:
-        let wf = interp.workQueue.pop()
-        # For continuation frames, clean up any values they would have consumed
-        if wf.kind == wfIfNodeContinuation or wf.kind == wfWhileLoop:
-          if interp.evalStack.len > 0:
-            discard interp.evalStack.pop()
-    
+    # If we preserved the target cleanup frame, let that wfPopActivation push the
+    # final value. Pushing it here would duplicate the return on the eval stack
+    # and corrupt the caller's pending send/continuation state.
+    if preservedTargetCleanup:
+      return true
+
     # Note: We don't truncate the eval stack here because:
-    # 1. If target was found, wfPopActivation will handle cleanup
-    # 2. If target wasn't found (escaped block), the caller handles cleanup
-    # Just push the return value - the stack will be cleaned up by wfPopActivation
+    # 1. If target wasn't found (escaped block), the caller handles cleanup
+    # 2. Legacy executeMethod paths may still need the return value on-stack
     interp.pushValue(returnVal)
     return true
 

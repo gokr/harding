@@ -119,12 +119,13 @@ suite "GTK automation helpers":
         ^ self
       ].
       Probe>>setup [
-        | i btn captured |
+        | i btn |
         i := 0.
         [ i < 3 ] whileTrue: [
-          captured := i.
+          | current |
+          current := i.
           btn := GtkButton newLabel: "Run".
-          btn clicked: [ results add: captured ].
+          btn clicked: [ results add: current ].
           buttons add: btn.
           i := i + 1.
         ].
@@ -403,6 +404,7 @@ suite "GTK automation helpers":
     let (result, err) = interp.doit("""
       TestOwner := Object derive.
       TestOwner>>addWindow: aWindow [ ^ self ].
+      TestOwner>>removeWindow: aWindow [ ^ self ].
       Owner := TestOwner new.
       Built := Builder openFor: Owner.
       GtkWidget flushEvents: 5.
