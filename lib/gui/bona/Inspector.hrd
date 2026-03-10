@@ -4,6 +4,12 @@
 # ============================================================================
 
 Inspector := Object derive: #(window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel inspectedObject selectedObject selectedSlotName expandedPaths owner)
+# Inspector presents object structure and nested values through a browsable tree-style view.
+# It is used to inspect arbitrary Harding objects, collections, and nested slot contents.
+# Workspace and other tools rely on this class to turn live objects into explorable UI state.
+# Keep tree rendering and inspection-specific navigation logic here.
+# This file is the primary object-introspection tool within Bona.
+# Changes here affect debugging and interactive exploration of running objects.
 
 Inspector class>>openOn: anObject [
     | inspector |

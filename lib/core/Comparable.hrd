@@ -9,6 +9,12 @@
 #   - positive if self > anObject
 
 Comparable := Mixin derive.
+# Comparable is a mixin that defines ordering-oriented protocol for classes with total or partial order.
+# Subclasses or adopters are expected to supply the primitive comparison semantics they need.
+# Methods here derive convenience ordering behavior from a smaller comparison core.
+# Use Comparable when objects need sorting, range checks, or relational tests.
+# It is intentionally separate from Equatable so ordering and equality concerns stay modular.
+# Classes may include this mixin alongside others through ordered multiple inheritance.
 
 Comparable>>compareTo: anObject [
   ^ self identityHash - anObject identityHash

@@ -3,6 +3,12 @@
 # System.hrd - process-level utilities
 
 System := Object derive: #()
+# System exposes process-level services such as filesystem, environment, and runtime queries.
+# It is the standard bridge between Harding code and host process information.
+# Methods here should stay focused on deterministic system services rather than application policy.
+# Browser, Builder, and command-line tooling rely on this class for path and environment access.
+# Keep host-interaction primitives here so they can be audited separately from domain logic.
+# This class is also the natural home for future runtime-wide utility services.
 
 System class>>arguments <primitive primitiveSystemArguments>
 

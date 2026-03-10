@@ -1,4 +1,10 @@
 Application := Object derive: #(name libraries)
+# Application is the base class for Harding programs intended to build and run through Granite.
+# It defines the expected application shape, including initialization and main: entrypoint conventions.
+# Builder and sample app flows depend on this class to discover runnable application classes.
+# Keep application lifecycle defaults here so generated apps stay simple and consistent.
+# Granite build paths assume subclasses of Application represent deployable program units.
+# This file is the root of the app-oriented Granite class hierarchy.
 
 Application>>initialize [
   # Initialize application with defaults

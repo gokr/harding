@@ -8,6 +8,12 @@
 #====================================================================
 
 Exception := Object derive: #(message stackTrace signaler)
+# Exception is the root of Harding's resumable exception hierarchy.
+# Instances carry the message, captured stack trace, and signaler associated with a signal site.
+# Methods here implement the Smalltalk-style signal, resume, retry, and pass protocol.
+# Error and Notification specialize this class for failure and non-fatal signaling flows.
+# The VM depends on this protocol when unwinding and resuming work frames.
+# Keep exception-control methods here so subclasses inherit a consistent signaling contract.
 
 Exception>>signal <primitive primitiveSignal>
   # Signal this exception (raise it)

@@ -1,4 +1,10 @@
 CounterApp := Application derive: #(count).
+# CounterApp is a stateful sample Application that demonstrates mutable UI state in Granite apps.
+# It combines declared slots with a small GTK interface to show live updates from callbacks.
+# Builder surfaces this template for users who need more than a single button example.
+# Keep the sample compact while preserving clear state transitions and widget updates.
+# This class doubles as a regression case for callback execution and slot mutation in apps.
+# It should remain a straightforward example of interactive Harding GUI state.
 
 CounterApp>>initialize [
   super initialize.

@@ -3,5 +3,11 @@
 # Notification.hrd - Notification class
 
 Notification := Exception derive
+# Notification represents non-fatal signals used to communicate noteworthy events.
+# It shares the resumable exception protocol with Exception but models advisory conditions.
+# Use Notification subclasses when code should be able to continue after handling.
+# Keeping it separate from Error makes signaling intent visible in both Browser and code.
+# Notification is the standard base for user-facing or informational signals.
+# The hierarchy here mirrors Smalltalk's distinction between notifications and errors.
 
 Notification>>isResumable [ ^ true ]

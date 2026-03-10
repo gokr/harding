@@ -6,6 +6,17 @@
 "=== Fibonacci Calculator ===" println
 
 Math := Object derive
+# Math is used by the example suite to demonstrate Harding usage.
+# This class definition is the canonical Browser-managed source entry.
+# The first line defines the superclass and declared slots.
+# Consecutive comment lines here describe the role of the class.
+# Methods that follow provide the operational behavior for this type.
+# Browser saves should preserve this comment block with the class definition.
+# Direct slot access is preferred inside instance-side methods when available.
+# Additional superclasses should be declared in the class definition if needed.
+# Reflection and source indexing use this section to describe the class.
+# Update this comment when the responsibilities of Math change.
+
 
 Math>>fibonacci: n [
   # Calculate fibonacci number using iterative approach

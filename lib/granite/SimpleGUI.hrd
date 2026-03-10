@@ -1,4 +1,10 @@
 SimpleGUI := Application derive: #().
+# SimpleGUI is a sample Application that exercises Granite together with the GTK GUI bridge.
+# It demonstrates creating a window, wiring a button, and running the main widget loop.
+# Builder uses it as a visual starter template for GUI-oriented applications.
+# Keep the example focused on a tiny, understandable interaction rather than feature depth.
+# This file is useful as a smoke test for GUI-capable Granite builds.
+# It should remain readable as a first reference for writing Harding GUI apps.
 
 SimpleGUI>>main: args [
   | window button |

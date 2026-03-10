@@ -3,3 +3,10 @@
 # SubscriptOutOfBounds.hrd - SubscriptOutOfBounds class
 
 SubscriptOutOfBounds := Exception derive
+# SubscriptOutOfBounds reports invalid indexed access on arrays and related collections.
+# It is raised when code asks for an element outside the valid bounds of a sequence.
+# Collection primitives use this class to convert low-level bounds issues into Harding errors.
+# Keep range-reporting behavior here so collection debugging stays consistent.
+# This exception belongs to the standard collection failure path alongside MessageNotUnderstood.
+# User code can catch it explicitly when validating or recovering from bad indexes.
+

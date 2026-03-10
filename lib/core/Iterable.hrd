@@ -3,6 +3,12 @@
 # Iterable.hrd - Iterable mixin
 
 Iterable := Mixin derive.
+# Iterable is a mixin for objects that can enumerate contained elements in sequence.
+# It defines shared traversal-oriented behavior used by collection-like classes.
+# Classes adopting Iterable are expected to supply a basic iteration primitive or method.
+# Higher-order operations can then build on that minimal traversal protocol.
+# This mixin keeps collection enumeration logic reusable across arrays, tables, and custom types.
+# Browser and tooling treat it as a standard capability marker for collection-style classes.
 
 Iterable>>collect: block [
   | result |

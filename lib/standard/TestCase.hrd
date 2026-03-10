@@ -9,6 +9,12 @@
 #   ]
 
 TestCase := Object derive: #(name assertions failures)
+# TestCase is the base class for unit tests written in Harding itself.
+# It collects assertion and test-running behavior used by the standard test framework.
+# User-defined test classes should inherit from TestCase rather than rebuilding assertion logic.
+# Keep shared testing protocol here so suites remain consistent and easy to discover.
+# Tooling can treat subclasses of TestCase as executable tests in the image.
+# This file anchors the standard library's xUnit-style support.
 
 TestCase>>initialize [
   name := "unnamed test"

@@ -3,6 +3,12 @@
 # Equatable.hrd - Equality comparison mixin
 
 Equatable := Mixin derive.
+# Equatable is a mixin for classes that provide value-oriented equality semantics.
+# It complements Object identity by letting classes define richer comparison behavior.
+# Methods in this file should stay focused on equality and inequality protocol only.
+# Use Equatable when instances need stable comparison independent of object identity.
+# Keeping equality logic here makes it easier to compose with Comparable and other mixins.
+# Ordered multiple inheritance can include this mixin without forcing an ordering contract.
 
 Equatable>>= anObject [
   ^ (self compareTo: anObject) = 0

@@ -3,3 +3,10 @@
 # Error.hrd - Error class
 
 Error := Exception derive
+# Error represents fatal exception conditions that should normally not be resumed silently.
+# It sits under Exception and is the base for concrete runtime failures such as DivisionByZero.
+# User code can still catch Error through on:do:, but the intent is failure reporting.
+# Place shared error-reporting behavior here rather than duplicating it in subclasses.
+# This file anchors the standard failure branch of the exception hierarchy.
+# Tooling and transcripts often surface Error subclasses during debugging sessions.
+

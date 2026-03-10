@@ -3,3 +3,10 @@
 # MessageNotUnderstood.hrd - MessageNotUnderstood class
 
 MessageNotUnderstood := Exception derive
+# MessageNotUnderstood is raised when normal message lookup cannot resolve a selector.
+# Instances capture the missing selector and receiver context needed for debugging dispatch.
+# The VM uses this class when doesNotUnderstand: cannot recover from a failed send.
+# This is one of the most important debugging exceptions in the core library.
+# Keep selector and receiver reporting behavior here so tooling can inspect failures cleanly.
+# Browser and Transcript output often rely on this class when surfacing dispatch bugs.
+

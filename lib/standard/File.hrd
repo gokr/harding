@@ -3,6 +3,12 @@
 # File.hrd - simple file convenience API
 
 File := Object derive: #()
+# File represents path-based file utilities and convenience helpers for filesystem access.
+# It complements FileStream by covering operations that work on whole files or paths.
+# Use this class for existence checks, reading, writing, and path-oriented utility behavior.
+# Browser source saving and library loading paths rely on File being predictable and simple.
+# Keep coarse-grained filesystem helpers here rather than in higher-level IDE classes.
+# This file anchors the standard path/file protocol exposed to Harding code.
 
 File class>>readAll: path [
   | stream contents |

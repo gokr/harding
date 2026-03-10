@@ -1,4 +1,10 @@
 HelloWorld := Application derive: #().
+# HelloWorld is the smallest sample Application used to validate Granite app discovery and execution.
+# It demonstrates the minimal main: method needed for a console-style Harding program.
+# Builder surfaces this class as a starter template for new application work.
+# Keep the sample intentionally small so it remains a reliable smoke test for app startup.
+# This file also serves as a reference for the canonical single-class-per-file app layout.
+# Changes here should preserve its usefulness as the simplest Granite example.
 
 HelloWorld>>main: args [
   Transcript showCr: "Hello, World!".

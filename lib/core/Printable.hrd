@@ -3,6 +3,12 @@
 # Printable.hrd - Printable mixin
 
 Printable := Mixin derive.
+# Printable is a mixin for classes that want a stable human-readable textual representation.
+# It centralizes printString-style behavior that would otherwise be repeated in many classes.
+# Use Printable when a type needs clear Transcript, debugger, or Browser output.
+# The mixin is intentionally lightweight so classes can opt in without extra structure.
+# Keeping formatting helpers here makes diagnostic output more consistent across the image.
+# Classes may override only the pieces needed for their own textual representation.
 
 Printable>>printOn: stream [
   stream show: (self class name).

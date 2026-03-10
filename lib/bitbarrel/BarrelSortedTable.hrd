@@ -10,6 +10,12 @@
 #====================================================================
 
 BarrelSortedTable := Object derive: #(barrel name).
+# BarrelSortedTable provides ordered persistent storage semantics on top of BitBarrel.
+# It is intended for range scans and ordered retrieval where plain BarrelTable is insufficient.
+# Use this class when persistent data also needs a predictable sorted traversal order.
+# Keeping ordered storage separate avoids complicating the simpler BarrelTable behavior.
+# This file is the persistent analogue of sorted collection behavior for BitBarrel data.
+# It should remain focused on sorted persistence rather than generic connection concerns.
 
 #--------------------------------------------------------------------
 # Class methods

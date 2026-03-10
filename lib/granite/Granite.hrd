@@ -2,6 +2,12 @@
 # Granite compiler integration
 
 Granite := Object derive: #()
+# Granite exposes the compiler-facing API for turning Harding applications into native binaries.
+# It is the bridge between the interactive image and the native compilation pipeline.
+# Builder uses this class to build runnable sample and user-defined applications.
+# Keep compile/build orchestration here so application classes stay focused on program logic.
+# Primitive-backed compiler entry points belong here rather than on Application subclasses.
+# This class is the public face of the Granite compilation subsystem.
 
 Granite class>>compile: sourceString <primitive primitiveGraniteCompile: sourceString>
   # Compile Harding source to Nim code, return as String

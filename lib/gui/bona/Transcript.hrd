@@ -5,6 +5,12 @@
 # ============================================================================
 
 Transcript := Object derive: #(window box scrolledWindow sourceView owner)
+# Transcript implements Bona's log and output viewer for messages emitted by the running image.
+# It provides a read-oriented window for status text, diagnostics, and ad hoc printed output.
+# Tools such as Workspace, Builder, and Browser rely on Transcript for user-visible feedback.
+# Keep transcript-specific display and clearing behavior here.
+# This class is the standard textual output surface for the Bona IDE.
+# Changes here affect how runtime feedback is surfaced to users during development.
 
 Transcript>>initialize [
   window := nil.

@@ -9,6 +9,12 @@
 #====================================================================
 
 Symbol := String derive.
+# Symbol models interned identifiers used as stable names for selectors, keys, and protocol terms.
+# Symbols are value-like and should compare efficiently across repeated lookups.
+# The runtime uses Symbol heavily for message sends, source indexing, and table-style access.
+# Keep conversion and comparison helpers here so symbol semantics remain centralized.
+# Many reflective and compiler-facing APIs depend on Symbols staying lightweight and canonical.
+# This file defines the standard library behavior for symbol manipulation.
 
 Symbol>>printString [
   # Symbols print with # prefix and without quotes.

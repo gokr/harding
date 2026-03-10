@@ -3,3 +3,10 @@
 # UnhandledError.hrd - UnhandledError class
 
 UnhandledError := Error derive
+# UnhandledError wraps failures that leave the protected computation without a matching handler.
+# It is used as a last-resort signal when an Error escapes the available exception stack.
+# The runtime can surface this class to preserve the original failure while marking it unhandled.
+# Keep final-reporting behavior here rather than baking it into every concrete Error subclass.
+# This class is mainly about diagnostic clarity when exception recovery has already failed.
+# Tooling can distinguish unhandled failures from ordinary Error instances through this type.
+

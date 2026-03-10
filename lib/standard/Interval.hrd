@@ -4,6 +4,12 @@
 #
 
 Interval := Object derive: #(start stop step).
+# Interval represents a numeric range that can be iterated without materializing every element eagerly.
+# It is useful for loops, bounded traversal, and range-based calculations.
+# Methods here should preserve the compact range abstraction rather than forcing array conversion.
+# Standard control-flow helpers often use Interval-style semantics for concise numeric iteration.
+# Keep start, stop, and step behavior here so range semantics remain consistent.
+# This class is the standard library abstraction for arithmetic ranges.
 
 Interval class>>from: startInteger to: stopInteger [
     ^self from: startInteger to: stopInteger by: 1

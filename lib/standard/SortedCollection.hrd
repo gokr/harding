@@ -5,6 +5,12 @@
 #
 
 SortedCollection := Object derive: #(sortBlock elements).
+# SortedCollection maintains ordered elements according to the collection's comparison policy.
+# It builds on the collection protocol while preserving sorted insertion and traversal order.
+# Use this class when callers need deterministic ordered results instead of append order.
+# Comparable-aware types can cooperate naturally with SortedCollection for ranking and searching.
+# Keep ordering maintenance logic here rather than duplicating it across domain-specific collections.
+# This file defines the standard sorted-collection behavior available to Harding code.
 
 SortedCollection class>>new [
     | sc |

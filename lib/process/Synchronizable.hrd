@@ -3,6 +3,12 @@
 # Synchronizable.hrd - Synchronization mixin
 
 Synchronizable := Mixin derive.
+# Synchronizable provides shared synchronization protocol for process and concurrency-related objects.
+# It groups monitor-style behavior that should be reusable across concurrent coordination types.
+# Use this class or mixin when an object participates in locking, waiting, or signaling flows.
+# Keeping synchronization protocol here makes process primitives easier to reason about and reuse.
+# The process library builds on this file to expose higher-level concurrency abstractions.
+# This class is part of the core coordination layer for Harding process support.
 
 Synchronizable>>critical: aBlock [
   self subclassResponsibility

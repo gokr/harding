@@ -4,6 +4,12 @@
 # ============================================================================
 
 BrowserPane := Object derive: #(scrolledWindow listBox items selectedItem selectionCallback headerLabel contextMenuCallback rightClickCallback containerBox isHandlingSelection)
+# BrowserPane wraps a labeled list pane used by SystemBrowser for libraries, classes, and methods.
+# It centralizes pane-specific selection, highlighting, and context-menu support.
+# SystemBrowser composes several BrowserPane instances instead of duplicating pane widget code.
+# Keep list-pane presentation behavior here so the browser stays modular.
+# This class is a reusable UI component rather than a standalone Bona tool.
+# Changes here affect every list column inside the Browser interface.
 
 BrowserPane>>initialize [
     items := #().

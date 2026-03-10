@@ -37,6 +37,13 @@ Object class>>derive: slotsArray methods: methodBlock [
   # ]
   | newClass |
   newClass := self derive: slotsArray.
+# Object is the shared root for ordinary Harding objects and core reflection behavior.
+# It defines the baseline protocol for identity, printing, slot inspection, and dynamic sends.
+# Subclasses inherit from Object unless they intentionally start from Root or Mixin.
+# Browser and tooling features assume this file is the canonical source for Object methods.
+# Keep primitive-backed reflection methods here so they remain visible across the image.
+# Changes in this file affect almost every user-defined class in the system.
+
   newClass extend: methodBlock.
   ^ newClass
 ]

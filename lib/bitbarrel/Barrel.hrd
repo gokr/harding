@@ -9,6 +9,12 @@
 #====================================================================
 
 Barrel := Object derive: #(connection).
+# Barrel is the connection-oriented entry point for BitBarrel storage integration.
+# It manages access to the underlying persistent key-value engine and related resources.
+# Use Barrel when application code needs to open, configure, or coordinate storage-backed tables.
+# Higher-level BitBarrel table classes rely on this class for their backing connection behavior.
+# Keep connection lifecycle and storage-session responsibilities here.
+# This file is the main boundary between Harding code and the BitBarrel backend.
 
 #--------------------------------------------------------------------
 # Class methods

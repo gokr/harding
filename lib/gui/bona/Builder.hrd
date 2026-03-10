@@ -7,6 +7,12 @@
 # and auto-saved to .hrd files like the SystemBrowser.
 
 Builder := Object derive: #(owner window appList appEditor outputView currentApp appClasses isRefreshing).
+# Builder implements Bona's Granite application builder and starter-template workflow.
+# It discovers Application subclasses, edits main: methods, and triggers Granite builds.
+# Sample app creation, build output, and app selection behavior all flow through this class.
+# Keep app-builder orchestration here so Granite and Browser stay loosely coupled.
+# This file is the IDE surface for turning Harding applications into runnable programs.
+# Changes here affect both template generation and build-time developer experience.
 
 Builder class>>open [
   | builder |

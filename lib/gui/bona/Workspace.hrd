@@ -5,6 +5,12 @@
 # ============================================================================
 
 Workspace := Object derive: #(window box scrolledWindow sourceView owner workspaceId filePath)
+# Workspace provides the free-form code editing and evaluation surface in Bona.
+# It is the main tool for ad hoc expressions, Print It, Do It, and inspection workflows.
+# The workspace integrates source editing with the live Harding image and GUI actions.
+# Keep evaluation-centric UI behavior here instead of overloading Browser or Transcript.
+# This class is the lightweight experimentation surface for day-to-day Harding coding.
+# Changes here affect interactive development ergonomics directly.
 
 Workspace class>>open [
     ^self openFor: nil

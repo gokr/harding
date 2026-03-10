@@ -8,6 +8,12 @@
 #====================================================================
 
 FileStream := Object derive: #(file mode isOpen)
+# FileStream provides stream-oriented reading and writing on filesystem-backed text or binary data.
+# It is the low-level streaming complement to the coarse-grained File utility class.
+# Use FileStream when code needs incremental reads, writes, or cursor-based file access.
+# Runtime tooling and future editors can build on this class for richer IO workflows.
+# Keep stream state management here so file cursor semantics stay isolated from File.
+# This class forms the standard streaming abstraction for host file interaction.
 
 FileStream>>open: filename mode: mode <primitive primitiveFileOpen: filename mode: mode>
   # Open file with mode ("r", "w", "a", 'r+', 'w+')
