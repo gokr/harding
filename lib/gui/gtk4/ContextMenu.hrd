@@ -4,6 +4,12 @@
 # ============================================================================
 
 ContextMenu := Object derive: #(popover items).
+# ContextMenu is a small Harding-level wrapper for building popover-based context menus in GTK4.
+# It hides the lower-level popover item wiring behind a simpler addItem:/addSeparator protocol.
+# Bona panes use this class to attach right-click menus without repeating GTK setup code.
+# Keep menu composition responsibilities here so BrowserPane and other tools stay lean.
+# This wrapper is intentionally minimal and should remain easy to use from Harding code.
+# It is the canonical popup-menu helper for the current GTK4 bridge.
 
 # ----------------------------------------------------------------------------
 # Class methods
@@ -30,7 +36,7 @@ ContextMenu>>initializeFor: aWidget [
 ContextMenu>>addItem: labelString do: aBlock [
     # Add a menu item with a callback block
     popover addItem: labelString do: aBlock.
-    items addLast: labelString.
+    items add: labelString.
     ^ self
 ]
 

@@ -31,6 +31,7 @@ type
   GtkMenu* = pointer
   GtkMenuItem* = pointer
   GtkTextView* = pointer
+  GtkEntry* = pointer
   GtkTextBuffer* = pointer
   GtkTextIter* = pointer
   GtkTextMark* = pointer
@@ -221,6 +222,10 @@ when not defined(gtk3):
 
 # TextView and TextBuffer
 proc gtkTextViewNew*(): GtkTextView {.cdecl, importc: "gtk_text_view_new".}
+proc gtkEntryNew*(): GtkEntry {.cdecl, importc: "gtk_entry_new".}
+proc gtkEntryGetText*(entry: GtkEntry): cstring {.cdecl, importc: "gtk_editable_get_text".}
+proc gtkEntrySetText*(entry: GtkEntry, text: cstring) {.cdecl, importc: "gtk_editable_set_text".}
+proc gtkEntrySetPlaceholderText*(entry: GtkEntry, text: cstring) {.cdecl, importc: "gtk_entry_set_placeholder_text".}
 proc gtkTextViewGetBuffer*(view: GtkTextView): GtkTextBuffer {.cdecl, importc: "gtk_text_view_get_buffer".}
 proc gtkTextViewSetBuffer*(view: GtkTextView, buffer: GtkTextBuffer) {.cdecl, importc: "gtk_text_view_set_buffer".}
 proc gtkTextViewSetEditable*(view: GtkTextView, editable: cint) {.cdecl, importc: "gtk_text_view_set_editable".}

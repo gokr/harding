@@ -443,7 +443,7 @@ suite "Stdlib: Source tracking":
       if dirExists(tmpDir):
         removeDir(tmpDir)
 
-    writeFile(filePath, "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().\n")
+    writeFile(filePath, "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().\n# First class comment line\n# Second class comment line\n\n")
     discard interp.evalStatements("Harding load: \"" & filePath & "\".")
 
     let result = interp.evalStatements("""
@@ -452,7 +452,7 @@ suite "Stdlib: Source tracking":
     """)
     check(result[1].len == 0)
     check(result[0][^1].kind == vkString)
-    check(result[0][^1].strVal == "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().")
+    check(result[0][^1].strVal == "TrackedClassDef := Object derive: #(name) read: #(name) write: #(name) superclasses: #().\n# First class comment line\n# Second class comment line")
 
   test "sourceEntriesForClass returns ordered entries including class definition":
     let result = interp.evalStatements("""

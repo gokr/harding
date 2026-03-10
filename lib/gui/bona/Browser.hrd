@@ -5,6 +5,12 @@
 # ============================================================================
 
 SystemBrowser := Object derive: #(window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock owner sourceModified originalSource ignoreTextChanges pendingTarget pendingPrevClass pendingPrevCategory pendingPrevMethod pendingContinueBlock)
+# SystemBrowser implements Bona's class browser, source editor, and refactoring entry points.
+# It coordinates library, class, category, and method panes together with the source view.
+# Browser source tracking, managed-file rewriting, and class-definition editing all live here.
+# Keep higher-level browsing behavior in this class rather than scattering it across pane widgets.
+# This file is the main integration point between reflection, source indexing, and the IDE UI.
+# Changes here directly affect how developers create, inspect, and save Harding code.
 
 SystemBrowser>>initialize [
     currentLibrary := nil.
@@ -90,6 +96,40 @@ SystemBrowser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
     dialog setChild: box.
     box append: label.
     box append: buttonBox.
+    dialog present.
+]
+
+SystemBrowser>>showErrorDialog: messageText [
+    | dialog box label okButton |
+    (Harding includesKey: "GtkAlertDialog") ifTrue: [
+        GtkAlertDialog
+            showAlertDialog: window
+            message: messageText
+            onResponse: [ nil ].
+        ^ self
+    ].
+
+    dialog := GtkWindow new.
+    dialog title: "Browser Error".
+    dialog setDefaultSize: 520 height: 140.
+
+    box := GtkBox vertical.
+    box setSpacing: 8.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+
+    label := GtkLabel new: messageText.
+    label halignStart.
+    label wrap: true.
+
+    okButton := GtkButton newLabel: "OK".
+    okButton clicked: [ dialog close ].
+
+    dialog setChild: box.
+    box append: label.
+    box append: okButton.
     dialog present.
 ]
 
@@ -189,6 +229,10 @@ SystemBrowser>>openWindowFor: anOwner [
     ].
 
     classPane onContextMenu: [:class :menu |
+        menu addItem: "New Class" do: [
+            self createNewClass
+        ].
+        menu addSeparator.
         menu addItem: "Print" do: [
             class notNil ifTrue: [
                 Transcript showCr: ("Class: " , class).
@@ -214,6 +258,24 @@ SystemBrowser>>openWindowFor: anOwner [
     ].
 
     libraryPane onContextMenu: [:lib :menu |
+        menu addItem: "New Library..." do: [
+            self showNewLibraryDialog
+        ].
+        menu addItem: "Rename Library..." do: [
+            lib notNil ifTrue: [
+                self showRenameLibraryDialog: lib
+            ] ifFalse: [
+                self showErrorDialog: "Select a library first before renaming it."
+            ]
+        ].
+        menu addItem: "Delete Library..." do: [
+            lib notNil ifTrue: [
+                self showDeleteLibraryDialog: lib
+            ] ifFalse: [
+                self showErrorDialog: "Select a library first before deleting it."
+            ]
+        ].
+        menu addSeparator.
         menu addItem: "Print" do: [
             lib notNil ifTrue: [
                 Transcript showCr: ("Library: " , lib).
@@ -324,8 +386,72 @@ SystemBrowser>>selectLibrary: aLibraryName [
     classPane clear.
     categoryPane clear.
     methodPane clear.
+    self updateSourceView: "Select a class to view its definition.".
 
     self populateClassesFor: aLibraryName.
+]
+
+SystemBrowser>>showNewLibraryDialog [
+    | dialog box label inputBox inputField createButton cancelButton |
+    dialog := GtkWindow new.
+    dialog title: "New Library".
+    dialog setDefaultSize: 420 height: 160.
+
+    box := GtkBox vertical.
+    box setSpacing: 12.
+    box marginStart: 12.
+    box marginEnd: 12.
+    box marginTop: 12.
+    box marginBottom: 12.
+
+    label := GtkLabel new: "Enter a name for the new library:".
+    label halignStart.
+
+    inputBox := GtkBox horizontal.
+    inputBox setSpacing: 8.
+    inputField := GtkEntry new.
+    inputField hexpand: true.
+    inputField placeholderText: "e.g. MyLibrary".
+
+    createButton := GtkButton newLabel: "Create".
+    createButton addCssClass: "suggested-action".
+    cancelButton := GtkButton newLabel: "Cancel".
+
+    createButton clicked: [
+        | name lib |
+        name := inputField text trim.
+        name isEmpty ifTrue: [
+            self showErrorDialog: "Library name cannot be empty.".
+            ^ self
+        ].
+        lib := Library named: name.
+        lib isNil ifTrue: [
+            lib := Library new.
+            lib name: name
+        ].
+        dialog close.
+        self populateLibraries.
+        libraryPane selectItem: name.
+        self selectLibrary: name.
+    ].
+
+    cancelButton clicked: [ dialog close ].
+
+    dialog setChild: box.
+    box append: label.
+    box append: inputBox.
+    inputBox append: inputField.
+    box append: createButton.
+    box append: cancelButton.
+    dialog present.
+]
+
+SystemBrowser>>showRenameLibraryDialog: aLibraryName [
+    self showErrorDialog: ("Rename Library is not implemented yet for " , aLibraryName , ".")
+]
+
+SystemBrowser>>showDeleteLibraryDialog: aLibraryName [
+    self showErrorDialog: ("Delete Library is not implemented yet for " , aLibraryName , ".")
 ]
 
 SystemBrowser>>populateClassesFor: aLibraryName [
@@ -1360,10 +1486,6 @@ SystemBrowser>>showFindClassDialog [
         dialog close
     ].
     
-    inputField activate: [
-        searchButton clicked
-    ].
-    
     inputBox append: inputField.
     inputBox append: searchButton.
     inputBox append: cancelButton.
@@ -1413,7 +1535,7 @@ libName = "Harding" ifTrue: [
                     [ li2 < classNames size and: [matchedClass isNil] ] whileTrue: [
                         | className |
                         className := classNames at: li2.
-                        ((className asString) findString: aPattern ignoreCase: true) >= 0 ifTrue: [
+                        (((className asString lowercase) includesSubString: (aPattern lowercase))) ifTrue: [
                             matchedLib := libName.
                             matchedClass := className
                         ].
@@ -1441,29 +1563,13 @@ SystemBrowser>>createNewClass [
     | className parentName slotsArray result fileName filePath classDefCode lib |
 
     currentLibrary isNil ifTrue: [
-        Transcript showCr: "Select a library first before creating a class".
+        self showErrorDialog: "Select a library first before creating a class.".
         ^ self
     ].
 
     className := self nextAutoClassName.
     parentName := "Object".
     slotsArray := #().
-
-    result := [ Object derive: slotsArray ]
-        on: Exception
-        do: [:ex | "ERROR: " , ex printString ].
-
-    (result isKindOf: String) ifTrue: [
-        result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to create class: " , result).
-            ^ self
-        ]
-    ].
-
-    lib := Library named: currentLibrary.
-    lib notNil ifTrue: [
-        lib at: className put: result
-    ].
 
     classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray.
     fileName := className , ".hrd".
@@ -1473,6 +1579,18 @@ SystemBrowser>>createNewClass [
         Transcript showCr: ("Cannot determine file path for class: " , className).
     ] ifFalse: [
         self writeClassDefinition: classDefCode toFile: filePath forClass: className.
+        lib := Library named: currentLibrary.
+        result := lib notNil
+            ifTrue: [ [ lib load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ]
+            ifFalse: [ [ Harding load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ].
+
+        (result isKindOf: String) ifTrue: [
+            result startsWith: "ERROR:" ifTrue: [
+                Transcript showCr: ("Failed to load new class: " , result).
+                ^ self
+            ]
+        ].
+
         currentMethodFile := filePath.
         currentMethodOwnerClass := className.
         currentMethodStartLine := nil.
@@ -1491,7 +1609,7 @@ SystemBrowser>>nextAutoClassName [
     | i name |
     i := 1.
     name := "NewClass".
-    [ Harding includesKey: name ] whileTrue: [
+    [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
         i := i + 1.
         name := "NewClass" , (i printString)
     ].
@@ -1508,8 +1626,8 @@ SystemBrowser>>showClassInfo: aClassName [
     ].
     
     superclasses := classObj superclassNames.
-    slots := classObj instanceVariables.
-    isMixin := classObj isMixin.
+    slots := [ classObj slotNames ] on: Exception do: [ #() ].
+    isMixin := [ classObj isMixin ] on: Exception do: [ false ].
     methodCount := classObj definedMethods size.
     
     infoText := aClassName , (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"]).
@@ -1605,7 +1723,7 @@ SystemBrowser>>addMixinToClass: aClassName mixinName: aMixinName [
         ^ self
     ].
     
-    classObj isMixin ifTrue: [
+    ([ classObj isMixin ] on: Exception do: [ false ]) ifTrue: [
         Transcript showCr: "Cannot add mixins to a Mixin class".
         ^ self
     ].
@@ -1638,7 +1756,7 @@ SystemBrowser>>confirmDeleteClass: aClassName [
         ^ self
     ].
     
-    (aClassName = "Object" or: [aClassName = "Root"] or: [aClassName = "Mixin"]) ifTrue: [
+    ((aClassName = "Object") or: [(aClassName = "Root") or: [aClassName = "Mixin"]]) ifTrue: [
         Transcript showCr: "Cannot delete built-in classes: " , aClassName.
         ^ self
     ].
@@ -1737,7 +1855,7 @@ SystemBrowser>>deleteClass: aClassName [
 ]
 
 SystemBrowser>>generateClassDefinition: className parent: parentName slots: slotsArray [
-    | code parentClass |
+    | code parentClass slotList |
     
     parentClass := parentName = "Mixin" 
         ifTrue: ["Mixin"] 
@@ -1746,19 +1864,11 @@ SystemBrowser>>generateClassDefinition: className parent: parentName slots: slot
     code := "# " , className , ".hrd - " , className , " class definition".
     code := code , "\n\n".
 
-    code := code , className , " := " , parentClass , " derive: #(".
-    slotsArray do: [:slot |
-        code := code , slot , " "
-    ].
-    code := code trimRight , ") read: #(".
-    slotsArray do: [:slot |
-        code := code , slot , " "
-    ].
-    code := code trimRight , ") write: #(".
-    slotsArray do: [:slot |
-        code := code , slot , " "
-    ].
-    code := code trimRight , ") superclasses: #().\n\n".
+    slotList := slotsArray isEmpty
+        ifTrue: [ "" ]
+        ifFalse: [ slotsArray join: " " ].
+
+    code := code , className , " := " , parentClass , " derive: #(" , slotList , ") read: #(" , slotList , ") write: #(" , slotList , ") superclasses: #().\n\n".
 
     code := code , "# Methods\n".
     code := code , className , ">>printOn: stream [\n".
@@ -1777,19 +1887,13 @@ SystemBrowser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     lib isNil ifTrue: [ ^ nil ].
     
     libPath := System cwd.
-    
     classDir := libPath , "/lib/" , (currentLibrary asString lowercase).
-    
     (File exists: classDir) ifFalse: [
-        classDir := libPath , "/lib/" , (currentLibrary asString lowercase).
+        ^ nil
     ].
-    
-    (File exists: classDir) ifFalse: [
-        classDir := libPath
-    ].
-    
+
     candidatePath := classDir , "/" , defaultFileName.
-    
+
     ^ candidatePath
 ]
 

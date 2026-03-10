@@ -11,6 +11,7 @@ import ./ffi
 import ./widget
 import ./window
 import ./button
+import ./entry
 import ./box
 import ./scrolledwindow
 when defined(gtk3):
@@ -289,6 +290,35 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   interp.globals[]["GtkButton"] = buttonCls.toValue()
   debug("Registered GtkButton class")
+
+  # Create Entry class
+  let entryCls = newClass(superclasses = @[widgetCls], name = "GtkEntry")
+  entryCls.tags = @["GTK", "Entry", "Input"]
+  entryCls.isNimProxy = true
+  entryCls.hardingType = "GtkEntry"
+
+  let entryNewMethod = createCoreMethod("new")
+  entryNewMethod.nativeImpl = cast[pointer](entryNewImpl)
+  entryNewMethod.hasInterpreterParam = true
+  addMethodToClass(entryCls, "new", entryNewMethod, isClassMethod = true)
+
+  let entryGetTextMethod = createCoreMethod("text")
+  entryGetTextMethod.nativeImpl = cast[pointer](entryGetTextImpl)
+  entryGetTextMethod.hasInterpreterParam = true
+  addMethodToClass(entryCls, "text", entryGetTextMethod)
+
+  let entrySetTextMethod = createCoreMethod("text:")
+  entrySetTextMethod.nativeImpl = cast[pointer](entrySetTextImpl)
+  entrySetTextMethod.hasInterpreterParam = true
+  addMethodToClass(entryCls, "text:", entrySetTextMethod)
+
+  let entryPlaceholderMethod = createCoreMethod("placeholderText:")
+  entryPlaceholderMethod.nativeImpl = cast[pointer](entrySetPlaceholderTextImpl)
+  entryPlaceholderMethod.hasInterpreterParam = true
+  addMethodToClass(entryCls, "placeholderText:", entryPlaceholderMethod)
+
+  interp.globals[]["GtkEntry"] = entryCls.toValue()
+  debug("Registered GtkEntry class")
 
   # Create Box class
   let boxCls = newClass(superclasses = @[widgetCls], name = "GtkBox")
