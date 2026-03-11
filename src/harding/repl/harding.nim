@@ -3,7 +3,7 @@
 # Harding REPL - Main entry point
 #
 
-import std/[os, strutils]
+import std/os
 import ../repl/doit
 import ../repl/cli
 import ../core/types
@@ -52,13 +52,13 @@ proc runTests(maxStackDepth: int): int =
   # Test 2: Expression evaluation
   try:
     var ctx = newDoitContext(maxStackDepth = maxStackDepth)
-    let (result, err) = ctx.doit("42")
-    if err.len == 0 and result.kind == vkInt and result.intVal == 42:
+    let (evalResult, err) = ctx.doit("42")
+    if err.len == 0 and evalResult.kind == vkInt and evalResult.intVal == 42:
       inc passed
       echo "✓ Test 2: Expression evaluation"
     else:
       inc failed
-      echo "✗ Test 2: Expected 42, got: " & result.toString()
+      echo "✗ Test 2: Expected 42, got: " & evalResult.toString()
   except:
     inc failed
     echo "✗ Test 2: Exception during evaluation"
@@ -67,7 +67,7 @@ proc runTests(maxStackDepth: int): int =
   try:
     var ctx = newDoitContext(maxStackDepth = maxStackDepth)
     discard ctx.doit("obj := Object clone")
-    let (name, err) = ctx.doit("obj printString")
+    let (_, err) = ctx.doit("obj printString")
     if err.len == 0:
       inc passed
       echo "✓ Test 3: Object creation and messaging"

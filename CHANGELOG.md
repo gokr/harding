@@ -10,18 +10,22 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
 - Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
+- Granite example parity harness and an updated Granite next-steps plan under `docs/research/`.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
 - Class definitions in core libraries now include class-specific comments.
 - BitBarrel support now ships as an external library instead of built-in Harding source and build flags.
 - MummyX request handling now runs through scheduler-backed green worker processes instead of executing on the socket thread.
+- Granite block/codegen parity now covers captured block expressions, top-level block returns, 0-based collection access, and more runtime selector coverage.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
 - Fixed source tracking temp file cleanup in tests.
 - External library builds now resolve transitive Nimble dependency paths needed by installed packages.
 - MummyX request handlers now resume correctly after blocking native receives in the stackless VM.
+- Interpreter native-value dispatch now marks interpreter-aware wrappers correctly, fixing crashes in collection iteration and block benchmark examples.
+- Interpreter `print` and `println` now render arrays and tables using their actual Harding string forms.
 
 ## [0.8.0] - 2026-03-09
 

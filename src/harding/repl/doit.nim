@@ -125,8 +125,7 @@ proc runREPL*(ctx: DoitContext = nil) =
         break  # EOF
     else:
       # Use readline for better editing
-      line = readLineFromStdin(replCtx.prompt)
-      if line.isNil:
+      if not readLineFromStdin(replCtx.prompt, line):
         break  # EOF
 
     # Check for EOF (Ctrl+D)
@@ -193,9 +192,9 @@ proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxSt
     echo ""
 
   # Execute the script as a block with self = nil (Smalltalk workspace convention)
-  var result: NodeValue
+  var scriptResult: NodeValue
   var err: string
-  (result, err) = scriptCtx.interpreter.evalScriptBlock(wrappedSource)
+  (scriptResult, err) = scriptCtx.interpreter.evalScriptBlock(wrappedSource)
 
   if err.len > 0:
     return ("", "Script error: " & err)
