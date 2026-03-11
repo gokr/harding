@@ -60,6 +60,8 @@ Harding includes multiple tools for different workflows:
 - `harding-lsp` - Language Server Protocol support
 - `bona` - GTK-based IDE
 
+Optional builds can enable the MummyX HTTP server bridge. See [MUMMYX.md](MUMMYX.md).
+
 Typical workflows:
 
 ```bash
