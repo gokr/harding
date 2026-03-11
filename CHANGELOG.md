@@ -8,14 +8,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ### Added
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
+- External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
 - Class definitions in core libraries now include class-specific comments.
+- BitBarrel support now ships as an external library instead of built-in Harding source and build flags.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
 - Fixed source tracking temp file cleanup in tests.
+- External library builds now resolve transitive Nimble dependency paths needed by installed packages.
 
 ## [0.8.0] - 2026-03-09
 
