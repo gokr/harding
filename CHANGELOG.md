@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- External Harding library management (`library` command) for installing and managing third-party Harding packages.
+
+### Changed
+- Bona workspace artifacts are no longer tracked in git (added to .gitignore).
+- Class definitions in core libraries now include class-specific comments.
+
+### Fixed
+- Hardened browser dialogs and class reflection in Bona IDE.
+- Fixed source tracking temp file cleanup in tests.
+
 ## [0.8.0] - 2026-03-09
 
 ### Added
