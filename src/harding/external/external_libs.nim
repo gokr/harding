@@ -5,7 +5,6 @@
 
 import std/strutils
 import ../core/types
-import ../interpreter/vm
 import discovery
 
 ## Conditional imports for each installed library

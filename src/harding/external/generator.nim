@@ -19,7 +19,6 @@ proc generateHeader(): string =
 
 import std/strutils
 import ../core/types
-import ../interpreter/vm
 import discovery
 """
 
