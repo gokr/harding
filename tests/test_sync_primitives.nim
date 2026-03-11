@@ -1,4 +1,4 @@
-import std/[unittest, tables, sequtils, strutils]
+import std/unittest
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm

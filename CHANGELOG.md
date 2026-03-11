@@ -30,6 +30,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Multiple-inheritance conflict reflection via `conflictSelectors` and `classConflictSelectors`.
 - Source indexing for Browser method and class-definition lookups, including `<classDefinition>` pseudo-entries.
 - `startsWith:` and `endsWith:` methods for `String`.
+- Optional MummyX HTTP server integration documentation and build tasks for both `harding` and `bona`.
 
 ### Changed
 - Multiple inheritance now uses first-parent-wins lookup order instead of failing on direct-parent selector conflicts.
@@ -45,6 +46,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Array sorting and collection method improvements.
 - Exception handling and block unwind cleanup fixes.
 - Builder heightRequest and compilation fixes.
+- MummyX request handlers now resume correctly after blocking native receives in the stackless VM.
 
 ## [0.7.1] - 2026-03-02
 

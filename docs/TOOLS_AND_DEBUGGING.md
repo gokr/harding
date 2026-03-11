@@ -293,8 +293,14 @@ bona --loglevel DEBUG
 # Build bona (GTK4 version, default)
 nimble bona
 
+# Build bona with MummyX HTTP support
+nimble bona_mummyx
+
 # Build release version
 nimble bona_release
+
+# Build release version with MummyX HTTP support
+nimble bona_mummyx_release
 
 # Build GTK3 version (if GTK4 not available)
 nimble gui3
@@ -330,11 +336,23 @@ nimble harding
 # Build harding REPL (release)
 nimble harding_release
 
+# Build harding with MummyX HTTP support
+nimble harding_mummyx
+
+# Build harding with MummyX HTTP support (release)
+nimble harding_mummyx_release
+
 # Build bona IDE (debug)
 nimble bona
 
 # Build bona IDE (release)
 nimble bona_release
+
+# Build bona IDE with MummyX HTTP support
+nimble bona_mummyx
+
+# Build bona IDE with MummyX HTTP support (release)
+nimble bona_mummyx_release
 
 # Build with debugger support
 nimble harding_debug

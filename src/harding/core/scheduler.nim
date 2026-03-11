@@ -1,9 +1,13 @@
-import std/[tables, deques]
+import std/[tables, deques, options]
 import ../core/types
 import ../core/process
 import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/vm  # Stackless VM
+
+when defined(mummyx):
+  import ../parser/parser
+  import ../web/mummyx_bridge
 
 # ============================================================================
 # Scheduler Integration with Interpreter
@@ -22,17 +26,55 @@ var processProxies: seq[ProcessProxy] = @[]
 # the GC needs to see actual Nim refs to prevent collection
 var interpreterRefs: seq[Interpreter] = @[]
 
+# Keep SchedulerContext refs alive - stored as raw pointers in Interpreter.schedulerContextPtr
+var schedulerContextRefs: seq[SchedulerContext] = @[]
+
+# NimChannel type - defined early so forward declarations can reference it.
+# Uses a pollProc callback to produce NodeValues. The actual Nim Channel
+# (e.g., Channel[PendingRequest]) lives in the bridge module.
+type NimChannel* = ref object
+  pollProc*: proc(): Option[NodeValue]  ## Main-thread callback that produces values
+  open*: bool
+  waitingReaders*: Deque[Process]
+var activeNimChannels*: seq[NimChannel] = @[]
+
 # Forward declarations for functions defined later in this file
 proc createProcessClass*(): Class
 proc createSchedulerClass*(): Class
 proc createMonitorClass*(): Class
 proc createSharedQueueClass*(): Class
 proc createSemaphoreClass*(): Class
+proc createNimChannelClass*(): Class
+proc pollNimChannels*(sched: Scheduler)
+proc newNimChannel*(pollProc: proc(): Option[NodeValue]): NimChannel
+proc createNimChannelProxy*(ch: NimChannel): NodeValue
 proc initProcessorGlobal*(interp: var Interpreter)
+
+proc initSchedulerOnInterpreter*(interp: var Interpreter): SchedulerContext =
+  ## Attach a scheduler to an existing interpreter.
+  ## Used when native code (e.g., MummyX serveForever) needs to run
+  ## green threads on an interpreter that was created without a scheduler.
+  if interp.schedulerContextPtr != nil:
+    return cast[SchedulerContext](interp.schedulerContextPtr)
+
+  result = SchedulerContext()
+  schedulerContextRefs.add(result)  # Keep alive for ARC/ORC
+  interp.schedulerContextPtr = cast[pointer](result)
+
+  result.theScheduler = newScheduler(
+    globals = interp.globals,
+    root = interp.rootObject
+  )
+
+  result.mainProcess = result.theScheduler.newProcess("main")
+  result.mainProcess.interpreter = cast[InterpreterRef](interp)
+  interpreterRefs.add(interp)
+  result.theScheduler.allProcesses[result.mainProcess.pid] = result.mainProcess
 
 proc newSchedulerContext*(): SchedulerContext =
   ## Create a new scheduler context with a main interpreter
   result = SchedulerContext()
+  schedulerContextRefs.add(result)  # Keep alive for ARC/ORC
 
   # Create main interpreter
   var mainInterp = newInterpreter()
@@ -126,20 +168,21 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
     return nilValue()
 
   if sched.currentProcess.interpreter == nil:
-    debug("Process ", sched.currentProcess.name, " has nil interpreter pointer, terminating")
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
 
   var interp = cast[Interpreter](sched.currentProcess.interpreter)
   if interp == nil:
-    debug("Process ", sched.currentProcess.name, " getInterpreter returned nil, terminating")
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
 
   let activation = interp.currentActivation
 
-  if activation == nil or activation.currentMethod == nil:
-    # Process has finished
+  if activation == nil:
+    sched.terminateProcess(sched.currentProcess)
+    return nilValue()
+
+  if activation.currentMethod == nil:
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
 
@@ -176,7 +219,6 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
   of vmYielded:
     # Process yielded - put back in ready queue (unless it was blocked by a primitive)
     # The work queue preserves state, so we can resume later
-    debug("Process ", sched.currentProcess.name, " yielded")
     interp.shouldYield = false
     # Only yield if not already blocked (primitives like Semaphore wait block directly)
     if not wasBlocked:
@@ -184,7 +226,6 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
     return nilValue()
   of vmError:
     # Process encountered an error - terminate it
-    debug("Process ", sched.currentProcess.name, " error")
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
   of vmCompleted:
@@ -206,6 +247,9 @@ proc runOneSlice*(ctx: SchedulerContext): bool =
   ## Run one complete time slice (one statement from one process)
   ## Returns true if something was executed, false if no ready processes
   let sched = ctx.theScheduler
+
+  if activeNimChannels.len > 0:
+    pollNimChannels(sched)
 
   if not sched.hasReadyProcesses():
     return false
@@ -363,6 +407,10 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   if semaphoreCls != nil:
     interp.globals[]["Semaphore"] = semaphoreCls.toValue()
 
+  let nimChannelCls = createNimChannelClass()
+  if nimChannelCls != nil:
+    interp.globals[]["NimChannel"] = nimChannelCls.toValue()
+
   # Protect process-related globals
   protectGlobal("Processor")
   protectGlobal("Process")
@@ -370,6 +418,34 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   protectGlobal("Monitor")
   protectGlobal("SharedQueue")
   protectGlobal("Semaphore")
+  protectGlobal("NimChannel")
+
+  # Wire up MummyX callbacks - scheduler has access to all needed functions
+  when defined(mummyx):
+    mummyx_bridge.setupSchedulerAndWorkersProc = proc(interp: var Interpreter,
+        pollProc: proc(): Option[NodeValue], workerCount: int): pointer =
+      let ctx = initSchedulerOnInterpreter(interp)
+      let ch = newNimChannel(pollProc)
+      let channelProxy = createNimChannelProxy(ch)
+      interp.globals[]["MummyXRequestChannel"] = channelProxy
+      let workerSource = "[true] whileTrue: [| job | job := MummyXRequestChannel receive. (job at: 1) value: (job at: 0). Processor yield]"
+      let (nodes, _) = parse(workerSource)
+      for i in 0..<workerCount:
+        if nodes.len > 0:
+          let workerBlock = BlockNode(
+            parameters: @[],
+            body: nodes,
+            capturedEnv: initTable[string, MutableCell](),
+            capturedEnvInitialized: true,
+            line: 0, col: 0
+          )
+          discard ctx.forkProcess(workerBlock, interp.rootObject,
+                                  "mummyx-worker-" & $i)
+      return cast[pointer](ctx)
+
+    mummyx_bridge.runOneSliceProc = proc(ctxPtr: pointer): bool =
+      let ctx = cast[SchedulerContext](ctxPtr)
+      return ctx.runOneSlice()
 
 # ============================================================================
 # Process Proxy and Class
@@ -1261,3 +1337,163 @@ proc createSemaphoreClass*(): Class =
   addMethodToClass(semaphoreClass, "count", countMethod)
 
   return semaphoreClass
+
+# ============================================================================
+# NimChannel - Bridge between Nim threads and Harding green threads
+# ============================================================================
+#
+# NimChannel provides a polling-based data source for Harding Processes.
+# A pollProc callback (set by bridge code like MummyX) reads from a real
+# Nim Channel[T] carrying thread-safe data (e.g., PendingRequest), converts
+# it to a NodeValue on the main thread, and delivers it to waiting Processes.
+#
+# The scheduler calls pollNimChannels each tick to check for incoming data.
+
+type
+  NimChannelProxy* = ref object
+    channel*: NimChannel
+
+var nimChannelClass*: Class = nil
+var nimChannelProxies: seq[NimChannelProxy] = @[]
+
+proc newNimChannel*(pollProc: proc(): Option[NodeValue]): NimChannel =
+  ## Create a NimChannel with a poll callback.
+  ## The pollProc runs on the main thread and should return Some(value)
+  ## when data is available, or None when empty.
+  result = NimChannel(
+    pollProc: pollProc,
+    open: true,
+    waitingReaders: initDeque[Process]()
+  )
+  activeNimChannels.add(result)
+
+proc closeNimChannel*(ch: NimChannel) =
+  if ch.open:
+    ch.open = false
+    var idx = -1
+    for i, c in activeNimChannels:
+      if c == ch:
+        idx = i
+        break
+    if idx >= 0:
+      activeNimChannels.delete(idx)
+
+proc pollNimChannels*(sched: Scheduler) =
+  ## Poll all active NimChannels and unblock waiting Processes.
+  for ch in activeNimChannels:
+    if ch.waitingReaders.len == 0 or ch.pollProc == nil:
+      continue
+    while ch.waitingReaders.len > 0:
+      let item = ch.pollProc()
+      if item.isNone:
+        break
+      let reader = ch.waitingReaders.popFirst()
+      let interp = cast[Interpreter](reader.interpreter)
+      interp.nimChannelResult = item
+      sched.unblockProcess(reader)
+
+# NimChannel proxy creation
+proc createNimChannelProxy*(ch: NimChannel): NodeValue =
+  let proxy = NimChannelProxy(channel: ch)
+  nimChannelProxies.add(proxy)
+  let obj = Instance(kind: ikObject, class: nimChannelClass, slots: @[])
+  obj.isNimProxy = true
+  obj.nimValue = cast[pointer](proxy)
+  return obj.toValue()
+
+proc asNimChannelProxy*(inst: Instance): NimChannelProxy =
+  if inst.nimValue != nil:
+    return cast[NimChannelProxy](inst.nimValue)
+  return nil
+
+# Native method implementations
+
+proc nimChannelReceiveImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## NimChannel receive - blocking receive (blocks green thread, not native thread)
+  let proxy = self.asNimChannelProxy()
+  if proxy == nil or proxy.channel == nil:
+    return nilValue()
+
+  # Check if we're resuming with a result already delivered by the scheduler
+  if interp.nimChannelResult.isSome:
+    let item = interp.nimChannelResult.get
+    interp.nimChannelResult = none(NodeValue)
+    return item
+
+  # Try non-blocking poll first
+  if proxy.channel.pollProc != nil:
+    let item = proxy.channel.pollProc()
+    if item.isSome:
+      return item.get
+
+  # No data available - block the green thread
+  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  if ctx == nil:
+    return nilValue()
+
+  let sched = ctx.theScheduler
+  let currentProc = sched.currentProcess
+  if currentProc == nil:
+    return nilValue()
+
+  proxy.channel.waitingReaders.addLast(currentProc)
+  sched.blockProcess(currentProc, WaitCondition(kind: wkChannel, target: cast[pointer](proxy.channel)))
+  interp.shouldYield = true
+  return nilValue()
+
+proc nimChannelTryReceiveImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## NimChannel tryReceive - non-blocking receive, returns nil if empty
+  let proxy = self.asNimChannelProxy()
+  if proxy == nil or proxy.channel == nil or proxy.channel.pollProc == nil:
+    return nilValue()
+  let item = proxy.channel.pollProc()
+  if item.isSome:
+    return item.get
+  return nilValue()
+
+proc nimChannelCloseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## NimChannel close
+  let proxy = self.asNimChannelProxy()
+  if proxy != nil and proxy.channel != nil:
+    closeNimChannel(proxy.channel)
+  return self.toValue()
+
+proc nimChannelIsOpenImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## NimChannel isOpen
+  let proxy = self.asNimChannelProxy()
+  if proxy == nil or proxy.channel == nil:
+    return NodeValue(kind: vkBool, boolVal: false)
+  return NodeValue(kind: vkBool, boolVal: proxy.channel.open)
+
+proc createNimChannelClass*(): Class =
+  if nimChannelClass != nil:
+    return nimChannelClass
+
+  discard initCoreClasses()
+
+  nimChannelClass = newClass(superclasses = @[objectClass], name = "NimChannel")
+  nimChannelClass.tags = @["NimChannel", "Synchronization"]
+  nimChannelClass.isNimProxy = true
+  nimChannelClass.hardingType = "NimChannel"
+
+  let receiveMethod = createCoreMethod("receive")
+  receiveMethod.nativeImpl = cast[pointer](nimChannelReceiveImpl)
+  receiveMethod.hasInterpreterParam = true
+  addMethodToClass(nimChannelClass, "receive", receiveMethod)
+
+  let tryReceiveMethod = createCoreMethod("tryReceive")
+  tryReceiveMethod.nativeImpl = cast[pointer](nimChannelTryReceiveImpl)
+  tryReceiveMethod.hasInterpreterParam = true
+  addMethodToClass(nimChannelClass, "tryReceive", tryReceiveMethod)
+
+  let closeMethod = createCoreMethod("close")
+  closeMethod.nativeImpl = cast[pointer](nimChannelCloseImpl)
+  closeMethod.hasInterpreterParam = true
+  addMethodToClass(nimChannelClass, "close", closeMethod)
+
+  let isOpenMethod = createCoreMethod("isOpen")
+  isOpenMethod.nativeImpl = cast[pointer](nimChannelIsOpenImpl)
+  isOpenMethod.hasInterpreterParam = true
+  addMethodToClass(nimChannelClass, "isOpen", isOpenMethod)
+
+  return nimChannelClass

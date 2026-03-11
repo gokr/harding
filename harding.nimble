@@ -289,12 +289,12 @@ task harding_mummyx_release, "Build harding with MummyX support (release)":
 
 task bona_mummyx, "Build bona IDE with MummyX support (debug)":
   ## Build GUI IDE with GTK4 and MummyX HTTP server support
-  exec "nim c -d:gtk4 -d:mummyx --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  exec "nim c -d:gtk4 -d:granite -d:mummyx --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (with MummyX support)"
 
 task bona_mummyx_release, "Build bona IDE with MummyX support (release)":
   ## Build GUI IDE with GTK4 and MummyX support in release mode
-  exec "nim c -d:gtk4 -d:mummyx -d:release --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  exec "nim c -d:gtk4 -d:granite -d:mummyx -d:release --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (release with MummyX support)"
 
 task harding_debug, "Build harding with debugger support":

@@ -45,6 +45,10 @@ git clone https://github.com/gokr/harding.git
 cd harding
 nimble harding  # Build harding REPL
 nimble bona     # Build bona IDE (optional)
+
+# Optional: build with MummyX HTTP server support
+nimble harding_mummyx
+nimble bona_mummyx
 ```
 
 Binaries:
@@ -53,6 +57,9 @@ Binaries:
 - `harding-lsp` - Language Server for IDE support
 - `granite` - Compiler to Nim
 - `bona` - GTK IDE
+
+Optional MummyX-enabled builds expose HTTP server support through `lib/mummyx/Bootstrap.hrd`.
+See [`docs/MUMMYX.md`](docs/MUMMYX.md).
 
 ### IDE Desktop Integration (Ubuntu/GNOME)
 
@@ -107,6 +114,23 @@ total  # Returns 15
 ```
 
 Scripts execute with `self = nil`, following the Smalltalk workspace convention.
+
+### MummyX HTTP Server
+
+Build with MummyX support when you want Harding-side HTTP routing:
+
+```bash
+nimble harding_mummyx
+./harding examples/mummyx_hello.hrd
+```
+
+This optional integration is also available in Bona builds:
+
+```bash
+nimble bona_mummyx
+```
+
+See [`docs/MUMMYX.md`](docs/MUMMYX.md) for the API, build tasks, and concurrency model.
 
 ### Environment Variables
 
@@ -195,6 +219,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Core I/O and process helpers (`File`, `FileStream`, `System`, `Stdin`/`Stdout`/`Stderr`)
 - Green threads: `Processor fork:`, `Processor yield`
 - Synchronization primitives: Monitor, SharedQueue, Semaphore
+- Optional MummyX HTTP server integration with `HttpServer`, `Router`, and green-process request handlers
 - Multiple inheritance with conflict detection and scoped super send
 - Dynamic message sending: `perform:`, `perform:with:`
 - Automatic accessor generation: `deriveWithAccessors:`, `derive:getters:setters:`
