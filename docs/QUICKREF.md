@@ -632,7 +632,7 @@ The Standard Library provides additional collection and utility classes, auto-im
 
 ### BitBarrel (Optional)
 
-Build with `-d:bitbarrel` flag. See [BitBarrel Integration](../../CLAUDE.md#bitbarrel-integration).
+Install the external `bitbarrel` library and rebuild Harding.
 
 - **BarrelTable** - Persistent hash-based key-value storage
 - **BarrelSortedTable** - Persistent ordered storage with range queries

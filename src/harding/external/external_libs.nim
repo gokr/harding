@@ -12,6 +12,9 @@ import discovery
 when defined(harding_mysql):
   import mysql/src/mysql/mysql
 
+when defined(harding_bitbarrel):
+  import bitbarrel/src/bitbarrel/bitbarrel
+
 ## ============================================================================
 ## Library Installation
 ## ============================================================================
@@ -38,6 +41,16 @@ proc installExternalLibraries*(interp: var Interpreter) =
   else:
     debug("Library mysql not enabled at compile time")
 
+  ## bitbarrel (0.1.0)
+  when defined(harding_bitbarrel):
+    try:
+      installBitbarrel(interp)
+      debug("External library installed: bitbarrel")
+    except:
+      warn("Failed to install library: bitbarrel")
+  else:
+    debug("Library bitbarrel not enabled at compile time")
+
   debug("External library installation complete")
 
 ## ============================================================================
@@ -52,6 +65,7 @@ proc getExternalCompileFlags*(): string =
   var flags: seq[string] = @[]
 
   flags.add("-d:harding_mysql")
+  flags.add("-d:harding_bitbarrel")
 
   return flags.join(" ")
 
@@ -64,5 +78,7 @@ proc getBuiltExternalLibraries*(): seq[string] =
 
   when defined(harding_mysql):
     result.add("mysql (1.0.0)")
+  when defined(harding_bitbarrel):
+    result.add("bitbarrel (0.1.0)")
 
   return result

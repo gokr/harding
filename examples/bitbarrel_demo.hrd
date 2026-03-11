@@ -2,16 +2,11 @@
 #
 # BitBarrel Demo - Example usage of BitBarrel persistent storage
 #
-# NOTE: This example requires Harding to be built with BitBarrel support:
-#   nimble harding_bitbarrel
-# Or:
-#   nim c -d:bitbarrel -o:harding src/harding/repl/harding.nim
+# NOTE: This example requires the external BitBarrel library:
+#   ./harding lib install bitbarrel
+#   nimble harding
 #
-# Then run in the REPL and use 'load: "lib/bitbarrel/Bootstrap.hrd"'
-# to load the BitBarrel classes.
-#
-# This script cannot be run directly because BitBarrel requires special
-# initialization at startup that is only available when compiled with -d:bitbarrel.
+# Then run this script with the rebuilt `./harding` binary.
 
 #============================================================
 # Example 1: Basic BarrelTable (Hash-based storage)

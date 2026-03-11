@@ -1848,7 +1848,7 @@ dict includesKey: "key" # Check if key exists
 
 ### Persistent Collections (BitBarrel)
 
-Requires building with `-d:bitbarrel` flag.
+Install the external `bitbarrel` library and rebuild Harding.
 
 **BarrelTable** - Hash-based persistent key-value storage:
 
@@ -1896,10 +1896,11 @@ logs last.     # Last entry
 logs keys.     # Keys in sorted order
 ```
 
-**Building with BitBarrel:**
+**Install BitBarrel:**
 
 ```bash
-nimble harding_bitbarrel    # Build REPL with BitBarrel
+./harding lib install bitbarrel
+nimble harding
 ```
 
 ---

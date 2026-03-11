@@ -33,7 +33,7 @@ harding --ast 05_classes.hrd
 | `12_stdlib.hrd` | Complete standard library demonstration |
 | `13_inheritance.hrd` | Single inheritance with proper slot declaration |
 | `13_multiple_inheritance.hrd` | Multiple inheritance using addSuperclass: |
-| `bitbarrel_demo.hrd` | BitBarrel database (requires -d:bitbarrel build) |
+| `bitbarrel_demo.hrd` | BitBarrel database (requires external `bitbarrel` library) |
 | `process_demo.hrd` | Green threads and process forking |
 
 ## Quick Start

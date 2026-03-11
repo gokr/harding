@@ -20,10 +20,6 @@ when defined(linux):
 # MummyX HTTP server support (compile with -d:mummyx to enable)
 requires "mummy >= 0.4.6"
 
-# BitBarrel support (optional)
-when defined(bitbarrel):
-  requires "whisky >= 0.2.0"
-
 import os, strutils, sequtils
 
 # Helper proc to get external library compile flags
@@ -55,9 +51,40 @@ proc parseNimbleRequires(nimblePath: string): seq[string] =
       continue
 
     let spec = trimmed[(firstQuote + 1) ..< secondQuote]
-    let pkgName = spec.splitWhitespace()[0]
+    var pkgName = spec.splitWhitespace()[0]
+    if pkgName.startsWith("https://") or pkgName.startsWith("http://"):
+      let parts = pkgName.split("/")
+      if parts.len > 0:
+        pkgName = parts[^1]
+        if pkgName.endsWith(".git"):
+          pkgName = pkgName[0 .. ^5]
     if pkgName.len > 0:
       result.add(pkgName)
+
+proc addDependencyPath(pkgName: string, pathFlags: var seq[string], seen: var seq[string]) =
+  if pkgName in seen:
+    return
+
+  seen.add(pkgName)
+
+  let pkgPathOutput = staticExec("nimble path " & pkgName).strip()
+  var pkgPath = ""
+  for line in pkgPathOutput.splitLines():
+    let candidate = line.strip()
+    if candidate.len > 0 and dirExists(candidate):
+      pkgPath = candidate
+
+  if pkgPath.len == 0:
+    return
+
+  pathFlags.add("-p:" & pkgPath.quoteShell())
+
+  let nimbleFile = pkgPath / (pkgName & ".nimble")
+  if not fileExists(nimbleFile):
+    return
+
+  for depName in parseNimbleRequires(nimbleFile):
+    addDependencyPath(depName, pathFlags, seen)
 
 proc getExternalDependencyPaths(): string =
   var pathFlags: seq[string] = @[]
@@ -77,13 +104,7 @@ proc getExternalDependencyPaths(): string =
       continue
 
     for pkgName in parseNimbleRequires(nimbleFile):
-      if pkgName in seen:
-        continue
-      seen.add(pkgName)
-      let pkgPath = staticExec("nimble path " & pkgName)
-      let trimmedPath = pkgPath.strip()
-      if trimmedPath.len > 0 and dirExists(trimmedPath):
-        pathFlags.add("-p:" & trimmedPath.quoteShell())
+      addDependencyPath(pkgName, pathFlags, seen)
 
   return pathFlags.join(" ")
 
@@ -261,16 +282,6 @@ task bona_mummyx_release, "Build bona IDE with MummyX support (release)":
   ## Build GUI IDE with GTK4 and MummyX support in release mode
   exec "nim c -d:gtk4 -d:mummyx -d:release --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (release with MummyX support)"
-
-task harding_bitbarrel, "Build harding with BitBarrel support":
-  ## Build REPL with BitBarrel database support
-  exec "nim c -d:bitbarrel -o:harding src/harding/repl/harding.nim"
-  echo "Binary available as ./harding (with BitBarrel support)"
-
-task harding_bitbarrel_release, "Build harding with BitBarrel support (release)":
-  ## Build REPL with BitBarrel support in release mode
-  exec "nim c -d:bitbarrel -d:release -o:harding src/harding/repl/harding.nim"
-  echo "Binary available as ./harding (release with BitBarrel support)"
 
 task harding_debug, "Build harding with debugger support":
   ## Build REPL with debugger support for VSCode integration

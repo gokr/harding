@@ -19,7 +19,6 @@ nimble test              # Run all tests
 nimble clean             # Clean build artifacts and binaries
 nimble install_harding   # Install harding binary to ~/.local/bin/
 nimble install_bona      # Install bona binary and desktop integration
-nimble harding_bitbarrel # Build REPL with BitBarrel support
 ```
 
 **IMPORTANT**: Use `nimble harding` / `nimble bona` to build. These place binaries in the root directory. `nimble build` alone will NOT update root directory binaries.
@@ -252,8 +251,8 @@ Declarative form: arguments must match method parameter names. Inline form: argu
 
 ## BitBarrel Integration
 
-BitBarrel is a Bitcask-style key-value storage engine. Build with `nimble harding_bitbarrel`. Requires `whisky` WebSocket library.
+BitBarrel is available as an external Harding library. Install it with `./harding lib install bitbarrel`, then rebuild with `nimble harding`.
 
 Classes: `Barrel` (connection), `BarrelTable` (hash-based persistent storage), `BarrelSortedTable` (ordered storage with range queries). Load via `load: "lib/bitbarrel/Bootstrap.hrd"`.
 
-Native methods are conditionally compiled with `when defined(bitbarrel):`.
+External BitBarrel builds are compiled with the generated `-d:harding_bitbarrel` flag.

@@ -207,7 +207,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Granite compiles standalone `.hrd` scripts to native binaries via Nim
 - Inline compilation of `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`, `whileTrue:`, `whileFalse:`, `timesRepeat:`
 - Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
-- BitBarrel integration: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
+- External BitBarrel library: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
 - Version-based MIC/PIC caching for improved message send performance
 - All 34 test files passing
 - VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
@@ -230,7 +230,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Roadmap](docs/ROADMAP.md) - Active priorities and milestones
 - [Performance](docs/PERFORMANCE.md) - Performance workflow and priorities
 - [Future Plans](docs/FUTURE.md) - Long-term roadmap
-- [CLAUDE.md](CLAUDE.md) - Developer guide with BitBarrel integration
+- [CLAUDE.md](CLAUDE.md) - Developer guide and repository conventions
 - [GTK Integration](docs/GTK.md) - GUI development
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
 - [GtkSourceView](docs/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting
