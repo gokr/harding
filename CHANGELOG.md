@@ -9,16 +9,19 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
+- Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
 - Class definitions in core libraries now include class-specific comments.
 - BitBarrel support now ships as an external library instead of built-in Harding source and build flags.
+- MummyX request handling now runs through scheduler-backed green worker processes instead of executing on the socket thread.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
 - Fixed source tracking temp file cleanup in tests.
 - External library builds now resolve transitive Nimble dependency paths needed by installed packages.
+- MummyX request handlers now resume correctly after blocking native receives in the stackless VM.
 
 ## [0.8.0] - 2026-03-09
 
@@ -30,7 +33,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Multiple-inheritance conflict reflection via `conflictSelectors` and `classConflictSelectors`.
 - Source indexing for Browser method and class-definition lookups, including `<classDefinition>` pseudo-entries.
 - `startsWith:` and `endsWith:` methods for `String`.
-- Optional MummyX HTTP server integration documentation and build tasks for both `harding` and `bona`.
 
 ### Changed
 - Multiple inheritance now uses first-parent-wins lookup order instead of failing on direct-parent selector conflicts.
@@ -46,7 +48,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Array sorting and collection method improvements.
 - Exception handling and block unwind cleanup fixes.
 - Builder heightRequest and compilation fixes.
-- MummyX request handlers now resume correctly after blocking native receives in the stackless VM.
 
 ## [0.7.1] - 2026-03-02
 
