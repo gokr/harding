@@ -206,18 +206,24 @@ Person := Object derive: #(name age) methods: [
 ### Creating Classes
 
 ```smalltalk
-# Class without accessors (manual method definition required)
+# Class with direct slot access (no accessors generated)
 Point := Object derive: #(x y)
 
-# Class with automatic accessors for all slots
-Person := Object deriveWithAccessors: #(name age)
+# Class with public slots (auto-generated accessors + :: access)
+Person := Object derivePublic: #(name age)
 
-# Class with selective accessor generation
+# Canonical form with explicit read/write slot lists
 Account := Object derive: #(balance owner)
-                       getters: #(balance owner)
-                       setters: #(balance)
+                       read: #(balance owner)
+                       write: #(balance)
 
-# Subclass
+# With multiple inheritance
+ColoredPoint := Object derive: #(color x y)
+                       read: #(color x y)
+                       write: #(color x y)
+                       superclasses: #(Point)
+
+# Subclass (single inheritance)
 ColoredPoint := Point derive: #(color)
 ```
 
@@ -249,7 +255,7 @@ p name: "Alice"      # Setter
 p age: 30            # Setter
 p name               # Getter - returns "Alice"
 
-# Selective accessor generation
+# Selective accessor generation (legacy API)
 Account := Object derive: #(balance owner)
                        getters: #(balance owner)
                        setters: #(balance)
@@ -258,9 +264,36 @@ acc balance: 100     # Setter for balance
 acc balance          # Getter - returns 100
 acc owner            # Getter - returns nil (not set)
 # acc owner: "Bob"   # Error - no setter for owner
+
+# Canonical form with explicit read/write slot lists (v0.8.0+)
+Account := Object derive: #(balance owner)
+                       read: #(balance owner)
+                       write: #(balance)
 ```
 
-### Property Access
+### Direct Named Access (::)
+
+Access slots, table entries, and library bindings directly using `::` syntax:
+
+```smalltalk
+# Slot access (for readable slots or inside methods)
+person::name              # Get slot value
+person::name := "Alice"   # Set slot value (if writable)
+
+# Table/Dictionary access
+table::key                # Get value at key
+table::key := value        # Set value at key
+
+# Library binding access
+MyLib::ClassName          # Access binding from library
+```
+
+`::` provides O(1) direct access without method call overhead. Works for:
+- Slots declared in `read:` or `write:` lists (or `derivePublic:` which marks all slots readable/writable)
+- Table keys (strings, symbols)
+- Library bindings
+
+### Property Access (Legacy)
 
 ```smalltalk
 obj at: #name                      # Get property

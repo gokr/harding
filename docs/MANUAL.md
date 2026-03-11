@@ -218,13 +218,22 @@ chmod +x script.hrd
 # Create a class with slots (no accessors)
 Point := Object derive: #(x y)
 
-# Create a class with automatic accessors
+# Create a class with automatic accessors (legacy API)
 Person := Object deriveWithAccessors: #(name age)
 
-# Create a class with selective accessors
+# Create a class with public slots (auto accessors + :: access)
+Person := Object derivePublic: #(name age)
+
+# Canonical form with explicit read/write slot lists (v0.8.0+)
 Account := Object derive: #(balance owner)
-                       getters: #(balance owner)
-                       setters: #(balance)
+                       read: #(balance owner)
+                       write: #(balance)
+
+# With multiple inheritance (v0.8.0+)
+ColoredPoint := Object derive: #(color x y)
+                       read: #(color x y)
+                       write: #(color x y)
+                       superclasses: #(Point)
 
 # Create an instance
 p := Point new
@@ -393,6 +402,83 @@ Performance comparison (per 100k ops):
 
 Slot-based access is **149x faster** than property bag access.
 
+### Named Access Syntax (::)
+
+The `::` operator provides direct O(1) access to slots, table entries, and library bindings without method call overhead.
+
+#### Slot Access
+
+For slots declared in the `read:` or `write:` lists (or all slots with `derivePublic:`):
+
+```smalltalk
+# Reading slots
+name := person::name
+x := point::x
+
+# Writing slots (only if declared writable)
+person::name := "Alice"
+point::x := 100
+
+# Inside methods - direct slot access (no :: needed)
+Person>>haveBirthday [
+    age := age + 1    # Direct slot access within the class
+]
+```
+
+#### Table/Dictionary Access
+
+```smalltalk
+table := #{"name" -> "Alice", "age" -> 30}
+
+# Reading
+name := table::name
+age := table::"age"    # String keys work too
+
+# Writing
+table::name := "Bob"
+table::city := "NYC"   # Creates new key if doesn't exist
+```
+
+#### Library Binding Access
+
+```smalltalk
+MyLib := Library new.
+MyLib at: "MyClass" put: SomeClass.
+
+# Access binding directly
+cls := MyLib::MyClass
+```
+
+#### Benefits
+
+1. **Performance**: O(1) direct access without method dispatch
+2. **Conciseness**: `obj::slot` vs `obj slot` or `obj slot: value`
+3. **Flexibility**: Works for slots, tables, and libraries uniformly
+
+#### Canonical Derive APIs (v0.8.0+)
+
+The canonical form for class creation uses explicit read/write slot lists:
+
+```smalltalk
+# All slots readable and writable (equivalent to derivePublic:)
+Person := Object derive: #(name age)
+                       read: #(name age)
+                       write: #(name age)
+
+# Read-only age, read-write name
+Person := Object derive: #(name age)
+                       read: #(name age)
+                       write: #(name)
+
+# With multiple inheritance
+Child := Object derive: #(x)
+                       read: #(x)
+                       write: #(x)
+                       superclasses: #(Parent1 Parent2)
+```
+
+**Note**: `derivePublic:` is shorthand for `derive:read:write:` with all slots in both lists.
+
 ### The Class Object
 
 In Harding, **Class** is a regular class just like any other. It exists as a global binding and provides class-related functionality, but unlike Smalltalk-80, there are no metaclasses.
@@ -550,6 +636,46 @@ Child addSuperclass: Parent2
 ```
 
 **Note**: Only directly-defined methods on each parent are checked for conflicts. Inherited methods (like `derive:` from Object) will not cause false conflicts.
+
+### Method Lookup Order (v0.8.0+)
+
+As of v0.8.0, multiple inheritance uses **first-parent-wins** lookup order instead of failing on conflicts:
+
+1. The class's own methods
+2. First parent's methods (and its parents)
+3. Second parent's methods (and its parents)
+4. And so on...
+
+If the same method exists in multiple parents, the first parent's version is used. A warning is printed for conflicting selectors.
+
+```smalltalk
+Parent1 := Object derive: #(a)
+Parent1 >> foo [ ^ "parent1" ]
+
+Parent2 := Object derive: #(b)
+Parent2 >> foo [ ^ "parent2" ]
+
+# No error - first parent wins
+Child := Object derive: #(x)
+Child addSuperclass: Parent1
+Child addSuperclass: Parent2
+
+(Child new foo)  # Returns "parent1" (with warning about conflict)
+```
+
+To explicitly select which parent's method to use, define an override or use qualified super sends.
+
+### Conflict Reflection (v0.8.0+)
+
+Query selector conflicts programmatically:
+
+```smalltalk
+# Get conflicting selectors between this class and all parents
+conflicts := Child conflictSelectors
+
+# Get conflicting selectors with a specific parent class
+conflicts := Child classConflictSelectors: Parent2
+```
 
 ### Super Sends
 
@@ -1077,6 +1203,56 @@ Use this flow:
 3. Bundle all package `.hrd` files as embedded strings and install them with `HardingPackageSpec`.
 
 For a full end-to-end example, see `docs/NIM_PACKAGE_TUTORIAL.md`.
+
+### External Libraries (v0.8.0+)
+
+Harding includes a library management system for installing third-party packages:
+
+#### Listing Available Libraries
+
+```bash
+harding lib list           # List available libraries from registry
+harding lib fetch          # Refresh metadata from remote repositories
+harding lib info mysql     # Show detailed info about a library
+```
+
+#### Installing Libraries
+
+```bash
+harding lib install mysql           # Install latest version
+harding lib install mysql@1.0.0    # Install specific version
+```
+
+Libraries are installed to the `external/` directory and compiled into Harding on the next build.
+
+#### Managing Installed Libraries
+
+```bash
+harding lib installed      # List installed libraries
+harding lib update mysql   # Update a specific library
+harding lib update --all   # Update all libraries
+harding lib remove mysql   # Remove a library
+```
+
+#### Building with External Libraries
+
+After installing or updating libraries:
+
+```bash
+nimble harding             # Rebuild with new libraries
+```
+
+#### Creating External Libraries
+
+External libraries are Nim packages that extend Harding:
+
+1. Create a Git repository named `harding-<libname>`
+2. Add a `<libname>.nimble` file with metadata
+3. Implement Nim primitives in `src/harding_<libname>/`
+4. Create Harding classes in `lib/<libname>/`
+5. Add a `lib/<libname>/Bootstrap.hrd` file
+
+See `external/README.md` for the full specification.
 
 ### Loading Code into Global Scope
 
