@@ -7,15 +7,15 @@ Harding is a Smalltalk dialect written in Nim that preserves most of the disting
 ```smalltalk
 "Hello, World!" println
 
-# Class with automatic accessors
-Person := Object deriveWithAccessors: #(name age)
+# Class with generated accessors
+Person := Object derivePublic: #(name age)
 p := Person new
 p name: "Alice"
 p age: 30
 ("Hello, " , p name) println
 
-# Class with manual method definition
-Point := Object deriveWithAccessors: #(x y)
+# Class with generated accessors and a manual method
+Point := Object derivePublic: #(x y)
 Point>>distanceFromOrigin [ ^ ((x * x) + (y * y)) sqrt ]
 
 p := Point new
@@ -179,7 +179,7 @@ See [VSCODE.md](docs/VSCODE.md) for full details.
 | Double quotes for comments | Hash `#` for comments |
 | Single quotes for strings | Double quotes for strings |
 | Classes define structure via class definition | Class construction using derive: `Object derive: #(slots)` |
-| Manual accessor definition | Auto-generated accessors via `deriveWithAccessors:` |
+| Manual accessor definition | Generated accessors via `derivePublic:` or `derive:read:write:` |
 | Image-based persistence | Source files loaded on startup, git friendly source format, normal Unix workflow |
 | VM execution | Interprets AST directly, native compiler via Nim (in development) |
 | FFI via C bindings | Direct Nim interop: call Nim functions, use Nim types |
@@ -200,12 +200,12 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 | Comments | `# This is a comment` |
 | Strings | `"Double quotes only"` |
 | Create subclass | `Point := Object derive: #(x y)` |
-| Create with accessors | `Point := Object deriveWithAccessors: #(x y)` |
+| Create with generated accessors | `Point := Object derivePublic: #(x y)` |
 | Create instance | `p := Point new` |
 | Define method | `Point>>move: dx [ ... ]` |
 | Batch methods | `Point extend: [ self >> foo [ ... ] ]` |
 
-## Current Status (v0.7.1)
+## Current Status
 
 **Working:**
 - Lexer, parser, stackless AST interpreter
@@ -222,26 +222,25 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - Optional MummyX HTTP server integration with `HttpServer`, `Router`, and green-process request handlers
 - Multiple inheritance with conflict detection and scoped super send
 - Dynamic message sending: `perform:`, `perform:with:`
-- Automatic accessor generation: `deriveWithAccessors:`, `derive:getters:setters:`
+- Generated accessors via `derivePublic:`, `derive:read:write:`, and `derive:read:write:superclasses:`
+- Named slot and binding access via `::`
 - Library/namespace system for modular code organization (Core, Collections, GUI, IDE libraries)
+- External Harding libraries via the `harding lib` workflow, including BitBarrel as an installable package
 - String concatenation with auto-conversion using `,`
 - GTK-based IDE (`bona`) with Workspace (code editor with Do It/Print It/Inspect It), Transcript (output console), System Browser (class/method browser), and Inspector (object viewer)
 - Smalltalk-style Print It - insert results in editor with selection
 - Exception handling via `on:do:` with Smalltalk-style resumable exceptions (`resume`, `resume:`, `retry`, `pass`, `return:`)
-- Compiler infrastructure (`granite`) with inline control flow compilation
-- Granite compiles standalone `.hrd` scripts to native binaries via Nim
-- Inline compilation of `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`, `whileTrue:`, `whileFalse:`, `timesRepeat:`
-- Compiled code runs 30-200x faster than interpreted (benchmark: sieve of Eratosthenes)
-- External BitBarrel library: persistent key-value storage with `BarrelTable` and `BarrelSortedTable` classes
+- Granite compiler pipeline for standalone `.hrd` scripts to native binaries via Nim
+- Granite support for inline control flow, block-heavy examples, and mixed interpreted/compiled runtime support
 - Version-based MIC/PIC caching for improved message send performance
-- All 34 test files passing
+- Broad test coverage across interpreter, stdlib, compiler, exceptions, IDE tooling, and website examples
 - VSCode extension with LSP (completions, hover, symbols) and DAP (breakpoints, stepping, variables)
 - Harding Debug Protocol (HDP) for VM debugging
 
 **In progress:**
-- Compiler to Nim: first-class blocks with captures, non-local returns
+- Granite parity work for remaining inheritance and in-VM compilation edge cases
 - FFI to Nim
-- Standard library expansion
+- Standard library and external ecosystem expansion
 
 ## Documentation
 
