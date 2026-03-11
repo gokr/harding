@@ -51,7 +51,7 @@ Library class>>syncDynamicLibraries [
 
     # Bona classes (loaded from lib/gui/bona/*.hrd)
     # Keep this explicit so unrelated classes are not pulled in.
-    bonaNames := #("Launcher" "Workspace" "Transcript" "SystemBrowser" "BrowserPane" "Inspector").
+    bonaNames := #("Launcher" "Workspace" "Transcript" "Browser" "BrowserPane" "Inspector").
     index := 0.
     [ index < bonaNames size ] whileTrue: [
         name := bonaNames at: index.

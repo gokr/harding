@@ -381,7 +381,7 @@ suite "GTK automation helpers":
       ].
 
       Owner := TestOwner new initialize.
-      BrowserWindow := SystemBrowser openFor: Owner.
+      BrowserWindow := Browser openFor: Owner.
       GtkWidget flushEvents: 10.
       BrowserWindow close.
       GtkWidget flushEvents: 20.

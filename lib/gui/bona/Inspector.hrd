@@ -3,7 +3,7 @@
 # Two-pane layout: tree view with expand/collapse | embedded workspace
 # ============================================================================
 
-Inspector := Object derive: #(window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel inspectedObject selectedObject selectedSlotName expandedPaths owner)
+Inspector := Object derive: #(model window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel owner)
 # Inspector presents object structure and nested values through a browsable tree-style view.
 # It is used to inspect arbitrary Harding objects, collections, and nested slot contents.
 # Workspace and other tools rely on this class to turn live objects into explorable UI state.
@@ -26,17 +26,13 @@ Inspector class>>openOn: anObject for: anOwner [
 ]
 
 Inspector>>initialize [
-    inspectedObject := nil.
-    selectedObject := nil.
-    selectedSlotName := nil.
-    expandedPaths := Table new.
+    model := InspectorModel new.
     owner := nil.
     ^ self
 ]
 
 Inspector>>inspect: anObject [
-    inspectedObject := anObject.
-    selectedObject := anObject.
+    model inspect: anObject.
     ^ self
 ]
 
@@ -51,7 +47,7 @@ Inspector>>openWindowFor: anOwner [
 
     # Create main window
     window := GtkWindow new.
-    window title: ("Inspector: " , (inspectedObject printString)).
+    window title: ("Inspector: " , ((model inspectedObject) printString)).
     window iconName: "harding".
     window setDefaultSize: 750 height: 500.
 
@@ -161,10 +157,10 @@ Inspector>>renderTree [
     treeScroll setChild: treeBox.
 
     # Add self header
-    self addTreeHeader: ("self (" , (inspectedObject className) , ")") to: treeBox.
+    self addTreeHeader: ("self (" , ((model inspectedObject) className) , ")") to: treeBox.
 
     # Render the inspected object's slots
-    self renderSlotsOf: inspectedObject atDepth: 0 pathPrefix: "root" into: treeBox.
+    self renderSlotsOf: (model inspectedObject) atDepth: 0 pathPrefix: "root" into: treeBox.
 ]
 
 Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
@@ -201,7 +197,7 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
 Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box [
     | idx pathsTable inspector |
     inspector := self.
-    pathsTable := expandedPaths.
+    pathsTable := model expandedPaths.
     idx := 0.
     anArray do: [:element |
         | name path expanded |
@@ -213,7 +209,7 @@ Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box
              value: element
              depth: depth
              expanded: expanded
-             expandable: (inspector isExpandable: element)
+             expandable: (model isExpandable: element)
              path: path
              into: box.
 
@@ -232,7 +228,7 @@ Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box
 Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box [
     | pathsTable inspector |
     inspector := self.
-    pathsTable := expandedPaths.
+    pathsTable := model expandedPaths.
     aTable keysAndValuesDo: [:key :value |
         | name path expanded |
         name := key printString.
@@ -243,7 +239,7 @@ Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box 
              value: value
              depth: depth
              expanded: expanded
-             expandable: (inspector isExpandable: value)
+             expandable: (model isExpandable: value)
              path: path
              into: box.
 
@@ -275,7 +271,7 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
     ].
 
     # Build label
-    label := indent , icon , name , ": " , (self formatValue: value).
+    label := indent , icon , name , ": " , (model formatValue: value).
     button label: label.
 
     # Click handler: toggle expansion and select
@@ -320,30 +316,17 @@ Inspector>>addTreeHeader: headerText to: aBox [
 ]
 
 Inspector>>togglePath: path [
-    | current |
-    current := expandedPaths at: path ifAbsent: [ false ].
-    current ifTrue: [
-        expandedPaths removeKey: path.
-    ] ifFalse: [
-        expandedPaths at: path put: true.
-    ].
+    model togglePath: path.
     self renderTree.
 ]
 
 Inspector>>selectValue: value name: name [
-    selectedObject := value.
-    selectedSlotName := name.
+    model selectValue: value name: name.
     self updateWorkspaceLabel.
 ]
 
 Inspector>>updateWorkspaceLabel [
-    | text |
-    selectedSlotName notNil ifTrue: [
-        text := selectedSlotName , ": " , (self formatValue: selectedObject).
-    ] ifFalse: [
-        text := inspectedObject printString.
-    ].
-    workspaceLabel text: text.
+    workspaceLabel text: (model workspaceLabelText).
 ]
 
 # ============================================================================
@@ -351,38 +334,11 @@ Inspector>>updateWorkspaceLabel [
 # ============================================================================
 
 Inspector>>formatValue: aValue [
-    aValue isNil ifTrue: [ ^ "nil" ].
-    (aValue isKindOf: String) ifTrue: [
-        aValue size > 50 ifTrue: [
-            ^ ("\"" , (aValue copyFrom: 0 to: 47) , "...\"")
-        ].
-        ^ ("\"" , aValue , "\"")
-    ].
-    (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Boolean) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Array) ifTrue: [
-        ^ ("Array(" , (aValue size printString) , ")")
-    ].
-    (aValue isKindOf: Table) ifTrue: [
-        ^ ("Table(" , (aValue size printString) , ")")
-    ].
-    ^ aValue className
+    ^ model formatValue: aValue
 ]
 
 Inspector>>isExpandable: aValue [
-    | slotNames |
-    aValue isNil ifTrue: [ ^ false ].
-    (aValue isKindOf: Boolean) ifTrue: [ ^ false ].
-    (aValue isKindOf: Integer) ifTrue: [ ^ false ].
-    (aValue isKindOf: Float) ifTrue: [ ^ false ].
-    (aValue isKindOf: String) ifTrue: [ ^ false ].
-    (aValue isKindOf: Array) ifTrue: [ ^ aValue size > 0 ].
-    (aValue isKindOf: Table) ifTrue: [ ^ aValue size > 0 ].
-
-    # Regular object: expandable if it has slots
-    slotNames := aValue slotNames.
-    ^ slotNames size > 0
+    ^ model isExpandable: aValue
 ]
 
 # ============================================================================
@@ -402,7 +358,7 @@ Inspector>>evaluationSourceCode [
 Inspector>>evalInContext: codeString [
     | wrappedCode |
     # Bind self to the selected object in the evaluated code
-    Harding at: "_inspectorSelf" put: selectedObject.
+    Harding at: "_inspectorSelf" put: (model selectedObject).
     wrappedCode := "| self |
 self := Harding at: \"_inspectorSelf\".
 " , codeString.
@@ -428,7 +384,7 @@ Inspector>>doItInWorkspace [
     (self isErrorResult: result) ifTrue: [
         window title: result.
     ] ifFalse: [
-        window title: ("Inspector: " , (inspectedObject printString)).
+        window title: ("Inspector: " , ((model inspectedObject) printString)).
     ].
     ^ result
 ]
@@ -471,8 +427,8 @@ Inspector>>inspectItInWorkspace [
 # ============================================================================
 
 Inspector>>inspectSelected [
-    selectedObject notNil ifTrue: [
-        Inspector openOn: selectedObject for: owner.
+    (model selectedObject) notNil ifTrue: [
+        Inspector openOn: (model selectedObject) for: owner.
     ].
 ]
 

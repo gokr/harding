@@ -1,0 +1,51 @@
+# ============================================================================
+# BuilderModel - Non-GTK state holder for Builder
+# ============================================================================
+
+BuilderModel := Object derive: #(catalog currentApp appClasses isRefreshing outputText).
+
+BuilderModel>>initialize [
+    catalog := Catalog new.
+    currentApp := nil.
+    appClasses := Array new.
+    isRefreshing := false.
+    outputText := "".
+    ^ self
+].
+
+BuilderModel>>catalog [ ^ catalog ].
+BuilderModel>>catalog: aCatalog [ catalog := aCatalog. ^ self ].
+BuilderModel>>currentApp [ ^ currentApp ].
+BuilderModel>>currentApp: anApp [ currentApp := anApp. ^ self ].
+BuilderModel>>appClasses [ ^ appClasses ].
+BuilderModel>>appClasses: classes [ appClasses := classes. ^ self ].
+BuilderModel>>isRefreshing [ ^ isRefreshing ].
+BuilderModel>>isRefreshing: aBool [ isRefreshing := aBool. ^ self ].
+BuilderModel>>outputText [ ^ outputText ].
+BuilderModel>>appendOutput: text [
+    outputText isEmpty
+        ifTrue: [ outputText := text ]
+        ifFalse: [ outputText := outputText , "\n" , text ].
+    ^ self
+].
+
+BuilderModel>>appDisplayName: appClass [
+    ^ [ appClass name asString ] on: Exception do: [ appClass className asString ]
+].
+
+BuilderModel>>isApplicationSubclass: aClass [
+    | supers className |
+    aClass isNil ifTrue: [ ^ false ].
+    className := [ aClass name asString ] on: Exception do: [ aClass className asString ].
+    className = "Application" ifTrue: [ ^ false ].
+    supers := [ aClass superclassNames ] on: Exception do: [ Array new ].
+    ^ (supers includes: "Application") or: [ supers includes: #Application ]
+].
+
+BuilderModel>>findApplicationSubclasses [
+    ^ catalog applicationSubclasses
+].
+
+BuilderModel>>uniqueAppName: baseName [
+    ^ catalog nextAvailableClassNameFrom: baseName
+].

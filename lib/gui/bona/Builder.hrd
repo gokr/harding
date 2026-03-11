@@ -4,15 +4,20 @@
 #
 # A GUI tool for creating, editing, and compiling Harding Applications
 # using the Granite compiler. All work is captured in Application subclasses
-# and auto-saved to .hrd files like the SystemBrowser.
+# and auto-saved to .hrd files like the Browser.
 
-Builder := Object derive: #(owner window appList appEditor outputView currentApp appClasses isRefreshing).
+Builder := Object derive: #(model owner window appList appEditor outputView).
 # Builder implements Bona's Granite application builder and starter-template workflow.
 # It discovers Application subclasses, edits main: methods, and triggers Granite builds.
 # Sample app creation, build output, and app selection behavior all flow through this class.
 # Keep app-builder orchestration here so Granite and Browser stay loosely coupled.
 # This file is the IDE surface for turning Harding applications into runnable programs.
 # Changes here affect both template generation and build-time developer experience.
+
+Builder>>initialize [
+  model := BuilderModel new.
+  ^ self
+].
 
 Builder class>>open [
   | builder |
@@ -287,14 +292,14 @@ Builder>>addEmptyRow [
 Builder>>refreshAppList [
   | apps |
 
-  isRefreshing := true.
+  model isRefreshing: true.
   [
     # Clear existing items
     appList clear.
 
     # Find all Application subclasses
     apps := self findApplicationSubclasses.
-    appClasses := apps.
+    model appClasses: apps.
 
     apps isEmpty
       ifTrue: [
@@ -311,63 +316,39 @@ Builder>>refreshAppList [
     Transcript showCr: ("Builder refresh failed: " , ex printString).
   ].
 
-  isRefreshing := false.
+  model isRefreshing: false.
   ^ self
 ].
 
 Builder>>appDisplayName: appClass [
-  ^ [ appClass name asString ] on: Exception do: [ appClass className asString ]
+  ^ model appDisplayName: appClass
 ].
 
 Builder>>isApplicationSubclass: aClass [
-  # True when class inherits from Application.
-  | supers className |
-  aClass isNil ifTrue: [ ^ false ].
-
-  className := [ aClass name asString ] on: Exception do: [ aClass className asString ].
-  className = "Application" ifTrue: [ ^ false ].
-
-  supers := [ aClass superclassNames ] on: Exception do: [ Array new ].
-  ^ (supers includes: "Application") or: [ supers includes: #Application ]
+  ^ model isApplicationSubclass: aClass
 ].
 
 Builder>>findApplicationSubclasses [
-  | result |
-  result := Array new.
-
-  Harding keys do: [:key |
-    | obj |
-    obj := Harding at: key.
-    (obj notNil and: [ obj isClass ]) ifTrue: [
-      # Check if this class is a subclass of Application
-      (self isApplicationSubclass: obj) ifTrue: [
-        (obj name ~= "Application") ifTrue: [
-          result add: obj.
-        ].
-      ].
-    ].
-  ].
-
-  ^ result
+  ^ model findApplicationSubclasses
 ].
 
 Builder>>onAppSelected: index [
   | appClass |
 
-  isRefreshing ifTrue: [ ^ self ].
+  (model isRefreshing) ifTrue: [ ^ self ].
   index isNil ifTrue: [ ^ self ].
   (index isKindOf: Integer) ifFalse: [ ^ self ].
   index < 0 ifTrue: [ ^ self ].
 
-  (appClasses isNil or: [ index >= appClasses size ]) ifTrue: [ ^ self ].
+  ((model appClasses) isNil or: [ index >= ((model appClasses) size) ]) ifTrue: [ ^ self ].
 
-  appClass := appClasses at: index.
+  appClass := (model appClasses) at: index.
   appClass isNil ifTrue: [
     self showOutput: "Error: Could not find selected application class".
     ^ self.
   ].
 
-  currentApp := appClass.
+  model currentApp: appClass.
   self loadApp: appClass.
 ].
 
@@ -419,19 +400,19 @@ Builder>>methodSource: method [
 Builder>>buildCurrentApp [
   | result output appName |
 
-  currentApp isNil ifTrue: [
+  (model currentApp) isNil ifTrue: [
     self showOutput: "Error: No application selected".
     ^ self.
   ].
 
-  appName := self appDisplayName: currentApp.
+  appName := self appDisplayName: (model currentApp).
   self showOutput: ("Building ", appName, "...").
 
   # Save current edits first
   self saveCurrentApp.
 
   # Call Granite build
-  result := [ Granite build: (currentApp new) ] on: Exception do: [:ex |
+  result := [ Granite build: ((model currentApp) new) ] on: Exception do: [:ex |
     "Error: " , ex printString , " (Granite build primitive may be unavailable in this bona build)"
   ].
 
@@ -445,7 +426,7 @@ Builder>>buildCurrentApp [
 Builder>>saveCurrentApp [
   | source libraries appName |
 
-  currentApp isNil ifTrue: [ ^ self ].
+  (model currentApp) isNil ifTrue: [ ^ self ].
 
   # Get source from editor
   source := appEditor text.
@@ -454,12 +435,12 @@ Builder>>saveCurrentApp [
   libraries := self getSelectedLibraries.
 
   # Compile and install new method
-  self compileMethod: source for: currentApp.
+  self compileMethod: source for: (model currentApp).
 
   # Save libraries preference
-  self saveLibraries: libraries for: currentApp.
+  self saveLibraries: libraries for: (model currentApp).
 
-  appName := self appDisplayName: currentApp.
+  appName := self appDisplayName: (model currentApp).
   Transcript showCr: ("Saved ", appName).
 ].
 
@@ -498,12 +479,12 @@ Builder>>compileMethod: source for: appClass [
 Builder>>runCurrentApp [
   | binaryPath cmd appName |
 
-  currentApp isNil ifTrue: [
+  (model currentApp) isNil ifTrue: [
     self showOutput: "Error: No application selected".
     ^ self.
   ].
 
-  appName := self appDisplayName: currentApp.
+  appName := self appDisplayName: (model currentApp).
   binaryPath := "./build/", appName.
 
   self showOutput: ("Running: ", binaryPath).
@@ -562,13 +543,13 @@ Builder>>createNewApp [
     ^ self
   ].
 
-  currentApp := appClass.
+  model currentApp: appClass.
 
   # Select the new app in the list when possible.
   idx := 0.
   found := false.
-  [ (idx < appClasses size) and: [ found not ] ] whileTrue: [
-    ((appClasses at: idx) == appClass) ifTrue: [
+  [ (idx < ((model appClasses) size)) and: [ found not ] ] whileTrue: [
+    (((model appClasses) at: idx) == appClass) ifTrue: [
       appList selectIndex: idx.
       found := true
     ] ifFalse: [
@@ -626,7 +607,7 @@ Builder>>createHelloWorldApp [
   self refreshAppList.
 
   appClass := Harding at: name ifAbsent: [ appClass ].
-  currentApp := appClass.
+  model currentApp: appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)
   ].
@@ -675,7 +656,7 @@ Builder>>createSimpleGUIApp [
   self refreshAppList.
 
   appClass := Harding at: name ifAbsent: [ appClass ].
-  currentApp := appClass.
+  model currentApp: appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)
   ].
@@ -733,7 +714,7 @@ Builder>>createCounterApp [
   self refreshAppList.
 
   appClass := Harding at: name ifAbsent: [ appClass ].
-  currentApp := appClass.
+  model currentApp: appClass.
   [ self loadApp: appClass ] on: Exception do: [:ex |
     self showOutput: ("Created template but failed to load editor: " , ex printString)
   ].
@@ -742,20 +723,12 @@ Builder>>createCounterApp [
 ].
 
 Builder>>uniqueAppName: baseName [
-  | counter name |
-  counter := 1.
-  name := baseName.
-
-  [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
-    counter := counter + 1.
-    name := baseName , (counter printString).
-  ].
-
-  ^ name
+  ^ model uniqueAppName: baseName
 ].
 
 Builder>>showOutput: text [
   | buffer |
+  model appendOutput: text.
   buffer := outputView buffer.
   buffer append: text.
   buffer append: "\n".

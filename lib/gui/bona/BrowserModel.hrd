@@ -1,0 +1,101 @@
+# ============================================================================
+# BrowserModel - Non-GTK state holder for Browser
+# ============================================================================
+
+BrowserModel := Object derive: #(catalog currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock sourceModified originalSource pendingTarget pendingPrevClass pendingPrevCategory pendingPrevMethod pendingContinueBlock).
+
+BrowserModel>>initialize [
+    catalog := Catalog new.
+    self reset.
+    ^ self
+].
+
+BrowserModel>>reset [
+    currentLibrary := nil.
+    currentClass := nil.
+    currentCategory := nil.
+    self clearMethodState.
+    sourceModified := false.
+    originalSource := nil.
+    self clearPendingState.
+    ^ self
+].
+
+BrowserModel>>clearMethodState [
+    currentMethod := nil.
+    currentMethodFile := nil.
+    currentMethodOwnerClass := nil.
+    currentMethodHeader := nil.
+    currentMethodSuffix := "".
+    currentMethodStartLine := nil.
+    currentMethodEndLine := nil.
+    currentMethodHasBlock := false.
+    ^ self
+].
+
+BrowserModel>>clearPendingState [
+    pendingTarget := nil.
+    pendingPrevClass := nil.
+    pendingPrevCategory := nil.
+    pendingPrevMethod := nil.
+    pendingContinueBlock := nil.
+    ^ self
+].
+
+BrowserModel>>markSourceClean: sourceText [
+    sourceModified := false.
+    originalSource := sourceText.
+    ^ self
+].
+
+BrowserModel>>markSourceModified [
+    sourceModified := true.
+    ^ self
+].
+
+BrowserModel>>hasUnsavedChangesFor: sourceText [
+    ^ sourceModified and: [
+        originalSource notNil and: [
+            sourceText ~= originalSource
+        ]
+    ]
+].
+
+BrowserModel>>catalog [ ^ catalog ].
+BrowserModel>>catalog: aCatalog [ catalog := aCatalog. ^ self ].
+BrowserModel>>currentLibrary [ ^ currentLibrary ].
+BrowserModel>>currentLibrary: aValue [ currentLibrary := aValue. ^ self ].
+BrowserModel>>currentClass [ ^ currentClass ].
+BrowserModel>>currentClass: aValue [ currentClass := aValue. ^ self ].
+BrowserModel>>currentCategory [ ^ currentCategory ].
+BrowserModel>>currentCategory: aValue [ currentCategory := aValue. ^ self ].
+BrowserModel>>currentMethod [ ^ currentMethod ].
+BrowserModel>>currentMethod: aValue [ currentMethod := aValue. ^ self ].
+BrowserModel>>currentMethodFile [ ^ currentMethodFile ].
+BrowserModel>>currentMethodFile: aValue [ currentMethodFile := aValue. ^ self ].
+BrowserModel>>currentMethodOwnerClass [ ^ currentMethodOwnerClass ].
+BrowserModel>>currentMethodOwnerClass: aValue [ currentMethodOwnerClass := aValue. ^ self ].
+BrowserModel>>currentMethodHeader [ ^ currentMethodHeader ].
+BrowserModel>>currentMethodHeader: aValue [ currentMethodHeader := aValue. ^ self ].
+BrowserModel>>currentMethodSuffix [ ^ currentMethodSuffix ].
+BrowserModel>>currentMethodSuffix: aValue [ currentMethodSuffix := aValue. ^ self ].
+BrowserModel>>currentMethodStartLine [ ^ currentMethodStartLine ].
+BrowserModel>>currentMethodStartLine: aValue [ currentMethodStartLine := aValue. ^ self ].
+BrowserModel>>currentMethodEndLine [ ^ currentMethodEndLine ].
+BrowserModel>>currentMethodEndLine: aValue [ currentMethodEndLine := aValue. ^ self ].
+BrowserModel>>currentMethodHasBlock [ ^ currentMethodHasBlock ].
+BrowserModel>>currentMethodHasBlock: aValue [ currentMethodHasBlock := aValue. ^ self ].
+BrowserModel>>sourceModified [ ^ sourceModified ].
+BrowserModel>>sourceModified: aValue [ sourceModified := aValue. ^ self ].
+BrowserModel>>originalSource [ ^ originalSource ].
+BrowserModel>>originalSource: aValue [ originalSource := aValue. ^ self ].
+BrowserModel>>pendingTarget [ ^ pendingTarget ].
+BrowserModel>>pendingTarget: aValue [ pendingTarget := aValue. ^ self ].
+BrowserModel>>pendingPrevClass [ ^ pendingPrevClass ].
+BrowserModel>>pendingPrevClass: aValue [ pendingPrevClass := aValue. ^ self ].
+BrowserModel>>pendingPrevCategory [ ^ pendingPrevCategory ].
+BrowserModel>>pendingPrevCategory: aValue [ pendingPrevCategory := aValue. ^ self ].
+BrowserModel>>pendingPrevMethod [ ^ pendingPrevMethod ].
+BrowserModel>>pendingPrevMethod: aValue [ pendingPrevMethod := aValue. ^ self ].
+BrowserModel>>pendingContinueBlock [ ^ pendingContinueBlock ].
+BrowserModel>>pendingContinueBlock: aValue [ pendingContinueBlock := aValue. ^ self ].

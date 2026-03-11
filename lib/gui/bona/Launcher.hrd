@@ -87,7 +87,7 @@ Launcher>>createHeaderBar [
   browserButton vexpand: false.
   browserButton hexpand: false.
   browserButton clicked: [ self openBrowser ].
-  browserButton tooltip: "Open System Browser (class/method browser)".
+  browserButton tooltip: "Open Browser (class/method browser)".
   headerBar append: browserButton.
 
   # Spacer
@@ -174,8 +174,8 @@ Launcher>>openTranscript [
 ].
 
 Launcher>>openBrowser [
-  Transcript showCr: "Opening system browser...".
-  SystemBrowser openFor: self.
+  Transcript showCr: "Opening browser...".
+  Browser openFor: self.
   ^ self
 ].
 

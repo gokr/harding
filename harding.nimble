@@ -22,6 +22,8 @@ requires "mummy >= 0.4.6"
 
 import os, strutils, sequtils
 
+const ExternalLibsGeneratedFile = "src/harding/external/external_libs_generated.nim"
+
 # Helper proc to get external library compile flags
 proc getExternalLibFlags(): string =
   var flags: seq[string] = @[]
@@ -108,11 +110,19 @@ proc getExternalDependencyPaths(): string =
 
   return pathFlags.join(" ")
 
-task discover, "Scan external/ and regenerate external_libs.nim":
+proc ensureExternalLibsFile() =
+  if fileExists(ExternalLibsGeneratedFile):
+    return
+
+  echo "Generated external library integration file is missing; running nimble discover..."
+  exec "nim c -r src/harding/external/generator.nim"
+
+task discover, "Scan external/ and regenerate external_libs_generated.nim":
   ## Discover installed libraries and regenerate the import file
   exec "nim c -r src/harding/external/generator.nim"
 
 task test, "Run all tests (automatic discovery via testament)":
+  ensureExternalLibsFile()
   exec """
     echo "Running Harding test suite..."
     echo "=== Running tests/test_*.nim ==="
@@ -125,6 +135,7 @@ task test, "Run all tests (automatic discovery via testament)":
 
 task harding, "Build harding REPL (debug) in repo root":
   # Build REPL in debug mode, output to repo root, with external libraries
+  ensureExternalLibsFile()
   let externalFlags = getExternalLibFlags()
   let dependencyPaths = getExternalDependencyPaths()
   exec "nim c -p:external " & dependencyPaths & " " & externalFlags & " -o:harding src/harding/repl/harding.nim"
@@ -132,6 +143,7 @@ task harding, "Build harding REPL (debug) in repo root":
 
 task harding_release, "Build harding REPL (release) in repo root":
   # Build REPL in release mode, output to repo root, with external libraries
+  ensureExternalLibsFile()
   let externalFlags = getExternalLibFlags()
   let dependencyPaths = getExternalDependencyPaths()
   exec "nim c -p:external " & dependencyPaths & " -d:release " & externalFlags & " -o:harding src/harding/repl/harding.nim"
@@ -139,6 +151,7 @@ task harding_release, "Build harding REPL (release) in repo root":
 
 task bona, "Build bona IDE (debug) in repo root":
   # Build GUI IDE in debug mode with GTK4 + Granite primitives, output to repo root
+  ensureExternalLibsFile()
   let externalFlags = getExternalLibFlags()
   let dependencyPaths = getExternalDependencyPaths()
   exec "nim c -p:external " & dependencyPaths & " -d:gtk4 -d:granite " & externalFlags & " -o:bona src/harding/gui/bona.nim"
@@ -146,6 +159,7 @@ task bona, "Build bona IDE (debug) in repo root":
 
 task bona_release, "Build bona IDE (release) in repo root":
   # Build GUI IDE in release mode with GTK4 + Granite primitives, output to repo root
+  ensureExternalLibsFile()
   let externalFlags = getExternalLibFlags()
   let dependencyPaths = getExternalDependencyPaths()
   exec "nim c -p:external " & dependencyPaths & " -d:release -d:gtk4 -d:granite " & externalFlags & " -o:bona src/harding/gui/bona.nim"

@@ -1,6 +1,6 @@
 ## ============================================================================
 ## External Library Generator
-## Generates external_libs.nim based on installed libraries
+## Generates external_libs_generated.nim based on installed libraries
 ## Run with: nim c -r src/harding/external/generator.nim
 ## ============================================================================
 
@@ -8,7 +8,7 @@ import std/[strutils, strformat]
 import discovery
 
 const
-  OutputFile = "src/harding/external/external_libs.nim"
+  OutputFile = "src/harding/external/external_libs_generated.nim"
 
 proc generateHeader(): string =
   ## Generate file header
@@ -144,7 +144,7 @@ proc getBuiltExternalLibraries*(): seq[string] =
   result.add("\n  return result\n")
 
 proc generateExternalLibsFile*() =
-  ## Generate the external_libs.nim file
+  ## Generate the external_libs_generated.nim file
   echo "Discovering installed libraries..."
 
   let libs = discoverInstalledLibraries()
