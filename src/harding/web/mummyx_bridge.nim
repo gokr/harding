@@ -195,6 +195,7 @@ proc mummyxRequestHandler(request: Request) {.gcsafe.} =
 # ============================================================================
 
 var activeServer: Server
+var serverThread: Thread[ServerThreadArgs]
 
 proc serverThreadProc(args: ServerThreadArgs) {.thread.} =
   ## Background thread that runs the MummyX event loop
@@ -204,103 +205,78 @@ proc serverThreadProc(args: ServerThreadArgs) {.thread.} =
     try:
       server.serve(Port(args.port), args.address)
     except:
-      discard
+      stderr.writeLine("[MUMMYX] server thread failed: " & getCurrentExceptionMsg())
 
 # ============================================================================
-# Block Invocation Helper
+# Callbacks - set by vm.nim to break circular dependency
+# (bridge can't import scheduler directly since scheduler imports vm imports bridge)
 # ============================================================================
 
-# Callback for VM evaluation - set by vm.nim during initialization
-# to break the circular dependency (vm imports bridge, bridge needs vm's eval)
-var evalCleanContextProc*: proc(interp: var Interpreter, node: Node): NodeValue = nil
+# Sets up scheduler on interpreter, creates NimChannel, forks worker processes,
+# and returns the SchedulerContext pointer (as raw pointer for the run loop).
+var setupSchedulerAndWorkersProc*: proc(interp: var Interpreter,
+    pollProc: proc(): Option[NodeValue], workerCount: int): pointer = nil
 
-proc invokeBlockWithArg*(interp: var Interpreter, blockVal: NodeValue,
-                          arg: NodeValue): NodeValue =
-  ## Invoke a Harding block with a single argument using the VM.
-  ## Creates a synthetic message send: block value: arg
-  if evalCleanContextProc == nil:
-    raise newException(ValueError, "MummyX bridge not fully initialized (evalCleanContextProc is nil)")
-  let receiverLiteral = LiteralNode(value: blockVal, line: 0, col: 0)
-  let argLiteral = LiteralNode(value: arg, line: 0, col: 0)
-  let msgNode = MessageNode(
-    receiver: receiverLiteral,
-    selector: "value:",
-    arguments: @[Node(argLiteral)],
-    line: 0, col: 0
+# Runs one scheduler tick. Returns true if work was done.
+var runOneSliceProc*: proc(ctxPtr: pointer): bool = nil
+
+# ============================================================================
+# NimChannel poll callback for request dispatch
+# ============================================================================
+#
+# The pollProc reads PendingRequests from globalRequestChan (fed by MummyX
+# worker threads), does route matching on the main thread, creates an
+# HttpRequest instance, and returns an Array #(request handlerBlock) that
+# the worker Process unpacks and invokes.
+
+# Global routes reference - set when server starts
+var activeRoutes*: seq[HardingRoute] = @[]
+
+proc mummyxPollProc(): Option[NodeValue] =
+  ## Poll globalRequestChan for incoming requests.
+  ## Returns Some(#(request handlerBlock)) or None.
+  if not globalRequestChanOpen:
+    return none(NodeValue)
+
+  let (hasData, pending) = globalRequestChan.tryRecv()
+  if not hasData:
+    return none(NodeValue)
+
+  # Route matching
+  var pathParams: seq[(string, string)] = @[]
+  let route = findRoute(activeRoutes, pending.httpMethod, pending.path, pathParams)
+
+  if route.isNone:
+    # 404 - respond directly, don't bother a worker Process
+    pending.responseChan[].send(PendingResponse(
+      statusCode: 404,
+      headers: @[("Content-Type", "text/plain")],
+      body: "Not Found"
+    ))
+    return none(NodeValue)
+
+  # Create HttpRequest instance on the main thread
+  let reqProxy = RequestProxy(
+    httpMethod: pending.httpMethod,
+    uri: pending.uri,
+    path: pending.path,
+    body: pending.body,
+    remoteAddress: pending.remoteAddress,
+    headers: pending.headers,
+    queryParams: pending.queryParams,
+    pathParams: pathParams,
+    responseChan: pending.responseChan,
+    responded: false
   )
-  return evalCleanContextProc(interp, msgNode)
+  requestProxies.add(reqProxy)
 
-# ============================================================================
-# Process Pending Requests (main thread)
-# ============================================================================
+  let reqInst = newInstance(httpRequestClass)
+  reqInst.isNimProxy = true
+  reqInst.nimValue = cast[pointer](reqProxy)
 
-proc processRequestsBatch*(interp: var Interpreter, routes: seq[HardingRoute],
-                            maxRequests: int = 10): int =
-  ## Process up to maxRequests pending requests from the global channel.
-  ## Returns the number of requests processed.
-  ## Must be called from the main interpreter thread.
-  result = 0
-
-  for i in 0..<maxRequests:
-    let (hasData, pending) = globalRequestChan.tryRecv()
-    if not hasData:
-      break
-
-    inc result
-
-    # Find matching route
-    var pathParams: seq[(string, string)] = @[]
-    let route = findRoute(routes, pending.httpMethod, pending.path, pathParams)
-
-    if route.isNone:
-      # 404 Not Found
-      pending.responseChan[].send(PendingResponse(
-        statusCode: 404,
-        headers: @[("Content-Type", "text/plain")],
-        body: "Not Found"
-      ))
-      continue
-
-    # Create HttpRequest instance
-    let reqProxy = RequestProxy(
-      httpMethod: pending.httpMethod,
-      uri: pending.uri,
-      path: pending.path,
-      body: pending.body,
-      remoteAddress: pending.remoteAddress,
-      headers: pending.headers,
-      queryParams: pending.queryParams,
-      pathParams: pathParams,
-      responseChan: pending.responseChan,
-      responded: false
-    )
-    requestProxies.add(reqProxy)
-
-    let reqInst = newInstance(httpRequestClass)
-    reqInst.isNimProxy = true
-    reqInst.nimValue = cast[pointer](reqProxy)
-
-    # Invoke handler block with request as argument
-    try:
-      discard invokeBlockWithArg(interp, route.get.handlerBlock, reqInst.toValue())
-    except Exception as e:
-      # Handler raised an error
-      if not reqProxy.responded:
-        pending.responseChan[].send(PendingResponse(
-          statusCode: 500,
-          headers: @[("Content-Type", "text/plain")],
-          body: "Internal Server Error: " & e.msg
-        ))
-        reqProxy.responded = true
-
-    # If handler didn't respond, send 500
-    if not reqProxy.responded:
-      pending.responseChan[].send(PendingResponse(
-        statusCode: 500,
-        headers: @[("Content-Type", "text/plain")],
-        body: "Handler did not produce a response"
-      ))
-      reqProxy.responded = true
+  # Return #(request handlerBlock) as a Harding Array
+  let arr = newArrayInstance(arrayClass, @[reqInst.toValue(), route.get.handlerBlock])
+  return some(arr.toValue())
 
 # ============================================================================
 # Native Method Implementations - HttpServer
@@ -334,10 +310,21 @@ proc serverRouterImpl(interp: var Interpreter, self: Instance,
       serverProxy.routes = routerProxy.routes
   return self.toValue()
 
+const defaultWorkerCount = 10
+
+proc startMummyxServer(proxy: ServerProxy) =
+  ## Common startup: open channel, start MummyX background thread.
+  activeRoutes = proxy.routes
+  globalRequestChan.open()
+  globalRequestChanOpen = true
+  proxy.running = true
+
+  createThread(serverThread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+
 proc serverStartImpl(interp: var Interpreter, self: Instance,
                      args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## HttpServer>>start: port
-  ## Starts MummyX on a background thread. Non-blocking.
+  ## Starts MummyX on a background thread with worker Processes. Non-blocking.
   if self == nil or self.nimValue == nil:
     return nilValue()
   let proxy = cast[ServerProxy](self.nimValue)
@@ -347,12 +334,8 @@ proc serverStartImpl(interp: var Interpreter, self: Instance,
   if args.len > 0 and args[0].kind == vkInt:
     proxy.port = args[0].intVal
 
-  globalRequestChan.open()
-  globalRequestChanOpen = true
-  proxy.running = true
-
-  var thread: Thread[ServerThreadArgs]
-  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+  startMummyxServer(proxy)
+  discard setupSchedulerAndWorkersProc(interp, mummyxPollProc, defaultWorkerCount)
 
   return self.toValue()
 
@@ -370,30 +353,30 @@ proc serverStartAddressImpl(interp: var Interpreter, self: Instance,
   if args.len > 1 and args[1].kind == vkString:
     proxy.address = args[1].strVal
 
-  globalRequestChan.open()
-  globalRequestChanOpen = true
-  proxy.running = true
-
-  var thread: Thread[ServerThreadArgs]
-  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
+  startMummyxServer(proxy)
+  discard setupSchedulerAndWorkersProc(interp, mummyxPollProc, defaultWorkerCount)
 
   return self.toValue()
 
 proc serverProcessRequestsImpl(interp: var Interpreter, self: Instance,
                                 args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## HttpServer>>processRequests
-  ## Process pending requests on the main thread. Call this periodically.
+  ## Run one scheduler tick - processes pending requests via worker Processes.
   if self == nil or self.nimValue == nil:
     return nilValue()
-  let proxy = cast[ServerProxy](self.nimValue)
-  let count = processRequestsBatch(interp, proxy.routes)
+  if interp.schedulerContextPtr == nil:
+    return NodeValue(kind: vkInt, intVal: 0)
+  var count = 0
+  while runOneSliceProc(interp.schedulerContextPtr):
+    inc count
+    if count >= 100:
+      break
   return NodeValue(kind: vkInt, intVal: count)
 
 proc serverServeForeverImpl(interp: var Interpreter, self: Instance,
                             args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## HttpServer>>serveForever: port
-  ## Starts server and enters a blocking processing loop.
-  ## For standalone use (not Bona).
+  ## Starts server with worker Process pool and enters scheduler loop.
   if self == nil or self.nimValue == nil:
     return nilValue()
   let proxy = cast[ServerProxy](self.nimValue)
@@ -401,18 +384,13 @@ proc serverServeForeverImpl(interp: var Interpreter, self: Instance,
   if args.len > 0 and args[0].kind == vkInt:
     proxy.port = args[0].intVal
 
-  globalRequestChan.open()
-  globalRequestChanOpen = true
-  proxy.running = true
+  startMummyxServer(proxy)
+  let ctxPtr = setupSchedulerAndWorkersProc(interp, mummyxPollProc, defaultWorkerCount)
 
-  # Start MummyX on background thread
-  var thread: Thread[ServerThreadArgs]
-  createThread(thread, serverThreadProc, ServerThreadArgs(port: proxy.port, address: proxy.address))
-
-  # Enter processing loop on main thread
+  # Run scheduler loop - polls NimChannel and dispatches to workers
   while proxy.running:
-    let count = processRequestsBatch(interp, proxy.routes)
-    if count == 0:
+    let didWork = runOneSliceProc(ctxPtr)
+    if not didWork:
       sleep(1)
 
   return nilValue()

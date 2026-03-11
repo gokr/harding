@@ -1,5 +1,6 @@
 import std/[tables, strutils, math, strformat, os, random, algorithm]
 import ../core/types
+import ../core/process
 import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
@@ -7262,6 +7263,20 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
           debug("VM: About to call nativeProc (no interp), receiver=", (if receiver != nil: receiver.class.name else: "nil"), " receiver ptr=", cast[int](receiver))
           resultVal = nativeProc(receiver, args)
+        var requeueBlockedSend = false
+        if interp.shouldYield and interp.schedulerContextPtr != nil:
+          let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+          if ctx != nil and ctx.theScheduler != nil and ctx.theScheduler.currentProcess != nil:
+            requeueBlockedSend = ctx.theScheduler.currentProcess.state == psBlocked
+        if requeueBlockedSend:
+          interp.pushWorkFrame(newSendMessageFrame(frame.selector, frame.argCount, frame.msgNode, frame.isClassMethod))
+          interp.pushValue(receiverVal)
+          if hasSingleArg:
+            interp.pushValue(singleArg)
+          else:
+            for arg in args:
+              interp.pushValue(arg)
+          return true
         interp.pushValue(resultVal)
       finally:
         interp.currentReceiver = savedReceiver
@@ -8091,10 +8106,6 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
     interp.currentActivation = savedCurrentActivation
     interp.currentReceiver = savedCurrentReceiver
     raise
-
-# Wire up MummyX callback now that evalWithVMCleanContext is defined
-when defined(mummyx):
-  mummyx_bridge.evalCleanContextProc = evalWithVMCleanContext
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM

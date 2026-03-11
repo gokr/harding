@@ -20,6 +20,7 @@ type
     wkSemaphore   ## Waiting on a Semaphore
     wkQueueFull   ## Waiting for queue space (producer)
     wkQueueEmpty  ## Waiting for queue item (consumer)
+    wkChannel     ## Waiting on a NimChannel for external data
 
   WaitCondition* = object
     kind*: WaitKind
