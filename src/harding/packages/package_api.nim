@@ -1,15 +1,21 @@
 import std/[tables]
 import ../core/types
-import ../interpreter/vm
+
+# Interpreter type is defined in core/types.nim, not vm.nim
+# We use the Interpreter type from types.nim which has all the fields we need
 
 type
   HardingPackageSpec* = object
-    ## Package descriptor for embedding Harding sources with Nim primitives.
     name*: string
     version*: string
     bootstrapPath*: string
     sources*: seq[tuple[path: string, source: string]]
     registerPrimitives*: proc(interp: var Interpreter) {.nimcall.}
+
+# Callback for evalStatements - set by vm.nim to break circular dependency
+type EvalStatementsProc* = proc(interp: var Interpreter, source: string): (seq[NodeValue], string) {.nimcall.}
+
+var evalStatementsCallback*: EvalStatementsProc = nil
 
 proc ensurePackageSourceTable(interp: var Interpreter) =
   if interp.packageSources == nil:
@@ -17,19 +23,15 @@ proc ensurePackageSourceTable(interp: var Interpreter) =
     interp.packageSources[] = initTable[string, string]()
 
 proc addPackageSource*(interp: var Interpreter, path: string, source: string) =
-  ## Register one embedded source file for subsequent `load:` calls.
   ensurePackageSourceTable(interp)
   interp.packageSources[][path] = source
 
 proc hasPackageSource*(interp: Interpreter, path: string): bool =
-  ## Check whether a virtual package source path is registered.
   if interp == nil or interp.packageSources == nil:
     return false
   path in interp.packageSources[]
 
 proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
-  ## Install a package by registering sources, evaluating bootstrap,
-  ## and then binding Nim primitive implementations.
   if spec.name.len == 0:
     warn("installPackage: package name is empty")
     return false
@@ -44,10 +46,14 @@ proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
            " at path ", spec.bootstrapPath)
       return false
 
-    let (_, err) = interp.evalStatements(interp.packageSources[][spec.bootstrapPath])
-    if err.len > 0:
-      warn("installPackage: bootstrap evaluation failed for package ", spec.name,
-           ": ", err)
+    if evalStatementsCallback != nil:
+      let (_, err) = evalStatementsCallback(interp, interp.packageSources[][spec.bootstrapPath])
+      if err.len > 0:
+        warn("installPackage: bootstrap evaluation failed for package ", spec.name,
+             ": ", err)
+        return false
+    else:
+      warn("installPackage: evalStatements callback not set")
       return false
 
   if spec.registerPrimitives != nil:

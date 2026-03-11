@@ -7,6 +7,9 @@ license = "MIT"
 srcDir = "src"
 bin = @["harding/repl/harding","harding/compiler/granite"]
 
+# Add external directory to Nim search path
+--path:"external"
+
 # Current Nim version
 requires "nim == 2.2.6"
 
@@ -21,7 +24,72 @@ requires "mummy >= 0.4.6"
 when defined(bitbarrel):
   requires "whisky >= 0.2.0"
 
-import os, strutils
+import os, strutils, sequtils
+
+# Helper proc to get external library compile flags
+proc getExternalLibFlags(): string =
+  var flags: seq[string] = @[]
+  if dirExists("external"):
+    for kind, path in walkDir("external"):
+      if kind == pcDir:
+        let libName = lastPathPart(path)
+        let metadataFile = path / ".harding-lib.json"
+        if fileExists(metadataFile):
+          flags.add("-d:harding_" & libName)
+  return flags.join(" ")
+
+proc parseNimbleRequires(nimblePath: string): seq[string] =
+  if not fileExists(nimblePath):
+    return @[]
+
+  for line in readFile(nimblePath).splitLines():
+    let trimmed = line.strip()
+    if not trimmed.startsWith("requires "):
+      continue
+
+    let firstQuote = trimmed.find('"')
+    if firstQuote < 0:
+      continue
+    let secondQuote = trimmed.find('"', firstQuote + 1)
+    if secondQuote <= firstQuote:
+      continue
+
+    let spec = trimmed[(firstQuote + 1) ..< secondQuote]
+    let pkgName = spec.splitWhitespace()[0]
+    if pkgName.len > 0:
+      result.add(pkgName)
+
+proc getExternalDependencyPaths(): string =
+  var pathFlags: seq[string] = @[]
+  var seen: seq[string] = @[]
+
+  if not dirExists("external"):
+    return ""
+
+  for kind, path in walkDir("external"):
+    if kind != pcDir:
+      continue
+
+    let libName = lastPathPart(path)
+    let metadataFile = path / ".harding-lib.json"
+    let nimbleFile = path / (libName & ".nimble")
+    if not fileExists(metadataFile) or not fileExists(nimbleFile):
+      continue
+
+    for pkgName in parseNimbleRequires(nimbleFile):
+      if pkgName in seen:
+        continue
+      seen.add(pkgName)
+      let pkgPath = staticExec("nimble path " & pkgName)
+      let trimmedPath = pkgPath.strip()
+      if trimmedPath.len > 0 and dirExists(trimmedPath):
+        pathFlags.add("-p:" & trimmedPath.quoteShell())
+
+  return pathFlags.join(" ")
+
+task discover, "Scan external/ and regenerate external_libs.nim":
+  ## Discover installed libraries and regenerate the import file
+  exec "nim c -r src/harding/external/generator.nim"
 
 task test, "Run all tests (automatic discovery via testament)":
   exec """
@@ -35,23 +103,31 @@ task test, "Run all tests (automatic discovery via testament)":
   """
 
 task harding, "Build harding REPL (debug) in repo root":
-  # Build REPL in debug mode, output to repo root
-  exec "nim c -o:harding src/harding/repl/harding.nim"
+  # Build REPL in debug mode, output to repo root, with external libraries
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " " & externalFlags & " -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (debug)"
 
 task harding_release, "Build harding REPL (release) in repo root":
-  # Build REPL in release mode, output to repo root
-  exec "nim c -d:release -o:harding src/harding/repl/harding.nim"
+  # Build REPL in release mode, output to repo root, with external libraries
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:release " & externalFlags & " -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (release)"
 
 task bona, "Build bona IDE (debug) in repo root":
   # Build GUI IDE in debug mode with GTK4 + Granite primitives, output to repo root
-  exec "nim c -d:gtk4 -d:granite -o:bona src/harding/gui/bona.nim"
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:gtk4 -d:granite " & externalFlags & " -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (debug)"
 
 task bona_release, "Build bona IDE (release) in repo root":
   # Build GUI IDE in release mode with GTK4 + Granite primitives, output to repo root
-  exec "nim c -d:release -d:gtk4 -d:granite -o:bona src/harding/gui/bona.nim"
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:release -d:gtk4 -d:granite " & externalFlags & " -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (release)"
 
 task install_bona, "Install bona binary and desktop integration (.desktop file and icon)":

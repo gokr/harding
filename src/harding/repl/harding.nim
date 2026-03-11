@@ -7,6 +7,7 @@ import std/[os, strutils]
 import ../repl/doit
 import ../repl/cli
 import ../core/types
+import ../external/libmanager
 
 when defined(debugger):
   import ../debugger/server
@@ -108,6 +109,12 @@ proc main() =
 
   # Set HARDING_HOME environment for child processes
   putEnv("HARDING_HOME", opts.hardingHome)
+
+  # Handle library management commands
+  if opts.positionalArgs.len > 0 and opts.positionalArgs[0] == "lib":
+    let libArgs = if opts.positionalArgs.len > 1: opts.positionalArgs[1..^1] else: @[]
+    handleLibCommand(libArgs)
+    quit(0)
 
   when defined(debugger):
     # Start debugger server if port is specified

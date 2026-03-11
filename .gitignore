@@ -82,3 +82,12 @@ vscode-harding/node_modules/
 vscode-harding/out/
 vscode-harding/package-lock.json
 *.vsix
+
+# External libraries (user-installed)
+# Keep the directory and README, but ignore installed libraries
+external/*
+!external/.gitkeep
+!external/README.md
+
+# Cached registry metadata
+registry-full.json

@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "libraries": {
+    "mysql": "https://github.com/gokr/harding-mysql.git",
+    "redis": "https://github.com/harding-lang/harding-redis.git"
+  }
+}
