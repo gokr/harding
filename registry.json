@@ -2,7 +2,6 @@
   "version": "1.0.0",
   "libraries": {
     "bitbarrel": "https://github.com/gokr/harding-bitbarrel.git",
-    "mysql": "https://github.com/gokr/harding-mysql.git",
-    "redis": "https://github.com/harding-lang/harding-redis.git"
+    "mysql": "https://github.com/gokr/harding-mysql.git"
   }
 }
