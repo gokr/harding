@@ -58,9 +58,12 @@ proc genBinaryOpFastPath*(op: string): string =
   of "+": nimOp = "+"
   of "-": nimOp = "-"
   of "*": nimOp = "*"
-  of "/", "//":
+  of "/":
     nimOp = "/"
     useDiv = true
+  of "//":
+    nimOp = "div"
+    isMod = true
   of "\\":
     nimOp = "mod"
     isMod = true
@@ -72,7 +75,7 @@ proc genBinaryOpFastPath*(op: string): string =
   var output = "\n  # Fast path: both operands are integers\n"
   output.add("  if a.kind == vkInt and b.kind == vkInt:\n")
   if useDiv:
-    output.add("    return NodeValue(kind: vkInt, intVal: a.intVal div b.intVal)\n")
+    output.add("    return NodeValue(kind: vkFloat, floatVal: float(a.intVal) / float(b.intVal))\n")
   else:
     output.add("    return NodeValue(kind: vkInt, intVal: a.intVal " & nimOp & " b.intVal)\n")
 
@@ -150,6 +153,7 @@ proc genMethodBodyFromAST*(cls: ClassInfo, meth: BlockNode, selector: string): s
 
   # Create generation context with class info and parameters
   var ctx = newGenContext(cls)
+  ctx.inMethod = true
   for param in meth.parameters:
     ctx.parameters.add(param)
 
@@ -203,8 +207,12 @@ proc genMethodBodyFromAST*(cls: ClassInfo, meth: BlockNode, selector: string): s
 
       # Check if variable is a slot
       if ctx.isSlot(varName):
-        let idx = ctx.getSlotIndex(varName)
-        output.add(indent & "self.slots[" & $idx & "] = " & exprCode & "\n")
+        if ctx.inMethod and ctx.cls != nil:
+          let slotName = mangleSlot(varName)
+          output.add(indent & "discard set" & slotName & "(cast[" & mangleClass(ctx.cls.name) & "](self.instVal.nimValue), " & exprCode & ")\n")
+        else:
+          let idx = ctx.getSlotIndex(varName)
+          output.add(indent & "self.slots[" & $idx & "] = " & exprCode & "\n")
         if isLast:
           output.add(indent & "return " & exprCode & "\n")
       elif ctx.isLocal(varName):
@@ -381,9 +389,9 @@ proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
 
 proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
   ## Collection access: receiver at: key
-  ## Works for both Arrays (1-based indexing) and Tables
+  ## Works for both Arrays (0-based indexing) and Tables
   if receiver.kind == vkArray and key.kind == vkInt:
-    let idx = key.intVal - 1  # Convert to 0-based
+    let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
       return receiver.arrayVal[idx]
   elif receiver.kind == vkTable:
@@ -393,12 +401,16 @@ proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
 
 proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
   ## Collection assignment: receiver at: key put: value
-  ## Works for both Arrays (1-based indexing) and Tables
+  ## Works for both Arrays (0-based indexing) and Tables
   if receiver.kind == vkArray and key.kind == vkInt:
-    let idx = key.intVal - 1  # Convert to 0-based
+    let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
       var newArr = receiver
       newArr.arrayVal[idx] = value
+      return newArr
+    if idx == receiver.arrayVal.len:
+      var newArr = receiver
+      newArr.arrayVal.add(value)
       return newArr
   elif receiver.kind == vkTable:
     var newTbl = receiver
@@ -408,10 +420,14 @@ proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeV
 
 # Array primitives
 
-proc nt_size*(arr: NodeValue): NodeValue =
-  ## Array size
-  if arr.kind == vkArray:
-    return NodeValue(kind: vkInt, intVal: arr.arrayVal.len)
+proc nt_size*(value: NodeValue): NodeValue =
+  ## Collection or string size
+  if value.kind == vkArray:
+    return NodeValue(kind: vkInt, intVal: value.arrayVal.len)
+  if value.kind == vkTable:
+    return NodeValue(kind: vkInt, intVal: value.tableVal.len)
+  if value.kind == vkString:
+    return NodeValue(kind: vkInt, intVal: value.strVal.len)
   return NodeValue(kind: vkNil)
 
 proc nt_last*(arr: NodeValue): NodeValue =

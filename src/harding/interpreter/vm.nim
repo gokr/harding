@@ -2501,18 +2501,19 @@ proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
 
   let blockNode = args[0].blockVal
   var lastResult = nilValue()
-  
-  # Save reference to home activation to detect non-local returns
-  let savedHomeActivation = blockNode.homeActivation
+
+  let callerActivation = if interp.activationStack.len > 0:
+                           interp.activationStack[^1]
+                         else:
+                           nil
 
   # Iterate over array elements
   for elem in self.elements:
     # Invoke block with element as argument
-    lastResult = interp.invokeBlock(blockNode, @[elem])
-    
-    # Check for non-local return: if home activation has returned, stop iteration
-    if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
-      lastResult = savedHomeActivation.returnValue
+    lastResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, elem)
+
+    if callerActivation != nil and callerActivation.hasReturned:
+      lastResult = callerActivation.returnValue
       break
 
   return lastResult
@@ -2544,6 +2545,7 @@ proc initGlobals*(interp: var Interpreter) =
         return nilValue()
       return impl(interp, receiver, args)
     )
+    meth.hasInterpreterParam = true
 
   # Set rootClass and create the basic class hierarchy from Root
   let rootCls = initRootClass()
@@ -3437,30 +3439,14 @@ proc initGlobals*(interp: var Interpreter) =
     # Print self to stdout without newline
     if self == nil:
       return nilValue()
-    case self.kind
-    of ikString:
-      stdout.write(self.strVal)
-    of ikInt:
-      stdout.write($self.intVal)
-    of ikFloat:
-      stdout.write($self.floatVal)
-    of ikObject, ikArray, ikTable:
-      stdout.write("instance")
+    stdout.write(self.toValue().toString())
     return self.toValue()
 
   proc objPrintlnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
     # Print self to stdout with newline
     if self == nil:
       return nilValue()
-    case self.kind
-    of ikString:
-      echo(self.strVal)
-    of ikInt:
-      echo($self.intVal)
-    of ikFloat:
-      echo($self.floatVal)
-    of ikObject, ikArray, ikTable:
-      echo("instance")
+    echo(self.toValue().toString())
     return self.toValue()
 
   let printMethod = createCoreMethod("print")
@@ -4410,6 +4396,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
         return nilValue()
       return impl(interp, receiver, args)
     )
+    meth.hasInterpreterParam = true
 
   # Initialize Process, Scheduler, Monitor, SharedQueue, Semaphore classes
   # Use a callback to avoid circular import with scheduler module

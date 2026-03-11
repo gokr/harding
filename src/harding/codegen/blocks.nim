@@ -95,6 +95,7 @@ type
     captures*: seq[string]              # Captured variable names
     captureTypes*: seq[string]          # Types for captured variables (NodeValue)
     hasNonLocalReturn*: bool            # Does block contain ^ (return)?
+    homeInMethod*: bool                 # Whether the block home is a method body
     paramCount*: int                    # Number of block parameters
     envStructName*: string              # Name of environment struct
 
@@ -283,7 +284,7 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
 
   return captures
 
-proc hasReturnNode(node: Node): bool =
+proc hasReturnNode*(node: Node): bool =
   ## Recursively check if node contains a return statement
   if node == nil:
     return false
@@ -319,10 +320,33 @@ proc hasReturnNode(node: Node): bool =
     for msg in cas.messages:
       if hasReturnNode(msg):
         return true
-  
+  elif node of IfNode:
+    let ifNode = node.IfNode
+    return hasReturnNode(ifNode.condition) or
+           hasReturnNode(ifNode.thenBranch) or
+           hasReturnNode(ifNode.elseBranch)
+  elif node of WhileNode:
+    let whileNode = node.WhileNode
+    return hasReturnNode(whileNode.condition) or
+           hasReturnNode(whileNode.body)
+  elif node of SlotAccessNode:
+    return hasReturnNode(node.SlotAccessNode.valueExpr)
+  elif node of NamedAccessNode:
+    return hasReturnNode(node.NamedAccessNode.receiver) or
+           hasReturnNode(node.NamedAccessNode.valueExpr)
+  elif node of SuperSendNode:
+    for arg in node.SuperSendNode.arguments:
+      if hasReturnNode(arg):
+        return true
+  elif node of PrimitiveCallNode:
+    for arg in node.PrimitiveCallNode.arguments:
+      if hasReturnNode(arg):
+        return true
+
   return false
 
-proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[string] = @[]): BlockProcInfo =
+proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[string] = @[],
+                    homeInMethod: bool = false): BlockProcInfo =
   ## Register a block for compilation and return its metadata
   let nimName = reg.generateBlockName()
   let envName = reg.generateEnvStructName()
@@ -343,6 +367,7 @@ proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[
     captures: captures,
     captureTypes: captures.mapIt("NodeValue"),  # All captures are NodeValue
     hasNonLocalReturn: hasNonLocalReturn,
+    homeInMethod: homeInMethod,
     paramCount: blockNode.parameters.len,
     envStructName: envName
   )

@@ -1,4 +1,4 @@
-import std/[tables, strformat, os]
+import std/[tables, strformat, os, strutils]
 import ../core/types
 import ../core/scheduler
 import ../interpreter/vm
@@ -131,6 +131,15 @@ proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
     currentClass = getSuperclassName(currentClass)
   return NodeValue(kind: vkNil)
 
+proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
+  ## Check if a compiled method exists on this class or any superclass.
+  var currentClass = className
+  while currentClass.len > 0:
+    if findCompiledMethod(currentClass, selector) != nil:
+      return true
+    currentClass = getSuperclassName(currentClass)
+  return false
+
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
                        selector: string, args: seq[NodeValue],
                        explicitParent: string = ""): NodeValue =
@@ -211,6 +220,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     else:
       discard
 
+  let receiverClassName = getReceiverClassName(receiver)
+  if receiverClassName.len > 0 and hasCompiledMethodInHierarchy(receiverClassName, selector):
+    return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
+
   case selector
   of "writeLine:", "writeline:", "println":
     if args.len > 0:
@@ -244,6 +257,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkNil)
   of "/":
     if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkFloat, floatVal: float(receiver.intVal) / float(args[0].intVal))
+    return NodeValue(kind: vkNil)
+  of "//":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
       return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
     return NodeValue(kind: vkNil)
 
@@ -268,7 +285,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   of "at:":
     if args.len > 0:
       if receiver.kind == vkArray and args[0].kind == vkInt:
-        let idx = args[0].intVal - 1
+        let idx = args[0].intVal
         if idx >= 0 and idx < receiver.arrayVal.len:
           return receiver.arrayVal[idx]
       elif receiver.kind == vkTable:
@@ -279,7 +296,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   of "at:put:":
     if args.len >= 2:
       if receiver.kind == vkArray and args[0].kind == vkInt:
-        let idx = args[0].intVal - 1
+        let idx = args[0].intVal
         if idx >= 0:
           var arr = receiver.arrayVal
           if idx < arr.len:
@@ -298,6 +315,13 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkInt, intVal: receiver.arrayVal.len)
     if receiver.kind == vkTable:
       return NodeValue(kind: vkInt, intVal: receiver.tableVal.len)
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkInt, intVal: receiver.strVal.len)
+    return NodeValue(kind: vkNil)
+
+  of "first":
+    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
+      return receiver.arrayVal[0]
     return NodeValue(kind: vkNil)
 
   of "last":
@@ -311,6 +335,65 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       for k in receiver.tableVal.keys:
         keys.add(k)
       return NodeValue(kind: vkArray, arrayVal: keys)
+    return NodeValue(kind: vkNil)
+
+  of "uppercase":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.toUpperAscii())
+    return NodeValue(kind: vkNil)
+
+  of "lowercase":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.toLowerAscii())
+    return NodeValue(kind: vkNil)
+
+  of "trim":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.strip())
+    return NodeValue(kind: vkNil)
+
+  of "indexOf:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      return NodeValue(kind: vkInt, intVal: receiver.strVal.find(args[0].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "includesSubString:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      return NodeValue(kind: vkBool, boolVal: receiver.strVal.contains(args[0].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "replace:with:":
+    if receiver.kind == vkString and args.len >= 2 and args[0].kind == vkString and args[1].kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.replace(args[0].strVal, args[1].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "split:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      var parts: seq[NodeValue] = @[]
+      for part in receiver.strVal.split(args[0].strVal):
+        parts.add(NodeValue(kind: vkString, strVal: part))
+      return NodeValue(kind: vkArray, arrayVal: parts)
+    return NodeValue(kind: vkNil)
+
+  of "max:":
+    if args.len > 0:
+      if receiver.kind == vkInt and args[0].kind == vkInt:
+        return NodeValue(kind: vkInt, intVal: max(receiver.intVal, args[0].intVal))
+      if receiver.kind == vkFloat and args[0].kind == vkFloat:
+        return NodeValue(kind: vkFloat, floatVal: max(receiver.floatVal, args[0].floatVal))
+    return NodeValue(kind: vkNil)
+
+  of "min:":
+    if args.len > 0:
+      if receiver.kind == vkInt and args[0].kind == vkInt:
+        return NodeValue(kind: vkInt, intVal: min(receiver.intVal, args[0].intVal))
+      if receiver.kind == vkFloat and args[0].kind == vkFloat:
+        return NodeValue(kind: vkFloat, floatVal: min(receiver.floatVal, args[0].floatVal))
+    return NodeValue(kind: vkNil)
+
+  of "between:and:":
+    if args.len >= 2 and receiver.kind == vkInt and args[0].kind == vkInt and args[1].kind == vkInt:
+      return NodeValue(kind: vkBool, boolVal: receiver.intVal >= args[0].intVal and receiver.intVal <= args[1].intVal)
     return NodeValue(kind: vkNil)
 
   of "do:":
@@ -412,9 +495,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           currentClass = getSuperclassName(currentClass)
         return NodeValue(kind: vkBool, boolVal: false)
 
-    let className = getReceiverClassName(receiver)
-    if className.len > 0:
-      return dispatchCompiledMethodFromClass(receiver, className, selector, args)
+    if receiverClassName.len > 0:
+      return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
     return NodeValue(kind: vkNil)
 
 # Global interpreter instance for mixed mode (initialized on first use)
