@@ -7,7 +7,7 @@
 # NOTE: This compiler initializes the full Harding VM to ensure access to
 # the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, tables]
+import std/[os, strutils, parseopt, strformat, tables, logging]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer

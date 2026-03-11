@@ -283,6 +283,44 @@ proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: 
   # Not a slot accessor
   return ""
 
+proc tryGenerateNamedAccess*(ctx: GenContext, node: NamedAccessNode, receiverCode: string): string =
+  ## Try to generate direct access for named access on known compiled classes.
+  let receiverType = ctx.inferTypeFromExpression(node.receiver)
+  if receiverType.className.len == 0:
+    return ""
+  if ctx.mixed:
+    return ""
+  if not receiverType.isNativeClass:
+    return ""
+  if receiverType.className notin ctx.classInfo:
+    return ""
+
+  let classDef = ctx.classInfo[receiverType.className]
+  var slotFound = false
+  for slot in classDef.getAllSlots():
+    if slot.name == node.memberName:
+      slotFound = true
+      break
+
+  if not slotFound:
+    return ""
+
+  let nativeReceiver = fmt("cast[{mangleClass(receiverType.className)}]({receiverCode}.instVal.nimValue)")
+  let mangledSlot = mangleSlot(node.memberName)
+  if node.isAssignment and node.valueExpr != nil:
+    let valueCode = genExpression(ctx, node.valueExpr)
+    return fmt("set{mangledSlot}({nativeReceiver}, {valueCode})")
+  return fmt("get{mangledSlot}({nativeReceiver})")
+
+proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): string =
+  ## Generate expression-safe block creation for captured blocks.
+  var initFields: seq[string] = @[]
+  for capture in blockInfo.captures:
+    initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
+
+  let fieldsStr = initFields.join(", ")
+  return fmt("(block:\n    createBlockWithEnv({blockInfo.nimName}, {blockInfo.paramCount}, {blockInfo.envStructName}({fieldsStr})))")
+
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
 
@@ -315,7 +353,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # Inline if/else when both blocks are literals
     if node.arguments.len >= 2 and
        node.arguments[0].kind == nkBlock and
-       node.arguments[1].kind == nkBlock:
+       node.arguments[1].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]) and
+       not hasReturnNode(node.arguments[1]):
       let thenBlock = node.arguments[0].BlockNode
       let elseBlock = node.arguments[1].BlockNode
       var code = "(if isTruthy(" & receiverCode & "):\n"
@@ -337,7 +377,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "ifTrue:":
     # Inline if when block is literal
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
       var code = "(if isTruthy(" & receiverCode & "):\n"
       for i, stmt in thenBlock.body:
@@ -352,7 +393,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "ifFalse:":
     # Inline ifFalse when block is literal
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
       var code = "(if not isTruthy(" & receiverCode & "):\n"
       for i, stmt in thenBlock.body:
@@ -367,7 +409,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "whileTrue:":
     # Inline whileTrue when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]) and
+       (node.receiver == nil or not hasReturnNode(node.receiver)):
       let bodyBlock = node.arguments[0].BlockNode
       var condCode = receiverCode
       if node.receiver != nil and node.receiver.kind == nkBlock:
@@ -384,7 +428,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "whileFalse:":
     # Inline whileFalse when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]) and
+       (node.receiver == nil or not hasReturnNode(node.receiver)):
       let bodyBlock = node.arguments[0].BlockNode
       var condCode = receiverCode
       if node.receiver != nil and node.receiver.kind == nkBlock:
@@ -402,7 +448,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "do:":
     # Inline do: for Arrays when block is literal
     # Compiles to: for i, elem in arr.arrayVal: block(elem)
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
@@ -427,7 +474,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "collect:":
     # Inline collect: for Arrays when block is literal
     # Compiles to: result = @[]; for elem in arr: result.add(block(elem)); return result
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
@@ -459,7 +507,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "select:":
     # Inline select: for Arrays when block is literal
     # Compiles to: result = @[]; for elem in arr: if block(elem): result.add(elem); return result
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
@@ -497,7 +546,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "timesRepeat:":
     # Inline timesRepeat when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock:
+    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       var code = "(block:\n"
       code.add("    let count = toInt(" & receiverCode & ")\n")
@@ -510,7 +560,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
 
   of "to:by:do:":
     # Inline to:by:do: when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 3 and node.arguments[2].kind == nkBlock:
+    if node.arguments.len >= 3 and node.arguments[2].kind == nkBlock and
+       not hasReturnNode(node.arguments[2]):
       let endVal = genExpression(ctx, node.arguments[0])
       let stepVal = genExpression(ctx, node.arguments[1])
       let bodyBlock = node.arguments[2].BlockNode
@@ -718,22 +769,10 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let blockInfo = if existingIdx >= 0:
                       ctx.blockRegistry.blocks[existingIdx]
                     else:
-                      registerBlock(ctx.blockRegistry, blockNode, ctx.globals)
+                      registerBlock(ctx.blockRegistry, blockNode, ctx.globals, ctx.inMethod)
 
     if blockInfo.captures.len > 0:
-      # Create environment struct with captured values and pass to createBlock
-      var initFields: seq[string] = @[]
-      for capture in blockInfo.captures:
-        initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
-      let fieldsStr = initFields.join(", ")
-      let envStruct = blockInfo.envStructName
-      let nimName = blockInfo.nimName
-      let paramCount = $blockInfo.paramCount
-      # NOTE: Blocks with captures cannot be generated in expression context
-      # because Nim doesn't allow variable declarations in expressions.
-      # This should be handled by the caller by declaring the env variable
-      # beforehand. For now, we generate a placeholder that won't compile.
-      return "createBlockWithEnv(" & nimName & ", " & paramCount & ", " & envStruct & "(" & fieldsStr & "))"
+      return genCapturedBlockExpression(blockInfo, ctx)
     else:
       return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
 
@@ -766,7 +805,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
   of nkSlotAccess:
     let slotNode = node.SlotAccessNode
     if ctx.inMethod and ctx.cls != nil:
-      var slotName = ""
+      var slotName = if slotNode.slotName.len > 0: mangleSlot(slotNode.slotName) else: ""
       for slot in ctx.cls.getAllSlots():
         if slot.index == slotNode.slotIndex:
           slotName = mangleSlot(slot.name)
@@ -787,6 +826,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
   of nkNamedAccess:
     let namedNode = node.NamedAccessNode
     let recvCode = genExpression(ctx, namedNode.receiver)
+    let directAccess = tryGenerateNamedAccess(ctx, namedNode, recvCode)
+    if directAccess.len > 0:
+      return directAccess
     if namedNode.isAssignment and namedNode.valueExpr != nil:
       let valCode = genExpression(ctx, namedNode.valueExpr)
       return fmt("sendMessageHybrid({recvCode}, \"at:put:\", @[NodeValue(kind: vkSymbol, symVal: \"{namedNode.memberName}\"), {valCode}])")
@@ -911,6 +953,19 @@ proc genStatement*(ctx: GenContext, node: Node): string =
                      genExpression(ctx, ifNode.condition)
                    else:
                      "NodeValue(kind: vkBool, boolVal: false)"
+
+    if ctx.inBlock and not ctx.inMethod and
+       (hasReturnNode(ifNode.thenBranch) or hasReturnNode(ifNode.elseBranch)):
+      var runtimeCode = "if isTruthy(" & condCode & "):\n"
+      if ifNode.thenBranch != nil:
+        runtimeCode.add("  discard sendMessage(currentRuntime[], " & genExpression(ctx, ifNode.thenBranch) & ", \"value\", @[])\n")
+      else:
+        runtimeCode.add("  discard\n")
+      if ifNode.elseBranch != nil:
+        runtimeCode.add("else:\n")
+        runtimeCode.add("  discard sendMessage(currentRuntime[], " & genExpression(ctx, ifNode.elseBranch) & ", \"value\", @[])\n")
+      return runtimeCode
+
     var code = "if isTruthy(" & condCode & "):\n"
 
     let thenBlock = asBlockNode(ifNode.thenBranch)
@@ -954,7 +1009,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Inline control flow in statement context (no value needed)
     case msg.selector
     of "whileTrue:":
-      if msg.arguments.len >= 1:
+      if msg.arguments.len >= 1 and
+         not hasReturnNode(msg.arguments[0]) and
+         (msg.receiver == nil or not hasReturnNode(msg.receiver)):
         let bodyBlock = asBlockNode(msg.arguments[0])
         if bodyBlock != nil:
           var condCode: string
@@ -975,7 +1032,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           return code
 
     of "whileFalse:":
-      if msg.arguments.len >= 1:
+      if msg.arguments.len >= 1 and
+         not hasReturnNode(msg.arguments[0]) and
+         (msg.receiver == nil or not hasReturnNode(msg.receiver)):
         let bodyBlock = asBlockNode(msg.arguments[0])
         if bodyBlock != nil:
           var condCode: string
@@ -996,7 +1055,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           return code
 
     of "ifTrue:":
-      if msg.arguments.len >= 1:
+      if msg.arguments.len >= 1 and not hasReturnNode(msg.arguments[0]):
         let thenBlock = asBlockNode(msg.arguments[0])
         if thenBlock != nil:
           let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
@@ -1012,7 +1071,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           return code
 
     of "ifFalse:":
-      if msg.arguments.len >= 1:
+      if msg.arguments.len >= 1 and not hasReturnNode(msg.arguments[0]):
         let thenBlock = asBlockNode(msg.arguments[0])
         if thenBlock != nil:
           let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
@@ -1028,7 +1087,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           return code
 
     of "ifTrue:ifFalse:":
-      if msg.arguments.len >= 2:
+      if msg.arguments.len >= 2 and
+         not hasReturnNode(msg.arguments[0]) and
+         not hasReturnNode(msg.arguments[1]):
         let thenBlock = asBlockNode(msg.arguments[0])
         let elseBlock = asBlockNode(msg.arguments[1])
         if thenBlock != nil and elseBlock != nil:
@@ -1053,7 +1114,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           return code
 
     of "timesRepeat:":
-      if msg.arguments.len >= 1:
+      if msg.arguments.len >= 1 and not hasReturnNode(msg.arguments[0]):
         let bodyBlock = asBlockNode(msg.arguments[0])
         if bodyBlock != nil:
           let countCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
@@ -1117,6 +1178,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   var bodyCtx = GenContext(
     cls: ctx.cls,
     inBlock: true,
+    inMethod: ctx.inMethod,
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
@@ -1151,6 +1213,11 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                      else:
                        "NodeValue(kind: vkNil)"
       output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)\n"))
+    elif i == blkNode.body.len - 1 and stmt.kind in {nkIf, nkWhile}:
+      let stmtCode = genStatement(bodyCtx, stmt)
+      if stmtCode.len > 0:
+        output.add(indentBlock(stmtCode))
+      output.add("  return NodeValue(kind: vkNil)\n")
     elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign}:
       # Last statement is the return value
       let exprCode = genExpression(bodyCtx, stmt)
@@ -1203,7 +1270,7 @@ proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blo
   let blockInfo = if existingIdx >= 0:
                     ctx.blockRegistry.blocks[existingIdx]
                   else:
-                    registerBlock(ctx.blockRegistry, blockNode, ctx.globals)
+                    registerBlock(ctx.blockRegistry, blockNode, ctx.globals, ctx.inMethod)
   
   if blockInfo.captures.len > 0:
     return (true, blockInfo)
