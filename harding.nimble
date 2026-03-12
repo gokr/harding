@@ -121,17 +121,39 @@ task discover, "Scan external/ and regenerate external_libs_generated.nim":
   ## Discover installed libraries and regenerate the import file
   exec "nim c -r src/harding/external/generator.nim"
 
-task test, "Run all tests (automatic discovery via testament)":
+proc getExternalTestPatterns(): string =
+  ## Collect test patterns from external libraries
+  ## Convention: external library tests live in <lib>/tests/test_*.nim
+  var patterns: seq[string] = @[]
+  if not dirExists("external"):
+    return ""
+  for kind, path in walkDir("external"):
+    if kind != pcDir:
+      continue
+    let libName = lastPathPart(path)
+    let testDir = path / "tests"
+    if dirExists(testDir):
+      let testPattern = testDir & "/test_*.nim"
+      patterns.add(testPattern)
+  return patterns.join(" ")
+
+task test, "Run all tests including external libraries":
+  ## Run tests from tests/ and external/*/tests/
+  ## External library tests follow convention: <lib>/tests/test_*.nim
   ensureExternalLibsFile()
+  let externalTestPatterns = getExternalTestPatterns()
   exec """
     echo "Running Harding test suite..."
-    echo "=== Running tests/test_*.nim ==="
+    echo "=== Running core tests/test_*.nim ==="
     testament pattern "tests/test_*.nim" || true
-    # echo "=== Running tests/category/*.nim ==="
-    # testament pattern "tests/**/*.nim" || true
-    # echo "=== Running tests/category/subcategory/*.nim ==="
-    # testament pattern "tests/**/**/*.nim" || true
   """
+  if externalTestPatterns.len > 0:
+    exec """
+      echo "=== Running external library tests ==="
+      testament pattern """ & externalTestPatterns & """ || true
+    """
+  else:
+    echo "No external library tests found."
 
 task harding, "Build harding REPL (debug) in repo root":
   # Build REPL in debug mode, output to repo root, with external libraries
