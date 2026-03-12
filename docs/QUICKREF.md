@@ -248,17 +248,17 @@ Point>>moveBy: dx y: dy [
 ### Automatic Accessors
 
 ```smalltalk
-# Class with auto-generated getters and setters
-Person := Object deriveWithAccessors: #(name age)
+# Class with auto-generated getters and setters (v0.8.0+)
+Person := Object derivePublic: #(name age)
 p := Person new
 p name: "Alice"      # Setter
 p age: 30            # Setter
 p name               # Getter - returns "Alice"
 
-# Selective accessor generation (legacy API)
+# Selective accessor generation (v0.8.0+)
 Account := Object derive: #(balance owner)
-                       getters: #(balance owner)
-                       setters: #(balance)
+                       read: #(balance owner)
+                       write: #(balance)
 acc := Account new
 acc balance: 100     # Setter for balance
 acc balance          # Getter - returns 100

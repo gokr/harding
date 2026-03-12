@@ -110,8 +110,69 @@ Now Harding code can call:
 Echo value
 ```
 
+## External Library Distribution with `harding lib`
+
+For distributing Harding libraries that can be installed by end users via `harding lib install`, use the external library workflow. This is separate from the embedded package flow above.
+
+### 1. Create a Nimble package with external library metadata
+
+```text
+harding-mysql/
+├── harding-mysql.nimble
+├── src/
+│   └── harding_mysql/
+│       └── package.nim
+└── lib/
+    └── harding/
+        └── mysql/
+            ├── Bootstrap.hrd
+            └── MySQL.hrd
+```
+
+### 2. Add library metadata to nimble file
+
+```nimble
+# harding-mysql.nimble
+version       = "0.1.0"
+author        = "Your Name"
+description   = "Harding MySQL driver"
+license       = "MIT"
+
+requires      = "harding >= 0.8.0"
+
+[extra]
+hardingLibrary = "harding_mysql"
+hardingSources = @["lib/harding/mysql/Bootstrap.hrd"]
+```
+
+### 3. Implement Bootstrap.hrd
+
+```smalltalk
+MySQLLib := Library new.
+MySQLLib load: "lib/mysql/MySQL.hrd".
+Harding import: MySQLLib.
+```
+
+### 4. Distribute via a registry
+
+Users can install your library once it's published to a registry:
+
+```bash
+# List available libraries
+harding lib list
+
+# Install a library
+harding lib install harding-mysql
+
+# Use it in their code
+MySQLConnection new host: "localhost" database: "test"
+```
+
+The `harding lib` command handles downloading, installing, and loading the library bootstrap automatically.
+
 ## Notes
 
 - Keep primitive selectors in `.hrd` and Nim registration exactly matched.
 - If you store Nim `ref object` values in `Instance.nimValue`, keep them alive with a registry (ARC safety).
 - For package-relative source loading, use stable virtual paths in `sources` and in your bootstrap `load:` calls.
+- Use `derive:`, `derivePublic:`, or `derive:read:write:` for class creation (not the deprecated `deriveWithAccessors:`).

@@ -63,8 +63,8 @@ These are the methods that MUST be defined in Nim because they're needed **befor
 | `selector:put:` | Define instance method (used by `>>` syntax) | Needed to parse method definitions in .hrd files |
 | `classSelector:put:` | Define class method (used by `class>>` syntax) | Needed to parse class method definitions |
 | `derive:` | Create subclass with slots | Needed to define new classes |
-| `deriveWithAccessors:` | Create subclass with slots + accessors | Needed to define classes with convenient API |
-| `derive:getters:setters:` | Create subclass with selective accessors | Needed for classes with read-only or write-only slots |
+| `derivePublic:` | Create subclass with slots + accessors | Needed to define classes with convenient API |
+| `derive:read:write:` | Create subclass with selective accessors | Needed for classes with read-only or write-only slots |
 | `derive` | Create subclass without slots | Needed to define new classes |
 | `new` | Create instance | Needed before `.hrd` files can define initialization |
 | `basicNew` | Core object creation primitive | Underlying implementation for `new` |

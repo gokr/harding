@@ -220,9 +220,6 @@ chmod +x script.hrd
 # Create a class with slots (no accessors)
 Point := Object derive: #(x y)
 
-# Create a class with automatic accessors (legacy API)
-Person := Object deriveWithAccessors: #(name age)
-
 # Create a class with public slots (auto accessors + :: access)
 Person := Object derivePublic: #(name age)
 
@@ -255,16 +252,16 @@ Point>>moveBy: dx and: dy [
 ]
 ```
 
-### Automatic Accessor Generation
+### Accessor Generation
 
-Harding provides convenience methods for generating getters and setters automatically:
+Harding provides several methods for generating getters and setters:
 
-#### `deriveWithAccessors:`
+#### `derivePublic:`
 
 Creates a class and auto-generates both getters and setters for all slots:
 
 ```smalltalk
-Person := Object deriveWithAccessors: #(name age)
+Person := Object derivePublic: #(name age)
 p := Person new
 p name: "Alice"    # Auto-generated setter
 p age: 30          # Auto-generated setter
@@ -276,15 +273,15 @@ For each slot `x`, two methods are generated:
 - `x` - Getter method that returns the slot value
 - `x:` - Setter method that takes one argument and assigns it to the slot
 
-#### `derive:getters:setters:`
+#### `derive:read:write:`
 
 Creates a class with selective accessor generation:
 
 ```smalltalk
 # Generate getters for both slots, but setter only for 'name'
 Person := Object derive: #(name age)
-                       getters: #(name age)
-                       setters: #(name)
+                       read: #(name age)
+                       write: #(name)
 
 p := Person new
 p name: "Alice"    # Works - setter generated
@@ -294,8 +291,8 @@ p age: 30          # Error - no setter generated for 'age'
 ```
 
 This is useful when you want:
-- Read-only slots (include in getters but not setters)
-- Write-only slots (include in setters but not getters)
+- Read-only slots (include in read but not write)
+- Write-only slots (include in write but not read)
 - Public getters with private setters (convention: only generate setters for internal use)
 
 #### Performance
@@ -1556,7 +1553,7 @@ Granite supports a special syntax for organizing compiled code:
 ```harding
 Harding compile: [
     # Class and method definitions go here
-    Dog := Object deriveWithAccessors: #(name age)
+    Dog := Object derivePublic: #(name age)
     Dog>>bark [ ^ "Woof!" ]
 ]
 
