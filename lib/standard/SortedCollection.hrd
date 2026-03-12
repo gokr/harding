@@ -115,6 +115,74 @@ SortedCollection>>do: aBlock [
     ^self
 ]
 
+SortedCollection>>copyEmpty [
+    ^SortedCollection sortBlock: sortBlock
+]
+
+SortedCollection>>collect: aBlock [
+    | result |
+    result := self copyEmpty.
+    self do: [:each | result add: (aBlock value: each)].
+    ^result
+]
+
+SortedCollection>>select: aBlock [
+    | result |
+    result := self copyEmpty.
+    self do: [:each | (aBlock value: each) ifTrue: [ result add: each ]].
+    ^result
+]
+
+SortedCollection>>reject: aBlock [
+    | result |
+    result := self copyEmpty.
+    self do: [:each | (aBlock value: each) ifFalse: [ result add: each ]].
+    ^result
+]
+
+SortedCollection>>detect: aBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
+    ^nil
+]
+
+SortedCollection>>detect: aBlock ifNone: noneBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
+    ^noneBlock value
+]
+
+SortedCollection>>inject: initialValue into: aBlock [
+    | result |
+    result := initialValue.
+    self do: [:each | result := aBlock value: result value: each].
+    ^result
+]
+
+SortedCollection>>anySatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^true ]].
+    ^false
+]
+
+SortedCollection>>allSatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifFalse: [ ^false ]].
+    ^true
+]
+
+SortedCollection>>noneSatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^false ]].
+    ^true
+]
+
+SortedCollection>>sum [
+    ^self inject: 0 into: [:sum :each | sum + each ]
+]
+
+SortedCollection>>count: aBlock [
+    | count |
+    count := 0.
+    self do: [:each | (aBlock value: each) ifTrue: [ count := count + 1 ]].
+    ^count
+]
+
 SortedCollection>>resort [
     # Re-sort all elements after sortBlock change
     | sorted |
@@ -192,24 +260,6 @@ SortedCollection>>first [
 SortedCollection>>last [
     # Largest element (at end)
     ^self at: (self size - 1)
-]
-
-SortedCollection>>select: aBlock [
-    # Return new SortedCollection with elements satisfying aBlock
-    | result |
-    result := SortedCollection new.
-    self do: [:each | (aBlock value: each) ifTrue: [ result add: each ]].
-    ^result
-]
-
-SortedCollection>>reject: aBlock [
-    # Return new SortedCollection with elements not satisfying aBlock
-    ^self select: [:each | (aBlock value: each) not]
-]
-
-SortedCollection>>collect: aBlock [
-    # Transform each element, return Array
-    ^elements collect: aBlock
 ]
 
 SortedCollection>>copy [

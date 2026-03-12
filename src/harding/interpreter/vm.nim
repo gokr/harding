@@ -1088,10 +1088,11 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    let poppedBlock = interp.activationStack.pop()
+    if interp.activationStack.len > 0 and interp.activationStack[^1] == activation:
+      let poppedBlock = interp.activationStack.pop()
+      releaseActivation(poppedBlock)
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
-    releaseActivation(poppedBlock)
 
   return blockResult.unwrap()
 
@@ -1130,10 +1131,11 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
         blockResult = activation.returnValue.unwrap()
         break
   finally:
-    let poppedBlockArg = interp.activationStack.pop()
+    if interp.activationStack.len > 0 and interp.activationStack[^1] == activation:
+      let poppedBlockArg = interp.activationStack.pop()
+      releaseActivation(poppedBlockArg)
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
-    releaseActivation(poppedBlockArg)
 
   return blockResult
 
@@ -1178,10 +1180,11 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
         nonLocalReturn = true
         break
   finally:
-    let poppedBlock2 = interp.activationStack.pop()
+    if interp.activationStack.len > 0 and interp.activationStack[^1] == activation:
+      let poppedBlock2 = interp.activationStack.pop()
+      releaseActivation(poppedBlock2)
     interp.currentActivation = savedActivation
     interp.currentReceiver = savedReceiver
-    releaseActivation(poppedBlock2)
 
   return (blockResult, nonLocalReturn)
 
@@ -1395,12 +1398,7 @@ proc ifTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): 
                              else:
                                nil
 
-      let blockReceiver = if blockNode.homeActivation != nil and
-                            blockNode.homeActivation.receiver != nil:
-                            blockNode.homeActivation.receiver
-                          else:
-                            interp.currentReceiver
-      let blockResult = evalBlock(interp, blockReceiver, blockNode)
+      let blockResult = evalBlock(interp, nil, blockNode)
 
       # Check if a non-local return was triggered (hasReturned on caller)
       if callerActivation != nil and callerActivation.hasReturned:
@@ -1428,12 +1426,7 @@ proc ifFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
                              else:
                                nil
 
-      let blockReceiver = if blockNode.homeActivation != nil and
-                            blockNode.homeActivation.receiver != nil:
-                            blockNode.homeActivation.receiver
-                          else:
-                            interp.currentReceiver
-      let blockResult = evalBlock(interp, blockReceiver, blockNode)
+      let blockResult = evalBlock(interp, nil, blockNode)
 
       # Check if a non-local return was triggered (hasReturned on caller)
       if callerActivation != nil and callerActivation.hasReturned:
@@ -1471,7 +1464,7 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
   # Loop while condition is true
   while true:
     # Evaluate condition block
-    let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
+    let conditionResult = evalBlock(interp, nil, conditionBlock)
 
     # Check if a non-local return was triggered (target activation hasReturned)
     if callerActivation != nil and callerActivation.hasReturned:
@@ -1490,7 +1483,7 @@ proc whileTrueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]
       break
 
     # Execute body block
-    lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
+    lastResult = evalBlock(interp, nil, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
     if callerActivation != nil and callerActivation.hasReturned:
@@ -1527,7 +1520,7 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
   # Loop while condition is false
   while true:
     # Evaluate condition block
-    let conditionResult = evalBlock(interp, interp.currentReceiver, conditionBlock)
+    let conditionResult = evalBlock(interp, nil, conditionBlock)
 
     # Check if a non-local return was triggered (hasReturned on caller)
     if callerActivation != nil and callerActivation.hasReturned:
@@ -1545,7 +1538,7 @@ proc whileFalseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue
       break
 
     # Execute body block
-    lastResult = evalBlock(interp, interp.currentReceiver, bodyBlock)
+    lastResult = evalBlock(interp, nil, bodyBlock)
 
     # Check if a non-local return was triggered after body execution
     if callerActivation != nil and callerActivation.hasReturned:
@@ -2395,7 +2388,7 @@ proc primitiveValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
                            else:
                              nil
 
-    let blockResult = evalBlock(interp, interp.currentReceiver, blockNode)
+    let blockResult = evalBlock(interp, nil, blockNode)
 
     # Check if a non-local return was triggered (hasReturned on caller)
     if callerActivation != nil and callerActivation.hasReturned:
@@ -2417,7 +2410,7 @@ proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: se
                            else:
                              nil
 
-    let blockResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, args[0])
+    let blockResult = evalBlockWithArg(interp, nil, blockNode, args[0])
 
     # Check if a non-local return was triggered (hasReturned on caller)
     if callerActivation != nil and callerActivation.hasReturned:
@@ -2439,7 +2432,7 @@ proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args
                            else:
                              nil
 
-    let (blockResult, _) = evalBlockWithTwoArgs(interp, interp.currentReceiver, blockNode, args[0], args[1])
+    let (blockResult, _) = evalBlockWithTwoArgs(interp, nil, blockNode, args[0], args[1])
 
     # Check if a non-local return was triggered (hasReturned on caller)
     if callerActivation != nil and callerActivation.hasReturned:
@@ -2454,7 +2447,7 @@ proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, ar
     return nilValue()
   if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
     let blockNode = cast[BlockNode](self.nimValue)
-    return evalBlockWithThreeArgs(interp, interp.currentReceiver, blockNode, args[0], args[1], args[2])
+    return evalBlockWithThreeArgs(interp, nil, blockNode, args[0], args[1], args[2])
   return nilValue()
 
 # Set iteration primitive (needs interpreter for block evaluation)
@@ -2474,9 +2467,21 @@ proc primitiveSetDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
       else:
         return nilValue()
       for key in elementsVal.instVal.entries.keys():
-        discard evalBlockWithArg(interp, interp.currentReceiver, theBlock, key)
+        discard evalBlockWithArg(interp, nil, theBlock, key)
       return nilValue()
   return nilValue()
+
+proc primitiveSetAsArrayImpl(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Materialize set elements as an Array instance.
+  discard args
+  if self.kind == ikObject and self.slots.len > 0:
+    let elementsVal = self.slots[0]
+    if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
+      var elements: seq[NodeValue] = @[]
+      for key in elementsVal.instVal.entries.keys():
+        elements.add(key)
+      return newArrayInstance(arrayClass, elements).toValue()
+  return newArrayInstance(arrayClass, @[]).toValue()
 
 # Exception handling methods
 proc formatStackTrace*(interp: Interpreter): string =
@@ -2511,7 +2516,7 @@ proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]):
   # Iterate over array elements
   for elem in self.elements:
     # Invoke block with element as argument
-    lastResult = evalBlockWithArg(interp, interp.currentReceiver, blockNode, elem)
+    lastResult = evalBlockWithArg(interp, nil, blockNode, elem)
 
     if callerActivation != nil and callerActivation.hasReturned:
       lastResult = callerActivation.returnValue
@@ -4215,6 +4220,12 @@ proc initGlobals*(interp: var Interpreter) =
     setNativeValueFromInstance(setDifferenceMethod, primitiveSetDifferenceImpl)
     setCls.methods["primitiveSetDifference:"] = setDifferenceMethod
     setCls.allMethods["primitiveSetDifference:"] = setDifferenceMethod
+
+    let setAsArrayMethod = createCoreMethod("primitiveSetAsArray")
+    setAsArrayMethod.setNativeImpl(primitiveSetAsArrayImpl)
+    setNativeValueFromInstance(setAsArrayMethod, primitiveSetAsArrayImpl)
+    setCls.methods["primitiveSetAsArray"] = setAsArrayMethod
+    setCls.allMethods["primitiveSetAsArray"] = setAsArrayMethod
 
     let setDoMethod = createCoreMethod("primitiveSetDo:")
     setDoMethod.setNativeImpl(primitiveSetDoImpl)
@@ -7503,6 +7514,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       else:
         # Methods without explicit ^ return self
         if interp.currentActivation != nil and interp.currentActivation.hasReturned:
+          if interp.evalStack.len > frame.savedEvalStackDepth:
+            interp.evalStack.setLen(frame.savedEvalStackDepth)
           resultValue = interp.currentActivation.returnValue
           debug("VM: wfPopActivation method result: explicit return value")
         else:
@@ -8042,6 +8055,11 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
     if interp.shouldYield:
       interp.shouldYield = false
       return VMResult(status: vmYielded, value: interp.peekValue())
+
+    while interp.currentActivation != nil and interp.currentActivation.hasReturned and
+          interp.workQueue.len > 0 and interp.workQueue[^1].kind != wfPopActivation:
+      let staleFrame = interp.popWorkFrame()
+      releaseFrame(staleFrame)
 
     let frame = interp.popWorkFrame()
     debug("VM: Processing frame kind=", frame.kind)

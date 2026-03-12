@@ -58,7 +58,43 @@ suite "Interpreter: Non-Local Returns":
     check(result[0][^1].intVal == 99)
 
   test "early return with ^ works in conditionals":
-    skip()  # Division returns float, needs type check update
+    let result = interp.evalStatements("""
+      TestObj := Object derive.
+      TestObj>>testMethod [
+        true ifTrue: [ ^7 ].
+        ^9
+      ].
+
+      Obj := TestObj new.
+      Result := Obj testMethod
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 7)
+
+  test "non-local return through Set iteration exits method":
+    let result = interp.evalStatements("""
+      TestObj := Object derive.
+      TestObj>>firstGreaterThanTwo [
+        | s |
+        s := Set new.
+        s add: 1.
+        s add: 3.
+        s add: 5.
+        s do: [:each |
+          each > 2 ifTrue: [ ^each ]
+        ].
+        ^nil
+      ].
+
+      Obj := TestObj new.
+      Result := Obj firstGreaterThanTwo
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal > 2)
 
   test "implicit return of self when no explicit return":
     let result = interp.evalStatements("""

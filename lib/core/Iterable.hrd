@@ -10,16 +10,24 @@ Iterable := Mixin derive.
 # This mixin keeps collection enumeration logic reusable across arrays, tables, and custom types.
 # Browser and tooling treat it as a standard capability marker for collection-style classes.
 
+Iterable>>species [
+  ^ self class
+]
+
+Iterable>>copyEmpty [
+  ^ self species new
+]
+
 Iterable>>collect: block [
   | result |
-  result := Array new.
+  result := self copyEmpty.
   self do: [ :each | result add: (block value: each) ].
   ^ result
 ]
 
 Iterable>>select: block [
   | result |
-  result := Array new.
+  result := self copyEmpty.
   self do: [ :each |
     (block value: each) ifTrue: [ result add: each ]
   ].
@@ -28,7 +36,7 @@ Iterable>>select: block [
 
 Iterable>>reject: block [
   | result |
-  result := Array new.
+  result := self copyEmpty.
   self do: [ :each |
     (block value: each) ifFalse: [ result add: each ]
   ].

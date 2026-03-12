@@ -22,4 +22,9 @@ Set>>intersection: otherSet <primitive primitiveSetIntersection: otherSet>
 
 Set>>difference: otherSet <primitive primitiveSetDifference: otherSet>
 
-Set>>do: block <primitive primitiveSetDo: block>
+Set>>asArray <primitive primitiveSetAsArray>
+
+Set>>do: block [
+  self asArray do: block.
+  ^ self
+]

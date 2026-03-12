@@ -35,6 +35,102 @@ Table>>do: block [
     ]
 ]
 
+Table>>species [
+    ^ Table
+]
+
+Table>>copyEmpty [
+    ^ self species new
+]
+
+Table>>collect: block [
+    | result |
+    result := Array new.
+    self keysAndValuesDo: [:key :value |
+        result add: (block value: key value: value)
+    ].
+    ^ result
+]
+
+Table>>select: block [
+    | result |
+    result := self copyEmpty.
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [
+            result at: key put: value
+        ]
+    ].
+    ^ result
+]
+
+Table>>reject: block [
+    | result |
+    result := self copyEmpty.
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifFalse: [
+            result at: key put: value
+        ]
+    ].
+    ^ result
+]
+
+Table>>detect: block [
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [ ^ value ]
+    ].
+    ^ nil
+]
+
+Table>>detect: block ifNone: noneBlock [
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [ ^ value ]
+    ].
+    ^ noneBlock value
+]
+
+Table>>inject: initialValue into: block [
+    | result |
+    result := initialValue.
+    self keysAndValuesDo: [:key :value |
+        result := block value: result value: key value: value
+    ].
+    ^ result
+]
+
+Table>>anySatisfy: block [
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [ ^ true ]
+    ].
+    ^ false
+]
+
+Table>>allSatisfy: block [
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifFalse: [ ^ false ]
+    ].
+    ^ true
+]
+
+Table>>noneSatisfy: block [
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [ ^ false ]
+    ].
+    ^ true
+]
+
+Table>>sum [
+    ^ self inject: 0 into: [:sum :key :value | sum + value ]
+]
+
+Table>>count: block [
+    | count |
+    count := 0.
+    self keysAndValuesDo: [:key :value |
+        (block value: key value: value) ifTrue: [ count := count + 1 ]
+    ].
+    ^ count
+]
+
 Table>>keysAndValuesDo: block [
     # Iterate over key-value pairs
     self keys do: [:key |

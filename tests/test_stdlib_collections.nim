@@ -208,6 +208,30 @@ suite "Stdlib: Tables - Advanced":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 6)
 
+  test "select: preserves Table species":
+    let result = interp.evalStatements("""
+      T := Table new.
+      T at: "alice" put: 21.
+      T at: "bob" put: 17.
+      Adults := T select: [:key :value | value >= 18].
+      Result := Adults className
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Table")
+
+  test "collect: on Table returns Array":
+    let result = interp.evalStatements("""
+      T := Table new.
+      T at: "alice" put: 21.
+      T at: "bob" put: 17.
+      Names := T collect: [:key :value | key].
+      Result := Names className
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Array")
+
   test "values returns array of all values":
     let result = interp.evalStatements("""
       T := Table new.

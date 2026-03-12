@@ -283,6 +283,16 @@ suite "Stdlib: Reflection":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 3)
 
+  test "collect: preserves Array species":
+    let result = interp.evalStatements("""
+      Arr := #(1 2 3).
+      Doubles := Arr collect: [ :n | n * 2 ].
+      Result := Doubles className
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Array")
+
   test "select: filters elements":
     let result = interp.evalStatements("""
       Arr := Array new.

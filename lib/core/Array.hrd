@@ -36,75 +36,14 @@ Array class>>new: size withAll: value <primitive primitiveArrayNew: size withAll
 # Array iteration
 #====================================================================
 
-Array>>do: block <primitive primitiveDo: block>
-
-#====================================================================
-# Array higher-order methods (defined in Harding code)
-#====================================================================
-
-Array>>collect: aBlock [
-    # Transform each element using block, return new Array
-    | result |
-    result := Array new.
-    self do: [:elem |
-        result add: (aBlock value: elem)
+Array>>do: block [
+    | index |
+    index := 0.
+    [ index < self size ] whileTrue: [
+        block value: (self at: index).
+        index := index + 1
     ].
-    ^ result
-]
-
-Array>>select: aBlock [
-    # Return new Array with elements where block returns true
-    | result |
-    result := Array new.
-    self do: [:elem |
-        (aBlock value: elem) ifTrue: [
-            result add: elem
-        ]
-    ].
-    ^ result
-]
-
-Array>>reject: aBlock [
-    # Return new Array with elements where block returns false
-    | result |
-    result := Array new.
-    self do: [:elem |
-        (aBlock value: elem) ifFalse: [
-            result add: elem
-        ]
-    ].
-    ^ result
-]
-
-Array>>detect: aBlock [
-    # Return first element where block returns true, or nil
-    | i elem found |
-    i := 0.
-    found := nil.
-    [ (i < self size) and: [ found isNil ] ] whileTrue: [
-        elem := self at: i.
-        (aBlock value: elem) ifTrue: [ found := elem ].
-        i := i + 1.
-    ].
-    ^ found
-]
-
-Array>>detect: aBlock ifNone: noneBlock [
-    # Return first element where block returns true, or evaluate noneBlock
-    | found |
-    found := self detect: aBlock.
-    found isNil ifTrue: [ ^ noneBlock value ].
-    ^ found
-]
-
-Array>>inject: initial into: aBlock [
-    # Fold/reduce: accumulate value starting with initial
-    | result |
-    result := initial.
-    self do: [:elem |
-        result := aBlock value: result value: elem
-    ].
-    ^ result
+    ^ self
 ]
 
 Array>>join: separator [

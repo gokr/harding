@@ -148,6 +148,19 @@ suite "Set: Iteration":
     check(results[0][^1].kind == vkInt)
     check(results[0][^1].intVal == 0)
 
+  test "Set select: preserves Set species":
+    let results = interp.evalStatements("""
+      S := Set new.
+      S add: 1.
+      S add: 2.
+      S add: 3.
+      Evens := S select: [:each | each even].
+      Result := Evens className
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkString)
+    check(results[0][^1].strVal == "Set")
+
 suite "Set: Set Operations":
   var interp {.used.}: Interpreter
 

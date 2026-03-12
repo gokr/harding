@@ -72,6 +72,15 @@ suite "Stdlib: Interval":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 5)
 
+  test "Interval collect: returns Array species":
+    let result = interp.evalStatements("""
+      Squares := (1 to: 5) collect: [:i | i * i].
+      Result := Squares className
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Array")
+
   test "Interval includes: checks membership":
     let result = interp.evalStatements("""
       R := 1 to: 10 by: 2.
@@ -176,3 +185,16 @@ suite "Stdlib: SortedCollection":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 1)
+
+  test "SortedCollection collect: preserves sort policy":
+    let result = interp.evalStatements("""
+      SC := SortedCollection sortBlock: [:a :b | a > b].
+      SC add: 1.
+      SC add: 3.
+      SC add: 2.
+      Mapped := SC collect: [:each | each * 10].
+      Result := Mapped first
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 30)

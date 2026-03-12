@@ -108,49 +108,76 @@ Interval>>do: aBlock [
                 aBlock value: current.
                 current := current + step.
             ].
-        ].
+    ].
     ^self
 ]
 
+Interval>>species [
+    ^ Array
+]
+
 Interval>>collect: aBlock [
-    # Transform each element, return Array
     | result |
-    result := Array new.
+    result := self species new.
     self do: [:each | result add: (aBlock value: each)].
     ^result
 ]
 
 Interval>>select: aBlock [
-    # Return Array with elements satisfying aBlock
     | result |
-    result := Array new.
+    result := self species new.
     self do: [:each | (aBlock value: each) ifTrue: [ result add: each ]].
     ^result
 ]
 
 Interval>>reject: aBlock [
-    # Return Array with elements not satisfying aBlock
-    ^self select: [:each | (aBlock value: each) not]
+    | result |
+    result := self species new.
+    self do: [:each | (aBlock value: each) ifFalse: [ result add: each ]].
+    ^result
 ]
 
 Interval>>detect: aBlock [
-    # Find first element satisfying aBlock
     self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
     ^nil
 ]
 
 Interval>>detect: aBlock ifNone: noneBlock [
-    # Find first element satisfying aBlock, or evaluate noneBlock
     self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
     ^noneBlock value
 ]
 
 Interval>>inject: initialValue into: aBlock [
-    # Accumulate result
     | result |
     result := initialValue.
     self do: [:each | result := aBlock value: result value: each].
     ^result
+]
+
+Interval>>anySatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^true ]].
+    ^false
+]
+
+Interval>>allSatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifFalse: [ ^false ]].
+    ^true
+]
+
+Interval>>noneSatisfy: aBlock [
+    self do: [:each | (aBlock value: each) ifTrue: [ ^false ]].
+    ^true
+]
+
+Interval>>sum [
+    ^self inject: 0 into: [:sum :each | sum + each ]
+]
+
+Interval>>count: aBlock [
+    | count |
+    count := 0.
+    self do: [:each | (aBlock value: each) ifTrue: [ count := count + 1 ]].
+    ^count
 ]
 
 Interval>>anySatisfy: aBlock [
