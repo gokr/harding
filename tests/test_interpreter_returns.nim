@@ -96,6 +96,46 @@ suite "Interpreter: Non-Local Returns":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal > 2)
 
+  test "non-local return through Array iteration exits method":
+    let result = interp.evalStatements("""
+      TestObj := Object derive.
+      TestObj>>firstGreaterThanTwo [
+        | arr |
+        arr := #(1 3 5).
+        arr do: [:each |
+          each > 2 ifTrue: [ ^each ]
+        ].
+        ^nil
+      ].
+
+      Obj := TestObj new.
+      Result := Obj firstGreaterThanTwo
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
+  test "non-local return through whileTrue exits method":
+    let result = interp.evalStatements("""
+      TestObj := Object derivePublic: #(count).
+      TestObj>>run [
+        count := 0.
+        [ count < 5 ] whileTrue: [
+          count := count + 1.
+          count = 3 ifTrue: [ ^count ]
+        ].
+        ^nil
+      ].
+
+      Obj := TestObj new.
+      Result := Obj run
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 3)
+
   test "implicit return of self when no explicit return":
     let result = interp.evalStatements("""
     Builder := Object derivePublic: #(value).

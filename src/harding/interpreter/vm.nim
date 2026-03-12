@@ -2450,27 +2450,6 @@ proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, ar
     return evalBlockWithThreeArgs(interp, nil, blockNode, args[0], args[1], args[2])
   return nilValue()
 
-# Set iteration primitive (needs interpreter for block evaluation)
-proc primitiveSetDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Iterate over all elements in the set
-  if self.kind == ikObject and self.slots.len > 0:
-    let elementsVal = self.slots[0]
-    if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
-      if args.len == 0:
-        return nilValue()
-      let blockVal = args[0]
-      var theBlock: BlockNode
-      if blockVal.kind == vkBlock:
-        theBlock = blockVal.blockVal
-      elif blockVal.kind == vkInstance and blockVal.instVal != nil and nimValueIsSet(blockVal.instVal.nimValue):
-        theBlock = cast[BlockNode](blockVal.instVal.nimValue)
-      else:
-        return nilValue()
-      for key in elementsVal.instVal.entries.keys():
-        discard evalBlockWithArg(interp, nil, theBlock, key)
-      return nilValue()
-  return nilValue()
-
 proc primitiveSetAsArrayImpl(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Materialize set elements as an Array instance.
   discard args
@@ -2493,36 +2472,6 @@ proc formatStackTrace*(interp: Interpreter): string =
       result.add($frameNum & ": <method>\n")
     else:
       result.add($frameNum & ": <unknown>\n")
-
-# Array iteration method
-proc arrayDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Iterate over array elements: arr do: [ :elem | code ]
-  ## self is the array, args[0] is the block to execute for each element
-  if args.len < 1 or args[0].kind != vkBlock:
-    return nilValue()
-
-  # Check if this is an array
-  if self.kind != ikArray:
-    return nilValue()
-
-  let blockNode = args[0].blockVal
-  var lastResult = nilValue()
-
-  let callerActivation = if interp.activationStack.len > 0:
-                           interp.activationStack[^1]
-                         else:
-                           nil
-
-  # Iterate over array elements
-  for elem in self.elements:
-    # Invoke block with element as argument
-    lastResult = evalBlockWithArg(interp, nil, blockNode, elem)
-
-    if callerActivation != nil and callerActivation.hasReturned:
-      lastResult = callerActivation.returnValue
-      break
-
-  return lastResult
 
 # Built-in globals - NEW Class-based implementation
 proc initGlobals*(interp: var Interpreter) =
@@ -3871,13 +3820,6 @@ proc initGlobals*(interp: var Interpreter) =
   arrayCls.methods["primitiveArrayReverse"] = arrayReverseMethod
   arrayCls.allMethods["primitiveArrayReverse"] = arrayReverseMethod
 
-  let arrayDoMethod = createCoreMethod("primitiveDo:")
-  arrayDoMethod.setNativeImpl(arrayDoImpl)
-  setNativeValueFromInstanceWithInterp(arrayDoMethod, arrayDoImpl)
-  arrayDoMethod.hasInterpreterParam = true
-  arrayCls.methods["primitiveDo:"] = arrayDoMethod
-  arrayCls.allMethods["primitiveDo:"] = arrayDoMethod
-
   # Register Array class new method
   proc arrayClassNewImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
     # Create an Array instance
@@ -4226,13 +4168,6 @@ proc initGlobals*(interp: var Interpreter) =
     setNativeValueFromInstance(setAsArrayMethod, primitiveSetAsArrayImpl)
     setCls.methods["primitiveSetAsArray"] = setAsArrayMethod
     setCls.allMethods["primitiveSetAsArray"] = setAsArrayMethod
-
-    let setDoMethod = createCoreMethod("primitiveSetDo:")
-    setDoMethod.setNativeImpl(primitiveSetDoImpl)
-    setNativeValueFromInstanceWithInterp(setDoMethod, primitiveSetDoImpl)
-    setDoMethod.hasInterpreterParam = true
-    setCls.methods["primitiveSetDo:"] = setDoMethod
-    setCls.allMethods["primitiveSetDo:"] = setDoMethod
 
   # ============================================================================
   # Random number generator primitives
