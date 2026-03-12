@@ -193,8 +193,7 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
     let slotIdx = ctx.cls.getSlotIndex(name)
     if slotIdx >= 0:
       if ctx.inMethod:
-        let slotName = mangleSlot(name)
-        return fmt("get{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue))")
+        return fmt("getSlotValue(self, \"{name}\")")
       return fmt("self.slots[{slotIdx}]")
 
   # Check if it's a known global (class or global variable)
@@ -729,8 +728,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName):
       if ctx.inMethod and ctx.cls != nil:
-        let slotName = mangleSlot(varName)
-        return fmt("set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
+        return fmt("setSlotValue(self, \"{varName}\", {exprCode})")
       let idx = ctx.getSlotIndex(varName)
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
 
@@ -805,17 +803,17 @@ proc genExpression*(ctx: GenContext, node: Node): string =
   of nkSlotAccess:
     let slotNode = node.SlotAccessNode
     if ctx.inMethod and ctx.cls != nil:
-      var slotName = if slotNode.slotName.len > 0: mangleSlot(slotNode.slotName) else: ""
+      var origSlotName = if slotNode.slotName.len > 0: slotNode.slotName else: ""
       for slot in ctx.cls.getAllSlots():
         if slot.index == slotNode.slotIndex:
-          slotName = mangleSlot(slot.name)
+          origSlotName = slot.name
           break
-      if slotName.len > 0:
+      if origSlotName.len > 0:
         if slotNode.isAssignment and slotNode.valueExpr != nil:
           let valCode = genExpression(ctx, slotNode.valueExpr)
-          return fmt("set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {valCode})")
+          return fmt("setSlotValue(self, \"{origSlotName}\", {valCode})")
         else:
-          return fmt("get{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue))")
+          return fmt("getSlotValue(self, \"{origSlotName}\")")
 
     if slotNode.isAssignment and slotNode.valueExpr != nil:
       let valCode = genExpression(ctx, slotNode.valueExpr)
@@ -884,8 +882,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName):
       if ctx.inMethod and ctx.cls != nil:
-        let slotName = mangleSlot(varName)
-        return fmt("discard set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
+        return fmt("discard setSlotValue(self, \"{varName}\", {exprCode})")
       let idx = ctx.getSlotIndex(varName)
       return fmt"self.slots[{idx}] = {exprCode}"
 
@@ -1139,8 +1136,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       let msgCode = genMessage(ctx, msg)
       if ctx.isSlot(receiverName):
         if ctx.inMethod and ctx.cls != nil:
-          let slotName = mangleSlot(receiverName)
-          return fmt("discard set{slotName}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {msgCode})")
+          return fmt("discard setSlotValue(self, \"{receiverName}\", {msgCode})")
         let slotIdx = ctx.getSlotIndex(receiverName)
         if slotIdx >= 0:
           return fmt("self.slots[{slotIdx}] = {msgCode}")
@@ -1386,8 +1382,7 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
       for slot in classDef.slots:
         if slot.name == varName:
           # It's a slot - generate setter call
-          let mangledSlot = mangleSlot(slot.name)
-          let setterCall = fmt("set{mangledSlot}(cast[{mangleClass(ctx.cls.name)}](self.instVal.nimValue), {exprCode})")
+          let setterCall = fmt("setSlotValue(self, \"{varName}\", {exprCode})")
           if isLast:
             return "return " & setterCall
           else:

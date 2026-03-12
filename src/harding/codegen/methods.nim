@@ -208,8 +208,7 @@ proc genMethodBodyFromAST*(cls: ClassInfo, meth: BlockNode, selector: string): s
       # Check if variable is a slot
       if ctx.isSlot(varName):
         if ctx.inMethod and ctx.cls != nil:
-          let slotName = mangleSlot(varName)
-          output.add(indent & "discard set" & slotName & "(cast[" & mangleClass(ctx.cls.name) & "](self.instVal.nimValue), " & exprCode & ")\n")
+          output.add(indent & "discard setSlotValue(self, \"" & varName & "\", " & exprCode & ")\n")
         else:
           let idx = ctx.getSlotIndex(varName)
           output.add(indent & "self.slots[" & $idx & "] = " & exprCode & "\n")

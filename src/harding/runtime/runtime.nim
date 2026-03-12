@@ -73,6 +73,19 @@ var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValu
   initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
 var nimProxyClassNames*: Table[pointer, string] = initTable[pointer, string]()
 
+type
+  SlotGetter* = proc(nimValue: pointer): NodeValue {.nimcall.}
+  SlotSetter* = proc(nimValue: pointer, value: NodeValue): NodeValue {.nimcall.}
+
+var slotGetters*: Table[string, SlotGetter] = initTable[string, SlotGetter]()
+var slotSetters*: Table[string, SlotSetter] = initTable[string, SlotSetter]()
+
+proc registerSlotAccessor*(className: string, slotName: string,
+                           getter: SlotGetter, setter: SlotSetter) =
+  let key = className & "::" & slotName
+  slotGetters[key] = getter
+  slotSetters[key] = setter
+
 proc registerCompiledMethod*(className: string, selector: string,
                               fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
   let key = className & ">>" & selector
@@ -119,6 +132,26 @@ proc getReceiverClassName*(receiver: NodeValue): string =
     return getNimProxyClassName(receiver.instVal.nimValue)
 
   return ""
+
+proc getSlotValue*(self: NodeValue, slotName: string): NodeValue =
+  ## Get a slot value from a compiled instance, dispatching by actual class
+  if self.kind != vkInstance or self.instVal == nil or not self.instVal.isNimProxy:
+    return NodeValue(kind: vkNil)
+  let className = getReceiverClassName(self)
+  let key = className & "::" & slotName
+  if key in slotGetters:
+    return slotGetters[key](self.instVal.nimValue)
+  return NodeValue(kind: vkNil)
+
+proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeValue =
+  ## Set a slot value on a compiled instance, dispatching by actual class
+  if self.kind != vkInstance or self.instVal == nil or not self.instVal.isNimProxy:
+    return value
+  let className = getReceiverClassName(self)
+  let key = className & "::" & slotName
+  if key in slotSetters:
+    return slotSetters[key](self.instVal.nimValue, value)
+  return value
 
 proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
                                       selector: string, args: seq[NodeValue]): NodeValue =

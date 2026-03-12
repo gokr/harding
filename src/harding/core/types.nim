@@ -1045,6 +1045,13 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
     for slotName in parent.allSlotNames:
       if slotName notin result.allSlotNames:
         result.allSlotNames.add(slotName)
+    # Inherit readable/writable slot permissions
+    for slotName in parent.readableSlotNames:
+      if slotName notin result.readableSlotNames:
+        result.readableSlotNames.add(slotName)
+    for slotName in parent.writableSlotNames:
+      if slotName notin result.writableSlotNames:
+        result.writableSlotNames.add(slotName)
 
   var allowMethodConflicts = true
   for parent in superclasses:
@@ -1106,6 +1113,13 @@ proc addSuperclass*(cls: Class, parent: Class) =
   for slotName in parent.allSlotNames:
     if slotName notin cls.allSlotNames:
       cls.allSlotNames.add(slotName)
+  # Inherit readable/writable slot permissions
+  for slotName in parent.readableSlotNames:
+    if slotName notin cls.readableSlotNames:
+      cls.readableSlotNames.add(slotName)
+  for slotName in parent.writableSlotNames:
+    if slotName notin cls.writableSlotNames:
+      cls.writableSlotNames.add(slotName)
 
   # Update hasSlots flag if needed
   if cls.allSlotNames.len > 0:
@@ -1152,6 +1166,7 @@ proc getSlotIndex*(cls: Class, name: string): int =
     if slotName == name:
       return i
   return -1
+
 
 proc getSlot*(inst: Instance, index: int): NodeValue =
   ## Get slot value by index (only for ikObject instances)
