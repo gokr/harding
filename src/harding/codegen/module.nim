@@ -115,30 +115,52 @@ proc genSlotAccessors*(cls: ClassInfo): string =
   ## Generate native Nim slot accessor procs for a class
   let clsName = mangleClass(cls.name)
   let slots = cls.getAllSlots()
-  
+
   var output = ""
   if slots.len == 0:
     return output
-  
+
   output.add("# Slot accessors\n")
   output.add("################################\n\n")
-  
+
   for slot in slots:
     if slot.isInherited:
       continue
     let slotName = mangleSlot(slot.name)
-    
-    # Getter
+
+    # Typed getter
     output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
     output.add(fmt("  ## Get slot '{slot.name}' from {cls.name}\n"))
     output.add(fmt("  return self[].{slotName}\n\n"))
-    
-    # Setter  
+
+    # Typed setter
     output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue): NodeValue =\n"))
     output.add(fmt("  ## Set slot '{slot.name}' on {cls.name}\n"))
     output.add(fmt("  self[].{slotName} = value\n"))
     output.add(fmt("  return value\n\n"))
-  
+
+  # Pointer-based wrappers for runtime slot dispatch (inheritance-safe)
+  for slot in slots:
+    if slot.isInherited:
+      continue
+    let slotName = mangleSlot(slot.name)
+    output.add(fmt("proc slotGet_{cls.name}_{slotName}(nimValue: pointer): NodeValue {{.nimcall.}} =\n"))
+    output.add(fmt("  return cast[{clsName}](nimValue)[].{slotName}\n\n"))
+    output.add(fmt("proc slotSet_{cls.name}_{slotName}(nimValue: pointer, value: NodeValue): NodeValue {{.nimcall.}} =\n"))
+    output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = value\n"))
+    output.add(fmt("  return value\n\n"))
+
+  return output
+
+proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
+  ## Generate registerSlotAccessor calls for a class
+  let slots = cls.getAllSlots()
+  var output = ""
+  for slot in slots:
+    if slot.isInherited:
+      continue
+    let slotName = mangleSlot(slot.name)
+    output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{cls.name}_{slotName}, slotSet_{cls.name}_{slotName})\n"))
   return output
 
 proc isClassDefinition(node: Node): bool =
@@ -203,11 +225,18 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   var registrationCode = ""
   
   if methodDefs.len == 0:
-    # Still generate registration stub
+    # Generate slot accessor registrations even with no methods
+    var slotRegCode = ""
+    for clsName in compiledClasses:
+      if clsName in classInfo:
+        slotRegCode.add(genSlotAccessorRegistrations(classInfo[clsName]))
     output.add("# Method Registration\n")
     output.add("#####################\n\n")
     output.add("proc registerCompiledMethods*() =\n")
-    output.add("  discard 0\n")
+    if slotRegCode.len > 0:
+      output.add(slotRegCode)
+    else:
+      output.add("  discard 0\n")
     output.add("\n")
     return output
   
@@ -264,16 +293,23 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     # Add registration call
     registrationCode.add(fmt("  registerCompiledMethod(\"{clsName}\", \"{selector}\", {procName})\n"))
   
+  # Generate slot accessor registrations for all compiled classes
+  var slotRegCode = ""
+  for clsName in compiledClasses:
+    if clsName in classInfo:
+      slotRegCode.add(genSlotAccessorRegistrations(classInfo[clsName]))
+
   # Add registration procs (stubs if no methods/superclasses)
   output.add("# Method Registration\n")
   output.add("#####################\n\n")
   output.add("proc registerCompiledMethods*() =\n")
-  if registrationCode.len > 0:
+  if registrationCode.len > 0 or slotRegCode.len > 0:
     output.add(registrationCode)
+    output.add(slotRegCode)
   else:
     output.add("  discard 0\n")
   output.add("\n")
-  
+
   return output
 
 proc isHardingCompileBlock(node: Node): bool =
