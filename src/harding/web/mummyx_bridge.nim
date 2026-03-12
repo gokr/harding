@@ -13,7 +13,7 @@
 ## Build: nim c -d:mummyx --threads:on --mm:orc ...
 ## ============================================================================
 
-import std/[tables, os, strutils, options]
+import std/[tables, os, strutils, options, uri]
 import mummy, mummy/routers
 import ../core/types
 import ../interpreter/objects
@@ -36,6 +36,7 @@ type
     remoteAddress*: string
     headers*: seq[(string, string)]
     queryParams*: seq[(string, string)]
+    formParams*: seq[(string, string)]
     pathParams*: seq[(string, string)]
     responseChan*: ptr Channel[PendingResponse]
 
@@ -45,14 +46,14 @@ type
     parts*: seq[string]  # split pattern parts for matching
     handlerBlock*: NodeValue  # The Harding block (vkBlock)
 
-  ServerProxy* = ref object
+  RouterProxy* = ref object
     routes*: seq[HardingRoute]
+
+  ServerProxy* = ref object
+    routerProxy*: RouterProxy
     running*: bool
     port*: int
     address*: string
-
-  RouterProxy* = ref object
-    routes*: seq[HardingRoute]
 
   RequestProxy* = ref object
     httpMethod*: string
@@ -62,6 +63,7 @@ type
     remoteAddress*: string
     headers*: seq[(string, string)]
     queryParams*: seq[(string, string)]
+    formParams*: seq[(string, string)]
     pathParams*: seq[(string, string)]
     responseChan*: ptr Channel[PendingResponse]
     responded*: bool
@@ -79,6 +81,7 @@ var routerClass*: Class = nil
 # Global request channel for the MummyX handler (one server per process)
 var globalRequestChan*: Channel[PendingRequest]
 var globalRequestChanOpen* = false
+var activeRouterProxy*: RouterProxy = nil
 
 type
   ServerThreadArgs = object
@@ -140,6 +143,23 @@ proc findRoute(routes: seq[HardingRoute], httpMethod: string, path: string,
       return some(route)
   return none(HardingRoute)
 
+proc decodeFormComponent(value: string): string =
+  decodeUrl(value.replace("+", " "))
+
+proc parseFormBody(body: string): seq[(string, string)] =
+  result = @[]
+  if body.len == 0:
+    return result
+
+  for part in body.split('&'):
+    if part.len == 0:
+      continue
+
+    let pieces = part.split("=", maxsplit = 1)
+    let key = decodeFormComponent(pieces[0])
+    let value = if pieces.len > 1: decodeFormComponent(pieces[1]) else: ""
+    result.add((key, value))
+
 # ============================================================================
 # MummyX Request Handler (runs on worker threads)
 # ============================================================================
@@ -163,6 +183,12 @@ proc mummyxRequestHandler(request: Request) {.gcsafe.} =
   # Copy headers
   for (key, value) in request.headers:
     pending.headers.add((key, value))
+
+  for (key, value) in pending.headers:
+    if key.toLowerAscii() == "content-type" and
+        value.toLowerAscii().startsWith("application/x-www-form-urlencoded"):
+      pending.formParams = parseFormBody(pending.body)
+      break
 
   # Copy query params
   for (key, value) in request.queryParams:
@@ -229,9 +255,6 @@ var runOneSliceProc*: proc(ctxPtr: pointer): bool = nil
 # HttpRequest instance, and returns an Array #(request handlerBlock) that
 # the worker Process unpacks and invokes.
 
-# Global routes reference - set when server starts
-var activeRoutes*: seq[HardingRoute] = @[]
-
 proc mummyxPollProc(): Option[NodeValue] =
   ## Poll globalRequestChan for incoming requests.
   ## Returns Some(#(request handlerBlock)) or None.
@@ -244,7 +267,8 @@ proc mummyxPollProc(): Option[NodeValue] =
 
   # Route matching
   var pathParams: seq[(string, string)] = @[]
-  let route = findRoute(activeRoutes, pending.httpMethod, pending.path, pathParams)
+  let routes = if activeRouterProxy == nil: @[] else: activeRouterProxy.routes
+  let route = findRoute(routes, pending.httpMethod, pending.path, pathParams)
 
   if route.isNone:
     # 404 - respond directly, don't bother a worker Process
@@ -264,6 +288,7 @@ proc mummyxPollProc(): Option[NodeValue] =
     remoteAddress: pending.remoteAddress,
     headers: pending.headers,
     queryParams: pending.queryParams,
+    formParams: pending.formParams,
     pathParams: pathParams,
     responseChan: pending.responseChan,
     responded: false
@@ -288,7 +313,7 @@ proc serverNewImpl(interp: var Interpreter, self: Instance,
   let inst = newInstance(httpServerClass)
   inst.isNimProxy = true
   let proxy = ServerProxy(
-    routes: @[],
+    routerProxy: nil,
     running: false,
     port: 8080,
     address: "localhost"
@@ -307,14 +332,16 @@ proc serverRouterImpl(interp: var Interpreter, self: Instance,
     let routerInst = args[0].instVal
     if routerInst.nimValue != nil:
       let routerProxy = cast[RouterProxy](routerInst.nimValue)
-      serverProxy.routes = routerProxy.routes
+      serverProxy.routerProxy = routerProxy
+      if serverProxy.running:
+        activeRouterProxy = routerProxy
   return self.toValue()
 
 const defaultWorkerCount = 10
 
 proc startMummyxServer(proxy: ServerProxy) =
   ## Common startup: open channel, start MummyX background thread.
-  activeRoutes = proxy.routes
+  activeRouterProxy = proxy.routerProxy
   globalRequestChan.open()
   globalRequestChanOpen = true
   proxy.running = true
@@ -491,6 +518,14 @@ proc routerAnyDoImpl(interp: var Interpreter, self: Instance,
   ## Router>>any: path do: handler (matches any HTTP method)
   return addRouteImpl(interp, self, "*", args)
 
+proc routerClearImpl(interp: var Interpreter, self: Instance,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self == nil or self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[RouterProxy](self.nimValue)
+  proxy.routes.setLen(0)
+  return self.toValue()
+
 # ============================================================================
 # Native Method Implementations - HttpRequest
 # ============================================================================
@@ -585,6 +620,27 @@ proc requestPathParamsImpl(interp: var Interpreter, self: Instance,
   let proxy = cast[RequestProxy](self.nimValue)
   let tbl = newInstance(tableClass)
   for (k, v) in proxy.pathParams:
+    tbl.entries[NodeValue(kind: vkString, strVal: k)] = NodeValue(kind: vkString, strVal: v)
+  return tbl.toValue()
+
+proc requestFormParamImpl(interp: var Interpreter, self: Instance,
+                          args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil or args.len < 1:
+    return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let name = if args[0].kind == vkString: args[0].strVal else: ""
+  for (k, v) in proxy.formParams:
+    if k == name:
+      return NodeValue(kind: vkString, strVal: v)
+  return nilValue()
+
+proc requestFormParamsImpl(interp: var Interpreter, self: Instance,
+                           args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[RequestProxy](self.nimValue)
+  let tbl = newInstance(tableClass)
+  for (k, v) in proxy.formParams:
     tbl.entries[NodeValue(kind: vkString, strVal: k)] = NodeValue(kind: vkString, strVal: v)
   return tbl.toValue()
 
@@ -710,6 +766,7 @@ proc initMummyxBridge*(interp: var Interpreter) =
   routerClass.registerMethod("delete:do:", routerDeleteDoImpl)
   routerClass.registerMethod("patch:do:", routerPatchDoImpl)
   routerClass.registerMethod("any:do:", routerAnyDoImpl)
+  routerClass.registerMethod("clear", routerClearImpl)
 
   interp.globals[]["Router"] = routerClass.toValue()
 
@@ -729,6 +786,8 @@ proc initMummyxBridge*(interp: var Interpreter) =
   httpRequestClass.registerMethod("headers", requestHeadersImpl)
   httpRequestClass.registerMethod("queryParams", requestQueryParamsImpl)
   httpRequestClass.registerMethod("pathParams", requestPathParamsImpl)
+  httpRequestClass.registerMethod("formParam:", requestFormParamImpl)
+  httpRequestClass.registerMethod("formParams", requestFormParamsImpl)
   httpRequestClass.registerMethod("respond:", requestRespondImpl)
   httpRequestClass.registerMethod("respond:body:", requestRespondBodyImpl)
   httpRequestClass.registerMethod("respond:headers:body:", requestRespondHeadersBodyImpl)

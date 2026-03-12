@@ -428,7 +428,7 @@ proc initProcessorGlobal*(interp: var Interpreter) =
       let ch = newNimChannel(pollProc)
       let channelProxy = createNimChannelProxy(ch)
       interp.globals[]["MummyXRequestChannel"] = channelProxy
-      let workerSource = "[true] whileTrue: [| job | job := MummyXRequestChannel receive. (job at: 1) value: (job at: 0). Processor yield]"
+      let workerSource = "[true] whileTrue: [| job | job := MummyXRequestChannel receive. [ (job at: 1) value: (job at: 0) ] on: Exception do: [:ex | (job at: 0) respond: 500 body: ex printString ]. Processor yield]"
       let (nodes, _) = parse(workerSource)
       for i in 0..<workerCount:
         if nodes.len > 0:

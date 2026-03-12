@@ -1,0 +1,45 @@
+Daisy := Object derive: #().
+
+Daisy class>>stylesheetPath [
+  ^ "lib/web/Basecoat.css"
+].
+
+Daisy class>>stylesheet [
+  ^ File readAll: self stylesheetPath
+].
+
+Daisy class>>shellClass [
+  ^ "shell"
+].
+
+Daisy class>>heroClass [
+  ^ "hero hero-card"
+].
+
+Daisy class>>panelClass [
+  ^ "card panel"
+].
+
+Daisy class>>stackClass [
+  ^ "stack card-body"
+].
+
+Daisy class>>inputClass [
+  ^ "input input-bordered"
+].
+
+Daisy class>>primaryButtonClass [
+  ^ "btn btn-primary"
+].
+
+Daisy class>>ghostButtonClass [
+  ^ "btn btn-ghost"
+].
+
+Daisy class>>badgeClass [
+  ^ "badge badge-outline"
+].
+
+Daisy class>>mutedClass [
+  ^ "muted"
+].

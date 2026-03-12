@@ -1,0 +1,147 @@
+TodoItemComponent := Component derivePublic: #(todo).
+TodoPanelComponent := Component derivePublic: #(repository).
+TodoPageComponent := Component derivePublic: #(repository).
+
+TodoItemComponent class>>todo: aTodo [
+  | component |
+  component := self basicNew.
+  component::todo := aTodo.
+  ^ component
+].
+
+TodoPanelComponent class>>repository: aRepository [
+  | component |
+  component := self basicNew.
+  component::repository := aRepository.
+  ^ component
+].
+
+TodoPageComponent class>>repository: aRepository [
+  | component |
+  component := self basicNew.
+  component::repository := aRepository.
+  ^ component
+].
+
+TodoItemComponent>>statusClass [
+  ^ (todo at: "completed") ifTrue: [ "todo-status is-done" ] ifFalse: [ "todo-status" ]
+].
+
+TodoItemComponent>>titleClass [
+  ^ (todo at: "completed") ifTrue: [ "todo-title is-done" ] ifFalse: [ "todo-title" ]
+].
+
+TodoItemComponent>>toggleLabel [
+  ^ (todo at: "completed") ifTrue: [ "Mark active" ] ifFalse: [ "Mark done" ]
+].
+
+TodoItemComponent>>render [
+  | rowAttrs mainAttrs actionsAttrs statusAttrs titleAttrs metaAttrs toggleAttrs deleteAttrs |
+  rowAttrs := #{"class" -> "todo-row"}.
+  mainAttrs := #{"class" -> "todo-main"}.
+  actionsAttrs := #{"class" -> "todo-actions"}.
+  statusAttrs := #{"class" -> (self statusClass)}.
+  titleAttrs := #{"class" -> (self titleClass)}.
+  metaAttrs := #{"class" -> "todo-meta"}.
+  toggleAttrs := #{
+    "class" -> (Daisy ghostButtonClass),
+    "hx-post" -> ("/todos/" , ((todo at: "id") printString) , "/toggle"),
+    "hx-target" -> "#todo-panel",
+    "hx-swap" -> "outerHTML"
+  }.
+  deleteAttrs := #{
+    "class" -> (Daisy ghostButtonClass),
+    "hx-post" -> ("/todos/" , ((todo at: "id") printString) , "/delete"),
+    "hx-target" -> "#todo-panel",
+    "hx-swap" -> "outerHTML"
+  }.
+
+  ^ WebHtml li: rowAttrs with: #(
+    (WebHtml div: mainAttrs with: #(
+      (WebHtml div: statusAttrs with: "")
+      (WebHtml div: #{"class" -> "todo-copy"} with: #(
+        (WebHtml div: titleAttrs with: (WebHtml text: (todo at: "title")))
+        (WebHtml div: metaAttrs with: ((todo at: "completed") ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ]))
+      ))
+    ))
+    (WebHtml div: actionsAttrs with: #(
+      (WebHtml button: toggleAttrs text: self toggleLabel)
+      (WebHtml button: deleteAttrs text: "Delete")
+    ))
+  )
+].
+
+TodoPanelComponent>>formAttrs [
+  ^ #{
+    "class" -> "todo-form",
+    "hx-post" -> "/todos",
+    "hx-target" -> "#todo-panel",
+    "hx-swap" -> "outerHTML"
+  }
+].
+
+TodoPanelComponent>>inputAttrs [
+  ^ #{
+    "class" -> (Daisy inputClass),
+    "type" -> "text",
+    "name" -> "title",
+    "placeholder" -> "Add a task that should survive a browser refresh",
+    "autocomplete" -> "off",
+    "required" -> "true"
+  }
+].
+
+TodoPanelComponent>>renderList [
+  repository all isEmpty ifTrue: [
+    ^ WebHtml div: #{"class" -> "empty-state"} with: #(
+      (WebHtml h2: #{} text: "Nothing queued yet")
+      (WebHtml p: #{"class" -> "muted"} text: "Use the form above, then edit the component methods in Bona while the server keeps running.")
+    )
+  ].
+
+  ^ WebHtml ul: #{"class" -> "todo-list"} with: (repository all collect: [:todo |
+    (TodoItemComponent todo: todo) renderString
+  ])
+].
+
+TodoPanelComponent>>render [
+  ^ WebHtml div: #{"id" -> "todo-panel", "class" -> (Daisy panelClass)} with: #(
+    (WebHtml div: #{"class" -> (Daisy stackClass)} with: #(
+      (WebHtml div: #{"class" -> "stack"} with: #(
+        (WebHtml h2: #{} text: "Today")
+        (WebHtml p: #{"class" -> (Daisy mutedClass)} text: "This panel is returned as an htmx fragment. Route logic stays on the Harding side.")
+      ))
+      (WebHtml form: self formAttrs with: #(
+        (WebHtml input: self inputAttrs)
+        (WebHtml button: #{"class" -> (Daisy primaryButtonClass), "type" -> "submit"} text: "Add item")
+      ))
+      (self renderList)
+      (WebHtml p: #{"class" -> "footer-note muted"} text: "Next step: swap the in-memory repository for Bitbarrel or MySQL without changing the view layer.")
+    ))
+  )
+].
+
+TodoPageComponent>>heroStats [
+  ^ WebHtml div: #{"class" -> "stats"} with: #(
+    (WebHtml span: #{"class" -> (Daisy badgeClass)} text: (repository count printString) , " total")
+    (WebHtml span: #{"class" -> (Daisy badgeClass)} text: (repository remainingCount printString) , " remaining")
+    (WebHtml span: #{"class" -> (Daisy badgeClass)} text: (repository completedCount printString) , " completed")
+  )
+].
+
+TodoPageComponent>>render [
+  ^ WebHtml documentTitle: "Harding Todo" head: #(
+    (WebHtml styleTag: TodoAppStylesheet)
+    (Htmx scriptTag)
+  ) body: #(
+    (WebHtml main: #{"class" -> (Daisy shellClass)} with: #(
+      (WebHtml section: #{"class" -> (Daisy heroClass)} with: #(
+        (WebHtml span: #{"class" -> "hero-eyebrow"} text: "Harding + Bona + htmx")
+        (WebHtml h1: #{"class" -> "hero-title"} text: "A live-editable todo app")
+        (WebHtml p: #{"class" -> "hero-copy"} text: "Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.")
+        (self heroStats)
+      ))
+      ((TodoPanelComponent repository: repository) renderString)
+    ))
+  )
+].

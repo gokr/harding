@@ -1,0 +1,145 @@
+WebHtml := Object derive: #().
+
+WebHtml class>>escape: value [
+  | text |
+  value isNil ifTrue: [ ^ "" ].
+  text := value asString.
+  text := text replace: "&" with: "&amp;".
+  text := text replace: "<" with: "&lt;".
+  text := text replace: ">" with: "&gt;".
+  text := text replace: "\"" with: "&quot;".
+  ^ text replace: "'" with: "&#39;"
+].
+
+WebHtml class>>text: value [
+  ^ self escape: value
+].
+
+WebHtml class>>raw: value [
+  value isNil ifTrue: [ ^ "" ].
+  ^ value asString
+].
+
+WebHtml class>>attrs: attrs [
+  | rendered |
+  attrs isNil ifTrue: [ ^ "" ].
+  rendered := "".
+  attrs keys do: [:key |
+    | value |
+    value := attrs at: key.
+    value isNil ifFalse: [
+      rendered := rendered , " " , key asString , "=\"" , (WebHtml escape: value) , "\""
+    ]
+  ].
+  ^ rendered
+].
+
+WebHtml class>>fragment: content [
+  content isNil ifTrue: [ ^ "" ].
+  (content isKindOf: Array) ifTrue: [
+    | rendered |
+    rendered := "".
+    content do: [:each |
+      rendered := rendered , (WebHtml fragment: each)
+    ].
+    ^ rendered
+  ].
+  (content respondsTo: #renderString) ifTrue: [ ^ content renderString ].
+  ^ content asString
+].
+
+WebHtml class>>tag: name attrs: attrs with: content [
+  ^ "<" , name , (self attrs: attrs) , ">" , (self fragment: content) , "</" , name , ">"
+].
+
+WebHtml class>>tag: name attrs: attrs text: text [
+  ^ self tag: name attrs: attrs with: (self text: text)
+].
+
+WebHtml class>>voidTag: name attrs: attrs [
+  ^ "<" , name , (self attrs: attrs) , ">"
+].
+
+WebHtml class>>div: attrs with: content [
+  ^ self tag: "div" attrs: attrs with: content
+].
+
+WebHtml class>>section: attrs with: content [
+  ^ self tag: "section" attrs: attrs with: content
+].
+
+WebHtml class>>header: attrs with: content [
+  ^ self tag: "header" attrs: attrs with: content
+].
+
+WebHtml class>>main: attrs with: content [
+  ^ self tag: "main" attrs: attrs with: content
+].
+
+WebHtml class>>form: attrs with: content [
+  ^ self tag: "form" attrs: attrs with: content
+].
+
+WebHtml class>>button: attrs text: text [
+  ^ self tag: "button" attrs: attrs text: text
+].
+
+WebHtml class>>input: attrs [
+  ^ self voidTag: "input" attrs: attrs
+].
+
+WebHtml class>>span: attrs text: text [
+  ^ self tag: "span" attrs: attrs text: text
+].
+
+WebHtml class>>p: attrs text: text [
+  ^ self tag: "p" attrs: attrs text: text
+].
+
+WebHtml class>>h1: attrs text: text [
+  ^ self tag: "h1" attrs: attrs text: text
+].
+
+WebHtml class>>h2: attrs text: text [
+  ^ self tag: "h2" attrs: attrs text: text
+].
+
+WebHtml class>>ul: attrs with: content [
+  ^ self tag: "ul" attrs: attrs with: content
+].
+
+WebHtml class>>li: attrs with: content [
+  ^ self tag: "li" attrs: attrs with: content
+].
+
+WebHtml class>>title: text [
+  ^ self tag: "title" attrs: #{} text: text
+].
+
+WebHtml class>>styleTag: css [
+  ^ self tag: "style" attrs: #{} with: css
+].
+
+WebHtml class>>scriptSrc: url [
+  ^ self tag: "script" attrs: #{"src" -> url} with: ""
+].
+
+WebHtml class>>linkStylesheet: url [
+  ^ self voidTag: "link" attrs: #{"rel" -> "stylesheet", "href" -> url}
+].
+
+WebHtml class>>documentTitle: title head: headContent body: bodyContent [
+  | document headMarkup bodyMarkup |
+  headMarkup := "<meta charset=\"utf-8\">".
+  headMarkup := headMarkup , "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
+  headMarkup := headMarkup , (self title: title).
+  headMarkup := headMarkup , (self fragment: headContent).
+  bodyMarkup := self fragment: bodyContent.
+  document := "<!DOCTYPE html>" , (self tag: "html" attrs: #{"lang" -> "en"} with: #(
+      (self tag: "head" attrs: #{} with: headMarkup)
+      (self tag: "body" attrs: #{} with: bodyMarkup)
+    )).
+  ^ document
+].
+
+Html := WebHtml.

@@ -1,0 +1,173 @@
+TodoApp := Object derivePublic: #(server router repository port).
+
+TodoAppCurrent := nil.
+TodoRepositoryCurrent := nil.
+TodoAppStylesheet := nil.
+
+TodoApp class>>current [
+  ^ TodoAppCurrent
+].
+
+TodoApp class>>repository [
+  TodoRepositoryCurrent isNil ifTrue: [
+    TodoRepositoryCurrent := TodoRepository new
+  ].
+  ^ TodoRepositoryCurrent
+].
+
+TodoApp class>>resetRepository [
+  TodoRepositoryCurrent := TodoRepository new.
+  ^ TodoRepositoryCurrent
+].
+
+TodoApp class>>prepareAssets [
+  TodoAppStylesheet isNil ifTrue: [
+    TodoAppStylesheet := Daisy stylesheet
+  ].
+  ^ TodoAppStylesheet
+].
+
+TodoApp class>>installRoutesOn: aRouter [
+  self prepareAssets.
+  aRouter clear.
+  aRouter get: "/" do: [:req | TodoApp home: req ].
+  aRouter get: "/todos/panel" do: [:req | TodoApp panel: req ].
+  aRouter post: "/todos" do: [:req | TodoApp createTodo: req ].
+  aRouter post: "/todos/@id/toggle" do: [:req | TodoApp toggleTodo: req ].
+  aRouter post: "/todos/@id/delete" do: [:req | TodoApp deleteTodo: req ].
+  aRouter get: "/assets/daisy.css" do: [:req | TodoApp stylesheet: req ].
+  ^ aRouter
+].
+
+TodoApp class>>home: req [
+  req respondHtml: ((TodoPageComponent repository: self repository) renderString)
+].
+
+TodoApp class>>panel: req [
+  req respondHtml: ((TodoPanelComponent repository: self repository) renderString)
+].
+
+TodoApp class>>createTodo: req [
+  self repository addTitle: (req formParam: "title").
+  ^ self panel: req
+].
+
+TodoApp class>>toggleTodo: req [
+  self repository toggle: (req pathParam: "id").
+  ^ self panel: req
+].
+
+TodoApp class>>deleteTodo: req [
+  self repository delete: (req pathParam: "id").
+  ^ self panel: req
+].
+
+TodoApp class>>stylesheet: req [
+  req respondCss: Daisy stylesheet
+].
+
+TodoApp class>>start [
+  ^ self startOn: 8080
+].
+
+TodoApp class>>serveForeverOn: aPort [
+  | app |
+  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
+  app := self basicNew.
+  TodoAppCurrent := app.
+  app serveForeverOn: aPort.
+  ^ app
+].
+
+TodoApp class>>startOn: aPort [
+  | app |
+  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
+  app := self basicNew.
+  app startOn: aPort.
+  TodoAppCurrent := app.
+  ^ app
+].
+
+TodoApp class>>stop [
+  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
+  TodoAppCurrent := nil.
+  ^ nil
+].
+
+TodoApp class>>reloadRoutes [
+  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent installRoutes ].
+  ^ TodoAppCurrent
+].
+
+TodoApp>>startOn: aPort [
+  server isNil ifTrue: [ server := HttpServer new ].
+  router isNil ifTrue: [ router := Router new ].
+  repository isNil ifTrue: [ repository := TodoRepository new ].
+  port := aPort.
+  self installRoutes.
+  server router: router.
+  server start: port.
+  ^ self
+].
+
+TodoApp>>serveForeverOn: aPort [
+  server isNil ifTrue: [ server := HttpServer new ].
+  router isNil ifTrue: [ router := Router new ].
+  repository isNil ifTrue: [ repository := TodoRepository new ].
+  port := aPort.
+  self installRoutes.
+  server router: router.
+  server serveForever: port.
+  ^ self
+].
+
+TodoApp>>stop [
+  server notNil ifTrue: [ server stop ].
+  ^ self
+].
+
+TodoApp>>runLoop [
+  [ server isRunning ] whileTrue: [
+    server processRequests.
+  ].
+  ^ self
+].
+
+TodoApp>>installRoutes [
+  TodoApp prepareAssets.
+  router clear.
+  router get: "/" do: [:req | TodoAppCurrent home: req ].
+  router get: "/todos/panel" do: [:req | TodoAppCurrent panel: req ].
+  router post: "/todos" do: [:req | TodoAppCurrent createTodo: req ].
+  router post: "/todos/@id/toggle" do: [:req | TodoAppCurrent toggleTodo: req ].
+  router post: "/todos/@id/delete" do: [:req | TodoAppCurrent deleteTodo: req ].
+  router get: "/assets/daisy.css" do: [:req | TodoAppCurrent stylesheet: req ].
+  ^ router
+].
+
+TodoApp>>home: req [
+  req respondHtml: ((TodoPageComponent repository: repository) renderString)
+].
+
+TodoApp>>panel: req [
+  req respondHtml: ((TodoPanelComponent repository: repository) renderString)
+].
+
+TodoApp>>createTodo: req [
+  repository addTitle: (req formParam: "title").
+  ^ self panel: req
+].
+
+TodoApp>>toggleTodo: req [
+  repository toggle: (req pathParam: "id").
+  ^ self panel: req
+].
+
+TodoApp>>deleteTodo: req [
+  repository delete: (req pathParam: "id").
+  ^ self panel: req
+].
+
+TodoApp>>stylesheet: req [
+  req respondCss: Daisy stylesheet
+].

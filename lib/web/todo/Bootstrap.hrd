@@ -1,0 +1,15 @@
+WebTodo := Library new.
+WebTodo name: "WebTodo".
+Harding at: "WebTodoLibrary" put: WebTodo.
+
+WebTodo load: "lib/web/todo/TodoRepository.hrd".
+WebTodo load: "lib/web/todo/TodoComponents.hrd".
+WebTodo load: "lib/web/todo/TodoApp.hrd".
+
+Harding at: "TodoRepository" put: TodoRepository.
+Harding at: "TodoItemComponent" put: TodoItemComponent.
+Harding at: "TodoPanelComponent" put: TodoPanelComponent.
+Harding at: "TodoPageComponent" put: TodoPageComponent.
+Harding at: "TodoApp" put: TodoApp.
+
+Harding import: WebTodo.

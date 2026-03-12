@@ -1,0 +1,9 @@
+Component := Object derive: #().
+
+Component>>render [
+  self error: "Subclass must implement render"
+].
+
+Component>>renderString [
+  ^ self render
+].
