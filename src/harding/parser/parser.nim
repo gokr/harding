@@ -395,8 +395,8 @@ proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node =
   result = receiver
   while parser.peek().kind == tkDoubleColon:
     discard parser.next()
-    if parser.peek().kind != tkIdent:
-      parser.parseError("Expected identifier after ::")
+    if parser.peek().kind notin {tkIdent, tkSymbol}:
+      parser.parseError("Expected identifier or symbol after ::")
       return result
     let memberName = parser.next().value
     result = NamedAccessNode(receiver: result, memberName: memberName, isAssignment: false, valueExpr: nil)

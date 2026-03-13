@@ -132,6 +132,24 @@ suite "Table Literals with Newlines":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
 
+suite "Quoted Symbol Literals":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "quoted symbol literal with whitespace parses and evaluates":
+    let result = interp.evalStatements("Result := #\"my symbol\"")
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkSymbol)
+    check(result[0][^1].symVal == "my symbol")
+
+  test "quoted symbol literal with whitespace prints as symbol":
+    let result = interp.evalStatements("Result := #\"my symbol\" printString")
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "#my symbol")
+
   test "nested table literal with newlines":
     let result = interp.evalStatements("""
       T := #{

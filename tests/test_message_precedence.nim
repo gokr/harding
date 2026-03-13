@@ -151,6 +151,34 @@ suite "Message Precedence: Unary > Binary > Keyword":
     if result[0].len >= 1:
       check(result[0][^1].intVal == 20)
 
+  test "named access accepts quoted symbol with spaces":
+    let result = interp.evalStatements("""
+    T := Table new.
+    T at: #"ju ju" put: 99.
+    Result := T::#"ju ju"
+    """)
+
+    if result[1].len > 0:
+      stderr.writeLine("Quoted symbol named access ERROR: ", result[1])
+    check(result[1].len == 0)
+    if result[0].len >= 1:
+      check(result[0][^1].kind == vkInt)
+      check(result[0][^1].intVal == 99)
+
+  test "named access accepts quoted symbol with punctuation":
+    let result = interp.evalStatements("""
+    T := Table new.
+    T at: #"hx-post" put: "/todos".
+    Result := T::#"hx-post"
+    """)
+
+    if result[1].len > 0:
+      stderr.writeLine("Punctuation symbol named access ERROR: ", result[1])
+    check(result[1].len == 0)
+    if result[0].len >= 1:
+      check(result[0][^1].kind == vkString)
+      check(result[0][^1].strVal == "/todos")
+
   test "explicit parentheses work as workaround":
     # Verify explicit parentheses work correctly
     let result = interp.evalStatements("""
