@@ -32,15 +32,19 @@ TodoApp class>>prepareAssets [
 ].
 
 TodoApp class>>installRoutesOn: aRouter [
+  ^ self configureRoutesOn: aRouter handlingWith: self
+].
+
+TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
   self prepareAssets.
   aRouter clear.
-  aRouter get: "/" do: [:req | TodoApp home: req ].
-  aRouter get: "/todos/panel" do: [:req | TodoApp panel: req ].
-  aRouter post: "/todos" do: [:req | TodoApp createTodo: req ].
-  aRouter post: "/todos/@id/toggle" do: [:req | TodoApp toggleTodo: req ].
-  aRouter post: "/todos/@id/delete" do: [:req | TodoApp deleteTodo: req ].
-  aRouter get: "/assets/daisyui.css" do: [:req | TodoApp daisyStylesheet: req ].
-  aRouter get: "/assets/basecoat.css" do: [:req | TodoApp baseStylesheet: req ].
+  aRouter get: "/" do: [:req | aHandler home: req ].
+  aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
+  aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
+  aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
+  aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
+  aRouter get: "/assets/daisyui.css" do: [:req | aHandler daisyStylesheet: req ].
+  aRouter get: "/assets/basecoat.css" do: [:req | aHandler baseStylesheet: req ].
   ^ aRouter
 ].
 
@@ -109,24 +113,25 @@ TodoApp class>>reloadRoutes [
 ].
 
 TodoApp>>startOn: aPort [
-  server isNil ifTrue: [ server := HttpServer new ].
-  router isNil ifTrue: [ router := Router new ].
-  repository isNil ifTrue: [ repository := TodoRepository new ].
-  port := aPort.
-  self installRoutes.
-  server router: router.
-  server start: port.
-  ^ self
+  ^ self bootOn: aPort with: [:httpServer :runningPort |
+    httpServer start: runningPort
+  ]
 ].
 
 TodoApp>>serveForeverOn: aPort [
+  ^ self bootOn: aPort with: [:httpServer :runningPort |
+    httpServer serveForever: runningPort
+  ]
+].
+
+TodoApp>>bootOn: aPort with: aServerBlock [
   server isNil ifTrue: [ server := HttpServer new ].
   router isNil ifTrue: [ router := Router new ].
   repository isNil ifTrue: [ repository := TodoRepository new ].
   port := aPort.
   self installRoutes.
   server router: router.
-  server serveForever: port.
+  aServerBlock value: server value: port.
   ^ self
 ].
 
@@ -143,16 +148,7 @@ TodoApp>>runLoop [
 ].
 
 TodoApp>>installRoutes [
-  TodoApp prepareAssets.
-  router clear.
-  router get: "/" do: [:req | TodoAppCurrent home: req ].
-  router get: "/todos/panel" do: [:req | TodoAppCurrent panel: req ].
-  router post: "/todos" do: [:req | TodoAppCurrent createTodo: req ].
-  router post: "/todos/@id/toggle" do: [:req | TodoAppCurrent toggleTodo: req ].
-  router post: "/todos/@id/delete" do: [:req | TodoAppCurrent deleteTodo: req ].
-  router get: "/assets/daisyui.css" do: [:req | TodoAppCurrent daisyStylesheet: req ].
-  router get: "/assets/basecoat.css" do: [:req | TodoAppCurrent baseStylesheet: req ].
-  ^ router
+  ^ TodoApp configureRoutesOn: router handlingWith: self
 ].
 
 TodoApp>>home: req [
