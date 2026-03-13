@@ -114,7 +114,8 @@ TodoApp class>>reloadRoutes [
 
 TodoApp>>startOn: aPort [
   ^ self bootOn: aPort with: [:httpServer :runningPort |
-    httpServer start: runningPort
+    httpServer start: runningPort.
+    Processor fork: [ self runLoop ]
   ]
 ].
 
