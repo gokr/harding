@@ -106,6 +106,10 @@ Html class>>input: attrs [
   ^ self voidTag: "input" attrs: attrs
 ].
 
+Html class>>iframe: attrs [
+  ^ self tag: "iframe" attrs: attrs with: ""
+].
+
 Html class>>span: attrs text: text [
   ^ self tag: "span" attrs: attrs text: text
 ].
