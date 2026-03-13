@@ -309,10 +309,10 @@ Catalog>>editableHeaderFromMethodHeader: aHeader fallback: aFallback [
 
 Catalog>>methodTextFromInfo: info [
     | header source suffix hasBlock |
-    header := (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ "" ].
-    source := (info includesKey: "source") ifTrue: [ info at: "source" ] ifFalse: [ "" ].
-    suffix := (info includesKey: "suffix") ifTrue: [ info at: "suffix" ] ifFalse: [ "" ].
-    hasBlock := (info includesKey: "hasBlock") ifTrue: [ info at: "hasBlock" ] ifFalse: [ false ].
+    header := info at: "header" ifAbsent: [ "" ].
+    source := info at: "source" ifAbsent: [ "" ].
+    suffix := info at: "suffix" ifAbsent: [ "" ].
+    hasBlock := info at: "hasBlock" ifAbsent: [ false ].
 
     hasBlock ifTrue: [
         ^ header , " [\n" , source , "\n]" , suffix

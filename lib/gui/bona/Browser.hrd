@@ -132,11 +132,12 @@ Browser>>showErrorDialog: messageText [
     dialog setDefaultSize: 520 height: 140.
 
     box := GtkBox vertical.
-    box setSpacing: 8.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
+    box
+        setSpacing: 8;
+        marginStart: 12;
+        marginEnd: 12;
+        marginTop: 12;
+        marginBottom: 12.
 
     label := GtkLabel new: messageText.
     label halignStart.
@@ -410,11 +411,12 @@ Browser>>showNewLibraryDialog [
     dialog setDefaultSize: 420 height: 160.
 
     box := GtkBox vertical.
-    box setSpacing: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
+    box
+        setSpacing: 12;
+        marginStart: 12;
+        marginEnd: 12;
+        marginTop: 12;
+        marginBottom: 12.
 
     label := GtkLabel new: "Enter a name for the new library:".
     label halignStart.
@@ -535,18 +537,18 @@ Browser>>applyClassSelection: aClassName [
 Browser>>showClassDefinition: aClassName [
     | info found sourceText |
     info := Harding methodSourceInfoForClass: aClassName selector: "<classDefinition>".
-    found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+    found := info at: "found" ifAbsent: [ false ].
 
     self currentMethod: "<classDefinition>".
     self currentMethodOwnerClass: aClassName.
-    self currentMethodFile: (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ].
-    self currentMethodHeader: (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ nil ].
-    self currentMethodStartLine: (info includesKey: "startLine") ifTrue: [ info at: "startLine" ] ifFalse: [ nil ].
-    self currentMethodEndLine: (info includesKey: "endLine") ifTrue: [ info at: "endLine" ] ifFalse: [ nil ].
+    self currentMethodFile: (info at: "file" ifAbsent: [ nil ]).
+    self currentMethodHeader: (info at: "header" ifAbsent: [ nil ]).
+    self currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]).
+    self currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]).
     self currentMethodHasBlock: false.
 
     found ifTrue: [
-        sourceText := (info includesKey: "source") ifTrue: [ info at: "source" ] ifFalse: [ "" ].
+        sourceText := info at: "source" ifAbsent: [ "" ].
         self updateSourceView: sourceText.
     ] ifFalse: [
         self showClassInfo: aClassName
@@ -646,51 +648,35 @@ Browser>>showMethodSource: aMethodName [
     ].
 
     info := self methodSourceInfoFor: aMethodName.
-    found := (info includesKey: "found")
-        ifTrue: [ info at: "found" ]
-        ifFalse: [ false ].
+    found := info at: "found" ifAbsent: [ false ].
 
     found ifFalse: [
-        self currentMethodFile: nil.
-        self currentMethodOwnerClass: nil.
-        self currentMethodHeader: nil.
-        self currentMethodSuffix: "".
-        self currentMethodStartLine: nil.
-        self currentMethodEndLine: nil.
-        self currentMethodHasBlock: false.
+        self
+            currentMethodFile: nil;
+            currentMethodOwnerClass: nil;
+            currentMethodHeader: nil;
+            currentMethodSuffix: "";
+            currentMethodStartLine: nil;
+            currentMethodEndLine: nil;
+            currentMethodHasBlock: false.
 
         sourceText := (aMethodName asString) , "\n\nMethod source not found in .hrd files.".
         self updateSourceView: sourceText.
         ^ self
     ].
 
-    self currentMethodFile: (info includesKey: "file")
-        ifTrue: [ info at: "file" ]
-        ifFalse: [ nil ].
-    self currentMethodOwnerClass: (info includesKey: "ownerClass")
-        ifTrue: [ info at: "ownerClass" ]
-        ifFalse: [ self currentClass ].
-    self currentMethodHeader: (info includesKey: "header")
-        ifTrue: [ info at: "header" ]
-        ifFalse: [ nil ].
-    self currentMethodSuffix: (info includesKey: "suffix")
-        ifTrue: [ info at: "suffix" ]
-        ifFalse: [ "" ].
-    self currentMethodStartLine: (info includesKey: "startLine")
-        ifTrue: [ info at: "startLine" ]
-        ifFalse: [ nil ].
-    self currentMethodEndLine: (info includesKey: "endLine")
-        ifTrue: [ info at: "endLine" ]
-        ifFalse: [ nil ].
-    self currentMethodHasBlock: (info includesKey: "hasBlock")
-        ifTrue: [ info at: "hasBlock" ]
-        ifFalse: [ false ].
+    self
+        currentMethodFile: (info at: "file" ifAbsent: [ nil ]);
+        currentMethodOwnerClass: (info at: "ownerClass" ifAbsent: [ self currentClass ]);
+        currentMethodHeader: (info at: "header" ifAbsent: [ nil ]);
+        currentMethodSuffix: (info at: "suffix" ifAbsent: [ "" ]);
+        currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]);
+        currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]);
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ]).
 
     editorHeader := self editableHeaderFromMethodHeader: self currentMethodHeader.
     editorHeader isNil ifTrue: [ editorHeader := aMethodName asString ].
-    sourceText := (info includesKey: "source")
-        ifTrue: [ info at: "source" ]
-        ifFalse: [ "" ].
+    sourceText := info at: "source" ifAbsent: [ "" ].
     sourceText isNil ifTrue: [ sourceText := "" ].
 
     self currentMethodHasBlock ifTrue: [
@@ -719,15 +705,16 @@ Browser>>refreshCurrentMethodLocation [
     selector isNil ifTrue: [ ^ false ].
 
     info := Harding methodSourceInfoForClass: self currentMethodOwnerClass selector: selector.
-    found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+    found := info at: "found" ifAbsent: [ false ].
     found ifFalse: [ ^ false ].
 
-    self currentMethodFile: (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ self currentMethodFile ].
-    self currentMethodHeader: (info includesKey: "header") ifTrue: [ info at: "header" ] ifFalse: [ self currentMethodHeader ].
-    self currentMethodSuffix: (info includesKey: "suffix") ifTrue: [ info at: "suffix" ] ifFalse: [ self currentMethodSuffix ].
-    self currentMethodStartLine: (info includesKey: "startLine") ifTrue: [ info at: "startLine" ] ifFalse: [ self currentMethodStartLine ].
-    self currentMethodEndLine: (info includesKey: "endLine") ifTrue: [ info at: "endLine" ] ifFalse: [ self currentMethodEndLine ].
-    self currentMethodHasBlock: (info includesKey: "hasBlock") ifTrue: [ info at: "hasBlock" ] ifFalse: [ self currentMethodHasBlock ].
+    self
+        currentMethodFile: (info at: "file" ifAbsent: [ self currentMethodFile ]);
+        currentMethodHeader: (info at: "header" ifAbsent: [ self currentMethodHeader ]);
+        currentMethodSuffix: (info at: "suffix" ifAbsent: [ self currentMethodSuffix ]);
+        currentMethodStartLine: (info at: "startLine" ifAbsent: [ self currentMethodStartLine ]);
+        currentMethodEndLine: (info at: "endLine" ifAbsent: [ self currentMethodEndLine ]);
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ self currentMethodHasBlock ]).
     ^ true
 ]
 
@@ -745,8 +732,8 @@ Browser>>managedMethodInfosForCurrentClass [
     i := 0.
     [ i < entries size ] whileTrue: [
         info := entries at: i.
-        file := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ].
-        selector := (info includesKey: "selector") ifTrue: [ info at: "selector" ] ifFalse: [ nil ].
+        file := info at: "file" ifAbsent: [ nil ].
+        selector := info at: "selector" ifAbsent: [ nil ].
         ((file = self currentMethodFile) and: [ selector ~= "<classDefinition>" ]) ifTrue: [
             infos add: info
         ].
@@ -771,9 +758,8 @@ Browser>>rewriteManagedClassFileWithClassDefinition: classDefText overridingSele
     i := 0.
     [ i < infos size ] whileTrue: [
         info := infos at: i.
-        selector := (info includesKey: "header")
-            ifTrue: [ self editableHeaderFromMethodHeader: (info at: "header") ]
-            ifFalse: [ nil ].
+        selector := (info at: "header" ifAbsent: [ nil ])
+            ifNotNil: [:header | self editableHeaderFromMethodHeader: header].
 
         selector = removeSelector ifFalse: [
             selector = overrideSelector
@@ -863,7 +849,7 @@ Browser>>saveCurrentMethod [
     (self currentClass notNil and: [ self currentMethodFile notNil ]) ifTrue: [
         | classInfo |
         classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>".
-        ((classInfo includesKey: "found") and: [ classInfo at: "found" ]) ifTrue: [
+        (classInfo at: "found" ifAbsent: [ false ]) ifTrue: [
             classDefText := classInfo at: "source"
         ]
     ].
@@ -1018,12 +1004,12 @@ Browser>>resolveMethodFileForCurrentClass [
     [ file isNil and: [ index < candidates size ] ] whileTrue: [
         selector := (candidates at: index) asString.
         info := self methodSourceInfoFor: selector.
-        found := (info includesKey: "found") ifTrue: [ info at: "found" ] ifFalse: [ false ].
+    found := info at: "found" ifAbsent: [ false ].
 
         found ifTrue: [
-            owner := (info includesKey: "ownerClass") ifTrue: [ info at: "ownerClass" ] ifFalse: [ self currentClass ].
+    owner := info at: "ownerClass" ifAbsent: [ self currentClass ].
             (owner = self currentClass) ifTrue: [
-                file := (info includesKey: "file") ifTrue: [ info at: "file" ] ifFalse: [ nil ]
+    file := info at: "file" ifAbsent: [ nil ]
             ]
         ].
         index := index + 1
@@ -1048,13 +1034,14 @@ Browser>>createNewMethod [
             ^ self
         ].
 
-        self currentMethodOwnerClass: self currentClass.
-        self currentMethod: "newMethod".
-        self currentMethodHeader: self currentClass , ">>newMethod".
-        self currentMethodSuffix: "".
-        self currentMethodStartLine: nil.
-        self currentMethodEndLine: nil.
-        self currentMethodHasBlock: true.
+        self
+            currentMethodOwnerClass: self currentClass;
+            currentMethod: "newMethod";
+            currentMethodHeader: self currentClass , ">>newMethod";
+            currentMethodSuffix: "";
+            currentMethodStartLine: nil;
+            currentMethodEndLine: nil;
+            currentMethodHasBlock: true.
 
         self updateSourceView: "newMethod" , "\n\n^ nil".
         Transcript showCr: ("Created new method stub for " , self currentClass , " in " , self currentMethodFile).
@@ -1096,7 +1083,7 @@ Browser>>deleteCurrentMethod [
             | classDefText classInfo |
             classDefText := "".
             classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>".
-            ((classInfo includesKey: "found") and: [ classInfo at: "found" ]) ifTrue: [
+            (classInfo at: "found" ifAbsent: [ false ]) ifTrue: [
                 classDefText := classInfo at: "source"
             ].
             self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: self currentMethod.
@@ -1127,42 +1114,28 @@ Browser>>prepareMethodForDelete: aMethodName [
     self currentMethod: aMethodName.
     
     info := self methodSourceInfoFor: aMethodName.
-    found := (info includesKey: "found")
-        ifTrue: [ info at: "found" ]
-        ifFalse: [ false ].
+    found := info at: "found" ifAbsent: [ false ].
 
     found ifFalse: [
-        self currentMethodFile: nil.
-        self currentMethodOwnerClass: nil.
-        self currentMethodHeader: nil.
-        self currentMethodSuffix: "".
-        self currentMethodStartLine: nil.
-        self currentMethodEndLine: nil.
-        self currentMethodHasBlock: false.
+        self
+            currentMethodFile: nil;
+            currentMethodOwnerClass: nil;
+            currentMethodHeader: nil;
+            currentMethodSuffix: "";
+            currentMethodStartLine: nil;
+            currentMethodEndLine: nil;
+            currentMethodHasBlock: false.
         ^ false
     ].
 
-    self currentMethodFile: (info includesKey: "file")
-        ifTrue: [ info at: "file" ]
-        ifFalse: [ nil ].
-    self currentMethodOwnerClass: (info includesKey: "ownerClass")
-        ifTrue: [ info at: "ownerClass" ]
-        ifFalse: [ self currentClass ].
-    self currentMethodHeader: (info includesKey: "header")
-        ifTrue: [ info at: "header" ]
-        ifFalse: [ nil ].
-    self currentMethodSuffix: (info includesKey: "suffix")
-        ifTrue: [ info at: "suffix" ]
-        ifFalse: [ "" ].
-    self currentMethodStartLine: (info includesKey: "startLine")
-        ifTrue: [ info at: "startLine" ]
-        ifFalse: [ nil ].
-    self currentMethodEndLine: (info includesKey: "endLine")
-        ifTrue: [ info at: "endLine" ]
-        ifFalse: [ nil ].
-    self currentMethodHasBlock: (info includesKey: "hasBlock")
-        ifTrue: [ info at: "hasBlock" ]
-        ifFalse: [ false ].
+    self
+        currentMethodFile: (info at: "file" ifAbsent: [ nil ]);
+        currentMethodOwnerClass: (info at: "ownerClass" ifAbsent: [ self currentClass ]);
+        currentMethodHeader: (info at: "header" ifAbsent: [ nil ]);
+        currentMethodSuffix: (info at: "suffix" ifAbsent: [ "" ]);
+        currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]);
+        currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]);
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ]).
     
     ^ true
 ]
@@ -1187,11 +1160,12 @@ Browser>>showFindClassDialog [
     dialog setDefaultSize: 350 height: 120.
     
     box := GtkBox vertical.
-    box setSpacing: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
+    box
+        setSpacing: 12;
+        marginStart: 12;
+        marginEnd: 12;
+        marginTop: 12;
+        marginBottom: 12.
     
     label := GtkLabel new: "Class name (or partial name):".
     label halignStart.
@@ -1397,11 +1371,12 @@ Browser>>showAddMixinDialog: aClassName [
     dialog setDefaultSize: 350 height: 250.
     
     box := GtkBox vertical.
-    box setSpacing: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
+    box
+        setSpacing: 12;
+        marginStart: 12;
+        marginEnd: 12;
+        marginTop: 12;
+        marginBottom: 12.
     
     label := GtkLabel new: "Select a mixin to add:".
     label halignStart.
@@ -1501,11 +1476,12 @@ Browser>>confirmDeleteClass: aClassName [
     dialog setDefaultSize: 400 height: 200.
     
     box := GtkBox vertical.
-    box setSpacing: 12.
-    box marginStart: 12.
-    box marginEnd: 12.
-    box marginTop: 12.
-    box marginBottom: 12.
+    box
+        setSpacing: 12;
+        marginStart: 12;
+        marginEnd: 12;
+        marginTop: 12;
+        marginBottom: 12.
     
     label := GtkLabel new: ("Are you sure you want to delete class " , aClassName , "?").
     label halignStart.
@@ -1622,9 +1598,9 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     lib isNil ifTrue: [ ^ nil ].
     
     libPath := System cwd.
-    classDir := (lib includesKey: "__sourceDir")
-        ifTrue: [ libPath , "/" , (lib at: "__sourceDir") asString ]
-        ifFalse: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ].
+    classDir := (lib at: "__sourceDir" ifAbsent: [ nil ])
+        ifNotNil: [:sourceDir | libPath , "/" , sourceDir asString]
+        ifNil: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ].
 
     candidatePath := classDir , "/" , defaultFileName.
 
