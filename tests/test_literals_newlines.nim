@@ -108,6 +108,30 @@ suite "Table Literals with Newlines":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
 
+  test "table literal value can be a unary message without parentheses":
+    let result = interp.evalStatements("""
+      Friend := Object derive.
+      Friend selector: #name put: [ ^"Alice" ].
+      myFriend := Friend new.
+      T := #{ "his name" -> myFriend name }.
+      Result := T at: "his name"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Alice")
+
+  test "table literal newline entries do not require trailing commas":
+    let result = interp.evalStatements("""
+      T := #{
+        "count" -> #(1 2 3) size
+        "age" -> 42
+      }.
+      Result := T size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 2)
+
   test "nested table literal with newlines":
     let result = interp.evalStatements("""
       T := #{

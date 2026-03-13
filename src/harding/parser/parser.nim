@@ -13,6 +13,11 @@ const BinaryOpTokens* = {
   tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe
 }
 
+const TableValueBinaryOpTokens = {
+  tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent,
+  tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe
+}
+
 proc suggestHelp*(token: string): string =
   ## Suggest helpful hints for common mistakes
   if token == "(":
@@ -48,7 +53,8 @@ type
     isClassMethodContext*: bool  # True when parsing a class method (for primitive dispatch)
 
 # Forward declarations
-proc parseBinaryOperators*(parser: var Parser, left: Node): Node
+proc parseBinaryOperators*(parser: var Parser, left: Node,
+                           binaryTokens: set[TokenKind] = BinaryOpTokens): Node
 proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node
 
 # Helper to parse primitive tag content as keyword message syntax
@@ -138,7 +144,8 @@ proc parsePrimitiveTagContent(tagContent: string): (string, seq[Node], string) =
   return (selector, arguments, "")
 
 # Forward declarations for recursive parsing functions
-proc parseExpression*(parser: var Parser; parseMessages = true): Node
+proc parseExpression*(parser: var Parser; parseMessages = true,
+                      binaryTokens: set[TokenKind] = BinaryOpTokens): Node
 proc parsePrimaryUnaryOnly(parser: var Parser): Node
 proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
@@ -398,7 +405,8 @@ proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node =
 proc transformControlFlow(msg: MessageNode): Node
 
 # Parse keyword message
-proc parseKeywordMessage(parser: var Parser, receiver: Node): Node =
+proc parseKeywordMessage(parser: var Parser, receiver: Node,
+                         binaryTokens: set[TokenKind] = BinaryOpTokens): Node =
   debug("parseKeywordMessage: entering, receiver type=", receiver.kind, " current token=", parser.peek().kind)
   var selector = ""
   var arguments = newSeq[Node]()
@@ -420,8 +428,8 @@ proc parseKeywordMessage(parser: var Parser, receiver: Node): Node =
 
     # Parse binary operators after the argument (e.g., "at: 1 + 2")
     var finalArg = arg
-    if parser.peek().kind in BinaryOpTokens:
-      finalArg = parser.parseBinaryOperators(arg)
+    if parser.peek().kind in binaryTokens:
+      finalArg = parser.parseBinaryOperators(arg, binaryTokens)
 
     arguments.add(finalArg)
 
@@ -486,7 +494,8 @@ proc transformControlFlow(msg: MessageNode): Node =
   return msg
 
 # Parse binary/unary messages
-proc parseBinaryMessage(parser: var Parser, receiver: Node): Node =
+proc parseBinaryMessage(parser: var Parser, receiver: Node,
+                        binaryTokens: set[TokenKind] = BinaryOpTokens): Node =
   # If there are no unary messages, return the receiver wrapped as a message
   # This should not happen in practice as we only call this when we detect messages
   if not (parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii()):
@@ -516,15 +525,16 @@ proc parseBinaryMessage(parser: var Parser, receiver: Node): Node =
 
   # After unary messages, check for keyword message (e.g., self foo bar x: value)
   if parser.peek().kind == tkKeyword:
-    return parser.parseKeywordMessage(msg)
+    return parser.parseKeywordMessage(msg, binaryTokens)
 
   return msg
 
 # Parse binary operators with left-to-right associativity
-proc parseBinaryOperators(parser: var Parser, left: Node): Node =
+proc parseBinaryOperators(parser: var Parser, left: Node,
+                          binaryTokens: set[TokenKind] = BinaryOpTokens): Node =
   ## Parse binary operators after unary messages
   var expr = left
-  while parser.peek().kind in BinaryOpTokens:
+  while parser.peek().kind in binaryTokens:
     let opToken = parser.next()
     # Parse the right operand (primary + unary messages only, not more binary operators yet)
     var right = parser.parsePrimary()
@@ -559,7 +569,8 @@ proc parseBinaryOperators(parser: var Parser, left: Node): Node =
   return expr
 
 # Parse expressions with precedence (no cascade detection)
-proc parseExpression*(parser: var Parser; parseMessages = true): Node =
+proc parseExpression*(parser: var Parser; parseMessages = true,
+                      binaryTokens: set[TokenKind] = BinaryOpTokens): Node =
   # Start with primary
   let primary = parser.parsePrimary()
   if primary == nil:
@@ -595,15 +606,15 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
     case next.kind
     of tkKeyword:
       # Keyword message (lowest precedence, parsed last)
-      current = parser.parseKeywordMessage(accessedPrimary)
+      current = parser.parseKeywordMessage(accessedPrimary, binaryTokens)
       return current
     of tkIdent:
       if next.value[0].isLowerAscii():
         # Unary message chain first
-        current = parser.parseBinaryMessage(accessedPrimary)
+        current = parser.parseBinaryMessage(accessedPrimary, binaryTokens)
         # After unary messages, check for binary operators
-        if parser.peek().kind in BinaryOpTokens:
-          current = parser.parseBinaryOperators(current)
+        if parser.peek().kind in binaryTokens:
+          current = parser.parseBinaryOperators(current, binaryTokens)
         # Check for keyword messages (may be on next line)
         if parser.peek().kind == tkKeyword:
           return parser.parseKeywordMessage(current)
@@ -613,7 +624,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
           while parser.peek().kind == tkSeparator:
             discard parser.next()
           if parser.peek().kind == tkKeyword:
-            return parser.parseKeywordMessage(current)
+            return parser.parseKeywordMessage(current, binaryTokens)
           # Not a keyword continuation - restore position
           parser.pos = savePos
         return current
@@ -622,17 +633,17 @@ proc parseExpression*(parser: var Parser; parseMessages = true): Node =
     of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
        tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
       # Binary operator directly after primary
-      current = parser.parseBinaryOperators(accessedPrimary)
+      current = parser.parseBinaryOperators(accessedPrimary, binaryTokens)
       # Check for keyword messages (may be on next line)
       if parser.peek().kind == tkKeyword:
-        return parser.parseKeywordMessage(current)
+        return parser.parseKeywordMessage(current, binaryTokens)
       # Also check for keyword after separator (multi-line support)
       if parser.peek().kind == tkSeparator:
         let savePos = parser.pos
         while parser.peek().kind == tkSeparator:
           discard parser.next()
         if parser.peek().kind == tkKeyword:
-          return parser.parseKeywordMessage(current)
+          return parser.parseKeywordMessage(current, binaryTokens)
         # Not a keyword continuation - restore position
         parser.pos = savePos
       return current
@@ -884,8 +895,10 @@ proc parseTableLiteral(parser: var Parser): TableNode =
       parser.parseError("Expected '->' after table key")
       return nil
 
-    # Parse value
-    let value = parser.parseExpression(parseMessages = false)
+    # Parse value with full message syntax, but stop before entry separators.
+    # This gives -> lower precedence than message sends inside the value.
+    let value = parser.parseExpression(parseMessages = true,
+                                       binaryTokens = TableValueBinaryOpTokens)
     if value == nil:
       parser.parseError("Expected table value after '->'")
       return nil
