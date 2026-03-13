@@ -94,6 +94,10 @@ Html class>>form: attrs with: content [
   ^ self tag: "form" attrs: attrs with: content
 ].
 
+Html class>>label: attrs with: content [
+  ^ self tag: "label" attrs: attrs with: content
+].
+
 Html class>>button: attrs text: text [
   ^ self tag: "button" attrs: attrs text: text
 ].
