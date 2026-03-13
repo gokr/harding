@@ -9,19 +9,23 @@ Daisy class>>stylesheet [
 ].
 
 Daisy class>>shellClass [
-  ^ "shell"
+  ^ "daisy-shell"
+].
+
+Daisy class>>themeName [
+  ^ "autumn"
 ].
 
 Daisy class>>heroClass [
-  ^ "hero-card"
+  ^ "hero bg-base-200 rounded-box shadow-xl"
 ].
 
 Daisy class>>panelClass [
-  ^ "panel"
+  ^ "card bg-base-100 shadow-xl"
 ].
 
 Daisy class>>stackClass [
-  ^ "stack"
+  ^ "card-body"
 ].
 
 Daisy class>>inputClass [
@@ -37,9 +41,9 @@ Daisy class>>ghostButtonClass [
 ].
 
 Daisy class>>badgeClass [
-  ^ "badge badge-outline badge-neutral"
+  ^ "badge badge-outline"
 ].
 
 Daisy class>>mutedClass [
-  ^ "muted"
+  ^ "text-base-content"
 ].

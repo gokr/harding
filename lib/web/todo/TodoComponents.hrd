@@ -24,11 +24,11 @@ TodoPageComponent class>>repository: aRepository [
 ].
 
 TodoItemComponent>>statusClass [
-  ^ todo::completed ifTrue: [ "todo-status is-done" ] ifFalse: [ "todo-status" ]
+  ^ todo::completed ifTrue: [ "badge badge-success badge-outline" ] ifFalse: [ "badge badge-warning badge-outline" ]
 ].
 
 TodoItemComponent>>titleClass [
-  ^ todo::completed ifTrue: [ "todo-title is-done" ] ifFalse: [ "todo-title" ]
+  ^ todo::completed ifTrue: [ "opacity-60" ] ifFalse: [ "" ]
 ].
 
 TodoItemComponent>>toggleLabel [
@@ -36,28 +36,34 @@ TodoItemComponent>>toggleLabel [
 ].
 
 TodoItemComponent>>render [
-  | rowAttrs mainAttrs actionsAttrs statusAttrs titleAttrs metaAttrs toggleAttrs deleteAttrs copyMarkup mainMarkup actionMarkup |
-  rowAttrs := #{#class -> "todo-row"}.
-  mainAttrs := #{#class -> "todo-main"}.
-  actionsAttrs := #{#class -> "todo-actions"}.
+  | rowAttrs mainAttrs actionsAttrs statusAttrs titleAttrs metaAttrs toggleAttrs deleteAttrs copyMarkup mainMarkup actionMarkup statusText headerMarkup titleMarkup metaText |
+  rowAttrs := #{#class -> "card bg-base-200 border border-base-300 shadow-sm", #style -> "margin-top: 0.75rem;"}.
+  mainAttrs := #{#style -> "display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; width:100%;"}.
+  actionsAttrs := #{#style -> "display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;"}.
   statusAttrs := #{#class -> self statusClass}.
-  titleAttrs := #{#class -> self titleClass}.
-  metaAttrs := #{#class -> "todo-meta"}.
+  titleAttrs := #{#class -> self titleClass, #style -> "font-size:1rem; font-weight:600;"}.
+  metaAttrs := #{#style -> "opacity:0.72; font-size:0.92rem;"}.
   toggleAttrs := #{
+    #class -> "btn-sm"
     #"hx-post" -> ("/todos/" , (todo::id printString) , "/toggle")
     #"hx-target" -> "#todo-panel"
     #"hx-swap" -> "outerHTML"
   }.
   deleteAttrs := #{
+    #class -> "btn-sm"
     #"hx-post" -> ("/todos/" , (todo::id printString) , "/delete")
     #"hx-target" -> "#todo-panel"
     #"hx-swap" -> "outerHTML"
   }.
 
-  copyMarkup := (Html div: titleAttrs with: (Html text: (todo::title))) , (Html div: metaAttrs with: (todo::completed ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ])).
-  mainMarkup := (Html div: statusAttrs with: "") , (Html div: #{#class -> "todo-copy"} with: copyMarkup).
+  statusText := todo::completed ifTrue: [ "Done" ] ifFalse: [ "Open" ].
+  titleMarkup := Html text: (todo::title).
+  metaText := todo::completed ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ].
+  headerMarkup := (Html span: statusAttrs text: statusText) , (Html div: titleAttrs with: titleMarkup).
+  copyMarkup := (Html div: #{#style -> "display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;"} with: headerMarkup) , (Html div: metaAttrs with: metaText).
+  mainMarkup := (Html div: #{#style -> "display:flex; flex-direction:column; gap:0.4rem; min-width:0; flex:1;"} with: copyMarkup).
   actionMarkup := (DaisyButton ghost: self toggleLabel attrs: toggleAttrs) , (DaisyButton ghost: "Delete" attrs: deleteAttrs).
-  ^ Html li: rowAttrs with: ((Html div: mainAttrs with: mainMarkup) , (Html div: actionsAttrs with: actionMarkup))
+  ^ Html li: #{#style -> "list-style:none;"} with: (DaisyCard panel: ((Html div: mainAttrs with: mainMarkup) , (Html div: actionsAttrs with: actionMarkup)) attrs: rowAttrs)
 ].
 
 TodoPanelComponent>>formAttrs [
@@ -73,7 +79,7 @@ TodoPanelComponent>>inputAttrs [
   ^ #{
     #type -> "text"
     #name -> "title"
-    #placeholder -> "Add a task that should survive a browser refresh"
+    #placeholder -> "Add a task"
     #autocomplete -> "off"
     #required -> "true"
   }
@@ -82,10 +88,7 @@ TodoPanelComponent>>inputAttrs [
 TodoPanelComponent>>renderList [
   | renderedItems todos index |
   repository all isEmpty ifTrue: [
-    ^ Html div: #{#class -> "empty-state"} with: #(
-      (Html h2: #{} text: "Nothing queued yet")
-      (Html p: #{#class -> "muted"} text: "Use the form above, then edit the component methods in Bona while the server keeps running.")
-    )
+    ^ DaisyAlert info: ((Html div: #{#style -> "font-weight:600;"} with: "Nothing queued yet") , (Html p: #{#style -> "margin-top:0.35rem; opacity:0.8;"} text: "Use the form above, then edit the component methods in Bona while the server keeps running.")) attrs: #{}
   ].
 
   renderedItems := "".
@@ -96,29 +99,30 @@ TodoPanelComponent>>renderList [
     index := index + 1
   ].
 
-  ^ Html ul: #{#class -> "todo-list"} with: renderedItems
+  ^ Html ul: #{#style -> "padding:0; margin:0;"} with: renderedItems
 ].
 
 TodoPanelComponent>>render [
-  | introMarkup formMarkup panelMarkup |
-  introMarkup := (Html h2: #{} text: "Today") , (Html p: #{#class -> Daisy mutedClass} text: "This panel is returned as an htmx fragment. Route logic stays on the Harding side.").
-  formMarkup := (DaisyField label: "New task" control: (DaisyInput field: self inputAttrs) hint: "Submit to re-render the panel via htmx." attrs: #{}) , (DaisyButton primary: "Add item" attrs: #{#type -> "submit"}).
-  panelMarkup := (DaisyStack with: introMarkup attrs: #{#class -> "stack"}) , (Html form: self formAttrs with: formMarkup) , (self renderList) , (DaisyAlert info: (Html text: "Next step: swap the in-memory repository for Bitbarrel or MySQL without changing the view layer.") attrs: #{#class -> "footer-note"}).
+  | introMarkup formMarkup panelMarkup formHint |
+  introMarkup := (Html h2: #{} text: "Today") , (Html p: #{#style -> "opacity:0.72;"} text: "This panel is returned as an htmx fragment. Route logic stays on the Harding side.").
+  formMarkup := (DaisyField label: "New task" control: (DaisyInput field: self inputAttrs) hint: nil attrs: #{}) , (DaisyButton ghost: "Add task" attrs: #{#type -> "submit", #class -> "btn-outline", #style -> "min-width:7.75rem;"}).
+  formHint := Html p: #{#style -> "margin-top:0.35rem; opacity:0.72; font-size:0.92rem;"} text: "Submit to re-render the panel via htmx.".
+  panelMarkup := (Html div: #{#style -> "display:flex; flex-direction:column; gap:1.25rem;"} with: introMarkup) , (Html form: self formAttrs with: ((Html div: #{#style -> "display:grid; grid-template-columns:minmax(0,1fr) 7.75rem; gap:0.65rem; align-items:end; max-width:34rem;"} with: formMarkup) , formHint)) , (self renderList) , (DaisyAlert neutral: (Html text: "Next step: swap the in-memory repository for Bitbarrel or MySQL without changing the view layer.") attrs: #{#style -> "margin-top:0.5rem;"}).
   ^ DaisyCard panel: (DaisyStack with: panelMarkup) attrs: #{#id -> "todo-panel"}
 ].
 
 TodoPageComponent>>heroStats [
   | statsMarkup |
   statsMarkup := (DaisyBadge neutral: (repository count printString) , " total" attrs: #{}) , (DaisyBadge neutral: (repository remainingCount printString) , " remaining" attrs: #{}) , (DaisyBadge neutral: (repository completedCount printString) , " completed" attrs: #{}).
-  ^ Html div: #{#class -> "stats"} with: statsMarkup
+  ^ Html div: #{#style -> "display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;"} with: statsMarkup
 ].
 
 TodoPageComponent>>render [
   | headMarkup heroMarkup bodyMarkup |
-  headMarkup := (Html linkStylesheet: "/assets/daisyui.css") , (Html linkStylesheet: "/assets/basecoat.css") , (Htmx scriptTag).
-  heroMarkup := (Html span: #{#class -> "hero-eyebrow"} text: "Harding + Bona + htmx") , (Html h1: #{#class -> "hero-title"} text: "A live-editable todo app") , (Html p: #{#class -> "hero-copy"} text: "Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.") , (self heroStats).
+  headMarkup := (Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag).
+  heroMarkup := (Html div: #{#class -> "badge badge-accent badge-outline"} with: "Harding + Bona + htmx") , (Html h1: #{#style -> "font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;"} text: "A live-editable todo app") , (Html p: #{#style -> "font-size:1rem; opacity:0.8; max-width:46rem;"} text: "Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.") , (self heroStats).
   bodyMarkup := (DaisyHero with: heroMarkup) , ((TodoPanelComponent repository: repository) renderString).
   ^ Html documentTitle: "Harding Todo"
       head: headMarkup
-      body: (Html main: #{#class -> Daisy shellClass, #"data-theme" -> "autumn"} with: bodyMarkup)
+      body: (Html main: #{#class -> Daisy shellClass, #"data-theme" -> Daisy themeName, #style -> "width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem;"} with: bodyMarkup)
 ].
