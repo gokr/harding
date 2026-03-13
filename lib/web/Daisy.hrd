@@ -13,15 +13,15 @@ Daisy class>>shellClass [
 ].
 
 Daisy class>>heroClass [
-  ^ "hero hero-card"
+  ^ "hero-card"
 ].
 
 Daisy class>>panelClass [
-  ^ "card panel"
+  ^ "panel"
 ].
 
 Daisy class>>stackClass [
-  ^ "stack card-body"
+  ^ "stack"
 ].
 
 Daisy class>>inputClass [
@@ -37,7 +37,7 @@ Daisy class>>ghostButtonClass [
 ].
 
 Daisy class>>badgeClass [
-  ^ "badge badge-outline"
+  ^ "badge badge-outline badge-neutral"
 ].
 
 Daisy class>>mutedClass [

@@ -21,26 +21,40 @@ Html class>>raw: value [
 ].
 
 Html class>>attrs: attrs [
-  | rendered |
+  | rendered keys index key value |
   attrs isNil ifTrue: [ ^ "" ].
   rendered := "".
-  attrs keys do: [:key |
-    | value |
+  keys := attrs keys.
+  index := 0.
+  [ index < keys size ] whileTrue: [
+    key := keys at: index.
     value := attrs at: key.
     value isNil ifFalse: [
       rendered := rendered , " " , key asString , "=\"" , (Html escape: value) , "\""
-    ]
+    ].
+    index := index + 1
   ].
   ^ rendered
 ].
 
 Html class>>fragment: content [
+  | rendered index |
   content isNil ifTrue: [ ^ "" ].
-  (content isKindOf: Array) ifTrue: [
-    | rendered |
+  (content className = "Array") ifTrue: [
     rendered := "".
-    content do: [:each |
-      rendered := rendered , (Html fragment: each)
+    index := 0.
+    [ index < content size ] whileTrue: [
+      rendered := rendered , (Html fragment: (content at: index)).
+      index := index + 1
+    ].
+    ^ rendered
+  ].
+  (content isKindOf: Array) ifTrue: [
+    rendered := "".
+    index := 0.
+    [ index < content size ] whileTrue: [
+      rendered := rendered , (Html fragment: (content at: index)).
+      index := index + 1
     ].
     ^ rendered
   ].
@@ -129,16 +143,14 @@ Html class>>linkStylesheet: url [
 ].
 
 Html class>>documentTitle: title head: headContent body: bodyContent [
-  | document headMarkup bodyMarkup |
+  | document headMarkup bodyMarkup htmlMarkup |
   headMarkup := "<meta charset=\"utf-8\">".
   headMarkup := headMarkup , "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
   headMarkup := headMarkup , (self title: title).
   headMarkup := headMarkup , (self fragment: headContent).
   bodyMarkup := self fragment: bodyContent.
-  document := "<!DOCTYPE html>" , (self tag: "html" attrs: #{"lang" -> "en"} with: #(
-      (self tag: "head" attrs: #{} with: headMarkup)
-      (self tag: "body" attrs: #{} with: bodyMarkup)
-    )).
+  htmlMarkup := (self tag: "head" attrs: #{} with: headMarkup) , (self tag: "body" attrs: #{} with: bodyMarkup).
+  document := "<!DOCTYPE html>" , (self tag: "html" attrs: #{"lang" -> "en"} with: htmlMarkup).
   ^ document
 ].
 

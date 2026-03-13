@@ -4,7 +4,7 @@
   --surface: rgba(255, 252, 248, 0.88);
   --surface-strong: #fffaf3;
   --text: #201712;
-  --muted: #665a52;
+  --muted: #4f433c;
   --line: rgba(72, 44, 27, 0.14);
   --shadow: 0 24px 60px rgba(63, 35, 18, 0.12);
   --primary: #b85c38;
@@ -37,6 +37,13 @@ body {
     linear-gradient(180deg, var(--bg) 0%, #f3e8da 100%);
 }
 
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -64,9 +71,13 @@ body::before {
 }
 
 .hero-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   border-radius: var(--radius-xl);
-  padding: 32px;
+  padding: 36px;
   margin-bottom: 22px;
+  gap: 18px;
 }
 
 .hero-eyebrow {
@@ -83,9 +94,13 @@ body::before {
 }
 
 .hero-title {
-  font-size: clamp(2.4rem, 5vw, 4.3rem);
-  line-height: 0.94;
-  margin: 18px 0 10px;
+  font-family: Inter, "Avenir Next", "Segoe UI", sans-serif;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1;
+  margin: 0;
+  max-width: 11ch;
+  text-wrap: balance;
 }
 
 .hero-copy,
@@ -94,28 +109,22 @@ body::before {
 }
 
 .hero-copy {
-  font-size: 1.05rem;
-  line-height: 1.6;
-  max-width: 44rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 52ch;
 }
 
 .stats {
   display: flex;
   flex-wrap: wrap;
   gap: 0.8rem;
-  margin-top: 20px;
+  margin-top: 2px;
+  align-items: center;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  border-radius: 999px;
-  padding: 0.58rem 0.9rem;
-  background: rgba(255, 250, 243, 0.9);
-  border: 1px solid rgba(72, 44, 27, 0.12);
-  color: var(--text);
-  font-size: 0.94rem;
+.stats .badge {
+  position: relative;
+  z-index: 1;
 }
 
 .panel {
@@ -136,47 +145,20 @@ body::before {
   align-items: stretch;
 }
 
-.input {
-  width: 100%;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(72, 44, 27, 0.18);
-  background: rgba(255, 255, 255, 0.75);
-  color: var(--text);
-  font: inherit;
-  padding: 0.95rem 1rem;
-  outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+.input,
+.btn,
+.badge {
+  font-family: Inter, "Avenir Next", "Segoe UI", sans-serif;
 }
 
-.input:focus {
-  border-color: rgba(184, 92, 56, 0.55);
-  box-shadow: 0 0 0 4px rgba(184, 92, 56, 0.14);
-  transform: translateY(-1px);
+.input {
+  width: 100%;
+  min-height: 3.1rem;
 }
 
 .btn {
-  border: 0;
-  border-radius: 999px;
-  font: inherit;
-  padding: 0.9rem 1.1rem;
-  cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-}
-
-.btn-primary {
-  color: #fff9f5;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
-  box-shadow: 0 12px 26px rgba(152, 70, 37, 0.24);
-}
-
-.btn-ghost {
-  background: rgba(255, 250, 243, 0.88);
-  color: var(--text);
-  border: 1px solid rgba(72, 44, 27, 0.12);
+  min-height: 3.1rem;
+  font-weight: 600;
 }
 
 .todo-list {
@@ -225,10 +207,11 @@ body::before {
 
 .todo-title {
   font-size: 1.02rem;
+  line-height: 1.4;
 }
 
 .todo-title.is-done {
-  color: var(--muted);
+  color: #6b5d55;
   text-decoration: line-through;
 }
 
@@ -243,6 +226,10 @@ body::before {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.todo-actions .btn {
+  min-width: 8.5rem;
 }
 
 .empty-state {
@@ -267,6 +254,11 @@ body::before {
   .hero-card,
   .panel {
     padding: 20px;
+  }
+
+  .hero-title {
+    font-size: clamp(1.8rem, 8vw, 2.4rem);
+    max-width: none;
   }
 
   .todo-form,
