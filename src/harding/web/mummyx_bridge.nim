@@ -13,7 +13,7 @@
 ## Build: nim c -d:mummyx --threads:on --mm:orc ...
 ## ============================================================================
 
-import std/[tables, os, strutils, options, uri]
+import std/[tables, os, strutils, options, uri, times]
 import mummy, mummy/routers
 import ../core/types
 import ../interpreter/objects
@@ -23,6 +23,11 @@ import ../interpreter/objects
 # ============================================================================
 
 type
+  HttpRequestLogLevel* = enum
+    hrllOff = 0,
+    hrllBasic = 1,
+    hrllDetailed = 2
+
   PendingResponse* = object
     statusCode*: int
     headers*: seq[(string, string)]
@@ -54,6 +59,7 @@ type
     running*: bool
     port*: int
     address*: string
+    requestLogLevel*: HttpRequestLogLevel
 
   RequestProxy* = ref object
     httpMethod*: string
@@ -67,6 +73,8 @@ type
     pathParams*: seq[(string, string)]
     responseChan*: ptr Channel[PendingResponse]
     responded*: bool
+    startedAt*: float
+    logLevel*: HttpRequestLogLevel
 
 # Keep proxies alive for ARC
 var serverProxies*: seq[ServerProxy] = @[]
@@ -82,6 +90,7 @@ var routerClass*: Class = nil
 var globalRequestChan*: Channel[PendingRequest]
 var globalRequestChanOpen* = false
 var activeRouterProxy*: RouterProxy = nil
+var activeRequestLogLevel*: HttpRequestLogLevel = hrllOff
 
 type
   ServerThreadArgs = object
@@ -159,6 +168,98 @@ proc parseFormBody(body: string): seq[(string, string)] =
     let key = decodeFormComponent(pieces[0])
     let value = if pieces.len > 1: decodeFormComponent(pieces[1]) else: ""
     result.add((key, value))
+
+proc requestLogLevelName(level: HttpRequestLogLevel): string =
+  case level
+  of hrllBasic:
+    "basic"
+  of hrllDetailed:
+    "detailed"
+  else:
+    "off"
+
+proc parseRequestLogLevel(value: NodeValue): HttpRequestLogLevel =
+  case value.kind
+  of vkInt:
+    case value.intVal
+    of 2:
+      hrllDetailed
+    of 1:
+      hrllBasic
+    else:
+      hrllOff
+  of vkString:
+    case value.strVal.toLowerAscii()
+    of "detailed", "debug", "verbose", "2":
+      hrllDetailed
+    of "basic", "info", "1", "on", "true":
+      hrllBasic
+    else:
+      hrllOff
+  of vkBool:
+    if value.boolVal: hrllBasic else: hrllOff
+  else:
+    hrllOff
+
+proc truncateForLog(value: string, limit: int = 240): string =
+  if value.len <= limit:
+    return value
+  value[0..<limit] & "..."
+
+proc formatPairSeq(pairs: seq[(string, string)]): string =
+  if pairs.len == 0:
+    return "[]"
+
+  result = "["
+  for i, (key, value) in pairs:
+    if i > 0:
+      result.add(", ")
+    result.add(key)
+    result.add("=")
+    result.add(value)
+  result.add("]")
+
+proc logRequestStart(level: HttpRequestLogLevel, pending: PendingRequest) =
+  if level == hrllOff:
+    return
+
+  stdout.writeLine("[HTTP] ", pending.httpMethod, " ", pending.path,
+                   " remote=", pending.remoteAddress)
+
+  if level == hrllDetailed:
+    stdout.writeLine("[HTTP]   uri=", pending.uri)
+    stdout.writeLine("[HTTP]   query=", formatPairSeq(pending.queryParams))
+    stdout.writeLine("[HTTP]   pathParams=", formatPairSeq(pending.pathParams))
+    stdout.writeLine("[HTTP]   form=", formatPairSeq(pending.formParams))
+    stdout.writeLine("[HTTP]   headers=", formatPairSeq(pending.headers))
+    stdout.writeLine("[HTTP]   body=", truncateForLog(pending.body))
+
+  flushFile(stdout)
+
+proc logRequestResponse(level: HttpRequestLogLevel, httpMethod: string,
+                        path: string, response: PendingResponse, elapsedMs: int) =
+  if level == hrllOff:
+    return
+
+  stdout.writeLine("[HTTP] ", httpMethod, " ", path,
+                   " -> ", $response.statusCode,
+                   " ", $elapsedMs, "ms",
+                   " bytes=", $response.body.len)
+
+  if level == hrllDetailed:
+    stdout.writeLine("[HTTP]   responseHeaders=", formatPairSeq(response.headers))
+    stdout.writeLine("[HTTP]   responseBody=", truncateForLog(response.body))
+
+  flushFile(stdout)
+
+proc sendResponse(proxy: RequestProxy, response: PendingResponse) =
+  proxy.responseChan[].send(response)
+  logRequestResponse(proxy.logLevel, proxy.httpMethod, proxy.path, response,
+                     int((epochTime() - proxy.startedAt) * 1000.0))
+
+proc syncActiveServerSettings(proxy: ServerProxy) =
+  activeRouterProxy = proxy.routerProxy
+  activeRequestLogLevel = proxy.requestLogLevel
 
 # ============================================================================
 # MummyX Request Handler (runs on worker threads)
@@ -291,9 +392,13 @@ proc mummyxPollProc(): Option[NodeValue] =
     formParams: pending.formParams,
     pathParams: pathParams,
     responseChan: pending.responseChan,
-    responded: false
+    responded: false,
+    startedAt: epochTime(),
+    logLevel: activeRequestLogLevel
   )
   requestProxies.add(reqProxy)
+
+  logRequestStart(reqProxy.logLevel, pending)
 
   let reqInst = newInstance(httpRequestClass)
   reqInst.isNimProxy = true
@@ -316,7 +421,8 @@ proc serverNewImpl(interp: var Interpreter, self: Instance,
     routerProxy: nil,
     running: false,
     port: 8080,
-    address: "localhost"
+    address: "localhost",
+    requestLogLevel: hrllOff
   )
   serverProxies.add(proxy)
   inst.nimValue = cast[pointer](proxy)
@@ -334,14 +440,32 @@ proc serverRouterImpl(interp: var Interpreter, self: Instance,
       let routerProxy = cast[RouterProxy](routerInst.nimValue)
       serverProxy.routerProxy = routerProxy
       if serverProxy.running:
-        activeRouterProxy = routerProxy
+        syncActiveServerSettings(serverProxy)
+  return self.toValue()
+
+proc serverRequestLogLevelImpl(interp: var Interpreter, self: Instance,
+                               args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil:
+    return NodeValue(kind: vkString, strVal: "off")
+  let proxy = cast[ServerProxy](self.nimValue)
+  return NodeValue(kind: vkString, strVal: requestLogLevelName(proxy.requestLogLevel))
+
+proc serverSetRequestLogLevelImpl(interp: var Interpreter, self: Instance,
+                                  args: seq[NodeValue]): NodeValue {.nimcall.} =
+  if self.nimValue == nil:
+    return nilValue()
+  let proxy = cast[ServerProxy](self.nimValue)
+  if args.len > 0:
+    proxy.requestLogLevel = parseRequestLogLevel(args[0])
+    if proxy.running:
+      syncActiveServerSettings(proxy)
   return self.toValue()
 
 const defaultWorkerCount = 10
 
 proc startMummyxServer(proxy: ServerProxy) =
   ## Common startup: open channel, start MummyX background thread.
-  activeRouterProxy = proxy.routerProxy
+  syncActiveServerSettings(proxy)
   globalRequestChan.open()
   globalRequestChanOpen = true
   proxy.running = true
@@ -442,6 +566,7 @@ proc serverStopImpl(interp: var Interpreter, self: Instance,
   except:
     discard
   globalRequestChanOpen = false
+  activeRequestLogLevel = hrllOff
   return self.toValue()
 
 proc serverPortImpl(interp: var Interpreter, self: Instance,
@@ -657,7 +782,7 @@ proc requestRespondBodyImpl(interp: var Interpreter, self: Instance,
   let statusCode = if args[0].kind == vkInt: args[0].intVal else: 200
   let body = if args[1].kind == vkString: args[1].strVal else: args[1].toString()
 
-  proxy.responseChan[].send(PendingResponse(
+  sendResponse(proxy, PendingResponse(
     statusCode: statusCode,
     headers: @[("Content-Type", "text/plain")],
     body: body
@@ -685,7 +810,7 @@ proc requestRespondHeadersBodyImpl(interp: var Interpreter, self: Instance,
 
   let body = if args[2].kind == vkString: args[2].strVal else: args[2].toString()
 
-  proxy.responseChan[].send(PendingResponse(
+  sendResponse(proxy, PendingResponse(
     statusCode: statusCode,
     headers: headerSeq,
     body: body
@@ -703,7 +828,7 @@ proc requestRespondImpl(interp: var Interpreter, self: Instance,
 
   let statusCode = if args[0].kind == vkInt: args[0].intVal else: 200
 
-  proxy.responseChan[].send(PendingResponse(
+  sendResponse(proxy, PendingResponse(
     statusCode: statusCode,
     headers: @[],
     body: ""
@@ -721,7 +846,7 @@ proc requestRespondJsonImpl(interp: var Interpreter, self: Instance,
 
   let body = if args[0].kind == vkString: args[0].strVal else: args[0].toString()
 
-  proxy.responseChan[].send(PendingResponse(
+  sendResponse(proxy, PendingResponse(
     statusCode: 200,
     headers: @[("Content-Type", "application/json")],
     body: body
@@ -744,6 +869,8 @@ proc initMummyxBridge*(interp: var Interpreter) =
 
   httpServerClass.registerClassMethod("new", serverNewImpl, needsInterp = true)
   httpServerClass.registerMethod("router:", serverRouterImpl)
+  httpServerClass.registerMethod("requestLogLevel", serverRequestLogLevelImpl)
+  httpServerClass.registerMethod("requestLogLevel:", serverSetRequestLogLevelImpl)
   httpServerClass.registerMethod("start:", serverStartImpl)
   httpServerClass.registerMethod("start:address:", serverStartAddressImpl)
   httpServerClass.registerMethod("processRequests", serverProcessRequestsImpl)

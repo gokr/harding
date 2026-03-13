@@ -1590,7 +1590,7 @@ Browser>>generateClassDefinition: className parent: parentName slots: slotsArray
 ]
 
 Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
-    | lib libPath classDir candidatePath |
+    | lib libPath classDir candidatePath sourceDir |
     
     self currentLibrary isNil ifTrue: [ ^ nil ].
     
@@ -1598,9 +1598,10 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     lib isNil ifTrue: [ ^ nil ].
     
     libPath := System cwd.
-    classDir := (lib at: "__sourceDir" ifAbsent: [ nil ])
-        ifNotNil: [:sourceDir | libPath , "/" , sourceDir asString]
-        ifNil: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ].
+    sourceDir := lib at: "__sourceDir" ifAbsent: [ nil ].
+    classDir := sourceDir isNil
+        ifTrue: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ]
+        ifFalse: [ libPath , "/" , sourceDir asString ].
 
     candidatePath := classDir , "/" , defaultFileName.
 

@@ -7,9 +7,23 @@
 #   HttpServer>>start: port address: address   (non-blocking, explicit bind address)
 #   HttpServer>>processRequests                (process pending requests, call periodically)
 #   HttpServer>>serveForever: port             (blocking, for standalone scripts)
+#   HttpServer>>requestLogLevel                (off/basic/detailed)
+#   HttpServer>>requestLogLevel: level         (string/int/bool)
 #   HttpServer>>isRunning
 #   HttpServer>>stop
 #   HttpServer>>port
+
+HttpServer>>disableRequestLogging [
+  ^ self requestLogLevel: "off"
+]
+
+HttpServer>>basicRequestLogging [
+  ^ self requestLogLevel: "basic"
+]
+
+HttpServer>>detailedRequestLogging [
+  ^ self requestLogLevel: "detailed"
+]
 
 # Convenience: start on 0.0.0.0 (externally accessible)
 HttpServer>>startPublic: port [
