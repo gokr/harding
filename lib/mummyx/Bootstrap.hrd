@@ -11,6 +11,12 @@
 #   server router: router.
 #   server serveForever: 8080.
 
+(Harding includesKey: "HttpServer") ifFalse: [
+  System stderr writeline: "MummyX support is not available in this binary.".
+  System stderr writeline: "Rebuild with nimble harding_mummyx or nimble bona_mummyx, then load lib/mummyx/Bootstrap.hrd again.".
+  ^ nil
+].
+
 # Load Harding-side class extensions
 Harding load: "lib/mummyx/HttpServer.hrd".
 Harding load: "lib/mummyx/HttpRequest.hrd".
