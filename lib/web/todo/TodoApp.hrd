@@ -39,10 +39,17 @@ TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
   self prepareAssets.
   aRouter clear.
   aRouter get: "/" do: [:req | aHandler home: req ].
+  aRouter get: "/classic" do: [:req | aHandler classicHome: req ].
+  aRouter get: "/compare" do: [:req | aHandler compareHome: req ].
+  aRouter get: "/benchmark" do: [:req | aHandler benchmark: req ].
   aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
+  aRouter get: "/classic/todos/panel" do: [:req | aHandler classicPanel: req ].
   aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
   aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
   aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
+  aRouter post: "/classic/todos" do: [:req | aHandler classicCreateTodo: req ].
+  aRouter post: "/classic/todos/@id/toggle" do: [:req | aHandler classicToggleTodo: req ].
+  aRouter post: "/classic/todos/@id/delete" do: [:req | aHandler classicDeleteTodo: req ].
   aRouter get: "/assets/daisyui.css" do: [:req | aHandler daisyStylesheet: req ].
   aRouter get: "/assets/basecoat.css" do: [:req | aHandler baseStylesheet: req ].
   ^ aRouter
@@ -56,9 +63,51 @@ TodoApp class>>panel: req [
   req respondHtml: ((TodoPanelComponent repository: self repository) renderString)
 ].
 
+TodoApp class>>classicHome: req [
+  req respondHtml: ((TodoClassicPageComponent repository: self repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
+].
+
+TodoApp class>>classicPanel: req [
+  req respondHtml: ((TodoClassicPanelComponent repository: self repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
+].
+
+TodoApp class>>compareHome: req [
+  | headMarkup heroMarkup actionsMarkup daisyFrame classicFrame daisyCard classicCard heroBlock gridMarkup bodyMarkup |
+  headMarkup := (Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag).
+  actionsMarkup := (DaisyButton ghost: "Open Daisy page" attrs: #{#onclick -> "window.open('/', '_blank')"}) , (DaisyButton ghost: "Open Classic page" attrs: #{#onclick -> "window.open('/classic', '_blank')"}) , (DaisyButton ghost: "Open benchmark" attrs: #{#onclick -> "window.open('/benchmark', '_blank')"}).
+  heroMarkup := (Html h1: #{#class -> "text-4xl font-bold"} text: "Todo UI comparison") , (Html p: #{#class -> "py-2 opacity-80"} text: "Compare the Daisy-first and Classic Todo renderers side by side with the same shared repository data.") , (Html div: #{#class -> "flex gap-3 flex-wrap"} with: actionsMarkup).
+  daisyFrame := Html iframe: #{#src -> "/", #style -> "width:100%; height:900px; border:0; border-radius:1rem; background:#fff;"}.
+  classicFrame := Html iframe: #{#src -> "/classic", #style -> "width:100%; height:900px; border:0; border-radius:1rem; background:#fff;"}.
+  daisyCard := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: ((Html div: #{#class -> "card-body"} with: ((Html h2: #{#class -> "card-title"} text: "Daisy-first") , daisyFrame))).
+  classicCard := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: ((Html div: #{#class -> "card-body"} with: ((Html h2: #{#class -> "card-title"} text: "Classic hybrid") , classicFrame))).
+  gridMarkup := Html div: #{#style -> "display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start;"} with: (daisyCard , classicCard).
+  heroBlock := Html div: #{#class -> "hero bg-base-200 rounded-box mb-6"} with: (Html div: #{#class -> "hero-content", #style -> "display:block; width:100%;"} with: heroMarkup).
+  bodyMarkup := heroBlock , gridMarkup.
+  req respondHtml: (Html documentTitle: "Harding Todo Compare"
+      head: headMarkup
+      body: (Html main: #{#"data-theme" -> Daisy themeName, #style -> "max-width: 1200px; margin: 0 auto; padding: 2rem 1rem 4rem;"} with: bodyMarkup))
+].
+
+TodoApp class>>benchmark: req [
+  | daisyMarkup classicMarkup statsMarkup summary cardBody |
+  daisyMarkup := ((TodoPageComponent repository: self repository) renderString).
+  classicMarkup := ((TodoClassicPageComponent repository: self repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString).
+  statsMarkup := (Html div: #{#class -> "stat"} with: ((Html div: #{#class -> "stat-title"} with: "Daisy bytes") , (Html div: #{#class -> "stat-value text-primary"} with: daisyMarkup size printString))) , (Html div: #{#class -> "stat"} with: ((Html div: #{#class -> "stat-title"} with: "Classic bytes") , (Html div: #{#class -> "stat-value text-secondary"} with: classicMarkup size printString))).
+  cardBody := (Html h1: #{#class -> "card-title text-3xl"} text: "Todo render comparison") , (Html p: #{#class -> "opacity-80"} text: "This page compares generated markup size for the two implementations. Use the standalone Nim benchmark for timing.") , (Html div: #{#class -> "stats stats-vertical lg:stats-horizontal shadow"} with: statsMarkup).
+  summary := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (Html div: #{#class -> "card-body"} with: cardBody).
+  req respondHtml: (Html documentTitle: "Harding Todo Benchmark"
+      head: (Html linkStylesheet: "/assets/daisyui.css")
+      body: (Html main: #{#"data-theme" -> Daisy themeName, #style -> "max-width: 960px; margin: 0 auto; padding: 2rem 1rem 4rem;"} with: summary))
+].
+
 TodoApp class>>createTodo: req [
   self repository addTitle: (req formParam: "title").
   ^ self panel: req
+].
+
+TodoApp class>>classicCreateTodo: req [
+  self repository addTitle: (req formParam: "title").
+  ^ self classicPanel: req
 ].
 
 TodoApp class>>toggleTodo: req [
@@ -66,9 +115,19 @@ TodoApp class>>toggleTodo: req [
   ^ self panel: req
 ].
 
+TodoApp class>>classicToggleTodo: req [
+  self repository toggle: (req pathParam: "id").
+  ^ self classicPanel: req
+].
+
 TodoApp class>>deleteTodo: req [
   self repository delete: (req pathParam: "id").
   ^ self panel: req
+].
+
+TodoApp class>>classicDeleteTodo: req [
+  self repository delete: (req pathParam: "id").
+  ^ self classicPanel: req
 ].
 
 TodoApp class>>daisyStylesheet: req [
@@ -160,9 +219,30 @@ TodoApp>>panel: req [
   req respondHtml: ((TodoPanelComponent repository: repository) renderString)
 ].
 
+TodoApp>>classicHome: req [
+  req respondHtml: ((TodoClassicPageComponent repository: repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
+].
+
+TodoApp>>classicPanel: req [
+  req respondHtml: ((TodoClassicPanelComponent repository: repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
+].
+
+TodoApp>>compareHome: req [
+  ^ TodoApp compareHome: req
+].
+
+TodoApp>>benchmark: req [
+  ^ TodoApp benchmark: req
+].
+
 TodoApp>>createTodo: req [
   repository addTitle: (req formParam: "title").
   ^ self panel: req
+].
+
+TodoApp>>classicCreateTodo: req [
+  repository addTitle: (req formParam: "title").
+  ^ self classicPanel: req
 ].
 
 TodoApp>>toggleTodo: req [
@@ -170,9 +250,19 @@ TodoApp>>toggleTodo: req [
   ^ self panel: req
 ].
 
+TodoApp>>classicToggleTodo: req [
+  repository toggle: (req pathParam: "id").
+  ^ self classicPanel: req
+].
+
 TodoApp>>deleteTodo: req [
   repository delete: (req pathParam: "id").
   ^ self panel: req
+].
+
+TodoApp>>classicDeleteTodo: req [
+  repository delete: (req pathParam: "id").
+  ^ self classicPanel: req
 ].
 
 TodoApp>>daisyStylesheet: req [
