@@ -15,35 +15,31 @@ Open a Workspace and evaluate the contents of `examples/web_todo_bona.hrd`:
 
 ```smalltalk
 Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Component.hrd".
-Harding load: "lib/web/Html.hrd".
-Harding load: "lib/web/Htmx.hrd".
-Harding load: "lib/web/Daisy.hrd".
-Harding load: "lib/web/Basecoat.hrd".
-Harding load: "lib/web/todo/TodoRepository.hrd".
-Harding load: "lib/web/todo/TodoComponents.hrd".
-Harding load: "lib/web/todo/TodoApp.hrd".
+Harding load: "lib/web/Bootstrap.hrd".
+Harding load: "lib/web/todo/Bootstrap.hrd".
 
 TodoApp resetRepository.
 
-TodoServer := HttpServer new.
-TodoRouter := Router new.
-TodoApp installRoutesOn: TodoRouter.
-TodoServer router: TodoRouter.
-TodoServer start: 8080.
+TodoApp startOn: 8080.
 ```
 
 Then open `http://127.0.0.1:8080` in a browser.
+
+This load path matters for Bona Browser visibility: it creates named `Web` and `WebTodo` libraries, so the loaded classes appear in the Browser instead of only existing as top-level globals.
 
 ## Edit The App Live In Browser
 
 Use Bona's System Browser and open these classes:
 
+- `Web` library
+- `WebTodo` library
 - `TodoApp`
 - `TodoPageComponent`
 - `TodoPanelComponent`
 - `TodoItemComponent`
 - `TodoRepository`
+
+If the Browser was already open when you evaluated the Workspace code, Bona refreshes open Browser windows after a successful evaluation. You can also use the Browser's `Refresh` button.
 
 The most useful live-edit points are:
 
@@ -69,7 +65,7 @@ If you only change code inside existing handler methods like `home:`, `createTod
 If you change route declarations inside `TodoApp class>>installRoutesOn:` or `TodoApp>>installRoutes`, evaluate this in Workspace:
 
 ```smalltalk
-TodoApp installRoutesOn: TodoRouter.
+TodoApp reloadRoutes.
 ```
 
 That reapplies the router table to the already-running server.
@@ -107,6 +103,6 @@ TodoApp resetRepository.
 
 ## Current Notes
 
-- The Todo app currently uses direct `Harding load:` calls in Bona because that path is the most reliable for live request handlers right now.
-- The UI uses DaisyUI-style class names with a bundled stylesheet, so the workflow stays htmx-friendly and does not require a Tailwind build step.
+- The Bona workflow uses `lib/web/Bootstrap.hrd` and `lib/web/todo/Bootstrap.hrd` so Browser libraries stay in sync with the loaded web code.
+- The UI now serves a vendored DaisyUI stylesheet plus the local `Basecoat.css` app layer, so the workflow stays htmx-friendly and does not require a Tailwind build step at runtime.
 - The repository is in-memory. Replacing it with Bitbarrel or MySQL should mainly affect `TodoRepository`.

@@ -11,7 +11,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
 - Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
 - Granite example parity harness and an updated Granite next-steps plan under `docs/research/`.
-- A Harding htmx-style web component layer, DaisyUI-style Todo app example, and Bona workflow notes for live-editable MummyX web experiments.
+- A Harding htmx-style web component layer, DaisyUI-backed Todo app example, and Bona workflow notes for live-editable MummyX web experiments.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - MummyX request handling now runs through scheduler-backed green worker processes instead of executing on the socket thread.
 - Granite block/codegen parity now covers captured block expressions, top-level block returns, 0-based collection access, and more runtime selector coverage.
 - MummyX routes can now be cleared and rebuilt, and URL-encoded form data is exposed on `HttpRequest`.
+- Bona now pumps scheduler work from the GTK main loop, refreshes open Browsers after successful Workspace evaluations, and documents the web stack through `Web` and `WebTodo` library bootstraps.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.

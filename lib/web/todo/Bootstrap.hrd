@@ -1,10 +1,17 @@
 WebTodo := Library new.
 WebTodo name: "WebTodo".
 Harding at: "WebTodoLibrary" put: WebTodo.
+WebTodo at: "__sourceDir" put: "lib/web/todo".
 
-WebTodo load: "lib/web/todo/TodoRepository.hrd".
-WebTodo load: "lib/web/todo/TodoComponents.hrd".
-WebTodo load: "lib/web/todo/TodoApp.hrd".
+Harding load: "lib/web/todo/TodoRepository.hrd".
+Harding load: "lib/web/todo/TodoComponents.hrd".
+Harding load: "lib/web/todo/TodoApp.hrd".
+
+WebTodo at: "TodoRepository" put: TodoRepository.
+WebTodo at: "TodoItemComponent" put: TodoItemComponent.
+WebTodo at: "TodoPanelComponent" put: TodoPanelComponent.
+WebTodo at: "TodoPageComponent" put: TodoPageComponent.
+WebTodo at: "TodoApp" put: TodoApp.
 
 Harding at: "TodoRepository" put: TodoRepository.
 Harding at: "TodoItemComponent" put: TodoItemComponent.

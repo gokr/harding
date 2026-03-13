@@ -20,7 +20,22 @@ when not defined(gtk3):
   var
     gAppOptions: CliOptions
     gAppInterp: ptr Interpreter
+    gAppSchedulerCtx: SchedulerContext
     gAppActivated: bool = false
+
+when defined(gtk3):
+  var gAppSchedulerCtx: SchedulerContext
+
+proc onSchedulerTick(userData: pointer): cint {.cdecl.} =
+  discard userData
+  if gAppSchedulerCtx == nil:
+    return 1
+
+  var slices = 0
+  while slices < 50 and gAppSchedulerCtx.runOneSlice():
+    inc slices
+
+  return 1
 
 ## Callback for GTK4 application activate signal
 when not defined(gtk3):
@@ -48,6 +63,7 @@ proc runIde*(opts: CliOptions) =
 
   # Create scheduler context (this also initializes the interpreter)
   var ctx = newSchedulerContext()
+  gAppSchedulerCtx = ctx
   var interp = cast[Interpreter](ctx.mainProcess.interpreter)
 
   # Set hardingHome on the interpreter
@@ -116,6 +132,7 @@ proc runIde*(opts: CliOptions) =
 
   # Run GTK main loop
   debug("Starting GTK main loop")
+  discard gTimeoutAdd(10, onSchedulerTick, nil)
 
   when not defined(gtk3):
     # GTK4: Create application and run it properly for desktop integration

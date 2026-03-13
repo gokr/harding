@@ -1,12 +1,6 @@
 Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Component.hrd".
-Harding load: "lib/web/Html.hrd".
-Harding load: "lib/web/Htmx.hrd".
-Harding load: "lib/web/Daisy.hrd".
-Harding load: "lib/web/Basecoat.hrd".
-Harding load: "lib/web/todo/TodoRepository.hrd".
-Harding load: "lib/web/todo/TodoComponents.hrd".
-Harding load: "lib/web/todo/TodoApp.hrd".
+Harding load: "lib/web/Bootstrap.hrd".
+Harding load: "lib/web/todo/Bootstrap.hrd".
 
 TodoApp resetRepository.
 TodoServer := HttpServer new.

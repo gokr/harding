@@ -5,5 +5,5 @@ Htmx class>>cdnUrl [
 ].
 
 Htmx class>>scriptTag [
-  ^ WebHtml scriptSrc: self cdnUrl
+  ^ Html scriptSrc: self cdnUrl
 ].

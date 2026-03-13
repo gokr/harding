@@ -290,7 +290,7 @@ Builder>>addEmptyRow [
 ].
 
 Builder>>refreshAppList [
-  | apps |
+  | apps index |
 
   model isRefreshing: true.
   [
@@ -306,8 +306,10 @@ Builder>>refreshAppList [
         self addEmptyRow
       ]
       ifFalse: [
-        apps do: [:appClass |
-          self addAppRow: appClass
+        index := 0.
+        [ index < apps size ] whileTrue: [
+          self addAppRow: (apps at: index).
+          index := index + 1
         ]
       ].
 

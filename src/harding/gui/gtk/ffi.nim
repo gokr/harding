@@ -56,6 +56,7 @@ type
 
   GType* = csize_t
   GConnectFlags* = cint
+  GSourceFunc* = proc(data: pointer): cint {.cdecl.}
 
 const
   GCONNECTAFTER* = 1.GConnectFlags
@@ -178,6 +179,7 @@ when not defined(gtk3):
 # GObject reference counting
 proc gObjectRef*(obj: pointer): pointer {.cdecl, importc: "g_object_ref".}
 proc gObjectUnref*(obj: pointer) {.cdecl, importc: "g_object_unref".}
+proc gTimeoutAdd*(interval: cuint, function: GSourceFunc, data: pointer): cuint {.cdecl, importc: "g_timeout_add".}
 
 # Helper for signal connection
 proc gSignalConnect*(instance: GObject, signal: cstring, cHandler: GCallback, data: pointer): culong =

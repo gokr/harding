@@ -1,7 +1,7 @@
 Daisy := Object derive: #().
 
 Daisy class>>stylesheetPath [
-  ^ "lib/web/Basecoat.css"
+  ^ "lib/web/daisyui.css"
 ].
 
 Daisy class>>stylesheet [

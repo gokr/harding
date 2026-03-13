@@ -2,7 +2,8 @@ TodoApp := Object derivePublic: #(server router repository port).
 
 TodoAppCurrent := nil.
 TodoRepositoryCurrent := nil.
-TodoAppStylesheet := nil.
+TodoAppDaisyStylesheet := nil.
+TodoAppBaseStylesheet := nil.
 
 TodoApp class>>current [
   ^ TodoAppCurrent
@@ -21,10 +22,13 @@ TodoApp class>>resetRepository [
 ].
 
 TodoApp class>>prepareAssets [
-  TodoAppStylesheet isNil ifTrue: [
-    TodoAppStylesheet := Daisy stylesheet
+  TodoAppDaisyStylesheet isNil ifTrue: [
+    TodoAppDaisyStylesheet := Daisy stylesheet
   ].
-  ^ TodoAppStylesheet
+  TodoAppBaseStylesheet isNil ifTrue: [
+    TodoAppBaseStylesheet := Basecoat stylesheet
+  ].
+  ^ TodoAppBaseStylesheet
 ].
 
 TodoApp class>>installRoutesOn: aRouter [
@@ -35,7 +39,8 @@ TodoApp class>>installRoutesOn: aRouter [
   aRouter post: "/todos" do: [:req | TodoApp createTodo: req ].
   aRouter post: "/todos/@id/toggle" do: [:req | TodoApp toggleTodo: req ].
   aRouter post: "/todos/@id/delete" do: [:req | TodoApp deleteTodo: req ].
-  aRouter get: "/assets/daisy.css" do: [:req | TodoApp stylesheet: req ].
+  aRouter get: "/assets/daisyui.css" do: [:req | TodoApp daisyStylesheet: req ].
+  aRouter get: "/assets/basecoat.css" do: [:req | TodoApp baseStylesheet: req ].
   ^ aRouter
 ].
 
@@ -62,8 +67,12 @@ TodoApp class>>deleteTodo: req [
   ^ self panel: req
 ].
 
-TodoApp class>>stylesheet: req [
-  req respondCss: Daisy stylesheet
+TodoApp class>>daisyStylesheet: req [
+  req respondCss: TodoAppDaisyStylesheet
+].
+
+TodoApp class>>baseStylesheet: req [
+  req respondCss: TodoAppBaseStylesheet
 ].
 
 TodoApp class>>start [
@@ -141,7 +150,8 @@ TodoApp>>installRoutes [
   router post: "/todos" do: [:req | TodoAppCurrent createTodo: req ].
   router post: "/todos/@id/toggle" do: [:req | TodoAppCurrent toggleTodo: req ].
   router post: "/todos/@id/delete" do: [:req | TodoAppCurrent deleteTodo: req ].
-  router get: "/assets/daisy.css" do: [:req | TodoAppCurrent stylesheet: req ].
+  router get: "/assets/daisyui.css" do: [:req | TodoAppCurrent daisyStylesheet: req ].
+  router get: "/assets/basecoat.css" do: [:req | TodoAppCurrent baseStylesheet: req ].
   ^ router
 ].
 
@@ -168,6 +178,10 @@ TodoApp>>deleteTodo: req [
   ^ self panel: req
 ].
 
-TodoApp>>stylesheet: req [
-  req respondCss: Daisy stylesheet
+TodoApp>>daisyStylesheet: req [
+  req respondCss: TodoAppDaisyStylesheet
+].
+
+TodoApp>>baseStylesheet: req [
+  req respondCss: TodoAppBaseStylesheet
 ].

@@ -52,6 +52,27 @@ suite "Bona headless models":
     check(result.kind == vkBool)
     check(result.boolVal)
 
+  test "Catalog merges dynamically loaded classes into library views":
+    var interp = newHeadlessToolInterpreter()
+    let (result, err) = interp.doit("""
+      DynamicBrowserProbe := Object derive: #().
+      Harding load: "lib/web/Bootstrap.hrd".
+      Harding load: "lib/web/todo/Bootstrap.hrd".
+      Cat := Catalog new.
+      HardingNames := Cat classNamesForLibrary: "Harding".
+      WebNames := Cat classNamesForLibrary: "Web".
+      WebTodoNames := Cat classNamesForLibrary: "WebTodo".
+      (HardingNames includes: "DynamicBrowserProbe") and: [
+        (WebNames includes: "Html") and: [
+          WebTodoNames includes: "TodoApp"
+        ]
+      ]
+    """)
+
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal)
+
   test "BrowserModel tracks dirty state and pending selection":
     var interp = newHeadlessToolInterpreter()
     let (result, err) = interp.doit("""

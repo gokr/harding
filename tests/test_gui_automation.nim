@@ -441,6 +441,85 @@ suite "GTK automation helpers":
     check(result.kind == vkString)
     check(result.strVal == "Builder")
 
+  test "Workspace evaluation refreshes Browser and exposes web library":
+    if not hasGuiDisplay():
+      skip()
+
+    let interp = ideInterp()
+
+    let (result, err) = interp[].doit("""
+      TestOwner := Object derive: #(refreshCount windows).
+      TestOwner>>initialize [
+        refreshCount := 0.
+        windows := #().
+        ^ self
+      ].
+      TestOwner>>isRefreshed [
+        ^ refreshCount > 0
+      ].
+      TestOwner>>addWindow: aWindow [
+        windows add: aWindow.
+        ^ self
+      ].
+      TestOwner>>removeWindow: aWindow [
+        windows := windows reject: [:w | w == aWindow ].
+        ^ self
+      ].
+      TestOwner>>refreshBrowsers [
+        refreshCount := refreshCount + 1.
+        windows do: [:w |
+          ([ w class name ] on: Exception do: [ nil ]) = "Browser" ifTrue: [
+            [ w refresh ] on: Exception do: [:ex | nil ]
+          ]
+        ].
+        ^ self
+      ].
+
+      Owner := TestOwner new initialize.
+      BrowserWindow := Browser openFor: Owner.
+      Work := Workspace openFor: Owner id: 91.
+      Work text: "Harding load: \"lib/web/Bootstrap.hrd\".".
+      Work doItSelection.
+      GtkWidget flushEvents: 20.
+      Libs := BrowserWindow catalog allLibraryNames.
+      Owner isRefreshed and: [
+        Libs includes: "Web"
+      ]
+    """)
+
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == true)
+
+  test "Browser resolves nested WebTodo source path":
+    if not hasGuiDisplay():
+      skip()
+
+    let interp = ideInterp()
+
+    let (result, err) = interp[].doit("""
+      TestOwner := Object derive.
+      TestOwner>>addWindow: aWindow [ ^ self ].
+      TestOwner>>removeWindow: aWindow [ ^ self ].
+      Owner := TestOwner new.
+      Harding load: "lib/web/Bootstrap.hrd".
+      Harding load: "lib/web/todo/Bootstrap.hrd".
+      BrowserWindow := Browser openFor: Owner.
+      BrowserWindow currentLibrary: "WebTodo".
+      Path := BrowserWindow resolveClassFilePath: "FreshTodoThing" defaultName: "FreshTodoThing.hrd".
+      GtkWidget flushEvents: 10.
+      BrowserWindow close.
+      Path notNil and: [
+        ((Path asString) includesSubString: "lib/web/todo/") and: [
+          (Path asString) includesSubString: "FreshTodoThing.hrd"
+        ]
+      ]
+    """)
+
+    check(err.len == 0)
+    check(result.kind == vkBool)
+    check(result.boolVal == true)
+
   test "Inspector opens on slotted object":
     if not hasGuiDisplay():
       skip()

@@ -1,16 +1,24 @@
 Web := Library new.
 Web name: "Web".
 Harding at: "WebLibrary" put: Web.
+Web at: "__sourceDir" put: "lib/web".
 
-Web load: "lib/web/Component.hrd".
-Web load: "lib/web/Html.hrd".
-Web load: "lib/web/Htmx.hrd".
-Web load: "lib/web/Daisy.hrd".
-Web load: "lib/web/Basecoat.hrd".
+Harding load: "lib/web/Component.hrd".
+Harding load: "lib/web/Html.hrd".
+Harding load: "lib/web/Htmx.hrd".
+Harding load: "lib/web/Daisy.hrd".
+Harding load: "lib/web/Basecoat.hrd".
+
+Web at: "Component" put: Component.
+Web at: "Html" put: Html.
+Web at: "WebHtml" put: WebHtml.
+Web at: "Htmx" put: Htmx.
+Web at: "Daisy" put: Daisy.
+Web at: "Basecoat" put: Basecoat.
 
 Harding at: "Component" put: Component.
-Harding at: "WebHtml" put: WebHtml.
 Harding at: "Html" put: Html.
+Harding at: "WebHtml" put: WebHtml.
 Harding at: "Htmx" put: Htmx.
 Harding at: "Daisy" put: Daisy.
 Harding at: "Basecoat" put: Basecoat.

@@ -332,6 +332,11 @@ Browser>>openWindowFor: anOwner [
     deleteMethodButton tooltip: "Delete the selected method".
     buttonBox append: deleteMethodButton.
 
+    refreshButton := GtkButton newLabel: "Refresh" iconName: "view-refresh".
+    refreshButton clicked: [ self refresh ].
+    refreshButton tooltip: "Refresh libraries, classes, and methods".
+    buttonBox append: refreshButton.
+
     window setChild: mainBox.
     mainBox append: panesBox.
     mainBox append: sourceScrolled.
@@ -1617,10 +1622,9 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     lib isNil ifTrue: [ ^ nil ].
     
     libPath := System cwd.
-    classDir := libPath , "/lib/" , (self currentLibrary asString lowercase).
-    (File exists: classDir) ifFalse: [
-        ^ nil
-    ].
+    classDir := (lib includesKey: "__sourceDir")
+        ifTrue: [ libPath , "/" , (lib at: "__sourceDir") asString ]
+        ifFalse: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ].
 
     candidatePath := classDir , "/" , defaultFileName.
 
