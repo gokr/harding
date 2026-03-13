@@ -10,8 +10,8 @@ import std/[unittest, strutils]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
 import ../src/harding/interpreter/[vm]
-import ../src/harding/compiler/[context, types as compilerTypes, symbols]
-import ../src/harding/codegen/[blocks, module]
+import ../src/harding/compiler/context
+import ../src/harding/codegen/[blocks, expression, module]
 import ./stdlib_test_support
 
 # ============================================================================
@@ -434,6 +434,26 @@ suite "Compiler: Block Code Generation":
     let info = registerBlock(reg, blockNode)
     check info.hasNonLocalReturn == true
 
+  test "registerBlock records whether block home is a method":
+    let reg = newBlockRegistry()
+    let ret = ReturnNode(expression: LiteralNode(value: NodeValue(kind: vkInt, intVal: 1)).Node)
+    let blockNode = BlockNode(body: @[ret.Node])
+    let topLevel = registerBlock(reg, blockNode, homeInMethod = false)
+    let inMethod = registerBlock(reg, blockNode, homeInMethod = true)
+    check topLevel.homeInMethod == false
+    check inMethod.homeInMethod == true
+
+  test "genBlockBody only raises for method-owned non-local returns":
+    let cls = newClassInfo("Dummy")
+    let ctx = newGenContext(cls)
+    let ret = ReturnNode(expression: LiteralNode(value: NodeValue(kind: vkInt, intVal: 5)).Node)
+    let blockNode = BlockNode(body: @[ret.Node])
+    let methodBody = genBlockBody(ctx, blockNode, @[], true, "")
+    let topLevelBody = genBlockBody(ctx, blockNode, @[], false, "")
+    check methodBody.contains("NonLocalReturnException")
+    check topLevelBody.contains("return NodeValue(kind: vkInt, intVal: 5)")
+    check not topLevelBody.contains("NonLocalReturnException")
+
 # ============================================================================
 # Suite 8: Compilation Pipeline Status
 # ============================================================================
@@ -447,8 +467,8 @@ suite "Compiler: Pipeline Status":
       ("Generate block signatures", true),
       ("Generate env structs", true),
       ("Generate block bodies (literals)", true),
-      ("Generate block bodies (full expressions)", false),
-      ("Non-local return support", false),
+      ("Generate block bodies (full expressions)", true),
+      ("Non-local return support", true),
       ("Environment capture at runtime", false),
       ("Block invocation from compiled code", false)
     ]
@@ -458,8 +478,7 @@ suite "Compiler: Pipeline Status":
       if done:
         implemented += 1
     
-    # Track progress - currently 5/9 stages implemented
-    check implemented >= 5
+    check implemented >= 7
 
 # ============================================================================
 # Known Gaps Documentation
@@ -467,30 +486,23 @@ suite "Compiler: Pipeline Status":
 #
 # This test file documents the known gaps in compiler block support:
 #
-# 1. Non-Local Returns (^):
-#    - Current: Detected during analysis
-#    - Missing: Exception-based implementation in generated code
-#    - Test: "non-local return from block" will fail to compile correctly
+# 1. Full compilation/execution parity in tests:
+#    - Current: interpreter assertions plus compiler-level codegen assertions
+#    - Missing: direct compile-and-run coverage in this test file
 #
-# 2. Full Expression Generation in Blocks:
-#    - Current: Basic literals and simple arithmetic
-#    - Missing: Complex expressions, message sends, control flow
-#    - Impact: Most real-world blocks won't compile correctly
-#
-# 3. Runtime Environment Capture:
+# 2. Runtime Environment Capture:
 #    - Current: Environment struct generation
-#    - Missing: Actual capture and passing at runtime
-#    - Impact: Blocks that reference outer variables won't work
+#    - Missing: broader direct end-to-end parity coverage here
+#    - Impact: some regressions are still caught mainly by example parity/tests elsewhere
 #
-# 4. Block Invocation:
+# 3. Block Invocation:
 #    - Current: Template code exists
 #    - Missing: Integration with compiled method dispatch
 #    - Impact: Can't actually call compiled blocks
 #
 # Implementation Priority:
-# 1. Non-local returns (critical for parity)
+# 1. Direct compile-and-run parity in this suite
 # 2. Environment capture runtime support
-# 3. Full expression generation
-# 4. Block invocation integration
+# 3. Block invocation integration
 
 # Note: Tests run via nimble test (uses testament), not unittest.main()

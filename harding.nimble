@@ -121,24 +121,37 @@ task discover, "Scan external/ and regenerate external_libs_generated.nim":
   ## Discover installed libraries and regenerate the import file
   exec "nim c -r src/harding/external/generator.nim"
 
+proc addUniqueDir(path: string, dirs: var seq[string]) =
+  if path.len == 0 or not dirExists(path):
+    return
+  let normalized = absolutePath(path)
+  if normalized notin dirs:
+    dirs.add(normalized)
+
+proc getExternalTestRoots(): seq[string] =
+  ## Collect roots that may contain installed external libraries.
+  ## Libraries are installed under external/ relative to the current Harding home.
+  addUniqueDir("external", result)
+  let hardingHome = getEnv("HARDING_HOME", "")
+  if hardingHome.len > 0:
+    addUniqueDir(hardingHome / "external", result)
+
 proc getExternalTestPatterns(): string =
   ## Collect test patterns from external libraries
   ## Convention: external library tests live in <lib>/tests/test_*.nim
   var patterns: seq[string] = @[]
-  if not dirExists("external"):
-    return ""
-  for kind, path in walkDir("external"):
-    if kind != pcDir:
-      continue
-    let libName = lastPathPart(path)
-    let testDir = path / "tests"
-    if dirExists(testDir):
-      let testPattern = testDir & "/test_*.nim"
-      patterns.add(testPattern)
+  for root in getExternalTestRoots():
+    for kind, path in walkDir(root):
+      if kind != pcDir:
+        continue
+      let metadataFile = path / ".harding-lib.json"
+      let testDir = path / "tests"
+      if fileExists(metadataFile) and dirExists(testDir):
+        patterns.add(testDir / "test_*.nim")
   return patterns.join(" ")
 
 task test, "Run all tests including external libraries":
-  ## Run tests from tests/ and external/*/tests/
+  ## Run tests from tests/ and installed external library repos.
   ## External library tests follow convention: <lib>/tests/test_*.nim
   ensureExternalLibsFile()
   let externalTestPatterns = getExternalTestPatterns()

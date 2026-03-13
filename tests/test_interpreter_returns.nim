@@ -4,10 +4,10 @@
 # Tests non-local returns and call stack behavior
 #
 
-import std/[unittest, tables, strutils]
+import std/unittest
 import ../src/harding/core/types
-import ../src/harding/parser/[lexer, parser]
-import ../src/harding/interpreter/[vm, objects]
+import ../src/harding/interpreter/vm
+import ./stdlib_test_support
 
 suite "Interpreter: Non-Local Returns":
   var interp: Interpreter
@@ -135,6 +135,30 @@ suite "Interpreter: Non-Local Returns":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 3)
+
+  test "method-owned nested block return exits the enclosing method":
+    let result = interp.evalStatements("""
+      Finder := Object derive.
+      Finder>>firstPositive: arr [
+        arr do: [:each |
+          each > 0 ifTrue: [ ^each ]
+        ].
+        ^nil
+      ].
+
+      Result := Finder new firstPositive: #(-2 -1 7 9)
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 7)
+
+  test "script-owned block return stays local to the block":
+    var scriptInterp = newSharedStdlibInterpreter()
+    let (resultValue, err) = scriptInterp.evalScriptBlock("[ blk := [ ^41 ]. blk value ]")
+    check(err.len == 0)
+    check(resultValue.kind == vkInt)
+    check(resultValue.intVal == 41)
 
   test "implicit return of self when no explicit return":
     let result = interp.evalStatements("""
