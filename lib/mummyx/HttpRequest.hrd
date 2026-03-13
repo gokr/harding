@@ -8,9 +8,11 @@
 #   HttpRequest>>remoteAddress                     - Client IP address
 #   HttpRequest>>header: name                      - Get header by name (case-insensitive)
 #   HttpRequest>>queryParam: name                  - Get query parameter by name
+#   HttpRequest>>formParam: name                   - Get URL-encoded form parameter by name
 #   HttpRequest>>pathParam: name                   - Get path parameter by name
 #   HttpRequest>>headers                           - All headers as Table
 #   HttpRequest>>queryParams                       - All query params as Table
+#   HttpRequest>>formParams                        - All URL-encoded form params as Table
 #   HttpRequest>>pathParams                        - All path params as Table
 #   HttpRequest>>respond: statusCode               - Send response with status only
 #   HttpRequest>>respond: statusCode body: body    - Send response with body
@@ -37,6 +39,20 @@ HttpRequest>>respondHtml: body [
   self respond: 200
        headers: #{"Content-Type" -> "text/html"}
        body: body
+]
+
+HttpRequest>>respondCss: body [
+  self respond: 200
+       headers: #{"Content-Type" -> "text/css"}
+       body: body
+]
+
+HttpRequest>>isHtmx [
+  ^ (self header: "HX-Request") = "true"
+]
+
+HttpRequest>>contentType [
+  ^ self header: "Content-Type"
 ]
 
 HttpRequest>>respondRedirect: url [

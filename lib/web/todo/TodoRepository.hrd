@@ -1,0 +1,72 @@
+TodoRepository := Object derivePublic: #(items nextId).
+
+TodoRepository>>initialize [
+  super initialize.
+  items := Array new.
+  nextId := 1.
+  self seedDemoData.
+  ^ self
+].
+
+TodoRepository>>seedDemoData [
+  self addTitle: "Wire Harding to htmx".
+  self addTitle: "Edit a handler in Bona and refresh the browser".
+  self addTitle: "Decide whether this app should persist to Bitbarrel or MySQL"
+].
+
+TodoRepository>>all [
+  ^ items
+].
+
+TodoRepository>>count [
+  ^ items size
+].
+
+TodoRepository>>completedCount [
+  ^ (items select: [:todo | todo at: "completed" ]) size
+].
+
+TodoRepository>>remainingCount [
+  ^ self count - self completedCount
+].
+
+TodoRepository>>nextIdentifier [
+  | current |
+  current := nextId.
+  nextId := nextId + 1.
+  ^ current
+].
+
+TodoRepository>>addTitle: title [
+  | trimmed todo |
+  trimmed := title isNil ifTrue: [ "" ] ifFalse: [ title trim ].
+  trimmed isEmpty ifTrue: [ ^ nil ].
+
+  todo := Table new.
+  todo at: "id" put: self nextIdentifier.
+  todo at: "title" put: trimmed.
+  todo at: "completed" put: false.
+  items add: todo.
+  ^ todo
+].
+
+TodoRepository>>findById: rawId [
+  | numericId |
+  numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
+  ^ items detect: [:todo | (todo at: "id") = numericId ] ifNone: [ nil ]
+].
+
+TodoRepository>>toggle: rawId [
+  | todo |
+  todo := self findById: rawId.
+  todo isNil ifTrue: [ ^ nil ].
+  todo at: "completed" put: ((todo at: "completed") not).
+  ^ todo
+].
+
+TodoRepository>>delete: rawId [
+  | numericId |
+  numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
+  items := items reject: [:todo | (todo at: "id") = numericId ].
+  ^ self
+].

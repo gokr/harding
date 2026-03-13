@@ -8,12 +8,61 @@
 #   Router>>delete: path do: handler
 #   Router>>patch: path do: handler
 #   Router>>any: path do: handler      (matches any HTTP method)
+#   Router>>clear
 #
 # Path patterns:
 #   "/users"         - exact match
 #   "/users/@id"     - named parameter (accessible via req pathParam: "id")
 #   "/files/*"       - single segment wildcard
 #   "/docs/**"       - multi-segment wildcard
+
+Router>>get: path to: target selector: selector [
+  ^ self get: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>post: path to: target selector: selector [
+  ^ self post: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>put: path to: target selector: selector [
+  ^ self put: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>delete: path to: target selector: selector [
+  ^ self delete: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>patch: path to: target selector: selector [
+  ^ self patch: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>any: path to: target selector: selector [
+  ^ self any: path do: [:req | target perform: selector with: req ]
+].
+
+Router>>get: path toClass: targetClass selector: selector [
+  ^ self get: path do: [:req | (targetClass new) perform: selector with: req ]
+].
+
+Router>>post: path toClass: targetClass selector: selector [
+  ^ self post: path do: [:req | (targetClass new) perform: selector with: req ]
+].
+
+Router>>put: path toClass: targetClass selector: selector [
+  ^ self put: path do: [:req | (targetClass new) perform: selector with: req ]
+].
+
+Router>>delete: path toClass: targetClass selector: selector [
+  ^ self delete: path do: [:req | (targetClass new) perform: selector with: req ]
+].
+
+Router>>patch: path toClass: targetClass selector: selector [
+  ^ self patch: path do: [:req | (targetClass new) perform: selector with: req ]
+].
+
+Router>>any: path toClass: targetClass selector: selector [
+  ^ self any: path do: [:req | (targetClass new) perform: selector with: req ]
+].
 
 Router>>printString [
   ^ "<Router>"

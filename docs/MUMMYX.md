@@ -139,6 +139,8 @@ sequenceDiagram
 
 See `examples/mummyx_hello.hrd`.
 
+For the live-editable Bona Todo workflow, see `docs/BONA_WEB_TODO.md`.
+
 It includes:
 
 - `GET /`

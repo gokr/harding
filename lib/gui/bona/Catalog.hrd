@@ -20,7 +20,7 @@ Catalog>>allLibraryNames [
 ].
 
 Catalog>>classNamesForLibrary: aLibraryName [
-    | libb classNames libraryName keysResult i |
+    | libb classNames libraryName keysResult i keyName |
     aLibraryName isNil ifTrue: [
         ^ #()
     ].
@@ -139,30 +139,31 @@ Catalog>>classNamesForLibrary: aLibraryName [
         classNames add: "Granite".
     ].
 
-    (classNames size = 0) ifTrue: [
-        libraryName = "Harding" ifTrue: [
-            keysResult := Harding keys
-        ] ifFalse: [
-            libb isNil ifTrue: [
-                ^ #()
-            ].
-            keysResult := libb keys
+    libraryName = "Harding" ifTrue: [
+        keysResult := Harding keys
+    ] ifFalse: [
+        libb isNil ifTrue: [
+            ^ classNames
         ].
+        keysResult := libb keys
+    ].
 
-        keysResult notNil ifTrue: [
-            [
-                i := 0.
-                [ i < keysResult size ] whileTrue: [
-                    classNames add: ((keysResult at: i) asString).
-                    i := i + 1
-                ]
-            ] on: Exception do: [:ex |
-                Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
+    keysResult notNil ifTrue: [
+        [
+            i := 0.
+            [ i < keysResult size ] whileTrue: [
+                keyName := (keysResult at: i) asString.
+                (classNames includes: keyName) ifFalse: [
+                    classNames add: keyName
+                ].
+                i := i + 1
             ]
+        ] on: Exception do: [:ex |
+            Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
         ]
     ].
 
-    ^ classNames
+    ^ [ classNames sorted ] on: Exception do: [:ex | classNames]
 ].
 
 Catalog>>classForName: aClassName currentLibrary: aLibraryName [

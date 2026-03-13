@@ -132,6 +132,15 @@ Launcher>>removeWindow: aWindow [
   windows := windows reject: [ :w | w == aWindow ].
 ].
 
+Launcher>>refreshBrowsers [
+  windows do: [:w |
+    ([ w class name ] on: Exception do: [ nil ]) = "Browser" ifTrue: [
+      [ w refresh ] on: Exception do: [:ex | nil ]
+    ]
+  ].
+  ^ self
+].
+
 Launcher>>nextWorkspaceId [
   # Find the lowest available workspace ID not currently in use
   | usedIds candidate found |
