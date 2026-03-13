@@ -42,10 +42,11 @@ TodoRepository>>addTitle: title [
   trimmed := title isNil ifTrue: [ "" ] ifFalse: [ title trim ].
   trimmed isEmpty ifTrue: [ ^ nil ].
 
-  todo := Table new.
-  todo at: #id put: self nextIdentifier.
-  todo at: #title put: trimmed.
-  todo at: #completed put: false.
+  todo := #{
+    #id -> self nextIdentifier
+    #title -> trimmed
+    #completed -> false
+  }
   items add: todo.
   ^ todo
 ].
