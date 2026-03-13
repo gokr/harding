@@ -135,11 +135,11 @@ Html class>>styleTag: css [
 ].
 
 Html class>>scriptSrc: url [
-  ^ self tag: "script" attrs: #{"src" -> url} with: ""
+  ^ self tag: "script" attrs: #{#src -> url} with: ""
 ].
 
 Html class>>linkStylesheet: url [
-  ^ self voidTag: "link" attrs: #{"rel" -> "stylesheet", "href" -> url}
+  ^ self voidTag: "link" attrs: #{#rel -> "stylesheet", #href -> url}
 ].
 
 Html class>>documentTitle: title head: headContent body: bodyContent [
@@ -150,7 +150,7 @@ Html class>>documentTitle: title head: headContent body: bodyContent [
   headMarkup := headMarkup , (self fragment: headContent).
   bodyMarkup := self fragment: bodyContent.
   htmlMarkup := (self tag: "head" attrs: #{} with: headMarkup) , (self tag: "body" attrs: #{} with: bodyMarkup).
-  document := "<!DOCTYPE html>" , (self tag: "html" attrs: #{"lang" -> "en"} with: htmlMarkup).
+  document := "<!DOCTYPE html>" , (self tag: "html" attrs: #{#lang -> "en"} with: htmlMarkup).
   ^ document
 ].
 

@@ -24,70 +24,70 @@ TodoPageComponent class>>repository: aRepository [
 ].
 
 TodoItemComponent>>statusClass [
-  ^ (todo at: "completed") ifTrue: [ "todo-status is-done" ] ifFalse: [ "todo-status" ]
+  ^ todo::completed ifTrue: [ "todo-status is-done" ] ifFalse: [ "todo-status" ]
 ].
 
 TodoItemComponent>>titleClass [
-  ^ (todo at: "completed") ifTrue: [ "todo-title is-done" ] ifFalse: [ "todo-title" ]
+  ^ todo::completed ifTrue: [ "todo-title is-done" ] ifFalse: [ "todo-title" ]
 ].
 
 TodoItemComponent>>toggleLabel [
-  ^ (todo at: "completed") ifTrue: [ "Mark active" ] ifFalse: [ "Mark done" ]
+  ^ todo::completed ifTrue: [ "Mark active" ] ifFalse: [ "Mark done" ]
 ].
 
 TodoItemComponent>>render [
   | rowAttrs mainAttrs actionsAttrs statusAttrs titleAttrs metaAttrs toggleAttrs deleteAttrs copyMarkup mainMarkup actionMarkup |
-  rowAttrs := #{"class" -> "todo-row"}.
-  mainAttrs := #{"class" -> "todo-main"}.
-  actionsAttrs := #{"class" -> "todo-actions"}.
-  statusAttrs := #{"class" -> self statusClass}.
-  titleAttrs := #{"class" -> self titleClass}.
-  metaAttrs := #{"class" -> "todo-meta"}.
+  rowAttrs := #{#class -> "todo-row"}.
+  mainAttrs := #{#class -> "todo-main"}.
+  actionsAttrs := #{#class -> "todo-actions"}.
+  statusAttrs := #{#class -> self statusClass}.
+  titleAttrs := #{#class -> self titleClass}.
+  metaAttrs := #{#class -> "todo-meta"}.
   toggleAttrs := #{
-    "class" -> Daisy ghostButtonClass
-    "hx-post" -> ("/todos/" , ((todo at: "id") printString) , "/toggle")
-    "hx-target" -> "#todo-panel"
-    "hx-swap" -> "outerHTML"
+    #class -> Daisy ghostButtonClass
+    #"hx-post" -> ("/todos/" , (todo::id printString) , "/toggle")
+    #"hx-target" -> "#todo-panel"
+    #"hx-swap" -> "outerHTML"
   }.
   deleteAttrs := #{
-    "class" -> Daisy ghostButtonClass
-    "hx-post" -> ("/todos/" , ((todo at: "id") printString) , "/delete")
-    "hx-target" -> "#todo-panel"
-    "hx-swap" -> "outerHTML"
+    #class -> Daisy ghostButtonClass
+    #"hx-post" -> ("/todos/" , (todo::id printString) , "/delete")
+    #"hx-target" -> "#todo-panel"
+    #"hx-swap" -> "outerHTML"
   }.
 
-  copyMarkup := (Html div: titleAttrs with: (Html text: (todo at: "title"))) , (Html div: metaAttrs with: ((todo at: "completed") ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ])).
-  mainMarkup := (Html div: statusAttrs with: "") , (Html div: #{"class" -> "todo-copy"} with: copyMarkup).
+  copyMarkup := (Html div: titleAttrs with: (Html text: (todo::title))) , (Html div: metaAttrs with: (todo::completed ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ])).
+  mainMarkup := (Html div: statusAttrs with: "") , (Html div: #{#class -> "todo-copy"} with: copyMarkup).
   actionMarkup := (Html button: toggleAttrs text: self toggleLabel) , (Html button: deleteAttrs text: "Delete").
   ^ Html li: rowAttrs with: ((Html div: mainAttrs with: mainMarkup) , (Html div: actionsAttrs with: actionMarkup))
 ].
 
 TodoPanelComponent>>formAttrs [
   ^ #{
-    "class" -> "todo-form"
-    "hx-post" -> "/todos"
-    "hx-target" -> "#todo-panel"
-    "hx-swap" -> "outerHTML"
+    #class -> "todo-form"
+    #"hx-post" -> "/todos"
+    #"hx-target" -> "#todo-panel"
+    #"hx-swap" -> "outerHTML"
   }
 ].
 
 TodoPanelComponent>>inputAttrs [
   ^ #{
-    "class" -> Daisy inputClass
-    "type" -> "text"
-    "name" -> "title"
-    "placeholder" -> "Add a task that should survive a browser refresh"
-    "autocomplete" -> "off"
-    "required" -> "true"
+    #class -> Daisy inputClass
+    #type -> "text"
+    #name -> "title"
+    #placeholder -> "Add a task that should survive a browser refresh"
+    #autocomplete -> "off"
+    #required -> "true"
   }
 ].
 
 TodoPanelComponent>>renderList [
   | renderedItems todos index |
   repository all isEmpty ifTrue: [
-    ^ Html div: #{"class" -> "empty-state"} with: #(
+    ^ Html div: #{#class -> "empty-state"} with: #(
       (Html h2: #{} text: "Nothing queued yet")
-      (Html p: #{"class" -> "muted"} text: "Use the form above, then edit the component methods in Bona while the server keeps running.")
+      (Html p: #{#class -> "muted"} text: "Use the form above, then edit the component methods in Bona while the server keeps running.")
     )
   ].
 
@@ -99,29 +99,29 @@ TodoPanelComponent>>renderList [
     index := index + 1
   ].
 
-  ^ Html ul: #{"class" -> "todo-list"} with: renderedItems
+  ^ Html ul: #{#class -> "todo-list"} with: renderedItems
 ].
 
 TodoPanelComponent>>render [
   | introMarkup formMarkup panelMarkup |
-  introMarkup := (Html h2: #{} text: "Today") , (Html p: #{"class" -> Daisy mutedClass} text: "This panel is returned as an htmx fragment. Route logic stays on the Harding side.").
-  formMarkup := (Html input: self inputAttrs) , (Html button: #{"class" -> Daisy primaryButtonClass, "type" -> "submit"} text: "Add item").
-  panelMarkup := (Html div: #{"class" -> "stack"} with: introMarkup) , (Html form: self formAttrs with: formMarkup) , (self renderList) , (Html p: #{"class" -> "footer-note muted"} text: "Next step: swap the in-memory repository for Bitbarrel or MySQL without changing the view layer.").
-  ^ Html div: #{"id" -> "todo-panel", "class" -> Daisy panelClass} with: (Html div: #{"class" -> Daisy stackClass} with: panelMarkup)
+  introMarkup := (Html h2: #{} text: "Today") , (Html p: #{#class -> Daisy mutedClass} text: "This panel is returned as an htmx fragment. Route logic stays on the Harding side.").
+  formMarkup := (Html input: self inputAttrs) , (Html button: #{#class -> Daisy primaryButtonClass, #type -> "submit"} text: "Add item").
+  panelMarkup := (Html div: #{#class -> "stack"} with: introMarkup) , (Html form: self formAttrs with: formMarkup) , (self renderList) , (Html p: #{#class -> "footer-note muted"} text: "Next step: swap the in-memory repository for Bitbarrel or MySQL without changing the view layer.").
+  ^ Html div: #{#id -> "todo-panel", #class -> Daisy panelClass} with: (Html div: #{#class -> Daisy stackClass} with: panelMarkup)
 ].
 
 TodoPageComponent>>heroStats [
   | statsMarkup |
-  statsMarkup := (Html span: #{"class" -> Daisy badgeClass} text: (repository count printString) , " total") , (Html span: #{"class" -> Daisy badgeClass} text: (repository remainingCount printString) , " remaining") , (Html span: #{"class" -> Daisy badgeClass} text: (repository completedCount printString) , " completed").
-  ^ Html div: #{"class" -> "stats"} with: statsMarkup
+  statsMarkup := (Html span: #{#class -> Daisy badgeClass} text: (repository count printString) , " total") , (Html span: #{#class -> Daisy badgeClass} text: (repository remainingCount printString) , " remaining") , (Html span: #{#class -> Daisy badgeClass} text: (repository completedCount printString) , " completed").
+  ^ Html div: #{#class -> "stats"} with: statsMarkup
 ].
 
 TodoPageComponent>>render [
   | headMarkup heroMarkup bodyMarkup |
   headMarkup := (Html linkStylesheet: "/assets/daisyui.css") , (Html linkStylesheet: "/assets/basecoat.css") , (Htmx scriptTag).
-  heroMarkup := (Html span: #{"class" -> "hero-eyebrow"} text: "Harding + Bona + htmx") , (Html h1: #{"class" -> "hero-title"} text: "A live-editable todo app") , (Html p: #{"class" -> "hero-copy"} text: "Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.") , (self heroStats).
-  bodyMarkup := (Html section: #{"class" -> Daisy heroClass} with: heroMarkup) , ((TodoPanelComponent repository: repository) renderString).
+  heroMarkup := (Html span: #{#class -> "hero-eyebrow"} text: "Harding + Bona + htmx") , (Html h1: #{#class -> "hero-title"} text: "A live-editable todo app") , (Html p: #{#class -> "hero-copy"} text: "Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.") , (self heroStats).
+  bodyMarkup := (Html section: #{#class -> Daisy heroClass} with: heroMarkup) , ((TodoPanelComponent repository: repository) renderString).
   ^ Html documentTitle: "Harding Todo"
       head: headMarkup
-      body: (Html main: #{"class" -> Daisy shellClass, "data-theme" -> "autumn"} with: bodyMarkup)
+      body: (Html main: #{#class -> Daisy shellClass, #"data-theme" -> "autumn"} with: bodyMarkup)
 ].

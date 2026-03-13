@@ -1598,7 +1598,7 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     lib isNil ifTrue: [ ^ nil ].
     
     libPath := System cwd.
-    sourceDir := lib at: "__sourceDir" ifAbsent: [ nil ].
+    sourceDir := lib at: #"__sourceDir" ifAbsent: [ lib at: "__sourceDir" ifAbsent: [ nil ] ].
     classDir := sourceDir isNil
         ifTrue: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ]
         ifFalse: [ libPath , "/" , sourceDir asString ].

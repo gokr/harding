@@ -60,6 +60,21 @@ proc isProtectedGlobal*(name: string): bool =
   ## Check if a global variable is protected from reassignment
   name in protectedGlobals
 
+proc libraryBindingLookup(bindingsVal: NodeValue, name: string): tuple[found: bool, value: NodeValue] =
+  ## Look up a library binding by either string or symbol key.
+  if bindingsVal.kind != vkInstance or bindingsVal.instVal == nil or bindingsVal.instVal.kind != ikTable:
+    return (false, nilValue())
+
+  let stringKey = toValue(name)
+  if stringKey in bindingsVal.instVal.entries:
+    return (true, bindingsVal.instVal.entries[stringKey])
+
+  let symbolKey = toSymbol(name)
+  if symbolKey in bindingsVal.instVal.entries:
+    return (true, bindingsVal.instVal.entries[symbolKey])
+
+  return (false, nilValue())
+
 type
   EvalError* = object of ValueError
     node*: Node
@@ -486,11 +501,10 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
         let lib = interp.importedLibraries[i]
         if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
           let bindingsVal = lib.slots[0]
-          if bindingsVal.kind == vkInstance and bindingsVal.instVal != nil and bindingsVal.instVal.kind == ikTable:
-            let key = toValue(name)
-            if key in bindingsVal.instVal.entries:
-              debug("Found variable in imported library (in block): ", name)
-              return (true, bindingsVal.instVal.entries[key])
+          let lookup = libraryBindingLookup(bindingsVal, name)
+          if lookup.found:
+            debug("Found variable in imported library (in block): ", name)
+            return (true, lookup.value)
       if name in interp.globals[]:
         debug("Found variable in globals (in block): ", name, " = ", interp.globals[][name].toString())
         let val = interp.globals[][name]
@@ -526,11 +540,10 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     let lib = interp.importedLibraries[i]
     if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
       let bindingsVal = lib.slots[0]
-      if bindingsVal.kind == vkInstance and bindingsVal.instVal != nil and bindingsVal.instVal.kind == ikTable:
-        let key = toValue(name)
-        if key in bindingsVal.instVal.entries:
-          debug("Found variable in imported library: ", name)
-          return (true, bindingsVal.instVal.entries[key])
+      let lookup = libraryBindingLookup(bindingsVal, name)
+      if lookup.found:
+        debug("Found variable in imported library: ", name)
+        return (true, lookup.value)
 
   # Check globals
   if name in interp.globals[]:
@@ -1862,10 +1875,9 @@ proc findClassInLibraries(interp: Interpreter, name: string): Class =
   for lib in interp.importedLibraries:
     if lib.kind == ikObject and lib.class == libraryClass:
       let bindingsVal = lib.slots[0]
-      if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
-        let classVal = bindingsVal.instVal.entries[toValue(name)]
-        if classVal.kind == vkClass:
-          return classVal.classVal
+      let lookup = libraryBindingLookup(bindingsVal, name)
+      if lookup.found and lookup.value.kind == vkClass:
+        return lookup.value.classVal
   return nil
 
 proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string) =
@@ -4433,12 +4445,9 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     for lib in interp.importedLibraries:
       if lib.kind == ikObject and lib.class == libraryClass:
         let bindingsVal = lib.slots[0]
-        if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
-          let key = toValue(name)
-          if key in bindingsVal.instVal.entries:
-            let classVal = bindingsVal.instVal.entries[key]
-            if classVal.kind == vkClass:
-              return classVal.classVal
+        let lookup = libraryBindingLookup(bindingsVal, name)
+        if lookup.found and lookup.value.kind == vkClass:
+          return lookup.value.classVal
     return nil
 
   let fileStreamCls = if "FileStream" in interp.globals[]:

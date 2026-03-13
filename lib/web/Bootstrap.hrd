@@ -1,26 +1,41 @@
 Web := Library new.
 Web name: "Web".
-Harding at: "WebLibrary" put: Web.
-Web at: "__sourceDir" put: "lib/web".
+Harding at: #WebLibrary put: Web.
+Web at: #"__sourceDir" put: "lib/web".
 
 Harding load: "lib/web/Component.hrd".
 Harding load: "lib/web/Html.hrd".
 Harding load: "lib/web/Htmx.hrd".
 Harding load: "lib/web/Daisy.hrd".
+Harding load: "lib/web/DaisyComponents.hrd".
 Harding load: "lib/web/Basecoat.hrd".
 
-Web at: "Component" put: Component.
-Web at: "Html" put: Html.
-Web at: "WebHtml" put: WebHtml.
-Web at: "Htmx" put: Htmx.
-Web at: "Daisy" put: Daisy.
-Web at: "Basecoat" put: Basecoat.
+Web at: #Component put: Component.
+Web at: #Html put: Html.
+Web at: #WebHtml put: WebHtml.
+Web at: #Htmx put: Htmx.
+Web at: #Daisy put: Daisy.
+Web at: #DaisyComponent put: DaisyComponent.
+Web at: #DaisyButton put: DaisyButton.
+Web at: #DaisyBadge put: DaisyBadge.
+Web at: #DaisyInput put: DaisyInput.
+Web at: #DaisyCard put: DaisyCard.
+Web at: #DaisyStack put: DaisyStack.
+Web at: #DaisyHero put: DaisyHero.
+Web at: #Basecoat put: Basecoat.
 
-Harding at: "Component" put: Component.
-Harding at: "Html" put: Html.
-Harding at: "WebHtml" put: WebHtml.
-Harding at: "Htmx" put: Htmx.
-Harding at: "Daisy" put: Daisy.
-Harding at: "Basecoat" put: Basecoat.
+Harding at: #Component put: Component.
+Harding at: #Html put: Html.
+Harding at: #WebHtml put: WebHtml.
+Harding at: #Htmx put: Htmx.
+Harding at: #Daisy put: Daisy.
+Harding at: #DaisyComponent put: DaisyComponent.
+Harding at: #DaisyButton put: DaisyButton.
+Harding at: #DaisyBadge put: DaisyBadge.
+Harding at: #DaisyInput put: DaisyInput.
+Harding at: #DaisyCard put: DaisyCard.
+Harding at: #DaisyStack put: DaisyStack.
+Harding at: #DaisyHero put: DaisyHero.
+Harding at: #Basecoat put: Basecoat.
 
 Harding import: Web.

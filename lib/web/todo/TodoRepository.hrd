@@ -23,7 +23,7 @@ TodoRepository>>count [
 ].
 
 TodoRepository>>completedCount [
-  ^ (items select: [:todo | todo at: "completed" ]) size
+  ^ (items select: [:todo | todo::completed ]) size
 ].
 
 TodoRepository>>remainingCount [
@@ -43,9 +43,9 @@ TodoRepository>>addTitle: title [
   trimmed isEmpty ifTrue: [ ^ nil ].
 
   todo := Table new.
-  todo at: "id" put: self nextIdentifier.
-  todo at: "title" put: trimmed.
-  todo at: "completed" put: false.
+  todo at: #id put: self nextIdentifier.
+  todo at: #title put: trimmed.
+  todo at: #completed put: false.
   items add: todo.
   ^ todo
 ].
@@ -53,20 +53,20 @@ TodoRepository>>addTitle: title [
 TodoRepository>>findById: rawId [
   | numericId |
   numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
-  ^ items detect: [:todo | (todo at: "id") = numericId ] ifNone: [ nil ]
+  ^ items detect: [:todo | todo::id = numericId ] ifNone: [ nil ]
 ].
 
 TodoRepository>>toggle: rawId [
   | todo |
   todo := self findById: rawId.
   todo isNil ifTrue: [ ^ nil ].
-  todo at: "completed" put: ((todo at: "completed") not).
+  todo::completed := (todo::completed not).
   ^ todo
 ].
 
 TodoRepository>>delete: rawId [
   | numericId |
   numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
-  items := items reject: [:todo | (todo at: "id") = numericId ].
+  items := items reject: [:todo | todo::id = numericId ].
   ^ self
 ].
