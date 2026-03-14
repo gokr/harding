@@ -288,6 +288,7 @@ type
     body*: seq[Node]                      # AST statements
     isMethod*: bool                       # true if method definition
     selector*: string                     # method selector (name) - set when method is registered
+    primitiveSelector*: string            # for declarative primitives: selector of underlying primitive
     localCount*: int                      # total indexed locals: 1(self) + params.len + temps.len
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
@@ -450,6 +451,7 @@ var
   integerClass*: Class = nil
   floatClass*: Class = nil
   stringClass*: Class = nil
+  bufferClass*: Class = nil
   arrayClass*: Class = nil
   tableClass*: Class = nil
   blockClass*: Class = nil

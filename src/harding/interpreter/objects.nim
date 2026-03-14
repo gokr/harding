@@ -343,6 +343,19 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   # Mark block as a method so return (^) has correct semantics
   meth.isMethod = true
   meth.selector = selector  # Store the selector for later lookup
+
+  # Resolve declarative primitive: copy nativeImpl from underlying primitive
+  # This eliminates the extra message dispatch overhead for <primitive ...> syntax
+  if meth.primitiveSelector.len > 0:
+    let primSelector = meth.primitiveSelector
+    let methodTable = if isClassMethod: cls.allClassMethods else: cls.allMethods
+    if primSelector in methodTable:
+      let primMethod = methodTable[primSelector]
+      if primMethod.nativeImpl != nil:
+        meth.nativeImpl = primMethod.nativeImpl
+        meth.nativeValueImpl = primMethod.nativeValueImpl
+        meth.hasInterpreterParam = primMethod.hasInterpreterParam
+
   if isClassMethod:
     cls.classMethods[selector] = meth
     cls.allClassMethods[selector] = meth

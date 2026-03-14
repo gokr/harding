@@ -1,0 +1,30 @@
+# Buffer - String/Stream buffer for accumulating output
+#
+# Nim primitives implemented:
+#   primitiveBufferWrite:            - Append string/value to buffer
+#   primitiveBufferContents          - Return accumulated string
+#   primitiveBufferClear             - Empty the buffer
+#   primitiveBufferSize              - Return character count
+#   primitiveBufferWithCapacity:     - Create buffer with initial capacity
+
+Buffer class>>withCapacity: capacity <primitive primitiveBufferWithCapacity: capacity>
+
+Buffer>>write: value <primitive primitiveBufferWrite: value>
+Buffer>><< value <primitive primitiveBufferWrite: value>
+Buffer>>contents <primitive primitiveBufferContents>
+Buffer>>clear <primitive primitiveBufferClear>
+Buffer>>size <primitive primitiveBufferSize>
+
+Buffer>>asString [
+  ^ self contents
+]
+
+Buffer>>printString [
+  ^ self contents printString
+]
+
+Buffer>>stream: aBlock [
+  # Convenience for streaming and accumulating output in a block
+  aBlock value: self.
+  ^ self contents
+]

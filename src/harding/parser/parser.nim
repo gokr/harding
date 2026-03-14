@@ -10,12 +10,12 @@ import ../core/types
 # Set of all binary operator tokens for quick lookup
 const BinaryOpTokens* = {
   tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
-  tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe
+  tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe
 }
 
 const TableValueBinaryOpTokens = {
   tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent,
-  tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe
+  tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe
 }
 
 proc suggestHelp*(token: string): string =
@@ -244,8 +244,8 @@ proc parsePrimary(parser: var Parser): Node =
         # Check if this is a super send (followed by message selector)
         let nextTok = parser.peek()
         if nextTok.kind in {tkIdent, tkKeyword, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq,
-                           tkPercent, tkComma, tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq,
-                           tkAmpersand, tkPipe, tkTag}:
+                            tkPercent, tkComma, tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft,
+                            tkAmpersand, tkPipe, tkTag}:
           # This is a super send, parse it
           var explicitParent: string = ""
 
@@ -275,7 +275,7 @@ proc parsePrimary(parser: var Parser): Node =
           of tkIdent:
             selector = parser.next().value
           of tkSpecial, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkPercent,
-             tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
+             tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe:
             selector = parser.next().value
             let arg = parser.parseExpression(parseMessages = false)
             if arg == nil:
@@ -631,7 +631,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true,
       else:
         return accessedPrimary
     of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
-       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe:
       # Binary operator directly after primary
       current = parser.parseBinaryOperators(accessedPrimary, binaryTokens)
       # Check for keyword messages (may be on next line)
@@ -696,7 +696,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
         parser.parseError("Expected message after ;")
         return nil
     of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
-       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkAmpersand, tkPipe:
+       tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe:
       # Binary operator
       discard parser.next()  # Skip operator
       let right = parser.parseExpression(parseMessages = false)
@@ -1197,6 +1197,7 @@ proc parseMethodDefinition(parser: var Parser, receiver: Node): Node =
           col: parser.lastCol
         )))],
         isMethod: true,
+        primitiveSelector: primSelector,  # Store for resolution during method registration
         nativeImpl: nil,
         capturedEnv: initTable[string, MutableCell](),
         capturedEnvInitialized: true
