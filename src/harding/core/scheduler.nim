@@ -356,7 +356,6 @@ proc createProcessorClass*(): Class =
   discard initCoreClasses()
 
   processorClass = newClass(superclasses = @[objectClass], name = "Processor")
-  processorClass.tags = @["Processor", "Scheduler"]
 
   # Add yield method
   let yieldMethod = createCoreMethod("yield")
@@ -540,7 +539,6 @@ proc createProcessClass*(): Class =
   discard initCoreClasses()
 
   processClass = newClass(superclasses = @[objectClass], name = "Process")
-  processClass.tags = @["Process", "Proxy"]
   processClass.isNimProxy = true
   processClass.hardingType = "Process"
 
@@ -692,7 +690,6 @@ proc createSchedulerClass*(): Class =
   discard initCoreClasses()
 
   schedulerClass = newClass(superclasses = @[objectClass], name = "Scheduler")
-  schedulerClass.tags = @["Scheduler", "Proxy"]
   schedulerClass.isNimProxy = true
   schedulerClass.hardingType = "Scheduler"
 
@@ -927,7 +924,6 @@ proc createMonitorClass*(): Class =
   discard initCoreClasses()
 
   monitorClass = newClass(superclasses = @[objectClass], name = "Monitor")
-  monitorClass.tags = @["Monitor", "Synchronization"]
   monitorClass.isNimProxy = true
   monitorClass.hardingType = "Monitor"
 
@@ -1125,7 +1121,6 @@ proc createSharedQueueClass*(): Class =
   discard initCoreClasses()
 
   sharedQueueClass = newClass(superclasses = @[objectClass], name = "SharedQueue")
-  sharedQueueClass.tags = @["SharedQueue", "Synchronization"]
   sharedQueueClass.isNimProxy = true
   sharedQueueClass.hardingType = "SharedQueue"
 
@@ -1296,7 +1291,6 @@ proc createSemaphoreClass*(): Class =
   discard initCoreClasses()
 
   semaphoreClass = newClass(superclasses = @[objectClass], name = "Semaphore")
-  semaphoreClass.tags = @["Semaphore", "Synchronization"]
   semaphoreClass.isNimProxy = true
   semaphoreClass.hardingType = "Semaphore"
 
@@ -1472,7 +1466,6 @@ proc createNimChannelClass*(): Class =
   discard initCoreClasses()
 
   nimChannelClass = newClass(superclasses = @[objectClass], name = "NimChannel")
-  nimChannelClass.tags = @["NimChannel", "Synchronization"]
   nimChannelClass.isNimProxy = true
   nimChannelClass.hardingType = "NimChannel"
 

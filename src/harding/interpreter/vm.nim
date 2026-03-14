@@ -99,9 +99,13 @@ type
     when not defined(js):
       file: File
 
+  BufferProxy = ref object
+    data: string
+
 # Keep FileStreamProxy references alive - stored as raw pointer in nimValue,
 # ARC needs a rooted reference to avoid premature collection.
 var fileStreamProxies: seq[FileStreamProxy] = @[]
+var bufferProxies: seq[BufferProxy] = @[]
 
 # Forward declarations
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
@@ -2562,7 +2566,6 @@ proc initGlobals*(interp: var Interpreter) =
   if objectClass == nil:
     # Fallback: create Object class if initCoreClasses wasn't called
     objectCls = newClass(superclasses = @[rootCls], name = "Object")
-    objectCls.tags = @["Object"]
     objectClass = objectCls
   else:
     # Use the Object class already created by initCoreClasses
@@ -2573,7 +2576,6 @@ proc initGlobals*(interp: var Interpreter) =
   if mixinClass == nil:
     # Fallback: create Mixin class if initCoreClasses was not called
     mixinCls = newClass(superclasses = @[objectCls], name = "Mixin")
-    mixinCls.tags = @["Mixin", "Object"]
     mixinClass = mixinCls
   else:
     # Use the Mixin class already created by initCoreClasses
@@ -3479,23 +3481,19 @@ proc initGlobals*(interp: var Interpreter) =
   # Create Number class (derives from Object)
   # Number is an abstract class; methods are defined in .hrd files
   let numberCls = newClass(superclasses = @[objectCls], name = "Number")
-  numberCls.tags = @["Number"]
 
   # Create Integer class (derives from Number)
   # Methods are defined in lib/core/Integer.hrd using <primitive> syntax
   let intCls = newClass(superclasses = @[numberCls], name = "Integer")
-  intCls.tags = @["Integer", "Number"]
   integerClass = intCls
 
   # Create Float class (derives from Number)
   # Methods are defined in lib/core/Float.hrd using <primitive> syntax
   let floatCls = newClass(superclasses = @[numberCls], name = "Float")
-  floatCls.tags = @["Float", "Number"]
   floatClass = floatCls
 
   # Create String class (derives from Object)
   let stringCls = newClass(superclasses = @[objectCls], name = "String")
-  stringCls.tags = @["String", "Text"]
   stringClass = stringCls
 
   # Register String primitive methods
@@ -3598,6 +3596,126 @@ proc initGlobals*(interp: var Interpreter) =
   stringRepeatMethod.setNativeValueImpl(primitiveStringRepeatValueImpl)
   stringCls.methods["primitiveRepeat:"] = stringRepeatMethod
   stringCls.allMethods["primitiveRepeat:"] = stringRepeatMethod
+
+  # Create Buffer class (derives from Object)
+  let bufferCls = newClass(superclasses = @[objectCls], name = "Buffer")
+  bufferCls.isNimProxy = true
+  bufferCls.hardingType = "Buffer"
+  bufferClass = bufferCls
+
+  proc bufferClassNewImpl(interp: var Interpreter, self: Instance,
+                          args: seq[NodeValue]): NodeValue {.nimcall.} =
+    discard interp
+    discard args
+    let instCls = if self != nil and self.class != nil: self.class else: bufferClass
+    let inst = instCls.newInstance()
+    let proxy = BufferProxy(data: newStringOfCap(256))
+    bufferProxies.add(proxy)
+    inst.isNimProxy = true
+    inst.nimValue = cast[pointer](proxy)
+    return inst.toValue()
+
+  proc bufferClassWithCapacityImpl(interp: var Interpreter, self: Instance,
+                                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+    discard interp
+    let instCls = if self != nil and self.class != nil: self.class else: bufferClass
+    let inst = instCls.newInstance()
+    var capacity = 256
+    if args.len > 0:
+      let (ok, val) = args[0].tryGetInt()
+      if ok and val > 0:
+        capacity = val
+    let proxy = BufferProxy(data: newStringOfCap(capacity))
+    bufferProxies.add(proxy)
+    inst.isNimProxy = true
+    inst.nimValue = cast[pointer](proxy)
+    return inst.toValue()
+
+  proc bufferWriteImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    if self == nil:
+      return nilValue()
+    if not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
+      let proxy = BufferProxy(data: newStringOfCap(256))
+      bufferProxies.add(proxy)
+      self.isNimProxy = true
+      self.nimValue = cast[pointer](proxy)
+    let proxy = cast[BufferProxy](self.nimValue)
+    if args.len > 0:
+      proxy.data.add(args[0].toString())
+    return self.toValue()
+
+  proc bufferContentsImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    discard args
+    if self == nil or not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
+      return toValue("")
+    let proxy = cast[BufferProxy](self.nimValue)
+    return toValue(proxy.data)
+
+  proc bufferClearImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    discard args
+    if self == nil:
+      return nilValue()
+    if self.isNimProxy and self.class != nil and self.class.hardingType == "Buffer" and nimValueIsSet(self.nimValue):
+      let proxy = cast[BufferProxy](self.nimValue)
+      proxy.data.setLen(0)
+    return self.toValue()
+
+  proc bufferSizeImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    discard args
+    if self == nil or not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
+      return toValue(0)
+    let proxy = cast[BufferProxy](self.nimValue)
+    return toValue(proxy.data.len)
+
+  let bufferNewMethod = createCoreMethod("new")
+  bufferNewMethod.setNativeImpl(bufferClassNewImpl)
+  setNativeValueFromInstanceWithInterp(bufferNewMethod, bufferClassNewImpl)
+  bufferNewMethod.hasInterpreterParam = true
+  bufferCls.classMethods["new"] = bufferNewMethod
+  bufferCls.allClassMethods["new"] = bufferNewMethod
+
+  let bufferWithCapacityMethod = createCoreMethod("primitiveBufferWithCapacity:")
+  bufferWithCapacityMethod.setNativeImpl(bufferClassWithCapacityImpl)
+  setNativeValueFromInstanceWithInterp(bufferWithCapacityMethod, bufferClassWithCapacityImpl)
+  bufferWithCapacityMethod.hasInterpreterParam = true
+  bufferCls.classMethods["primitiveBufferWithCapacity:"] = bufferWithCapacityMethod
+  bufferCls.allClassMethods["primitiveBufferWithCapacity:"] = bufferWithCapacityMethod
+  bufferCls.classMethods["withCapacity:"] = bufferWithCapacityMethod
+  bufferCls.allClassMethods["withCapacity:"] = bufferWithCapacityMethod
+
+  let bufferWriteMethod = createCoreMethod("primitiveBufferWrite:")
+  bufferWriteMethod.setNativeImpl(bufferWriteImpl)
+  setNativeValueFromInstance(bufferWriteMethod, bufferWriteImpl)
+  bufferCls.methods["primitiveBufferWrite:"] = bufferWriteMethod
+  bufferCls.allMethods["primitiveBufferWrite:"] = bufferWriteMethod
+  bufferCls.methods["write:"] = bufferWriteMethod
+  bufferCls.allMethods["write:"] = bufferWriteMethod
+  bufferCls.methods["<<"] = bufferWriteMethod
+  bufferCls.allMethods["<<"] = bufferWriteMethod
+
+  let bufferContentsMethod = createCoreMethod("primitiveBufferContents")
+  bufferContentsMethod.setNativeImpl(bufferContentsImpl)
+  setNativeValueFromInstance(bufferContentsMethod, bufferContentsImpl)
+  bufferCls.methods["primitiveBufferContents"] = bufferContentsMethod
+  bufferCls.allMethods["primitiveBufferContents"] = bufferContentsMethod
+  bufferCls.methods["contents"] = bufferContentsMethod
+  bufferCls.allMethods["contents"] = bufferContentsMethod
+
+  let bufferClearMethod = createCoreMethod("primitiveBufferClear")
+  bufferClearMethod.setNativeImpl(bufferClearImpl)
+  setNativeValueFromInstance(bufferClearMethod, bufferClearImpl)
+  bufferCls.methods["primitiveBufferClear"] = bufferClearMethod
+  bufferCls.allMethods["primitiveBufferClear"] = bufferClearMethod
+  bufferCls.methods["clear"] = bufferClearMethod
+  bufferCls.allMethods["clear"] = bufferClearMethod
+
+  let bufferSizeMethod = createCoreMethod("primitiveBufferSize")
+  bufferSizeMethod.setNativeImpl(bufferSizeImpl)
+  setNativeValueFromInstance(bufferSizeMethod, bufferSizeImpl)
+  bufferCls.methods["primitiveBufferSize"] = bufferSizeMethod
+  bufferCls.allMethods["primitiveBufferSize"] = bufferSizeMethod
+  bufferCls.methods["size"] = bufferSizeMethod
+  bufferCls.allMethods["size"] = bufferSizeMethod
 
   # ============================================================================
   # Register Integer primitive selectors (used by lib/core/Integer.hrd)
@@ -3786,7 +3904,6 @@ proc initGlobals*(interp: var Interpreter) =
     arrayCls = arrayClass
   else:
     arrayCls = newClass(superclasses = @[objectCls], name = "Array")
-    arrayCls.tags = @["Array", "Collection"]
     arrayClass = arrayCls
 
   # Register Array primitive selectors (used by lib/core/Array.hrd)
@@ -3882,7 +3999,6 @@ proc initGlobals*(interp: var Interpreter) =
     tableCls = tableClass
   else:
     tableCls = newClass(superclasses = @[objectCls], name = "Table")
-    tableCls.tags = @["Table", "Dictionary", "Collection"]
     tableClass = tableCls
 
   # Register Table primitive selectors (used by lib/core/Table.hrd)
@@ -3945,7 +4061,6 @@ proc initGlobals*(interp: var Interpreter) =
     libraryCls = newClass(superclasses = @[objectCls],
                           slotNames = @["bindings", "imports", "name"],
                           name = "Library")
-    libraryCls.tags = @["Library", "Namespace"]
     libraryClass = libraryCls
 
   # Register Library instance primitives (at:, at:put:, keys, etc.)
@@ -4030,7 +4145,6 @@ proc initGlobals*(interp: var Interpreter) =
   # Create Boolean class (derives from Object)
   # Methods are defined in lib/core/Boolean.hrd
   let booleanCls = newClass(superclasses = @[objectCls], name = "Boolean")
-  booleanCls.tags = @["Boolean"]
   booleanClass = booleanCls
 
   # Register Boolean primitive selectors
@@ -4050,18 +4164,15 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Create True class (singleton class for true value)
   let trueCls = newClass(superclasses = @[booleanCls], name = "True")
-  trueCls.tags = @["True", "Boolean"]
   trueClassCache = trueCls
 
   # Create False class (singleton class for false value)
   let falseCls = newClass(superclasses = @[booleanCls], name = "False")
-  falseCls.tags = @["False", "Boolean"]
   falseClassCache = falseCls
 
   # Create Block class (derives from Object)
   # Methods are defined in lib/core/Block.hrd using <primitive> syntax
   let blockCls = newClass(superclasses = @[objectCls], name = "Block")
-  blockCls.tags = @["Block", "Closure"]
   blockClass = blockCls
 
   # Register Block primitive selectors (used by lib/core/Block.hrd)
@@ -4222,7 +4333,6 @@ proc initGlobals*(interp: var Interpreter) =
   # Create Random class (derives from Object) - random number generator
   # ============================================================================
   let randomCls = newClass(superclasses = @[objectCls], name = "Random")
-  randomCls.tags = @["Random", "Object"]
   randomClass = randomCls
 
   # Register Random primitive methods
@@ -4252,7 +4362,6 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Create UndefinedObject class (derives from Object) - the class of nil
   let undefinedObjCls = newClass(superclasses = @[objectCls], name = "UndefinedObject")
-  undefinedObjCls.tags = @["UndefinedObject", "Object"]
   undefinedObjectClass = undefinedObjCls  # Set global variable in types module
 
   # Create the singleton nil instance (instance of UndefinedObject)
@@ -4271,6 +4380,7 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["Integer"] = intCls.toValue()
   interp.globals[]["Float"] = floatCls.toValue()
   interp.globals[]["String"] = stringCls.toValue()
+  interp.globals[]["Buffer"] = bufferCls.toValue()
   interp.globals[]["Array"] = arrayCls.toValue()
   interp.globals[]["Table"] = tableCls.toValue()
   interp.globals[]["Set"] = types.setClass.toValue()
@@ -4286,7 +4396,6 @@ proc initGlobals*(interp: var Interpreter) =
   # Create Class class (metaclass) - derives from Object like all classes
   # This allows isKindOf: Class to work properly
   let classCls = newClass(superclasses = @[objectCls], name = "Class")
-  classCls.tags = @["Class", "Object"]
 
   # Ensure all class objects (instances of Class) can use core class-side
   # bootstrap constructors like derive/new, not just Object.
@@ -5110,7 +5219,6 @@ proc createGlobalTableClass*(): Class =
         return val.classVal
 
   let globalTableClass = newClass(superclasses = @[tableClass], name = "GlobalTable")
-  globalTableClass.tags = @["GlobalTable", "Dictionary"]
   globalTableClass.isNimProxy = true
   globalTableClass.hardingType = "GlobalTable"
 

@@ -689,35 +689,30 @@ proc initCoreClasses*(): Class =
   # Methods are defined in lib/core/Integer.hrd using <primitive> syntax
   if integerClass == nil:
     integerClass = newClass(superclasses = @[objectClass], name = "Integer")
-    integerClass.tags = @["Integer", "Number"]
     addGlobal("Integer", NodeValue(kind: vkClass, classVal: integerClass))
 
   # Create Float class
   # Methods are defined in lib/core/Float.hrd using <primitive> syntax
   if floatClass == nil:
     floatClass = newClass(superclasses = @[objectClass], name = "Float")
-    floatClass.tags = @["Float", "Number"]
     addGlobal("Float", NodeValue(kind: vkClass, classVal: floatClass))
 
   # Create String class
   # Methods are defined in lib/core/String.hrd using <primitive> syntax
   if stringClass == nil:
     stringClass = newClass(superclasses = @[objectClass], name = "String")
-    stringClass.tags = @["String"]
     addGlobal("String", NodeValue(kind: vkClass, classVal: stringClass))
 
   # Create Array class
   # Methods are defined in lib/core/Array.hrd using <primitive> syntax
   if arrayClass == nil:
     arrayClass = newClass(superclasses = @[objectClass], name = "Array")
-    arrayClass.tags = @["Array", "Collection"]
     addGlobal("Array", NodeValue(kind: vkClass, classVal: arrayClass))
 
   # Create Table class
   # Methods are defined in lib/core/Table.hrd using <primitive> syntax
   if tableClass == nil:
     tableClass = newClass(superclasses = @[objectClass], name = "Table")
-    tableClass.tags = @["Table", "Collection", "Dictionary"]
     addGlobal("Table", NodeValue(kind: vkClass, classVal: tableClass))
 
   # Create Library class (composition: ikObject with bindings Table slot)
@@ -726,7 +721,6 @@ proc initCoreClasses*(): Class =
     libraryClass = newClass(superclasses = @[objectClass],
                             slotNames = @["bindings", "imports", "name"],
                             name = "Library")
-    libraryClass.tags = @["Library", "Namespace"]
     libraryClass.hardingType = "Library"
     addGlobal("Library", NodeValue(kind: vkClass, classVal: libraryClass))
 
@@ -734,21 +728,18 @@ proc initCoreClasses*(): Class =
     # Methods are defined in lib/core/Set.hrd using <primitive> syntax
   if setClass == nil:
     setClass = newClass(superclasses = @[objectClass], name = "Set")
-    setClass.tags = @["Set", "Collection"]
     # Note: Set primitives like primitiveSetNew, primitiveSetAdd: etc.
     # are registered in vm.nim initGlobals() for use by Collections.hrd
 
   # Create Block class
   if blockClass == nil:
     blockClass = newClass(superclasses = @[objectClass], name = "Block")
-    blockClass.tags = @["Block", "Closure"]
 
     addGlobal("Block", NodeValue(kind: vkClass, classVal: blockClass))
 
   # Create Boolean class (parent for True and False)
   if booleanClass == nil:
     booleanClass = newClass(superclasses = @[objectClass], name = "Boolean")
-    booleanClass.tags = @["Boolean"]
 
     addGlobal("Boolean", NodeValue(kind: vkClass, classVal: booleanClass))
 

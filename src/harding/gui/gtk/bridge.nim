@@ -89,7 +89,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Widget class (base class for all GTK widgets)
   let widgetCls = newClass(superclasses = @[objectClass], name = "GtkWidget")
-  widgetCls.tags = @["GTK", "Widget"]
   widgetCls.isNimProxy = true
   widgetCls.hardingType = "GtkWidget"
 
@@ -184,7 +183,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Window class
   let windowCls = newClass(superclasses = @[widgetCls], name = "GtkWindow")
-  windowCls.tags = @["GTK", "Window"]
   windowCls.isNimProxy = true
   windowCls.hardingType = "GtkWindow"
 
@@ -250,7 +248,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Button class
   let buttonCls = newClass(superclasses = @[widgetCls], name = "GtkButton")
-  buttonCls.tags = @["GTK", "Button"]
   buttonCls.isNimProxy = true
   buttonCls.hardingType = "GtkButton"
 
@@ -293,7 +290,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Entry class
   let entryCls = newClass(superclasses = @[widgetCls], name = "GtkEntry")
-  entryCls.tags = @["GTK", "Entry", "Input"]
   entryCls.isNimProxy = true
   entryCls.hardingType = "GtkEntry"
 
@@ -322,7 +318,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Box class
   let boxCls = newClass(superclasses = @[widgetCls], name = "GtkBox")
-  boxCls.tags = @["GTK", "Box", "Layout"]
   boxCls.isNimProxy = true
   boxCls.hardingType = "GtkBox"
 
@@ -361,7 +356,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create ScrolledWindow class (for scrollable containers)
   let scrolledWindowCls = newClass(superclasses = @[widgetCls], name = "GtkScrolledWindow")
-  scrolledWindowCls.tags = @["GTK", "ScrolledWindow", "Container"]
   scrolledWindowCls.isNimProxy = true
   scrolledWindowCls.hardingType = "GtkScrolledWindow"
 
@@ -382,7 +376,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Paned class (for split pane containers)
   let panedCls = newClass(superclasses = @[widgetCls], name = "GtkPaned")
-  panedCls.tags = @["GTK", "Paned", "Container"]
   panedCls.isNimProxy = true
   panedCls.hardingType = "GtkPaned"
 
@@ -425,7 +418,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create ListBox class (for scrollable lists)
   let listBoxCls = newClass(superclasses = @[widgetCls], name = "GtkListBox")
-  listBoxCls.tags = @["GTK", "ListBox", "List"]
   listBoxCls.isNimProxy = true
   listBoxCls.hardingType = "GtkListBox"
 
@@ -481,7 +473,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create Label class (for display widgets)
   let labelCls = newClass(superclasses = @[widgetCls], name = "GtkLabel")
-  labelCls.tags = @["GTK", "Label", "Display"]
   labelCls.isNimProxy = true
   labelCls.hardingType = "GtkLabel"
 
@@ -509,7 +500,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create TextView class (for multiple line text editing)
   let textViewCls = newClass(superclasses = @[widgetCls], name = "GtkTextView")
-  textViewCls.tags = @["GTK", "TextView", "Editor"]
   textViewCls.isNimProxy = true
   textViewCls.hardingType = "GtkTextView"
 
@@ -585,7 +575,6 @@ proc initGtkBridge*(interp: var Interpreter) =
   # Create GtkSourceView class (for source code editing with syntax highlighting)
   # Inherits from GtkTextView so it gets the text manipulation methods
   let sourceViewCls = newClass(superclasses = @[textViewCls], name = "GtkSourceView")
-  sourceViewCls.tags = @["GTK", "SourceView", "Editor"]
   sourceViewCls.isNimProxy = true
   sourceViewCls.hardingType = "GtkSourceView"
 
@@ -633,7 +622,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create GtkEventController class for keyboard handling
   let eventControllerCls = newClass(superclasses = @[objectClass], name = "GtkEventController")
-  eventControllerCls.tags = @["GTK", "EventController"]
   eventControllerCls.isNimProxy = true
   eventControllerCls.hardingType = "GtkEventController"
 
@@ -664,7 +652,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Create TextBuffer class (for TextView text storage)
   let textBufferCls = newClass(superclasses = @[objectClass], name = "GtkTextBuffer")
-  textBufferCls.tags = @["GTK", "TextBuffer"]
   textBufferCls.isNimProxy = true
   textBufferCls.hardingType = "GtkTextBuffer"
 
@@ -706,7 +693,6 @@ proc initGtkBridge*(interp: var Interpreter) =
   when not defined(gtk3):
     # Create AlertDialog class (GTK4 only)
     let alertDialogCls = newClass(superclasses = @[objectClass], name = "GtkAlertDialog")
-    alertDialogCls.tags = @["GTK", "AlertDialog", "Dialog"]
     alertDialogCls.isNimProxy = true
     alertDialogCls.hardingType = "GtkAlertDialog"
 
@@ -726,7 +712,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
     # Create GtkPopover class (GTK4 only) - custom popover with button content
     let popoverCls = newClass(superclasses = @[widgetCls], name = "GtkPopover")
-    popoverCls.tags = @["GTK", "Popover", "Menu"]
     popoverCls.isNimProxy = true
     popoverCls.hardingType = "GtkPopover"
 
@@ -776,7 +761,6 @@ proc initGtkBridge*(interp: var Interpreter) =
   when defined(gtk3):
     # Create MenuItem class (GTK3 only)
     let menuItemCls = newClass(superclasses = @[widgetCls], name = "GtkMenuItem")
-    menuItemCls.tags = @["GTK", "MenuItem", "Menu"]
     menuItemCls.isNimProxy = true
     menuItemCls.hardingType = "GtkMenuItem"
 
@@ -802,7 +786,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
     # Create Menu class (GTK3 only)
     let menuCls = newClass(superclasses = @[objectClass], name = "GtkMenu")
-    menuCls.tags = @["GTK", "Menu"]
     menuCls.isNimProxy = true
     menuCls.hardingType = "GtkMenu"
 
@@ -822,7 +805,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
     # Create MenuBar class (GTK3 only)
     let menuBarCls = newClass(superclasses = @[widgetCls], name = "GtkMenuBar")
-    menuBarCls.tags = @["GTK", "MenuBar", "Menu"]
     menuBarCls.isNimProxy = true
     menuBarCls.hardingType = "GtkMenuBar"
 
@@ -843,7 +825,6 @@ proc initGtkBridge*(interp: var Interpreter) =
 
   # Register Launcher class (derived from GtkWindow)
   let launcherCls = newClass(superclasses = @[windowCls], slotNames = @["windows", "nextWorkspaceId"], name = "Launcher")
-  launcherCls.tags = @["GTK", "Window", "Launcher", "IDE"]
   launcherCls.isNimProxy = true
   launcherCls.hardingType = "Launcher"
 

@@ -73,7 +73,6 @@ type
 
     # Metadata
     name*: string                           # Class name for debugging/reflection
-    tags*: seq[string]                      # Type tags
     isNimProxy*: bool                       # Class wraps Nim type
     hardingType*: string                    # Nim type name for FFI
     hasSlots*: bool                         # Has any slots
@@ -926,7 +925,6 @@ proc initRootClass*(): Class =
   ## Root has zero methods - used as base for DNU wrappers/proxies
   if rootClass == nil:
     rootClass = newClass(name = "Root")
-    rootClass.tags = @["Root"]
   return rootClass
 
 proc initObjectClass*(): Class =
@@ -936,7 +934,6 @@ proc initObjectClass*(): Class =
     # Ensure Root exists first
     discard initRootClass()
     objectClass = newClass(superclasses = @[rootClass], name = "Object")
-    objectClass.tags = @["Object"]
   return objectClass
 
 proc initMixinClass*(): Class =
@@ -945,7 +942,6 @@ proc initMixinClass*(): Class =
   ## Use Mixin derive: methods: [...] to create reusable trait/mixin classes
   if mixinClass == nil:
     mixinClass = newClass(superclasses = @[objectClass], name = "Mixin")
-    mixinClass.tags = @["Mixin", "Object"]
   return mixinClass
 
 # ============================================================================
@@ -954,13 +950,11 @@ proc initMixinClass*(): Class =
 
 proc isMixin*(cls: Class): bool =
   ## Check if a class is a mixin class.
-  ## A class is considered a mixin when it is tagged as Mixin or when its
-  ## primary superclass chain reaches Mixin (e.g., Comparable := Mixin derive).
+  ## A class is considered a mixin when its primary superclass chain reaches
+  ## Mixin (e.g. Comparable := Mixin derive).
   ## This excludes regular classes that only include mixins as additional parents.
   if cls == nil:
     return false
-  if "Mixin" in cls.tags:
-    return true
 
   var current = cls
   while current != nil:
@@ -989,7 +983,6 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   result.superclasses = superclasses
   result.subclasses = @[]
   result.name = name
-  result.tags = @["Class"]
   result.isNimProxy = false
   result.hardingType = ""
   result.hasSlots = slotNames.len > 0
