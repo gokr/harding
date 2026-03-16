@@ -32,7 +32,7 @@ type
   # Node kind enum - defined before Node for use as stored field
   NodeKind* = enum
     nkLiteral, nkIdent, nkMessage, nkBlock, nkAssign, nkReturn,
-    nkArray, nkTable, nkObjectLiteral, nkPrimitive, nkPrimitiveCall, nkCascade,
+    nkArray, nkTable, nkPrimitive, nkPrimitiveCall, nkCascade,
     nkSlotAccess, nkNamedAccess, nkSuperSend, nkPseudoVar,
     nkIf, nkWhile  # Control flow specialization nodes
 
@@ -370,9 +370,6 @@ type
   TableNode* = ref object of Node
     entries*: seq[tuple[key: Node, value: Node]]
 
-  ObjectLiteralNode* = ref object of Node
-    properties*: seq[tuple[name: string, value: Node]]
-
   PrimitiveNode* = ref object of Node
     tag*: string                    # Raw tag content like "primitive" or "primitive name=\"clone\""
     nimCode*: string               # Raw Nim code between tags
@@ -457,6 +454,7 @@ var
   libraryClass*: Class = nil                    # Library class for namespace management
   setClass*: Class = nil                        # Set class for hash set operations
   randomClass*: Class = nil                     # Random class for random number generation
+  jsonClass*: Class = nil                       # Json class for prefix literal support
   classClass*: Class = nil                      # Class class (metaclass)
 
 # nil instance - singleton instance of UndefinedObject
@@ -496,7 +494,6 @@ proc kind*(node: Node): NodeKind {.inline.} =
   elif node of CascadeNode: nkCascade
   elif node of ArrayNode: nkArray
   elif node of TableNode: nkTable
-  elif node of ObjectLiteralNode: nkObjectLiteral
   elif node of PrimitiveNode: nkPrimitive
   else: raise newException(ValueError, "Unknown node type")
 

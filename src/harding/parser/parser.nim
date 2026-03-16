@@ -150,7 +150,7 @@ proc parsePrimaryUnaryOnly(parser: var Parser): Node
 proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
-proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode
+proc parsePrefixLiteral(parser: var Parser; prefix: string): Node
 proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
@@ -214,6 +214,11 @@ proc expect(parser: var Parser, kind: TokenKind): bool =
 
 # Parse primary expressions
 proc parsePrimary(parser: var Parser): Node =
+  # Skip separators (newlines) before parsing primary
+  # This allows newlines before expressions like: "with: (expr)" or just "(expr)"
+  while parser.peek().kind == tkSeparator:
+    discard parser.next()
+  
   let token = parser.peek()
 
   case token.kind
@@ -306,12 +311,18 @@ proc parsePrimary(parser: var Parser): Node =
       return PseudoVarNode(name: token.value)
 
     # Regular identifier - needs variable lookup at runtime
+    # Check for prefix literal syntax: Ident{...}
+    if parser.peek().kind == tkSpecial and parser.peek().value == "{":
+      return parser.parsePrefixLiteral(token.value)
     return IdentNode(name: token.value, localIndex: -1)
 
   of tkLParen:
     # Parenthesized expression
     discard parser.next()  # Skip (
     let expr = parser.parseExpression()
+    # Skip any separators (newlines) before closing paren
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
     if not parser.expect(tkRParen):
       parser.parseError("Expected ')'")
     return expr
@@ -328,10 +339,6 @@ proc parsePrimary(parser: var Parser): Node =
   of tkTableStart:
     # Table literal #{...}
     return parser.parseTableLiteral()
-
-  of tkObjectStart:
-    # Object literal {| ... |}
-    return parser.parseObjectLiteral()
 
   of tkRBracket:
     # Closing bracket - can appear when parsing blocks
@@ -373,6 +380,11 @@ proc parsePrimary(parser: var Parser): Node =
 # Parse primary expression with optional unary messages only
 # Used for keyword arguments where we want to allow "obj msg" but not "obj + obj" or "obj msg: obj"
 proc parsePrimaryUnaryOnly(parser: var Parser): Node =
+  # Skip separators (newlines) before parsing primary
+  # This allows newlines between keywords and arguments like: "with: (expr)"
+  while parser.peek().kind == tkSeparator:
+    discard parser.next()
+  
   let primary = parser.parsePrimary()
   if primary == nil:
     return nil
@@ -913,52 +925,81 @@ proc parseTableLiteral(parser: var Parser): TableNode =
 
   return table
 
-# Parse object literal {| ... |}
-proc parseObjectLiteral(parser: var Parser): ObjectLiteralNode =
-  if not parser.expect(tkObjectStart):
-    parser.parseError("Expected '{|' for object literal start")
+# Parse prefix literal: Prefix{content}
+# Parses expressions within braces and generates message send to Prefix class
+proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
+  ## Parse prefix literal like json{...} or yaml{...}
+  ## Normalizes prefix to TitleCase and generates parseLiteral: message
+  if not parser.expect(tkSpecial) or parser.tokens[parser.pos - 1].value != "{":
+    parser.parseError("Expected '{' after prefix literal name")
     return nil
-
-  let obj = ObjectLiteralNode()
-  obj.properties = @[]
-
-  # Parse properties until closing |}
-  while not (parser.peek().kind == tkPipe):
-    if parser.peek().kind == tkEOF:
-      parser.parseError("Unclosed object literal - expected '|'")
+  
+  # Extract content between braces by finding matching }
+  var content = ""
+  var braceDepth = 1
+  var safetyCounter = 0
+  const MAX_CHARS = 100000  # Safety limit
+  
+  while braceDepth > 0 and safetyCounter < MAX_CHARS:
+    if parser.pos >= parser.tokens.len:
+      parser.parseError("Unclosed prefix literal - expected '}'")
       return nil
-
-    # Property name (identifier)
-    if not parser.expect(tkIdent):
-      parser.parseError("Expected property name in object literal")
-      return nil
-    let propName = parser.tokens[parser.pos - 1].value
-
-    # Expect colon :
-    if not parser.expect(tkColon):
-      parser.parseError("Expected ':' after property name")
-      return nil
-
-    # Parse value
-    let value = parser.parseExpression(parseMessages = false)
-    if value == nil:
-      parser.parseError("Expected property value after ':'")
-      return nil
-
-    obj.properties.add((propName, value))
-
-    # Skip optional whitespace
-
-  # Consume closing |
-  discard parser.next()
-
-  # Expect closing }
-  if not (parser.peek().kind == tkSpecial and parser.peek().value == "}"):
-    parser.parseError("Expected '}' after '|' in object literal")
-    return nil
-  discard parser.next()
-
-  return obj
+    
+    let tok = parser.tokens[parser.pos]
+    inc safetyCounter
+    
+    case tok.kind
+    of tkSpecial:
+      if tok.value == "{":
+        inc braceDepth
+        content.add("{")
+      elif tok.value == "}":
+        dec braceDepth
+        if braceDepth > 0:
+          content.add("}")
+      else:
+        content.add(tok.value)
+    of tkString:
+      content.add("\"" & tok.value & "\"")
+    of tkIdent, tkKeyword:
+      content.add(tok.value)
+    of tkInt, tkFloat:
+      content.add(tok.value)
+    of tkSymbol:
+      content.add("#" & tok.value)
+    of tkSeparator:
+      content.add(" ")
+    of tkComma:
+      content.add(", ")
+    of tkArrow:
+      content.add(" -> ")
+    of tkColon:
+      content.add(":")
+    of tkPeriod:
+      content.add(".")
+    of tkAssign:
+      content.add(" := ")
+    of tkReturn:
+      content.add("^ ")
+    else:
+      content.add(tok.value)
+    
+    inc parser.pos
+  
+  # Normalize prefix to TitleCase (json, Json, JSON all become "Json")
+  var normalizedPrefix = ""
+  if prefix.len > 0:
+    normalizedPrefix.add(prefix[0].toUpperAscii())
+    for i in 1..<prefix.len:
+      normalizedPrefix.add(prefix[i].toLowerAscii())
+  
+  # Generate: Prefix parseLiteral: "content"
+  let argNode: Node = LiteralNode(value: NodeValue(kind: vkString, strVal: content))
+  return MessageNode(
+    receiver: IdentNode(name: normalizedPrefix, localIndex: -1),
+    selector: "parseLiteral:",
+    arguments: @[argNode]
+  )
 
 # Parse statement (expression or assignment)
 proc parseStatement(parser: var Parser; parseMessages = true): Node =

@@ -1,0 +1,14 @@
+#!/usr/bin/env harding
+#
+# Json.hrd - JSON literal support
+# Provides json{...} syntax for creating JSON strings
+#
+# The Json class and its methods are registered in vm.nim:
+# - Json class>>parseLiteral: content - parses json{...} literal
+# - Json class>>parse: jsonString - parses JSON string into Harding objects
+# - Json class>>stringify: value - converts Harding value to JSON string
+#
+# Usage:
+#   json{"x": 10, "y": 20}  → returns JSON string
+#   Json parse: jsonString  → returns Table/Array
+#   Json stringify: object  → returns JSON string

@@ -10,10 +10,10 @@ type
     tkLParen, tkRParen, tkLBracket, tkRBracket
     tkAssign, tkReturn, tkPeriod, tkSeparator
     tkSpecial  # ; & | etc
-    tkArrayStart, tkTableStart, tkObjectStart, tkArrow, tkColon, tkDoubleColon
+    tkArrayStart, tkTableStart, tkArrow, tkColon, tkDoubleColon
     tkTag, tkNimCode
     tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
-    tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq  # Multi-character binary operators: // \\ <= >= ~=
+    tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft  # Multi-character binary operators: // \\ <= >= ~= <<
     tkAmpersand, tkPipe  # & and | for logical operations
     tkMethodDef  # >> for method definitions
   Token* = object
@@ -374,6 +374,10 @@ proc nextToken*(lexer: var Lexer): Token =
       return parseTag(lexer)
     else:
       discard lexer.next()
+      # Check for << streaming operator
+      if lexer.peek() == '<':
+        discard lexer.next()
+        return Token(kind: tkShiftLeft, value: "<<", line: startLine, col: startCol)
       # Check for <= or <> comparison
       if lexer.peek() == '=':
         discard lexer.next()
@@ -467,12 +471,7 @@ proc nextToken*(lexer: var Lexer): Token =
     return parseSymbol(lexer)
   of '{':
     discard lexer.next()
-    # Check for object literal start {|
-    if lexer.peek() == '|':
-      discard lexer.next()
-      return Token(kind: tkObjectStart, value: "{|", line: startLine, col: startCol)
-    else:
-      return Token(kind: tkError, value: "Expected | after { for object literal", line: startLine, col: startCol)
+    return Token(kind: tkSpecial, value: "{", line: startLine, col: startCol)
   of '}':
     discard lexer.next()
     return Token(kind: tkSpecial, value: "}", line: startLine, col: startCol)
