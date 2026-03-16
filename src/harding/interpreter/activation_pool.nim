@@ -37,6 +37,7 @@ proc clearActivation*(act: Activation) =
   act.nonLocalReturnTarget = nil
   act.isClassMethod = false
   act.wasCaptured = false
+  act.blockHomeActivation = nil
 
 proc initActivationPool*() =
   ## Pre-allocate the pool so the first burst of method calls does not hit

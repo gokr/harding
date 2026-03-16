@@ -7660,6 +7660,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         ", got " & $args.len)
 
     # Block's home activation determines 'self'
+    # Capture homeActivation NOW before any recursive calls can overwrite blockNode.homeActivation
     let blockHome = blockNode.homeActivation
     let blockReceiver = if blockHome != nil and blockHome.receiver != nil:
                           blockHome.receiver
@@ -7668,6 +7669,10 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
     # Create activation
     let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
+
+    # Store the home activation at creation time so wfReturnValue uses the correct target
+    # even if blockNode.homeActivation is later overwritten by recursive invocations
+    activation.blockHomeActivation = blockHome
 
     # Bind captured environment
     if blockNode.capturedEnvInitialized and blockNode.capturedEnv.len > 0:
@@ -7805,13 +7810,21 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     var isNonLocalReturn = false  # Track if this is a non-local return from a block
     if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
       let currentMethod = interp.currentActivation.currentMethod
-      if not currentMethod.isMethod and currentMethod.homeActivation != nil:
+      # Use blockHomeActivation (captured at creation time) if available, to avoid
+      # using a stale/overwritten blockNode.homeActivation from recursive invocations
+      let effectiveHomeActivation = if interp.currentActivation.blockHomeActivation != nil:
+                                       interp.currentActivation.blockHomeActivation
+                                     else:
+                                       currentMethod.homeActivation
+      if not currentMethod.isMethod and effectiveHomeActivation != nil:
         # This is a non-local return from a block - walk up to find the method activation
         isNonLocalReturn = true
-        var homeAct = currentMethod.homeActivation
+        var homeAct = effectiveHomeActivation
         while homeAct != nil and homeAct.currentMethod != nil and not homeAct.currentMethod.isMethod:
-          homeAct = homeAct.currentMethod.homeActivation
-        targetActivation = if homeAct != nil: homeAct else: currentMethod.homeActivation
+          let nextHome = if homeAct.blockHomeActivation != nil: homeAct.blockHomeActivation
+                         else: homeAct.currentMethod.homeActivation
+          homeAct = nextHome
+        targetActivation = if homeAct != nil: homeAct else: effectiveHomeActivation
       else:
         # Normal return from a method - target is the current method itself
         targetActivation = interp.currentActivation
@@ -8213,15 +8226,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     of lsLoopBody:
       # Body completed - discard body result and loop back to condition
       discard interp.popValue()
-
-      # Check if the body's home activation (the method) has returned
-      # This handles the case where a nested block did a non-local return
-      debug("lsLoopBody: bodyBlock.homeActivation=", if frame.bodyBlock.homeActivation != nil: $cast[int](frame.bodyBlock.homeActivation) else: "nil")
-      if frame.bodyBlock.homeActivation != nil:
-        debug("lsLoopBody: bodyBlock.homeActivation.hasReturned=", $frame.bodyBlock.homeActivation.hasReturned)
-        if frame.bodyBlock.homeActivation.hasReturned:
-          debug("lsLoopBody: non-local return detected in home activation, exiting loop")
-          return true
 
       # Loop back - reuse frame
       frame.loopState = lsEvaluateCondition
