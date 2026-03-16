@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **Prefix literal syntax** with `json{...}` for creating JSON strings directly. Pluggable design allows any class to implement `parseLiteral:` for custom `{...}` syntax. Case-insensitive prefix normalization (json, Json, JSON all work). Includes `Json parse:` and `Json stringify:` for bidirectional conversion.
 - **`String class>>withCapacity:`** - Create pre-allocated mutable strings for efficient building.
 - **`String>><<`** operator - In-place string appending that returns self for chaining. Uses Nim's efficient `add()` with automatic capacity doubling.
+- **Constant literal optimization** - Array and Table literals with only constant elements (literals, no variables or message sends) are evaluated at parse time and cached. Interpreter uses pre-computed values, Granite generates compile-time Nim constants. Nested collections not yet optimized.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
