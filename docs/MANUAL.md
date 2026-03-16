@@ -93,6 +93,7 @@ For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](T
 #symbol             # Symbol
 #(1 2 3)            # Array
 #{"key" -> "value"} # Table (dictionary)
+json{"x": 10}       # JSON literal (returns JSON string)
 ```
 
 ### Comments

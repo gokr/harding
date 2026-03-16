@@ -4,9 +4,28 @@
 
 This plan replaces the older external Granite notes with a repo-local status and execution order based on the current tree.
 
-The main compiler priority is still parity for block-heavy programs, especially captured blocks and compiled non-local returns. Some items from older plans are now already done, including compiled inheritance examples, `super` sends, and `Harding compile:` / `Harding main:` split behavior.
+**Status Update (2026-03-15)**: Granite Phases 0-7 are now complete. The compiler supports exception handling codegen, remaining node types, and direct slot access. The main compiler priority remains parity for block-heavy programs, especially captured blocks and compiled non-local returns. Items now done include compiled inheritance examples, `super` sends, `Harding compile:` / `Harding main:` split behavior, and exception handling.
 
 ## Current Snapshot
+
+### Completed Phases (0-7)
+
+**Phase 0-4 (2026-03-10)**: Foundation and core compilation
+- Basic expression and statement compilation
+- Method generation with arguments
+- Inline control flow (`ifTrue:`, `whileTrue:`, `timesRepeat:`)
+- Class and slot access compilation
+
+**Phase 5 (2026-03-12)**: Exception handling codegen
+- `on:do:` exception handler compilation
+- Handler actions: `resume`, `resume:`, `retry`, `pass`, `return:`
+- Exception signal point preservation
+- `ensure:` cleanup blocks
+
+**Phase 6-7 (2026-03-15)**: Remaining node types and optimizations
+- Direct slot access code generation
+- Remaining AST node type coverage
+- Inherited slot access in compiled code
 
 ### Already Confirmed
 
@@ -15,6 +34,8 @@ The main compiler priority is still parity for block-heavy programs, especially 
 - `super` dispatch is present in generated code and runtime fallback.
 - Compiled method registration with arguments is active.
 - Collection and boolean runtime support has been expanded in compiled mode.
+- Exception handling works in compiled code.
+- Direct slot access generates efficient Nim code.
 
 References:
 

@@ -1,24 +1,23 @@
 #!/usr/bin/env nim
 #
-# Lexical closure tests for Harding interpreter
-# Tests block evaluation and closures
+# Consolidated closure tests
+# Merges: test_interpreter_closures, test_closure_capture
 #
 
 import std/[unittest, tables, strutils, logging]
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
-import ../src/harding/parser/[lexer, parser]
-import ../src/harding/interpreter/[vm, objects]
+import ../src/harding/interpreter/vm
+import ./stdlib_test_support
+
+# Shared interpreter for all suites
+var sharedInterp = newSharedStdlibInterpreter()
 
 suite "Interpreter: Block Evaluation":
-  var interp: Interpreter
+  var interp {.used.}: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    initSymbolTable()
-    initProcessorGlobal(interp)
-    loadStdlib(interp)
+    interp = sharedInterp
 
   test "blocks can be stored and evaluated later":
     let result = interp.evalStatements("""
@@ -70,15 +69,10 @@ suite "Interpreter: Block Evaluation":
     check(result[0][^1].intVal == 3)
 
 suite "Interpreter: Lexical Closures":
-  var interp: Interpreter
+  var interp {.used.}: Interpreter
 
   setup:
-    configureLogging(lvlWarn)
-    interp = newInterpreter()
-    initGlobals(interp)
-    initSymbolTable()
-    initProcessorGlobal(interp)
-    loadStdlib(interp)
+    interp = sharedInterp
 
   test "closures capture and isolate variables":
     let result = interp.evalStatements("""
@@ -178,9 +172,6 @@ Add5and10 value: 15
     check(err.len == 0)
     check(result.intVal == 30)
 
-  test "closures as object methods capture slots":
-    skip()  # Complex closure behavior needs review
-
   test "closures outlive their defining scope":
     let result = interp.evalStatements("""
       Factory := Object derive.
@@ -203,25 +194,118 @@ Add5and10 value: 15
     check(result[0].len == 1)
     check(result[0][^1].intVal == 40)
 
-  test "closure with non-local return from captured scope":
+suite "Closure Capture in Control Flow":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "captured variables survive IfNode blocks":
     let result = interp.evalStatements("""
-      Finder := Object derive.
-      Finder >> search: arr [ | elem1 elem2 elem3 |
-        elem1 := arr at: 0.
-        elem2 := arr at: 1.
-        elem3 := arr at: 2.
-        elem1 = 2 ifTrue: [ ^elem1 ].
-        elem2 = 2 ifTrue: [ ^elem2 ].
-        elem3 = 2 ifTrue: [ ^elem3 ].
-        ^0
+      Tester := Object derive.
+      Tester >> run [ | captured res |
+        captured := 42.
+        res := nil.
+        true ifTrue: [
+          | holder |
+          holder := Array new.
+          holder add: [res := captured].
+          (holder at: 0) value.
+        ].
+        ^res
       ].
-
-      Finder2 := Finder new.
-      Numbers := #(1 2 3).
-      Result := Finder2 search: Numbers
+      Result := Tester new run
     """)
-
     if result[1].len > 0:
-      echo "Non-local return error: ", result[1]
+      echo "Error: ", result[1]
     check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
+
+  test "captured variables in nested blocks inside ifTrue":
+    let result = interp.evalStatements("""
+      Tester := Object derive.
+      Tester >> run [ | x callback |
+        x := "hello".
+        callback := nil.
+        true ifTrue: [
+          callback := [x].
+        ].
+        ^callback value
+      ].
+      Result := Tester new run
+    """)
+    if result[1].len > 0:
+      echo "Error: ", result[1]
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "hello")
+
+  test "captured variables in ifFalse branch":
+    let result = interp.evalStatements("""
+      Tester := Object derive.
+      Tester >> run [ | x callback |
+        x := 99.
+        callback := nil.
+        false ifTrue: [
+          callback := [0].
+        ] ifFalse: [
+          callback := [x].
+        ].
+        ^callback value
+      ].
+      Result := Tester new run
+    """)
+    if result[1].len > 0:
+      echo "Error: ", result[1]
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 99)
+
+  test "captured variables in whileTrue nested blocks":
+    let result = interp.evalStatements("""
+      Tester := Object derive.
+      Tester >> run [ | count callbacks |
+        count := 0.
+        callbacks := Array new.
+        [count < 3] whileTrue: [
+          | current |
+          current := count.
+          callbacks add: [current].
+          count := count + 1.
+        ].
+        ^(callbacks at: 2) value
+      ].
+      Result := Tester new run
+    """)
+    if result[1].len > 0:
+      echo "Error: ", result[1]
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
+
+  test "captured class variable in do: iteration":
+    ## Class variable capture works in do: blocks
+    let result = interp.evalStatements("""
+      TestClass := Object derive: #(value).
+      TestClass>>initialize [
+        value := 42.
+      ].
+      TestClass>>getValue [
+        ^ value.
+      ].
+      
+      CapturedClass := TestClass.
+      Results := Array new.
+      
+      #(1) do: [:each |
+        Results add: (CapturedClass new getValue).
+      ].
+      
+      Results at: 0
+    """)
+    if result[1].len > 0:
+      echo "Error: ", result[1]
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)

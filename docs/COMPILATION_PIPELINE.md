@@ -15,7 +15,9 @@ Granite is the Harding-to-Nim compiler. There are two entry points:
 - Entry: `src/harding/compiler/granite.nim`
 - Compiles standalone `.hrd` scripts to native binaries via Nim
 - Supports `compile`, `build`, and `run` commands
-- Inline control flow compilation (ifTrue:, whileTrue:, timesRepeat:, etc.)
+- Inline control flow compilation (ifTrue:, whileTrue:, timesRepeat:, etc)
+- Exception handling compilation (`on:do:`, `ensure:`)
+- Direct slot access code generation (O(1) access)
 - Does NOT initialize Harding VM or load stdlib
 - Produces binaries 30-200x faster than interpreted code
 
@@ -26,7 +28,10 @@ Granite is the Harding-to-Nim compiler. There are two entry points:
 - Located in: `src/harding/compiler/compiler_primitives.nim`
 - Application builds now inject host command-line arguments into `main: args`
 
-### Block Compilation (implemented)
+### Block Compilation (Phases 0-7 Complete)
+- **Phase 0-4**: Core compilation, expressions, statements, methods
+- **Phase 5**: Exception handling codegen (`on:do:`, handler actions, `ensure:`)
+- **Phase 6-7**: Remaining node types and direct slot access
 - Block registry: `src/harding/codegen/blocks.nim`
 - Inline control flow: `src/harding/codegen/expression.nim` (statement and expression context)
 - Block procedure generation infrastructure in place
@@ -147,16 +152,22 @@ Recommendation: IDE should primarily use Harding-side Granite for consistency.
 
 ## Action Items
 
+### Completed
 1. **Document current divergence** (this file) ✓
 2. **Standalone script compilation with inline control flow** ✓
 3. **Block registry and procedure generation infrastructure** ✓
-4. **First-class block compilation** with captures and `value:` dispatch
-5. **Non-local return** from blocks via Nim exceptions
-6. **Refactor CLI granite** to use shared `compileSource()` function
-7. **Add optional VM initialization** to CLI for advanced analysis
-8. **Create unified compiler API** in `compiler/compiler.nim`
-9. **Update primitives** to use same unified API
-10. **Add tests** ensuring both paths produce identical output
+4. **Exception handling compilation** (`on:do:`, `ensure:`) ✓
+5. **Direct slot access code generation** ✓
+6. **Remaining AST node type coverage** (Phases 6-7) ✓
+
+### In Progress
+7. **First-class block compilation** with captures and `value:` dispatch
+8. **Non-local return** from blocks via Nim exceptions
+9. **Refactor CLI granite** to use shared `compileSource()` function
+10. **Add optional VM initialization** to CLI for advanced analysis
+11. **Create unified compiler API** in `compiler/compiler.nim`
+12. **Update primitives** to use same unified API
+13. **Add tests** ensuring both paths produce identical output
 
 ## Nim Metaprogramming Opportunities
 

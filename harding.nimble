@@ -5,7 +5,6 @@ description = "Modern Smalltalk dialect written in Nim"
 license = "MIT"
 
 srcDir = "src"
-bin = @["harding/repl/harding","harding/compiler/granite"]
 
 # Add external directory to Nim search path
 --path:"external"

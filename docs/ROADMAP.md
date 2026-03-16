@@ -8,6 +8,7 @@ Historical planning notes are preserved in `docs/research/`.
 
 ### Compiler (Granite)
 
+- ✅ Completed Phases 0-7: exception handling, remaining node types, direct slot access.
 - Complete first-class block compilation with captures.
 - Implement non-local return support in compiled blocks.
 - Improve class/method compilation from in-VM code paths.
