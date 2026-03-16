@@ -10,8 +10,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
 - Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
-- Granite example parity harness and an updated Granite next-steps plan under `docs/research/`.
 - A Harding htmx-style web component layer, DaisyUI-backed Todo app example, and Bona workflow notes for live-editable MummyX web experiments.
+- Block-aware cached Html templates and buffer-backed component rendering for reusable static markup with dynamic slots.
+- Granite compiler Phases 0-7: exception handling codegen, remaining node types, and direct slot access compilation.
+- VM optimization for declarative primitives eliminating dispatch overhead.
+- **Prefix literal syntax** with `json{...}` for creating JSON strings directly. Pluggable design allows any class to implement `parseLiteral:` for custom `{...}` syntax. Case-insensitive prefix normalization (json, Json, JSON all work). Includes `Json parse:` and `Json stringify:` for bidirectional conversion.
+- **`String class>>withCapacity:`** - Create pre-allocated mutable strings for efficient building.
+- **`String>><<`** operator - In-place string appending that returns self for chaining. Uses Nim's efficient `add()` with automatic capacity doubling.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
@@ -21,6 +26,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Granite block/codegen parity now covers captured block expressions, top-level block returns, 0-based collection access, and more runtime selector coverage.
 - MummyX routes can now be cleared and rebuilt, and URL-encoded form data is exposed on `HttpRequest`.
 - Bona now pumps scheduler work from the GTK main loop, refreshes open Browsers after successful Workspace evaluations, and documents the web stack through `Web` and `WebTodo` library bootstraps.
+- **Removed Buffer class** - String now has `withCapacity:` and `<<` operator, making Buffer redundant. Use `(String withCapacity: 100) << "text"` instead of `Buffer withCapacity: 100` + `<<` + `contents`.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
