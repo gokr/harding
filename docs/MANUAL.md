@@ -1660,11 +1660,52 @@ a >= b           # Greater than or equal
 a // b           # Integer division
 a \ b            # Modulo
 a ~~ b           # Not identity
-"a" , "b"        # String concatenation
+"a" , "b"        # String concatenation (non-destructive, returns new string)
 "Value: " , 42    # Auto-converts to string: "Value: 42"
-a & b            # Logical AND
-a | b            # Logical OR
+s << "text"        # In-place append (mutates string, returns self)
+a & b              # Logical AND
+a | b              # Logical OR
 ```
+
+---
+
+## String Operations
+
+Harding provides two complementary ways to work with strings:
+
+### Non-Destructive Concatenation (` , `)
+
+The comma operator creates new strings:
+
+```smalltalk
+str1 := "Hello".
+str2 := str1 , " World".    # str1 is still "Hello", str2 is "Hello World"
+result := "A" , "B" , "C". # Creates intermediate strings: "A" -> "AB" -> "ABC"
+```
+
+**Use for**: Simple concatenation, functional style, short strings.
+
+### In-Place Appending (` << `)
+
+The `<<` operator mutates the string efficiently and supports chaining:
+
+```smalltalk
+# Efficient string building with pre-allocated capacity
+buffer := String withCapacity: 1000.
+buffer << "<html>".
+buffer << "<head><title>" << title << "</title></head>".
+buffer << "<body>" << content << "</body>".
+buffer << "</html>".
+html := buffer.  # The string itself is the result (no .contents needed)
+```
+
+**Key differences:**
+- `<<` mutates the string in-place (O(1) amortized with pre-allocated capacity)
+- ` , ` creates new strings each time (O(n) per operation)
+- `<<` returns `self` for method chaining
+- `withCapacity:` hints the initial buffer size to avoid reallocations
+
+**Use for**: Building large strings (HTML, JSON, logs), tight loops, streaming output.
 
 ---
 
@@ -1785,10 +1826,12 @@ b not                    # Negation
 
 ```smalltalk
 # Strings (double quotes only)
-"hello"             # String literal
-str size            # Length
-str at: 0           # Character at index
-str1 , str2         # Concatenation
+"hello"                          # String literal
+str size                         # Length
+str at: 0                        # Character at index
+str1 , str2                      # Non-destructive concatenation (returns new String)
+buffer := String withCapacity: 100.   # Pre-allocated string for efficient building
+buffer << "part1" << "part2".       # In-place append (returns self for chaining)
 
 # Arrays (0-based indexing)
 #(1 2 3)            # Array literal

@@ -9,7 +9,8 @@
 | String | `"hello"`, `"world"` | Double quotes only |
 | Symbol | `#symbol`, `#at:put:` | Used as selectors, keys |
 | Array | `#(1 2 3)`, `#("a" "b")` | Sequences of values |
-| Table | `#{"key" -> "value"}` | Key-value mappings |
+| Table | `#{"key" -> "value"}` | Key-value mappings (Harding syntax) |
+| JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |
 
 ## Comments
 
@@ -54,7 +55,8 @@ x >= y                           # Greater than or equal
 a // b                           # Integer division
 a \\ b                           # Modulo
 a ~~ b                           # Not identity
-"a" , "b"                        # String concatenation
+"a" , "b"                        # String concatenation (non-destructive)
+s << "text"                      # In-place append (mutates, returns self)
 a & b                            # Logical AND
 a | b                            # Logical OR
 ```
