@@ -1,5 +1,6 @@
 import std/[strutils, tables]
 import ../parser/lexer
+import ../parser/constant_analysis
 import ../core/types
 
 # ============================================================================
@@ -872,6 +873,9 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
       return nil
     array.elements.add(element)
 
+  # Analyze and cache if constant
+  analyzeAndCacheArray(array)
+
   return array
 
 # Parse table literal #{...}
@@ -922,6 +926,9 @@ proc parseTableLiteral(parser: var Parser): TableNode =
 
   # Consume closing }
   discard parser.next()  # Skip }
+
+  # Analyze and cache if constant
+  analyzeAndCacheTable(table)
 
   return table
 

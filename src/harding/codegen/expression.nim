@@ -161,6 +161,37 @@ proc genLiteral*(node: LiteralNode): string =
   else:
     return "NodeValue(kind: vkNil)"
 
+proc genNodeValueLiteral*(val: NodeValue): string =
+  ## Generate Nim code for a pre-computed NodeValue.
+  ## Used for constant array/table literals.
+  case val.kind
+  of vkInt:
+    return fmt("NodeValue(kind: vkInt, intVal: {val.intVal})")
+  of vkFloat:
+    return fmt("NodeValue(kind: vkFloat, floatVal: {val.floatVal})")
+  of vkString:
+    let escaped = escapeNimString(val.strVal)
+    return fmt("NodeValue(kind: vkString, strVal: \"{escaped}\")")
+  of vkSymbol:
+    let escaped = escapeNimString(val.symVal)
+    return fmt("NodeValue(kind: vkSymbol, symVal: \"{escaped}\")")
+  of vkBool:
+    return fmt("NodeValue(kind: vkBool, boolVal: {val.boolVal})")
+  of vkNil:
+    return "NodeValue(kind: vkNil)"
+  of vkArray:
+    var elems: seq[string] = @[]
+    for elem in val.arrayVal:
+      elems.add(genNodeValueLiteral(elem))
+    return fmt("NodeValue(kind: vkArray, arrayVal: @[{elems.join(\", \")}])")
+  of vkTable:
+    var entries: seq[string] = @[]
+    for key, v in val.tableVal.pairs:
+      entries.add(fmt("{genNodeValueLiteral(key)}: {genNodeValueLiteral(v)}"))
+    return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
+  else:
+    return "NodeValue(kind: vkNil)"
+
 proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
@@ -748,11 +779,19 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
   of nkArray:
     let arr = node.ArrayNode
+    # Use pre-computed constant value if available
+    if arr.isConstant and arr.elements.len > 0:
+      return genNodeValueLiteral(arr.cachedValue)
+    # Standard code generation
     let elems = arr.elements.mapIt(genExpression(ctx, it)).join(", ")
     return fmt("NodeValue(kind: vkArray, arrayVal: @[{elems}])")
 
   of nkTable:
     let tbl = node.TableNode
+    # Use pre-computed constant value if available
+    if tbl.isConstant and tbl.entries.len > 0:
+      return genNodeValueLiteral(tbl.cachedValue)
+    # Standard code generation
     var entries: seq[string] = @[]
     for (key, val) in tbl.entries:
       let keyCode = genExpression(ctx, key)

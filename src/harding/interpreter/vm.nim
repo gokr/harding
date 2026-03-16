@@ -6544,6 +6544,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
   of nkArray:
     # Array literal - evaluate elements
     let arr = cast[ArrayNode](node)
+    # Fast path: use pre-computed constant value
+    if arr.isConstant and arr.elements.len > 0:
+      if arrayClass != nil:
+        interp.pushValue(newArrayInstance(arrayClass, arr.cachedValue.arrayVal).toValue())
+      else:
+        interp.pushValue(arr.cachedValue)
+      return true
+    # Standard path: evaluate at runtime
     if arr.elements.len == 0:
       if arrayClass != nil:
         interp.pushValue(newArrayInstance(arrayClass, @[]).toValue())
@@ -6575,6 +6583,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
   of nkTable:
     # Table literal - evaluate key-value pairs and build table
     let tab = cast[TableNode](node)
+    # Fast path: use pre-computed constant value
+    if tab.isConstant and tab.entries.len > 0:
+      if tableClass != nil:
+        interp.pushValue(newTableInstance(tableClass, tab.cachedValue.tableVal).toValue())
+      else:
+        interp.pushValue(tab.cachedValue)
+      return true
+    # Standard path: evaluate at runtime
     if tab.entries.len == 0:
       if tableClass != nil:
         interp.pushValue(newTableInstance(tableClass, initTable[NodeValue, NodeValue]()).toValue())
