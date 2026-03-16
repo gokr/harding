@@ -4,6 +4,31 @@ Component>>render [
   self error: "Subclass must implement render"
 ].
 
+Component>>renderInto: buffer [
+  | rendered errorOccurred |
+  Html pushRenderContext: self.
+  errorOccurred := false.
+
+  [
+    rendered := self render.
+    ((rendered className = "HtmlTemplate") or: [ rendered isKindOf: HtmlTemplate ]) ifTrue: [
+      rendered renderInto: buffer with: self
+    ] ifFalse: [
+      Html appendFragment: rendered to: buffer with: self
+    ]
+  ] on: Exception do: [:ex |
+    errorOccurred := true.
+    Html popRenderContext.
+    ex pass
+  ].
+
+  errorOccurred ifFalse: [ Html popRenderContext ].
+  ^ self
+].
+
 Component>>renderString [
-  ^ self render
+  | buffer |
+  buffer := String withCapacity: 256.
+  self renderInto: buffer.
+  ^ buffer
 ].

@@ -1,4 +1,4 @@
-import std/[tables, strutils, math, strformat, os, random, algorithm]
+import std/[tables, strutils, math, strformat, os, random, algorithm, json]
 import ../core/types
 import ../core/process
 import ../parser/lexer
@@ -99,13 +99,9 @@ type
     when not defined(js):
       file: File
 
-  BufferProxy = ref object
-    data: string
-
 # Keep FileStreamProxy references alive - stored as raw pointer in nimValue,
 # ARC needs a rooted reference to avoid premature collection.
 var fileStreamProxies: seq[FileStreamProxy] = @[]
-var bufferProxies: seq[BufferProxy] = @[]
 
 # Forward declarations
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
@@ -3597,125 +3593,58 @@ proc initGlobals*(interp: var Interpreter) =
   stringCls.methods["primitiveRepeat:"] = stringRepeatMethod
   stringCls.allMethods["primitiveRepeat:"] = stringRepeatMethod
 
-  # Create Buffer class (derives from Object)
-  let bufferCls = newClass(superclasses = @[objectCls], name = "Buffer")
-  bufferCls.isNimProxy = true
-  bufferCls.hardingType = "Buffer"
-  bufferClass = bufferCls
-
-  proc bufferClassNewImpl(interp: var Interpreter, self: Instance,
-                          args: seq[NodeValue]): NodeValue {.nimcall.} =
-    discard interp
-    discard args
-    let instCls = if self != nil and self.class != nil: self.class else: bufferClass
-    let inst = instCls.newInstance()
-    let proxy = BufferProxy(data: newStringOfCap(256))
-    bufferProxies.add(proxy)
-    inst.isNimProxy = true
-    inst.nimValue = cast[pointer](proxy)
-    return inst.toValue()
-
-  proc bufferClassWithCapacityImpl(interp: var Interpreter, self: Instance,
+  # String capacity and append primitives (replacing Buffer)
+  proc stringClassWithCapacityImpl(interp: var Interpreter, self: Instance,
                                    args: seq[NodeValue]): NodeValue {.nimcall.} =
     discard interp
-    let instCls = if self != nil and self.class != nil: self.class else: bufferClass
-    let inst = instCls.newInstance()
-    var capacity = 256
+    var capacity = 64
     if args.len > 0:
       let (ok, val) = args[0].tryGetInt()
       if ok and val > 0:
         capacity = val
-    let proxy = BufferProxy(data: newStringOfCap(capacity))
-    bufferProxies.add(proxy)
-    inst.isNimProxy = true
-    inst.nimValue = cast[pointer](proxy)
-    return inst.toValue()
+    let newStr = newStringOfCap(capacity)
+    return NodeValue(kind: vkInstance, instVal: newStringInstance(stringClass, newStr))
 
-  proc bufferWriteImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
-    if self == nil:
+  proc stringAppendImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    if self == nil or self.kind != ikString:
       return nilValue()
-    if not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
-      let proxy = BufferProxy(data: newStringOfCap(256))
-      bufferProxies.add(proxy)
-      self.isNimProxy = true
-      self.nimValue = cast[pointer](proxy)
-    let proxy = cast[BufferProxy](self.nimValue)
     if args.len > 0:
-      proxy.data.add(args[0].toString())
+      self.strVal.add(args[0].toString())
     return self.toValue()
 
-  proc bufferContentsImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
-    discard args
-    if self == nil or not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
-      return toValue("")
-    let proxy = cast[BufferProxy](self.nimValue)
-    return toValue(proxy.data)
+  let stringWithCapacityMethod = createCoreMethod("primitiveStringWithCapacity:")
+  stringWithCapacityMethod.setNativeImpl(stringClassWithCapacityImpl)
+  setNativeValueFromInstanceWithInterp(stringWithCapacityMethod, stringClassWithCapacityImpl)
+  stringWithCapacityMethod.hasInterpreterParam = true
+  stringCls.classMethods["primitiveStringWithCapacity:"] = stringWithCapacityMethod
+  stringCls.allClassMethods["primitiveStringWithCapacity:"] = stringWithCapacityMethod
+  stringCls.classMethods["withCapacity:"] = stringWithCapacityMethod
+  stringCls.allClassMethods["withCapacity:"] = stringWithCapacityMethod
 
-  proc bufferClearImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
-    discard args
-    if self == nil:
-      return nilValue()
-    if self.isNimProxy and self.class != nil and self.class.hardingType == "Buffer" and nimValueIsSet(self.nimValue):
-      let proxy = cast[BufferProxy](self.nimValue)
-      proxy.data.setLen(0)
-    return self.toValue()
+  let stringAppendMethod = createCoreMethod("primitiveStringAppend:")
+  stringAppendMethod.setNativeImpl(stringAppendImpl)
+  stringAppendMethod.setNativeValueImpl(proc (self: NodeValue, args: seq[NodeValue]): NodeValue =
+    case self.kind
+    of vkString:
+      var newStr = self.strVal
+      for arg in args:
+        newStr.add(arg.toString())
+      return NodeValue(kind: vkString, strVal: newStr)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        for arg in args:
+          self.instVal.strVal.add(arg.toString())
+        return self
+    else:
+      discard
+    return nilValue()
+  )
+  stringCls.methods["primitiveStringAppend:"] = stringAppendMethod
+  stringCls.allMethods["primitiveStringAppend:"] = stringAppendMethod
+  stringCls.methods["<<"] = stringAppendMethod
+  stringCls.allMethods["<<"] = stringAppendMethod
 
-  proc bufferSizeImpl(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
-    discard args
-    if self == nil or not self.isNimProxy or self.class == nil or self.class.hardingType != "Buffer" or not nimValueIsSet(self.nimValue):
-      return toValue(0)
-    let proxy = cast[BufferProxy](self.nimValue)
-    return toValue(proxy.data.len)
-
-  let bufferNewMethod = createCoreMethod("new")
-  bufferNewMethod.setNativeImpl(bufferClassNewImpl)
-  setNativeValueFromInstanceWithInterp(bufferNewMethod, bufferClassNewImpl)
-  bufferNewMethod.hasInterpreterParam = true
-  bufferCls.classMethods["new"] = bufferNewMethod
-  bufferCls.allClassMethods["new"] = bufferNewMethod
-
-  let bufferWithCapacityMethod = createCoreMethod("primitiveBufferWithCapacity:")
-  bufferWithCapacityMethod.setNativeImpl(bufferClassWithCapacityImpl)
-  setNativeValueFromInstanceWithInterp(bufferWithCapacityMethod, bufferClassWithCapacityImpl)
-  bufferWithCapacityMethod.hasInterpreterParam = true
-  bufferCls.classMethods["primitiveBufferWithCapacity:"] = bufferWithCapacityMethod
-  bufferCls.allClassMethods["primitiveBufferWithCapacity:"] = bufferWithCapacityMethod
-  bufferCls.classMethods["withCapacity:"] = bufferWithCapacityMethod
-  bufferCls.allClassMethods["withCapacity:"] = bufferWithCapacityMethod
-
-  let bufferWriteMethod = createCoreMethod("primitiveBufferWrite:")
-  bufferWriteMethod.setNativeImpl(bufferWriteImpl)
-  setNativeValueFromInstance(bufferWriteMethod, bufferWriteImpl)
-  bufferCls.methods["primitiveBufferWrite:"] = bufferWriteMethod
-  bufferCls.allMethods["primitiveBufferWrite:"] = bufferWriteMethod
-  bufferCls.methods["write:"] = bufferWriteMethod
-  bufferCls.allMethods["write:"] = bufferWriteMethod
-  bufferCls.methods["<<"] = bufferWriteMethod
-  bufferCls.allMethods["<<"] = bufferWriteMethod
-
-  let bufferContentsMethod = createCoreMethod("primitiveBufferContents")
-  bufferContentsMethod.setNativeImpl(bufferContentsImpl)
-  setNativeValueFromInstance(bufferContentsMethod, bufferContentsImpl)
-  bufferCls.methods["primitiveBufferContents"] = bufferContentsMethod
-  bufferCls.allMethods["primitiveBufferContents"] = bufferContentsMethod
-  bufferCls.methods["contents"] = bufferContentsMethod
-  bufferCls.allMethods["contents"] = bufferContentsMethod
-
-  let bufferClearMethod = createCoreMethod("primitiveBufferClear")
-  bufferClearMethod.setNativeImpl(bufferClearImpl)
-  setNativeValueFromInstance(bufferClearMethod, bufferClearImpl)
-  bufferCls.methods["primitiveBufferClear"] = bufferClearMethod
-  bufferCls.allMethods["primitiveBufferClear"] = bufferClearMethod
-  bufferCls.methods["clear"] = bufferClearMethod
-  bufferCls.allMethods["clear"] = bufferClearMethod
-
-  let bufferSizeMethod = createCoreMethod("primitiveBufferSize")
-  bufferSizeMethod.setNativeImpl(bufferSizeImpl)
-  setNativeValueFromInstance(bufferSizeMethod, bufferSizeImpl)
-  bufferCls.methods["primitiveBufferSize"] = bufferSizeMethod
-  bufferCls.allMethods["primitiveBufferSize"] = bufferSizeMethod
-  bufferCls.methods["size"] = bufferSizeMethod
-  bufferCls.allMethods["size"] = bufferSizeMethod
+  # Buffer class has been removed - use String with withCapacity: and << instead
 
   # ============================================================================
   # Register Integer primitive selectors (used by lib/core/Integer.hrd)
@@ -4360,6 +4289,286 @@ proc initGlobals*(interp: var Interpreter) =
   randomCls.methods["primitiveRandomSeed:"] = randomSeedSetMethod
   randomCls.allMethods["primitiveRandomSeed:"] = randomSeedSetMethod
 
+  # ============================================================================
+  # Json class for prefix literal support (json{...} syntax)
+  # ============================================================================
+  let jsonCls = newClass(superclasses = @[objectCls], name = "Json")
+
+  proc primitiveJsonParseLiteralImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    ## Parse json{...} literal content and return JSON string
+    ## Content contains Harding expressions that need to be evaluated
+    if args.len < 1 or args[0].kind != vkString:
+      return NodeValue(kind: vkString, strVal: "{}")
+
+    let content = args[0].strVal
+    if content.len == 0:
+      return NodeValue(kind: vkString, strVal: "{}")
+
+    # For now, return the content wrapped as a JSON object string
+    # The content was extracted by the parser from between braces
+    # TODO: Properly parse and evaluate Harding expressions within the content
+    # For API construction, we want to return valid JSON
+    var jsonResult = "{"
+    var pos = 0
+    var first = true
+
+    while pos < content.len:
+      # Skip whitespace
+      while pos < content.len and content[pos] in {' ', '\t', '\n', '\r'}:
+        inc pos
+
+      if pos >= content.len:
+        break
+
+      # Expect property name (string or identifier)
+      var key = ""
+      if content[pos] == '"':
+        # Quoted string key
+        inc pos
+        while pos < content.len and content[pos] != '"':
+          if content[pos] == '\\' and pos + 1 < content.len:
+            inc pos
+          key.add(content[pos])
+          inc pos
+        if pos < content.len and content[pos] == '"':
+          inc pos
+      elif content[pos] in {'a'..'z', 'A'..'Z', '_'}:
+        # Unquoted identifier key
+        while pos < content.len and content[pos] in {'a'..'z', 'A'..'Z', '0'..'9', '_'}:
+          key.add(content[pos])
+          inc pos
+      else:
+        break
+
+      # Skip whitespace and expect colon
+      while pos < content.len and content[pos] in {' ', '\t', '\n', '\r'}:
+        inc pos
+
+      if pos >= content.len or content[pos] != ':':
+        break
+      inc pos
+
+      # Skip whitespace
+      while pos < content.len and content[pos] in {' ', '\t', '\n', '\r'}:
+        inc pos
+
+      # Collect value expression (everything until comma or closing brace)
+      var valueExpr = ""
+      var braceDepth = 0
+      var bracketDepth = 0
+      var parenDepth = 0
+      var inString = false
+      var stringChar = '\0'
+
+      while pos < content.len:
+        let c = content[pos]
+
+        if inString:
+          valueExpr.add(c)
+          if c == stringChar:
+            inString = false
+          elif c == '\\' and pos + 1 < content.len:
+            inc pos
+            if pos < content.len:
+              valueExpr.add(content[pos])
+        else:
+          case c
+          of '"', '\'':
+            inString = true
+            stringChar = c
+            valueExpr.add(c)
+          of '{':
+            inc braceDepth
+            valueExpr.add(c)
+          of '}':
+            if braceDepth == 0:
+              break
+            dec braceDepth
+            valueExpr.add(c)
+          of '[':
+            inc bracketDepth
+            valueExpr.add(c)
+          of ']':
+            dec bracketDepth
+            valueExpr.add(c)
+          of '(':
+            inc parenDepth
+            valueExpr.add(c)
+          of ')':
+            dec parenDepth
+            valueExpr.add(c)
+          of ',':
+            if braceDepth == 0 and bracketDepth == 0 and parenDepth == 0:
+              break
+            valueExpr.add(c)
+          else:
+            valueExpr.add(c)
+
+        inc pos
+
+      # Use the value expression as-is (it's already been tokenized by the parser)
+      # In a full implementation, we would re-parse and evaluate Harding expressions here
+      # For now, use the raw value string
+      var valueStr = valueExpr.strip()
+
+      # Add to result
+      if not first:
+        jsonResult.add(", ")
+      first = false
+
+      # JSON-escape the key
+      var escapedKey = ""
+      for c in key:
+        case c
+        of '"': escapedKey.add("\\\"")
+        of '\\': escapedKey.add("\\\\")
+        of '\b': escapedKey.add("\\b")
+        of '\f': escapedKey.add("\\f")
+        of '\n': escapedKey.add("\\n")
+        of '\r': escapedKey.add("\\r")
+        of '\t': escapedKey.add("\\t")
+        else: escapedKey.add(c)
+      jsonResult.add("\"" & escapedKey & "\": ")
+
+      # Check if value looks like JSON or needs quoting
+      if valueStr.len > 0 and (valueStr[0] == '{' or valueStr[0] == '[' or valueStr == "null" or valueStr == "true" or valueStr == "false" or (valueStr[0] in {'0'..'9', '-'})):
+        jsonResult.add(valueStr)
+      else:
+        # Quote as string
+        var escapedValue = ""
+        for c in valueStr:
+          case c
+          of '"': escapedValue.add("\\\"")
+          of '\\': escapedValue.add("\\\\")
+          of '\b': escapedValue.add("\\b")
+          of '\f': escapedValue.add("\\f")
+          of '\n': escapedValue.add("\\n")
+          of '\r': escapedValue.add("\\r")
+          of '\t': escapedValue.add("\\t")
+          else: escapedValue.add(c)
+        jsonResult.add("\"" & escapedValue & "\"")
+
+      # Skip comma if present
+      while pos < content.len and content[pos] in {' ', '\t', '\n', '\r'}:
+        inc pos
+      if pos < content.len and content[pos] == ',':
+        inc pos
+
+    jsonResult.add("}")
+    return NodeValue(kind: vkString, strVal: jsonResult)
+
+  proc primitiveJsonParseImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    ## Parse JSON string into Harding objects
+    if args.len < 1 or args[0].kind != vkString:
+      return nilValue()
+
+    let jsonStr = args[0].strVal
+    try:
+      let parsed = parseJson(jsonStr)
+
+      proc jsonToHarding(node: JsonNode): NodeValue =
+        case node.kind
+        of JObject:
+          var entries = initTable[NodeValue, NodeValue]()
+          for key, val in node.pairs:
+            entries[toValue(key)] = jsonToHarding(val)
+          if tableClass != nil:
+            return newTableInstance(tableClass, entries).toValue()
+          else:
+            return NodeValue(kind: vkTable, tableVal: entries)
+        of JArray:
+          var elements: seq[NodeValue] = @[]
+          for elem in node.items:
+            elements.add(jsonToHarding(elem))
+          if arrayClass != nil:
+            return newArrayInstance(arrayClass, elements).toValue()
+          else:
+            return NodeValue(kind: vkArray, arrayVal: elements)
+        of JString:
+          return toValue(node.getStr())
+        of JInt:
+          return NodeValue(kind: vkInt, intVal: node.getInt())
+        of JFloat:
+          return NodeValue(kind: vkFloat, floatVal: node.getFloat())
+        of JBool:
+          return NodeValue(kind: vkBool, boolVal: node.getBool())
+        of JNull:
+          return nilValue()
+
+      return jsonToHarding(parsed)
+    except:
+      return nilValue()
+
+  proc primitiveJsonStringifyImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    ## Convert Harding value to JSON string
+    if args.len < 1:
+      return NodeValue(kind: vkString, strVal: "null")
+
+    let value = args[0]
+
+    proc hardingToJson(val: NodeValue): JsonNode =
+      case val.kind
+      of vkInt:
+        return %val.intVal
+      of vkFloat:
+        return %val.floatVal
+      of vkString:
+        return %val.strVal
+      of vkBool:
+        return %val.boolVal
+      of vkNil:
+        return newJNull()
+      of vkArray:
+        var arr = newJArray()
+        for elem in val.arrayVal:
+          arr.add(hardingToJson(elem))
+        return arr
+      of vkTable:
+        var obj = newJObject()
+        for key, val in val.tableVal.pairs:
+          obj[key.toString()] = hardingToJson(val)
+        return obj
+      of vkInstance:
+        if val.instVal.kind == ikArray:
+          var arr = newJArray()
+          for elem in val.instVal.elements:
+            arr.add(hardingToJson(elem))
+          return arr
+        elif val.instVal.kind == ikTable:
+          var obj = newJObject()
+          for key, entryVal in val.instVal.entries.pairs:
+            obj[key.toString()] = hardingToJson(entryVal)
+          return obj
+        else:
+          return %val.toString()
+      else:
+        return %val.toString()
+
+    return NodeValue(kind: vkString, strVal: $hardingToJson(value))
+
+  let jsonParseLiteralMethod = createCoreMethod("parseLiteral:")
+  jsonParseLiteralMethod.setNativeImpl(primitiveJsonParseLiteralImpl)
+  setNativeValueFromInstanceWithInterp(jsonParseLiteralMethod, primitiveJsonParseLiteralImpl)
+  jsonParseLiteralMethod.hasInterpreterParam = true
+  jsonCls.classMethods["parseLiteral:"] = jsonParseLiteralMethod
+  jsonCls.allClassMethods["parseLiteral:"] = jsonParseLiteralMethod
+
+  let jsonParseMethod = createCoreMethod("parse:")
+  jsonParseMethod.setNativeImpl(primitiveJsonParseImpl)
+  setNativeValueFromInstanceWithInterp(jsonParseMethod, primitiveJsonParseImpl)
+  jsonParseMethod.hasInterpreterParam = true
+  jsonCls.classMethods["parse:"] = jsonParseMethod
+  jsonCls.allClassMethods["parse:"] = jsonParseMethod
+
+  let jsonStringifyMethod = createCoreMethod("stringify:")
+  jsonStringifyMethod.setNativeImpl(primitiveJsonStringifyImpl)
+  setNativeValueFromInstanceWithInterp(jsonStringifyMethod, primitiveJsonStringifyImpl)
+  jsonStringifyMethod.hasInterpreterParam = true
+  jsonCls.classMethods["stringify:"] = jsonStringifyMethod
+  jsonCls.allClassMethods["stringify:"] = jsonStringifyMethod
+
+  jsonClass = jsonCls  # Set global variable
+
   # Create UndefinedObject class (derives from Object) - the class of nil
   let undefinedObjCls = newClass(superclasses = @[objectCls], name = "UndefinedObject")
   undefinedObjectClass = undefinedObjCls  # Set global variable in types module
@@ -4380,11 +4589,11 @@ proc initGlobals*(interp: var Interpreter) =
   interp.globals[]["Integer"] = intCls.toValue()
   interp.globals[]["Float"] = floatCls.toValue()
   interp.globals[]["String"] = stringCls.toValue()
-  interp.globals[]["Buffer"] = bufferCls.toValue()
   interp.globals[]["Array"] = arrayCls.toValue()
   interp.globals[]["Table"] = tableCls.toValue()
   interp.globals[]["Set"] = types.setClass.toValue()
   interp.globals[]["Random"] = randomCls.toValue()
+  interp.globals[]["Json"] = jsonCls.toValue()
   interp.globals[]["Boolean"] = booleanCls.toValue()
   interp.globals[]["True"] = trueCls.toValue()
   interp.globals[]["False"] = falseCls.toValue()
@@ -4425,6 +4634,7 @@ proc initGlobals*(interp: var Interpreter) =
   protectGlobal("Table")
   protectGlobal("Set")
   protectGlobal("Random")
+  protectGlobal("Json")
   protectGlobal("Boolean")
   protectGlobal("True")
   protectGlobal("False")
@@ -6439,26 +6649,6 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
 
     let methodResult = executeMethod(interp, methodBlock, interp.currentReceiver, arguments, targetParent)
     interp.pushValue(methodResult)
-    return true
-
-  of nkObjectLiteral:
-    # Object literal - create new Table instance with properties
-    let objLit = cast[ObjectLiteralNode](node)
-    if objLit.properties.len == 0:
-      # Empty object literal
-      if tableClass != nil:
-        interp.pushValue(newTableInstance(tableClass, initTable[NodeValue, NodeValue]()).toValue())
-      else:
-        interp.pushValue(NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]()))
-    else:
-      # Push build-object-literal frame (reuses wfBuildTable with string keys)
-      interp.pushWorkFrame(newBuildTableFrame(objLit.properties.len * 2))
-      # Push property value evaluations in reverse order
-      for i in countdown(objLit.properties.len - 1, 0):
-        let prop = objLit.properties[i]
-        # Property name as string value
-        interp.pushWorkFrame(newEvalFrame(LiteralNode(value: toValue(prop.name))))
-        interp.pushWorkFrame(newEvalFrame(prop.value))
     return true
 
   of nkPrimitive:

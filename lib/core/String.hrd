@@ -6,11 +6,19 @@
 # Note: String class is built-in, we just add methods to it here
 
 #====================================================================
+# String class methods (factory methods)
+#====================================================================
+
+String class>>withCapacity: capacity <primitive primitiveStringWithCapacity: capacity>
+  # Create a new String with pre-allocated capacity for efficient appending
+  # Usage: buffer := String withCapacity: 1024.
+
+#====================================================================
 # String primitives
 #====================================================================
 
 String>>, other <primitive primitiveConcat: other>
-  # Concatenate strings (comma operator)
+  # Concatenate strings (comma operator) - returns NEW string, non-destructive
 
 String>>size <primitive primitiveStringSize>
   # Return string length
@@ -53,6 +61,11 @@ String>>asSymbol <primitive primitiveAsSymbol>
 
 String>>repeat: count <primitive primitiveRepeat: count>
   # Repeat string count times (e.g., "ab" repeat: 3 -> "ababab")
+
+String>><< other <primitive primitiveStringAppend: other>
+  # Append in place - MUTATES the string and returns self for chaining
+  # Usage: buffer << "text" << " more text"
+  # For functional concatenation use #, (comma) instead
 
 #====================================================================
 # String printing

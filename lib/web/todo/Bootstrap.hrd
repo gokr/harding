@@ -6,6 +6,8 @@ WebTodo at: #"__sourceDir" put: "lib/web/todo".
 Harding load: "lib/web/todo/TodoRepository.hrd".
 Harding load: "lib/web/todo/TodoComponents.hrd".
 Harding load: "lib/web/todo/TodoClassicComponents.hrd".
+Harding load: "lib/web/todo/TodoBufferComponents.hrd".
+Harding load: "lib/web/todo/TodoTemplateComponents.hrd".
 Harding load: "lib/web/todo/TodoApp.hrd".
 
 WebTodo at: #TodoRepository put: TodoRepository.
@@ -15,6 +17,12 @@ WebTodo at: #TodoPageComponent put: TodoPageComponent.
 WebTodo at: #TodoClassicItemComponent put: TodoClassicItemComponent.
 WebTodo at: #TodoClassicPanelComponent put: TodoClassicPanelComponent.
 WebTodo at: #TodoClassicPageComponent put: TodoClassicPageComponent.
+WebTodo at: #TodoBufferItemComponent put: TodoBufferItemComponent.
+WebTodo at: #TodoBufferPanelComponent put: TodoBufferPanelComponent.
+WebTodo at: #TodoBufferPageComponent put: TodoBufferPageComponent.
+WebTodo at: #TodoTemplateItemComponent put: TodoTemplateItemComponent.
+WebTodo at: #TodoTemplatePanelComponent put: TodoTemplatePanelComponent.
+WebTodo at: #TodoTemplatePageComponent put: TodoTemplatePageComponent.
 WebTodo at: #TodoApp put: TodoApp.
 
 Harding at: #TodoRepository put: TodoRepository.
@@ -24,6 +32,12 @@ Harding at: #TodoPageComponent put: TodoPageComponent.
 Harding at: #TodoClassicItemComponent put: TodoClassicItemComponent.
 Harding at: #TodoClassicPanelComponent put: TodoClassicPanelComponent.
 Harding at: #TodoClassicPageComponent put: TodoClassicPageComponent.
+Harding at: #TodoBufferItemComponent put: TodoBufferItemComponent.
+Harding at: #TodoBufferPanelComponent put: TodoBufferPanelComponent.
+Harding at: #TodoBufferPageComponent put: TodoBufferPageComponent.
+Harding at: #TodoTemplateItemComponent put: TodoTemplateItemComponent.
+Harding at: #TodoTemplatePanelComponent put: TodoTemplatePanelComponent.
+Harding at: #TodoTemplatePageComponent put: TodoTemplatePageComponent.
 Harding at: #TodoApp put: TodoApp.
 
 Harding import: WebTodo.
