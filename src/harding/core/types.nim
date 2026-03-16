@@ -312,6 +312,7 @@ type
     nonLocalReturnTarget*: Activation # if set, return is non-local to this activation
     isClassMethod*: bool              # true if this is a class method activation
     wasCaptured*: bool                # true if stored as homeActivation or in ExceptionContext
+    blockHomeActivation*: Activation  # captured homeActivation at block creation time (immutable, prevents overwrites)
 
   # Value types for AST nodes and runtime values
   ValueKind* = enum
