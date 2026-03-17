@@ -1,0 +1,428 @@
+Html := Object derive: #().
+HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag tagStack voidTags currentTagBuilder).
+HtmlTagBuilder := Object derivePublic: #(canvas tagName attributes isVoid isOpen).
+
+Html class>>voidTags [
+  ^ #(#area #base #br #col #embed #hr #img #input #link #meta #param #source #track #wbr)
+].
+
+Html class>>canvas: aBlock [
+  | builder |
+  builder := HtmlCanvas new.
+  ^ builder render: aBlock
+].
+
+Html class>>canvas: aSymbol with: aBlock [
+  | builder cached |
+  builder := HtmlCanvas new.
+  cached := TemplateCache at: aSymbol ifAbsent: [ nil ].
+  cached notNil ifTrue: [
+    ^ builder renderCached: cached withBlock: aBlock
+  ].
+  ^ builder render: aBlock withKey: aSymbol
+].
+
+HtmlCanvas>>initialize [
+  output := String withCapacity: 256.
+  attributes := Table new.
+  indentLevel := 0.
+  currentTag := nil.
+  tagStack := Array new.
+  voidTags := Html voidTags.
+  currentTagBuilder := nil.
+].
+
+HtmlTagBuilder class>>on: aCanvas tag: aName [
+  | builder |
+  builder := self basicNew.
+  builder::canvas := aCanvas.
+  builder::tagName := aName.
+  builder::attributes := Table new.
+  builder::isVoid := Html voidTags includes: aName asSymbol.
+  builder::isOpen := false.
+  ^ builder
+].
+
+HtmlTagBuilder>>class: aString [
+  | current |
+  aString isNil ifTrue: [ ^ self ].
+  current := attributes at: #class ifAbsent: [ "" ].
+  current isEmpty 
+    ifTrue: [ attributes at: #class put: aString ]
+    ifFalse: [ attributes at: #class put: (current , " " , aString) ].
+].
+
+HtmlTagBuilder>>id: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #id put: aString
+].
+
+HtmlTagBuilder>>style: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #style put: aString
+].
+
+HtmlTagBuilder>>attr: key value: value [
+  value isNil ifTrue: [ ^ self ].
+  attributes at: key put: value
+].
+
+HtmlTagBuilder>>attrs: aTable [
+  aTable keysAndValuesDo: [:key :value |
+    value notNil ifTrue: [ attributes at: key put: value ]
+  ].
+].
+
+HtmlTagBuilder>>with: aBlock [
+  "Render tag with content"
+  self renderOpen.
+  canvas increaseIndent.
+  canvas renderContent: aBlock.
+  canvas decreaseIndent.
+  canvas closeTag: tagName.
+].
+
+HtmlTagBuilder>>with: aString [
+  "Render tag with string content"
+  self renderOpen.
+  canvas text: aString.
+  canvas closeTag: tagName.
+].
+
+HtmlTagBuilder>>renderOpen [
+  "Open the tag with accumulated attributes"
+  canvas openTag: tagName withAttrs: attributes.
+  isOpen := true.
+].
+
+HtmlTagBuilder>>renderVoid [
+  "Render as void tag"
+  canvas openVoidTag: tagName withAttrs: attributes.
+].
+
+HtmlTagBuilder>>finalize [
+  "Called when cascade ends or next tag starts"
+  isOpen ifFalse: [
+    isVoid 
+      ifTrue: [ self renderVoid ]
+      ifFalse: [ self renderOpen; canvas closeTag: tagName ].
+  ].
+].
+
+HtmlCanvas>>render: aBlock [
+  self renderBlock: aBlock.
+  ^ output
+].
+
+HtmlCanvas>>render: aBlock withKey: aKey [
+  self renderBlock: aBlock.
+  self storeTemplateForKey: aKey.
+  ^ output
+].
+
+HtmlCanvas>>renderCached: aTemplate withBlock: aBlock [
+  ^ aTemplate renderWithBlock: aBlock on: self
+].
+
+HtmlCanvas>>storeTemplateForKey: aKey [
+  TemplateCache at: aKey put: (HtmlCachedTemplate for: output)
+].
+
+HtmlCanvas>>renderBlock: aBlock [
+  aBlock value: self
+].
+
+HtmlCanvas>>write: aString [
+  output << aString
+].
+
+HtmlCanvas>>writeIndent [
+  indentLevel timesRepeat: [ output << "  " ]
+].
+
+HtmlCanvas>>newline [
+  output << "
+".
+  self writeIndent
+].
+
+HtmlCanvas>>increaseIndent [
+  indentLevel := indentLevel + 1
+].
+
+HtmlCanvas>>decreaseIndent [
+  indentLevel := indentLevel - 1
+].
+
+HtmlCanvas>>renderContent: anObject [
+  "Ask object to render itself on this canvas"
+  anObject isNil ifTrue: [ ^ self ].
+  anObject renderOn: self
+].
+
+HtmlCanvas>>class: aString [
+  | current |
+  aString isNil ifTrue: [ ^ self ].
+  current := attributes at: #class ifAbsent: [ "" ].
+  current isEmpty 
+    ifTrue: [ attributes at: #class put: aString ]
+    ifFalse: [ attributes at: #class put: (current , " " , aString) ]
+].
+
+HtmlCanvas>>id: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #id put: aString
+].
+
+HtmlCanvas>>id: idString class: classString [
+  self id: idString.
+  self class: classString
+].
+
+HtmlCanvas>>style: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #style put: aString
+].
+
+HtmlCanvas>>attr: key value: value [
+  value isNil ifTrue: [ ^ self ].
+  attributes at: key put: value
+].
+
+HtmlCanvas>>attrs: aTable [
+  aTable keysAndValuesDo: [:key :value |
+    value notNil ifTrue: [ attributes at: key put: value ]
+  ]
+].
+
+HtmlCanvas>>disabled [
+  attributes at: #disabled put: ""
+].
+
+HtmlCanvas>>checked [
+  attributes at: #checked put: ""
+].
+
+HtmlCanvas>>selected [
+  attributes at: #selected put: ""
+].
+
+HtmlCanvas>>readonly [
+  attributes at: #readonly put: ""
+].
+
+HtmlCanvas>>required [
+  attributes at: #required put: ""
+].
+
+HtmlCanvas>>autofocus [
+  attributes at: #autofocus put: ""
+].
+
+HtmlCanvas>>multiple [
+  attributes at: #multiple put: ""
+].
+
+HtmlCanvas>>writeAttributes [
+  attributes keysAndValuesDo: [:key :value |
+    output << " ".
+    output << (key asString).
+    value isEmpty ifFalse: [
+      output << "=\"".
+      output << (Html escape: value).
+      output << "\""
+    ]
+  ].
+  attributes := Table new
+].
+
+HtmlCanvas>>openTag: aName withAttrs: attrs [
+  output << "<".
+  output << aName.
+  attrs keysAndValuesDo: [:key :value |
+    value isEmpty ifFalse: [
+      output << " ".
+      output << (key asString).
+      output << "=\"".
+      output << (Html escape: value).
+      output << "\""
+    ] ifTrue: [
+      output << " ".
+      output << (key asString).
+    ].
+  ].
+  output << ">"
+].
+
+HtmlCanvas>>openVoidTag: aName withAttrs: attrs [
+  output << "<".
+  output << aName.
+  attrs keysAndValuesDo: [:key :value |
+    value isEmpty ifFalse: [
+      output << " ".
+      output << (key asString).
+      output << "=\"".
+      output << (Html escape: value).
+      output << "\""
+    ] ifTrue: [
+      output << " ".
+      output << (key asString).
+    ].
+  ].
+  output << ">"
+].
+
+HtmlCanvas>>openTag: aName [
+  output << "<".
+  output << aName.
+  self writeAttributes.
+  output << ">"
+].
+
+HtmlCanvas>>closeTag: aName [
+  output << "</".
+  output << aName.
+  output << ">"
+].
+
+HtmlCanvas>>openVoidTag: aName [
+  output << "<".
+  output << aName.
+  self writeAttributes.
+  output << ">"
+].
+
+HtmlCanvas>>div: aBlock [
+  self openTag: "div".
+  self increaseIndent.
+  self renderContent: aBlock.
+  self decreaseIndent.
+  self closeTag: "div"
+].
+
+HtmlCanvas>>span: aBlock [
+  self openTag: "span".
+  self renderContent: aBlock.
+  self closeTag: "span"
+].
+
+HtmlCanvas>>p: aBlock [
+  self openTag: "p".
+  self renderContent: aBlock.
+  self closeTag: "p"
+].
+
+HtmlCanvas>>h1: aBlock [
+  self openTag: "h1".
+  self renderContent: aBlock.
+  self closeTag: "h1"
+].
+
+HtmlCanvas>>h2: aBlock [
+  self openTag: "h2".
+  self renderContent: aBlock.
+  self closeTag: "h2"
+].
+
+HtmlCanvas>>input [
+  self openVoidTag: "input"
+].
+
+HtmlCanvas>>hr [
+  self openVoidTag: "hr"
+].
+
+HtmlCanvas>>br [
+  self openVoidTag: "br"
+].
+
+HtmlCanvas>>button: aBlock [
+  self openTag: "button".
+  self renderContent: aBlock.
+  self closeTag: "button"
+].
+
+HtmlCanvas>>form: aBlock [
+  self openTag: "form".
+  self increaseIndent.
+  self renderContent: aBlock.
+  self decreaseIndent.
+  self closeTag: "form"
+].
+
+HtmlCanvas>>ul: aBlock [
+  self openTag: "ul".
+  self increaseIndent.
+  self renderContent: aBlock.
+  self decreaseIndent.
+  self closeTag: "ul"
+].
+
+HtmlCanvas>>li: aBlock [
+  self openTag: "li".
+  self renderContent: aBlock.
+  self closeTag: "li"
+].
+
+HtmlCanvas>>a: aBlock [
+  self openTag: "a".
+  self renderContent: aBlock.
+  self closeTag: "a"
+].
+
+HtmlCanvas>>text: aString [
+  output << (Html escape: aString)
+].
+
+HtmlCanvas>>raw: aString [
+  output << aString
+].
+
+HtmlCanvas>><< aString [
+  output << aString
+].
+
+HtmlCanvas>>renderComponent: aComponent [
+  aComponent renderOn: self
+].
+
+Html class>>escape: aString [
+  | result |
+  aString isNil ifTrue: [ ^ "" ].
+  result := aString asString.
+  result := result replace: "&" with: "&amp;".
+  result := result replace: "<" with: "&lt;".
+  result := result replace: ">" with: "&gt;".
+  result := result replace: "\"" with: "&quot;".
+  ^ result replace: "'" with: "&#39;"
+].
+
+TemplateCache := Table new.
+
+HtmlCachedTemplate := Object derivePublic: #(output).
+
+HtmlCachedTemplate class>>for: output [
+  | template |
+  template := self basicNew.
+  template::output := output.
+  ^ template
+].
+
+HtmlCachedTemplate>>renderWithBlock: aBlock on: canvas [
+  aBlock value: canvas.
+  ^ canvas output
+].
+
+String>>renderOn: html [
+  html text: self
+].
+
+Block>>renderOn: html [
+  self value
+].
+
+Component>>renderOn: html [
+  html text: self asString
+].
+
+WebHtml := Html.

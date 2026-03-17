@@ -4,7 +4,7 @@ Harding at: #WebLibrary put: Web.
 Web at: #"__sourceDir" put: "lib/web".
 
 Harding load: "lib/web/Component.hrd".
-Harding load: "lib/web/Html.hrd".
+Harding load: "lib/web/Html2.hrd".
 Harding load: "lib/web/Htmx.hrd".
 Harding load: "lib/web/Daisy.hrd".
 Harding load: "lib/web/DaisyComponents.hrd".
