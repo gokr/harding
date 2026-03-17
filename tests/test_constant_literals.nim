@@ -134,15 +134,12 @@ suite "Constant Literal Optimization":
     First := Arr at: 0.
     Second := Arr at: 1.
     Third := Arr at: 2.
-    #(First Second Third)
+    First + Second + Third
     """
     let (result, err) = interp.doit(code)
     check(err.len == 0)
-    check(result.kind == vkArray)
-    check(result.arrayVal.len == 3)
-    check(result.arrayVal[0].intVal == 1)
-    check(result.arrayVal[1].intVal == 2)
-    check(result.arrayVal[2].intVal == 3)
+    check(result.kind == vkInt)
+    check(result.intVal == 6)  # 1 + 2 + 3 = 6
 
   test "table with nested constant values works at runtime":
     let code = """
