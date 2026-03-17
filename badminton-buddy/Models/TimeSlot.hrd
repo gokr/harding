@@ -1,0 +1,63 @@
+# TimeSlot model for Badminton Buddy
+
+TimeSlot := Object derivePublic: #(id courtId dayOfWeek startTime duration maxPlayers).
+
+TimeSlot class>>fromRow: aRow [
+    | slot |
+    slot := self new.
+    slot id: (aRow at: #id).
+    slot courtId: (aRow at: #courtId).
+    slot dayOfWeek: (aRow at: #dayOfWeek).
+    slot startTime: (aRow at: #startTime).
+    slot duration: (aRow at: #duration).
+    slot maxPlayers: (aRow at: #maxPlayers).
+    ^ slot
+].
+
+TimeSlot>>dayName [
+    dayOfWeek = 1 ifTrue: [ ^ "Monday" ].
+    dayOfWeek = 2 ifTrue: [ ^ "Tuesday" ].
+    dayOfWeek = 3 ifTrue: [ ^ "Wednesday" ].
+    dayOfWeek = 4 ifTrue: [ ^ "Thursday" ].
+    dayOfWeek = 5 ifTrue: [ ^ "Friday" ].
+    dayOfWeek = 6 ifTrue: [ ^ "Saturday" ].
+    dayOfWeek = 7 ifTrue: [ ^ "Sunday" ].
+    ^ "Unknown"
+].
+
+TimeSlot>>shortDayName [
+    dayOfWeek = 1 ifTrue: [ ^ "Mon" ].
+    dayOfWeek = 2 ifTrue: [ ^ "Tue" ].
+    dayOfWeek = 3 ifTrue: [ ^ "Wed" ].
+    dayOfWeek = 4 ifTrue: [ ^ "Thu" ].
+    dayOfWeek = 5 ifTrue: [ ^ "Fri" ].
+    dayOfWeek = 6 ifTrue: [ ^ "Sat" ].
+    dayOfWeek = 7 ifTrue: [ ^ "Sun" ].
+    ^ "?"
+].
+
+TimeSlot>>endTime [
+    | hour minute endHour endMinute |
+    hour := (startTime copyFrom: 1 to: 2) asInteger.
+    minute := (startTime copyFrom: 4 to: 5) asInteger.
+    endHour := hour + (duration // 60).
+    endMinute := minute + (duration \\ 60).
+    endMinute >= 60 ifTrue: [
+        endHour := endHour + 1.
+        endMinute := endMinute - 60
+    ].
+    ^ (endHour printString padLeft: 2 with: $0) , ":" , (endMinute printString padLeft: 2 with: $0)
+].
+
+TimeSlot>>toJson [
+    ^ "{"
+        , "\"id\": \"" , id , "\","
+        , "\"courtId\": \"" , courtId , "\","
+        , "\"dayOfWeek\": " , (dayOfWeek printString) , ","
+        , "\"dayName\": \"" , self dayName , "\","
+        , "\"startTime\": \"" , startTime , "\","
+        , "\"endTime\": \"" , self endTime , "\","
+        , "\"duration\": " , (duration printString) , ","
+        , "\"maxPlayers\": " , (maxPlayers printString)
+        , "}"
+].

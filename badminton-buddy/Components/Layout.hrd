@@ -1,0 +1,225 @@
+# Badminton Buddy Layout Component
+
+BadmintonLayoutComponent := Object derivePublic: #(user).
+
+BadmintonLayoutComponent class>>user: aUser [
+    | component |
+    component := self basicNew.
+    component::user := aUser.
+    ^ component
+].
+
+BadmintonLayoutComponent>>homePage [
+    ^ self renderPage: "Badminton Buddy" body: self homeContent
+].
+
+BadmintonLayoutComponent>>loginPage [
+    ^ self renderPage: "Login" body: self loginContent
+].
+
+BadmintonLayoutComponent>>courtsPage [
+    ^ self renderPage: "Courts" body: self courtsContent
+].
+
+BadmintonLayoutComponent>>bookingsPage [
+    ^ self renderPage: "My Bookings" body: self bookingsContent
+].
+
+BadmintonLayoutComponent>>partnersPage [
+    ^ self renderPage: "Find Partners" body: self partnersContent
+].
+
+BadmintonLayoutComponent>>recurringPage [
+    ^ self renderPage: "Recurring Spots" body: self recurringContent
+].
+
+BadmintonLayoutComponent>>profilePage [
+    ^ self renderPage: "Profile" body: self profileContent
+].
+
+BadmintonLayoutComponent>>courtDetailPage: aCourt [
+    ^ self renderPage: (aCourt at: #name) body: (self courtDetailContent: aCourt)
+].
+
+# ============================================================================
+# Content Methods
+# ============================================================================
+
+BadmintonLayoutComponent>>homeContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        self heroSection ,
+        self featuresSection
+    )) renderString
+].
+
+BadmintonLayoutComponent>>loginContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html div: #{#class -> "max-w-md mx-auto"} with: (
+            Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (
+                Html div: #{#class -> "card-body text-center"} with: (
+                    Html h2: #{#class -> "card-title text-2xl justify-center mb-4"} text: "Welcome to Badminton Buddy" ,
+                    Html p: #{#class -> "mb-6"} text: "Sign in to book courts and find partners"
+                )
+            )
+        )
+    )) renderString
+].
+
+BadmintonLayoutComponent>>courtsContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "Badminton Courts" ,
+        Html div: #{#id -> "courts-list", #hxGet -> "/api/courts", #hxTrigger -> "load"} with: (
+            Html div: #{#class -> "flex justify-center p-8"} with: (
+                Html span: #{#class -> "loading loading-spinner loading-lg"} text: ""
+            )
+        )
+    )) renderString
+].
+
+BadmintonLayoutComponent>>bookingsContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "My Bookings" ,
+        Html div: #{#id -> "bookings-panel", #hxGet -> "/api/bookings/panel", #hxTrigger -> "load"} with: (
+            Html div: #{#class -> "flex justify-center p-8"} with: (
+                Html span: #{#class -> "loading loading-spinner loading-lg"} text: ""
+            )
+        )
+    )) renderString
+].
+
+BadmintonLayoutComponent>>partnersContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "Find Partners" ,
+        Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
+    )) renderString
+].
+
+BadmintonLayoutComponent>>recurringContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "Recurring Spots" ,
+        Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
+    )) renderString
+].
+
+BadmintonLayoutComponent>>profileContent [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "My Profile" ,
+        Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
+    )) renderString
+].
+
+BadmintonLayoutComponent>>courtDetailContent: aCourt [
+    ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
+        Html h1: #{#class -> "text-3xl font-bold mb-6"} text: (aCourt at: #name) ,
+        Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (
+            Html div: #{#class -> "card-body"} with: (
+                Html p: #{#class -> "text-lg mb-4"} text: (aCourt at: #location) ,
+                Html div: #{#class -> "badge badge-outline mb-4"} text: (aCourt at: #amenities) ,
+                Html h3: #{#class -> "text-xl font-bold mb-4"} text: "Available Time Slots" ,
+                Html div: #{#id -> "slots-list", #hxGet -> ("/api/slots?courtId=" , (aCourt at: #id)), #hxTrigger -> "load"} with: (
+                    Html span: #{#class -> "loading loading-spinner"} text: ""
+                )
+            )
+        )
+    )) renderString
+].
+
+BadmintonLayoutComponent>>heroSection [
+    ^ Html div: #{#class -> "hero bg-base-200 rounded-box mb-8"} with: (
+        Html div: #{#class -> "hero-content text-center py-12"} with: (
+            Html div: #{#class -> "max-w-md"} with: (
+                Html h1: #{#class -> "text-5xl font-bold text-orange-500"} text: "Badminton Buddy" ,
+                Html p: #{#class -> "py-6 text-lg"} text: "Book courts, find partners, and enjoy badminton!" ,
+                Html div: #{#class -> "flex gap-4 justify-center"} with: (
+                    Html a: #{#class -> "btn btn-primary", #href -> "/courts"} text: "Find Courts" ,
+                    Html a: #{#class -> "btn btn-secondary", #href -> "/partners"} text: "Find Partners"
+                )
+            )
+        )
+    )
+].
+
+BadmintonLayoutComponent>>featuresSection [
+    ^ Html div: #{#class -> "grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"} with: (
+        self featureCard: "Book Courts" description: "Reserve badminton courts at top facilities near you." ,
+        self featureCard: "Find Partners" description: "Connect with players at your skill level." ,
+        self featureCard: "Recurring Spots" description: "Set up weekly games with automatic bookings."
+    )
+].
+
+BadmintonLayoutComponent>>featureCard: title description: desc [
+    ^ Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (
+        Html div: #{#class -> "card-body"} with: (
+            Html h2: #{#class -> "card-title"} text: title ,
+            Html p: desc
+        )
+    )
+].
+
+# ============================================================================
+# Layout Helpers
+# ============================================================================
+
+BadmintonLayoutComponent>>renderPage: title body: bodyContent [
+    ^ Html documentTitle: title
+        head: self headContent
+        body: (Html div: #{#"data-theme" -> "autumn"} with: (
+            self navbar ,
+            Html div: #{#class -> "min-h-screen"} with: bodyContent ,
+            self footer
+        ))
+].
+
+BadmintonLayoutComponent>>headContent [
+    ^ (Html metaCharset: "utf-8") ,
+    (Html metaViewport: "width=device-width, initial-scale=1.0") ,
+    (Html metaThemeColor: "#f97316") ,
+    (Html linkRel: "manifest" href: "/manifest.json") ,
+    (Html linkStylesheet: "/assets/daisyui.css") ,
+    (Html scriptSrc: "https://unpkg.com/htmx.org@2.0.4")
+].
+
+BadmintonLayoutComponent>>navbar [
+    | navItems userMenu loginButton |
+    navItems := Html div: #{#class -> "flex-none hidden lg:flex"} with: (
+        Html ul: #{#class -> "menu menu-horizontal px-1 gap-2"} with: (
+            Html li: (Html a: #{#href -> "/"} text: "Home") ,
+            Html li: (Html a: #{#href -> "/courts"} text: "Courts") ,
+            Html li: (Html a: #{#href -> "/partners"} text: "Partners")
+        )
+    ).
+    
+    loginButton := Html a: #{#class -> "btn btn-primary btn-sm", #href -> "/login"} text: "Login".
+    
+    user isNil ifTrue: [
+        userMenu := Html div: #{#class -> "flex-none"} with: loginButton
+    ] ifFalse: [
+        userMenu := Html div: #{#class -> "flex-none"} with: loginButton
+    ].
+    
+    ^ Html div: #{#class -> "navbar bg-base-100 sticky top-0 z-50 shadow-sm"} with: (
+        Html div: #{#class -> "navbar-start"} with: (
+            Html div: #{#class -> "dropdown lg:hidden"} with: (
+                Html button: #{#class -> "btn btn-ghost btn-circle", #tabindex -> "0"} text: "Menu" ,
+                Html ul: #{#class -> "menu menu-sm dropdown-content mt-3 z-50 p-2 shadow bg-base-100 rounded-box w-52", #tabindex -> "0"} with: (
+                    Html li: (Html a: #{#href -> "/"} text: "Home") ,
+                    Html li: (Html a: #{#href -> "/courts"} text: "Courts") ,
+                    Html li: (Html a: #{#href -> "/partners"} text: "Partners") ,
+                    Html li: (Html a: #{#href -> "/bookings"} text: "My Bookings")
+                )
+            ) ,
+            Html a: #{#class -> "btn btn-ghost text-xl normal-case", #href -> "/"} with: (
+                Html span: #{#class -> "text-orange-500"} text: "Badminton" ,
+                Html span: #{#class -> "font-light"} text: "Buddy"
+            )
+        ) ,
+        navItems ,
+        Html div: #{#class -> "navbar-end"} with: userMenu
+    )
+].
+
+BadmintonLayoutComponent>>footer [
+    ^ Html footer: #{#class -> "footer footer-center p-4 bg-base-200 text-base-content mt-8"} with: (
+        Html aside: (Html p: "Badminton Buddy - Find courts and partners")
+    )
+].

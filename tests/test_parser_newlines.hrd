@@ -1,0 +1,50 @@
+TestParserNewlines := Object derive: #().
+
+TestParserNewlines class>>testSimpleParens [
+  | x |
+  x := (42).
+  ^ x = 42
+].
+
+TestParserNewlines class>>testParensWithNewline [
+  | x |
+  x := (
+    42
+  ).
+  ^ x = 42
+].
+
+TestParserNewlines class>>testNestedParens [
+  | result |
+  result := (
+    (
+      1 + 2
+    ) * 3
+  ).
+  ^ result = 9
+].
+
+TestParserNewlines class>>testMultiLineTable [
+  | attrs |
+  attrs := #{
+    #key1 -> "value1",
+    #key2 -> "value2"
+  }.
+  ^ attrs size = 2
+].
+
+TestParserNewlines class>>runAll [
+  | passed failed |
+  passed := Array new.
+  failed := Array new.
+  
+  self testSimpleParens ifTrue: [ passed add: "testSimpleParens" ] ifFalse: [ failed add: "testSimpleParens" ].
+  self testParensWithNewline ifTrue: [ passed add: "testParensWithNewline" ] ifFalse: [ failed add: "testParensWithNewline" ].
+  self testNestedParens ifTrue: [ passed add: "testNestedParens" ] ifFalse: [ failed add: "testNestedParens" ].
+  self testMultiLineTable ifTrue: [ passed add: "testMultiLineTable" ] ifFalse: [ failed add: "testMultiLineTable" ].
+  
+  "Passed: " print. passed size printString println.
+  "Failed: " print. failed size printString println.
+  failed size = 0 ifTrue: [ "All tests passed!" println. ^ true ].
+  ^ false
+].

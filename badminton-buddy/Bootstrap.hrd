@@ -1,0 +1,15 @@
+# Badminton Buddy - Bootstrap
+# Loads all dependencies and initializes the application
+
+"Loading Badminton Buddy..." println.
+
+# Load required libraries
+Harding load: "lib/mummyx/Bootstrap.hrd".
+Harding load: "lib/web/Bootstrap.hrd".
+
+# Load application modules
+Harding load: "badminton-buddy/Components/Layout.hrd".
+Harding load: "badminton-buddy/BadmintonApp.hrd".
+
+"Badminton Buddy loaded successfully!" println.
+"Run: BadmintonApp startOn: 8080" println.

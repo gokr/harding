@@ -1,0 +1,38 @@
+# PartnerRequest model for Badminton Buddy
+
+PartnerRequest := Object derivePublic: #(id bookingId userId message status createdAt).
+
+PartnerRequest class>>fromRow: aRow [
+    | request |
+    request := self new.
+    request id: (aRow at: #id).
+    request bookingId: (aRow at: #bookingId).
+    request userId: (aRow at: #userId).
+    request message: (aRow at: #message).
+    request status: (aRow at: #status).
+    request createdAt: (aRow at: #createdAt).
+    ^ request
+].
+
+PartnerRequest>>isOpen [
+    ^ status = "open"
+].
+
+PartnerRequest>>isAccepted [
+    ^ status = "accepted"
+].
+
+PartnerRequest>>isRejected [
+    ^ status = "rejected"
+].
+
+PartnerRequest>>toJson [
+    ^ "{"
+        , "\"id\": \"" , id , "\","
+        , "\"bookingId\": \"" , bookingId , "\","
+        , "\"userId\": \"" , userId , "\","
+        , "\"message\": \"" , (message ifNil: [ "" ]) , "\","
+        , "\"status\": \"" , status , "\","
+        , "\"createdAt\": " , (createdAt printString)
+        , "}"
+].

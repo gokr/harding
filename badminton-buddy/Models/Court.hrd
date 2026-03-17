@@ -1,0 +1,34 @@
+# Court model for Badminton Buddy
+
+Court := Object derivePublic: #(id name location latitude longitude amenities active).
+
+Court class>>fromRow: aRow [
+    | court |
+    court := self new.
+    court id: (aRow at: #id).
+    court name: (aRow at: #name).
+    court location: (aRow at: #location).
+    court latitude: (aRow at: #latitude).
+    court longitude: (aRow at: #longitude).
+    court amenities: (aRow at: #amenities).
+    court active: (aRow at: #active).
+    ^ court
+].
+
+Court>>amenitiesList [
+    | list |
+    list := amenities split: ",".
+    ^ list collect: [:each | each trim ]
+].
+
+Court>>toJson [
+    ^ "{"
+        , "\"id\": \"" , id , "\","
+        , "\"name\": \"" , name , "\","
+        , "\"location\": \"" , location , "\","
+        , "\"latitude\": " , (latitude printString) , ","
+        , "\"longitude\": " , (longitude printString) , ","
+        , "\"amenities\": \"" , amenities , "\","
+        , "\"active\": " , (active ifTrue: [ "true" ] ifFalse: [ "false" ])
+        , "}"
+].

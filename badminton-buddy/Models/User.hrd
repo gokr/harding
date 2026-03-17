@@ -1,0 +1,39 @@
+# User model for Badminton Buddy
+
+User := Object derivePublic: #(id email name avatarUrl skillLevel createdAt).
+
+User class>>fromRow: aRow [
+    | user |
+    user := self new.
+    user id: (aRow at: #id).
+    user email: (aRow at: #email).
+    user name: (aRow at: #name).
+    user avatarUrl: (aRow at: #avatarUrl).
+    user skillLevel: (aRow at: #skillLevel).
+    user createdAt: (aRow at: #createdAt).
+    ^ user
+].
+
+User>>skillLevelName [
+    skillLevel = 1 ifTrue: [ ^ "Beginner" ].
+    skillLevel = 2 ifTrue: [ ^ "Intermediate" ].
+    skillLevel = 3 ifTrue: [ ^ "Advanced" ].
+    skillLevel = 4 ifTrue: [ ^ "Expert" ].
+    ^ "Unknown"
+].
+
+User>>displayName [
+    name isEmpty ifTrue: [ ^ email ].
+    ^ name
+].
+
+User>>toJson [
+    ^ "{"
+        , "\"id\": \"" , id , "\","
+        , "\"email\": \"" , email , "\","
+        , "\"name\": \"" , (name ifNil: [ "" ]) , "\","
+        , "\"avatarUrl\": \"" , (avatarUrl ifNil: [ "" ]) , "\","
+        , "\"skillLevel\": " , (skillLevel printString) , ","
+        , "\"skillLevelName\": \"" , self skillLevelName , "\""
+        , "}"
+].

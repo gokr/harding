@@ -36,6 +36,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - MummyX request handlers now resume correctly after blocking native receives in the stackless VM.
 - Interpreter native-value dispatch now marks interpreter-aware wrappers correctly, fixing crashes in collection iteration and block benchmark examples.
 - Interpreter `print` and `println` now render arrays and tables using their actual Harding string forms.
+- **Fixed VM eval stack underflow** with nested HtmlTemplates using dynamic content blocks (`textWith:`, `attrWith:`, `fragmentWith:`). Root cause was BlockNode AST mutation during non-local returns corrupting the target activation. Fixed by copying block nodes before mutation.
 
 ## [0.8.0] - 2026-03-09
 
