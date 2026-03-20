@@ -15,7 +15,8 @@
 11. [Green Threads and Processes](#green-threads-and-processes)
 12. [Primitives](#primitives)
 13. [Smalltalk Compatibility](#smalltalk-compatibility)
-14. [Grammar Reference](#grammar-reference)
+14. [JSON Support](#json-support)
+15. [Grammar Reference](#grammar-reference)
 
 ---
 
@@ -89,8 +90,16 @@ For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](T
 ```smalltalk
 42                  # Integer
 3.14                # Float
-"hello"             # String (double quotes only)
+ "hello"             # String (double quotes only)
+"""
+  hello
+  world
+"""               # Triple-quoted multiline string
 #symbol             # Symbol
+#"""
+  multi
+  line
+"""               # Triple-quoted multiline symbol
 #(1 2 3)            # Array
 #{"key" -> "value"} # Table (dictionary)
 json{"x": 10}       # JSON literal (returns JSON string)
@@ -111,7 +120,52 @@ json{"x": 10}       # JSON literal (returns JSON string)
 #symbol         # Simple symbol
 #at:put:        # Keyword symbol
 #"with spaces"  # Symbol with spaces (double quotes)
+#"""
+  line 1
+  line 2 with "quotes"
+"""            # Multiline symbol string
 ```
+
+### Triple-Quoted Strings
+
+Harding supports triple-quoted string literals using `"""..."""`.
+
+```smalltalk
+text := """
+  Hello
+  He said "welcome"
+  Literal #{name}
+  Backslash-n: \n
+"""
+```
+
+Triple-quoted strings behave as follows:
+
+- They are **raw** strings. Backslashes are preserved literally, so `\n` stays two characters.
+- A single `"` inside the string does not need escaping.
+- If the opening delimiter is followed immediately by a newline, that first newline is removed.
+- Common indentation is stripped from all non-empty lines, making indented source blocks easier to write.
+- The trailing newline before the closing delimiter is preserved.
+
+This differs slightly from Nim: Harding matches Nim's raw triple-quoted handling for quotes and backslashes, but also strips leading indentation to make indented multiline literals easier to embed in Harding code.
+
+### JSON Literals
+
+Harding supports prefix JSON literals using `json{...}`:
+
+```smalltalk
+json{"x": 10, "name": "Alice"}
+```
+
+This returns a JSON string, not a Table. The prefix is case-insensitive:
+
+```smalltalk
+json{"ok": true}
+Json{"ok": true}
+JSON{"ok": true}
+```
+
+All three forms normalize to the `Json` class internally.
 
 ### Shebang Support
 
@@ -1707,6 +1761,209 @@ html := buffer.  # The string itself is the result (no .contents needed)
 - `withCapacity:` hints the initial buffer size to avoid reallocations
 
 **Use for**: Building large strings (HTML, JSON, logs), tight loops, streaming output.
+
+---
+
+## JSON Support
+
+Harding currently provides three JSON entry points:
+
+- `json{...}` / `Json{...}` / `JSON{...}` prefix literals for inline JSON strings
+- `Json parse:` to parse JSON text into Harding values
+- `Json stringify:` to convert Harding values into compact JSON text
+
+The `Json` class is available by default.
+
+### JSON Literals
+
+Prefix JSON literals return JSON text directly:
+
+```smalltalk
+payload := json{"status": "ok", "count": 42}
+payload class          # String
+```
+
+These literals are useful for:
+
+- inline API payloads
+- tests and fixtures
+- small constant JSON documents
+
+### Parsing JSON
+
+`Json parse:` converts JSON text into Harding values:
+
+```smalltalk
+value := Json parse: "{\"name\":\"Alice\",\"age\":30,\"tags\":[\"a\",\"b\"]}"
+```
+
+Current conversions:
+
+| JSON | Harding |
+|------|---------|
+| object | `Table` |
+| array | `Array` |
+| string | `String` |
+| integer | `Integer` |
+| float | `Float` |
+| true / false | `Boolean` |
+| null | `nil` |
+
+Example:
+
+```smalltalk
+user := Json parse: "{\"name\":\"Alice\",\"admin\":true,\"scores\":[1,2,3]}".
+
+user at: "name"          # "Alice"
+user at: "admin"         # true
+user at: "scores"        # #(1 2 3)
+```
+
+If parsing fails, `Json parse:` currently returns `nil`.
+
+### Stringifying Harding Values
+
+`Json stringify:` converts Harding values into compact JSON text:
+
+```smalltalk
+Json stringify: #{"a" -> 1, "b" -> #(2 3 4)}
+```
+
+Current supported inputs:
+
+- Numbers
+- Strings
+- Booleans
+- `nil`
+- Arrays
+- Tables
+- ordinary Harding objects
+- Array and Table instances
+
+Example:
+
+```smalltalk
+payload := #{
+    "name" -> "Alice".
+    "age" -> 30.
+    "roles" -> #("admin" "editor").
+    "active" -> true
+}.
+
+jsonText := Json stringify: payload.
+```
+
+Output is compact JSON with no pretty-print formatting.
+
+### Serializing Ordinary Objects
+
+Ordinary Harding objects now serialize as JSON objects using slot order by default:
+
+```smalltalk
+Person := Object derivePublic: #(name age).
+person := Person new.
+person::name := "Alice".
+person::age := 30.
+
+Json stringify: person
+# => {"name":"Alice","age":30}
+```
+
+Inherited slots are included as well.
+
+### Class-Side JSON Configuration
+
+Harding supports declarative class-side JSON configuration for common cases:
+
+```smalltalk
+User := Object derivePublic: #(id username password avatarUrl)
+    ; jsonExclude: #(password)
+    ; jsonRename: #{#username -> "userName"}
+    ; jsonOmitNil: #(avatarUrl).
+```
+
+Supported class-side messages:
+
+- `jsonExclude:`
+- `jsonOnly:`
+- `jsonRename:`
+- `jsonOmitNil:`
+- `jsonOmitEmpty:`
+- `jsonFormat:`
+- `jsonFieldOrder:`
+- `jsonReset`
+- `jsonSpec`
+
+Supported built-in formatter symbols:
+
+- `#string`
+- `#rawJson`
+- `#symbolName`
+- `#className`
+
+Example with formatting:
+
+```smalltalk
+Envelope := Object derivePublic: #(payload kind).
+Envelope jsonFormat: #{#payload -> #rawJson, #kind -> #symbolName}.
+```
+
+### Fallback Representation Hook
+
+When declarative slot-based serialization is not enough, a class can define `jsonRepresentation`.
+
+The method should return a Harding value that `Json stringify:` already understands, typically a Table, Array, primitive, or nested combination of those.
+
+```smalltalk
+Invoice := Object derivePublic: #(id lines).
+
+Invoice>>jsonRepresentation [
+    ^ #{
+        "id" -> id,
+        "lineCount" -> lines size
+    }
+]
+```
+
+This path is more flexible, but slower than the compiled slot-plan path.
+
+### Current Limitations
+
+Also note:
+
+- JSON table keys support Strings, Symbols, Numbers, Booleans, `nil`, Classes, and primitive wrapper instances; unsupported key types raise an error
+- There is no built-in pretty printer yet
+- Parse errors currently return `nil` rather than signaling a JSON-specific exception
+- Arbitrary transformer blocks are not part of the current fast-path API
+
+### Performance Notes
+
+As of the current implementation, `Json stringify:` writes directly into a mutable string buffer inside the primitive and serializes ordinary objects through compiled class plans.
+
+This improves the core serialization path for primitives, Arrays, Tables, and ordinary slot-based objects.
+
+### Benchmarking JSON
+
+There are benchmark scripts for the current JSON support:
+
+```bash
+nim c -r tests/benchmark_json_stringify.nim
+nim c -r tests/benchmark_json_objects.nim
+```
+
+They compare:
+
+- Harding `Json stringify:` on a reasonably complex nested Table/Array payload
+- Harding `Json stringify:` on a reasonably complex nested object graph
+- an equivalent pure Nim direct string writer
+- an equivalent pure Nim `std/json` builder
+
+Recent release-build results on the current implementation were approximately:
+
+- Table/Array payload: Harding ~129.72 ms, Nim direct ~19.75 ms, Nim `std/json` ~91.40 ms
+- Object graph payload: Harding ~34.48 ms, Nim direct ~11.40 ms, Nim `std/json` ~37.92 ms
+
+The object-graph case is the more relevant comparison for the new slot-plan serializer. In that benchmark, Harding is already slightly faster than Nim `std/json`, while still behind a hand-written direct Nim encoder.
 
 ---
 

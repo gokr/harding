@@ -6,11 +6,59 @@
 |------|---------|-------------|
 | Integer | `42`, `-10` | Signed integers |
 | Float | `3.14`, `-0.5` | Floating point numbers |
-| String | `"hello"`, `"world"` | Double quotes only |
-| Symbol | `#symbol`, `#at:put:` | Used as selectors, keys |
+| String | `"hello"`, `"""multi\nline"""` | Double-quoted or triple-quoted |
+| Symbol | `#symbol`, `#at:put:`, `#"""multi\nline"""` | Used as selectors, keys |
 | Array | `#(1 2 3)`, `#("a" "b")` | Sequences of values |
 | Table | `#{"key" -> "value"}` | Key-value mappings (Harding syntax) |
 | JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |
+
+## JSON
+
+```smalltalk
+Json parse: "{\"name\":\"Alice\"}"      # Parse JSON to Harding values
+Json stringify: #("a" 1 true)                 # Emit compact JSON string
+someObject toJson                             # Convenience alias for Json stringify:
+```
+
+### Object Serialization
+
+```smalltalk
+User := Object derivePublic: #(id username password avatarUrl)
+    ; jsonExclude: #(password)
+    ; jsonRename: #{#username -> "userName"}
+    ; jsonOmitNil: #(avatarUrl).
+
+user := User new.
+user::id := 7.
+user::username := "alice".
+user toJson
+```
+
+Supported class-side JSON config:
+
+- `jsonExclude:`
+- `jsonOnly:`
+- `jsonRename:`
+- `jsonOmitNil:`
+- `jsonOmitEmpty:`
+- `jsonFormat:`
+- `jsonFieldOrder:`
+- `jsonReset`
+
+Built-in formatter symbols:
+
+- `#string`
+- `#rawJson`
+- `#symbolName`
+- `#className`
+
+Fallback hook:
+
+```smalltalk
+Invoice>>jsonRepresentation [
+    ^ #{"id" -> id, "lineCount" -> lines size}
+]
+```
 
 ## Comments
 
@@ -20,6 +68,31 @@
 ```
 
 Note: Hash `#` + whitespace = comment. Double quotes are strings, not comments.
+
+### Multiline Strings
+
+```smalltalk
+message := """
+  Hello
+  He said "welcome"
+  Literal #{name}
+"""
+```
+
+- Triple-quoted strings are raw: backslashes stay literal and `"` does not need escaping.
+- If the opening `"""` is followed by a newline, Harding removes that first newline and strips common indentation from non-empty lines.
+- The final newline before the closing `"""` is preserved.
+
+### Multiline Symbol Strings
+
+```smalltalk
+selector := #"""
+  line 1
+  line 2 with "quotes"
+"""
+```
+
+Triple-quoted symbol strings use the same raw, indentation-aware rules as triple-quoted strings.
 
 ## Assignment
 
