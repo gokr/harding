@@ -1,4 +1,4 @@
-import std/[tables, strutils, sequtils, math, hashes]
+import std/[tables, strutils, sequtils, math, hashes, options]
 import ../core/types
 
 # ============================================================================
@@ -146,6 +146,15 @@ proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValu
 proc classDeriveReadWriteParentsImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonSpecImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonExcludeImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonOnlyImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonRenameImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonOmitNilImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonOmitEmptyImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonFormatImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonFieldOrderImpl*(self: Class, args: seq[NodeValue]): NodeValue
+proc classJsonResetImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
                         writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class
 
@@ -207,6 +216,7 @@ proc invalidateSubclasses*(cls: Class)
 proc rebuildAllTables*(cls: Class)
 proc registerPrimitivesOnObjectClass*(objCls: Class)
 proc primitiveCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc extractStringValue*(val: NodeValue): string
 proc primitiveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc primitiveAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 
@@ -230,6 +240,7 @@ var blockClassCache*: Class = nil
 # Scheduler-related classes (set by scheduler module)
 var processClass*: Class = nil
 var schedulerClass*: Class = nil
+var activationClass*: Class = nil
 
 # Create a core method
 
@@ -668,6 +679,42 @@ proc initCoreClasses*(): Class =
     deriveMethod.setNativeImpl(classDeriveImpl)
     addMethodToClass(objectClass, "derive", deriveMethod, isClassMethod = true)
 
+    let jsonSpecMethod = createCoreMethod("jsonSpec")
+    jsonSpecMethod.setNativeImpl(classJsonSpecImpl)
+    addMethodToClass(objectClass, "jsonSpec", jsonSpecMethod, isClassMethod = true)
+
+    let jsonExcludeMethod = createCoreMethod("jsonExclude:")
+    jsonExcludeMethod.setNativeImpl(classJsonExcludeImpl)
+    addMethodToClass(objectClass, "jsonExclude:", jsonExcludeMethod, isClassMethod = true)
+
+    let jsonOnlyMethod = createCoreMethod("jsonOnly:")
+    jsonOnlyMethod.setNativeImpl(classJsonOnlyImpl)
+    addMethodToClass(objectClass, "jsonOnly:", jsonOnlyMethod, isClassMethod = true)
+
+    let jsonRenameMethod = createCoreMethod("jsonRename:")
+    jsonRenameMethod.setNativeImpl(classJsonRenameImpl)
+    addMethodToClass(objectClass, "jsonRename:", jsonRenameMethod, isClassMethod = true)
+
+    let jsonOmitNilMethod = createCoreMethod("jsonOmitNil:")
+    jsonOmitNilMethod.setNativeImpl(classJsonOmitNilImpl)
+    addMethodToClass(objectClass, "jsonOmitNil:", jsonOmitNilMethod, isClassMethod = true)
+
+    let jsonOmitEmptyMethod = createCoreMethod("jsonOmitEmpty:")
+    jsonOmitEmptyMethod.setNativeImpl(classJsonOmitEmptyImpl)
+    addMethodToClass(objectClass, "jsonOmitEmpty:", jsonOmitEmptyMethod, isClassMethod = true)
+
+    let jsonFormatMethod = createCoreMethod("jsonFormat:")
+    jsonFormatMethod.setNativeImpl(classJsonFormatImpl)
+    addMethodToClass(objectClass, "jsonFormat:", jsonFormatMethod, isClassMethod = true)
+
+    let jsonFieldOrderMethod = createCoreMethod("jsonFieldOrder:")
+    jsonFieldOrderMethod.setNativeImpl(classJsonFieldOrderImpl)
+    addMethodToClass(objectClass, "jsonFieldOrder:", jsonFieldOrderMethod, isClassMethod = true)
+
+    let jsonResetMethod = createCoreMethod("jsonReset")
+    jsonResetMethod.setNativeImpl(classJsonResetImpl)
+    addMethodToClass(objectClass, "jsonReset", jsonResetMethod, isClassMethod = true)
+
     # new - create instances (initialization is done via Harding code: ^self basicNew initialize)
     let newMethod = createCoreMethod("new")
     newMethod.setNativeImpl(classNewImpl)
@@ -1009,6 +1056,19 @@ proc classDeriveImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   let newClass = createDerivedClass(self, slotNames, @[], @[])
   return NodeValue(kind: vkClass, classVal: newClass)
 
+proc invalidateJsonPlansRecursive(cls: Class) =
+  if cls == nil:
+    return
+  invalidateJsonPlan(cls)
+  for subclass in cls.subclasses:
+    invalidateJsonPlansRecursive(subclass)
+
+proc bumpJsonConfigVersion(cls: Class) =
+  if cls == nil:
+    return
+  cls.jsonConfigVersion += 1
+  invalidateJsonPlansRecursive(cls)
+
 proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
   ## Extract slot names from an array NodeValue
   result = @[]
@@ -1018,6 +1078,152 @@ proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
         result.add(elem.symVal)
       elif elem.kind == vkString:
         result.add(elem.strVal)
+
+proc extractStringKeyTable(arr: NodeValue): Table[string, string] =
+  result = initTable[string, string]()
+  var entries: Table[NodeValue, NodeValue]
+  if arr.kind == vkTable:
+    entries = arr.tableVal
+  elif arr.kind == vkInstance and arr.instVal.kind == ikTable:
+    entries = arr.instVal.entries
+  else:
+    return result
+
+  for key, value in entries.pairs:
+    let keyStr = extractStringValue(key)
+    let valueStr = extractStringValue(value)
+    if keyStr.len > 0 and valueStr.len > 0:
+      result[keyStr] = valueStr
+
+proc extractFormatKeyTable(arr: NodeValue): Table[string, JsonFormatKind] =
+  result = initTable[string, JsonFormatKind]()
+  var entries: Table[NodeValue, NodeValue]
+  if arr.kind == vkTable:
+    entries = arr.tableVal
+  elif arr.kind == vkInstance and arr.instVal.kind == ikTable:
+    entries = arr.instVal.entries
+  else:
+    return result
+
+  for key, value in entries.pairs:
+    let keyStr = extractStringValue(key)
+    if keyStr.len == 0:
+      continue
+
+    let formatName = if value.kind == vkSymbol: value.symVal else: extractStringValue(value)
+    let formatKind = case formatName
+      of "string": jfkString
+      of "rawJson": jfkRawJson
+      of "symbolName": jfkSymbolName
+      of "className": jfkClassName
+      else:
+        raise newException(ValueError, "Unknown JSON format: " & formatName)
+    result[keyStr] = formatKind
+
+proc validateJsonSlotNames(cls: Class, slotNames: seq[string]) =
+  for slotName in slotNames:
+    if cls.getSlotIndex(slotName) < 0:
+      raise newException(ValueError, "Unknown JSON slot: " & slotName)
+
+proc classJsonSpecImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  let spec = self.getJsonSpec()
+  var entries = initTable[NodeValue, NodeValue]()
+  var excluded: seq[NodeValue] = @[]
+  for name in spec.excludedSlots:
+    excluded.add(toSymbol(name))
+  var included: seq[NodeValue] = @[]
+  if spec.includedOnly.isSome:
+    for name in spec.includedOnly.get:
+      included.add(toSymbol(name))
+  var renamedEntries = initTable[NodeValue, NodeValue]()
+  for key, value in spec.renamedSlots.pairs:
+    renamedEntries[toSymbol(key)] = toValue(value)
+  var omitNil: seq[NodeValue] = @[]
+  for name in spec.omitNilSlots:
+    omitNil.add(toSymbol(name))
+  var omitEmpty: seq[NodeValue] = @[]
+  for name in spec.omitEmptySlots:
+    omitEmpty.add(toSymbol(name))
+  var formatEntries = initTable[NodeValue, NodeValue]()
+  for key, value in spec.slotFormats.pairs:
+    let formatName = ($value)[3..^1]
+    formatEntries[toSymbol(key)] = toSymbol(formatName)
+  var fieldOrder: seq[NodeValue] = @[]
+  for name in spec.fieldOrder:
+    fieldOrder.add(toSymbol(name))
+
+  entries[toValue("excludedSlots")] = toValue(excluded)
+  entries[toValue("includedOnly")] = if spec.includedOnly.isSome: toValue(included) else: nilValue()
+  entries[toValue("renamedSlots")] = toValue(renamedEntries)
+  entries[toValue("omitNilSlots")] = toValue(omitNil)
+  entries[toValue("omitEmptySlots")] = toValue(omitEmpty)
+  entries[toValue("slotFormats")] = toValue(formatEntries)
+  entries[toValue("fieldOrder")] = toValue(fieldOrder)
+
+  if tableClass != nil:
+    return newTableInstance(tableClass, entries).toValue()
+  toValue(entries)
+
+proc classJsonExcludeImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let slotNames = extractSlotNamesFromArray(args[0])
+    validateJsonSlotNames(self, slotNames)
+    self.getJsonSpec().excludedSlots = slotNames
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonOnlyImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let slotNames = extractSlotNamesFromArray(args[0])
+    validateJsonSlotNames(self, slotNames)
+    self.getJsonSpec().includedOnly = some(slotNames)
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonRenameImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let mappings = extractStringKeyTable(args[0])
+    validateJsonSlotNames(self, toSeq(mappings.keys))
+    self.getJsonSpec().renamedSlots = mappings
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonOmitNilImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let slotNames = extractSlotNamesFromArray(args[0])
+    validateJsonSlotNames(self, slotNames)
+    self.getJsonSpec().omitNilSlots = slotNames
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonOmitEmptyImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let slotNames = extractSlotNamesFromArray(args[0])
+    validateJsonSlotNames(self, slotNames)
+    self.getJsonSpec().omitEmptySlots = slotNames
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonFormatImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let mappings = extractFormatKeyTable(args[0])
+    validateJsonSlotNames(self, toSeq(mappings.keys))
+    self.getJsonSpec().slotFormats = mappings
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonFieldOrderImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  if args.len > 0:
+    let slotNames = extractSlotNamesFromArray(args[0])
+    validateJsonSlotNames(self, slotNames)
+    self.getJsonSpec().fieldOrder = slotNames
+    bumpJsonConfigVersion(self)
+  self.toValue()
+
+proc classJsonResetImpl*(self: Class, args: seq[NodeValue]): NodeValue =
+  self.jsonSpec = nil
+  bumpJsonConfigVersion(self)
+  self.toValue()
 
 proc classNameForDerived(self: Class): string =
   if self.name.len > 0: self.name & "+Derived" else: "Anonymous"
@@ -1401,6 +1607,8 @@ proc classParentsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     for parent in parents:
       if parent notin cls[].superclasses:
         cls[].superclasses.add(parent)
+        invalidateJsonPlan(cls[])
+        invalidateJsonPlansRecursive(cls[])
         invalidateSubclasses(cls[])
         rebuildAllTables(cls[])
 
@@ -1436,6 +1644,9 @@ proc classSlotsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
       slotNames = newSlotNames,
       name = cls[].name
     )
+    replacementClass.jsonSpec = cls[].jsonSpec
+    replacementClass.jsonConfigVersion = cls[].jsonConfigVersion + 1
+    replacementClass.cachedJsonPlan = nil
 
     # Copy existing methods
     for selector, meth in cls[].methods.pairs:
@@ -2147,6 +2358,7 @@ proc invalidateSubclasses*(cls: Class) =
   for subclass in cls.subclasses:
     subclass.methodsDirty = true
     subclass.version += 1
+    invalidateJsonPlan(subclass)
     invalidateSubclasses(subclass)
 
 proc rebuildAllTables*(cls: Class) =
@@ -2174,6 +2386,7 @@ proc rebuildAllTables*(cls: Class) =
 
   cls.allSlotNames = allSlotNames
   cls.hasSlots = allSlotNames.len > 0
+  invalidateJsonPlan(cls)
 
   # For the class itself, use directly-defined methods only
   for sel, m in cls.methods:

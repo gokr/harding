@@ -8,6 +8,7 @@ Harding at: "StandardLibrary" put: Standard.
 
 Standard load: "lib/standard/SortedCollection.hrd"
 Standard load: "lib/standard/Interval.hrd"
+Standard load: "lib/standard/Json.hrd"
 Standard load: "lib/standard/File.hrd"
 Standard load: "lib/standard/FileStream.hrd"
 Standard load: "lib/standard/TestCase.hrd"

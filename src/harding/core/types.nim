@@ -51,6 +51,40 @@ type
     ikFloat        # Float instance (optimized)
     ikString       # String instance (optimized)
 
+  JsonFormatKind* = enum
+    jfkNone,
+    jfkString,
+    jfkRawJson,
+    jfkSymbolName,
+    jfkClassName
+
+  JsonSpec* = ref object
+    excludedSlots*: seq[string]
+    includedOnly*: Option[seq[string]]
+    renamedSlots*: Table[string, string]
+    omitNilSlots*: seq[string]
+    omitEmptySlots*: seq[string]
+    slotFormats*: Table[string, JsonFormatKind]
+    fieldOrder*: seq[string]
+
+  JsonFieldPlan* = object
+    slotIndex*: int
+    outputKey*: string
+    outputKeyPrefix*: string
+    omitNil*: bool
+    omitEmpty*: bool
+    formatKind*: JsonFormatKind
+
+  JsonPlanKind* = enum
+    jpkSlots,
+    jpkRepresentationHook
+
+  JsonPlan* = ref object
+    kind*: JsonPlanKind
+    fields*: seq[JsonFieldPlan]
+    compiledForClassVersion*: int
+    compiledForJsonVersion*: int
+
   Class* {.acyclic.} = ref object of RootObj
     ## Class object - defines structure and behavior for instances
     # Instance methods (methods that instances of this class will have)
@@ -84,6 +118,11 @@ type
 
     # Version counter for inline cache invalidation
     version*: int                           # Incremented when methods change
+
+    # JSON serialization metadata/cache
+    jsonSpec*: JsonSpec
+    jsonConfigVersion*: int
+    cachedJsonPlan*: JsonPlan
 
   Instance* = ref object of RootObj
     ## Instance object - pure data with reference to its class
@@ -990,6 +1029,9 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
   result.hasSlots = slotNames.len > 0
   result.conflictSelectors = @[]
   result.classConflictSelectors = @[]
+  result.jsonSpec = nil
+  result.jsonConfigVersion = 0
+  result.cachedJsonPlan = nil
 
   # Check for slot name conflicts from superclasses
   var seenSlotNames: seq[string] = @[]
@@ -1164,6 +1206,28 @@ proc getSlotIndex*(cls: Class, name: string): int =
     if slotName == name:
       return i
   return -1
+
+proc getJsonSpec*(cls: Class): JsonSpec =
+  if cls == nil:
+    return nil
+  if cls.jsonSpec == nil:
+    cls.jsonSpec = JsonSpec(
+      excludedSlots: @[],
+      includedOnly: none(seq[string]),
+      renamedSlots: initTable[string, string](),
+      omitNilSlots: @[],
+      omitEmptySlots: @[],
+      slotFormats: initTable[string, JsonFormatKind](),
+      fieldOrder: @[]
+    )
+  cls.jsonSpec
+
+proc invalidateJsonPlan*(cls: Class) =
+  if cls != nil:
+    cls.cachedJsonPlan = nil
+
+proc hasCachedJsonPlan*(cls: Class): bool =
+  cls != nil and cls.cachedJsonPlan != nil
 
 
 proc getSlot*(inst: Instance, index: int): NodeValue =

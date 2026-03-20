@@ -18,6 +18,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **`String class>>withCapacity:`** - Create pre-allocated mutable strings for efficient building.
 - **`String>><<`** operator - In-place string appending that returns self for chaining. Uses Nim's efficient `add()` with automatic capacity doubling.
 - **Constant literal optimization** - Array and Table literals with only constant elements (literals, no variables or message sends) are evaluated at parse time and cached. Interpreter uses pre-computed values, Granite generates compile-time Nim constants. Nested collections not yet optimized.
+- Triple-quoted multiline string literals (`"""..."""`) for raw multi-line text with embedded `"` characters.
+- Compiled JSON object serialization with class-side configuration (`jsonExclude:`, `jsonOnly:`, `jsonRename:`, `jsonOmitNil:`, `jsonOmitEmpty:`, `jsonFormat:`, `jsonFieldOrder:`, `jsonReset`) and `Object>>toJson`.
+- JSON serialization benchmarks for nested Table/Array payloads and ordinary Harding object graphs.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
@@ -28,6 +31,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - MummyX routes can now be cleared and rebuilt, and URL-encoded form data is exposed on `HttpRequest`.
 - Bona now pumps scheduler work from the GTK main loop, refreshes open Browsers after successful Workspace evaluations, and documents the web stack through `Web` and `WebTodo` library bootstraps.
 - **Removed Buffer class** - String now has `withCapacity:` and `<<` operator, making Buffer redundant. Use `(String withCapacity: 100) << "text"` instead of `Buffer withCapacity: 100` + `<<` + `contents`.
+- `Json stringify:` now serializes ordinary Harding objects through compiled slot plans, supports primitive-only formatters (`#string`, `#rawJson`, `#symbolName`, `#className`), and falls back to `jsonRepresentation` when a class needs custom structure.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
@@ -37,6 +41,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Interpreter native-value dispatch now marks interpreter-aware wrappers correctly, fixing crashes in collection iteration and block benchmark examples.
 - Interpreter `print` and `println` now render arrays and tables using their actual Harding string forms.
 - **Fixed VM eval stack underflow** with nested HtmlTemplates using dynamic content blocks (`textWith:`, `attrWith:`, `fragmentWith:`). Root cause was BlockNode AST mutation during non-local returns corrupting the target activation. Fixed by copying block nodes before mutation.
+- JSON table-key serialization now rejects unsupported key types explicitly and detects cycles in slot-based and `jsonRepresentation`-based object serialization.
 
 ## [0.8.0] - 2026-03-09
 

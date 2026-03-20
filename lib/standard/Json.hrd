@@ -12,3 +12,7 @@
 #   json{"x": 10, "y": 20}  → returns JSON string
 #   Json parse: jsonString  → returns Table/Array
 #   Json stringify: object  → returns JSON string
+
+Object>>toJson [
+    ^ Json stringify: self
+]

@@ -1,4 +1,4 @@
-import std/[tables, strutils, math, strformat, os, random, algorithm, json]
+import std/[tables, strutils, math, strformat, os, random, algorithm, json, options]
 import ../core/types
 import ../core/process
 import ../parser/lexer
@@ -4499,52 +4499,381 @@ proc initGlobals*(interp: var Interpreter) =
     except:
       return nilValue()
 
+  proc writeJsonEscapedString(buf: var string, s: string) =
+    buf.add '"'
+    for c in s:
+      case c
+      of '"': buf.add("\\\"")
+      of '\\': buf.add("\\\\")
+      of '\b': buf.add("\\b")
+      of '\f': buf.add("\\f")
+      of '\n': buf.add("\\n")
+      of '\r': buf.add("\\r")
+      of '\t': buf.add("\\t")
+      of '\0'..'\7', '\11', '\14'..'\31', '\127':
+        buf.add("\\u00")
+        buf.add(toHex(ord(c), 2).toLowerAscii())
+      else:
+        buf.add(c)
+    buf.add '"'
+
+  type
+    JsonWriteState = object
+      visited: seq[Instance]
+      depth: int
+
+  proc initJsonWriteState(): JsonWriteState =
+    JsonWriteState(visited: @[], depth: 0)
+
+  proc enterInstance(state: var JsonWriteState, inst: Instance): bool =
+    for existing in state.visited:
+      if existing == inst:
+        return false
+    state.visited.add(inst)
+    state.depth += 1
+    true
+
+  proc leaveInstance(state: var JsonWriteState, inst: Instance) =
+    if state.visited.len > 0 and state.visited[^1] == inst:
+      discard state.visited.pop()
+    elif state.visited.len > 0:
+      for i in countdown(state.visited.len - 1, 0):
+        if state.visited[i] == inst:
+          state.visited.delete(i)
+          break
+    if state.depth > 0:
+      state.depth -= 1
+
+  proc appendUniqueSlotName(names: var seq[string], name: string) =
+    if name notin names:
+      names.add(name)
+
+  proc newEmptyJsonSpec(): JsonSpec =
+    JsonSpec(
+      excludedSlots: @[],
+      includedOnly: none(seq[string]),
+      renamedSlots: initTable[string, string](),
+      omitNilSlots: @[],
+      omitEmptySlots: @[],
+      slotFormats: initTable[string, JsonFormatKind](),
+      fieldOrder: @[]
+    )
+
+  proc mergeJsonSpecInto(target: JsonSpec, source: JsonSpec) =
+    if source == nil:
+      return
+    for slotName in source.excludedSlots:
+      appendUniqueSlotName(target.excludedSlots, slotName)
+    if source.includedOnly.isSome:
+      target.includedOnly = some(source.includedOnly.get)
+    for slotName in source.omitNilSlots:
+      appendUniqueSlotName(target.omitNilSlots, slotName)
+    for slotName in source.omitEmptySlots:
+      appendUniqueSlotName(target.omitEmptySlots, slotName)
+    for key, value in source.renamedSlots.pairs:
+      target.renamedSlots[key] = value
+    for key, value in source.slotFormats.pairs:
+      target.slotFormats[key] = value
+    if source.fieldOrder.len > 0:
+      target.fieldOrder = source.fieldOrder
+
+  proc collectEffectiveJsonSpec(cls: Class, spec: JsonSpec) =
+    if cls == nil:
+      return
+    for parent in cls.superclasses:
+      collectEffectiveJsonSpec(parent, spec)
+    mergeJsonSpecInto(spec, cls.jsonSpec)
+
+  proc buildJsonKeyPrefix(key: string): string =
+    writeJsonEscapedString(result, key)
+    result.add ':'
+
+  proc compileJsonPlan(interp: var Interpreter, cls: Class): JsonPlan =
+    let effectiveSpec = newEmptyJsonSpec()
+    collectEffectiveJsonSpec(cls, effectiveSpec)
+
+    let representationLookup = lookupMethodOnClass(interp, cls, "jsonRepresentation")
+    if representationLookup.found:
+      return JsonPlan(
+        kind: jpkRepresentationHook,
+        fields: @[],
+        compiledForClassVersion: cls.version,
+        compiledForJsonVersion: cls.jsonConfigVersion
+      )
+
+    var orderedSlotNames: seq[string] = @[]
+    if effectiveSpec.fieldOrder.len > 0:
+      for slotName in effectiveSpec.fieldOrder:
+        if cls.getSlotIndex(slotName) >= 0:
+          appendUniqueSlotName(orderedSlotNames, slotName)
+    for slotName in cls.allSlotNames:
+      appendUniqueSlotName(orderedSlotNames, slotName)
+
+    result = JsonPlan(
+      kind: jpkSlots,
+      fields: @[],
+      compiledForClassVersion: cls.version,
+      compiledForJsonVersion: cls.jsonConfigVersion
+    )
+
+    for slotName in orderedSlotNames:
+      if slotName in effectiveSpec.excludedSlots:
+        continue
+      if effectiveSpec.includedOnly.isSome and slotName notin effectiveSpec.includedOnly.get:
+        continue
+
+      let slotIndex = cls.getSlotIndex(slotName)
+      if slotIndex < 0:
+        continue
+
+      let outputKey = if slotName in effectiveSpec.renamedSlots:
+        effectiveSpec.renamedSlots[slotName]
+      else:
+        slotName
+
+      let formatKind = if slotName in effectiveSpec.slotFormats:
+        effectiveSpec.slotFormats[slotName]
+      else:
+        jfkNone
+
+      result.fields.add(JsonFieldPlan(
+        slotIndex: slotIndex,
+        outputKey: outputKey,
+        outputKeyPrefix: buildJsonKeyPrefix(outputKey),
+        omitNil: slotName in effectiveSpec.omitNilSlots,
+        omitEmpty: slotName in effectiveSpec.omitEmptySlots,
+        formatKind: formatKind
+      ))
+
+  proc getOrCompileJsonPlan(interp: var Interpreter, cls: Class): JsonPlan =
+    if cls == nil:
+      return nil
+    if cls.cachedJsonPlan != nil and
+       cls.cachedJsonPlan.compiledForClassVersion == cls.version and
+       cls.cachedJsonPlan.compiledForJsonVersion == cls.jsonConfigVersion:
+      return cls.cachedJsonPlan
+    cls.cachedJsonPlan = compileJsonPlan(interp, cls)
+    cls.cachedJsonPlan
+
+  proc isJsonEmpty(val: NodeValue): bool =
+    case val.kind
+    of vkString:
+      val.strVal.len == 0
+    of vkArray:
+      val.arrayVal.len == 0
+    of vkTable:
+      val.tableVal.len == 0
+    of vkInstance:
+      case val.instVal.kind
+      of ikString:
+        val.instVal.strVal.len == 0
+      of ikArray:
+        val.instVal.elements.len == 0
+      of ikTable:
+        val.instVal.entries.len == 0
+      else:
+        false
+    else:
+      false
+
+  proc writeJsonValue(interp: var Interpreter, buf: var string, val: NodeValue,
+                      state: var JsonWriteState)
+
+  proc writeJsonKey(buf: var string, key: NodeValue) =
+    case key.kind
+    of vkString:
+      writeJsonEscapedString(buf, key.strVal)
+    of vkSymbol:
+      writeJsonEscapedString(buf, key.symVal)
+    of vkInt:
+      writeJsonEscapedString(buf, $key.intVal)
+    of vkFloat:
+      writeJsonEscapedString(buf, $(%key.floatVal))
+    of vkBool:
+      if key.boolVal:
+        writeJsonEscapedString(buf, "true")
+      else:
+        writeJsonEscapedString(buf, "false")
+    of vkNil:
+      writeJsonEscapedString(buf, "null")
+    of vkClass:
+      writeJsonEscapedString(buf, key.classVal.name)
+    of vkInstance:
+      case key.instVal.kind
+      of ikString:
+        writeJsonEscapedString(buf, key.instVal.strVal)
+      of ikInt:
+        writeJsonEscapedString(buf, $key.instVal.intVal)
+      of ikFloat:
+        writeJsonEscapedString(buf, $(%key.instVal.floatVal))
+      else:
+        raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
+    else:
+      raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
+
+  proc writeJsonTable(buf: var string, entries: Table[NodeValue, NodeValue],
+                      interp: var Interpreter, state: var JsonWriteState) =
+    buf.add '{'
+    var first = true
+    for key, entryVal in entries.pairs:
+      if not first:
+        buf.add ','
+      first = false
+      writeJsonKey(buf, key)
+      buf.add ':'
+      writeJsonValue(interp, buf, entryVal, state)
+    buf.add '}'
+
+  proc writeJsonArray(buf: var string, elements: seq[NodeValue], interp: var Interpreter,
+                      state: var JsonWriteState) =
+    buf.add '['
+    for i, elem in elements:
+      if i > 0:
+        buf.add ','
+      writeJsonValue(interp, buf, elem, state)
+    buf.add ']'
+
+  proc writeFormattedJsonValue(buf: var string, val: NodeValue, formatKind: JsonFormatKind,
+                               interp: var Interpreter, state: var JsonWriteState) =
+    case formatKind
+    of jfkNone:
+      writeJsonValue(interp, buf, val, state)
+    of jfkString:
+      writeJsonEscapedString(buf, val.toString())
+    of jfkRawJson:
+      case val.kind
+      of vkString:
+        buf.add(val.strVal)
+      of vkInstance:
+        if val.instVal.kind == ikString:
+          buf.add(val.instVal.strVal)
+        else:
+          writeJsonEscapedString(buf, val.toString())
+      else:
+        writeJsonEscapedString(buf, val.toString())
+    of jfkSymbolName:
+      case val.kind
+      of vkSymbol:
+        writeJsonEscapedString(buf, val.symVal)
+      of vkInstance:
+        if val.instVal.kind == ikString and val.instVal.class == symbolClassCache:
+          writeJsonEscapedString(buf, val.instVal.strVal)
+        else:
+          writeJsonEscapedString(buf, val.toString())
+      else:
+        writeJsonEscapedString(buf, val.toString())
+    of jfkClassName:
+      case val.kind
+      of vkClass:
+        writeJsonEscapedString(buf, val.classVal.name)
+      of vkInstance:
+        if val.instVal.class != nil:
+          writeJsonEscapedString(buf, val.instVal.class.name)
+        else:
+          writeJsonEscapedString(buf, val.toString())
+      else:
+        writeJsonEscapedString(buf, val.toString())
+
+  proc writeJsonObjectFast(inst: Instance, buf: var string, interp: var Interpreter,
+                           state: var JsonWriteState) =
+    let plan = getOrCompileJsonPlan(interp, inst.class)
+    if plan == nil:
+      writeJsonEscapedString(buf, inst.toValue().toString())
+      return
+
+    if plan.kind == jpkRepresentationHook:
+      let methodLookup = lookupMethodOnClass(interp, inst.class, "jsonRepresentation")
+      if not methodLookup.found:
+        raise newException(ValueError, "jsonRepresentation plan missing method")
+      if not enterInstance(state, inst):
+        raise newException(ValueError, "JSON serialization cycle detected")
+      try:
+        let represented = executeMethod(interp, methodLookup.currentMethod, inst, @[], methodLookup.definingClass)
+        writeJsonValue(interp, buf, represented, state)
+      finally:
+        leaveInstance(state, inst)
+      return
+
+    if not enterInstance(state, inst):
+      raise newException(ValueError, "JSON serialization cycle detected")
+
+    buf.add '{'
+    var emitted = 0
+    for field in plan.fields:
+      if field.slotIndex < 0 or field.slotIndex >= inst.slots.len:
+        continue
+      let slotValue = inst.slots[field.slotIndex]
+      if field.omitNil and isNilValue(slotValue):
+        continue
+      if field.omitEmpty and isJsonEmpty(slotValue):
+        continue
+      if emitted > 0:
+        buf.add ','
+      buf.add field.outputKeyPrefix
+      writeFormattedJsonValue(buf, slotValue, field.formatKind, interp, state)
+      emitted += 1
+    buf.add '}'
+    leaveInstance(state, inst)
+
+  proc writeJsonValue(interp: var Interpreter, buf: var string, val: NodeValue,
+                      state: var JsonWriteState) =
+    case val.kind
+    of vkInt:
+      buf.add($val.intVal)
+    of vkFloat:
+      buf.add($(%val.floatVal))
+    of vkString:
+      writeJsonEscapedString(buf, val.strVal)
+    of vkBool:
+      if val.boolVal:
+        buf.add("true")
+      else:
+        buf.add("false")
+    of vkNil:
+      buf.add("null")
+    of vkArray:
+      writeJsonArray(buf, val.arrayVal, interp, state)
+    of vkTable:
+      writeJsonTable(buf, val.tableVal, interp, state)
+    of vkSymbol:
+      writeJsonEscapedString(buf, val.symVal)
+    of vkClass:
+      writeJsonEscapedString(buf, val.classVal.name)
+    of vkInstance:
+      case val.instVal.kind
+      of ikInt:
+        buf.add($val.instVal.intVal)
+      of ikFloat:
+        buf.add($(%val.instVal.floatVal))
+      of ikString:
+        writeJsonEscapedString(buf, val.instVal.strVal)
+      of ikArray:
+        if not enterInstance(state, val.instVal):
+          raise newException(ValueError, "JSON serialization cycle detected")
+        writeJsonArray(buf, val.instVal.elements, interp, state)
+        leaveInstance(state, val.instVal)
+      of ikTable:
+        if not enterInstance(state, val.instVal):
+          raise newException(ValueError, "JSON serialization cycle detected")
+        writeJsonTable(buf, val.instVal.entries, interp, state)
+        leaveInstance(state, val.instVal)
+      of ikObject:
+        if val.instVal.isNimProxy:
+          writeJsonEscapedString(buf, val.toString())
+        else:
+          writeJsonObjectFast(val.instVal, buf, interp, state)
+    else:
+      writeJsonEscapedString(buf, val.toString())
+
   proc primitiveJsonStringifyImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
     ## Convert Harding value to JSON string
     if args.len < 1:
       return NodeValue(kind: vkString, strVal: "null")
 
-    let value = args[0]
-
-    proc hardingToJson(val: NodeValue): JsonNode =
-      case val.kind
-      of vkInt:
-        return %val.intVal
-      of vkFloat:
-        return %val.floatVal
-      of vkString:
-        return %val.strVal
-      of vkBool:
-        return %val.boolVal
-      of vkNil:
-        return newJNull()
-      of vkArray:
-        var arr = newJArray()
-        for elem in val.arrayVal:
-          arr.add(hardingToJson(elem))
-        return arr
-      of vkTable:
-        var obj = newJObject()
-        for key, val in val.tableVal.pairs:
-          obj[key.toString()] = hardingToJson(val)
-        return obj
-      of vkInstance:
-        if val.instVal.kind == ikArray:
-          var arr = newJArray()
-          for elem in val.instVal.elements:
-            arr.add(hardingToJson(elem))
-          return arr
-        elif val.instVal.kind == ikTable:
-          var obj = newJObject()
-          for key, entryVal in val.instVal.entries.pairs:
-            obj[key.toString()] = hardingToJson(entryVal)
-          return obj
-        else:
-          return %val.toString()
-      else:
-        return %val.toString()
-
-    return NodeValue(kind: vkString, strVal: $hardingToJson(value))
+    var buf = newStringOfCap(64)
+    var state = initJsonWriteState()
+    writeJsonValue(interp, buf, args[0], state)
+    return NodeValue(kind: vkString, strVal: buf)
 
   let jsonParseLiteralMethod = createCoreMethod("parseLiteral:")
   jsonParseLiteralMethod.setNativeImpl(primitiveJsonParseLiteralImpl)
