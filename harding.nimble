@@ -149,6 +149,53 @@ proc getExternalTestPatterns(): string =
         patterns.add(testDir / "test_*.nim")
   return patterns.join(" ")
 
+# Test groups - defined as test sets
+const TestCore = """
+tests/test_interpreter_core.nim
+tests/test_precedence.nim
+tests/test_primitives.nim
+tests/test_exception_handling.nim
+tests/test_closures.nim
+tests/test_scheduler_complete.nim
+tests/test_sync_primitives.nim
+tests/test_tagged.nim
+tests/test_vm_regressions.nim
+tests/test_nil_conditionals.nim
+tests/test_dynamic_features.nim
+tests/test_literals.nim
+tests/test_slot_ivars.nim
+tests/test_extend.nim
+tests/test_cascade.nim
+tests/test_float_operations.nim
+tests/test_class_model.nim
+"""
+
+const TestStdlib = """
+tests/test_stdlib_basics.nim
+tests/test_stdlib_strings.nim
+tests/test_stdlib_collections.nim
+tests/test_stdlib_intervals.nim
+tests/test_stdlib_io_and_packages.nim
+tests/test_stdlib_utilities.nim
+tests/test_set_operations.nim
+tests/test_json_literal.nim
+tests/test_json_serialization.nim
+"""
+
+const TestOther = """
+tests/test_compiler_basic.nim
+tests/test_compiler_block_parity.nim
+tests/test_website_examples.nim
+tests/test_cli_args.nim
+tests/test_bona_models.nim
+tests/test_gui_automation.nim
+tests/test_html_canvas.nim
+tests/test_html2_dyn_cache.nim
+tests/test_web_html_template_cache.nim
+tests/test_signal_point_debugging.nim
+tests/test_bitbarrel.nim
+"""
+
 task test, "Run all tests including external libraries":
   ## Run tests from tests/ and installed external library repos.
   ## External library tests follow convention: <lib>/tests/test_*.nim
@@ -166,6 +213,55 @@ task test, "Run all tests including external libraries":
     """
   else:
     echo "No external library tests found."
+
+task testRelease, "Run all tests compiled in release mode (faster execution)":
+  ## Compile and run all tests in release mode for faster execution
+  ensureExternalLibsFile()
+  let externalTestPatterns = getExternalTestPatterns()
+  exec """
+    echo "Running Harding test suite (release mode)..."
+    echo "=== Running core tests/test_*.nim (release) ==="
+    testament pattern "tests/test_*.nim" --nim:"nim c -d:release" || true
+  """
+  if externalTestPatterns.len > 0:
+    exec """
+      echo "=== Running external library tests (release) ==="
+      testament pattern """ & externalTestPatterns & """ --nim:"nim c -d:release" || true
+    """
+  else:
+    echo "No external library tests found."
+
+proc runTestGroup(groupName: string, testFiles: string, releaseMode: bool = false) =
+  let modeFlag = if releaseMode: " --nim:\"nim c -d:release\"" else: ""
+  let modeName = if releaseMode: " (release)" else: ""
+  echo "Running Harding " & groupName & " tests" & modeName & "..."
+  for file in testFiles.splitWhitespace():
+    echo "  Running: " & file
+    exec "testament pattern " & file & modeFlag & " || true"
+
+task testCore, "Run core VM and language tests only":
+  ## Run core Harding tests (VM, interpreter, language features)
+  runTestGroup("core", TestCore, false)
+
+task testCoreRelease, "Run core VM and language tests in release mode":
+  ## Run core tests compiled in release mode for faster execution
+  runTestGroup("core", TestCore, true)
+
+task testStdlib, "Run standard library tests only":
+  ## Run stdlib tests (collections, strings, intervals, I/O, etc.)
+  runTestGroup("stdlib", TestStdlib, false)
+
+task testStdlibRelease, "Run standard library tests in release mode":
+  ## Run stdlib tests compiled in release mode for faster execution
+  runTestGroup("stdlib", TestStdlib, true)
+
+task testOther, "Run compiler, IDE, and integration tests":
+  ## Run compiler, GUI, and other integration tests
+  runTestGroup("other", TestOther, false)
+
+task testOtherRelease, "Run compiler, IDE, and integration tests in release mode":
+  ## Run other tests compiled in release mode for faster execution
+  runTestGroup("other", TestOther, true)
 
 task harding, "Build harding REPL (debug) in repo root":
   # Build REPL in debug mode, output to repo root, with external libraries

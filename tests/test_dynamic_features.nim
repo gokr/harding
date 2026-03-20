@@ -1,12 +1,8 @@
 #
-# test_reflection.nim - Tests for Harding reflection capabilities
-#
-# All reflection methods are confirmed in lib/core/Object.hrd:
-# respondsTo:, isKindOf:, slotNames, hasProperty:, properties,
-# allInstanceMethods, superclassNames
+# test_dynamic_features.nim - Tests for dynamic features including perform: and reflection
 #
 
-import std/[unittest]
+import std/unittest
 import ../src/harding/core/types
 import ../src/harding/interpreter/vm
 
@@ -14,6 +10,82 @@ var sharedInterp: Interpreter
 sharedInterp = newInterpreter()
 initGlobals(sharedInterp)
 loadStdlib(sharedInterp)
+
+
+suite "Dynamic Message Sending (perform:)":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "perform: sends message dynamically with unary selector":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass >> greet [ ^"hello" ].
+      obj := MyClass new.
+      Result := obj perform: #greet
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "hello")
+
+  test "perform: with keyword selector (perform:with:)":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass >> greet: name [ ^"hello " , name ].
+      obj := MyClass new.
+      Result := obj perform: #greet: with: "world"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "hello world")
+
+  test "perform:with:with: sends two-argument message":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass >> add: a to: b [ ^a + b ].
+      obj := MyClass new.
+      Result := obj perform: #add:to: with: 3 with: 4
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 7)
+
+  test "perform: with computed selector":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass >> methodA [ ^"A" ].
+      MyClass >> methodB [ ^"B" ].
+      obj := MyClass new.
+      selector := #methodB.
+      Result := obj perform: selector
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "B")
+
+  test "perform: returns nil on non-existent selector (KNOWN BEHAVIOR)":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      Obj := MyClass new.
+      Result := Obj perform: #nonExistentMethod
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInstance)
+    check(result[0][^1].toString() == "nil")
+
+  test "perform: inherits from parent class":
+    let result = interp.evalStatements("""
+      Parent := Object derive.
+      Parent >> parentMethod [ ^"from parent" ].
+      Child := Parent derive.
+      obj := Child new.
+      Result := obj perform: #parentMethod
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "from parent")
+
 
 suite "Reflection: respondsTo:":
   var interp {.used.}: Interpreter
@@ -56,6 +128,7 @@ suite "Reflection: respondsTo:":
     check(result.kind == vkBool)
     check(result.boolVal == true)
 
+
 suite "Reflection: isKindOf:":
   var interp {.used.}: Interpreter
 
@@ -89,6 +162,7 @@ suite "Reflection: isKindOf:":
     check(err.len == 0)
     check(result.kind == vkBool)
     check(result.boolVal == false)
+
 
 suite "Reflection: slotNames":
   var interp {.used.}: Interpreter
@@ -137,6 +211,7 @@ suite "Reflection: slotNames":
     check(results[0][^1].kind == vkInt)
     check(results[0][^1].intVal == 30)
 
+
 suite "Reflection: hasProperty: and properties":
   var interp {.used.}: Interpreter
 
@@ -173,6 +248,7 @@ suite "Reflection: hasProperty: and properties":
     check(results[0][^1].kind == vkInt)
     check(results[0][^1].intVal == 3)
 
+
 suite "Reflection: class and class name":
   var interp {.used.}: Interpreter
 
@@ -199,6 +275,7 @@ suite "Reflection: class and class name":
     check(results[1].len == 0)
     check(results[0][^1].kind == vkString)
     check(results[0][^1].strVal == "MySpecialClass")
+
 
 suite "Reflection: allInstanceMethods":
   var interp {.used.}: Interpreter
