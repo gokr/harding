@@ -409,22 +409,34 @@ task vsix, "Build the VS Code extension (vsix file)":
 
 task harding_mummyx, "Build harding with MummyX HTTP server support":
   ## Build REPL with MummyX HTTP/WebSocket server support
-  exec "nim c -d:mummyx --threads:on --mm:orc -o:harding src/harding/repl/harding.nim"
+  ensureExternalLibsFile()
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:mummyx --threads:on --mm:orc " & externalFlags & " -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (with MummyX support)"
 
 task harding_mummyx_release, "Build harding with MummyX support (release)":
   ## Build REPL with MummyX support in release mode
-  exec "nim c -d:mummyx -d:release --threads:on --mm:orc -o:harding src/harding/repl/harding.nim"
+  ensureExternalLibsFile()
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:mummyx -d:release --threads:on --mm:orc " & externalFlags & " -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (release with MummyX support)"
 
 task bona_mummyx, "Build bona IDE with MummyX support (debug)":
   ## Build GUI IDE with GTK4 and MummyX HTTP server support
-  exec "nim c -d:gtk4 -d:granite -d:mummyx --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  ensureExternalLibsFile()
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:gtk4 -d:granite -d:mummyx --threads:on --mm:orc " & externalFlags & " -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (with MummyX support)"
 
 task bona_mummyx_release, "Build bona IDE with MummyX support (release)":
   ## Build GUI IDE with GTK4 and MummyX support in release mode
-  exec "nim c -d:gtk4 -d:granite -d:mummyx -d:release --threads:on --mm:orc -o:bona src/harding/gui/bona.nim"
+  ensureExternalLibsFile()
+  let externalFlags = getExternalLibFlags()
+  let dependencyPaths = getExternalDependencyPaths()
+  exec "nim c -p:external " & dependencyPaths & " -d:gtk4 -d:granite -d:mummyx -d:release --threads:on --mm:orc " & externalFlags & " -o:bona src/harding/gui/bona.nim"
   echo "Binary available as ./bona (release with MummyX support)"
 
 task harding_debug, "Build harding with debugger support":

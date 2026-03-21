@@ -390,18 +390,20 @@ proc parsePrimaryUnaryOnly(parser: var Parser): Node =
   if primary == nil:
     return nil
 
+  let accessedPrimary = parser.parseNamedAccessChain(primary)
+
   # Parse unary message chain only (no binary or keyword messages)
   while parser.peek().kind == tkIdent and parser.peek().value[0].isLowerAscii():
     let token = parser.next()
     result = MessageNode(
-      receiver: if result == nil: primary else: result,
+      receiver: if result == nil: accessedPrimary else: result,
       selector: token.value,
       arguments: @[],
       isCascade: false
     )
 
   if result == nil:
-    return primary
+    return accessedPrimary
   return result
 
 proc parseNamedAccessChain(parser: var Parser, receiver: Node): Node =

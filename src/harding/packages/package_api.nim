@@ -31,6 +31,30 @@ proc hasPackageSource*(interp: Interpreter, path: string): bool =
     return false
   path in interp.packageSources[]
 
+proc rebindDeclarativePrimitives(interp: var Interpreter) =
+  if interp.globals == nil:
+    return
+
+  proc rebindMethodTable(cls: Class, methodTable: var Table[string, BlockNode],
+                         allMethods: Table[string, BlockNode]) =
+    for selector, meth in methodTable.mpairs:
+      discard selector
+      if meth == nil or meth.primitiveSelector.len == 0 or meth.nativeImpl != nil:
+        continue
+      if meth.primitiveSelector in allMethods:
+        let primMethod = allMethods[meth.primitiveSelector]
+        if primMethod != nil and primMethod.nativeImpl != nil:
+          meth.nativeImpl = primMethod.nativeImpl
+          meth.nativeValueImpl = primMethod.nativeValueImpl
+          meth.hasInterpreterParam = primMethod.hasInterpreterParam
+
+  for _, value in interp.globals[].mpairs:
+    if value.kind != vkClass or value.classVal == nil:
+      continue
+    var cls = value.classVal
+    rebindMethodTable(cls, cls.methods, cls.allMethods)
+    rebindMethodTable(cls, cls.classMethods, cls.allClassMethods)
+
 proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
   if spec.name.len == 0:
     warn("installPackage: package name is empty")
@@ -58,6 +82,7 @@ proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
 
   if spec.registerPrimitives != nil:
     spec.registerPrimitives(interp)
+    rebindDeclarativePrimitives(interp)
 
   debug("Installed Harding package: ", spec.name, " (", spec.version, ")")
   return true
