@@ -23,6 +23,9 @@ Block>>value: arg1 value: arg2 <primitive primitiveValue: arg1 value: arg2>
 Block>>value: arg1 value: arg2 value: arg3 <primitive primitiveValue: arg1 value: arg2 value: arg3>
   # Evaluate this block with three arguments
 
+Block>>parameterCount <primitive primitiveParameterCount>
+  # Number of declared block parameters
+
 # while loops - receiver is condition block, argument is body block
 Block>>whileTrue: bodyBlock <primitive primitiveWhileTrue: bodyBlock>
 

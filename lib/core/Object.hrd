@@ -270,6 +270,18 @@ Object>>yourself [
   ^ self
 ]
 
+Object>>activation [
+  | activation |
+  activation := Process current currentActivation.
+  ^ activation isNil ifTrue: [ nil ] ifFalse: [ activation sender ]
+]
+
+Object>>thisContext [
+  | activation |
+  activation := Process current currentActivation.
+  ^ activation isNil ifTrue: [ nil ] ifFalse: [ activation sender ]
+]
+
 #====================================================================
 # Initialization
 #====================================================================

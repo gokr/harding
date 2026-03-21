@@ -14,6 +14,13 @@ when defined(mummyx):
 # This module connects the green threads scheduler with the Harding interpreter
 # ============================================================================
 
+proc initSchedulerOnInterpreter*(interp: var Interpreter): SchedulerContext
+
+proc ensureSchedulerContext(interp: var Interpreter): SchedulerContext =
+  if interp.schedulerContextPtr != nil:
+    return cast[SchedulerContext](interp.schedulerContextPtr)
+  return initSchedulerOnInterpreter(interp)
+
 # ProcessProxy type - forward declaration, full definition below
 type ProcessProxy = ref object
   process: Process
@@ -318,6 +325,8 @@ proc processorYieldImpl(interp: var Interpreter, self: Instance,
 # Forward declarations for proxy creation functions
 proc createProcessProxy*(process: Process): NodeValue
 proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue
+proc createActivationProxy*(activation: Activation): NodeValue
+proc createActivationClass*(): Class
 
 # Processor fork: implementation
 proc processorForkImpl(interp: var Interpreter, self: Instance,
@@ -341,8 +350,15 @@ proc processorForkImpl(interp: var Interpreter, self: Instance,
 # Processor current implementation
 proc processorCurrentImpl(interp: var Interpreter, self: Instance,
                           args: seq[NodeValue]): NodeValue =
-  ## Processor current - returns the current process (placeholder)
-  debug("Processor current called")
+  ## Processor current - returns the current process
+  let ctx = ensureSchedulerContext(interp)
+  if ctx != nil:
+    let process = if ctx.theScheduler.currentProcess != nil:
+                    ctx.theScheduler.currentProcess
+                  else:
+                    ctx.mainProcess
+    if process != nil:
+      return createProcessProxy(process)
   return nilValue()
 
 var processorClass*: Class = nil
@@ -393,6 +409,10 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   if schedulerCls != nil:
     interp.globals[]["Scheduler"] = schedulerCls.toValue()
 
+  let activationCls = createActivationClass()
+  if activationCls != nil:
+    interp.globals[]["Activation"] = activationCls.toValue()
+
   # Add synchronization primitives
   let monitorCls = createMonitorClass()
   if monitorCls != nil:
@@ -414,6 +434,7 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   protectGlobal("Processor")
   protectGlobal("Process")
   protectGlobal("Scheduler")
+  protectGlobal("Activation")
   protectGlobal("Monitor")
   protectGlobal("SharedQueue")
   protectGlobal("Semaphore")
@@ -496,7 +517,7 @@ proc processStateImpl(interp: var Interpreter, self: Instance, args: seq[NodeVal
 
 proc processYieldImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Yield the current process
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil and ctx.theScheduler.currentProcess != nil:
     let proxy = self.asProcessProxy()
     if proxy != nil and proxy.process != nil and proxy.process == ctx.theScheduler.currentProcess:
@@ -505,7 +526,7 @@ proc processYieldImpl(interp: var Interpreter, self: Instance, args: seq[NodeVal
 
 proc processSuspendImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Suspend this process
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     let proxy = self.asProcessProxy()
     if proxy != nil and proxy.process != nil:
@@ -514,7 +535,7 @@ proc processSuspendImpl(interp: var Interpreter, self: Instance, args: seq[NodeV
 
 proc processResumeImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Resume this process
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     let proxy = self.asProcessProxy()
     if proxy != nil and proxy.process != nil:
@@ -523,12 +544,37 @@ proc processResumeImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
 
 proc processTerminateImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Terminate this process
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     let proxy = self.asProcessProxy()
     if proxy != nil and proxy.process != nil:
       ctx.theScheduler.terminateProcess(proxy.process)
   return nilValue()
+
+proc processCurrentImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Process current - returns the currently running process
+  let ctx = ensureSchedulerContext(interp)
+  if ctx != nil:
+    let process = if ctx.theScheduler.currentProcess != nil:
+                    ctx.theScheduler.currentProcess
+                  else:
+                    ctx.mainProcess
+    if process != nil:
+      return createProcessProxy(process)
+  return nilValue()
+
+proc processCurrentActivationImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Get the current activation for this process interpreter
+  let proxy = self.asProcessProxy()
+  if proxy != nil and proxy.process != nil and proxy.process.interpreter != nil:
+    let processInterp = cast[Interpreter](proxy.process.interpreter)
+    if processInterp != nil and processInterp.currentActivation != nil:
+      return createActivationProxy(processInterp.currentActivation)
+  return nilValue()
+
+proc processActivationImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Convenience alias for currentActivation
+  return processCurrentActivationImpl(interp, self, args)
 
 proc createProcessClass*(): Class =
   ## Create the Process class with native methods
@@ -584,6 +630,24 @@ proc createProcessClass*(): Class =
   terminateMethod.hasInterpreterParam = true
   addMethodToClass(processClass, "terminate", terminateMethod)
 
+  # Add current class method
+  let currentMethod = createCoreMethod("current")
+  currentMethod.nativeImpl = cast[pointer](processCurrentImpl)
+  currentMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "current", currentMethod, isClassMethod = true)
+
+  # Add currentActivation method
+  let currentActivationMethod = createCoreMethod("currentActivation")
+  currentActivationMethod.nativeImpl = cast[pointer](processCurrentActivationImpl)
+  currentActivationMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "currentActivation", currentActivationMethod)
+
+  # Add activation alias
+  let activationMethod = createCoreMethod("activation")
+  activationMethod.nativeImpl = cast[pointer](processActivationImpl)
+  activationMethod.hasInterpreterParam = true
+  addMethodToClass(processClass, "activation", activationMethod)
+
   return processClass
 
 # ============================================================================
@@ -595,8 +659,12 @@ type
     theScheduler*: Scheduler  # 'theScheduler' to avoid naming conflict
     context*: SchedulerContext
 
+  ActivationProxy* = ref object
+    activation*: Activation
+
 # Keep SchedulerProxy references alive for ARC
 var schedulerProxies: seq[SchedulerProxy] = @[]
+var activationProxies: seq[ActivationProxy] = @[]
 
 proc createSchedulerProxy*(ctx: SchedulerContext): NodeValue =
   ## Create a proxy object that wraps a Nim Scheduler
@@ -613,39 +681,57 @@ proc asSchedulerProxy*(inst: Instance): SchedulerProxy =
     return cast[SchedulerProxy](inst.nimValue)
   return nil
 
+proc createActivationProxy*(activation: Activation): NodeValue =
+  let proxy = ActivationProxy(activation: activation)
+  activationProxies.add(proxy)
+  let obj = Instance(kind: ikObject, class: activationClass, slots: @[])
+  obj.isNimProxy = true
+  obj.nimValue = cast[pointer](proxy)
+  return obj.toValue()
+
+proc asActivationProxy*(inst: Instance): ActivationProxy =
+  if inst.isNimProxy and nimValueIsSet(inst.nimValue):
+    return cast[ActivationProxy](inst.nimValue)
+  return nil
+
 # Scheduler native method implementations
 
 proc schedulerProcessCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get total number of processes
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     return toValue(ctx.theScheduler.processCount())
   return nilValue()
 
 proc schedulerReadyCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get number of ready processes
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     return toValue(ctx.theScheduler.readyCount())
   return nilValue()
 
 proc schedulerBlockedCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get number of blocked processes
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     return toValue(ctx.theScheduler.blockedCount())
   return nilValue()
 
 proc schedulerCurrentProcessImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Get the current process
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
-  if ctx != nil and ctx.theScheduler.currentProcess != nil:
-    return createProcessProxy(ctx.theScheduler.currentProcess)
+  let ctx = ensureSchedulerContext(interp)
+  if ctx != nil:
+    let process = if ctx.theScheduler.currentProcess != nil:
+                    ctx.theScheduler.currentProcess
+                  else:
+                    ctx.mainProcess
+    if process != nil:
+      return createProcessProxy(process)
   return nilValue()
 
 proc schedulerForkNameImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Fork a new process with a block and optional name
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx == nil:
     return nilValue()
 
@@ -664,22 +750,136 @@ proc schedulerForkNameImpl(interp: var Interpreter, self: Instance, args: seq[No
 
 proc schedulerStepImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Run one time slice
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     discard ctx.runOneSlice()
   return nilValue()
 
 proc schedulerRunToCompletionImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Run all processes to completion
-  let ctx = cast[SchedulerContext](interp.schedulerContextPtr)
+  let ctx = ensureSchedulerContext(interp)
   if ctx != nil:
     let maxSteps = if args.len > 0 and args[0].kind == vkInt:
                      args[0].intVal
                    else:
-                     100000
+      100000
     let stepsExecuted = ctx.runToCompletion(maxSteps)
     return toValue(stepsExecuted)
   return nilValue()
+
+proc schedulerCurrentImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Scheduler current - returns the current scheduler proxy
+  let ctx = ensureSchedulerContext(interp)
+  if ctx != nil:
+    return createSchedulerProxy(ctx)
+  return nilValue()
+
+# ============================================================================
+# Activation Proxy and Class
+# ============================================================================
+
+proc activationReceiverImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil and proxy.activation.receiver != nil:
+    return proxy.activation.receiver.toValue()
+  return nilValue()
+
+proc activationSenderImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil and proxy.activation.sender != nil:
+    return createActivationProxy(proxy.activation.sender)
+  return nilValue()
+
+proc activationSelectorImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil and proxy.activation.currentMethod != nil:
+    let selector = proxy.activation.currentMethod.selector
+    if selector.len > 0:
+      return toValue(selector)
+  return toValue("<doit>")
+
+proc activationLineImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil and proxy.activation.currentMethod != nil:
+    return toValue(proxy.activation.currentMethod.line)
+  return nilValue()
+
+proc activationColumnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil and proxy.activation.currentMethod != nil:
+    return toValue(proxy.activation.currentMethod.col)
+  return nilValue()
+
+proc activationIsClassMethodImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy != nil and proxy.activation != nil:
+    return toValue(proxy.activation.isClassMethod)
+  return toValue(false)
+
+proc activationCacheKeyImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  let proxy = self.asActivationProxy()
+  if proxy == nil or proxy.activation == nil:
+    return nilValue()
+
+  let act = proxy.activation
+  let receiverClass = if act.receiver != nil and act.receiver.class != nil:
+                        act.receiver.class.name
+                      else:
+                        "UndefinedObject"
+  let selector = if act.currentMethod != nil and act.currentMethod.selector.len > 0:
+                   act.currentMethod.selector
+                 else:
+                   "<doit>"
+  let line = if act.currentMethod != nil: act.currentMethod.line else: 0
+  let col = if act.currentMethod != nil: act.currentMethod.col else: 0
+  return toValue(receiverClass & ">>" & selector & "@" & $line & ":" & $col)
+
+proc createActivationClass*(): Class =
+  if activationClass != nil:
+    return activationClass
+
+  discard initCoreClasses()
+
+  activationClass = newClass(superclasses = @[objectClass], name = "Activation")
+  activationClass.isNimProxy = true
+  activationClass.hardingType = "Activation"
+
+  let receiverMethod = createCoreMethod("receiver")
+  receiverMethod.nativeImpl = cast[pointer](activationReceiverImpl)
+  receiverMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "receiver", receiverMethod)
+
+  let senderMethod = createCoreMethod("sender")
+  senderMethod.nativeImpl = cast[pointer](activationSenderImpl)
+  senderMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "sender", senderMethod)
+
+  let selectorMethod = createCoreMethod("selector")
+  selectorMethod.nativeImpl = cast[pointer](activationSelectorImpl)
+  selectorMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "selector", selectorMethod)
+
+  let lineMethod = createCoreMethod("line")
+  lineMethod.nativeImpl = cast[pointer](activationLineImpl)
+  lineMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "line", lineMethod)
+
+  let columnMethod = createCoreMethod("column")
+  columnMethod.nativeImpl = cast[pointer](activationColumnImpl)
+  columnMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "column", columnMethod)
+
+  let isClassMethod = createCoreMethod("isClassMethod")
+  isClassMethod.nativeImpl = cast[pointer](activationIsClassMethodImpl)
+  isClassMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "isClassMethod", isClassMethod)
+
+  let cacheKeyMethod = createCoreMethod("cacheKey")
+  cacheKeyMethod.nativeImpl = cast[pointer](activationCacheKeyImpl)
+  cacheKeyMethod.hasInterpreterParam = true
+  addMethodToClass(activationClass, "cacheKey", cacheKeyMethod)
+
+  return activationClass
 
 proc createSchedulerClass*(): Class =
   ## Create the Scheduler class with native methods
@@ -716,6 +916,12 @@ proc createSchedulerClass*(): Class =
   currentProcessMethod.nativeImpl = cast[pointer](schedulerCurrentProcessImpl)
   currentProcessMethod.hasInterpreterParam = true
   addMethodToClass(schedulerClass, "currentProcess", currentProcessMethod, isClassMethod = true)
+
+  # Add current method
+  let currentMethod = createCoreMethod("current")
+  currentMethod.nativeImpl = cast[pointer](schedulerCurrentImpl)
+  currentMethod.hasInterpreterParam = true
+  addMethodToClass(schedulerClass, "current", currentMethod, isClassMethod = true)
 
   # Add fork:name: method
   let forkNameMethod = createCoreMethod("fork:name:")

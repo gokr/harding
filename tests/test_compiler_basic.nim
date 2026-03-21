@@ -20,6 +20,32 @@ suite "Compiler: Lexer and Parser":
     check tokens.len >= 1
     check tokens[0].kind == tkString
 
+  test "lexes triple-quoted multiline string literal":
+    let expected = """line 1
+He said "hello"
+"two quotes" are fine
+backslash-n: \n
+"""
+    let source = "\"\"\"" & expected & "\"\"\""
+    let tokens = lex(source)
+    check tokens.len >= 1
+    check tokens[0].kind == tkString
+    check tokens[0].value == expected
+
+  test "lexes indentation-aware triple-quoted string literal":
+    let source = "\"\"\"\n      alpha\n        beta\n      gamma\n    \"\"\""
+    let tokens = lex(source)
+    check tokens.len >= 1
+    check tokens[0].kind == tkString
+    check tokens[0].value == "alpha\n  beta\ngamma\n"
+
+  test "lexes triple-quoted symbol string":
+    let source = "#\"\"\"line 1\n  line 2 with \"quotes\"\n\"\"\""
+    let tokens = lex(source)
+    check tokens.len >= 1
+    check tokens[0].kind == tkSymbol
+    check tokens[0].value == "line 1\n  line 2 with \"quotes\"\n"
+
   test "lexes identifier":
     let tokens = lex("foo")
     check tokens.len >= 1
@@ -47,6 +73,52 @@ suite "Compiler: Parser":
     check nodes[0].kind == nkLiteral
     check nodes[0].LiteralNode.value.kind == vkString
     check nodes[0].LiteralNode.value.strVal == "hello"
+
+  test "parses triple-quoted multiline string literal":
+    let expected = """line 1
+He said "hello"
+"two quotes" are fine
+backslash-n: \n
+"""
+    let source = "\"\"\"" & expected & "\"\"\""
+    let tokens = lex(source)
+    var p = initParser(tokens)
+    let nodes = p.parseStatements()
+    check nodes.len == 1
+    check nodes[0].kind == nkLiteral
+    check nodes[0].LiteralNode.value.kind == vkString
+    check nodes[0].LiteralNode.value.strVal == expected
+
+  test "parses indentation-aware triple-quoted string literal":
+    let source = "\"\"\"\n      alpha\n        beta\n      gamma\n    \"\"\""
+    let tokens = lex(source)
+    var p = initParser(tokens)
+    let nodes = p.parseStatements()
+    check nodes.len == 1
+    check nodes[0].kind == nkLiteral
+    check nodes[0].LiteralNode.value.kind == vkString
+    check nodes[0].LiteralNode.value.strVal == "alpha\n  beta\ngamma\n"
+
+  test "parses triple-quoted symbol string literal":
+    let source = "#\"\"\"line 1\n  line 2 with \"quotes\"\n\"\"\""
+    let tokens = lex(source)
+    var p = initParser(tokens)
+    let nodes = p.parseStatements()
+    check nodes.len == 1
+    check nodes[0].kind == nkLiteral
+    check nodes[0].LiteralNode.value.kind == vkSymbol
+    check nodes[0].LiteralNode.value.symVal == "line 1\n  line 2 with \"quotes\"\n"
+
+  test "triple-quoted multiline string keeps interpolation markers literally":
+    let expected = """Hello #{name}
+Value: #{1 + 2}
+"""
+    let source = "\"\"\"" & expected & "\"\"\""
+    let tokens = lex(source)
+    var p = initParser(tokens)
+    let nodes = p.parseStatements()
+    check nodes.len == 1
+    check nodes[0].LiteralNode.value.strVal == expected
 
   test "parses assignment":
     let tokens = lex("x := 10")

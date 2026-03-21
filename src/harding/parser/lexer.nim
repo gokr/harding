@@ -3,6 +3,54 @@
 # ============================================================================
 
 import std/strutils
+
+proc normalizeTripleQuotedString(value: string): string =
+  result = value
+  if result.len == 0:
+    return result
+
+  if result[0] == '\n':
+    result = result[1 .. ^1]
+
+  var minIndent = -1
+  var lineStart = 0
+
+  while lineStart < result.len:
+    var lineEnd = lineStart
+    while lineEnd < result.len and result[lineEnd] != '\n':
+      inc lineEnd
+
+    var indent = 0
+    while lineStart + indent < lineEnd and result[lineStart + indent] in {' ', '\t'}:
+      inc indent
+
+    if lineStart + indent < lineEnd:
+      if minIndent == -1 or indent < minIndent:
+        minIndent = indent
+
+    lineStart = lineEnd + 1
+
+  if minIndent <= 0:
+    return result
+
+  var normalized = newStringOfCap(result.len)
+  lineStart = 0
+  while lineStart < result.len:
+    var lineEnd = lineStart
+    while lineEnd < result.len and result[lineEnd] != '\n':
+      inc lineEnd
+
+    var trim = 0
+    while trim < minIndent and lineStart + trim < lineEnd and result[lineStart + trim] in {' ', '\t'}:
+      inc trim
+
+    normalized.add(result[(lineStart + trim) ..< lineEnd])
+    if lineEnd < result.len:
+      normalized.add('\n')
+
+    lineStart = lineEnd + 1
+
+  result = normalized
 type
   TokenKind* = enum
     tkIdent, tkKeyword, tkString, tkInt, tkFloat
@@ -125,24 +173,49 @@ proc parseNumber(lexer: var Lexer): Token =
     return Token(kind: tkFloat, value: value, line: startLine, col: startCol)
   else:
     return Token(kind: tkInt, value: value, line: startLine, col: startCol)
-# Parse string (single or double quotes)
+# Parse string (double quotes, including triple-quoted multiline strings)
 proc parseString(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
-  # Check which quote type
+
   let quoteChar = lexer.peek()
   if quoteChar != '"' and quoteChar != '\'':
     return Token(kind: tkError, value: "Expected opening quote", line: startLine, col: startCol)
+
+  let isTripleQuoted =
+    quoteChar == '"' and
+    lexer.pos + 2 < lexer.input.len and
+    lexer.input[lexer.pos + 1] == '"' and
+    lexer.input[lexer.pos + 2] == '"'
+
+  if isTripleQuoted:
+    discard lexer.next()
+    discard lexer.next()
+    discard lexer.next()
+
+    while lexer.pos < lexer.input.len:
+      if lexer.peek() == '"' and
+          lexer.pos + 2 < lexer.input.len and
+          lexer.input[lexer.pos + 1] == '"' and
+          lexer.input[lexer.pos + 2] == '"':
+        discard lexer.next()
+        discard lexer.next()
+        discard lexer.next()
+        return Token(kind: tkString, value: normalizeTripleQuotedString(value), line: startLine, col: startCol)
+
+      value.add(lexer.next())
+
+    return Token(kind: tkError, value: "Unterminated triple-quoted string", line: startLine, col: startCol)
+
   discard lexer.next()
-  # Parse string content
+
   while lexer.pos < lexer.input.len:
     let c = lexer.peek()
     if c == quoteChar:
       discard lexer.next()
-      break
+      return Token(kind: tkString, value: value, line: startLine, col: startCol)
     elif c == '\\':
-      # Escape sequence
       discard lexer.next()
       let esc = lexer.next()
       case esc
@@ -157,7 +230,8 @@ proc parseString(lexer: var Lexer): Token =
         value.add(esc)
     else:
       value.add(lexer.next())
-  return Token(kind: tkString, value: value, line: startLine, col: startCol)
+
+  return Token(kind: tkError, value: "Unterminated string", line: startLine, col: startCol)
 # Parse symbol (starts with #)
 proc parseSymbol(lexer: var Lexer): Token =
   let startLine = lexer.line

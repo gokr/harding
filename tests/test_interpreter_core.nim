@@ -83,6 +83,78 @@ suite "Interpreter: Method Execution with Parameters":
     check(result[0].len == 1)
     check(result[0][^1].intVal == 20)
 
+suite "Interpreter: Multiline Strings":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "evaluates triple-quoted multiline string literals as raw strings":
+    let expected = """line 1
+He said "hello"
+"two quotes" are fine
+backslash-n: \n
+"""
+    let code = "\"\"\"" & expected & "\"\"\""
+    let (result, err) = interp.doit(code)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == expected)
+
+  test "dedents indentation-aware triple-quoted strings":
+    let code = "\"\"\"\n      alpha\n        beta\n      gamma\n    \"\"\""
+    let (result, err) = interp.doit(code)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == "alpha\n  beta\ngamma\n")
+
+  test "evaluates triple-quoted symbol strings":
+    let code = "#\"\"\"line 1\n  line 2 with \"quotes\"\n\"\"\""
+    let (result, err) = interp.doit(code)
+    check(err.len == 0)
+    check(result.kind == vkSymbol)
+    check(result.symVal == "line 1\n  line 2 with \"quotes\"\n")
+
+suite "Interpreter: Process and Activation Introspection":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "exposes current process and scheduler":
+    let (result, err) = interp.doit("""
+      (Process current className) , "|" , (Scheduler current className) , "|" , (Processor current className)
+    """)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == "Process|Scheduler|Process")
+
+  test "exposes current activation details":
+    let (result, err) = interp.doit("""
+      Probe := Object derive.
+      Probe>>activationInfo [
+        | act |
+        act := Process current currentActivation.
+        ^ (act className) , "|" , (act selector) , "|" , (act receiver className) , "|" , (act cacheKey)
+      ].
+      Probe new activationInfo
+    """)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal.contains("Activation|activationInfo|Probe|Probe>>activationInfo@"))
+
+  test "object activation and thisContext are convenience aliases":
+    let (result, err) = interp.doit("""
+      Probe := Object derive.
+      Probe>>activationAliases [
+        ^ (self activation selector) , "|" , (self thisContext selector)
+      ].
+      Probe new activationAliases
+    """)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == "activationAliases|activationAliases")
+
   test "methods can access self and slots":
     let result = interp.evalStatements("""
       Person := Object derivePublic: #(name age).
@@ -467,6 +539,20 @@ suite "Interpreter: Error Handling":
 
     check(result[1].len > 0)
     check("undefinedMethod" in result[1])
+
+  test "named access can be receiver and keyword argument":
+    let result = sharedInterp.evalStatements("""
+    Holder := Object derivePublic: #(server router).
+    H := Holder new.
+    H::server := #{}.
+    H::router := 42.
+    H::server at: "x" put: H::router.
+    Result := H::server at: "x"
+    """)
+
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 42)
 
   test "error in block evaluation is reported":
     let result = sharedInterp.evalStatements("""

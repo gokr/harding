@@ -2431,6 +2431,14 @@ proc primitiveValueWithArgImpl(interp: var Interpreter, self: Instance, args: se
     return blockResult
   return nilValue()
 
+proc primitiveParameterCountImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Return the number of declared block parameters
+  if self.kind == ikObject and self.class == blockClass and not self.isNimProxy:
+    let blockNode = cast[BlockNode](self.nimValue)
+    if blockNode != nil:
+      return toValue(blockNode.parameters.len)
+  return toValue(0)
+
 proc primitiveValueWithTwoArgsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Evaluate this block with two arguments
   if args.len < 2:
@@ -4146,6 +4154,13 @@ proc initGlobals*(interp: var Interpreter) =
   primitiveValueWithThreeArgsMethod.hasInterpreterParam = true
   blockCls.methods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
   blockCls.allMethods["primitiveValue:value:value:"] = primitiveValueWithThreeArgsMethod
+
+  let primitiveParameterCountMethod = createCoreMethod("primitiveParameterCount")
+  primitiveParameterCountMethod.setNativeImpl(primitiveParameterCountImpl)
+  setNativeValueFromInstanceWithInterp(primitiveParameterCountMethod, primitiveParameterCountImpl)
+  primitiveParameterCountMethod.hasInterpreterParam = true
+  blockCls.methods["primitiveParameterCount"] = primitiveParameterCountMethod
+  blockCls.allMethods["primitiveParameterCount"] = primitiveParameterCountMethod
 
   # Register Block exception handling method (primitiveOnDo:do: for on:do: support)
   # The selector is primitiveOnDo:do: because the Harding method has two arguments:
