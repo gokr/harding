@@ -11,6 +11,7 @@ These are the active, maintained documents:
 | [MANUAL.md](MANUAL.md) | Complete language and runtime reference | All users |
 | [QUICKREF.md](QUICKREF.md) | Syntax and common idioms cheat sheet | Daily reference |
 | [MUMMYX.md](MUMMYX.md) | Optional HTTP server integration | Users and contributors |
+| [API_SERVER_TUTORIAL.md](API_SERVER_TUTORIAL.md) | Build a plain JSON API server with MummyX and BitBarrel | Users |
 | [NIM_PACKAGE_TUTORIAL.md](NIM_PACKAGE_TUTORIAL.md) | Packaging Nim primitives with Harding code | Contributors |
 | [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | CLI tools, workflows, and debugging | Users and contributors |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM/runtime architecture details | Contributors |
