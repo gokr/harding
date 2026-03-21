@@ -1,11 +1,14 @@
+TodoTemplateEmptyStateComponent := Component derive: #().
 TodoTemplateItemComponent := Component derivePublic: #(todo routePrefix panelId).
 TodoTemplatePanelComponent := Component derivePublic: #(repository routePrefix panelId).
 TodoTemplatePageComponent := Component derivePublic: #(repository routePrefix panelId).
 
-TodoTemplateItemComponent class>>todo: aTodo [
+TodoTemplateItemComponent class>>todo: aTodo routePrefix: aRoutePrefix panelId: aPanelId [
   | component |
   component := self basicNew.
   component::todo := aTodo.
+  component::routePrefix := aRoutePrefix.
+  component::panelId := aPanelId.
   ^ component
 ].
 
@@ -32,23 +35,23 @@ TodoTemplateItemComponent>>statusClass [
 ].
 
 TodoTemplateItemComponent>>titleClass [
-  ^ todo::completed ifTrue: [ "opacity-60" ] ifFalse: [ "" ]
+  ^ todo::completed ifTrue: [ "opacity-60" ] ifFalse: [ nil ]
 ].
 
 TodoTemplateItemComponent>>toggleLabel [
   ^ todo::completed ifTrue: [ "Mark active" ] ifFalse: [ "Mark done" ]
 ].
 
-TodoTemplateItemComponent>>metaText [
-  ^ todo::completed ifTrue: [ "Completed" ] ifFalse: [ "Active" ]
-].
-
 TodoTemplateItemComponent>>statusText [
   ^ todo::completed ifTrue: [ "Done" ] ifFalse: [ "Open" ]
 ].
 
+TodoTemplateItemComponent>>metaText [
+  ^ todo::completed ifTrue: [ "Completed - live edit to change this copy." ] ifFalse: [ "Active - edit this method in Bona and refresh." ]
+].
+
 TodoTemplateItemComponent>>titleText [
-  ^ Html escape: (todo::title)
+  ^ todo::title
 ].
 
 TodoTemplateItemComponent>>toggleUrl [
@@ -59,160 +62,258 @@ TodoTemplateItemComponent>>deleteUrl [
   ^ routePrefix , "/todos/" , (todo::id printString) , "/delete"
 ].
 
-TodoTemplateItemComponent>>panelIdWithHash [
+TodoTemplateItemComponent>>panelTarget [
   ^ "#" , panelId
 ].
 
-TodoTemplateItemComponent class>>cachedTemplate [
-  | template |
-  Template isNil ifTrue: [
-    Template := Html li: #{#style -> "list-style:none;"} with: (
-      Html div: #{
-        #class -> "card bg-base-200 border border-base-300 shadow-sm"
-        #style -> "margin-top: 0.75rem;"
-      } with: (
-        Html div: #{#style -> "display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; width:100%;"} with: (
-          # Left column: status, title, meta
-          Html div: #{#style -> "display:flex; flex-direction:column; gap:0.4rem; min-width:0; flex:1;"} with: (
-            Html div: #{#style -> "display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;"} with: (
-              Html tag: "span" attrs: #{
-                #class -> [ :item | item statusClass ]
-              } with: [ :item | item statusText ]
-            ) , (
-              Html div: #{#class -> [ :item | item titleClass ], #style -> "font-size:1rem; font-weight:600;"} with: [ :item | item titleText ]
-            )
-          ) , (
-            Html div: #{#style -> "opacity:0.72; font-size:0.92rem;"} with: [ :item | item metaText ]
-          )
-        )
-      ) , (
-        # Right column: action buttons
-        Html div: #{#style -> "display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;"} with: (
-          Html button: #{
-            #class -> "btn btn-ghost btn-sm"
-            #"hx-post" -> [ :item | item toggleUrl ]
-            #"hx-target" -> [ :item | item panelIdWithHash ]
-            #"hx-swap" -> "outerHTML"
-          } text: [ :item | item toggleLabel ]
-        ) , (
-          Html button: #{
-            #class -> "btn btn-ghost btn-sm"
-            #"hx-post" -> [ :item | item deleteUrl ]
-            #"hx-target" -> [ :item | item panelIdWithHash ]
-            #"hx-swap" -> "outerHTML"
-          } text: "Delete"
-        )
-      )
-    )
-  ].
-  ^ Template
+TodoTemplateItemComponent>>render [
+  ^ Html renderAuto: #todoTemplateItem with: [:h |
+    h li: [:item |
+      item class: "card bg-base-200 border border-base-300 shadow-sm";
+        style: "list-style:none; margin-top:0.75rem;".
+
+      item div: [:body |
+        body class: "card-body".
+
+        body div: [:layout |
+          layout style: "display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; width:100%;".
+
+          layout div: [:content |
+            content style: "display:flex; flex-direction:column; gap:0.4rem; min-width:0; flex:1;".
+
+            content div: [:headline |
+              headline style: "display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;".
+
+              headline span: [:badge |
+                badge class: (#statusClass dyn).
+                badge renderContent: (#statusText dyn)
+              ].
+
+              headline div: [:title |
+                title style: "font-size:1rem; font-weight:600;";
+                  class: (#titleClass dyn).
+                title renderContent: (#titleText dyn)
+              ]
+            ].
+
+            content div: [:meta |
+              meta style: "opacity:0.72; font-size:0.92rem;".
+              meta renderContent: (#metaText dyn)
+            ]
+          ].
+
+          layout div: [:actions |
+            actions style: "display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;".
+
+            actions button: [:toggle |
+              toggle class: "btn btn-ghost btn-sm";
+                post: (#toggleUrl dyn);
+                target: (#panelTarget dyn);
+                swap: "outerHTML".
+              toggle renderContent: (#toggleLabel dyn)
+            ].
+
+            actions button: [:delete |
+              delete class: "btn btn-ghost btn-sm";
+                post: (#deleteUrl dyn);
+                target: (#panelTarget dyn);
+                swap: "outerHTML".
+              delete text: "Delete"
+            ]
+          ]
+        ]
+      ]
+    ]
+  ] context: self
 ].
 
-TodoTemplateItemComponent>>renderFor: aRoutePrefix panelId: aPanelId [
-  routePrefix := aRoutePrefix.
-  panelId := aPanelId.
-  ^ self class cachedTemplate renderWith: self
+TodoTemplateEmptyStateComponent>>render [
+  ^ Html renderAuto: #todoTemplateEmptyState with: [:h |
+    h div: [:box |
+      box class: "alert alert-info".
+      box div: [:content |
+        content div: [:title |
+          title style: "font-weight:600;".
+          title text: "Nothing queued yet"
+        ].
+        content p: [:copy |
+          copy style: "margin-top:0.35rem; opacity:0.8;".
+          copy text: "Use the form above, then edit the component methods in Bona while the server keeps running."
+        ]
+      ]
+    ]
+  ]
 ].
 
-TodoTemplatePanelComponent>>renderList [
+TodoTemplatePanelComponent>>routePrefixText [
+  ^ routePrefix
+].
+
+TodoTemplatePanelComponent>>panelIdText [
+  ^ panelId
+].
+
+TodoTemplatePanelComponent>>panelTarget [
+  ^ "#" , panelId
+].
+
+TodoTemplatePanelComponent>>listComponents [
   | todos items |
   repository all isEmpty ifTrue: [
-    ^ DaisyAlert info: (
-      Html div: #{#style -> "font-weight:600;"} with: (
-        Html p: #{#style -> "margin-top:0.35rem; opacity:0.8;"} text: "Use the form above, then edit the component methods in Bona while the server keeps running."
-      )
-    ) attrs: #{}
+    items := Array new.
+    items add: (TodoTemplateEmptyStateComponent new).
+    ^ items
   ].
+
   todos := repository all.
   items := Array new.
-  todos do: [:todo |
-    items add: ((TodoTemplateItemComponent todo: todo) renderFor: routePrefix panelId: panelId)
+  todos do: [:aTodo |
+    items add: (TodoTemplateItemComponent todo: aTodo routePrefix: routePrefix panelId: panelId)
   ].
-  ^ Html ul: #{#style -> "padding:0; margin:0;"} with: items
-].
-
-# Class-level cached template for the panel
-# Static HTML structure cached once, dynamic content via blocks
-TodoTemplatePanelComponent class>>cachedTemplate [
-  | template |
-  Template isNil ifTrue: [
-    Template := Html div: #{
-      #id -> [ :panel | panel panelId ]
-      #class -> "card bg-base-100 shadow-xl"
-    } with: (
-      Html div: #{#class -> "card-body"} with: (
-        # Header
-        Html div: #{#style -> "display:flex; flex-direction:column; gap:1.25rem;"} with: (
-          Html h2: #{} text: "Today"
-        ) , (
-          Html p: #{#style -> "opacity:0.72;"} text: "This panel uses class-cached HtmlTemplate with dynamic blocks for data."
-        )
-      )
-    ) , (
-      # Add task form
-      Html form: #{
-        #class -> "todo-form"
-        #"hx-post" -> [ :panel | panel routePrefix , "/todos" ]
-        #"hx-target" -> [ :panel | "#" , panel panelId ]
-        #"hx-swap" -> "outerHTML"
-      } with: (
-        Html div: #{#style -> "display:grid; grid-template-columns:minmax(0,1fr) 7.75rem; gap:0.65rem; align-items:end; max-width:34rem;"} with: (
-          DaisyField label: "New task" control: (DaisyInput field: #{
-            #type -> "text"
-            #name -> "title"
-            #placeholder -> "Add a task"
-            #autocomplete -> "off"
-            #required -> "true"
-          }) hint: nil attrs: #{}
-        ) , (
-          DaisyButton ghost: "Add task" attrs: #{#type -> "submit" #class -> "btn-outline" #style -> "min-width:7.75rem;"}
-        )
-      ) , (
-        Html p: #{#style -> "margin-top:0.35rem; opacity:0.72; font-size:0.92rem;"} text: "Submit to re-render the panel via htmx."
-      )
-    ) , (
-      # Dynamic list content
-      Html fragmentWith: [ :panel | panel renderList ]
-    ) , (
-      # Footer
-      Html div: #{#style -> "margin-top:0.5rem;"} with: (
-        DaisyAlert neutral: (Html text: "Template version: static structure cached, dynamic content via blocks.") attrs: #{}
-      )
-    )
-  ].
-  ^ Template
+  ^ items
 ].
 
 TodoTemplatePanelComponent>>render [
-  ^ self class cachedTemplate renderWith: self
+  ^ Html renderAuto: #todoTemplatePanel with: [:h |
+    h div: [:card |
+      card id: (#panelIdText dyn);
+        class: "card bg-base-100 shadow-xl".
+
+      card div: [:body |
+        body class: "card-body".
+
+        body div: [:intro |
+          intro style: "display:flex; flex-direction:column; gap:1.25rem;".
+          intro h2: "Today".
+          intro p: [:copy |
+            copy style: "opacity:0.72;".
+            copy text: "This panel uses cached HtmlCanvas templates plus explicit dyn blocks."
+          ]
+        ].
+
+        body form: [:form |
+          form class: "todo-form";
+            post: ([ :panel | panel routePrefixText , "/todos" ] dyn);
+            target: (#panelTarget dyn);
+            swap: "outerHTML".
+
+          form div: [:row |
+            row style: "display:grid; grid-template-columns:minmax(0,1fr) 7.75rem; gap:0.65rem; align-items:end; max-width:34rem;".
+
+            row label: [:field |
+              field style: "display:flex; flex-direction:column; gap:0.4rem;".
+              field div: "New task".
+              field input: [:input |
+                input type: "text";
+                  name: "title";
+                  placeholder: "Add a task";
+                  autocomplete: "off";
+                  required;
+                  class: "input input-bordered"
+              ]
+            ].
+
+            row button: [:submit |
+              submit class: "btn btn-ghost btn-outline";
+                style: "min-width:7.75rem;";
+                type: "submit".
+              submit text: "Add task"
+            ]
+          ].
+
+          form p: [:hint |
+            hint style: "margin-top:0.35rem; opacity:0.72; font-size:0.92rem;".
+            hint text: "Submit to re-render the panel via htmx."
+          ]
+        ].
+
+        body ul: [:list |
+          list style: "padding:0; margin:0;".
+          list renderContent: (#listComponents dyn)
+        ].
+
+        body div: [:note |
+          note class: "alert";
+            style: "margin-top:0.5rem;".
+          note text: "Template version: cached HtmlCanvas shell with explicit dyn blocks for changing values."
+        ]
+      ]
+    ]
+  ] context: self
 ].
 
-TodoTemplatePageComponent>>heroStats [
-  | badges |
-  badges := Array new.
-  badges add: (DaisyBadge neutral: ((repository count printString) , " total") attrs: #{}).
-  badges add: (DaisyBadge neutral: ((repository remainingCount printString) , " remaining") attrs: #{}).
-  badges add: (DaisyBadge neutral: ((repository completedCount printString) , " completed") attrs: #{}).
-  ^ Html div: #{#style -> "display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;"} with: badges
+TodoTemplatePageComponent>>heroTotalText [
+  ^ repository count printString , " total"
+].
+
+TodoTemplatePageComponent>>heroRemainingText [
+  ^ repository remainingCount printString , " remaining"
+].
+
+TodoTemplatePageComponent>>heroCompletedText [
+  ^ repository completedCount printString , " completed"
+].
+
+TodoTemplatePageComponent>>panelComponent [
+  ^ TodoTemplatePanelComponent repository: repository routePrefix: routePrefix panelId: panelId
+].
+
+TodoTemplatePageComponent>>bodyMarkup [
+  ^ Html renderAuto: #todoTemplatePageBody with: [:h |
+    h main: [:main |
+      main class: Daisy shellClass;
+        attr: #"data-theme" value: Daisy themeName;
+        style: "width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem;".
+
+      main section: [:hero |
+        hero class: Daisy heroClass.
+        hero div: [:content |
+          content class: "hero-content";
+            style: "display:block; width:100%; padding:2.25rem;".
+
+          content div: [:eyebrow |
+            eyebrow class: "badge badge-accent badge-outline".
+            eyebrow text: "Harding + Bona + htmx"
+          ].
+
+          content h1: [:title |
+            title style: "font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;".
+            title text: "Template-cached todo app"
+          ].
+
+          content p: [:lead |
+            lead style: "font-size:1rem; opacity:0.8; max-width:46rem;".
+            lead text: "Using HtmlCanvas with keyed templates and explicit dyn blocks for changing values."
+          ].
+
+          content div: [:stats |
+            stats style: "display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;".
+
+            stats span: [:total |
+              total class: "badge badge-outline".
+              total renderContent: (#heroTotalText dyn)
+            ].
+
+            stats span: [:remaining |
+              remaining class: "badge badge-outline".
+              remaining renderContent: (#heroRemainingText dyn)
+            ].
+
+            stats span: [:completed |
+              completed class: "badge badge-outline".
+              completed renderContent: (#heroCompletedText dyn)
+            ]
+          ]
+        ]
+      ].
+
+      main renderContent: (#panelComponent dyn)
+    ]
+  ] context: self
 ].
 
 TodoTemplatePageComponent>>render [
-  | buffer |
-  buffer := String withCapacity: 4096.
-  buffer << "<!DOCTYPE html><html lang=\"en\"><head>".
-  buffer << "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
-  buffer << "<title>Harding Todo Template</title>".
-  buffer << (Html linkStylesheet: "/assets/daisyui.css").
-  buffer << (Htmx scriptTag).
-  buffer << "</head><body>".
-  buffer << "<main class=\"" << Daisy shellClass << "\" data-theme=\"" << Daisy themeName << "\" style=\"width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem;\">".
-  buffer << "<section class=\"" << Daisy heroClass << "\"><div class=\"hero-content\" style=\"display:block; width:100%; padding:2.25rem;\">".
-  buffer << "<div class=\"badge badge-accent badge-outline\">Harding + Bona + htmx</div>".
-  buffer << "<h1 style=\"font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;\">Template-cached todo app</h1>".
-  buffer << "<p style=\"font-size:1rem; opacity:0.8; max-width:46rem;\">Static HTML structure cached at class level, dynamic data injected via blocks.</p>".
-  buffer << self heroStats.
-  buffer << "</div></section>".
-  buffer << ((TodoTemplatePanelComponent repository: repository routePrefix: routePrefix panelId: panelId) renderString).
-  buffer << "</main></body></html>".
-  ^ buffer
+  ^ Html documentTitle: "Harding Todo Template"
+      head: ((Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag))
+      body: self bodyMarkup
 ].

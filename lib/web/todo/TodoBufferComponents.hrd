@@ -52,21 +52,25 @@ TodoBufferItemComponent>>renderFor: aRoutePrefix panelId: aPanelId [
   toggleUrl := aRoutePrefix , "/todos/" , itemId , "/toggle".
   deleteUrl := aRoutePrefix , "/todos/" , itemId , "/delete".
   buffer := String withCapacity: 768.
-  buffer << "<li style=\"list-style:none;\">".
-  buffer << "<div class=\"card bg-base-200 border border-base-300 shadow-sm\" style=\"margin-top: 0.75rem;\">".
-  buffer << "<div class=\"card-body\">".
-  buffer << "<div style=\"display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; width:100%;\">".
-  buffer << "<div style=\"display:flex; flex-direction:column; gap:0.4rem; min-width:0; flex:1;\">".
-  buffer << "<div style=\"display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;\">".
+  buffer << """<li style="list-style:none;">
+<div class="card bg-base-200 border border-base-300 shadow-sm" style="margin-top: 0.75rem;">
+<div class="card-body">
+<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; width:100%;">
+<div style="display:flex; flex-direction:column; gap:0.4rem; min-width:0; flex:1;">
+<div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+""".
   buffer << "<span class=\"". buffer << self statusClass. buffer << "\">". buffer << statusLabel. buffer << "</span>".
   buffer << "<div class=\"". buffer << self titleClass. buffer << "\" style=\"font-size:1rem; font-weight:600;\">". buffer << titleText. buffer << "</div>".
-  buffer << "</div>".
+  buffer << """</div>
+""".
   buffer << "<div style=\"opacity:0.72; font-size:0.92rem;\">". buffer << meta. buffer << "</div>".
-  buffer << "</div>".
-  buffer << "<div style=\"display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;\">".
+  buffer << """</div>
+<div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+""".
   buffer << "<button class=\"btn btn-ghost btn-sm\" hx-post=\"". buffer << toggleUrl. buffer << "\" hx-target=\"#". buffer << aPanelId. buffer << "\" hx-swap=\"outerHTML\">". buffer << self toggleLabel. buffer << "</button>".
   buffer << "<button class=\"btn btn-ghost btn-sm\" hx-post=\"". buffer << deleteUrl. buffer << "\" hx-target=\"#". buffer << aPanelId. buffer << "\" hx-swap=\"outerHTML\">Delete</button>".
-  buffer << "</div></div></div></li>".
+  buffer << """</div></div></div></li>
+""".
   ^ buffer
 ].
 
@@ -127,20 +131,24 @@ TodoBufferPageComponent>>heroStats [
 TodoBufferPageComponent>>render [
   | buffer |
   buffer := String withCapacity: 4096.
-  buffer << "<!DOCTYPE html><html lang=\"en\"><head>".
-  buffer << "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
-  buffer << "<title>Harding Todo Buffer</title>".
-  buffer << "<link rel=\"stylesheet\" href=\"/assets/daisyui.css\">".
+  buffer << """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harding Todo Buffer</title>
+<link rel="stylesheet" href="/assets/daisyui.css">
+""".
   buffer << (Htmx scriptTag).
-  buffer << "</head><body>".
+  buffer << """</head><body>
+""".
   buffer << "<main class=\"" << Daisy shellClass << "\" data-theme=\"" << Daisy themeName << "\" style=\"width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem;\">".
   buffer << "<section class=\"" << Daisy heroClass << "\"><div class=\"hero-content\" style=\"display:block; width:100%; padding:2.25rem;\">".
-  buffer << "<div class=\"badge badge-accent badge-outline\">Harding + Bona + htmx</div>".
-  buffer << "<h1 style=\"font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;\">A live-editable todo app</h1>".
-  buffer << "<p style=\"font-size:1rem; opacity:0.8; max-width:46rem;\">Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.</p>".
+  buffer << """<div class="badge badge-accent badge-outline">Harding + Bona + htmx</div>
+<h1 style="font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;">A live-editable todo app</h1>
+<p style="font-size:1rem; opacity:0.8; max-width:46rem;">Keep the MummyX server running, edit component or handler methods in Bona, then refresh the browser to see the new behavior.</p>
+""".
   buffer << self heroStats.
   buffer << "</div></section>".
   buffer << ((TodoBufferPanelComponent repository: repository routePrefix: routePrefix panelId: panelId) renderString).
-  buffer << "</main></body></html>".
+  buffer << """</main></body></html>
+""".
   ^ buffer
 ].

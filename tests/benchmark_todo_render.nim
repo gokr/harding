@@ -2,6 +2,7 @@
 
 import std/[times, strformat, logging, algorithm]
 import ../src/harding/core/types
+import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
 
 proc median(values: seq[float]): float =
@@ -16,6 +17,7 @@ proc newWebInterp(): Interpreter =
   result = newInterpreter()
   initGlobals(result)
   initSymbolTable()
+  initProcessorGlobal(result)
   loadStdlib(result)
   let setup = result.evalStatements("""
     Harding load: "lib/web/Bootstrap.hrd".
@@ -25,7 +27,7 @@ proc newWebInterp(): Interpreter =
   if setup[1].len > 0:
     raise newException(ValueError, "Setup failed: " & setup[1])
 
-proc runCase(name: string, code: string, runs: int = 7): float =
+proc runCase(name: string, code: string, runs: int = 2): float =
   var samples: seq[float] = @[]
   for _ in 0..<runs:
     var interp = newWebInterp()
@@ -52,23 +54,65 @@ when isMainModule:
   echo "Harding Todo Render Benchmark"
   echo "============================="
 
-  let daisyRender = """
+  let bufferItemRender = """
+    Todo := TodoApp repository all at: 0.
     I := 0.
-    [I < 75] whileTrue: [
-      Output := ((TodoPageComponent repository: TodoApp repository) renderString).
+    [I < 100] whileTrue: [
+      Output := ((TodoBufferItemComponent todo: Todo) renderFor: "/buffer" panelId: "buffer-todo-panel").
       I := I + 1
     ].
     Result := Output size
   """
 
-  let classicRender = """
+  let templateItemRender = """
+    Todo := TodoApp repository all at: 0.
     I := 0.
-    [I < 75] whileTrue: [
-      Output := ((TodoClassicPageComponent repository: TodoApp repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString).
+    [I < 100] whileTrue: [
+      Output := ((TodoTemplateItemComponent todo: Todo routePrefix: "/template" panelId: "template-todo-panel") renderString).
       I := I + 1
     ].
     Result := Output size
   """
 
-  discard runCase("daisy render", daisyRender)
-  discard runCase("classic render", classicRender)
+  let bufferPanelRender = """
+    I := 0.
+    [I < 40] whileTrue: [
+      Output := ((TodoBufferPanelComponent repository: TodoApp repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  let templatePanelRender = """
+    I := 0.
+    [I < 40] whileTrue: [
+      Output := ((TodoTemplatePanelComponent repository: TodoApp repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  let bufferRender = """
+    I := 0.
+    [I < 20] whileTrue: [
+      Output := ((TodoBufferPageComponent repository: TodoApp repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  let templateRender = """
+    I := 0.
+    [I < 20] whileTrue: [
+      Output := ((TodoTemplatePageComponent repository: TodoApp repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  discard runCase("buffer item render", bufferItemRender)
+  discard runCase("template item render", templateItemRender)
+  discard runCase("buffer panel render", bufferPanelRender)
+  discard runCase("template panel render", templatePanelRender)
+  discard runCase("buffer render", bufferRender)
+  discard runCase("template render", templateRender)

@@ -118,15 +118,34 @@ TodoApp class>>compareHome: req [
 ].
 
 TodoApp class>>benchmark: req [
-  | daisyMarkup classicMarkup statsMarkup summary cardBody |
-  daisyMarkup := ((TodoPageComponent repository: self repository) renderString).
-  classicMarkup := ((TodoBufferPageComponent repository: self repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
-  statsMarkup := (Html div: #{#class -> "stat"} with: ((Html div: #{#class -> "stat-title"} with: "Daisy bytes") , (Html div: #{#class -> "stat-value text-primary"} with: daisyMarkup size printString))) , (Html div: #{#class -> "stat"} with: ((Html div: #{#class -> "stat-title"} with: "Buffer bytes") , (Html div: #{#class -> "stat-value text-secondary"} with: classicMarkup size printString))).
-  cardBody := (Html h1: #{#class -> "card-title text-3xl"} text: "Todo render comparison") , (Html p: #{#class -> "opacity-80"} text: "This page compares generated markup size for the two implementations. Use the standalone Nim benchmark for timing.") , (Html div: #{#class -> "stats stats-vertical lg:stats-horizontal shadow"} with: statsMarkup).
-  summary := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (Html div: #{#class -> "card-body"} with: cardBody).
-  req respondHtml: (Html documentTitle: "Harding Todo Benchmark"
-      head: (Html linkStylesheet: "/assets/daisyui.css")
-      body: (Html main: #{#"data-theme" -> Daisy themeName, #style -> "max-width: 960px; margin: 0 auto; padding: 2rem 1rem 4rem;"} with: summary))
+  | buffer bufferMarkup templateMarkup pageCache panelCache pageSegments panelSegments |
+  bufferMarkup := ((TodoBufferPageComponent repository: self repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
+  templateMarkup := ((TodoTemplatePageComponent repository: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
+  pageCache := TemplateCache at: #todoTemplatePageBody ifAbsent: [ nil ].
+  panelCache := TemplateCache at: #todoTemplatePanel ifAbsent: [ nil ].
+  pageSegments := pageCache isNil ifTrue: [ "0" ] ifFalse: [ pageCache segments size printString ].
+  panelSegments := panelCache isNil ifTrue: [ "0" ] ifFalse: [ panelCache segments size printString ].
+
+  buffer := String withCapacity: 4096.
+  buffer << """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harding Todo Benchmark</title>
+<link rel="stylesheet" href="/assets/daisyui.css">
+</head><body>
+""".
+  buffer << "<main data-theme=\"" << Daisy themeName << "\" style=\"max-width:960px; margin:0 auto; padding:2rem 1rem 4rem;\">".
+  buffer << """<div class="card bg-base-100 shadow-xl"><div class="card-body">
+<h1 class="card-title text-3xl">Todo render comparison</h1>
+<p class="opacity-80">This page compares generated markup size and Html2 cache segment counts. Run <code>nim c -r tests/benchmark_todo_render.nim</code> for timing.</p>
+<div class="stats stats-vertical lg:stats-horizontal shadow">
+""".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Buffer bytes</div><div class=\"stat-value text-primary\">" << bufferMarkup size printString << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Template bytes</div><div class=\"stat-value text-secondary\">" << templateMarkup size printString << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Page segments</div><div class=\"stat-value\">" << pageSegments << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Panel segments</div><div class=\"stat-value\">" << panelSegments << "</div></div>".
+  buffer << """</div></div></div></main></body></html>
+""".
+  req respondHtml: buffer
 ].
 
 TodoApp class>>createTodo: req [
