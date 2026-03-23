@@ -48,7 +48,7 @@ Launcher>>openInstance [
 Launcher>>createHeaderBar [
   # Create a header bar with menu buttons in a horizontal box
   # GTK4 style: buttons in header area instead of traditional menu bar
-  | headerBar workspaceButton transcriptButton browserButton builderButton quitButton spacer |
+  | headerBar workspaceButton terminalButton transcriptButton browserButton builderButton quitButton spacer |
 
   headerBar := GtkBox horizontal.
   headerBar setSpacing: 0.
@@ -63,6 +63,19 @@ Launcher>>createHeaderBar [
   workspaceButton clicked: [ self openWorkspace ].
   workspaceButton tooltip: "Open Workspace (text editor)".
   headerBar append: workspaceButton.
+
+  # Spacer
+  spacer := GtkLabel new: "  ".
+  headerBar append: spacer.
+
+  # Terminal button - shell icon
+  terminalButton := GtkButton new.
+  terminalButton label: "Terminal" iconName: "utilities-terminal".
+  terminalButton vexpand: false.
+  terminalButton hexpand: false.
+  terminalButton clicked: [ self openTerminal ].
+  terminalButton tooltip: "Open Terminal (embedded shell)".
+  headerBar append: terminalButton.
 
   # Spacer
   spacer := GtkLabel new: "  ".
@@ -179,6 +192,12 @@ Launcher>>openWorkspace [
 
 Launcher>>openTranscript [
   Transcript openFor: self.
+  ^ self
+].
+
+Launcher>>openTerminal [
+  Transcript showCr: "Opening terminal...".
+  Terminal openFor: self.
   ^ self
 ].
 

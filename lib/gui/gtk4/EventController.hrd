@@ -4,6 +4,7 @@
 # Native class methods (registered in Nim bridge):
 # - getGdkKey: (get GDK key value by name)
 # - getControlMask (get GDK_CONTROL_MASK value)
+# - getShiftMask (get GDK_SHIFT_MASK value)
 
 # Native instance methods on GtkWidget:
 # - installKeyController (install keyboard event controller)
@@ -20,12 +21,25 @@ GtkEventController class>>controlMask [
     ^self getControlMask
 ].
 
+GtkEventController class>>shiftMask [
+    # Get GDK_SHIFT_MASK modifier
+    ^self getShiftMask
+].
+
 GtkWidget>>onControlKey: keyName do: aBlock [
     # Register a handler for Control+key combination
     | keyVal controlMask |
     keyVal := GtkEventController key: keyName.
     controlMask := GtkEventController controlMask.
     self onKey: keyVal modifiers: controlMask do: aBlock
+].
+
+GtkWidget>>onControlShiftKey: keyName do: aBlock [
+    # Register a handler for Control+Shift+key combination
+    | keyVal modifiers |
+    keyVal := GtkEventController key: keyName.
+    modifiers := GtkEventController controlMask + (GtkEventController shiftMask).
+    self onKey: keyVal modifiers: modifiers do: aBlock
 ].
 
 GtkWidget>>enableKeyboardShortcuts [

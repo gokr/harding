@@ -31,7 +31,7 @@ Install libraries gtk4 gtksourceview5
 
 #### linux:
 ```bash
-apt-get install gtk4 gtksourceview5
+apt-get install gtk4 gtksourceview5 libvte-2.91-gtk4-dev
 ```
 
 #### macos
@@ -93,9 +93,13 @@ bona                       # Start IDE with Launcher
 **IDE Tools:**
 - **Launcher** - Main window with access to all tools
 - **Workspace** - Code editor with Do It (Ctrl+D), Print It (Ctrl+P), Inspect It (Ctrl+I)
+- **Terminal** - Embedded VTE terminal for shell and agent workflows
 - **Transcript** - Output console for logging and results
 - **System Browser** - Browse classes by library (Core, Collections, GUI, IDE)
 - **Inspector** - Examine object slots and values
+
+On Linux, the embedded terminal requires the VTE development/runtime packages for your GTK version. Bona's default GTK4 build uses `libvte-2.91-gtk4-dev`.
+The terminal supports a right-click context menu plus shortcuts such as `Ctrl+Shift+C`, `Ctrl+Shift+V`, `Ctrl+Shift+N`, and `Ctrl+Shift+O` for copy, paste, new terminal, and a new OpenCode terminal.
 
 ### Script Execution
 

@@ -1,4 +1,4 @@
-import std/[tables]
+import std/[tables, options]
 import ../core/types
 
 # Interpreter type is defined in core/types.nim, not vm.nim
@@ -14,8 +14,11 @@ type
 
 # Callback for evalStatements - set by vm.nim to break circular dependency
 type EvalStatementsProc* = proc(interp: var Interpreter, source: string): (seq[NodeValue], string) {.nimcall.}
+type InstallThreadBridgeProc* = proc(interp: var Interpreter, channelGlobalName: string,
+    pollProc: proc(): Option[NodeValue], workerSource: string): bool {.nimcall.}
 
 var evalStatementsCallback*: EvalStatementsProc = nil
+var installThreadBridgeCallback*: InstallThreadBridgeProc = nil
 
 proc ensurePackageSourceTable(interp: var Interpreter) =
   if interp.packageSources == nil:

@@ -1,0 +1,14 @@
+# VTE terminal widget
+# Note: VteTerminal class is registered by Nim bridge, we just add methods here
+
+VteTerminal>>spawnShell [
+    self spawnShellIn: System cwd
+].
+
+VteTerminal>>spawnCommand: aCommandString [
+    self spawnCommand: aCommandString in: System cwd
+].
+
+VteTerminal>>clear [
+    self reset
+].

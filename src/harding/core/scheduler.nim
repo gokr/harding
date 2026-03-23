@@ -1,12 +1,13 @@
-import std/[tables, deques, options]
+import std/[tables, deques, options, strutils]
 import ../core/types
 import ../core/process
 import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/vm  # Stackless VM
+import ../packages/package_api
+import ../parser/parser
 
 when defined(mummyx):
-  import ../parser/parser
   import ../web/mummyx_bridge
 
 # ============================================================================
@@ -439,6 +440,31 @@ proc initProcessorGlobal*(interp: var Interpreter) =
   protectGlobal("SharedQueue")
   protectGlobal("Semaphore")
   protectGlobal("NimChannel")
+
+  package_api.installThreadBridgeCallback = proc(interp: var Interpreter,
+      channelGlobalName: string, pollProc: proc(): Option[NodeValue],
+      workerSource: string): bool =
+    let ctx = initSchedulerOnInterpreter(interp)
+    let ch = newNimChannel(pollProc)
+    let channelProxy = createNimChannelProxy(ch)
+    interp.globals[][channelGlobalName] = channelProxy
+
+    let (nodes, parserState) = parse(workerSource)
+    if parserState.hasError or nodes.len == 0:
+      warn("Failed to initialize external worker bridge: ", parserState.errorMsg)
+      return false
+
+    let workerBlock = BlockNode(
+      parameters: @[],
+      body: nodes,
+      capturedEnv: initTable[string, MutableCell](),
+      capturedEnvInitialized: true,
+      line: 0,
+      col: 0
+    )
+    discard ctx.forkProcess(workerBlock, interp.rootObject,
+                            channelGlobalName.toLowerAscii() & "-worker")
+    return true
 
   # Wire up MummyX callbacks - scheduler has access to all needed functions
   when defined(mummyx):

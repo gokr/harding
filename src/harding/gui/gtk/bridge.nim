@@ -22,6 +22,7 @@ import ./textview
 import ./textbuffer
 import ./label
 import ./sourceview
+import ./vteterminal
 import ./eventcontroller
 import ./alertdialog
 import ./gesture
@@ -620,6 +621,62 @@ proc initGtkBridge*(interp: var Interpreter) =
   interp.globals[]["GtkSourceView"] = sourceViewCls.toValue()
   debug("Registered GtkSourceView class")
 
+  # Create VteTerminal class (for embedded terminal sessions)
+  let vteTerminalCls = newClass(superclasses = @[widgetCls], name = "VteTerminal")
+  vteTerminalCls.isNimProxy = true
+  vteTerminalCls.hardingType = "VteTerminal"
+
+  let vteTerminalNewMethod = createCoreMethod("new")
+  vteTerminalNewMethod.nativeImpl = cast[pointer](vteTerminalNewImpl)
+  vteTerminalNewMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "new", vteTerminalNewMethod,
+                   isClassMethod = true)
+
+  let vteTerminalSpawnShellInMethod = createCoreMethod("spawnShellIn:")
+  vteTerminalSpawnShellInMethod.nativeImpl = cast[pointer](vteTerminalSpawnShellInImpl)
+  vteTerminalSpawnShellInMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "spawnShellIn:",
+                   vteTerminalSpawnShellInMethod)
+
+  let vteTerminalSpawnCommandInMethod = createCoreMethod("spawnCommand:in:")
+  vteTerminalSpawnCommandInMethod.nativeImpl = cast[pointer](vteTerminalSpawnCommandInImpl)
+  vteTerminalSpawnCommandInMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "spawnCommand:in:",
+                   vteTerminalSpawnCommandInMethod)
+
+  let vteTerminalFeedMethod = createCoreMethod("feed:")
+  vteTerminalFeedMethod.nativeImpl = cast[pointer](vteTerminalFeedImpl)
+  vteTerminalFeedMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "feed:", vteTerminalFeedMethod)
+
+  let vteTerminalFeedLineMethod = createCoreMethod("feedLine:")
+  vteTerminalFeedLineMethod.nativeImpl = cast[pointer](vteTerminalFeedLineImpl)
+  vteTerminalFeedLineMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "feedLine:", vteTerminalFeedLineMethod)
+
+  let vteTerminalCopyClipboardMethod = createCoreMethod("copyClipboard")
+  vteTerminalCopyClipboardMethod.nativeImpl = cast[pointer](vteTerminalCopyClipboardImpl)
+  vteTerminalCopyClipboardMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "copyClipboard", vteTerminalCopyClipboardMethod)
+
+  let vteTerminalPasteClipboardMethod = createCoreMethod("pasteClipboard")
+  vteTerminalPasteClipboardMethod.nativeImpl = cast[pointer](vteTerminalPasteClipboardImpl)
+  vteTerminalPasteClipboardMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "pasteClipboard", vteTerminalPasteClipboardMethod)
+
+  let vteTerminalSelectAllMethod = createCoreMethod("selectAll")
+  vteTerminalSelectAllMethod.nativeImpl = cast[pointer](vteTerminalSelectAllImpl)
+  vteTerminalSelectAllMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "selectAll", vteTerminalSelectAllMethod)
+
+  let vteTerminalResetMethod = createCoreMethod("reset")
+  vteTerminalResetMethod.nativeImpl = cast[pointer](vteTerminalResetImpl)
+  vteTerminalResetMethod.hasInterpreterParam = true
+  addMethodToClass(vteTerminalCls, "reset", vteTerminalResetMethod)
+
+  interp.globals[]["VteTerminal"] = vteTerminalCls.toValue()
+  debug("Registered VteTerminal class")
+
   # Create GtkEventController class for keyboard handling
   let eventControllerCls = newClass(superclasses = @[objectClass], name = "GtkEventController")
   eventControllerCls.isNimProxy = true
@@ -635,6 +692,11 @@ proc initGtkBridge*(interp: var Interpreter) =
   eventControllerGetControlMaskMethod.nativeImpl = cast[pointer](eventControllerGetControlMaskImpl)
   eventControllerGetControlMaskMethod.hasInterpreterParam = true
   addMethodToClass(eventControllerCls, "getControlMask", eventControllerGetControlMaskMethod, isClassMethod = true)
+
+  let eventControllerGetShiftMaskMethod = createCoreMethod("getShiftMask")
+  eventControllerGetShiftMaskMethod.nativeImpl = cast[pointer](eventControllerGetShiftMaskImpl)
+  eventControllerGetShiftMaskMethod.hasInterpreterParam = true
+  addMethodToClass(eventControllerCls, "getShiftMask", eventControllerGetShiftMaskMethod, isClassMethod = true)
 
   # Add EventController methods to GtkWidget class (since controllers are installed on widgets)
   let widgetInstallKeyControllerMethod = createCoreMethod("installKeyController")
@@ -863,6 +925,7 @@ proc loadGtkWrapperFiles*(interp: var Interpreter, basePath: string = "") =
     "TextView.hrd",
     "TextBuffer.hrd",
     "SourceView.hrd",
+    "VteTerminal.hrd",
     "EventController.hrd",
     "ContextMenu.hrd"
   ]
@@ -926,6 +989,8 @@ proc loadIdeToolFiles*(interp: var Interpreter, basePath: string = "") =
     "Browser.hrd",
     "Inspector.hrd",
     "Transcript.hrd",
+    "BonaMCP.hrd",
+    "Terminal.hrd",
     "Workspace.hrd",
     "Launcher.hrd",
     "Builder.hrd"

@@ -144,22 +144,17 @@ proc widgetOnKeyModifiersDoImpl*(interp: var Interpreter, self: Instance, args: 
 proc eventControllerGetGdkKeyImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Get GDK key value by name
   ## Supported: "d", "p", "Return", "Escape", "Tab", "Control"
+  discard interp
+  discard self
   if args.len < 1 or args[0].kind != vkString:
     return nilValue()
 
   let keyName = args[0].strVal
 
+  if keyName.len == 1:
+    return NodeValue(kind: vkInt, intVal: keyName[0].ord)
+
   case keyName:
-    of "d", "D":
-      return NodeValue(kind: vkInt, intVal: GDKKEYD.int)
-    of "i", "I":
-      return NodeValue(kind: vkInt, intVal: GDKKEYI.int)
-    of "n", "N":
-      return NodeValue(kind: vkInt, intVal: GDKKEYN.int)
-    of "p", "P":
-      return NodeValue(kind: vkInt, intVal: GDKKEYP.int)
-    of "s", "S":
-      return NodeValue(kind: vkInt, intVal: GDKKEYS.int)
     of "Return", "Enter":
       return NodeValue(kind: vkInt, intVal: GDKKEYRETURN.int)
     of "Escape":
@@ -174,4 +169,15 @@ proc eventControllerGetGdkKeyImpl*(interp: var Interpreter, self: Instance, args
 ## Native class method to get GDK modifier mask for Control
 proc eventControllerGetControlMaskImpl*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
   ## Get GDK_CONTROL_MASK value
+  discard interp
+  discard self
+  discard args
   return NodeValue(kind: vkInt, intVal: GDKCONTROLDMASK.int)
+
+proc eventControllerGetShiftMaskImpl*(interp: var Interpreter, self: Instance,
+                                      args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Get GDK_SHIFT_MASK value
+  discard interp
+  discard self
+  discard args
+  return NodeValue(kind: vkInt, intVal: GDKSHIFTMASK.int)

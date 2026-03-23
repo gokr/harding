@@ -5,14 +5,14 @@
 ## ============================================================================
 
 when defined(gtk3):
-  {.passl: "-lgtk-3 -lgtksourceview-4 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+  {.passl: "-lgtk-3 -lgtksourceview-4 -lvte-2.91 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
 else:
   when defined(macosx):
-    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 gio-2.0 gobject-2.0 glib-2.0").}
+    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 vte-2.91-gtk4 gio-2.0 gobject-2.0 glib-2.0").}
   elif defined(linux):
-    {.passl: "-lgtk-4 -L/usr/lib/x86_64-linux-gnu -l:libgtksourceview-5.so.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
+    {.passl: "-lgtk-4 -L/usr/lib/x86_64-linux-gnu -l:libgtksourceview-5.so.0 -l:libvte-2.91-gtk4.so.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0".}
   else:
-    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 gio-2.0 gobject-2.0 glib-2.0").}
+    {.passl: gorge("pkg-config --libs gtk4 gtksourceview-5 vte-2.91-gtk4 gio-2.0 gobject-2.0 glib-2.0").}
 
 ## Types
 type
@@ -53,14 +53,22 @@ type
   GMenuItem* = pointer
   GtkAlertDialog* = pointer
   GtkImage* = pointer
+  VteTerminal* = pointer
 
   GType* = csize_t
   GConnectFlags* = cint
   GSourceFunc* = proc(data: pointer): cint {.cdecl.}
+  GDestroyNotify* = proc(data: pointer) {.cdecl.}
+  GSpawnFlags* = cint
+  GPid* = cint
+  VtePtyFlags* = cint
 
 const
   GCONNECTAFTER* = 1.GConnectFlags
   GCONNECTSWAPPED* = 2.GConnectFlags
+  GSPAWNDEFAULT* = 0.GSpawnFlags
+  VTEPTYDEFAULT* = 0.VtePtyFlags
+  GDKSHIFTMASK* = 1.cint
 
 when not defined(gtk3):
   # GTK4 specific imports
@@ -353,6 +361,29 @@ proc gtkSourceLanguageManagerGetLanguageIds*(manager: GtkSourceLanguageManager):
 proc gtkSourceLanguageManagerSetSearchPath*(manager: GtkSourceLanguageManager, dirs: ptr cstring) {.cdecl, importc: "gtk_source_language_manager_set_search_path".}
 proc gtkSourceLanguageManagerAppendSearchPath*(manager: GtkSourceLanguageManager, path: cstring) {.cdecl, importc: "gtk_source_language_manager_append_search_path".}
 
+# VTE terminal widget
+proc vteTerminalNew*(): VteTerminal {.cdecl, importc: "vte_terminal_new".}
+proc vteTerminalSpawnAsync*(terminal: VteTerminal, ptyFlags: VtePtyFlags,
+                            workingDirectory: cstring, argv: ptr cstring,
+                            envv: ptr cstring, spawnFlags: GSpawnFlags,
+                            childSetup: pointer, childSetupData: pointer,
+                            childSetupDataDestroy: GDestroyNotify,
+                            timeout: cint, cancellable: pointer,
+                            callback: pointer, userData: pointer) {.cdecl,
+    importc: "vte_terminal_spawn_async".}
+proc vteTerminalFeedChild*(terminal: VteTerminal, text: cstring,
+                           len: int) {.cdecl,
+    importc: "vte_terminal_feed_child".}
+proc vteTerminalCopyClipboard*(terminal: VteTerminal) {.cdecl,
+    importc: "vte_terminal_copy_clipboard".}
+proc vteTerminalPasteClipboard*(terminal: VteTerminal) {.cdecl,
+    importc: "vte_terminal_paste_clipboard".}
+proc vteTerminalSelectAll*(terminal: VteTerminal) {.cdecl,
+    importc: "vte_terminal_select_all".}
+proc vteTerminalReset*(terminal: VteTerminal, clearTabstops: cint,
+                       clearHistory: cint) {.cdecl,
+    importc: "vte_terminal_reset".}
+
 # GtkEventController - Base for event controllers (GTK4)
 when not defined(gtk3):
   proc gtkEventControllerKeyNew*(): GtkEventControllerKey {.cdecl, importc: "gtk_event_controller_key_new".}
@@ -429,12 +460,18 @@ const
   GDKKEYKPENTER* = 65421.cuint
   GDKKEYTAB* = 65289.cuint
   GDKKEYBACKSPACE* = 65288.cuint
+  GDKKEYC* = 99.cuint
   GDKKEYDELETE* = 65535.cuint
   GDKKEYHOME* = 65360.cuint
   GDKKEYEND* = 65367.cuint
   GDKKEYLEFT* = 65361.cuint
+  GDKKEYL* = 108.cuint
+  GDKKEYO* = 111.cuint
   GDKKEYRIGHT* = 65363.cuint
+  GDKKEYR* = 114.cuint
   GDKKEYUP* = 65362.cuint
+  GDKKEYV* = 118.cuint
+  GDKKEYW* = 119.cuint
   GDKKEYDOWN* = 65364.cuint
   GDKKEYPAGEDOWN* = 65366.cuint
   GDKKEYPAGEUP* = 65365.cuint
