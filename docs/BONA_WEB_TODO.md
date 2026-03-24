@@ -23,6 +23,20 @@ TodoApp resetRepository.
 TodoApp startOn: 8080.
 ```
 
+`startOn:` is the non-blocking/background form, which is appropriate from a Bona workspace.
+
+For a terminal/CLI session use the blocking form instead:
+
+```smalltalk
+TodoApp serveForeverOn: 8080.
+```
+
+or simply:
+
+```smalltalk
+TodoApp serve.
+```
+
 Then open `http://127.0.0.1:8080` in a browser.
 
 This load path matters for Bona Browser visibility: it creates named `Web` and `WebTodo` libraries, so the loaded classes appear in the Browser instead of only existing as top-level globals.

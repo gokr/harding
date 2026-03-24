@@ -151,6 +151,10 @@ TodoApp class>>start [
   ^ self startOn: 8080
 ].
 
+TodoApp class>>serve [
+  ^ self serveForeverOn: 8080
+].
+
 TodoApp class>>serveForeverOn: aPort [
   | app |
   TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].

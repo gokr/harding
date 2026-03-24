@@ -264,11 +264,12 @@ HtmlTagBuilder>>ensureOpen [
 
 HtmlTagBuilder>>finalize [
   "Called when cascade ends or next tag starts"
-  isOpen ifFalse: [
-    isVoid 
-      ifTrue: [ self renderVoid ]
-      ifFalse: [ self renderOpen; canvas closeTag: tagName ].
+  isVoid ifTrue: [
+    isOpen ifFalse: [ self renderVoid ].
+    ^ self
   ].
+  isOpen ifFalse: [ self renderOpen ].
+  canvas closeTag: tagName.
 ].
 
 HtmlTagBuilder>>text: aString [

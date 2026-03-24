@@ -211,7 +211,7 @@ TodoPanelComponent>>render [
           intro h2: "Today".
           intro p: [:copy |
             copy style: "opacity:0.72;".
-            copy text: "This panel uses cached HtmlCanvas templates plus explicit dyn blocks."
+            copy text: "Capture tasks, tweak the code in Bona, and refresh to see the UI update immediately."
           ]
         ].
 
@@ -259,7 +259,7 @@ TodoPanelComponent>>render [
         body div: [:note |
           note class: "alert";
             style: "margin-top:0.5rem;".
-          note text: "Template version: cached HtmlCanvas shell with explicit dyn blocks for changing values."
+          note text: "This screen uses tracked state plus an external render cache, so unchanged parts stay warm between requests."
         ]
       ]
     ]
@@ -291,13 +291,13 @@ TodoPageComponent>>bodyMarkup [
     h main: [:main |
       main class: Daisy shellClass;
         attr: #"data-theme" value: Daisy themeName;
-        style: "width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem;".
+        style: "width:min(860px, calc(100% - 2rem)); margin:0 auto; padding:2rem 0 4rem; display:flex; flex-direction:column; gap:1.5rem;".
 
       main section: [:hero |
         hero class: Daisy heroClass.
         hero div: [:content |
           content class: "hero-content";
-            style: "display:block; width:100%; padding:2.25rem;".
+            style: "display:flex; flex-direction:column; gap:1rem; width:100%; padding:2.25rem;".
 
           content div: [:eyebrow |
             eyebrow class: "badge badge-accent badge-outline".
@@ -306,12 +306,12 @@ TodoPageComponent>>bodyMarkup [
 
           content h1: [:title |
             title style: "font-size:clamp(2rem,4vw,3.4rem); line-height:1.05; margin:0;".
-            title text: "Template-cached todo app"
+            title text: "A live-editable Harding todo app"
           ].
 
           content p: [:lead |
             lead style: "font-size:1rem; opacity:0.8; max-width:46rem;".
-            lead text: "Using HtmlCanvas with keyed templates and explicit dyn blocks for changing values."
+            lead text: "Built with the Html DSL, htmx interactions, and tracked-state render caching so the page stays responsive while you iterate."
           ].
 
           content div: [:stats |
@@ -341,7 +341,7 @@ TodoPageComponent>>bodyMarkup [
 ].
 
 TodoPageComponent>>render [
-  ^ Html documentTitle: "Harding Todo Template"
+  ^ Html documentTitle: "Harding Todo"
       head: ((Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag))
       body: self bodyMarkup
 ].
