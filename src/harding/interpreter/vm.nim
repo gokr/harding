@@ -2875,6 +2875,21 @@ proc initGlobals*(interp: var Interpreter) =
       return toValue(cls.name)
     return toValue("")
 
+  proc escapeHtmlText(value: string): string =
+    result = value
+    result = result.replace("&", "&amp;")
+    result = result.replace("<", "&lt;")
+    result = result.replace(">", "&gt;")
+    result = result.replace("\"", "&quot;")
+    result = result.replace("'", "&#39;")
+
+  proc primitiveHtmlEscapeImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    discard interp
+    discard args
+    if self == nil:
+      return toValue("")
+    return toValue(escapeHtmlText(self.toValue().toString()))
+
   proc primitiveStringSizeValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
     discard argsUnused
     case self.kind
@@ -3434,6 +3449,12 @@ proc initGlobals*(interp: var Interpreter) =
   printlnMethod.hasInterpreterParam = true
   objectCls.methods["println"] = printlnMethod
   objectCls.allMethods["println"] = printlnMethod
+
+  let htmlEscapeMethod = createCoreMethod("primitiveHtmlEscape")
+  htmlEscapeMethod.setNativeImpl(primitiveHtmlEscapeImpl)
+  setNativeValueFromInstanceWithInterp(htmlEscapeMethod, primitiveHtmlEscapeImpl)
+  htmlEscapeMethod.hasInterpreterParam = true
+  addMethodToClass(objectCls, "primitiveHtmlEscape", htmlEscapeMethod, deferRebuild = false)
 
   # Add eval class primitive for evaluating code strings
   proc primitiveEvalImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -5030,6 +5051,12 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   when defined(mummyx):
     initMummyxBridge(interp)
     debug("MummyX bridge initialized")
+
+  # Initialize MCP bridge (requires MummyX)
+  when defined(mummyx):
+    import ../web/mcp_bridge
+    registerMcpPrimitives(interp)
+    debug("MCP bridge initialized")
 
   # Use lib/core/Bootstrap.hrd as default if no bootstrapFile provided
   let actualBootstrapFile = if bootstrapFile.len > 0 and fileExists(bootstrapFile):

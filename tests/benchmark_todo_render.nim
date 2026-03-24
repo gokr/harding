@@ -46,73 +46,74 @@ proc runCase(name: string, code: string, runs: int = 2): float =
       best = value
     if value > worst:
       worst = value
-  echo fmt("{name:>22}: median {med:>8.2f} ms (best {best:>8.2f}, worst {worst:>8.2f})")
+  echo fmt("{name:>28}: median {med:>8.2f} ms (best {best:>8.2f}, worst {worst:>8.2f})")
   med
 
 when isMainModule:
   configureLogging(lvlWarn)
-  echo "Harding Todo Render Benchmark"
-  echo "============================="
+  echo "Harding Todo Render Cache Benchmark"
+  echo "=================================="
 
-  let bufferItemRender = """
+  let warmItemRender = """
     Todo := TodoApp repository all at: 0.
+    Item := (TodoItemComponent todo: Todo routePrefix: "" panelId: "todo-panel").
+    Item renderString.
     I := 0.
-    [I < 100] whileTrue: [
-      Output := ((TodoBufferItemComponent todo: Todo) renderFor: "/buffer" panelId: "buffer-todo-panel").
+    [I < 50] whileTrue: [
+      Output := Item renderString.
       I := I + 1
     ].
     Result := Output size
   """
 
-  let templateItemRender = """
-    Todo := TodoApp repository all at: 0.
-    I := 0.
-    [I < 100] whileTrue: [
-      Output := ((TodoTemplateItemComponent todo: Todo routePrefix: "/template" panelId: "template-todo-panel") renderString).
-      I := I + 1
-    ].
-    Result := Output size
-  """
-
-  let bufferPanelRender = """
-    I := 0.
-    [I < 40] whileTrue: [
-      Output := ((TodoBufferPanelComponent repository: TodoApp repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
-      I := I + 1
-    ].
-    Result := Output size
-  """
-
-  let templatePanelRender = """
-    I := 0.
-    [I < 40] whileTrue: [
-      Output := ((TodoTemplatePanelComponent repository: TodoApp repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
-      I := I + 1
-    ].
-    Result := Output size
-  """
-
-  let bufferRender = """
+  let warmPanelRender = """
+    Panel := (TodoPanelComponent repository: TodoApp repository routePrefix: "" panelId: "todo-panel").
+    Panel renderString.
     I := 0.
     [I < 20] whileTrue: [
-      Output := ((TodoBufferPageComponent repository: TodoApp repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
+      Output := Panel renderString.
       I := I + 1
     ].
     Result := Output size
   """
 
-  let templateRender = """
+  let warmPageRender = """
+    Page := (TodoPageComponent repository: TodoApp repository routePrefix: "" panelId: "todo-panel").
+    Page renderString.
     I := 0.
-    [I < 20] whileTrue: [
-      Output := ((TodoTemplatePageComponent repository: TodoApp repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
+    [I < 10] whileTrue: [
+      Output := Page renderString.
       I := I + 1
     ].
     Result := Output size
   """
 
-  discard runCase("buffer item render", bufferItemRender)
-  discard runCase("template item render", templateItemRender)
-  discard runCase("buffer panel render", bufferPanelRender)
-  discard runCase("template panel render", templatePanelRender)
-  discard runCase("buffer render", bufferRender)
-  discard runCase("template render", templateRender)
+  let invalidatingItemRender = """
+    Repo := TodoApp repository.
+    Todo := Repo all at: 0.
+    I := 0.
+    [I < 25] whileTrue: [
+      Output := ((TodoItemComponent todo: Todo routePrefix: "" panelId: "todo-panel") renderString).
+      Todo toggleCompleted.
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  let invalidatingPanelRender = """
+    Repo := TodoApp repository.
+    Panel := (TodoPanelComponent repository: Repo routePrefix: "" panelId: "todo-panel").
+    I := 0.
+    [I < 10] whileTrue: [
+      Output := Panel renderString.
+      Repo toggle: 1.
+      I := I + 1
+    ].
+    Result := Output size
+  """
+
+  discard runCase("warm item render", warmItemRender)
+  discard runCase("warm panel render", warmPanelRender)
+  discard runCase("warm page render", warmPageRender)
+  discard runCase("invalidating item render", invalidatingItemRender)
+  discard runCase("invalidating panel render", invalidatingPanelRender)

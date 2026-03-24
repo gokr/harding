@@ -1,0 +1,34 @@
+TodoItem := Object derivePublic: #(id titleState completedState).
+
+TodoItem class>>id: anId title: aTitle completed: aBool [
+  | item |
+  item := self basicNew.
+  item::id := anId.
+  item::titleState := TrackedValue value: aTitle.
+  item::completedState := TrackedValue value: aBool.
+  ^ item
+].
+
+TodoItem>>id [
+  ^ id
+].
+
+TodoItem>>title [
+  ^ titleState value
+].
+
+TodoItem>>title: aTitle [
+  ^ titleState value: aTitle
+].
+
+TodoItem>>completed [
+  ^ completedState value
+].
+
+TodoItem>>completed: aBool [
+  ^ completedState value: aBool
+].
+
+TodoItem>>toggleCompleted [
+  ^ self completed: (self completed not)
+].

@@ -42,5 +42,6 @@ Harding load: "lib/core/Printable.hrd"
 
 # Load optional higher-level libraries
 Harding load: "lib/process/Bootstrap.hrd"
+Harding load: "lib/reactive/Bootstrap.hrd"
 Harding load: "lib/standard/Bootstrap.hrd"
 Harding load: "lib/granite/Bootstrap.hrd"

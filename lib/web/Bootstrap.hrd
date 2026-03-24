@@ -3,14 +3,18 @@ Web name: "Web".
 Harding at: #WebLibrary put: Web.
 Web at: #"__sourceDir" put: "lib/web".
 
+Harding load: "lib/web/RenderEntry.hrd".
+Harding load: "lib/web/RenderCache.hrd".
 Harding load: "lib/web/Component.hrd".
-Harding load: "lib/web/Html2.hrd".
+Harding load: "lib/web/Html.hrd".
 Harding load: "lib/web/Htmx.hrd".
 Harding load: "lib/web/Daisy.hrd".
 Harding load: "lib/web/DaisyComponents.hrd".
 Harding load: "lib/web/Basecoat.hrd".
 
 Web at: #Component put: Component.
+Web at: #RenderEntry put: RenderEntry.
+Web at: #RenderCache put: RenderCache.
 Web at: #Html put: Html.
 Web at: #WebHtml put: WebHtml.
 Web at: #Htmx put: Htmx.
@@ -29,6 +33,8 @@ Web at: #DaisyHero put: DaisyHero.
 Web at: #Basecoat put: Basecoat.
 
 Harding at: #Component put: Component.
+Harding at: #RenderEntry put: RenderEntry.
+Harding at: #RenderCache put: RenderCache.
 Harding at: #Html put: Html.
 Harding at: #WebHtml put: WebHtml.
 Harding at: #Htmx put: Htmx.

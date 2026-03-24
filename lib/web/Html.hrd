@@ -1,45 +1,13 @@
 Html := Object derive: #().
-HtmlDynamicValue := Object derivePublic: #(mode block usesContext).
-HtmlAttrsTemplate := Object derivePublic: #(entries).
-HtmlTemplate := Object derivePublic: #(segments).
+HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag tagStack voidTags currentTagBuilder context captureSegments segments staticBuffer).
+HtmlTagBuilder := Object derivePublic: #(canvas tagName attributes isVoid isOpen).
+HtmlRawFragment := Object derivePublic: #(markup).
+HtmlDynamicSelector := Object derivePublic: #(selector).
 
 HtmlRenderContextStack := nil.
 
-Html class>>escape: value [
-  | text |
-  value isNil ifTrue: [ ^ "" ].
-  text := value asString.
-  text := text replace: "&" with: "&amp;".
-  text := text replace: "<" with: "&lt;".
-  text := text replace: ">" with: "&gt;".
-  text := text replace: "\"" with: "&quot;".
-  ^ text replace: "'" with: "&#39;"
-].
-
-HtmlDynamicValue class>>mode: aMode block: aBlock useContext: aBool [
-  | value |
-  value := self basicNew.
-  value::mode := aMode.
-  value::block := aBlock.
-  value::usesContext := aBool.
-  ^ value
-].
-
-HtmlDynamicValue class>>from: aValue mode: aMode [
-  (aValue isKindOf: HtmlDynamicValue) ifTrue: [
-    ^ self mode: aMode block: (aValue::block) useContext: (aValue::usesContext)
-  ].
-  (aValue isKindOf: Block) ifTrue: [
-    ^ self mode: aMode block: aValue useContext: false
-  ].
-  ^ aValue
-].
-
-HtmlDynamicValue>>evaluateWith: context [
-  | activeContext |
-  activeContext := context isNil ifTrue: [ Html currentRenderContext ] ifFalse: [ context ].
-  usesContext ifTrue: [ ^ block value: activeContext ].
-  ^ block value
+Html class>>voidTags [
+  ^ #(#area #base #br #col #embed #hr #img #input #link #meta #param #source #track #wbr)
 ].
 
 Html class>>renderContextStack [
@@ -49,9 +17,9 @@ Html class>>renderContextStack [
   ^ HtmlRenderContextStack
 ].
 
-Html class>>pushRenderContext: context [
-  (self renderContextStack) add: context.
-  ^ context
+Html class>>pushRenderContext: anObject [
+  (self renderContextStack) add: anObject.
+  ^ anObject
 ].
 
 Html class>>popRenderContext [
@@ -68,553 +36,1075 @@ Html class>>currentRenderContext [
   ^ stack at: (stack size - 1)
 ].
 
-HtmlAttrsTemplate class>>from: attrs [
-  | template entries keys index pair |
-  template := self basicNew.
-  entries := Array new.
-  attrs isNil ifTrue: [
-    template::entries := entries.
+Html class>>canvas: aBlock [
+  | builder |
+  builder := HtmlCanvas new.
+  ^ builder render: aBlock
+].
+
+Html class>>canvas: aSymbol with: aBlock context: anObject [
+  | builder cached template |
+  builder := HtmlCanvas new.
+  builder context: anObject.
+  cached := TemplateCache at: aSymbol ifAbsent: [ nil ].
+  cached notNil ifTrue: [
+    template := HtmlTemplate key: aSymbol block: aBlock.
+    template::cachedTemplate := cached.
+    template::context := anObject.
     ^ template
   ].
-
-  keys := attrs keys.
-  index := 0.
-  [ index < keys size ] whileTrue: [
-    pair := Array new.
-    pair add: ((keys at: index) asString).
-    pair add: (Html normalizeAttrValue: (attrs at: (keys at: index))).
-    entries add: pair.
-    index := index + 1
-  ].
-
-  template::entries := entries.
+  template := HtmlTemplate key: aSymbol block: aBlock.
+  template::context := anObject.
+  builder render: aBlock withKey: aSymbol.
   ^ template
 ].
 
-HtmlAttrsTemplate>>renderInto: buffer with: context [
-  | index pair value |
-  index := 0.
-  [ index < entries size ] whileTrue: [
-    pair := entries at: index.
-    value := Html resolveAttrValue: (pair at: 1) with: context.
-    value isNil ifFalse: [
-      buffer << " ".
-      buffer << (pair at: 0).
-      buffer << "=\"".
-      buffer << (Html escape: value).
-      buffer << "\""
-    ].
-    index := index + 1
-  ].
-  ^ buffer
+Html class>>canvas: aSymbol with: aBlock [
+  ^ self canvas: aSymbol with: aBlock context: nil
 ].
 
-HtmlTemplate class>>segments: someSegments [
+Html class>>renderKey: aKey with: aBlock context: anObject [
+  | builder cached renderedBuilder |
+  builder := HtmlCanvas new.
+  builder context: anObject.
+  cached := TemplateCache at: aKey ifAbsent: [ nil ].
+  cached notNil ifTrue: [
+    ^ builder renderCached: cached withBlock: aBlock
+  ].
+  builder render: aBlock withKey: aKey.
+  cached := TemplateCache at: aKey ifAbsent: [ nil ].
+  cached isNil ifTrue: [ ^ builder output ].
+  renderedBuilder := HtmlCanvas new.
+  renderedBuilder context: anObject.
+  ^ renderedBuilder renderCached: cached withBlock: aBlock
+].
+
+Html class>>renderKey: aKey with: aBlock [
+  ^ self renderKey: aKey with: aBlock context: nil
+].
+
+Html class>>autoCacheKey [
+  ^ self autoCacheKey: nil
+].
+
+Html class>>autoCacheActivation [
+  | activation receiverClass |
+  activation := Processor current currentActivation.
+  activation isNil ifTrue: [ ^ nil ].
+  activation := activation sender.
+  [ activation notNil ] whileTrue: [
+    receiverClass := activation receiver className.
+    ((receiverClass = "Html") or: [ receiverClass = "WebHtml" ])
+      ifTrue: [ activation := activation sender ]
+      ifFalse: [ ^ activation ]
+  ].
+  ^ nil
+].
+
+Html class>>autoCacheKey: aSuffix [
+  | activation key |
+  activation := self autoCacheActivation.
+  key := activation isNil ifTrue: [ "HtmlAuto" ] ifFalse: [ activation cacheKey ].
+  aSuffix isNil ifTrue: [ ^ key ].
+  ^ key , "::" , aSuffix asString
+].
+
+Html class>>canvasAuto: aBlock [
+  ^ self canvas: (self autoCacheKey) with: aBlock
+].
+
+Html class>>canvasAuto: aBlock context: anObject [
+  ^ self canvas: (self autoCacheKey) with: aBlock context: anObject
+].
+
+Html class>>canvasAuto: aSuffix with: aBlock [
+  ^ self canvas: (self autoCacheKey: aSuffix) with: aBlock
+].
+
+Html class>>canvasAuto: aSuffix with: aBlock context: anObject [
+  ^ self canvas: (self autoCacheKey: aSuffix) with: aBlock context: anObject
+].
+
+Html class>>renderAuto: aSuffix with: aBlock context: anObject [
+  ^ self renderKey: (self autoCacheKey: aSuffix) with: aBlock context: anObject
+].
+
+Html class>>renderAuto: aSuffix with: aBlock [
+  ^ self renderAuto: aSuffix with: aBlock context: nil
+].
+
+Html class>>isDynamicValue: anObject [
+  | name |
+  anObject isNil ifTrue: [ ^ false ].
+  name := anObject className.
+  ^ (name = "HtmlDynamicBlock") or: [ name = "HtmlDynamicSelector" ]
+].
+
+HtmlCanvas>>initialize [
+  output := String withCapacity: 256.
+  attributes := Table new.
+  indentLevel := 0.
+  currentTag := nil.
+  tagStack := Array new.
+  voidTags := Html voidTags.
+  currentTagBuilder := nil.
+  context := nil.
+  captureSegments := false.
+  segments := nil.
+  staticBuffer := nil
+].
+
+HtmlCanvas>>captureSegments [
+  ^ captureSegments
+].
+
+HtmlCanvas>>captureSegments: aBool [
+  captureSegments := aBool.
+  (aBool = true) ifTrue: [
+    segments := Array new.
+    staticBuffer := String withCapacity: 128
+  ]
+].
+
+HtmlCanvas>>flushStaticBuffer [
+  staticBuffer isNil ifTrue: [ ^ self ].
+  (staticBuffer isEmpty not and: [ segments notNil ]) ifTrue: [
+    segments add: (HtmlOptimizedSegment static: staticBuffer).
+    staticBuffer := String withCapacity: 128
+  ]
+].
+
+HtmlCanvas>>segments [
+  ^ segments
+].
+
+HtmlCanvas>>context [
+  ^ context
+].
+
+HtmlCanvas>>context: anObject [
+  context := anObject
+].
+
+HtmlCanvas>>output [
+  ^ output
+].
+
+HtmlTagBuilder class>>on: aCanvas tag: aName [
+  | builder |
+  builder := self basicNew.
+  builder::canvas := aCanvas.
+  builder::tagName := aName.
+  builder::attributes := Table new.
+  builder::isVoid := Html voidTags includes: aName asSymbol.
+  builder::isOpen := false.
+  ^ builder
+].
+
+HtmlTagBuilder>>class: aString [
+  | current |
+  aString isNil ifTrue: [ ^ self ].
+  current := attributes at: #class ifAbsent: [ "" ].
+  current isEmpty 
+    ifTrue: [ attributes at: #class put: aString ]
+    ifFalse: [ attributes at: #class put: (current , " " , aString) ].
+].
+
+HtmlTagBuilder>>id: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #id put: aString
+].
+
+HtmlTagBuilder>>style: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #style put: aString
+].
+
+HtmlTagBuilder>>attr: key value: value [
+  value isNil ifTrue: [ ^ self ].
+  attributes at: key put: value
+].
+
+HtmlTagBuilder>>attrs: aTable [
+  aTable keysAndValuesDo: [:key :value |
+    value notNil ifTrue: [ attributes at: key put: value ]
+  ].
+].
+
+HtmlTagBuilder>>with: aBlock [
+  "Render tag with content"
+  self renderOpen.
+  canvas increaseIndent.
+  canvas renderContent: aBlock.
+  canvas decreaseIndent.
+  canvas closeTag: tagName.
+].
+
+HtmlTagBuilder>>with: aString [
+  "Render tag with string content"
+  self renderOpen.
+  canvas text: aString.
+  canvas closeTag: tagName.
+].
+
+HtmlTagBuilder>>renderOpen [
+  "Open the tag with accumulated attributes"
+  canvas openTag: tagName withAttrs: attributes.
+  isOpen := true.
+].
+
+HtmlTagBuilder>>renderVoid [
+  "Render as void tag"
+  canvas openVoidTag: tagName withAttrs: attributes.
+].
+
+HtmlTagBuilder>>ensureOpen [
+  isOpen ifFalse: [ self renderOpen ]
+].
+
+HtmlTagBuilder>>finalize [
+  "Called when cascade ends or next tag starts"
+  isOpen ifFalse: [
+    isVoid 
+      ifTrue: [ self renderVoid ]
+      ifFalse: [ self renderOpen; canvas closeTag: tagName ].
+  ].
+].
+
+HtmlTagBuilder>>text: aString [
+  self ensureOpen.
+  canvas text: aString
+].
+
+HtmlTagBuilder>>raw: aString [
+  self ensureOpen.
+  canvas raw: aString
+].
+
+HtmlTagBuilder>>renderContent: anObject [
+  self ensureOpen.
+  canvas renderContent: anObject
+].
+
+HtmlTagBuilder>>name: aString [ self attr: #name value: aString ].
+HtmlTagBuilder>>type: aString [ self attr: #type value: aString ].
+HtmlTagBuilder>>value: aValue [ self attr: #value value: aValue ].
+HtmlTagBuilder>>placeholder: aString [ self attr: #placeholder value: aString ].
+HtmlTagBuilder>>autocomplete: aString [ self attr: #autocomplete value: aString ].
+HtmlTagBuilder>>href: aString [ self attr: #href value: aString ].
+HtmlTagBuilder>>src: aString [ self attr: #src value: aString ].
+HtmlTagBuilder>>title: aString [ self attr: #title value: aString ].
+HtmlTagBuilder>>role: aString [ self attr: #role value: aString ].
+HtmlTagBuilder>>for: aString [ self attr: #for value: aString ].
+HtmlTagBuilder>>disabled [ self attr: #disabled value: "" ].
+HtmlTagBuilder>>checked [ self attr: #checked value: "" ].
+HtmlTagBuilder>>selected [ self attr: #selected value: "" ].
+HtmlTagBuilder>>readonly [ self attr: #readonly value: "" ].
+HtmlTagBuilder>>required [ self attr: #required value: "" ].
+HtmlTagBuilder>>autofocus [ self attr: #autofocus value: "" ].
+HtmlTagBuilder>>multiple [ self attr: #multiple value: "" ].
+HtmlTagBuilder>>data: key value: value [ self attr: ("data-" , key asString) asSymbol value: value ].
+HtmlTagBuilder>>get: value [ self attr: #"hx-get" value: value ].
+HtmlTagBuilder>>post: value [ self attr: #"hx-post" value: value ].
+HtmlTagBuilder>>put: value [ self attr: #"hx-put" value: value ].
+HtmlTagBuilder>>patch: value [ self attr: #"hx-patch" value: value ].
+HtmlTagBuilder>>delete: value [ self attr: #"hx-delete" value: value ].
+HtmlTagBuilder>>target: value [ self attr: #"hx-target" value: value ].
+HtmlTagBuilder>>swap: value [ self attr: #"hx-swap" value: value ].
+HtmlTagBuilder>>trigger: value [ self attr: #"hx-trigger" value: value ].
+HtmlTagBuilder>>include: value [ self attr: #"hx-include" value: value ].
+HtmlTagBuilder>>vals: value [ self attr: #"hx-vals" value: value ].
+HtmlTagBuilder>>select: value [ self attr: #"hx-select" value: value ].
+
+HtmlTagBuilder>>div: aBlock [ self ensureOpen. canvas div: aBlock ].
+HtmlTagBuilder>>section: aBlock [ self ensureOpen. canvas section: aBlock ].
+HtmlTagBuilder>>header: aBlock [ self ensureOpen. canvas header: aBlock ].
+HtmlTagBuilder>>main: aBlock [ self ensureOpen. canvas main: aBlock ].
+HtmlTagBuilder>>article: aBlock [ self ensureOpen. canvas article: aBlock ].
+HtmlTagBuilder>>footer: aBlock [ self ensureOpen. canvas footer: aBlock ].
+HtmlTagBuilder>>label: aBlock [ self ensureOpen. canvas label: aBlock ].
+HtmlTagBuilder>>span: aBlock [ self ensureOpen. canvas span: aBlock ].
+HtmlTagBuilder>>p: aBlock [ self ensureOpen. canvas p: aBlock ].
+HtmlTagBuilder>>h1: aBlock [ self ensureOpen. canvas h1: aBlock ].
+HtmlTagBuilder>>h2: aBlock [ self ensureOpen. canvas h2: aBlock ].
+HtmlTagBuilder>>button: aBlock [ self ensureOpen. canvas button: aBlock ].
+HtmlTagBuilder>>form: aBlock [ self ensureOpen. canvas form: aBlock ].
+HtmlTagBuilder>>ul: aBlock [ self ensureOpen. canvas ul: aBlock ].
+HtmlTagBuilder>>li: aBlock [ self ensureOpen. canvas li: aBlock ].
+HtmlTagBuilder>>a: aBlock [ self ensureOpen. canvas a: aBlock ].
+HtmlTagBuilder>>input [ self ensureOpen. canvas input ].
+HtmlTagBuilder>>input: aBlock [ self ensureOpen. canvas input: aBlock ].
+HtmlTagBuilder>>hr [ self ensureOpen. canvas hr ].
+HtmlTagBuilder>>br [ self ensureOpen. canvas br ].
+
+HtmlCanvas>>render: aBlock [
+  self renderBlock: aBlock.
+  ^ output
+].
+
+HtmlCanvas>>render: aBlock withKey: aKey [
+  self captureSegments: true.
+  self renderBlock: aBlock.
+  self flushStaticBuffer.
+  self storeOptimizedTemplateForKey: aKey.
+  self captureSegments: false.
+  ^ output
+].
+
+HtmlCanvas>>renderCached: aTemplate withBlock: aBlock [
+  | cachedSegments |
+  cachedSegments := aTemplate segments.
+  cachedSegments isNil ifTrue: [ ^ aTemplate renderWithBlock: aBlock on: self ].
+  ^ aTemplate renderWithSegments: cachedSegments on: self
+].
+
+HtmlCanvas>>storeTemplateForKey: aKey [
+  TemplateCache at: aKey put: (HtmlCachedTemplate for: output)
+].
+
+HtmlCanvas>>storeOptimizedTemplateForKey: aKey [
   | template |
-  template := self basicNew.
-  template::segments := someSegments.
-  ^ template
+  template := HtmlCachedTemplate for: output.
+  template::segments := segments.
+  TemplateCache at: aKey put: template
 ].
 
-HtmlTemplate>>renderInto: buffer with: context [
-  | index |
-  index := 0.
-  [ index < segments size ] whileTrue: [
-    Html appendTemplateSegment: (segments at: index) to: buffer with: context.
-    index := index + 1
-  ].
-  ^ buffer
+HtmlCanvas>>renderBlock: aBlock [
+  aBlock value: self
 ].
 
-HtmlTemplate>>renderWith: context [
-  | buffer |
-  buffer := String withCapacity: 256.
-  self renderInto: buffer with: context.
-  ^ buffer
-].
-
-HtmlTemplate>>renderString [
-  ^ self renderWith: nil
-].
-
-HtmlTemplate>>printString [
-  ^ self renderString printString
-].
-
-HtmlTemplate>>, other [
-  | newSegments |
-  newSegments := Array new.
-  newSegments addAll: segments.
-  (other isKindOf: HtmlTemplate) ifTrue: [
-    newSegments addAll: (other::segments)
+HtmlCanvas>>write: aString [
+  (captureSegments = true) ifTrue: [
+    staticBuffer isNil ifTrue: [ output << aString ] ifFalse: [ staticBuffer << aString ]
   ] ifFalse: [
-    newSegments add: (other asString)
-  ].
-  ^ HtmlTemplate segments: newSegments
+    output << aString
+  ]
 ].
 
-Html class>>textBlock: aBlock [
-  ^ HtmlDynamicValue mode: #text block: aBlock useContext: false
-].
+HtmlCanvas>>appendDynamicResult: value [
+  | isArray isString isRawFragment hasRenderString hasRenderInto |
+  value isNil ifTrue: [ ^ self ].
 
-Html class>>rawBlock: aBlock [
-  ^ HtmlDynamicValue mode: #raw block: aBlock useContext: false
-].
-
-Html class>>fragmentBlock: aBlock [
-  ^ HtmlDynamicValue mode: #fragment block: aBlock useContext: false
-].
-
-Html class>>attrBlock: aBlock [
-  ^ HtmlDynamicValue mode: #attr block: aBlock useContext: false
-].
-
-Html class>>textWith: aBlock [
-  ^ HtmlDynamicValue mode: #text block: aBlock useContext: true
-].
-
-Html class>>rawWith: aBlock [
-  ^ HtmlDynamicValue mode: #raw block: aBlock useContext: true
-].
-
-Html class>>fragmentWith: aBlock [
-  ^ HtmlDynamicValue mode: #fragment block: aBlock useContext: true
-].
-
-Html class>>attrWith: aBlock [
-  ^ HtmlDynamicValue mode: #attr block: aBlock useContext: true
-].
-
-Html class>>isDynamicContent: value [
-  | index |
-  value isNil ifTrue: [ ^ false ].
-  (self isDynamicValueObject: value) ifTrue: [ ^ true ].
-  (self isTemplateObject: value) ifTrue: [ ^ true ].
-  (value isKindOf: Block) ifTrue: [ ^ true ].
-  (value className = "Array") ifTrue: [
-    index := 0.
-    [ index < value size ] whileTrue: [
-      (self isDynamicContent: (value at: index)) ifTrue: [ ^ true ].
-      index := index + 1
-    ].
-    ^ false
-  ].
-  (value isKindOf: Array) ifTrue: [
-    index := 0.
-    [ index < value size ] whileTrue: [
-      (self isDynamicContent: (value at: index)) ifTrue: [ ^ true ].
-      index := index + 1
-    ].
-    ^ false
-  ].
-  (value respondsTo: #renderInto:) ifTrue: [ ^ true ].
-  (value respondsTo: #renderString) ifTrue: [ ^ true ].
-  ^ false
-].
-
-Html class>>isDynamicValueObject: value [
-  value isNil ifTrue: [ ^ false ].
-  (value className = "HtmlDynamicValue") ifTrue: [ ^ true ].
-  ^ value isKindOf: HtmlDynamicValue
-].
-
-Html class>>isAttrsTemplateObject: value [
-  value isNil ifTrue: [ ^ false ].
-  (value className = "HtmlAttrsTemplate") ifTrue: [ ^ true ].
-  ^ value isKindOf: HtmlAttrsTemplate
-].
-
-Html class>>isTemplateObject: value [
-  value isNil ifTrue: [ ^ false ].
-  (value className = "HtmlTemplate") ifTrue: [ ^ true ].
-  ^ value isKindOf: HtmlTemplate
-].
-
-Html class>>normalizeAttrValue: value [
-  ^ HtmlDynamicValue from: value mode: #attr
-].
-
-Html class>>needsDynamicAttrs: attrs [
-  | keys index |
-  attrs isNil ifTrue: [ ^ false ].
-  (self isDynamicValueObject: attrs) ifTrue: [ ^ true ].
-  (attrs isKindOf: Block) ifTrue: [ ^ true ].
-  (self isAttrsTemplateObject: attrs) ifTrue: [ ^ true ].
-  keys := attrs keys.
-  index := 0.
-  [ index < keys size ] whileTrue: [
-    (self isDynamicContent: (attrs at: (keys at: index))) ifTrue: [ ^ true ].
-    index := index + 1
-  ].
-  ^ false
-].
-
-Html class>>text: value [
-  value isNil ifTrue: [ ^ "" ].
-  ((value isKindOf: Block) or: [ value isKindOf: HtmlDynamicValue ]) ifTrue: [
-    ^ HtmlDynamicValue from: value mode: #text
-  ].
-  ^ self escape: value
-].
-
-Html class>>raw: value [
-  value isNil ifTrue: [ ^ "" ].
-  ((value isKindOf: Block) or: [ value isKindOf: HtmlDynamicValue ]) ifTrue: [
-    ^ HtmlDynamicValue from: value mode: #raw
-  ].
-  ^ value asString
-].
-
-Html class>>resolveDynamicValue: value with: context [
-  (self isDynamicValueObject: value) ifTrue: [ ^ value evaluateWith: context ].
-  ^ value
-].
-
-Html class>>resolveAttrValue: value with: context [
-  | resolved |
-  resolved := self resolveDynamicValue: value with: context.
-  resolved isNil ifTrue: [ ^ nil ].
-  (self isDynamicValueObject: resolved) ifTrue: [ ^ self resolveAttrValue: resolved with: context ].
-  ^ resolved
-].
-
-Html class>>appendTemplateSegment: segment to: buffer with: context [
-  (segment isKindOf: String) ifTrue: [
-    buffer << segment.
-    ^ buffer
-  ].
-  (self isAttrsTemplateObject: segment) ifTrue: [
-    segment renderInto: buffer with: context.
-    ^ buffer
-  ].
-  (self isTemplateObject: segment) ifTrue: [
-    segment renderInto: buffer with: context.
-    ^ buffer
-  ].
-  (self isDynamicValueObject: segment) ifTrue: [
-    ^ self appendDynamicValue: segment to: buffer with: context
-  ].
-  ^ self appendFragment: segment to: buffer with: context
-].
-
-Html class>>appendDynamicValue: value to: buffer with: context [
-  | resolved |
-  resolved := value evaluateWith: context.
-  value::mode = #text ifTrue: [
-    buffer << (self escape: resolved).
-    ^ buffer
-  ].
-  value::mode = #raw ifTrue: [
-    resolved notNil ifTrue: [ buffer << resolved asString ].
-    ^ buffer
-  ].
-  value::mode = #attr ifTrue: [
-    resolved notNil ifTrue: [ buffer << (self escape: resolved) ].
-    ^ buffer
-  ].
-  ^ self appendFragment: resolved to: buffer with: context
-].
-
-Html class>>appendAttrs: attrs to: buffer with: context [
-  | keys index key value |
-  attrs isNil ifTrue: [ ^ buffer ].
-  (self isAttrsTemplateObject: attrs) ifTrue: [
-    attrs renderInto: buffer with: context.
-    ^ buffer
-  ].
-  (self isDynamicValueObject: attrs) ifTrue: [
-    ^ self appendAttrs: (self resolveDynamicValue: attrs with: context) to: buffer with: context
-  ].
-  (attrs isKindOf: Block) ifTrue: [
-    ^ self appendAttrs: (attrs value) to: buffer with: context
+  isArray := (value className = "Array").
+  isArray ifTrue: [
+    value do: [:each | self appendDynamicResult: each ].
+    ^ self
   ].
 
-  keys := attrs keys.
-  index := 0.
-  [ index < keys size ] whileTrue: [
-    key := keys at: index.
-    value := self resolveAttrValue: (attrs at: key) with: context.
-    value isNil ifFalse: [
-      buffer << " ".
-      buffer << key asString.
-      buffer << "=\"".
-      buffer << (self escape: value).
-      buffer << "\""
-    ].
-    index := index + 1
+  isString := (value isKindOf: String).
+  isString ifTrue: [
+    output << (Html escape: value).
+    ^ self
   ].
+
+  isRawFragment := (value className = "HtmlRawFragment").
+  isRawFragment ifTrue: [
+    output << value markup.
+    ^ self
+  ].
+
+  hasRenderInto := value respondsTo: #renderInto:.
+  hasRenderInto ifTrue: [
+    value renderInto: output.
+    ^ self
+  ].
+
+  hasRenderString := value respondsTo: #renderString.
+  hasRenderString ifTrue: [
+    output << value renderString.
+    ^ self
+  ].
+
+  output << (Html escape: value)
+].
+
+HtmlCanvas>>appendDynamicResultTo: buffer value: value [
+  self appendDynamicResult: value.
   ^ buffer
 ].
 
-Html class>>attrs: attrs [
+HtmlCanvas>>writeIndent [
+  indentLevel timesRepeat: [ self write: "  " ]
+].
+
+HtmlCanvas>>newline [
+  self write: "
+".
+  self writeIndent
+].
+
+HtmlCanvas>>increaseIndent [
+  indentLevel := indentLevel + 1
+].
+
+HtmlCanvas>>decreaseIndent [
+  indentLevel := indentLevel - 1
+].
+
+HtmlCanvas>>renderContent: anObject [
+  | isDynamic |
+  "Ask object to render itself on this canvas"
+  anObject isNil ifTrue: [ ^ self ].
+  isDynamic := Html isDynamicValue: anObject.
+  isDynamic ifTrue: [
+    (captureSegments = true) ifTrue: [
+      self flushStaticBuffer.
+      segments add: (HtmlOptimizedSegment dynamic: anObject)
+    ] ifFalse: [
+      self appendDynamicResult: (anObject evaluateWith: context)
+    ].
+    ^ self
+  ].
+  anObject renderOn: self
+].
+
+HtmlCanvas>>class: aString [
+  | current |
+  aString isNil ifTrue: [ ^ self ].
+  current := attributes at: #class ifAbsent: [ "" ].
+  current isEmpty 
+    ifTrue: [ attributes at: #class put: aString ]
+    ifFalse: [ attributes at: #class put: (current , " " , aString) ]
+].
+
+HtmlCanvas>>id: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #id put: aString
+].
+
+HtmlCanvas>>id: idString class: classString [
+  self id: idString.
+  self class: classString
+].
+
+HtmlCanvas>>style: aString [
+  aString isNil ifTrue: [ ^ self ].
+  attributes at: #style put: aString
+].
+
+HtmlCanvas>>attr: key value: value [
+  value isNil ifTrue: [ ^ self ].
+  attributes at: key put: value
+].
+
+HtmlCanvas>>name: aString [
+  self attr: #name value: aString
+].
+
+HtmlCanvas>>type: aString [
+  self attr: #type value: aString
+].
+
+HtmlCanvas>>value: aValue [
+  self attr: #value value: aValue
+].
+
+HtmlCanvas>>placeholder: aString [
+  self attr: #placeholder value: aString
+].
+
+HtmlCanvas>>autocomplete: aString [
+  self attr: #autocomplete value: aString
+].
+
+HtmlCanvas>>href: aString [
+  self attr: #href value: aString
+].
+
+HtmlCanvas>>src: aString [
+  self attr: #src value: aString
+].
+
+HtmlCanvas>>title: aString [
+  self attr: #title value: aString
+].
+
+HtmlCanvas>>role: aString [
+  self attr: #role value: aString
+].
+
+HtmlCanvas>>for: aString [
+  self attr: #for value: aString
+].
+
+HtmlCanvas>>data: key value: value [
+  self attr: ("data-" , key asString) asSymbol value: value
+].
+
+HtmlCanvas>>get: value [
+  self attr: #"hx-get" value: value
+].
+
+HtmlCanvas>>post: value [
+  self attr: #"hx-post" value: value
+].
+
+HtmlCanvas>>put: value [
+  self attr: #"hx-put" value: value
+].
+
+HtmlCanvas>>patch: value [
+  self attr: #"hx-patch" value: value
+].
+
+HtmlCanvas>>delete: value [
+  self attr: #"hx-delete" value: value
+].
+
+HtmlCanvas>>target: value [
+  self attr: #"hx-target" value: value
+].
+
+HtmlCanvas>>swap: value [
+  self attr: #"hx-swap" value: value
+].
+
+HtmlCanvas>>trigger: value [
+  self attr: #"hx-trigger" value: value
+].
+
+HtmlCanvas>>include: value [
+  self attr: #"hx-include" value: value
+].
+
+HtmlCanvas>>vals: value [
+  self attr: #"hx-vals" value: value
+].
+
+HtmlCanvas>>select: value [
+  self attr: #"hx-select" value: value
+].
+
+HtmlCanvas>>attrs: aTable [
+  aTable keysAndValuesDo: [:key :value |
+    value notNil ifTrue: [ attributes at: key put: value ]
+  ]
+].
+
+HtmlCanvas>>disabled [
+  attributes at: #disabled put: ""
+].
+
+HtmlCanvas>>checked [
+  attributes at: #checked put: ""
+].
+
+HtmlCanvas>>selected [
+  attributes at: #selected put: ""
+].
+
+HtmlCanvas>>readonly [
+  attributes at: #readonly put: ""
+].
+
+HtmlCanvas>>required [
+  attributes at: #required put: ""
+].
+
+HtmlCanvas>>autofocus [
+  attributes at: #autofocus put: ""
+].
+
+HtmlCanvas>>multiple [
+  attributes at: #multiple put: ""
+].
+
+HtmlCanvas>>writeAttributes [
+  attributes keysAndValuesDo: [:key :value |
+    self appendAttributeNamed: (key asString) value: value
+  ].
+  attributes := Table new
+].
+
+HtmlCanvas>>appendAttributeNamed: aName value: value [
+  | isDynamic resolved |
+  isDynamic := Html isDynamicValue: value.
+  isDynamic ifTrue: [
+    (captureSegments = true) ifTrue: [
+      self flushStaticBuffer.
+      segments add: (HtmlDynamicAttributeSegment name: aName block: value).
+    ] ifFalse: [
+      resolved := value evaluateWith: context.
+      resolved isNil ifFalse: [
+        self write: " ".
+        self write: aName.
+        resolved isEmpty ifFalse: [
+          self write: "=\"".
+          self write: (Html escape: resolved).
+          self write: "\""
+        ]
+      ]
+    ].
+    ^ self
+  ].
+
+  value isNil ifTrue: [ ^ self ].
+  self write: " ".
+  self write: aName.
+  value isEmpty ifFalse: [
+    self write: "=\"".
+    self write: (Html escape: value).
+    self write: "\""
+  ]
+].
+
+HtmlCanvas>>renderTag: aName content: content [
+  | builder |
+  ((content isKindOf: Block) and: [ content parameterCount > 0 ]) ifTrue: [
+    builder := HtmlTagBuilder on: self tag: aName.
+    content value: builder.
+    builder finalize.
+    ^ self
+  ].
+  self openTag: aName.
+  self renderContent: content.
+  self closeTag: aName
+].
+
+HtmlCanvas>>renderVoidTag: aName config: content [
+  | builder |
+  ((content isKindOf: Block) and: [ content parameterCount > 0 ]) ifTrue: [
+    builder := HtmlTagBuilder on: self tag: aName.
+    content value: builder.
+    builder finalize.
+    ^ self
+  ].
+  self openVoidTag: aName
+].
+
+HtmlCanvas>>openTag: aName withAttrs: attrs [
+  self write: "<".
+  self write: aName.
+  attrs keysAndValuesDo: [:key :value |
+    self appendAttributeNamed: (key asString) value: value.
+  ].
+  self write: ">"
+].
+
+HtmlCanvas>>openVoidTag: aName withAttrs: attrs [
+  self write: "<".
+  self write: aName.
+  attrs keysAndValuesDo: [:key :value |
+    self appendAttributeNamed: (key asString) value: value.
+  ].
+  self write: ">"
+].
+
+HtmlCanvas>>openTag: aName [
+  self write: "<".
+  self write: aName.
+  self writeAttributes.
+  self write: ">"
+].
+
+HtmlCanvas>>closeTag: aName [
+  self write: "</".
+  self write: aName.
+  self write: ">"
+].
+
+HtmlCanvas>>openVoidTag: aName [
+  self write: "<".
+  self write: aName.
+  self writeAttributes.
+  self write: ">"
+].
+
+HtmlCanvas>>div: aBlock [
+  self renderTag: "div" content: aBlock
+].
+
+HtmlCanvas>>section: aBlock [
+  self renderTag: "section" content: aBlock
+].
+
+HtmlCanvas>>header: aBlock [
+  self renderTag: "header" content: aBlock
+].
+
+HtmlCanvas>>main: aBlock [
+  self renderTag: "main" content: aBlock
+].
+
+HtmlCanvas>>article: aBlock [
+  self renderTag: "article" content: aBlock
+].
+
+HtmlCanvas>>footer: aBlock [
+  self renderTag: "footer" content: aBlock
+].
+
+HtmlCanvas>>label: aBlock [
+  self renderTag: "label" content: aBlock
+].
+
+HtmlCanvas>>span: aBlock [
+  self renderTag: "span" content: aBlock
+].
+
+HtmlCanvas>>p: aBlock [
+  self renderTag: "p" content: aBlock
+].
+
+HtmlCanvas>>h1: aBlock [
+  self renderTag: "h1" content: aBlock
+].
+
+HtmlCanvas>>h2: aBlock [
+  self renderTag: "h2" content: aBlock
+].
+
+HtmlCanvas>>input [
+  self openVoidTag: "input"
+].
+
+HtmlCanvas>>input: aBlock [
+  self renderVoidTag: "input" config: aBlock
+].
+
+HtmlCanvas>>hr [
+  self openVoidTag: "hr"
+].
+
+HtmlCanvas>>br [
+  self openVoidTag: "br"
+].
+
+HtmlCanvas>>button: aBlock [
+  self renderTag: "button" content: aBlock
+].
+
+HtmlCanvas>>form: aBlock [
+  self renderTag: "form" content: aBlock
+].
+
+HtmlCanvas>>ul: aBlock [
+  self renderTag: "ul" content: aBlock
+].
+
+HtmlCanvas>>li: aBlock [
+  self renderTag: "li" content: aBlock
+].
+
+HtmlCanvas>>a: aBlock [
+  self renderTag: "a" content: aBlock
+].
+
+HtmlCanvas>>text: aString [
+  self write: (Html escape: aString)
+].
+
+HtmlCanvas>>raw: aString [
+  self write: aString
+].
+
+HtmlCanvas>><< aString [
+  self write: aString
+].
+
+HtmlCanvas>>renderComponent: aComponent [
+  aComponent renderOn: self
+].
+
+Html class>>escape: aString [
+  | result |
+  aString isNil ifTrue: [ ^ "" ].
+  result := aString asString.
+  result := result replace: "&" with: "&amp;".
+  result := result replace: "<" with: "&lt;".
+  result := result replace: ">" with: "&gt;".
+  result := result replace: "\"" with: "&quot;".
+  ^ result replace: "'" with: "&#39;"
+].
+
+Html class>>scriptSrc: aUrl [
+  ^ "<script src=\"" , (self escape: aUrl) , "\"></script>"
+].
+
+Html class>>linkStylesheet: aUrl [
+  ^ "<link rel=\"stylesheet\" href=\"" , (self escape: aUrl) , "\">"
+].
+
+Html class>>rawFragment: aString [
+  | fragment |
+  fragment := HtmlRawFragment basicNew.
+  fragment::markup := aString.
+  ^ fragment
+].
+
+Html class>>documentTitle: aTitle head: headMarkup body: bodyMarkup [
   | buffer |
-  attrs isNil ifTrue: [ ^ "" ].
-  buffer := String withCapacity: 64.
-  self appendAttrs: attrs to: buffer with: nil.
+  buffer := String withCapacity: 2048.
+  buffer << "<!DOCTYPE html><html lang=\"en\"><head>".
+  buffer << "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
+  buffer << "<title>".
+  buffer << (self escape: aTitle).
+  buffer << "</title>".
+  self appendFragment: headMarkup to: buffer with: nil.
+  buffer << "</head><body>".
+  self appendFragment: bodyMarkup to: buffer with: nil.
+  buffer << "</body></html>".
   ^ buffer
 ].
 
 Html class>>appendFragment: content to: buffer with: context [
-  | index handled |
-  handled := false.
+  | isArray hasRenderInto hasRenderString |
+  content isNil ifTrue: [ ^ buffer ].
 
-  content isNil ifTrue: [ handled := true ].
-
-  handled ifFalse: [
-    (self isDynamicValueObject: content) ifTrue: [
-      self appendDynamicValue: content to: buffer with: context.
-      handled := true
-    ]
+  isArray := (content className = "Array").
+  isArray ifTrue: [
+    content do: [:each | self appendFragment: each to: buffer with: context ].
+    ^ buffer
   ].
 
-  handled ifFalse: [
-    (content isKindOf: Block) ifTrue: [
-      self appendDynamicValue: (self fragmentBlock: content) to: buffer with: context.
-      handled := true
-    ]
+  hasRenderInto := content respondsTo: #renderInto:.
+  hasRenderInto ifTrue: [
+    content renderInto: buffer.
+    ^ buffer
   ].
 
-  handled ifFalse: [
-    (self isTemplateObject: content) ifTrue: [
-      content renderInto: buffer with: context.
-      handled := true
-    ]
+  hasRenderString := content respondsTo: #renderString.
+  hasRenderString ifTrue: [
+    buffer << content renderString.
+    ^ buffer
   ].
 
-  handled ifFalse: [
-    ((content className = "Array") or: [ content isKindOf: Array ]) ifTrue: [
-      index := 0.
-      [ index < content size ] whileTrue: [
-        self appendFragment: (content at: index) to: buffer with: context.
-        index := index + 1
-      ].
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (content respondsTo: #renderString) ifTrue: [
-      buffer << content renderString.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (content respondsTo: #renderInto:) ifTrue: [
-      content renderInto: buffer.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    buffer << content asString
-  ].
-  ^ buffer
+  buffer << content asString
 ].
 
-Html class>>fragment: content [
-  | buffer |
-  buffer := String withCapacity: 128.
-  self appendFragment: content to: buffer with: nil.
-  ^ buffer
+TemplateCache := Table new.
+
+HtmlCachedTemplate := Object derivePublic: #(segments).
+
+HtmlCachedTemplate class>>for: output [
+  | template |
+  template := self basicNew.
+  template::segments := nil.
+  ^ template
 ].
 
-Html class>>appendFragmentSegments: content to: segments [
-  | index handled |
-  handled := false.
+HtmlCachedTemplate>>renderWithBlock: aBlock on: canvas [
+  aBlock value: canvas.
+  ^ canvas output
+].
 
-  content isNil ifTrue: [ handled := true ].
-
-  handled ifFalse: [
-    (self isDynamicValueObject: content) ifTrue: [
-      segments add: content.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (content isKindOf: Block) ifTrue: [
-      segments add: (self fragmentBlock: content).
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (self isTemplateObject: content) ifTrue: [
-      segments add: content.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    ((content className = "Array") or: [ content isKindOf: Array ]) ifTrue: [
-      index := 0.
-      [ index < content size ] whileTrue: [
-        self appendFragmentSegments: (content at: index) to: segments.
-        index := index + 1
-      ].
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (content respondsTo: #renderString) ifTrue: [
-      segments add: content.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    (content respondsTo: #renderInto:) ifTrue: [
-      segments add: content.
-      handled := true
-    ]
-  ].
-
-  handled ifFalse: [
-    segments add: content asString
-  ].
+HtmlCachedTemplate>>segments [
   ^ segments
 ].
 
-Html class>>tag: name attrs: attrs with: content [
-  | segments |
-  ((self needsDynamicAttrs: attrs) or: [ self isDynamicContent: content ]) ifFalse: [
-    ^ "<" , name , (self attrs: attrs) , ">" , (self fragment: content) , "</" , name , ">"
+HtmlOptimizedSegment := Object derivePublic: #(isStatic value).
+
+HtmlOptimizedSegment class>>static: aString [
+  | seg |
+  seg := self basicNew.
+  seg::isStatic := true.
+  seg::value := aString.
+  ^ seg
+].
+
+HtmlOptimizedSegment class>>dynamic: aBlock [
+  | seg |
+  seg := self basicNew.
+  seg::isStatic := false.
+  seg::value := aBlock.
+  ^ seg
+].
+
+HtmlOptimizedSegment>>isStatic [
+  ^ isStatic
+].
+
+HtmlOptimizedSegment>>value [
+  ^ value
+].
+
+HtmlDynamicBlock := Object derivePublic: #(block).
+
+HtmlDynamicBlock class>>block: aBlock [
+  | dyn |
+  dyn := self basicNew.
+  dyn::block := aBlock.
+  ^ dyn
+].
+
+Block>>dyn [
+  ^ HtmlDynamicBlock block: self
+].
+
+HtmlDynamicBlock>>block [
+  ^ block
+].
+
+HtmlDynamicBlock>>evaluateWith: anObject [
+  anObject isNil ifTrue: [ ^ self block value ].
+  ^ self block value: anObject
+].
+
+HtmlDynamicBlock>>renderOn: canvas [
+  | result |
+  result := self evaluateWith: canvas context.
+  canvas appendDynamicResult: result
+].
+
+HtmlDynamicSelector class>>selector: aSymbol [
+  | dynamic |
+  dynamic := self basicNew.
+  dynamic::selector := aSymbol.
+  ^ dynamic
+].
+
+Symbol>>dyn [
+  ^ HtmlDynamicSelector selector: self
+].
+
+HtmlDynamicSelector>>selector [
+  ^ selector
+].
+
+HtmlDynamicSelector>>evaluateWith: anObject [
+  anObject isNil ifTrue: [ ^ nil ].
+  ^ anObject perform: selector
+].
+
+HtmlDynamicSelector>>renderOn: canvas [
+  | result |
+  result := self evaluateWith: canvas context.
+  canvas appendDynamicResult: result
+].
+
+HtmlCachedTemplate>>renderWithSegments: aSegments on: canvas [
+  | isOptimized isAttrSegment |
+  aSegments do: [:seg |
+    isOptimized := (seg className = "HtmlOptimizedSegment").
+    isAttrSegment := (seg className = "HtmlDynamicAttributeSegment").
+    isOptimized ifTrue: [
+      seg isStatic ifTrue: [
+        canvas::output << seg value
+      ] ifFalse: [
+        canvas appendDynamicResult: (seg value evaluateWith: canvas context)
+      ]
+    ] ifFalse: [
+      isAttrSegment ifTrue: [
+        seg appendOn: canvas context: canvas context
+      ] ifFalse: [
+        canvas::output << seg
+      ]
+    ]
   ].
-
-  segments := Array new.
-  segments add: "<".
-  segments add: name.
-  (self needsDynamicAttrs: attrs)
-    ifTrue: [ segments add: (HtmlAttrsTemplate from: attrs) ]
-    ifFalse: [ segments add: (self attrs: attrs) ].
-  segments add: ">".
-  self appendFragmentSegments: content to: segments.
-  segments add: "</".
-  segments add: name.
-  segments add: ">".
-  ^ HtmlTemplate segments: segments
+  ^ canvas::output
 ].
 
-Html class>>tag: name attrs: attrs text: text [
-  ^ self tag: name attrs: attrs with: (self text: text)
+HtmlDynamicAttributeSegment := Object derivePublic: #(name valueBlock).
+
+HtmlDynamicAttributeSegment class>>name: aName block: aBlock [
+  | segment |
+  segment := self basicNew.
+  segment::name := aName.
+  segment::valueBlock := aBlock.
+  ^ segment
 ].
 
-Html class>>voidTag: name attrs: attrs [
-  | segments |
-  (self needsDynamicAttrs: attrs) ifFalse: [
-    ^ "<" , name , (self attrs: attrs) , ">"
+HtmlDynamicAttributeSegment>>appendOn: canvas context: aContext [
+  | value |
+  value := valueBlock evaluateWith: aContext.
+  value isNil ifTrue: [ ^ canvas ].
+  canvas::output << " ".
+  canvas::output << name.
+  value isEmpty ifFalse: [
+    canvas::output << "=\"".
+    canvas::output << (Html escape: value).
+    canvas::output << "\""
   ].
-
-  segments := Array new.
-  segments add: "<".
-  segments add: name.
-  segments add: (HtmlAttrsTemplate from: attrs).
-  segments add: ">".
-  ^ HtmlTemplate segments: segments
+  ^ canvas
 ].
 
-Html class>>div: attrs with: content [
-  ^ self tag: "div" attrs: attrs with: content
+HtmlTemplate := Object derivePublic: #(key block cachedTemplate context).
+
+HtmlTemplate class>>key: aKey block: aBlock [
+  | template |
+  template := self basicNew.
+  template::key := aKey.
+  template::block := aBlock.
+  template::cachedTemplate := nil.
+  template::context := nil.
+  ^ template
 ].
 
-Html class>>section: attrs with: content [
-  ^ self tag: "section" attrs: attrs with: content
+HtmlTemplate>>cachedTemplate [
+  cachedTemplate isNil ifTrue: [
+    cachedTemplate := TemplateCache at: key ifAbsent: [ nil ]
+  ].
+  ^ cachedTemplate
 ].
 
-Html class>>header: attrs with: content [
-  ^ self tag: "header" attrs: attrs with: content
+HtmlTemplate>>render [
+  | builder |
+  builder := HtmlCanvas new.
+  context notNil ifTrue: [ builder context: context ].
+  self cachedTemplate notNil ifTrue: [
+    ^ builder renderCached: cachedTemplate withBlock: block
+  ].
+  ^ builder render: block withKey: key
 ].
 
-Html class>>main: attrs with: content [
-  ^ self tag: "main" attrs: attrs with: content
+HtmlTemplate>>renderWith: anObject [
+  | builder |
+  builder := HtmlCanvas new.
+  builder context: anObject.
+  self cachedTemplate notNil ifTrue: [
+    ^ builder renderCached: cachedTemplate withBlock: block
+  ].
+  ^ builder render: block withKey: key
 ].
 
-Html class>>form: attrs with: content [
-  ^ self tag: "form" attrs: attrs with: content
+HtmlTemplate>>renderString [
+  ^ self render
 ].
 
-Html class>>label: attrs with: content [
-  ^ self tag: "label" attrs: attrs with: content
+HtmlTemplate>>renderStringWith: anObject [
+  ^ self renderWith: anObject
 ].
 
-Html class>>button: attrs text: text [
-  ^ self tag: "button" attrs: attrs text: text
+HtmlTemplate>>renderInto: buffer with: anObject [
+  buffer << (self renderWith: anObject).
+  ^ buffer
 ].
 
-Html class>>input: attrs [
-  ^ self voidTag: "input" attrs: attrs
+HtmlTemplate>>printString [
+  ^ self render
 ].
 
-Html class>>iframe: attrs [
-  ^ self tag: "iframe" attrs: attrs with: ""
+String>>renderOn: html [
+  html text: self
 ].
 
-Html class>>span: attrs text: text [
-  ^ self tag: "span" attrs: attrs text: text
+Array>>renderOn: html [
+  self do: [:each |
+    html renderContent: each
+  ]
 ].
 
-Html class>>p: attrs text: text [
-  ^ self tag: "p" attrs: attrs text: text
+HtmlRawFragment>>markup [
+  ^ markup
 ].
 
-Html class>>h1: attrs text: text [
-  ^ self tag: "h1" attrs: attrs text: text
+HtmlRawFragment>>renderOn: html [
+  html raw: markup
 ].
 
-Html class>>h2: attrs text: text [
-  ^ self tag: "h2" attrs: attrs text: text
+Block>>renderOn: html [
+  self value
 ].
 
-Html class>>ul: attrs with: content [
-  ^ self tag: "ul" attrs: attrs with: content
+Symbol>>renderOn: html [
+  | rendered |
+  html context isNil ifTrue: [ ^ html ].
+  rendered := html context perform: self.
+  html renderContent: rendered
 ].
 
-Html class>>li: attrs with: content [
-  ^ self tag: "li" attrs: attrs with: content
-].
-
-Html class>>title: text [
-  ^ self tag: "title" attrs: #{} text: text
-].
-
-Html class>>styleTag: css [
-  ^ self tag: "style" attrs: #{} with: css
-].
-
-Html class>>scriptSrc: url [
-  ^ self tag: "script" attrs: #{#src -> url} with: ""
-].
-
-Html class>>linkStylesheet: url [
-  ^ self voidTag: "link" attrs: #{#rel -> "stylesheet", #href -> url}
-].
-
-Html class>>documentTitle: title head: headContent body: bodyContent [
-  | headParts htmlParts documentParts titleTag headTag bodyTag htmlTag |
-  
-  titleTag := self title: title.
-  headParts := Array new.
-  headParts add: "<meta charset=\"utf-8\">".
-  headParts add: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".
-  headParts add: titleTag.
-  headParts add: headContent.
-  
-  headTag := self tag: "head" attrs: #{} with: headParts.
-  bodyTag := self tag: "body" attrs: #{} with: bodyContent.
-  
-  htmlParts := Array new.
-  htmlParts add: headTag.
-  htmlParts add: bodyTag.
-  
-  htmlTag := self tag: "html" attrs: #{#lang -> "en"} with: htmlParts.
-  
-  documentParts := Array new.
-  documentParts add: "<!DOCTYPE html>".
-  documentParts add: htmlTag.
-  
-  ^ self fragment: documentParts
+Component>>renderOn: html [
+  html raw: self renderString
 ].
 
 WebHtml := Html.

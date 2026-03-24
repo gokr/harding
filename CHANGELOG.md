@@ -9,6 +9,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
+- External NimCP library packaging for installable MCP server support, including a Harding `NimCPServer` wrapper aimed at Bona-hosted MCP workflows.
 - Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
 - A Harding htmx-style web component layer, DaisyUI-backed Todo app example, and Bona workflow notes for live-editable MummyX web experiments.
 - Block-aware cached Html templates and buffer-backed component rendering for reusable static markup with dynamic slots.
@@ -19,8 +20,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **`String>><<`** operator - In-place string appending that returns self for chaining. Uses Nim's efficient `add()` with automatic capacity doubling.
 - **Constant literal optimization** - Array and Table literals with only constant elements (literals, no variables or message sends) are evaluated at parse time and cached. Interpreter uses pre-computed values, Granite generates compile-time Nim constants. Nested collections not yet optimized.
 - Triple-quoted multiline string literals (`"""..."""`) for raw multi-line text with embedded `"` characters.
+- Process and activation introspection APIs including `Process current`, `Scheduler current`, `Object>>activation`, and `Object>>thisContext`.
+- Automatic Html template cache keys via `Html canvasAuto:...` built from the current activation cache key plus an optional suffix.
+- Reactive state primitives in `lib/reactive/` (`TrackedValue`, `TrackedTable`, `TrackedList`) plus web render caching via `RenderCache`/`RenderEntry`.
 - Compiled JSON object serialization with class-side configuration (`jsonExclude:`, `jsonOnly:`, `jsonRename:`, `jsonOmitNil:`, `jsonOmitEmpty:`, `jsonFormat:`, `jsonFieldOrder:`, `jsonReset`) and `Object>>toJson`.
 - JSON serialization benchmarks for nested Table/Array payloads and ordinary Harding object graphs.
+- JSON API server tutorial with complete example application demonstrating REST patterns.
+- MCP (Model Context Protocol) integration documentation for AI-assisted development workflows.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
@@ -32,6 +38,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Bona now pumps scheduler work from the GTK main loop, refreshes open Browsers after successful Workspace evaluations, and documents the web stack through `Web` and `WebTodo` library bootstraps.
 - **Removed Buffer class** - String now has `withCapacity:` and `<<` operator, making Buffer redundant. Use `(String withCapacity: 100) << "text"` instead of `Buffer withCapacity: 100` + `<<` + `contents`.
 - `Json stringify:` now serializes ordinary Harding objects through compiled slot plans, supports primitive-only formatters (`#string`, `#rawJson`, `#symbolName`, `#className`), and falls back to `jsonRepresentation` when a class needs custom structure.
+- Parser now supports binary expressions directly in table literal values with loosened precedence rules.
+- Removed native collection block iteration paths in favor of interpreted implementations for consistency.
+- `nimble test` now discovers and runs external library tests automatically.
+- MummyX now includes request logging for debugging HTTP handlers.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
@@ -42,6 +52,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Interpreter `print` and `println` now render arrays and tables using their actual Harding string forms.
 - **Fixed VM eval stack underflow** with nested HtmlTemplates using dynamic content blocks (`textWith:`, `attrWith:`, `fragmentWith:`). Root cause was BlockNode AST mutation during non-local returns corrupting the target activation. Fixed by copying block nodes before mutation.
 - JSON table-key serialization now rejects unsupported key types explicitly and detects cycles in slot-based and `jsonRepresentation`-based object serialization.
+- Fixed inherited slot access in both interpreter and Granite compiler.
+- Restored external library runtime compatibility for proper loading.
+- Collection species handling and non-local block return edge cases.
 
 ## [0.8.0] - 2026-03-09
 

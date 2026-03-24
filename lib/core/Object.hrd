@@ -312,6 +312,8 @@ Object>>asString [
   ^ self printString
 ]
 
+Object>>htmlEscape <primitive primitiveHtmlEscape>
+
 Object>>asSelfDo: aBlock <primitive primitiveAsSelfDo: aBlock>
 
 Object class>>extend: aBlock [

@@ -1,0 +1,29 @@
+Reactive := Object derive: #().
+
+ReactiveObserverStack := nil.
+
+Reactive class>>observerStack [
+  ReactiveObserverStack isNil ifTrue: [
+    ReactiveObserverStack := Array new
+  ].
+  ^ ReactiveObserverStack
+].
+
+Reactive class>>pushObserver: anObject [
+  (self observerStack) add: anObject.
+  ^ anObject
+].
+
+Reactive class>>popObserver [
+  | stack |
+  stack := self observerStack.
+  stack isEmpty ifTrue: [ ^ nil ].
+  ^ stack removeAt: (stack size - 1)
+].
+
+Reactive class>>currentObserver [
+  | stack |
+  stack := self observerStack.
+  stack isEmpty ifTrue: [ ^ nil ].
+  ^ stack at: (stack size - 1)
+].

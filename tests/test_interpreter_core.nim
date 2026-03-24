@@ -155,6 +155,14 @@ suite "Interpreter: Process and Activation Introspection":
     check(result.kind == vkString)
     check(result.strVal == "activationAliases|activationAliases")
 
+  test "htmlEscape escapes html-sensitive characters":
+    let (result, err) = interp.doit("""
+      "<tag attr=\"x\">& text" htmlEscape
+    """)
+    check(err.len == 0)
+    check(result.kind == vkString)
+    check(result.strVal == "&lt;tag attr=&quot;x&quot;&gt;&amp; text")
+
   test "methods can access self and slots":
     let result = interp.evalStatements("""
       Person := Object derivePublic: #(name age).

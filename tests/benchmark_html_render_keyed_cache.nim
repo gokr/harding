@@ -47,8 +47,8 @@ proc runCase(name: string, code: string, runs: int = 3): float =
 
 when isMainModule:
   configureLogging(lvlWarn)
-  echo "Html2 dyn benchmark"
-  echo "==================="
+  echo "Html keyed cache benchmark"
+  echo "=========================="
 
   let uncachedRender = """
     Counter := 0.
@@ -76,7 +76,7 @@ when isMainModule:
 
   let cachedRender = """
     Counter := 0.
-    Template := Html canvas: #benchHtml2Dyn with: [:h |
+    Template := Html canvas: #benchHtmlDyn with: [:h |
       h div: [
         h h1: "Benchmark page".
         h p: "Static section alpha".
@@ -101,7 +101,7 @@ when isMainModule:
 
   let cacheInspection = """
     Counter := 0.
-    Template := Html canvas: #benchHtml2DynInspect with: [:h |
+    Template := Html canvas: #benchHtmlDynInspect with: [:h |
       h div: [
         h h1: "Benchmark page".
         h p: "Static section alpha".
@@ -116,7 +116,7 @@ when isMainModule:
         h p: "Trailing footer"
       ]
     ].
-    Cache := TemplateCache at: #benchHtml2DynInspect ifAbsent: [ nil ].
+    Cache := TemplateCache at: #benchHtmlDynInspect ifAbsent: [ nil ].
     Cache isNil ifTrue: [ ^ "cache-miss" ].
     Count := Cache segments isNil ifTrue: [ -1 ] ifFalse: [ Cache segments size ].
     ^ Count printString

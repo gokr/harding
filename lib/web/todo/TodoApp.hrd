@@ -3,7 +3,6 @@ TodoApp := Object derivePublic: #(server router repository port).
 TodoAppCurrent := nil.
 TodoRepositoryCurrent := nil.
 TodoAppDaisyStylesheet := nil.
-TodoAppBaseStylesheet := nil.
 
 TodoApp class>>current [
   ^ TodoAppCurrent
@@ -18,6 +17,7 @@ TodoApp class>>repository [
 
 TodoApp class>>resetRepository [
   TodoRepositoryCurrent := TodoRepository new.
+  RenderCache current reset.
   ^ TodoRepositoryCurrent
 ].
 
@@ -25,10 +25,7 @@ TodoApp class>>prepareAssets [
   TodoAppDaisyStylesheet isNil ifTrue: [
     TodoAppDaisyStylesheet := Daisy stylesheet
   ].
-  TodoAppBaseStylesheet isNil ifTrue: [
-    TodoAppBaseStylesheet := Basecoat stylesheet
-  ].
-  ^ TodoAppBaseStylesheet
+  ^ TodoAppDaisyStylesheet
 ].
 
 TodoApp class>>installRoutesOn: aRouter [
@@ -38,114 +35,45 @@ TodoApp class>>installRoutesOn: aRouter [
 TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
   self prepareAssets.
   aRouter clear.
-  # Standard Daisy variant
   aRouter get: "/" do: [:req | aHandler home: req ].
   aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
   aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
   aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
   aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
-  
-  # Buffer variant
-  aRouter get: "/buffer" do: [:req | aHandler bufferHome: req ].
-  aRouter get: "/buffer/todos/panel" do: [:req | aHandler bufferPanel: req ].
-  aRouter post: "/buffer/todos" do: [:req | aHandler bufferCreateTodo: req ].
-  aRouter post: "/buffer/todos/@id/toggle" do: [:req | aHandler bufferToggleTodo: req ].
-  aRouter post: "/buffer/todos/@id/delete" do: [:req | aHandler bufferDeleteTodo: req ].
-  
-  # Classic variant
-  aRouter get: "/classic" do: [:req | aHandler classicHome: req ].
-  aRouter get: "/classic/todos/panel" do: [:req | aHandler classicPanel: req ].
-  aRouter post: "/classic/todos" do: [:req | aHandler classicCreateTodo: req ].
-  aRouter post: "/classic/todos/@id/toggle" do: [:req | aHandler classicToggleTodo: req ].
-  aRouter post: "/classic/todos/@id/delete" do: [:req | aHandler classicDeleteTodo: req ].
-  
-  # Template variant (block-aware caching)
+
   aRouter get: "/template" do: [:req | aHandler templateHome: req ].
   aRouter get: "/template/todos/panel" do: [:req | aHandler templatePanel: req ].
   aRouter post: "/template/todos" do: [:req | aHandler templateCreateTodo: req ].
   aRouter post: "/template/todos/@id/toggle" do: [:req | aHandler templateToggleTodo: req ].
   aRouter post: "/template/todos/@id/delete" do: [:req | aHandler templateDeleteTodo: req ].
-  
-  # Comparison and benchmark pages
-  aRouter get: "/compare" do: [:req | aHandler compareHome: req ].
+
   aRouter get: "/benchmark" do: [:req | aHandler benchmark: req ].
-  
-  # Static assets
   aRouter get: "/assets/daisyui.css" do: [:req | aHandler daisyStylesheet: req ].
-  aRouter get: "/assets/basecoat.css" do: [:req | aHandler baseStylesheet: req ].
   ^ aRouter
 ].
 
+TodoApp class>>pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  ^ TodoPageComponent repository: aRepository routePrefix: aRoutePrefix panelId: aPanelId
+].
+
+TodoApp class>>panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  ^ TodoPanelComponent repository: aRepository routePrefix: aRoutePrefix panelId: aPanelId
+].
+
 TodoApp class>>home: req [
-  req respondHtml: ((TodoPageComponent repository: self repository) renderString)
+  req respondHtml: ((self pageFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
 ].
 
 TodoApp class>>panel: req [
-  req respondHtml: ((TodoPanelComponent repository: self repository) renderString)
+  req respondHtml: ((self panelFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
 ].
 
-TodoApp class>>bufferHome: req [
-  req respondHtml: ((TodoBufferPageComponent repository: self repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString)
+TodoApp class>>templateHome: req [
+  req respondHtml: ((self pageFor: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
 ].
 
-TodoApp class>>bufferPanel: req [
-  req respondHtml: ((TodoBufferPanelComponent repository: self repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString)
-].
-
-TodoApp class>>classicHome: req [
-  req respondHtml: ((TodoClassicPageComponent repository: self repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
-].
-
-TodoApp class>>classicPanel: req [
-  req respondHtml: ((TodoClassicPanelComponent repository: self repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
-].
-
-TodoApp class>>compareHome: req [
-  | headMarkup heroMarkup actionsMarkup daisyFrame classicFrame daisyCard classicCard heroBlock gridMarkup bodyMarkup |
-  headMarkup := (Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag).
-  actionsMarkup := (DaisyButton ghost: "Open Daisy page" attrs: #{#onclick -> "window.open('/', '_blank')"}) , (DaisyButton ghost: "Open Buffer page" attrs: #{#onclick -> "window.open('/buffer', '_blank')"}) , (DaisyButton ghost: "Open benchmark" attrs: #{#onclick -> "window.open('/benchmark', '_blank')"}).
-  heroMarkup := (Html h1: #{#class -> "text-4xl font-bold"} text: "Todo UI comparison") , (Html p: #{#class -> "py-2 opacity-80"} text: "Compare the Daisy-first and buffer-backed Todo renderers side by side with the same shared repository data.") , (Html div: #{#class -> "flex gap-3 flex-wrap"} with: actionsMarkup).
-  daisyFrame := Html iframe: #{#src -> "/", #style -> "width:100%; height:900px; border:0; border-radius:1rem; background:#fff;"}.
-  classicFrame := Html iframe: #{#src -> "/buffer", #style -> "width:100%; height:900px; border:0; border-radius:1rem; background:#fff;"}.
-  daisyCard := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: ((Html div: #{#class -> "card-body"} with: ((Html h2: #{#class -> "card-title"} text: "Daisy-first") , daisyFrame))).
-  classicCard := Html div: #{#class -> "card bg-base-100 shadow-xl"} with: ((Html div: #{#class -> "card-body"} with: ((Html h2: #{#class -> "card-title"} text: "Buffer renderer") , classicFrame))).
-  gridMarkup := Html div: #{#style -> "display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start;"} with: (daisyCard , classicCard).
-  heroBlock := Html div: #{#class -> "hero bg-base-200 rounded-box mb-6"} with: (Html div: #{#class -> "hero-content", #style -> "display:block; width:100%;"} with: heroMarkup).
-  bodyMarkup := heroBlock , gridMarkup.
-  req respondHtml: (Html documentTitle: "Harding Todo Compare"
-      head: headMarkup
-      body: (Html main: #{#"data-theme" -> Daisy themeName, #style -> "max-width: 1200px; margin: 0 auto; padding: 2rem 1rem 4rem;"} with: bodyMarkup))
-].
-
-TodoApp class>>benchmark: req [
-  | buffer bufferMarkup templateMarkup pageCache panelCache pageSegments panelSegments |
-  bufferMarkup := ((TodoBufferPageComponent repository: self repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString).
-  templateMarkup := ((TodoTemplatePageComponent repository: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString).
-  pageCache := TemplateCache at: #todoTemplatePageBody ifAbsent: [ nil ].
-  panelCache := TemplateCache at: #todoTemplatePanel ifAbsent: [ nil ].
-  pageSegments := pageCache isNil ifTrue: [ "0" ] ifFalse: [ pageCache segments size printString ].
-  panelSegments := panelCache isNil ifTrue: [ "0" ] ifFalse: [ panelCache segments size printString ].
-
-  buffer := String withCapacity: 4096.
-  buffer << """<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harding Todo Benchmark</title>
-<link rel="stylesheet" href="/assets/daisyui.css">
-</head><body>
-""".
-  buffer << "<main data-theme=\"" << Daisy themeName << "\" style=\"max-width:960px; margin:0 auto; padding:2rem 1rem 4rem;\">".
-  buffer << """<div class="card bg-base-100 shadow-xl"><div class="card-body">
-<h1 class="card-title text-3xl">Todo render comparison</h1>
-<p class="opacity-80">This page compares generated markup size and Html2 cache segment counts. Run <code>nim c -r tests/benchmark_todo_render.nim</code> for timing.</p>
-<div class="stats stats-vertical lg:stats-horizontal shadow">
-""".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Buffer bytes</div><div class=\"stat-value text-primary\">" << bufferMarkup size printString << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Template bytes</div><div class=\"stat-value text-secondary\">" << templateMarkup size printString << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Page segments</div><div class=\"stat-value\">" << pageSegments << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Panel segments</div><div class=\"stat-value\">" << panelSegments << "</div></div>".
-  buffer << """</div></div></div></main></body></html>
-""".
-  req respondHtml: buffer
+TodoApp class>>templatePanel: req [
+  req respondHtml: ((self panelFor: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
 ].
 
 TodoApp class>>createTodo: req [
@@ -153,52 +81,14 @@ TodoApp class>>createTodo: req [
   ^ self panel: req
 ].
 
-TodoApp class>>bufferCreateTodo: req [
-  self repository addTitle: (req formParam: "title").
-  ^ self bufferPanel: req
-].
-
-TodoApp class>>classicCreateTodo: req [
-  self repository addTitle: (req formParam: "title").
-  ^ self classicPanel: req
-].
-
 TodoApp class>>toggleTodo: req [
   self repository toggle: (req pathParam: "id").
   ^ self panel: req
 ].
 
-TodoApp class>>bufferToggleTodo: req [
-  self repository toggle: (req pathParam: "id").
-  ^ self bufferPanel: req
-].
-
-TodoApp class>>classicToggleTodo: req [
-  self repository toggle: (req pathParam: "id").
-  ^ self classicPanel: req
-].
-
 TodoApp class>>deleteTodo: req [
   self repository delete: (req pathParam: "id").
   ^ self panel: req
-].
-
-TodoApp class>>bufferDeleteTodo: req [
-  self repository delete: (req pathParam: "id").
-  ^ self bufferPanel: req
-].
-
-TodoApp class>>classicDeleteTodo: req [
-  self repository delete: (req pathParam: "id").
-  ^ self classicPanel: req
-].
-
-TodoApp class>>templateHome: req [
-  req respondHtml: ((TodoTemplatePageComponent repository: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
-].
-
-TodoApp class>>templatePanel: req [
-  req respondHtml: ((TodoTemplatePanelComponent repository: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
 ].
 
 TodoApp class>>templateCreateTodo: req [
@@ -216,12 +106,45 @@ TodoApp class>>templateDeleteTodo: req [
   ^ self templatePanel: req
 ].
 
-TodoApp class>>daisyStylesheet: req [
-  req respondCss: TodoAppDaisyStylesheet
+TodoApp class>>benchmark: req [
+  | page panel item pageEntry panelEntry itemEntry buffer |
+  page := self pageFor: self repository routePrefix: "" panelId: "todo-panel".
+  panel := self panelFor: self repository routePrefix: "" panelId: "todo-panel".
+  item := TodoItemComponent todo: (self repository all at: 0) routePrefix: "" panelId: "todo-panel".
+
+  page renderString.
+  panel renderString.
+  item renderString.
+
+  pageEntry := RenderCache current entryForKey: page renderCacheKey session: nil.
+  panelEntry := RenderCache current entryForKey: panel renderCacheKey session: nil.
+  itemEntry := RenderCache current entryForKey: item renderCacheKey session: nil.
+
+  buffer := String withCapacity: 4096.
+  buffer << """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harding Todo Benchmark</title>
+<link rel="stylesheet" href="/assets/daisyui.css">
+</head><body>
+<main data-theme=""".
+  buffer << Daisy themeName.
+  buffer << """" style="max-width:960px; margin:0 auto; padding:2rem 1rem 4rem;">
+<div class="card bg-base-100 shadow-xl"><div class="card-body">
+<h1 class="card-title text-3xl">Todo render cache benchmark</h1>
+<p class="opacity-80">This page reports steady-state render cache data for the tracked-state Html todo app. Run <code>nim c -r tests/benchmark_todo_render.nim</code> for timings.</p>
+<div class="stats stats-vertical lg:stats-horizontal shadow">
+""".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Page bytes</div><div class=\"stat-value text-primary\">" << (pageEntry cachedOutput size printString) << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Panel bytes</div><div class=\"stat-value text-secondary\">" << (panelEntry cachedOutput size printString) << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Item bytes</div><div class=\"stat-value\">" << (itemEntry cachedOutput size printString) << "</div></div>".
+  buffer << "<div class=\"stat\"><div class=\"stat-title\">Render cache entries</div><div class=\"stat-value\">" << (RenderCache current entries size printString) << "</div></div>".
+  buffer << """</div></div></div></main></body></html>
+""".
+  req respondHtml: buffer
 ].
 
-TodoApp class>>baseStylesheet: req [
-  req respondCss: TodoAppBaseStylesheet
+TodoApp class>>daisyStylesheet: req [
+  req respondCss: TodoAppDaisyStylesheet
 ].
 
 TodoApp class>>start [
@@ -266,7 +189,7 @@ TodoApp>>startOn: aPort [
 
 TodoApp>>serveForeverOn: aPort [
   ^ self bootOn: aPort with: [:httpServer :runningPort |
-    httpServer basicRequestLogging
+    httpServer basicRequestLogging.
     httpServer serveForever: runningPort
   ]
 ].
@@ -288,9 +211,7 @@ TodoApp>>stop [
 ].
 
 TodoApp>>runLoop [
-  [ server isRunning ] whileTrue: [
-    server processRequests.
-  ].
+  [ server isRunning ] whileTrue: [ server processRequests ].
   ^ self
 ].
 
@@ -298,110 +219,15 @@ TodoApp>>installRoutes [
   ^ TodoApp configureRoutesOn: router handlingWith: self
 ].
 
-TodoApp>>home: req [
-  req respondHtml: ((TodoPageComponent repository: repository) renderString)
-].
-
-TodoApp>>panel: req [
-  req respondHtml: ((TodoPanelComponent repository: repository) renderString)
-].
-
-TodoApp>>bufferHome: req [
-  req respondHtml: ((TodoBufferPageComponent repository: repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString)
-].
-
-TodoApp>>bufferPanel: req [
-  req respondHtml: ((TodoBufferPanelComponent repository: repository routePrefix: "/buffer" panelId: "buffer-todo-panel") renderString)
-].
-
-TodoApp>>classicHome: req [
-  req respondHtml: ((TodoClassicPageComponent repository: repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
-].
-
-TodoApp>>classicPanel: req [
-  req respondHtml: ((TodoClassicPanelComponent repository: repository routePrefix: "/classic" panelId: "classic-todo-panel") renderString)
-].
-
-TodoApp>>compareHome: req [
-  ^ TodoApp compareHome: req
-].
-
-TodoApp>>benchmark: req [
-  ^ TodoApp benchmark: req
-].
-
-TodoApp>>createTodo: req [
-  repository addTitle: (req formParam: "title").
-  ^ self panel: req
-].
-
-TodoApp>>bufferCreateTodo: req [
-  repository addTitle: (req formParam: "title").
-  ^ self bufferPanel: req
-].
-
-TodoApp>>classicCreateTodo: req [
-  repository addTitle: (req formParam: "title").
-  ^ self classicPanel: req
-].
-
-TodoApp>>toggleTodo: req [
-  repository toggle: (req pathParam: "id").
-  ^ self panel: req
-].
-
-TodoApp>>bufferToggleTodo: req [
-  repository toggle: (req pathParam: "id").
-  ^ self bufferPanel: req
-].
-
-TodoApp>>classicToggleTodo: req [
-  repository toggle: (req pathParam: "id").
-  ^ self classicPanel: req
-].
-
-TodoApp>>deleteTodo: req [
-  repository delete: (req pathParam: "id").
-  ^ self panel: req
-].
-
-TodoApp>>bufferDeleteTodo: req [
-  repository delete: (req pathParam: "id").
-  ^ self bufferPanel: req
-].
-
-TodoApp>>classicDeleteTodo: req [
-  repository delete: (req pathParam: "id").
-  ^ self classicPanel: req
-].
-
-TodoApp>>templateHome: req [
-  req respondHtml: ((TodoTemplatePageComponent repository: repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
-].
-
-TodoApp>>templatePanel: req [
-  req respondHtml: ((TodoTemplatePanelComponent repository: repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
-].
-
-TodoApp>>templateCreateTodo: req [
-  repository addTitle: (req formParam: "title").
-  ^ self templatePanel: req
-].
-
-TodoApp>>templateToggleTodo: req [
-  repository toggle: (req pathParam: "id").
-  ^ self templatePanel: req
-].
-
-TodoApp>>templateDeleteTodo: req [
-  repository delete: (req pathParam: "id").
-  ^ self templatePanel: req
-].
-
-TodoApp>>daisyStylesheet: req [
-  req respondCss: TodoAppDaisyStylesheet
-].
-
-TodoApp>>baseStylesheet: req [
-  req respondCss: TodoAppBaseStylesheet
-].
+TodoApp>>home: req [ ^ TodoApp home: req ].
+TodoApp>>panel: req [ ^ TodoApp panel: req ].
+TodoApp>>templateHome: req [ ^ TodoApp templateHome: req ].
+TodoApp>>templatePanel: req [ ^ TodoApp templatePanel: req ].
+TodoApp>>createTodo: req [ repository addTitle: (req formParam: "title"). ^ self panel: req ].
+TodoApp>>toggleTodo: req [ repository toggle: (req pathParam: "id"). ^ self panel: req ].
+TodoApp>>deleteTodo: req [ repository delete: (req pathParam: "id"). ^ self panel: req ].
+TodoApp>>templateCreateTodo: req [ repository addTitle: (req formParam: "title"). ^ self templatePanel: req ].
+TodoApp>>templateToggleTodo: req [ repository toggle: (req pathParam: "id"). ^ self templatePanel: req ].
+TodoApp>>templateDeleteTodo: req [ repository delete: (req pathParam: "id"). ^ self templatePanel: req ].
+TodoApp>>benchmark: req [ ^ TodoApp benchmark: req ].
+TodoApp>>daisyStylesheet: req [ req respondCss: TodoAppDaisyStylesheet ].

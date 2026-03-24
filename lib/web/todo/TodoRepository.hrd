@@ -2,7 +2,7 @@ TodoRepository := Object derivePublic: #(items nextId).
 
 TodoRepository>>initialize [
   super initialize.
-  items := Array new.
+  items := TrackedList new.
   nextId := 1.
   self seedDemoData.
   ^ self
@@ -23,7 +23,7 @@ TodoRepository>>count [
 ].
 
 TodoRepository>>completedCount [
-  ^ (items select: [:todo | todo::completed ]) size
+  ^ (items select: [:todo | todo completed ]) size
 ].
 
 TodoRepository>>remainingCount [
@@ -42,11 +42,7 @@ TodoRepository>>addTitle: title [
   trimmed := title isNil ifTrue: [ "" ] ifFalse: [ title trim ].
   trimmed isEmpty ifTrue: [ ^ nil ].
 
-  todo := #{
-    #id -> self nextIdentifier
-    #title -> trimmed
-    #completed -> false
-  }
+  todo := TodoItem id: self nextIdentifier title: trimmed completed: false
   items add: todo.
   ^ todo
 ].
@@ -54,20 +50,20 @@ TodoRepository>>addTitle: title [
 TodoRepository>>findById: rawId [
   | numericId |
   numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
-  ^ items detect: [:todo | todo::id = numericId ] ifNone: [ nil ]
+  ^ items detect: [:todo | todo id = numericId ] ifNone: [ nil ]
 ].
 
 TodoRepository>>toggle: rawId [
   | todo |
   todo := self findById: rawId.
   todo isNil ifTrue: [ ^ nil ].
-  todo::completed := (todo::completed not).
+  todo toggleCompleted.
   ^ todo
 ].
 
 TodoRepository>>delete: rawId [
-  | numericId |
-  numericId := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ].
-  items := items reject: [:todo | todo::id = numericId ].
+  | todo |
+  todo := self findById: rawId.
+  todo notNil ifTrue: [ items remove: todo ].
   ^ self
 ].

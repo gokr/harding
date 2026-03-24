@@ -37,6 +37,7 @@ Use Bona's System Browser and open these classes:
 - `TodoPageComponent`
 - `TodoPanelComponent`
 - `TodoItemComponent`
+- `TodoItem`
 - `TodoRepository`
 
 If the Browser was already open when you evaluated the Workspace code, Bona refreshes open Browser windows after a successful evaluation. You can also use the Browser's `Refresh` button.
@@ -47,9 +48,10 @@ The most useful live-edit points are:
 - `TodoApp class>>createTodo:` in `lib/web/todo/TodoApp.hrd`
 - `TodoApp class>>toggleTodo:` in `lib/web/todo/TodoApp.hrd`
 - `TodoApp class>>deleteTodo:` in `lib/web/todo/TodoApp.hrd`
-- `TodoPageComponent>>render` in `lib/web/todo/TodoComponents.hrd`
+- `TodoPageComponent>>bodyMarkup` in `lib/web/todo/TodoComponents.hrd`
 - `TodoPanelComponent>>render` in `lib/web/todo/TodoComponents.hrd`
 - `TodoItemComponent>>render` in `lib/web/todo/TodoComponents.hrd`
+- `TodoItem>>title:` / `TodoItem>>toggleCompleted` in `lib/web/todo/TodoItem.hrd`
 
 For ordinary copy, markup, button labels, layout, and fragment rendering changes:
 
@@ -85,7 +87,7 @@ For example, changing:
 "Active - edit this method in Bona and refresh."
 ```
 
-inside `TodoItemComponent>>render` updates the next fragment response right away.
+inside `TodoItemComponent>>metaText` updates the next fragment response right away.
 
 ## Stop The Server
 
@@ -104,5 +106,6 @@ TodoApp resetRepository.
 ## Current Notes
 
 - The Bona workflow uses `lib/web/Bootstrap.hrd` and `lib/web/todo/Bootstrap.hrd` so Browser libraries stay in sync with the loaded web code.
-- The UI now serves a vendored DaisyUI stylesheet plus the local `Basecoat.css` app layer, so the workflow stays htmx-friendly and does not require a Tailwind build step at runtime.
-- The repository is in-memory. Replacing it with Bitbarrel or MySQL should mainly affect `TodoRepository`.
+- The UI serves a vendored DaisyUI stylesheet from `TodoApp`.
+- Rendering now uses tracked state in `lib/reactive/` plus web-specific external caching in `RenderCache`.
+- The repository is still in-memory. Replacing it with Bitbarrel or MySQL should mainly affect `TodoRepository` and `TodoItem` construction.

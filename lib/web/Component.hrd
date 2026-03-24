@@ -4,7 +4,15 @@ Component>>render [
   self error: "Subclass must implement render"
 ].
 
-Component>>renderInto: buffer [
+Component>>renderCacheKey [
+  ^ nil
+].
+
+Component>>renderSessionKey [
+  ^ nil
+].
+
+Component>>renderFreshInto: buffer [
   | rendered errorOccurred |
   Html pushRenderContext: self.
   errorOccurred := false.
@@ -23,6 +31,41 @@ Component>>renderInto: buffer [
   ].
 
   errorOccurred ifFalse: [ Html popRenderContext ].
+  ^ self
+].
+
+Component>>renderInto: buffer [
+  | key cache entry parentEntry renderedBuffer errorOccurred |
+  key := self renderCacheKey.
+  key isNil ifTrue: [ ^ self renderFreshInto: buffer ].
+
+  cache := RenderCache current.
+  entry := cache entryForKey: key session: self renderSessionKey.
+  parentEntry := cache currentEntry.
+  parentEntry notNil ifTrue: [ parentEntry addDependencySource: entry ].
+
+  entry valid ifTrue: [
+    buffer << entry cachedOutput.
+    ^ self
+  ].
+
+  entry clearDependencies.
+  renderedBuffer := String withCapacity: 256.
+  errorOccurred := false.
+  cache pushEntry: entry.
+
+  [
+    self renderFreshInto: renderedBuffer.
+    entry cachedOutput: renderedBuffer.
+    entry markClean.
+  ] on: Exception do: [:ex |
+    errorOccurred := true.
+    cache popEntry.
+    ex pass
+  ].
+
+  errorOccurred ifFalse: [ cache popEntry ].
+  buffer << entry cachedOutput.
   ^ self
 ].
 

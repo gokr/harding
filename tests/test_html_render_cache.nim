@@ -20,7 +20,7 @@ proc newWebInterp(loadTodo: bool = false): Interpreter =
   if setupResult[1].len > 0:
     raise newException(ValueError, setupResult[1])
 
-suite "Html2 dyn cache":
+suite "Html render cache":
   test "keyed template captures segments and updates dyn content":
     var interp = newWebInterp()
     let script = """
@@ -83,13 +83,13 @@ suite "Html2 dyn cache":
     check(result.strVal.contains("<p>1</p>"))
     check(result.strVal.contains("<p>2</p>"))
 
-suite "Todo template Html2":
+suite "Todo render cache":
   test "template todo page renders without dyn placeholders":
     var interp = newWebInterp(loadTodo = true)
     let script = """
       Repo := TodoRepository new.
       Repo addTitle: "<done>".
-      (TodoTemplatePageComponent repository: Repo routePrefix: "/template" panelId: "template-todo-panel") renderString
+      (TodoPageComponent repository: Repo routePrefix: "/template" panelId: "template-todo-panel") renderString
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)
@@ -97,3 +97,21 @@ suite "Todo template Html2":
     check(html.contains("template-todo-panel"))
     check(html.contains("&lt;done&gt;"))
     check(not html.contains("HtmlDynamicBlock"))
+
+  test "template item cache reuses output and invalidates on tracked state change":
+    var interp = newWebInterp(loadTodo = true)
+    let script = """
+      Repo := TodoApp resetRepository.
+      Item1 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      First := Item1 renderString.
+      Item2 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      Second := Item2 renderString.
+      Repo toggle: 1.
+      Item3 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      Third := Item3 renderString.
+      (First = Second) printString , "|" , (First = Third) printString , "|" , Third
+    """
+    let (result, err) = interp.doit(script)
+    check(err.len == 0)
+    check(result.strVal.startsWith("true|false|"))
+    check(result.strVal.contains("Mark active"))
