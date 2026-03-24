@@ -289,7 +289,7 @@ proc registerMcpPrimitives*(interp: var Interpreter) =
   ## Register MCP classes and primitives with Harding
 
   ## Create MCPServer class
-  let mcpServerClass = newClass(superclasses = @[objectClass], name: "MCPServer")
+  let mcpServerClass = newClass(superclasses = @[objectClass], name = "MCPServer")
   mcpServerClass.isNimProxy = true
 
   ## Register methods
