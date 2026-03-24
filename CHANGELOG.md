@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Process and activation introspection APIs including `Process current`, `Scheduler current`, `Object>>activation`, and `Object>>thisContext`.
 - Automatic Html template cache keys via `Html canvasAuto:...` built from the current activation cache key plus an optional suffix.
 - Reactive state primitives in `lib/reactive/` (`TrackedValue`, `TrackedTable`, `TrackedList`) plus web render caching via `RenderCache`/`RenderEntry`.
+- Simplified the Todo web example to a single tracked-state cached rendering path and removed the older parallel Todo rendering variants.
 - Compiled JSON object serialization with class-side configuration (`jsonExclude:`, `jsonOnly:`, `jsonRename:`, `jsonOmitNil:`, `jsonOmitEmpty:`, `jsonFormat:`, `jsonFieldOrder:`, `jsonReset`) and `Object>>toJson`.
 - JSON serialization benchmarks for nested Table/Array payloads and ordinary Harding object graphs.
 - JSON API server tutorial with complete example application demonstrating REST patterns.

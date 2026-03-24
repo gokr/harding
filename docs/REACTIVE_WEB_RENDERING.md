@@ -100,6 +100,16 @@ The Todo app uses:
 - `TrackedValue` inside each `TodoItem`
 - `Todo*Component` cache keys for item/panel/page entries
 
+The old Todo rendering variants were removed. The active path is now:
+
+- `TodoItem`
+- `TodoRepository`
+- `TodoItemComponent`
+- `TodoPanelComponent`
+- `TodoPageComponent`
+
+This keeps the example focused on the reactive state + external render cache model instead of preserving parallel rendering strategies.
+
 This gives:
 
 - item-level cache reuse
@@ -131,3 +141,5 @@ Harding is not async in the same way Flutter is, but the active-observer pattern
 - add tracked transactions around larger model updates
 - explore session-scoped cache keys in real multi-user routing
 - later consider whether some tracked/computed behavior belongs in Harding as a language/runtime feature rather than remaining only a library pattern
+
+At the moment `lib/web/Html.hrd` is still the main implementation file for the Html DSL. The old `Html2` split is gone, but the support classes still need a careful follow-up split into separate files.
