@@ -156,6 +156,8 @@ proc parseStatement(parser: var Parser; parseMessages = true): Node
 proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
+proc parseInlineJsonObject(parser: var Parser): Node
+proc parseJsonArray(parser: var Parser): Node
 
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
 const PseudoVariables* = ["self", "nil", "true", "false", "super"]
@@ -934,16 +936,275 @@ proc parseTableLiteral(parser: var Parser): TableNode =
 
   return table
 
+# Parse inline JSON object without the json prefix: {"key": value, ...}
+proc parseInlineJsonObject(parser: var Parser): Node =
+  ## Parse inline JSON object that appears inside json{} or another inline JSON object
+  ## This parses {"key": value, ...} and returns a Table node
+  
+  var pairs: seq[(string, Node)] = @[]
+  
+  while true:
+    # Skip separators
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    
+    # Check for closing brace
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      discard parser.next()  # consume }
+      break
+    
+    # If we see a closing bracket, we're done (we're inside an array)
+    if parser.peek().kind == tkRBracket:
+      break
+    
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed JSON object - expected '}'")
+      return nil
+    
+    # Parse key (must be string)
+    var keyStr = ""
+    let keyTok = parser.peek()
+    
+    if keyTok.kind == tkString:
+      keyStr = keyTok.value
+      discard parser.next()
+    else:
+      parser.parseError("Expected string as JSON object key, got: " & $keyTok.kind)
+      return nil
+    
+    # Expect colon
+    if not parser.expect(tkColon):
+      parser.parseError("Expected ':' after JSON key")
+      return nil
+    
+    # Skip separators after colon
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    
+    # Parse value - check for nested JSON object or array
+    var valueNode: Node
+    let nextTok = parser.peek()
+    if nextTok.kind == tkSpecial and nextTok.value == "{":
+      # Check if this is another nested JSON object
+      let lookAheadPos = parser.pos + 1
+      if lookAheadPos < parser.tokens.len:
+        var checkPos = lookAheadPos
+        while checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkSeparator:
+          inc checkPos
+        if checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkString:
+          # Nested JSON object
+          discard parser.next()  # consume {
+          valueNode = parser.parseInlineJsonObject()
+        else:
+          valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+      else:
+        valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    elif nextTok.kind == tkLBracket:
+      # JSON array [1, 2, 3]
+      discard parser.next()  # consume [
+      valueNode = parser.parseJsonArray()
+    else:
+      valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    
+    pairs.add((keyStr, valueNode))
+    
+    # Skip optional comma separator
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkComma:
+      discard parser.next()
+  
+  # Return as a Table node - this will be serialized properly
+  var entries: seq[tuple[key: Node, value: Node]] = @[]
+  for (key, value) in pairs:
+    let keyNode = LiteralNode(value: NodeValue(kind: vkString, strVal: key))
+    entries.add((keyNode.Node, value))
+  
+  return TableNode(entries: entries)
+
+# Parse JSON array: [value, value, ...]
+proc parseJsonArray(parser: var Parser): Node =
+  ## Parse JSON array syntax and return an Array node
+  
+  var elements: seq[Node] = @[]
+  
+  while true:
+    # Skip separators
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    
+    # Check for closing bracket
+    if parser.peek().kind == tkRBracket:
+      discard parser.next()  # consume ]
+      break
+    
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed JSON array - expected ']'")
+      return nil
+    
+    # Parse element value
+    # Check for nested JSON object
+    var elementNode: Node
+    let nextTok = parser.peek()
+    
+    if nextTok.kind == tkSpecial and nextTok.value == "{":
+      # Check if this is a nested inline JSON object
+      let lookAheadPos = parser.pos + 1
+      if lookAheadPos < parser.tokens.len:
+        var checkPos = lookAheadPos
+        while checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkSeparator:
+          inc checkPos
+        if checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkString:
+          # Nested JSON object
+          discard parser.next()  # consume {
+          elementNode = parser.parseInlineJsonObject()
+        else:
+          elementNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+      else:
+        elementNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    elif nextTok.kind == tkLBracket:
+      # Nested JSON array
+      discard parser.next()  # consume [
+      elementNode = parser.parseJsonArray()
+    else:
+      # Normal expression
+      elementNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    
+    elements.add(elementNode)
+    
+    # Skip optional comma separator
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkComma:
+      discard parser.next()
+  
+  # Return as an Array node
+  return ArrayNode(elements: elements)
+
+
+
+# Parse JSON object literal: json{key: value, ...}
+# Parse JSON object literal: json{key: value, ...}
+proc parseJsonObjectLiteral(parser: var Parser): Node =
+  ## Parse json{} literal and generate code for dynamic JSON construction
+  ## Returns a block that evaluates expressions and builds JSON string
+  ## Key-value separator is comma at top level, semicolon for statement separator
+  
+  # Parse key-value pairs
+  var pairs: seq[(string, Node)] = @[]
+  
+  while true:
+    # Skip separators
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    
+    # Check for closing brace
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      discard parser.next()  # consume }
+      break
+    
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed json{} literal - expected '}'")
+      return nil
+    
+    # Parse key (must be string or identifier)
+    var keyStr = ""
+    let keyTok = parser.peek()
+    
+    if keyTok.kind == tkString:
+      keyStr = keyTok.value
+      discard parser.next()
+    elif keyTok.kind == tkIdent:
+      keyStr = keyTok.value
+      discard parser.next()
+    else:
+      parser.parseError("Expected string or identifier as JSON key")
+      return nil
+    
+    # Expect colon
+    if not parser.expect(tkColon):
+      parser.parseError("Expected ':' after JSON key")
+      return nil
+    
+    # Skip separators after colon
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    
+    # Parse value
+    var valueNode: Node
+    let nextTok = parser.peek()
+    
+    if nextTok.kind == tkSpecial and nextTok.value == "{":
+      # Check if this is a nested inline JSON object: {"key": value, ...}
+      let lookAheadPos = parser.pos + 1
+      if lookAheadPos < parser.tokens.len:
+        # Skip any whitespace/separators
+        var checkPos = lookAheadPos
+        while checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkSeparator:
+          inc checkPos
+        if checkPos < parser.tokens.len and parser.tokens[checkPos].kind == tkString:
+          # This looks like a nested JSON object {"key": ...}
+          discard parser.next()  # consume {
+          valueNode = parser.parseInlineJsonObject()
+        else:
+          # It's a Block (starts with something other than string key)
+          valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+      else:
+        valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    elif nextTok.kind == tkLBracket:
+      # JSON array syntax [1, 2, 3]
+      discard parser.next()  # consume [
+      valueNode = parser.parseJsonArray()
+    else:
+      # Normal expression
+      valueNode = parser.parseExpression(parseMessages = true, binaryTokens = TableValueBinaryOpTokens)
+    
+    pairs.add((keyStr, valueNode))
+    
+    # Skip optional comma separator
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkComma:
+      discard parser.next()
+  
+  # Generate: Json build: #["key1" -> value1, "key2" -> value2, ...]
+  # This uses the existing Table literal syntax with a special marker
+  var entries: seq[tuple[key: Node, value: Node]] = @[]
+  for (key, value) in pairs:
+    let keyNode = LiteralNode(value: NodeValue(kind: vkString, strVal: key))
+    entries.add((keyNode.Node, value))
+  
+  let tableNode = TableNode(entries: entries)
+  
+  # Return: Json buildDynamic: table
+  return MessageNode(
+    receiver: IdentNode(name: "Json", localIndex: -1),
+    selector: "buildDynamic:",
+    arguments: @[tableNode.Node]
+  )
+
+
 # Parse prefix literal: Prefix{content}
-# Parses expressions within braces and generates message send to Prefix class
+# For json{}, parses as dynamic key-value pairs with expression evaluation
 proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
   ## Parse prefix literal like json{...} or yaml{...}
-  ## Normalizes prefix to TitleCase and generates parseLiteral: message
+  ## For json{}, generates code that builds JSON with evaluated expressions
   if not parser.expect(tkSpecial) or parser.tokens[parser.pos - 1].value != "{":
     parser.parseError("Expected '{' after prefix literal name")
     return nil
   
-  # Extract content between braces by finding matching }
+  # Normalize prefix to TitleCase (json, Json, JSON all become "Json")
+  var normalizedPrefix = ""
+  if prefix.len > 0:
+    normalizedPrefix.add(prefix[0].toUpperAscii())
+    for i in 1..<prefix.len:
+      normalizedPrefix.add(prefix[i].toLowerAscii())
+  
+  # For Json prefix, parse key-value pairs and build dynamic JSON construction
+  if normalizedPrefix == "Json":
+    return parser.parseJsonObjectLiteral()
+  
+  # For other prefixes, use original behavior (raw content extraction)
   var content = ""
   var braceDepth = 1
   var safetyCounter = 0
@@ -994,13 +1255,6 @@ proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
       content.add(tok.value)
     
     inc parser.pos
-  
-  # Normalize prefix to TitleCase (json, Json, JSON all become "Json")
-  var normalizedPrefix = ""
-  if prefix.len > 0:
-    normalizedPrefix.add(prefix[0].toUpperAscii())
-    for i in 1..<prefix.len:
-      normalizedPrefix.add(prefix[i].toLowerAscii())
   
   # Generate: Prefix parseLiteral: "content"
   let argNode: Node = LiteralNode(value: NodeValue(kind: vkString, strVal: content))

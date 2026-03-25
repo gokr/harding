@@ -11,8 +11,45 @@
 | Array | `#(1 2 3)`, `#("a" "b")` | Sequences of values |
 | Table | `#{"key" -> "value"}` | Key-value mappings (Harding syntax) |
 | JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |
+| JSON Array | `json{"items": [1, 2, 3]}` | Arrays use JSON [] syntax inside json{} |
 
 ## JSON
+
+### JSON Literals
+
+```smalltalk
+# Simple object
+json{"status": "ok", "count": 42}
+
+# Nested objects
+json{
+    "user": {
+        "name": "Alice",
+        "address": {"city": "NYC"}
+    }
+}
+
+# Arrays (use JSON [] syntax)
+json{
+    "items": [1, 2, 3],
+    "tags": ["a", "b"],
+    "matrix": [[1, 2], [3, 4]]
+}
+
+# Arrays of objects
+json{
+    "users": [
+        {"name": "Alice", "id": 1},
+        {"name": "Bob", "id": 2}
+    ]
+}
+
+# With variables
+X := 42.
+json{"value": X, "items": [1, 2, X]}
+```
+
+### Parsing and Stringifying
 
 ```smalltalk
 Json parse: "{\"name\":\"Alice\"}"      # Parse JSON to Harding values

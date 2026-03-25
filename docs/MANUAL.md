@@ -1783,10 +1783,55 @@ payload := json{"status": "ok", "count": 42}
 payload class          # String
 ```
 
+`json{}` supports full JSON syntax:
+
+```smalltalk
+# Objects with nested structures
+json{
+    "person": {
+        "name": "Alice",
+        "age": 30,
+        "address": {"city": "NYC", "zip": "10001"}
+    }
+}
+
+# Arrays using JSON [1, 2, 3] syntax
+json{
+    "items": [1, 2, 3],
+    "tags": ["a", "b", "c"],
+    "matrix": [[1, 2], [3, 4]]
+}
+
+# Arrays of objects
+json{
+    "users": [
+        {"name": "Alice", "id": 1},
+        {"name": "Bob", "id": 2}
+    ]
+}
+
+# Mixed with variables
+Name := "Todo API".
+Count := 42.
+json{
+    "name": Name,
+    "count": Count,
+    "tags": ["api", "rest"]
+}
+```
+
+**Key features:**
+- Native JSON object syntax: `{"key": value}`
+- JSON array syntax: `[1, 2, 3]` (not `#(1 2 3)`)
+- Nested objects and arrays
+- Dynamic values via variables and expressions
+- Commas separate items (not `->` arrows)
+
 These literals are useful for:
 
 - inline API payloads
 - tests and fixtures
+- OpenAPI specifications
 - small constant JSON documents
 
 ### Parsing JSON

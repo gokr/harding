@@ -4933,6 +4933,86 @@ proc initGlobals*(interp: var Interpreter) =
   jsonCls.classMethods["stringify:"] = jsonStringifyMethod
   jsonCls.allClassMethods["stringify:"] = jsonStringifyMethod
 
+  proc primitiveJsonBuildDynamicImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
+    ## Build JSON string from Table or Array with evaluated expressions
+    if args.len < 1:
+      return NodeValue(kind: vkString, strVal: "{}")
+    
+    let tableVal = args[0]
+    var state = initJsonWriteState()
+    
+    # Handle Array (for JSON arrays)
+    if tableVal.kind == vkArray:
+      var buf = newStringOfCap(64)
+      buf.add("[")
+      var first = true
+      for elem in tableVal.arrayVal:
+        if not first:
+          buf.add(", ")
+        first = false
+        writeJsonValue(interp, buf, elem, state)
+      buf.add("]")
+      return NodeValue(kind: vkString, strVal: buf)
+    elif tableVal.kind == vkInstance and tableVal.instVal.kind == ikArray:
+      var buf = newStringOfCap(64)
+      buf.add("[")
+      var first = true
+      if not enterInstance(state, tableVal.instVal):
+        raise newException(ValueError, "JSON serialization cycle detected")
+      for elem in tableVal.instVal.elements:
+        if not first:
+          buf.add(", ")
+        first = false
+        writeJsonValue(interp, buf, elem, state)
+      leaveInstance(state, tableVal.instVal)
+      buf.add("]")
+      return NodeValue(kind: vkString, strVal: buf)
+    
+    # Handle Table (for JSON objects)
+    if tableVal.kind != vkTable and not (tableVal.kind == vkInstance and tableVal.instVal.kind == ikTable):
+      return NodeValue(kind: vkString, strVal: "{}")
+    
+    var entries: Table[NodeValue, NodeValue]
+    if tableVal.kind == vkTable:
+      entries = tableVal.tableVal
+    elif tableVal.kind == vkInstance and tableVal.instVal.kind == ikTable:
+      entries = tableVal.instVal.entries
+    else:
+      return NodeValue(kind: vkString, strVal: "{}")
+    
+    # Build JSON object from the evaluated values
+    var buf = newStringOfCap(64)
+    buf.add("{")
+    var first = true
+    
+    for key, value in entries:
+      if not first:
+        buf.add(", ")
+      first = false
+      
+      # Write key
+      var keyStr: string
+      if key.kind == vkString:
+        keyStr = key.strVal
+      else:
+        keyStr = key.toString()
+      
+      writeJsonEscapedString(buf, keyStr)
+      buf.add(": ")
+      
+      # Write value (already evaluated)
+      writeJsonValue(interp, buf, value, state)
+    
+    buf.add("}")
+    return NodeValue(kind: vkString, strVal: buf)
+
+  let jsonBuildDynamicMethod = createCoreMethod("buildDynamic:")
+  jsonBuildDynamicMethod.setNativeImpl(primitiveJsonBuildDynamicImpl)
+  setNativeValueFromInstanceWithInterp(jsonBuildDynamicMethod, primitiveJsonBuildDynamicImpl)
+  jsonBuildDynamicMethod.hasInterpreterParam = true
+  jsonCls.classMethods["buildDynamic:"] = jsonBuildDynamicMethod
+  jsonCls.allClassMethods["buildDynamic:"] = jsonBuildDynamicMethod
+
   jsonClass = jsonCls  # Set global variable
 
   # Create UndefinedObject class (derives from Object) - the class of nil

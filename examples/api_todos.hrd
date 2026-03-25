@@ -1,12 +1,12 @@
-#!/usr/bin/env harding.
+#!/usr/bin/env harding
 
 # Plain JSON API example using MummyX + BitBarrel.
-#.
+#
 # Requirements:.
 #   nimble harding_mummyx.
 #   ./harding lib install bitbarrel.
 #   nimble harding_mummyx.
-#.
+#
 # Run:.
 #   ./harding examples/api_todos.hrd.
 

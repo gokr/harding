@@ -16,7 +16,7 @@ suite "Json Literal Syntax":
     check nodes.len == 1
     check nodes[0].kind == nkMessage
     let msg = cast[MessageNode](nodes[0])
-    check msg.selector == "parseLiteral:"
+    check msg.selector == "buildDynamic:"
     check msg.receiver.kind == nkIdent
     check cast[IdentNode](msg.receiver).name == "Json"
     check msg.arguments.len == 1
@@ -39,15 +39,15 @@ suite "Json Literal Syntax":
       let msg = cast[MessageNode](nodes[0])
       check cast[IdentNode](msg.receiver).name == "Json"
 
-  test "parses nested json{} literals":
-    let tokens = lex("json{\"outer\": {\"inner\": 1}}")
+  test "parses json{} with nested Table":
+    let tokens = lex("json{\"outer\": #{\"inner\" -> 1}}")
     var p = initParser(tokens)
     let nodes = p.parseStatements()
     check nodes.len == 1
     check nodes[0].kind == nkMessage
 
   test "handles json{} with arrays":
-    let tokens = lex("json{\"items\": [1, 2, 3]}")
+    let tokens = lex("json{\"items\": #(1 2 3)}")
     var p = initParser(tokens)
     let nodes = p.parseStatements()
     check nodes.len == 1
@@ -116,9 +116,9 @@ suite "Json Class":
     check results[^1].kind == vkString
     check results[^1].strVal == "{}"
 
-  test "json{} with nested objects":
+  test "json{} with nested Tables":
     let (results, err) = interp.evalStatements("""
-    Result := json{"person": {"name": "Alice", "age": 30}}
+    Result := json{"person": #{"name" -> "Alice", "age" -> 30}}
     """)
     check err.len == 0
     check results.len >= 1
@@ -129,7 +129,7 @@ suite "Json Class":
 
   test "json{} with arrays":
     let (results, err) = interp.evalStatements("""
-    Result := json{"items": [1, 2, 3]}
+    Result := json{"items": #(1 2 3)}
     """)
     check err.len == 0
     check results.len >= 1
@@ -147,3 +147,48 @@ suite "Json Class":
     check results[^1].kind == vkString
     let parsed = parseJson(results[^1].strVal)
     check parsed["nested"]["deep"]["value"].getInt() == 123
+
+  test "json{} with JSON array syntax [1, 2, 3]":
+    let (results, err) = interp.evalStatements("""
+    Result := json{"items": [1, 2, 3]}
+    """)
+    check err.len == 0
+    check results.len >= 1
+    check results[^1].kind == vkString
+    let parsed = parseJson(results[^1].strVal)
+    check parsed["items"].len == 3
+    check parsed["items"][0].getInt() == 1
+    check parsed["items"][2].getInt() == 3
+
+  test "json{} with arrays of objects":
+    let (results, err) = interp.evalStatements("""
+    Result := json{"users": [{"name": "Alice"}, {"name": "Bob"}]}
+    """)
+    check err.len == 0
+    check results.len >= 1
+    check results[^1].kind == vkString
+    let parsed = parseJson(results[^1].strVal)
+    check parsed["users"].len == 2
+    check parsed["users"][0]["name"].getStr() == "Alice"
+    check parsed["users"][1]["name"].getStr() == "Bob"
+
+  test "json{} with nested arrays":
+    let (results, err) = interp.evalStatements("""
+    Result := json{"matrix": [[1, 2], [3, 4]]}
+    """)
+    check err.len == 0
+    check results.len >= 1
+    check results[^1].kind == vkString
+    let parsed = parseJson(results[^1].strVal)
+    check parsed["matrix"][0][1].getInt() == 2
+    check parsed["matrix"][1][0].getInt() == 3
+
+  test "json{} with empty array":
+    let (results, err) = interp.evalStatements("""
+    Result := json{"items": []}
+    """)
+    check err.len == 0
+    check results.len >= 1
+    check results[^1].kind == vkString
+    let parsed = parseJson(results[^1].strVal)
+    check parsed["items"].len == 0
