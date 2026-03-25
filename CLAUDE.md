@@ -249,6 +249,27 @@ Declarative form: arguments must match method parameter names. Inline form: argu
 
 `isEmpty` / `isEmpty not`, `notNil`, `class`, `derive:`, `at:` / `at:put:`, `clone`, `perform:` / `perform:with:`
 
+### Defining Primitives (Nim-backed methods)
+
+When creating external libraries with Nim primitives, the .hrd file must use the correct primitive name format:
+
+1. **In .hrd files**: Use `<primitive primitive<ClassName><Selector>>` syntax
+   - The selector in the primitive should NOT include parameter names
+   - Example: `MyClass>>connect: host <primitive primitiveMyClassConnect:>`
+
+2. **In Nim code**: Register with the same name (without parameter names)
+   ```nim
+   let method = createCoreMethod("primitiveMyClassConnect:")
+   method.setNativeImpl(myConnectImpl)
+   cls.methods["primitiveMyClassConnect:"] = method
+   ```
+
+3. **Key rules**:
+   - Class methods go in `classMethods` / `allClassMethods` tables
+   - Instance methods go in `methods` / `allMethods` tables  
+   - Use `setNativeImpl()` not direct assignment for native implementation
+   - The primitive selector in .hrd is parsed to extract just the keyword parts (parameter names are stripped)
+
 ## BitBarrel Integration
 
 BitBarrel is available as an external Harding library. Install it with `./harding lib install bitbarrel`, then rebuild with `nimble harding`.
