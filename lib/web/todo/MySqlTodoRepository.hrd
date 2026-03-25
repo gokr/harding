@@ -1,0 +1,73 @@
+#!/usr/bin/env harding
+#
+# MySqlTodoRepository.hrd - MySQL-backed TodoRepository
+#
+# A subclass of TodoRepository that persists todos to MySQL.
+# Provides the same TrackedList-based reactive UI as the RAM version.
+#
+# Note: This is a stub that currently uses RAM. Full MySQL support requires
+# additional setup with the MySQL library and proper class loading order.
+#
+# Configuration (set before using):
+#   MySqlTodoRepository host: "127.0.0.1".
+#   MySqlTodoRepository port: 3306.
+#   MySqlTodoRepository database: "todo_app".
+#   MySqlTodoRepository user: "root".
+#   MySqlTodoRepository password: "".
+#
+# Usage:
+#   TodoApp useMySql: true.
+#   TodoApp serve.
+
+# Class variables for configuration
+MySqlTodoRepositoryHost := "127.0.0.1".
+MySqlTodoRepositoryPort := 3306.
+MySqlTodoRepositoryDatabase := "todo_app".
+MySqlTodoRepositoryUser := "root".
+MySqlTodoRepositoryPassword := "".
+
+MySqlTodoRepository := TodoRepository derivePublic: #(connection).
+
+# Configuration accessors
+MySqlTodoRepository class>>host [
+    ^ MySqlTodoRepositoryHost
+].
+
+MySqlTodoRepository class>>host: aString [
+    MySqlTodoRepositoryHost := aString
+].
+
+MySqlTodoRepository class>>port [
+    ^ MySqlTodoRepositoryPort
+].
+
+MySqlTodoRepository class>>port: anInteger [
+    MySqlTodoRepositoryPort := anInteger
+].
+
+MySqlTodoRepository class>>database [
+    ^ MySqlTodoRepositoryDatabase
+].
+
+MySqlTodoRepository class>>database: aString [
+    MySqlTodoRepositoryDatabase := aString
+].
+
+MySqlTodoRepository class>>user [
+    ^ MySqlTodoRepositoryUser
+].
+
+MySqlTodoRepository class>>user: aString [
+    MySqlTodoRepositoryUser := aString
+].
+
+MySqlTodoRepository class>>password [
+    ^ MySqlTodoRepositoryPassword
+].
+
+MySqlTodoRepository class>>password: aString [
+    MySqlTodoRepositoryPassword := aString
+].
+
+# For now, just use the parent implementation (RAM storage)
+# Full MySQL persistence would require proper library integration

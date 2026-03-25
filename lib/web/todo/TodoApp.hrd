@@ -50,6 +50,7 @@ TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
   aRouter clear.
   aRouter get: "/" do: [:req | aHandler home: req ].
   aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
+  aRouter get: "/todos/stats" do: [:req | aHandler stats: req ].
   aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
   aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
   aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
@@ -79,6 +80,12 @@ TodoApp class>>home: req [
 
 TodoApp class>>panel: req [
   req respondHtml: ((self panelFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
+].
+
+# Responds with just the stats badges HTML for HTMX updates
+# This endpoint is triggered by htmx after successful POST operations
+TodoApp class>>stats: req [
+  req respondHtml: ((self pageFor: self repository routePrefix: "" panelId: "todo-panel") statsHtml)
 ].
 
 TodoApp class>>templateHome: req [
