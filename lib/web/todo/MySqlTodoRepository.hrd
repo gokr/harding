@@ -5,69 +5,120 @@
 # A subclass of TodoRepository that persists todos to MySQL.
 # Provides the same TrackedList-based reactive UI as the RAM version.
 #
-# Note: This is a stub that currently uses RAM. Full MySQL support requires
-# additional setup with the MySQL library and proper class loading order.
-#
 # Configuration (set before using):
-#   MySqlTodoRepository host: "127.0.0.1".
-#   MySqlTodoRepository port: 3306.
-#   MySqlTodoRepository database: "todo_app".
-#   MySqlTodoRepository user: "root".
-#   MySqlTodoRepository password: "".
+#   MySqlTodoRepository host: "127.0.0.1"
+#   MySqlTodoRepository port: 3306
+#   MySqlTodoRepository database: "todo_app"
+#   MySqlTodoRepository user: "harding"
+#   MySqlTodoRepository password: "harding123"
 #
 # Usage:
-#   TodoApp useMySql: true.
-#   TodoApp serve.
+#   TodoApp useMySql: true
+#   TodoApp serve
 
 # Class variables for configuration
-MySqlTodoRepositoryHost := "127.0.0.1".
-MySqlTodoRepositoryPort := 3306.
-MySqlTodoRepositoryDatabase := "todo_app".
-MySqlTodoRepositoryUser := "root".
-MySqlTodoRepositoryPassword := "".
+MySqlTodoRepositoryHost := "127.0.0.1"
+MySqlTodoRepositoryPort := 3306
+MySqlTodoRepositoryDatabase := "todo_app"
+MySqlTodoRepositoryUser := "harding"
+MySqlTodoRepositoryPassword := "harding123"
 
-MySqlTodoRepository := TodoRepository derivePublic: #(connection).
+MySqlTodoRepository := TodoRepository derivePublic: #(connection)
 
 # Configuration accessors
-MySqlTodoRepository class>>host [
-    ^ MySqlTodoRepositoryHost
-].
+MySqlTodoRepository class>>host [ ^ MySqlTodoRepositoryHost ]
+MySqlTodoRepository class>>host: aString [ MySqlTodoRepositoryHost := aString ]
+MySqlTodoRepository class>>port [ ^ MySqlTodoRepositoryPort ]
+MySqlTodoRepository class>>port: anInteger [ MySqlTodoRepositoryPort := anInteger ]
+MySqlTodoRepository class>>database [ ^ MySqlTodoRepositoryDatabase ]
+MySqlTodoRepository class>>database: aString [ MySqlTodoRepositoryDatabase := aString ]
+MySqlTodoRepository class>>user [ ^ MySqlTodoRepositoryUser ]
+MySqlTodoRepository class>>user: aString [ MySqlTodoRepositoryUser := aString ]
+MySqlTodoRepository class>>password [ ^ MySqlTodoRepositoryPassword ]
+MySqlTodoRepository class>>password: aString [ MySqlTodoRepositoryPassword := aString ]
 
-MySqlTodoRepository class>>host: aString [
-    MySqlTodoRepositoryHost := aString
-].
+MySqlTodoRepository class>>connectionString [
+    ^ self host, ":", (self port printString), "/", self database
+]
 
-MySqlTodoRepository class>>port [
-    ^ MySqlTodoRepositoryPort
-].
+MySqlTodoRepository>>initialize [
+    super initialize
+    connection := MysqlConnection open: self class connectionString user: self class user password: self class password
+    connection isConnected ifTrue: [
+        self ensureTableExists
+        self loadFromDatabase
+    ] ifFalse: [
+        System stderr writeline: "MySQL connection failed, using RAM fallback"
+    ]
+]
 
-MySqlTodoRepository class>>port: anInteger [
-    MySqlTodoRepositoryPort := anInteger
-].
+MySqlTodoRepository>>ensureTableExists [
+    | result |
+    connection isNil ifTrue: [ ^ self ]
+    connection isConnected ifFalse: [ ^ self ]
+    connection execute: "CREATE DATABASE IF NOT EXISTS ", self class database
+    connection execute: "USE ", self class database
+    connection execute: "CREATE TABLE IF NOT EXISTS todos (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        completed BOOLEAN DEFAULT FALSE
+    )"
+    result := connection query: "SHOW TABLES LIKE 'todos'"
+    result close
+]
 
-MySqlTodoRepository class>>database [
-    ^ MySqlTodoRepositoryDatabase
-].
+MySqlTodoRepository>>loadFromDatabase [
+    | result row |
+    connection isNil ifTrue: [ ^ self ]
+    connection isConnected ifFalse: [ ^ self ]
+    items clear
+    result := connection query: "SELECT id, title, completed FROM todos ORDER BY id"
+    [row := result next. row notNil] whileTrue: [
+        | todo |
+        todo := TodoItem id: (row at: 0) title: (row at: 1) completed: (row at: 2)
+        items add: todo
+        (todo id) > nextId ifTrue: [ nextId := (todo id) + 1 ]
+    ]
+    result close
+]
 
-MySqlTodoRepository class>>database: aString [
-    MySqlTodoRepositoryDatabase := aString
-].
+MySqlTodoRepository>>addTitle: title [
+    | todo |
+    todo := super addTitle: title
+    todo isNil ifFalse: [
+        connection notNil ifTrue: [
+            connection isConnected ifTrue: [
+                connection execute: "INSERT INTO todos (id, title, completed) VALUES (", (todo id printString), ", '", (self escapeSql: todo title), "', ", (todo completed printString), ")"
+            ]
+        ]
+    ]
+    ^ todo
+]
 
-MySqlTodoRepository class>>user [
-    ^ MySqlTodoRepositoryUser
-].
+MySqlTodoRepository>>toggle: rawId [
+    | todo |
+    todo := super toggle: rawId
+    todo isNil ifFalse: [
+        connection notNil ifTrue: [
+            connection isConnected ifTrue: [
+                connection execute: "UPDATE todos SET completed = ", (todo completed printString), " WHERE id = ", (todo id printString)
+            ]
+        ]
+    ]
+    ^ todo
+]
 
-MySqlTodoRepository class>>user: aString [
-    MySqlTodoRepositoryUser := aString
-].
+MySqlTodoRepository>>delete: rawId [
+    | id |
+    id := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ]
+    connection notNil ifTrue: [
+        connection isConnected ifTrue: [
+            connection execute: "DELETE FROM todos WHERE id = ", (id printString)
+        ]
+    ]
+    ^ super delete: rawId
+]
 
-MySqlTodoRepository class>>password [
-    ^ MySqlTodoRepositoryPassword
-].
-
-MySqlTodoRepository class>>password: aString [
-    MySqlTodoRepositoryPassword := aString
-].
-
-# For now, just use the parent implementation (RAM storage)
-# Full MySQL persistence would require proper library integration
+MySqlTodoRepository>>escapeSql: aString [
+    ^ aString replace: "'" with: "''"
+]

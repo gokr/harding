@@ -221,7 +221,6 @@ TodoApp>>serveForeverOn: aPort [
 TodoApp>>bootOn: aPort with: aServerBlock [
   server isNil ifTrue: [ server := HttpServer new ].
   router isNil ifTrue: [ router := Router new ].
-  repository isNil ifTrue: [ repository := TodoRepository new ].
   port := aPort.
   self installRoutes.
   server router: router.
@@ -247,11 +246,11 @@ TodoApp>>home: req [ ^ TodoApp home: req ].
 TodoApp>>panel: req [ ^ TodoApp panel: req ].
 TodoApp>>templateHome: req [ ^ TodoApp templateHome: req ].
 TodoApp>>templatePanel: req [ ^ TodoApp templatePanel: req ].
-TodoApp>>createTodo: req [ repository addTitle: (req formParam: "title"). ^ self panel: req ].
-TodoApp>>toggleTodo: req [ repository toggle: (req pathParam: "id"). ^ self panel: req ].
-TodoApp>>deleteTodo: req [ repository delete: (req pathParam: "id"). ^ self panel: req ].
-TodoApp>>templateCreateTodo: req [ repository addTitle: (req formParam: "title"). ^ self templatePanel: req ].
-TodoApp>>templateToggleTodo: req [ repository toggle: (req pathParam: "id"). ^ self templatePanel: req ].
-TodoApp>>templateDeleteTodo: req [ repository delete: (req pathParam: "id"). ^ self templatePanel: req ].
+TodoApp>>createTodo: req [ TodoApp repository addTitle: (req formParam: "title"). ^ self panel: req ].
+TodoApp>>toggleTodo: req [ TodoApp repository toggle: (req pathParam: "id"). ^ self panel: req ].
+TodoApp>>deleteTodo: req [ TodoApp repository delete: (req pathParam: "id"). ^ self panel: req ].
+TodoApp>>templateCreateTodo: req [ TodoApp repository addTitle: (req formParam: "title"). ^ self templatePanel: req ].
+TodoApp>>templateToggleTodo: req [ TodoApp repository toggle: (req pathParam: "id"). ^ self templatePanel: req ].
+TodoApp>>templateDeleteTodo: req [ TodoApp repository delete: (req pathParam: "id"). ^ self templatePanel: req ].
 TodoApp>>benchmark: req [ ^ TodoApp benchmark: req ].
 TodoApp>>daisyStylesheet: req [ req respondCss: TodoAppDaisyStylesheet ].

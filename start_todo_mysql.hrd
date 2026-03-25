@@ -1,0 +1,38 @@
+#!/usr/bin/env harding
+#
+# Start the todo server with MySQL backend
+#
+
+# Load required libraries
+Harding load: "lib/mysql/Bootstrap.hrd"
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
+Harding load: "lib/web/todo/Bootstrap.hrd"
+
+# Test MySQL first
+"Testing MySQL..." println
+conn := MysqlConnection open: "127.0.0.1:3306/todo_app" user: "harding" password: "harding123"
+conn isConnected ifTrue: [
+    "MySQL connection OK" println
+] ifFalse: [
+    "MySQL connection failed" println
+]
+conn close
+
+# Configure MySQL connection
+MySqlTodoRepository host: "127.0.0.1"
+MySqlTodoRepository port: 3306
+MySqlTodoRepository database: "todo_app"
+MySqlTodoRepository user: "harding"
+MySqlTodoRepository password: "harding123"
+
+# Enable MySQL backend
+TodoApp useMySql: true
+
+# Test repository
+"Testing repository..." println
+repo := TodoApp repository
+repo class name println
+
+# Start the server
+TodoApp serveForeverOn: 3000
