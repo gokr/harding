@@ -1,7 +1,25 @@
 #!/usr/bin/env harding
 
-# API Todos - Pure json{} literal version
-# Uses native JSON object syntax with #(..) for arrays
+# Plain JSON API example using MummyX + BitBarrel with json{} literals.
+#
+# This version uses native JSON syntax (json{"key": "value", "items": [1, 2, 3]})
+# for JSON structures. json{} literals compile directly to JSON strings and are
+# ideal for simple, static JSON responses. They provide better performance for
+# straightforward structures by avoiding Table construction overhead.
+#
+# Note: Since json{} returns a JSON string directly, we avoid double-encoding
+# by passing it directly to req respond: instead of using Json stringify:.
+# See handleOpenApi: method for an example.
+#
+# For an alternative using Table literals, see api_todos.hrd
+#
+# Requirements:
+#   nimble harding_mummyx
+#   ./harding lib install bitbarrel
+#   nimble harding_mummyx
+#
+# Run:
+#   ./harding examples/api_todos_json.hrd
 
 Harding load: "lib/mummyx/Bootstrap.hrd".
 
@@ -484,7 +502,11 @@ TodoApiApp>>openApiDocument [
 ].
 
 TodoApiApp>>handleOpenApi: req [
-    ^ self respondJson: req status: 200 value: self openApiDocument
+    | jsonString |
+    jsonString := self openApiDocument.
+    ^ req respond: 200
+        headers: #{"Content-Type" -> "application/json"}
+        body: jsonString
 ].
 
 BitBarrelAvailable ifTrue: [

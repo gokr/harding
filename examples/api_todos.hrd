@@ -2,13 +2,20 @@
 
 # Plain JSON API example using MummyX + BitBarrel.
 #
-# Requirements:.
-#   nimble harding_mummyx.
-#   ./harding lib install bitbarrel.
-#   nimble harding_mummyx.
+# This version uses Table literals (#{"key" -> "value"}) for JSON structures.
+# Table literals are good for complex, computed JSON structures as they allow
+# method calls and dynamic construction. The Tables are converted to JSON
+# via Json stringify: when sending responses.
 #
-# Run:.
-#   ./harding examples/api_todos.hrd.
+# For an alternative using native JSON syntax, see api_todos_json.hrd
+#
+# Requirements:
+#   nimble harding_mummyx
+#   ./harding lib install bitbarrel
+#   nimble harding_mummyx
+#
+# Run:
+#   ./harding examples/api_todos.hrd
 
 Harding load: "lib/mummyx/Bootstrap.hrd"
 
