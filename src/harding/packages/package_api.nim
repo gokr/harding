@@ -35,28 +35,45 @@ proc hasPackageSource*(interp: Interpreter, path: string): bool =
   path in interp.packageSources[]
 
 proc rebindDeclarativePrimitives(interp: var Interpreter) =
+  ## Rebind methods with declarative primitive syntax (<primitive ...>) to their
+  ## native implementations after all primitives have been registered.
   if interp.globals == nil:
     return
 
   proc rebindMethodTable(cls: Class, methodTable: var Table[string, BlockNode],
-                         allMethods: Table[string, BlockNode]) =
+                         allMethods: Table[string, BlockNode],
+                         allClassMethods: Table[string, BlockNode]) =
     for selector, meth in methodTable.mpairs:
       discard selector
       if meth == nil or meth.primitiveSelector.len == 0 or meth.nativeImpl != nil:
+        if cls.name == "MysqlConnection":
+          debug("Skipping MysqlConnection>>", selector, " - no primitive or already bound")
         continue
+      # Check both instance and class method tables for the primitive
+      var primMethod: BlockNode = nil
       if meth.primitiveSelector in allMethods:
-        let primMethod = allMethods[meth.primitiveSelector]
-        if primMethod != nil and primMethod.nativeImpl != nil:
-          meth.nativeImpl = primMethod.nativeImpl
-          meth.nativeValueImpl = primMethod.nativeValueImpl
-          meth.hasInterpreterParam = primMethod.hasInterpreterParam
+        primMethod = allMethods[meth.primitiveSelector]
+        debug("Rebinding ", cls.name, ">>", selector, " from allMethods to ", meth.primitiveSelector)
+      elif meth.primitiveSelector in allClassMethods:
+        primMethod = allClassMethods[meth.primitiveSelector]
+        debug("Rebinding ", cls.name, ">>", selector, " from allClassMethods to ", meth.primitiveSelector)
+      else:
+        if cls.name == "MysqlConnection":
+          debug("Could not find primitive for MysqlConnection>>", selector, ": ", meth.primitiveSelector)
+      
+      if primMethod != nil and primMethod.nativeImpl != nil:
+        meth.nativeImpl = primMethod.nativeImpl
+        meth.nativeValueImpl = primMethod.nativeValueImpl
+        meth.hasInterpreterParam = primMethod.hasInterpreterParam
 
   for _, value in interp.globals[].mpairs:
     if value.kind != vkClass or value.classVal == nil:
       continue
     var cls = value.classVal
-    rebindMethodTable(cls, cls.methods, cls.allMethods)
-    rebindMethodTable(cls, cls.classMethods, cls.allClassMethods)
+    if cls.name == "MysqlConnection":
+      debug("Found MysqlConnection class for rebind")
+    rebindMethodTable(cls, cls.methods, cls.allMethods, cls.allClassMethods)
+    rebindMethodTable(cls, cls.classMethods, cls.allMethods, cls.allClassMethods)
 
 proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
   if spec.name.len == 0:
