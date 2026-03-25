@@ -1,8 +1,8 @@
-#!/usr/bin/env harding.
-#.
+#!/usr/bin/env harding
+#
 # Test String withCapacity: and << operator.
 # Tests efficient string building vs non-destructive concatenation.
-#.
+#
 
 passed := 0
 failed := 0
