@@ -280,7 +280,10 @@ This app depends on:
 
 To use MySQL for persistence instead of RAM:
 
-1. Create a MySQL user and database:
+### 1. Create a MySQL user and database
+
+Run these commands (requires sudo):
+
 ```bash
 sudo mysql -e "CREATE USER IF NOT EXISTS 'harding'@'127.0.0.1' IDENTIFIED BY 'harding123'"
 sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'harding'@'127.0.0.1'"
@@ -288,8 +291,24 @@ sudo mysql -e "CREATE DATABASE IF NOT EXISTS todo_app"
 sudo mysql -e "FLUSH PRIVILEGES"
 ```
 
-2. Configure and start:
+### 2. Rebuild Harding with MySQL support
+
+```bash
+nimble harding
+```
+
+This will compile the MySQL library into the Harding binary.
+
+### 3. Start the server with MySQL backend
+
+```bash
+./harding start_todo_mysql.hrd
+```
+
+Or configure manually:
 ```harding
+MySqlTodoRepository host: "127.0.0.1"
+MySqlTodoRepository port: 3306
 MySqlTodoRepository database: "todo_app"
 MySqlTodoRepository user: "harding"
 MySqlTodoRepository password: "harding123"
