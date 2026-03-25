@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
 #
-# Array.hrd - Array class methods
-# Uses primitive selectors registered in vm.nim initGlobals()
+# Array.hrd - Array class methods.
+# Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================
-# Array primitives
-#====================================================================
+#====================================================================.
+# Array primitives.
+#====================================================================.
 
 Array>>size <primitive primitiveArraySize>
 
@@ -22,9 +22,9 @@ Array>>includes: element <primitive primitiveArrayIncludes: element>
 
 Array>>reverse <primitive primitiveArrayReverse>
 
-#====================================================================
-# Array class methods
-#====================================================================
+#====================================================================.
+# Array class methods.
+#====================================================================.
 
 Array class>>new <primitive primitiveArrayNew>
 
@@ -32,48 +32,48 @@ Array class>>new: size <primitive primitiveArrayNew: size>
 
 Array class>>new: size withAll: value <primitive primitiveArrayNew: size withAll: value>
 
-#====================================================================
-# Array iteration
-#====================================================================
+#====================================================================.
+# Array iteration.
+#====================================================================.
 
 Array>>do: block [
     | index |
-    index := 0.
+    index := 0
     [ index < self size ] whileTrue: [
-        block value: (self at: index).
+        block value: (self at: index)
         index := index + 1
-    ].
+    ]
     ^ self
 ]
 
 Array>>join: separator [
     # Join elements as strings with separator
     | result first |
-    result := "".
-    first := true.
+    result := ""
+    first := true
     self do: [:elem |
-        first ifFalse: [ result := result , separator ].
-        result := result , elem printString.
+        first ifFalse: [ result := result , separator ]
+        result := result , elem printString
         first := false
-    ].
+    ]
     ^ result
 ]
 
 Array>>printString [
     | out first |
-    out := "#(".
-    first := true.
+    out := "#("
+    first := true
     self do: [:elem |
-        first ifFalse: [ out := out , " " ].
-        out := out , (elem printString).
+        first ifFalse: [ out := out , " " ]
+        out := out , (elem printString)
         first := false
-    ].
+    ]
     ^ out , ")"
 ]
 
-#====================================================================
-# Array testing
-#====================================================================
+#====================================================================.
+# Array testing.
+#====================================================================.
 
 Array>>isEmpty [
     ^ self size = 0
@@ -86,13 +86,13 @@ Array>>notEmpty [
 Array>>anySatisfy: aBlock [
     # Return true if any element satisfies block
     | i elem matched |
-    i := 0.
-    matched := false.
+    i := 0
+    matched := false
     [ (i < self size) and: [ matched not ] ] whileTrue: [
-        elem := self at: i.
-        (aBlock value: elem) ifTrue: [ matched := true ].
-        i := i + 1.
-    ].
+        elem := self at: i
+        (aBlock value: elem) ifTrue: [ matched := true ]
+        i := i + 1
+    ]
     ^ matched
 ]
 
@@ -100,13 +100,13 @@ Array>>allSatisfy: aBlock [
     # Return true if all elements satisfy block
     self do: [:elem |
         (aBlock value: elem) ifFalse: [ ^ false ]
-    ].
+    ]
     ^ true
 ]
 
-#====================================================================
-# Array element access
-#====================================================================
+#====================================================================.
+# Array element access.
+#====================================================================.
 
 Array>>first [
     # Return first element (0-based indexing)
@@ -121,36 +121,36 @@ Array>>last [
 Array>>indexOf: element [
     # Return 0-based index of element, or nil if not found
     | index size |
-    index := 0.
-    size := self size.
+    index := 0
+    size := self size
     [ index < size ] whileTrue: [
-        (self at: index) = element ifTrue: [ ^ index ].
+        (self at: index) = element ifTrue: [ ^ index ]
         index := index + 1
-    ].
+    ]
     ^ nil
 ]
 
 Array>>withIndexDo: aBlock [
     # Iterate over elements with 0-based index
     | index size |
-    index := 0.
-    size := self size.
+    index := 0
+    size := self size
     [ index < size ] whileTrue: [
-        aBlock value: (self at: index) value: index.
+        aBlock value: (self at: index) value: index
         index := index + 1
-    ].
+    ]
     ^ self
 ]
 
 Array>>copyFrom: startIndex to: endIndex [
     # Return a new Array containing elements from startIndex to endIndex (inclusive, 0-based)
     | result i |
-    result := Array new.
-    i := startIndex.
+    result := Array new
+    i := startIndex
     [ i <= endIndex ] whileTrue: [
-        result add: (self at: i).
+        result add: (self at: i)
         i := i + 1
-    ].
+    ]
     ^ result
 ]
 
@@ -166,16 +166,16 @@ Array>>removeLast [
 
 Array>>addAll: aCollection [
     # Append all elements from another collection
-    aCollection isNil ifTrue: [ ^ self ].
+    aCollection isNil ifTrue: [ ^ self ]
     aCollection do: [:each |
         self add: each
-    ].
+    ]
     ^ self
 ]
 
-#====================================================================
-# Array sorting
-#====================================================================
+#====================================================================.
+# Array sorting.
+#====================================================================.
 
 Array>>sorted [
     # Return a new Array sorted in ascending order
@@ -186,22 +186,22 @@ Array>>sorted: sortBlock [
     # Return a new Array sorted using the provided sort block
     # Uses simple insertion sort for simplicity
     | result size i j temp |
-    result := Array new.
-    self do: [:each | result add: each].
-    size := result size.
+    result := Array new
+    self do: [:each | result add: each]
+    size := result size
 
     # Insertion sort (0-based indexing)
-    i := 1.
+    i := 1
     [ i < size ] whileTrue: [
-        j := i.
+        j := i
         [ j > 0 and: [ sortBlock value: (result at: j) value: (result at: (j - 1)) ] ] whileTrue: [
             # Swap elements
-            temp := result at: j.
-            result at: j put: (result at: (j - 1)).
-            result at: (j - 1) put: temp.
+            temp := result at: j
+            result at: j put: (result at: (j - 1))
+            result at: (j - 1) put: temp
             j := j - 1
-        ].
+        ]
         i := i + 1
-    ].
+    ]
     ^ result
 ]

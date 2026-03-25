@@ -1,77 +1,77 @@
-Component := Object derive: #().
+Component := Object derive: #()
 
 Component>>render [
   self error: "Subclass must implement render"
-].
+]
 
 Component>>renderCacheKey [
   ^ nil
-].
+]
 
 Component>>renderSessionKey [
   ^ nil
-].
+]
 
 Component>>renderFreshInto: buffer [
   | rendered errorOccurred |
-  Html pushRenderContext: self.
-  errorOccurred := false.
+  Html pushRenderContext: self
+  errorOccurred := false
 
   [
-    rendered := self render.
+    rendered := self render
     ((rendered className = "HtmlTemplate") or: [ rendered isKindOf: HtmlTemplate ]) ifTrue: [
       rendered renderInto: buffer with: self
     ] ifFalse: [
       Html appendFragment: rendered to: buffer with: self
     ]
   ] on: Exception do: [:ex |
-    errorOccurred := true.
-    Html popRenderContext.
+    errorOccurred := true
+    Html popRenderContext
     ex pass
-  ].
+  ]
 
-  errorOccurred ifFalse: [ Html popRenderContext ].
+  errorOccurred ifFalse: [ Html popRenderContext ]
   ^ self
-].
+]
 
 Component>>renderInto: buffer [
   | key cache entry parentEntry renderedBuffer errorOccurred |
-  key := self renderCacheKey.
-  key isNil ifTrue: [ ^ self renderFreshInto: buffer ].
+  key := self renderCacheKey
+  key isNil ifTrue: [ ^ self renderFreshInto: buffer ]
 
-  cache := RenderCache current.
-  entry := cache entryForKey: key session: self renderSessionKey.
-  parentEntry := cache currentEntry.
-  parentEntry notNil ifTrue: [ parentEntry addDependencySource: entry ].
+  cache := RenderCache current
+  entry := cache entryForKey: key session: self renderSessionKey
+  parentEntry := cache currentEntry
+  parentEntry notNil ifTrue: [ parentEntry addDependencySource: entry ]
 
   entry valid ifTrue: [
-    buffer << entry cachedOutput.
+    buffer << entry cachedOutput
     ^ self
-  ].
+  ]
 
-  entry clearDependencies.
-  renderedBuffer := String withCapacity: 256.
-  errorOccurred := false.
-  cache pushEntry: entry.
+  entry clearDependencies
+  renderedBuffer := String withCapacity: 256
+  errorOccurred := false
+  cache pushEntry: entry
 
   [
-    self renderFreshInto: renderedBuffer.
-    entry cachedOutput: renderedBuffer.
-    entry markClean.
+    self renderFreshInto: renderedBuffer
+    entry cachedOutput: renderedBuffer
+    entry markClean
   ] on: Exception do: [:ex |
-    errorOccurred := true.
-    cache popEntry.
+    errorOccurred := true
+    cache popEntry
     ex pass
-  ].
+  ]
 
-  errorOccurred ifFalse: [ cache popEntry ].
-  buffer << entry cachedOutput.
+  errorOccurred ifFalse: [ cache popEntry ]
+  buffer << entry cachedOutput
   ^ self
-].
+]
 
 Component>>renderString [
   | buffer |
-  buffer := String withCapacity: 256.
-  self renderInto: buffer.
+  buffer := String withCapacity: 256
+  self renderInto: buffer
   ^ buffer
-].
+]

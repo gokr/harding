@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# SubscriptOutOfBounds.hrd - SubscriptOutOfBounds class
+# SubscriptOutOfBounds.hrd - SubscriptOutOfBounds class.
 
 SubscriptOutOfBounds := Exception derive
 # SubscriptOutOfBounds reports invalid indexed access on arrays and related collections.

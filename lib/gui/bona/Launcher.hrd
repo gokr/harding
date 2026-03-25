@@ -1,226 +1,226 @@
-# ============================================================================
-# IdeLauncher - Main IDE launcher window
-# Note: Launcher class is registered in Nim bridge (extends GtkWindow)
-# We just add Harding methods here
-# ============================================================================
+# ============================================================================.
+# IdeLauncher - Main IDE launcher window.
+# Note: Launcher class is registered in Nim bridge (extends GtkWindow).
+# We just add Harding methods here.
+# ============================================================================.
 
 Launcher class>>open [
   ^ self new openInstance
-].
+]
 
 Launcher>>openInstance [
   | mainBox headerBar |
 
   # Initialize window collection and workspace ID counter
-  windows := #().
-  nextWorkspaceId := 1.
+  windows := #()
+  nextWorkspaceId := 1
 
   # Set up the window
-  self title: "Bonadventure IDE".
-  self setDefaultSize: 800 height: 600.
-  self connectDestroy.
+  self title: "Bonadventure IDE"
+  self setDefaultSize: 800 height: 600
+  self connectDestroy
 
   # Set window icon (works in both GTK3 and GTK4)
-  self iconName: "harding".
+  self iconName: "harding"
 
   # Set WM_CLASS for proper window manager identification (dock/Alt-Tab)
-  self setWmClass: "bona".
+  self setWmClass: "bona"
 
   # Create main layout box (vertical)
-  mainBox := GtkBox vertical.
-  mainBox setSpacing: 0.
-  mainBox marginStart: 5.
-  mainBox marginEnd: 5.
-  mainBox marginTop: 5.
-  mainBox marginBottom: 5.
+  mainBox := GtkBox vertical
+  mainBox setSpacing: 0
+  mainBox marginStart: 5
+  mainBox marginEnd: 5
+  mainBox marginTop: 5
+  mainBox marginBottom: 5
 
   # Create header bar with menu buttons (GTK4 style)
-  headerBar := self createHeaderBar.
+  headerBar := self createHeaderBar
 
   # Add widgets
-  mainBox append: headerBar.
-  self setChild: mainBox.
-  self present.
+  mainBox append: headerBar
+  self setChild: mainBox
+  self present
 
   Transcript showCr: "Bonadventure IDE opened"
-].
+]
 
 Launcher>>createHeaderBar [
   # Create a header bar with menu buttons in a horizontal box
   # GTK4 style: buttons in header area instead of traditional menu bar
   | headerBar workspaceButton terminalButton transcriptButton browserButton builderButton quitButton spacer |
 
-  headerBar := GtkBox horizontal.
-  headerBar setSpacing: 0.
-  headerBar vexpand: false.
+  headerBar := GtkBox horizontal
+  headerBar setSpacing: 0
+  headerBar vexpand: false
 
   # Toolbar buttons with icons
   # Workspace button - text editor icon
-  workspaceButton := GtkButton new.
-  workspaceButton label: "Workspace" iconName: "text-editor".
-  workspaceButton vexpand: false.
-  workspaceButton hexpand: false.
-  workspaceButton clicked: [ self openWorkspace ].
-  workspaceButton tooltip: "Open Workspace (text editor)".
-  headerBar append: workspaceButton.
+  workspaceButton := GtkButton new
+  workspaceButton label: "Workspace" iconName: "text-editor"
+  workspaceButton vexpand: false
+  workspaceButton hexpand: false
+  workspaceButton clicked: [ self openWorkspace ]
+  workspaceButton tooltip: "Open Workspace (text editor)"
+  headerBar append: workspaceButton
 
   # Spacer
-  spacer := GtkLabel new: "  ".
-  headerBar append: spacer.
+  spacer := GtkLabel new: "  "
+  headerBar append: spacer
 
   # Terminal button - shell icon
-  terminalButton := GtkButton new.
-  terminalButton label: "Terminal" iconName: "utilities-terminal".
-  terminalButton vexpand: false.
-  terminalButton hexpand: false.
-  terminalButton clicked: [ self openTerminal ].
-  terminalButton tooltip: "Open Terminal (embedded shell)".
-  headerBar append: terminalButton.
+  terminalButton := GtkButton new
+  terminalButton label: "Terminal" iconName: "utilities-terminal"
+  terminalButton vexpand: false
+  terminalButton hexpand: false
+  terminalButton clicked: [ self openTerminal ]
+  terminalButton tooltip: "Open Terminal (embedded shell)"
+  headerBar append: terminalButton
 
   # Spacer
-  spacer := GtkLabel new: "  ".
-  headerBar append: spacer.
+  spacer := GtkLabel new: "  "
+  headerBar append: spacer
 
   # Transcript button - terminal/info icon  
-  transcriptButton := GtkButton new.
-  transcriptButton label: "Transcript" iconName: "utilities-terminal".
-  transcriptButton vexpand: false.
-  transcriptButton hexpand: false.
-  transcriptButton clicked: [ self openTranscript ].
-  transcriptButton tooltip: "Open Transcript (console output)".
-  headerBar append: transcriptButton.
+  transcriptButton := GtkButton new
+  transcriptButton label: "Transcript" iconName: "utilities-terminal"
+  transcriptButton vexpand: false
+  transcriptButton hexpand: false
+  transcriptButton clicked: [ self openTranscript ]
+  transcriptButton tooltip: "Open Transcript (console output)"
+  headerBar append: transcriptButton
 
   # Spacer
-  spacer := GtkLabel new: "  ".
-  headerBar append: spacer.
+  spacer := GtkLabel new: "  "
+  headerBar append: spacer
 
   # Browser button - search/explore icon
-  browserButton := GtkButton new.
-  browserButton label: "Browser" iconName: "system-search".
-  browserButton vexpand: false.
-  browserButton hexpand: false.
-  browserButton clicked: [ self openBrowser ].
-  browserButton tooltip: "Open Browser (class/method browser)".
-  headerBar append: browserButton.
+  browserButton := GtkButton new
+  browserButton label: "Browser" iconName: "system-search"
+  browserButton vexpand: false
+  browserButton hexpand: false
+  browserButton clicked: [ self openBrowser ]
+  browserButton tooltip: "Open Browser (class/method browser)"
+  headerBar append: browserButton
 
   # Spacer
-  spacer := GtkLabel new: "  ".
-  headerBar append: spacer.
+  spacer := GtkLabel new: "  "
+  headerBar append: spacer
 
   # Builder button - compile/build icon
-  builderButton := GtkButton new.
-  builderButton label: "Builder" iconName: "applications-engineering".
-  builderButton vexpand: false.
-  builderButton hexpand: false.
-  builderButton clicked: [ self openBuilder ].
-  builderButton tooltip: "Open Application Builder (Granite compiler)".
-  headerBar append: builderButton.
+  builderButton := GtkButton new
+  builderButton label: "Builder" iconName: "applications-engineering"
+  builderButton vexpand: false
+  builderButton hexpand: false
+  builderButton clicked: [ self openBuilder ]
+  builderButton tooltip: "Open Application Builder (Granite compiler)"
+  headerBar append: builderButton
 
   # Flexible spacer to push Quit to the right
-  spacer := GtkLabel new: "".
-  spacer vexpand: false.
-  spacer hexpand: true.
-  headerBar append: spacer.
+  spacer := GtkLabel new: ""
+  spacer vexpand: false
+  spacer hexpand: true
+  headerBar append: spacer
 
   # Quit button - exit icon (right side)
-  quitButton := GtkButton new.
-  quitButton label: "Quit" iconName: "application-exit".
-  quitButton vexpand: false.
-  quitButton hexpand: false.
-  quitButton clicked: [ self quit ].
-  quitButton tooltip: "Quit the application".
-  headerBar append: quitButton.
+  quitButton := GtkButton new
+  quitButton label: "Quit" iconName: "application-exit"
+  quitButton vexpand: false
+  quitButton hexpand: false
+  quitButton clicked: [ self quit ]
+  quitButton tooltip: "Quit the application"
+  headerBar append: quitButton
 
-  Transcript showCr: "Created header bar".
+  Transcript showCr: "Created header bar"
   ^ headerBar
-].
+]
 
 
 
 Launcher>>addWindow: aWindow [
-  windows add: aWindow.
-].
+  windows add: aWindow
+]
 
 Launcher>>removeWindow: aWindow [
-  windows := windows reject: [ :w | w == aWindow ].
-].
+  windows := windows reject: [ :w | w == aWindow ]
+]
 
 Launcher>>refreshBrowsers [
   windows do: [:w |
     ([ w class name ] on: Exception do: [ nil ]) = "Browser" ifTrue: [
       [ w refresh ] on: Exception do: [:ex | nil ]
     ]
-  ].
+  ]
   ^ self
-].
+]
 
 Launcher>>nextWorkspaceId [
   # Find the lowest available workspace ID not currently in use
   | usedIds candidate found |
-  usedIds := #().
-  found := nil.
+  usedIds := #()
+  found := nil
   
   # Collect IDs from open windows that are Workspaces by checking class name
   windows do: [ :w |
     (w class name = "Workspace") ifTrue: [
-      usedIds add: w workspaceId.
-    ].
-  ].
+      usedIds add: w workspaceId
+    ]
+  ]
   
   # Find lowest unused ID starting from 1
-  candidate := 1.
+  candidate := 1
   100 timesRepeat: [
     found isNil ifTrue: [
       (usedIds includes: candidate) ifFalse: [
-        found := candidate.
+        found := candidate
       ] ifTrue: [
-        candidate := candidate + 1.
-      ].
-    ].
-  ].
+        candidate := candidate + 1
+      ]
+    ]
+  ]
   
-  found isNil ifTrue: [ found := 1 ].
+  found isNil ifTrue: [ found := 1 ]
   ^ found
-].
+]
 
 Launcher>>openWorkspace [
   | id |
-  id := self nextWorkspaceId.
-  Workspace openFor: self id: id.
+  id := self nextWorkspaceId
+  Workspace openFor: self id: id
   ^ self
-].
+]
 
 Launcher>>openTranscript [
-  Transcript openFor: self.
+  Transcript openFor: self
   ^ self
-].
+]
 
 Launcher>>openTerminal [
-  Transcript showCr: "Opening terminal...".
-  Terminal openFor: self.
+  Transcript showCr: "Opening terminal..."
+  Terminal openFor: self
   ^ self
-].
+]
 
 Launcher>>openBrowser [
-  Transcript showCr: "Opening browser...".
-  Browser openFor: self.
+  Transcript showCr: "Opening browser..."
+  Browser openFor: self
   ^ self
-].
+]
 
 Launcher>>openBuilder [
-  Transcript showCr: "Opening application builder...".
+  Transcript showCr: "Opening application builder..."
   # Debug: Check if Builder class exists
   (Harding includesKey: "Builder") ifFalse: [
-    Transcript showCr: "ERROR: Builder class not found in Harding".
+    Transcript showCr: "ERROR: Builder class not found in Harding"
     ^ self
-  ].
-  Transcript showCr: "Builder class found, opening...".
-  Builder openFor: self.
+  ]
+  Transcript showCr: "Builder class found, opening..."
+  Builder openFor: self
   ^ self
-].
+]
 
 Launcher>>quit [
-  Transcript showCr: "Quitting Bonadventure IDE...".
-  self close.
+  Transcript showCr: "Quitting Bonadventure IDE..."
+  self close
   ^ self
-].
+]

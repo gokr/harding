@@ -1,10 +1,10 @@
-# GTK MenuBar - Container for menu items
-# Note: GtkMenuBar class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK MenuBar - Container for menu items.
+# Note: GtkMenuBar class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create new menu bar)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create new menu bar).
 #
-# Instance methods:
-# - append: (add menu item or button to menu bar)
+# Instance methods:.
+# - append: (add menu item or button to menu bar).

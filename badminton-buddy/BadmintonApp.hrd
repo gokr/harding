@@ -1,44 +1,44 @@
-# Badminton Buddy - Main Application
+# Badminton Buddy - Main Application.
 
-BadmintonApp := Object derivePublic: #(server router data).
-BadmintonAppCurrent := nil.
+BadmintonApp := Object derivePublic: #(server router data)
+BadmintonAppCurrent := nil
 
 BadmintonApp class>>current [
     ^ BadmintonAppCurrent
-].
+]
 
 BadmintonApp class>>start [
     ^ self startOn: 8080
-].
+]
 
 BadmintonApp class>>startOn: aPort [
     | app |
-    BadmintonAppCurrent notNil ifTrue: [ BadmintonAppCurrent stop ].
-    app := self basicNew.
-    app initialize.
-    BadmintonAppCurrent := app.
-    app startOn: aPort.
+    BadmintonAppCurrent notNil ifTrue: [ BadmintonAppCurrent stop ]
+    app := self basicNew
+    app initialize
+    BadmintonAppCurrent := app
+    app startOn: aPort
     ^ app
-].
+]
 
 BadmintonApp class>>stop [
     BadmintonAppCurrent notNil ifTrue: [
-        BadmintonAppCurrent stop.
+        BadmintonAppCurrent stop
         BadmintonAppCurrent := nil
-    ].
+    ]
     ^ nil
-].
+]
 
 BadmintonApp>>initialize [
-    data := Table new.
-    self seedSampleData.
+    data := Table new
+    self seedSampleData
     ^ self
-].
+]
 
 BadmintonApp>>seedSampleData [
     | courts slots bookings partnerRequests users |
     
-    courts := Array new.
+    courts := Array new
     courts add: #{
         #id -> "court1"
         #name -> "Downtown Badminton Center"
@@ -47,7 +47,7 @@ BadmintonApp>>seedSampleData [
         #longitude -> -74.0060
         #amenities -> "6 courts, Parking, Showers, Pro shop"
         #active -> true
-    }.
+    }
     courts add: #{
         #id -> "court2"
         #name -> "Westside Sports Complex"
@@ -56,7 +56,7 @@ BadmintonApp>>seedSampleData [
         #longitude -> -74.0200
         #amenities -> "8 courts, Parking, Cafe, Equipment rental"
         #active -> true
-    }.
+    }
     courts add: #{
         #id -> "court3"
         #name -> "East End Recreation Center"
@@ -65,14 +65,14 @@ BadmintonApp>>seedSampleData [
         #longitude -> -73.9950
         #amenities -> "4 courts, Free parking, Locker rooms"
         #active -> true
-    }.
-    data at: "courts" put: courts.
+    }
+    data at: "courts" put: courts
     
-    slots := Array new.
+    slots := Array new
     #(1 2 3 4 5 6 7) do: [:day |
         #("08:00" "10:00" "12:00" "14:00" "16:00" "18:00" "20:00") do: [:hour |
             | slotId |
-            slotId := "court1" , "_" , (day printString) , "_" , (hour replace: ":" with: "").
+            slotId := "court1" , "_" , (day printString) , "_" , (hour replace: ":" with: "")
             slots add: #{
                 #id -> slotId
                 #courtId -> "court1"
@@ -82,238 +82,238 @@ BadmintonApp>>seedSampleData [
                 #maxPlayers -> 4
             }
         ]
-    ].
-    data at: "slots" put: slots.
+    ]
+    data at: "slots" put: slots
     
-    bookings := Array new.
-    data at: "bookings" put: bookings.
+    bookings := Array new
+    data at: "bookings" put: bookings
     
-    partnerRequests := Array new.
-    data at: "partnerRequests" put: partnerRequests.
+    partnerRequests := Array new
+    data at: "partnerRequests" put: partnerRequests
     
-    users := Table new.
-    data at: "users" put: users.
+    users := Table new
+    data at: "users" put: users
     ^ self
-].
+]
 
 BadmintonApp>>startOn: aPort [
-    server := HttpServer new.
-    router := Router new.
-    self installRoutes.
-    server router: router.
-    "Badminton Buddy starting on port " , (aPort printString) println.
-    "Open http://localhost:" , (aPort printString) , " in your browser" println.
-    server serveForever: aPort.
+    server := HttpServer new
+    router := Router new
+    self installRoutes
+    server router: router
+    "Badminton Buddy starting on port " , (aPort printString) println
+    "Open http://localhost:" , (aPort printString) , " in your browser" println
+    server serveForever: aPort
     ^ self
-].
+]
 
 BadmintonApp>>stop [
-    server notNil ifTrue: [ server stop ].
+    server notNil ifTrue: [ server stop ]
     ^ self
-].
+]
 
 BadmintonApp>>installRoutes [
     # PWA assets
-    router get: "/manifest.json" do: [:req | self handleManifest: req ].
-    router get: "/sw.js" do: [:req | self handleServiceWorker: req ].
-    router get: "/assets/daisyui.css" do: [:req | self handleDaisyStylesheet: req ].
+    router get: "/manifest.json" do: [:req | self handleManifest: req ]
+    router get: "/sw.js" do: [:req | self handleServiceWorker: req ]
+    router get: "/assets/daisyui.css" do: [:req | self handleDaisyStylesheet: req ]
     
     # Main pages
-    router get: "/" do: [:req | self handleHome: req ].
-    router get: "/courts" do: [:req | self handleCourts: req ].
-    router get: "/courts/@id" do: [:req | self handleCourtDetail: req ].
-    router get: "/bookings" do: [:req | self handleBookings: req ].
-    router get: "/partners" do: [:req | self handlePartners: req ].
-    router get: "/recurring" do: [:req | self handleRecurring: req ].
-    router get: "/profile" do: [:req | self handleProfile: req ].
-    router get: "/login" do: [:req | self handleLogin: req ].
+    router get: "/" do: [:req | self handleHome: req ]
+    router get: "/courts" do: [:req | self handleCourts: req ]
+    router get: "/courts/@id" do: [:req | self handleCourtDetail: req ]
+    router get: "/bookings" do: [:req | self handleBookings: req ]
+    router get: "/partners" do: [:req | self handlePartners: req ]
+    router get: "/recurring" do: [:req | self handleRecurring: req ]
+    router get: "/profile" do: [:req | self handleProfile: req ]
+    router get: "/login" do: [:req | self handleLogin: req ]
     
     # API endpoints
-    router get: "/api/courts" do: [:req | self handleApiCourts: req ].
-    router get: "/api/slots" do: [:req | self handleApiSlots: req ].
-    router post: "/api/bookings" do: [:req | self handleApiCreateBooking: req ].
-    router post: "/api/bookings/@id/cancel" do: [:req | self handleApiCancelBooking: req ].
-    router get: "/api/bookings/panel" do: [:req | self handleApiBookingsPanel: req ].
+    router get: "/api/courts" do: [:req | self handleApiCourts: req ]
+    router get: "/api/slots" do: [:req | self handleApiSlots: req ]
+    router post: "/api/bookings" do: [:req | self handleApiCreateBooking: req ]
+    router post: "/api/bookings/@id/cancel" do: [:req | self handleApiCancelBooking: req ]
+    router get: "/api/bookings/panel" do: [:req | self handleApiBookingsPanel: req ]
     
     ^ self
-].
+]
 
 BadmintonApp>>handleHome: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout homePage)
-].
+]
 
 BadmintonApp>>handleLogin: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout loginPage)
-].
+]
 
 BadmintonApp>>handleCourts: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout courtsPage)
-].
+]
 
 BadmintonApp>>handleCourtDetail: req [
     | layout courtId court |
-    courtId := req pathParam: "id".
-    court := self findCourt: courtId.
+    courtId := req pathParam: "id"
+    court := self findCourt: courtId
     court isNil ifTrue: [
         ^ req respond: 404 body: "Court not found"
-    ].
-    layout := BadmintonLayoutComponent user: nil.
+    ]
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout courtDetailPage: court)
-].
+]
 
 BadmintonApp>>handleBookings: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout bookingsPage)
-].
+]
 
 BadmintonApp>>handlePartners: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout partnersPage)
-].
+]
 
 BadmintonApp>>handleRecurring: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout recurringPage)
-].
+]
 
 BadmintonApp>>handleProfile: req [
     | layout |
-    layout := BadmintonLayoutComponent user: nil.
+    layout := BadmintonLayoutComponent user: nil
     req respondHtml: (layout profilePage)
-].
+]
 
 BadmintonApp>>handleManifest: req [
     req respond: 200 headers: #{"Content-Type" -> "application/json"} body: 
     "{\"name\": \"Badminton Buddy\", \"short_name\": \"Badminton\", \"start_url\": \"/\", \"display\": \"standalone\", \"background_color\": \"#ffffff\", \"theme_color\": \"#f97316\"}"
-].
+]
 
 BadmintonApp>>handleServiceWorker: req [
     req respond: 200 headers: #{"Content-Type" -> "application/javascript"} body: 
     "self.addEventListener('install', e => { e.waitUntil(caches.open('v1').then(c => c.addAll(['/','/assets/daisyui.css']))); }); self.addEventListener('fetch', e => { e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))); });"
-].
+]
 
 BadmintonApp>>handleDaisyStylesheet: req [
     req respondCss: (File readAll: "lib/web/daisyui.css")
-].
+]
 
 BadmintonApp>>handleApiCourts: req [
     | courts json |
-    courts := data at: "courts".
-    json := "[".
+    courts := data at: "courts"
+    json := "["
     courts doWithIndex: [:court :idx |
-        idx > 1 ifTrue: [ json := json , "," ].
+        idx > 1 ifTrue: [ json := json , "," ]
         json := json , (self courtToJson: court)
-    ].
-    json := json , "]".
+    ]
+    json := json , "]"
     req respondJson: json
-].
+]
 
 BadmintonApp>>handleApiSlots: req [
     | courtId slots filtered json |
-    courtId := req queryParam: "courtId".
-    slots := data at: "slots".
+    courtId := req queryParam: "courtId"
+    slots := data at: "slots"
     courtId notNil ifTrue: [
         filtered := slots select: [:slot | (slot at: #courtId) = courtId ]
     ] ifFalse: [
         filtered := slots
-    ].
-    json := "[".
+    ]
+    json := "["
     filtered doWithIndex: [:slot :idx |
-        idx > 1 ifTrue: [ json := json , "," ].
+        idx > 1 ifTrue: [ json := json , "," ]
         json := json , (self slotToJson: slot)
-    ].
-    json := json , "]".
+    ]
+    json := json , "]"
     req respondJson: json
-].
+]
 
 BadmintonApp>>handleApiCreateBooking: req [
     | bookings slotId userId booking |
-    bookings := data at: "bookings".
-    slotId := req formParam: "slotId".
-    userId := "user1".
+    bookings := data at: "bookings"
+    slotId := req formParam: "slotId"
+    userId := "user1"
     booking := #{
         #id -> ((DateTime now asUnixTime printString) , "_" , ((Random new nextInt: 1000) printString))
         #slotId -> slotId
         #userId -> userId
         #status -> "confirmed"
         #createdAt -> DateTime now asUnixTime
-    }.
-    bookings add: booking.
+    }
+    bookings add: booking
     req respond: 200 body: "Booking created"
-].
+]
 
 BadmintonApp>>handleApiCancelBooking: req [
     | bookingId bookings |
-    bookingId := req pathParam: "id".
-    bookings := data at: "bookings".
-    bookings := bookings reject: [:b | (b at: #id) = bookingId ].
-    data at: "bookings" put: bookings.
+    bookingId := req pathParam: "id"
+    bookings := data at: "bookings"
+    bookings := bookings reject: [:b | (b at: #id) = bookingId ]
+    data at: "bookings" put: bookings
     req respond: 200 body: "Cancelled"
-].
+]
 
 BadmintonApp>>handleApiBookingsPanel: req [
     | bookings html userId |
-    bookings := data at: "bookings".
-    userId := "user1".
-    bookings := bookings select: [:b | (b at: #userId) = userId ].
+    bookings := data at: "bookings"
+    userId := "user1"
+    bookings := bookings select: [:b | (b at: #userId) = userId ]
     
     bookings isEmpty ifTrue: [
         ^ req respondHtml: "<div class=\"alert alert-info\">No bookings yet. <a href=\"/courts\" class=\"link\">Book a court</a>!</div>"
-    ].
+    ]
     
-    html := "<div class=\"space-y-4\">".
+    html := "<div class=\"space-y-4\">"
     bookings do: [:booking |
         html := html , "<div class=\"card bg-base-100 shadow-md\"><div class=\"card-body\"><h3 class=\"card-title\">Booking " , ((booking at: #id) copyFrom: 1 to: 8) , "</h3><p>Slot: " , (booking at: #slotId) , "</p><div class=\"card-actions justify-end\"><button class=\"btn btn-sm btn-error\" hx-post=\"/api/bookings/" , (booking at: #id) , "/cancel\" hx-target=\"closest .card\" hx-swap=\"outerHTML\">Cancel</button></div></div></div>"
-    ].
-    html := html , "</div>".
+    ]
+    html := html , "</div>"
     req respondHtml: html
-].
+]
 
 BadmintonApp>>findCourt: courtId [
     | courts |
-    courts := data at: "courts".
+    courts := data at: "courts"
     courts do: [:court |
         (court at: #id) = courtId ifTrue: [ ^ court ]
-    ].
+    ]
     ^ nil
-].
+]
 
 BadmintonApp>>courtToJson: court [
     | json |
-    json := "{".
-    json := json , "\"id\":\"" , (court at: #id) , "\",".
-    json := json , "\"name\":\"" , (court at: #name) , "\",".
-    json := json , "\"location\":\"" , (court at: #location) , "\",".
-    json := json , "\"amenities\":\"" , (court at: #amenities) , "\"".
-    json := json , "}".
+    json := "{"
+    json := json , "\"id\":\"" , (court at: #id) , "\","
+    json := json , "\"name\":\"" , (court at: #name) , "\","
+    json := json , "\"location\":\"" , (court at: #location) , "\","
+    json := json , "\"amenities\":\"" , (court at: #amenities) , "\""
+    json := json , "}"
     ^ json
-].
+]
 
 BadmintonApp>>slotToJson: slot [
     | dayName json |
-    (slot at: #dayOfWeek) = 1 ifTrue: [ dayName := "Monday" ].
-    (slot at: #dayOfWeek) = 2 ifTrue: [ dayName := "Tuesday" ].
-    (slot at: #dayOfWeek) = 3 ifTrue: [ dayName := "Wednesday" ].
-    (slot at: #dayOfWeek) = 4 ifTrue: [ dayName := "Thursday" ].
-    (slot at: #dayOfWeek) = 5 ifTrue: [ dayName := "Friday" ].
-    (slot at: #dayOfWeek) = 6 ifTrue: [ dayName := "Saturday" ].
-    (slot at: #dayOfWeek) = 7 ifTrue: [ dayName := "Sunday" ].
+    (slot at: #dayOfWeek) = 1 ifTrue: [ dayName := "Monday" ]
+    (slot at: #dayOfWeek) = 2 ifTrue: [ dayName := "Tuesday" ]
+    (slot at: #dayOfWeek) = 3 ifTrue: [ dayName := "Wednesday" ]
+    (slot at: #dayOfWeek) = 4 ifTrue: [ dayName := "Thursday" ]
+    (slot at: #dayOfWeek) = 5 ifTrue: [ dayName := "Friday" ]
+    (slot at: #dayOfWeek) = 6 ifTrue: [ dayName := "Saturday" ]
+    (slot at: #dayOfWeek) = 7 ifTrue: [ dayName := "Sunday" ]
     
-    json := "{".
-    json := json , "\"id\":\"" , (slot at: #id) , "\",".
-    json := json , "\"courtId\":\"" , (slot at: #courtId) , "\",".
-    json := json , "\"dayName\":\"" , dayName , "\",".
-    json := json , "\"startTime\":\"" , (slot at: #startTime) , "\",".
-    json := json , "\"duration\":" , ((slot at: #duration) printString).
-    json := json , "}".
+    json := "{"
+    json := json , "\"id\":\"" , (slot at: #id) , "\","
+    json := json , "\"courtId\":\"" , (slot at: #courtId) , "\","
+    json := json , "\"dayName\":\"" , dayName , "\","
+    json := json , "\"startTime\":\"" , (slot at: #startTime) , "\","
+    json := json , "\"duration\":" , ((slot at: #duration) printString)
+    json := json , "}"
     ^ json
-].
+]

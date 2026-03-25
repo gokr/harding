@@ -1,51 +1,51 @@
-# GTK SourceView - Source code editor widget with syntax highlighting
-# Note: GtkSourceView class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK SourceView - Source code editor widget with syntax highlighting.
+# Note: GtkSourceView class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create new source view with Harding syntax highlighting)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create new source view with Harding syntax highlighting).
 #
-# Instance methods:
-# - getText (get all text, returns string)
-# - setText: (set text in the view)
-# - getSelectedText (get selected text or current line, returns string)
-# - showLineNumbers: (show/hide line numbers)
-# - setTabWidth: (set tab width in spaces)
+# Instance methods:.
+# - getText (get all text, returns string).
+# - setText: (set text in the view).
+# - getSelectedText (get selected text or current line, returns string).
+# - showLineNumbers: (show/hide line numbers).
+# - setTabWidth: (set tab width in spaces).
 
-# Convenience accessors
+# Convenience accessors.
 GtkSourceView>>text [
     ^self getText
-].
+]
 
 GtkSourceView>>text: aString [
     self setText: aString
-].
+]
 
 GtkSourceView>>selectedText [
     ^self getSelectedText
-].
+]
 
-# Signal conveniences
+# Signal conveniences.
 GtkSourceView>>onChanged: aBlock [
     # Connect to buffer's changed signal
     | buf |
-    buf := self buffer.
+    buf := self buffer
     buf notNil ifTrue: [ buf connect: "changed" do: aBlock ]
-].
+]
 
 GtkSourceView>>onTextChanged: aBlock [
     # Alias for onChanged:
     self onChanged: aBlock
-].
+]
 
-# Buffer access (inherits from GtkTextView)
+# Buffer access (inherits from GtkTextView).
 GtkSourceView>>buffer [
     ^self getBuffer
-].
+]
 
-# Text insertion convenience methods
-# GtkSourceView>>insertTextAtEnd: aString [
+# Text insertion convenience methods.
+# GtkSourceView>>insertTextAtEnd: aString [.
     # Insert text at the current cursor position
 #    self insertTextAtSelectedEnd: aString.
 #].

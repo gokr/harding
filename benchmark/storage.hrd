@@ -1,11 +1,11 @@
 #!/usr/bin/env harding
-# Storage/Tree Benchmark
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: 5461 nodes for tree depth 7
+# Storage/Tree Benchmark.
+# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
+# Expected result: 5461 nodes for tree depth 7.
 #
 # This benchmark creates a tree structure and counts node visits.
 
-SomRandom := Object derivePublic: #(seed).
+SomRandom := Object derivePublic: #(seed)
 # SomRandom supports the benchmark suite for runtime performance measurement.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -24,8 +24,8 @@ SomRandom>>initialize [
 
 SomRandom>>next [
   | newSeed |
-  newSeed := (seed * 16807) % 2147483647.
-  seed := newSeed.
+  newSeed := (seed * 16807) % 2147483647
+  seed := newSeed
   ^ newSeed
 ]
 
@@ -33,7 +33,7 @@ SomRandom>>next: max [
   ^ (self next) % max
 ]
 
-Storage := Object derivePublic: #(count).
+Storage := Object derivePublic: #(count)
 
 Storage>>initialize [
   count := 0
@@ -41,9 +41,9 @@ Storage>>initialize [
 
 Storage>>benchmark [
   | random |
-  count := 0.
-  random := SomRandom new.
-  self buildTreeDepth: 7 with: random.
+  count := 0
+  random := SomRandom new
+  self buildTreeDepth: 7 with: random
   ^ count
 ]
 
@@ -52,21 +52,21 @@ Storage>>verifyResult: result [
 ]
 
 Storage>>buildTreeDepth: depth with: random [
-  count := (count + 1).
+  count := (count + 1)
   depth = 0 ifTrue: [
     ^ Array new: ((random next) % 10 + 1) withAll: 0
   ] ifFalse: [
     | arr |
-    arr := Array new: 4.
+    arr := Array new: 4
     1 to: 4 do: [:i |
       arr at: i put: (self buildTreeDepth: (depth - 1) with: random)
-    ].
+    ]
     ^ arr
   ]
 ]
 
-# Run the benchmark
-storage := Storage new.
-result := storage benchmark.
+# Run the benchmark.
+storage := Storage new
+result := storage benchmark
 
 result

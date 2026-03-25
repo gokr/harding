@@ -2,10 +2,10 @@
 #
 # Test method conflict resolution with ordered multiple inheritance.
 #
-# This example demonstrates:
-# 1. Animal has a greet method
-# 2. Pet has the SAME greet method
-# 3. Dog defines greet locally, which still wins over inherited parents
+# This example demonstrates:.
+# 1. Animal has a greet method.
+# 2. Pet has the SAME greet method.
+# 3. Dog defines greet locally, which still wins over inherited parents.
 
 Harding compile: [
     # Base class with a greet method

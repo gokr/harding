@@ -1,89 +1,89 @@
-# ==========================================================================
-# BonaMCP - NimCP-backed MCP server for live Bona and Harding access
-# ==========================================================================
+# ==========================================================================.
+# BonaMCP - NimCP-backed MCP server for live Bona and Harding access.
+# ==========================================================================.
 
-BonaMCP := Object derive: #(server catalog).
+BonaMCP := Object derive: #(server catalog)
 
 BonaMCP>>initialize [
-    server := nil.
-    catalog := Catalog new.
+    server := nil
+    catalog := Catalog new
     ^ self
-].
+]
 
 BonaMCP>>jsonOk: aValue [
     | response |
-    response := Table new.
-    response at: "ok" put: true.
-    response at: "result" put: aValue.
+    response := Table new
+    response at: "ok" put: true
+    response at: "result" put: aValue
     ^ Json stringify: response
-].
+]
 
 BonaMCP>>jsonError: aMessage [
     | response |
-    response := Table new.
-    response at: "ok" put: false.
-    response at: "error" put: aMessage asString.
+    response := Table new
+    response at: "ok" put: false
+    response at: "error" put: aMessage asString
     ^ Json stringify: response
-].
+]
 
 BonaMCP>>stringProperty: aDescription [
     | property |
-    property := Table new.
-    property at: "type" put: "string".
-    property at: "description" put: aDescription.
+    property := Table new
+    property at: "type" put: "string"
+    property at: "description" put: aDescription
     ^ property
-].
+]
 
 BonaMCP>>integerProperty: aDescription [
     | property |
-    property := Table new.
-    property at: "type" put: "integer".
-    property at: "description" put: aDescription.
+    property := Table new
+    property at: "type" put: "integer"
+    property at: "description" put: aDescription
     ^ property
-].
+]
 
 BonaMCP>>schemaWithRequired: requiredFields properties: propertyTable [
     | schema required index |
-    schema := Table new.
-    schema at: "type" put: "object".
-    schema at: "properties" put: propertyTable.
+    schema := Table new
+    schema at: "type" put: "object"
+    schema at: "properties" put: propertyTable
 
-    required := Array new.
-    index := 0.
+    required := Array new
+    index := 0
     [ index < requiredFields size ] whileTrue: [
-        required add: (requiredFields at: index).
+        required add: (requiredFields at: index)
         index := index + 1
-    ].
+    ]
 
     required isEmpty ifFalse: [
         schema at: "required" put: required
-    ].
+    ]
 
     ^ Json stringify: schema
-].
+]
 
 BonaMCP>>stringArgAt: aKey in: args default: defaultValue [
     | value |
     (args isNil or: [ (args isKindOf: Table) not ]) ifTrue: [
         ^ defaultValue
-    ].
+    ]
 
-    value := args at: aKey ifAbsent: [ defaultValue ].
-    value isNil ifTrue: [ ^ defaultValue ].
+    value := args at: aKey ifAbsent: [ defaultValue ]
+    value isNil ifTrue: [ ^ defaultValue ]
     ^ value asString
-].
+]
 
 BonaMCP>>integerArgAt: aKey in: args default: defaultValue [
     | value |
     (args isNil or: [ (args isKindOf: Table) not ]) ifTrue: [
         ^ defaultValue
-    ].
+    ]
 
-    value := args at: aKey ifAbsent: [ defaultValue ].
-    (value isKindOf: Integer) ifTrue: [ ^ value ].
-    (value isKindOf: String) ifTrue: [ ^ value asInteger ].
+    value := args at: aKey ifAbsent: [ defaultValue ]
+    (value isKindOf: Integer) ifTrue: [ ^ value ]
+    (value isKindOf: String) ifTrue: [ ^ value asInteger ]
     ^ defaultValue
-].
+]
 
 BonaMCP>>isErrorResult: result [
     ^ (result isKindOf: String)
@@ -97,297 +97,297 @@ BonaMCP>>isErrorResult: result [
                         ]
                 ]
         ]
-].
+]
 
 BonaMCP>>printableResultFor: anObject [
-    anObject isNil ifTrue: [ ^ "nil" ].
+    anObject isNil ifTrue: [ ^ "nil" ]
     (anObject isClass) ifTrue: [
         ^ "<class " , anObject name , ">"
-    ].
+    ]
     ^ anObject printString
-].
+]
 
 BonaMCP>>linesToText: lines [
     | out first |
-    out := "".
-    first := true.
+    out := ""
+    first := true
 
     lines do: [:line |
-        first ifFalse: [ out := out , "\n" ].
-        out := out , line asString.
+        first ifFalse: [ out := out , "\n" ]
+        out := out , line asString
         first := false
-    ].
+    ]
 
     ^ out
-].
+]
 
 BonaMCP>>tailLinesFrom: text count: count [
     | allLines start index result safeCount |
-    result := Array new.
-    text isNil ifTrue: [ ^ result ].
-    text isEmpty ifTrue: [ ^ result ].
+    result := Array new
+    text isNil ifTrue: [ ^ result ]
+    text isEmpty ifTrue: [ ^ result ]
 
-    safeCount := count.
-    safeCount < 1 ifTrue: [ safeCount := 1 ].
+    safeCount := count
+    safeCount < 1 ifTrue: [ safeCount := 1 ]
 
-    allLines := text split: "\n".
-    start := allLines size - safeCount.
-    start < 0 ifTrue: [ start := 0 ].
+    allLines := text split: "\n"
+    start := allLines size - safeCount
+    start < 0 ifTrue: [ start := 0 ]
 
-    index := start.
+    index := start
     [ index < allLines size ] whileTrue: [
-        result add: (allLines at: index).
+        result add: (allLines at: index)
         index := index + 1
-    ].
+    ]
 
     ^ result
-].
+]
 
 BonaMCP>>toolPing: args [
     | payload |
-    payload := Table new.
-    payload at: "message" put: "pong".
+    payload := Table new
+    payload at: "message" put: "pong"
     server notNil ifTrue: [
-        payload at: "name" put: server name.
+        payload at: "name" put: server name
         payload at: "url" put: server url
-    ].
+    ]
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolEval: args [
     | code result payload |
-    code := self stringArgAt: "code" in: args default: "".
+    code := self stringArgAt: "code" in: args default: ""
     code isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: code"
-    ].
+    ]
 
     result := [ Object eval: code ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ].
+        do: [:ex | "IDE_ERROR: " , ex printString ]
 
     (self isErrorResult: result) ifTrue: [
         ^ self jsonError: result
-    ].
+    ]
 
-    payload := Table new.
-    payload at: "printString" put: (self printableResultFor: result).
+    payload := Table new
+    payload at: "printString" put: (self printableResultFor: result)
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolTranscriptTail: args [
     | count lines payload |
-    count := self integerArgAt: "lines" in: args default: 40.
-    lines := self tailLinesFrom: Transcript contents count: count.
+    count := self integerArgAt: "lines" in: args default: 40
+    lines := self tailLinesFrom: Transcript contents count: count
 
-    payload := Table new.
-    payload at: "lines" put: lines.
-    payload at: "text" put: (self linesToText: lines).
+    payload := Table new
+    payload at: "lines" put: lines
+    payload at: "text" put: (self linesToText: lines)
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolListLibraries: args [
     | payload |
-    payload := Table new.
-    payload at: "libraries" put: catalog allLibraryNames.
+    payload := Table new
+    payload at: "libraries" put: catalog allLibraryNames
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolListClasses: args [
     | libraryName payload |
-    libraryName := self stringArgAt: "library" in: args default: "".
+    libraryName := self stringArgAt: "library" in: args default: ""
     libraryName isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: library"
-    ].
+    ]
 
-    payload := Table new.
-    payload at: "library" put: libraryName.
-    payload at: "classes" put: (catalog classNamesForLibrary: libraryName).
+    payload := Table new
+    payload at: "library" put: libraryName
+    payload at: "classes" put: (catalog classNamesForLibrary: libraryName)
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolListMethods: args [
     | className libraryName category payload |
-    className := self stringArgAt: "className" in: args default: "".
-    libraryName := self stringArgAt: "library" in: args default: nil.
-    category := self stringArgAt: "category" in: args default: "all".
+    className := self stringArgAt: "className" in: args default: ""
+    libraryName := self stringArgAt: "library" in: args default: nil
+    category := self stringArgAt: "category" in: args default: "all"
 
     className isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: className"
-    ].
+    ]
 
-    payload := Table new.
-    payload at: "className" put: className.
-    payload at: "category" put: category.
-    payload at: "methods" put: (catalog methodNamesForClass: className category: category currentLibrary: libraryName).
+    payload := Table new
+    payload at: "className" put: className
+    payload at: "category" put: category
+    payload at: "methods" put: (catalog methodNamesForClass: className category: category currentLibrary: libraryName)
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolGetMethodSource: args [
     | className selector info found payload |
-    className := self stringArgAt: "className" in: args default: "".
-    selector := self stringArgAt: "selector" in: args default: "".
+    className := self stringArgAt: "className" in: args default: ""
+    selector := self stringArgAt: "selector" in: args default: ""
 
     className isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: className"
-    ].
+    ]
     selector isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: selector"
-    ].
+    ]
 
-    info := catalog methodSourceInfoForClass: className selector: selector.
-    found := info at: "found" ifAbsent: [ false ].
+    info := catalog methodSourceInfoForClass: className selector: selector
+    found := info at: "found" ifAbsent: [ false ]
     found ifFalse: [
         ^ self jsonError: ("Method source not found for " , className , ">>" , selector)
-    ].
+    ]
 
-    payload := Table new.
-    payload at: "className" put: className.
-    payload at: "selector" put: selector.
-    payload at: "ownerClass" put: (info at: "ownerClass" ifAbsent: [ className ]).
-    payload at: "file" put: (info at: "file" ifAbsent: [ nil ]).
-    payload at: "source" put: (catalog methodTextFromInfo: info).
+    payload := Table new
+    payload at: "className" put: className
+    payload at: "selector" put: selector
+    payload at: "ownerClass" put: (info at: "ownerClass" ifAbsent: [ className ])
+    payload at: "file" put: (info at: "file" ifAbsent: [ nil ])
+    payload at: "source" put: (catalog methodTextFromInfo: info)
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>toolLoadFile: args [
     | path result payload |
-    path := self stringArgAt: "path" in: args default: "".
+    path := self stringArgAt: "path" in: args default: ""
     path isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: path"
-    ].
+    ]
 
     (File exists: path) ifFalse: [
         ^ self jsonError: ("File not found: " , path)
-    ].
+    ]
 
     result := [ Harding load: path ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ].
+        do: [:ex | "IDE_ERROR: " , ex printString ]
 
     (self isErrorResult: result) ifTrue: [
         ^ self jsonError: result
-    ].
+    ]
 
-    payload := Table new.
-    payload at: "path" put: path.
-    payload at: "status" put: "loaded".
+    payload := Table new
+    payload at: "path" put: path
+    payload at: "status" put: "loaded"
     ^ self jsonOk: payload
-].
+]
 
 BonaMCP>>registerDefaultToolsOn: aServer [
     | properties |
 
     aServer toolNamed: "bona_ping"
         description: "Check that the live Bona MCP server is reachable"
-        do: [:args | self toolPing: args ].
+        do: [:args | self toolPing: args ]
 
-    properties := Table new.
-    properties at: "code" put: (self stringProperty: "Harding code to evaluate in the live image").
+    properties := Table new
+    properties at: "code" put: (self stringProperty: "Harding code to evaluate in the live image")
     aServer toolNamed: "bona_eval"
         description: "Evaluate Harding code in the live Bona image and return a JSON result"
         schema: (self schemaWithRequired: #("code") properties: properties)
-        do: [:args | self toolEval: args ].
+        do: [:args | self toolEval: args ]
 
-    properties := Table new.
-    properties at: "lines" put: (self integerProperty: "Number of transcript lines to return").
+    properties := Table new
+    properties at: "lines" put: (self integerProperty: "Number of transcript lines to return")
     aServer toolNamed: "bona_transcript_tail"
         description: "Return the last lines from the Bona transcript as JSON"
         schema: (self schemaWithRequired: #() properties: properties)
-        do: [:args | self toolTranscriptTail: args ].
+        do: [:args | self toolTranscriptTail: args ]
 
     aServer toolNamed: "bona_list_libraries"
         description: "List libraries known to the live Bona image"
-        do: [:args | self toolListLibraries: args ].
+        do: [:args | self toolListLibraries: args ]
 
-    properties := Table new.
-    properties at: "library" put: (self stringProperty: "Library name to inspect").
+    properties := Table new
+    properties at: "library" put: (self stringProperty: "Library name to inspect")
     aServer toolNamed: "bona_list_classes"
         description: "List classes for a library in the live Bona image"
         schema: (self schemaWithRequired: #("library") properties: properties)
-        do: [:args | self toolListClasses: args ].
+        do: [:args | self toolListClasses: args ]
 
-    properties := Table new.
-    properties at: "className" put: (self stringProperty: "Class name to inspect").
-    properties at: "library" put: (self stringProperty: "Optional library hint for resolving the class").
-    properties at: "category" put: (self stringProperty: "Method category: all, defined, inherited, or class").
+    properties := Table new
+    properties at: "className" put: (self stringProperty: "Class name to inspect")
+    properties at: "library" put: (self stringProperty: "Optional library hint for resolving the class")
+    properties at: "category" put: (self stringProperty: "Method category: all, defined, inherited, or class")
     aServer toolNamed: "bona_list_methods"
         description: "List methods for a class in the live Bona image"
         schema: (self schemaWithRequired: #("className") properties: properties)
-        do: [:args | self toolListMethods: args ].
+        do: [:args | self toolListMethods: args ]
 
-    properties := Table new.
-    properties at: "className" put: (self stringProperty: "Class name owning the method").
-    properties at: "selector" put: (self stringProperty: "Method selector to retrieve").
+    properties := Table new
+    properties at: "className" put: (self stringProperty: "Class name owning the method")
+    properties at: "selector" put: (self stringProperty: "Method selector to retrieve")
     aServer toolNamed: "bona_get_method_source"
         description: "Return method source and file metadata for a class selector"
         schema: (self schemaWithRequired: #("className" "selector") properties: properties)
-        do: [:args | self toolGetMethodSource: args ].
+        do: [:args | self toolGetMethodSource: args ]
 
-    properties := Table new.
-    properties at: "path" put: (self stringProperty: "Workspace-relative or absolute Harding source file to load").
+    properties := Table new
+    properties at: "path" put: (self stringProperty: "Workspace-relative or absolute Harding source file to load")
     aServer toolNamed: "bona_load_file"
         description: "Load a Harding source file into the live Bona image"
         schema: (self schemaWithRequired: #("path") properties: properties)
-        do: [:args | self toolLoadFile: args ].
+        do: [:args | self toolLoadFile: args ]
 
     ^ aServer
-].
+]
 
 BonaMCP>>startOn: aPort host: aHost [
     (server notNil and: [ server isRunning ]) ifTrue: [
         ^ server
-    ].
+    ]
 
-    server := NimCP bonaDefault.
-    self registerDefaultToolsOn: server.
-    server listenOn: aPort host: aHost.
-    Transcript showCr: ("Bona MCP listening on " , server url).
+    server := NimCP bonaDefault
+    self registerDefaultToolsOn: server
+    server listenOn: aPort host: aHost
+    Transcript showCr: ("Bona MCP listening on " , server url)
     ^ server
-].
+]
 
 BonaMCP>>startOn: aPort [
     ^ self startOn: aPort host: "127.0.0.1"
-].
+]
 
 BonaMCP>>startDefault [
     ^ self startOn: 8765
-].
+]
 
 BonaMCP>>stop [
     server notNil ifTrue: [
-        server stop.
+        server stop
         Transcript showCr: "Bona MCP stopped"
-    ].
+    ]
     ^ self
-].
+]
 
 BonaMCP>>server [
     ^ server
-].
+]
 
-CurrentBonaMCP := BonaMCP new.
-CurrentBonaMCP initialize.
+CurrentBonaMCP := BonaMCP new
+CurrentBonaMCP initialize
 
 BonaMCP class>>current [
     ^ CurrentBonaMCP
-].
+]
 
 BonaMCP class>>startDefault [
     ^ self current startDefault
-].
+]
 
 BonaMCP class>>startOn: aPort [
     ^ self current startOn: aPort
-].
+]
 
 BonaMCP class>>startOn: aPort host: aHost [
     ^ self current startOn: aPort host: aHost
-].
+]
 
 BonaMCP class>>stop [
     ^ self current stop
-].
+]
 
 BonaMCP class>>server [
     ^ self current server
-].
+]

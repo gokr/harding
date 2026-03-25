@@ -1,9 +1,9 @@
 #!/usr/bin/env harding
-# Towers of Hanoi Benchmark
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: true (successful move of 13 disks)
+# Towers of Hanoi Benchmark.
+# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
+# Expected result: true (successful move of 13 disks).
 
-TowersDisk := Object derivePublic: #(diskSize nextDisk).
+TowersDisk := Object derivePublic: #(diskSize nextDisk)
 # TowersDisk supports the benchmark suite for runtime performance measurement.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -17,57 +17,57 @@ TowersDisk := Object derivePublic: #(diskSize nextDisk).
 
 
 TowersDisk>>initialize: aSize [
-  diskSize := aSize.
+  diskSize := aSize
   nextDisk := nil
 ]
 
 TowersDisk>>size [ ^ diskSize ]
 
-# Tower class manages a peg with a stack of disks
-Tower := Object derivePublic: #(towerIndex heldDisk).
+# Tower class manages a peg with a stack of disks.
+Tower := Object derivePublic: #(towerIndex heldDisk)
 
 Tower>>initialize: anIndex [
-  towerIndex := anIndex.
+  towerIndex := anIndex
   heldDisk := nil
 ]
 
 Tower>>initialize: anIndex withDisks: numDisks [
-  towerIndex := anIndex.
-  heldDisk := nil.
+  towerIndex := anIndex
+  heldDisk := nil
   self addDisks: numDisks
 ]
 
 Tower>>addDisks: numDisks [
   | i disk |
-  i := numDisks.
+  i := numDisks
   [ i >= 1 ] whileTrue: [
-    disk := TowersDisk new.
-    disk initialize: i.
-    self addDisk: disk.
+    disk := TowersDisk new
+    disk initialize: i
+    self addDisk: disk
     i := i - 1
   ]
 ]
 
 Tower>>addDisk: disk [
   disk notNil ifTrue: [
-    disk::nextDisk := heldDisk.
+    disk::nextDisk := heldDisk
     heldDisk := disk
   ]
 ]
 
 Tower>>removeDisk [
   | disk nextDiskRef |
-  disk := heldDisk.
+  disk := heldDisk
   disk notNil ifTrue: [
-    nextDiskRef := disk::nextDisk.
+    nextDiskRef := disk::nextDisk
     heldDisk := nextDiskRef
-  ].
+  ]
   ^ disk
 ]
 
 Tower>>moveDiskTo: destination [
   | disk |
-  disk := self removeDisk.
+  disk := self removeDisk
   disk notNil ifTrue: [
     destination addDisk: disk
   ]
@@ -77,52 +77,52 @@ Tower>>moveTo: destination using: helper disks: numDisks [
   numDisks = 1 ifTrue: [
     self moveDiskTo: destination
   ] ifFalse: [
-    self moveTo: helper using: destination disks: (numDisks - 1).
-    self moveDiskTo: destination.
+    self moveTo: helper using: destination disks: (numDisks - 1)
+    self moveDiskTo: destination
     helper moveTo: destination using: self disks: (numDisks - 1)
   ]
 ]
 
 Tower>>verify: expectedDisks [
   | current count expectedSize dsize |
-  current := heldDisk.
-  count := 0.
-  expectedSize := 1.
+  current := heldDisk
+  count := 0
+  expectedSize := 1
   
   [ current notNil ] whileTrue: [
-    dsize := current size.
+    dsize := current size
     dsize = expectedSize ifFalse: [
       ^ false
-    ].
-    count := count + 1.
-    expectedSize := expectedSize + 1.
+    ]
+    count := count + 1
+    expectedSize := expectedSize + 1
     current := current::nextDisk
-  ].
+  ]
   
   ^ count = expectedDisks
 ]
 
-# Main Towers benchmark class
-Towers := Object derive.
+# Main Towers benchmark class.
+Towers := Object derive
 
 Towers>>benchmark [
   | tower0 tower1 tower2 |
-  tower0 := Tower new.
-  tower0 initialize: 0 withDisks: 13.
+  tower0 := Tower new
+  tower0 initialize: 0 withDisks: 13
   
-  tower1 := Tower new.
-  tower1 initialize: 1.
+  tower1 := Tower new
+  tower1 initialize: 1
   
-  tower2 := Tower new.
-  tower2 initialize: 2.
+  tower2 := Tower new
+  tower2 initialize: 2
   
-  tower0 moveTo: tower2 using: tower1 disks: 13.
+  tower0 moveTo: tower2 using: tower1 disks: 13
   
   ^ tower2 verify: 13
 ]
 
-# Run the benchmark
-towers := Towers new.
-result := towers benchmark.
+# Run the benchmark.
+towers := Towers new
+result := towers benchmark
 
 result

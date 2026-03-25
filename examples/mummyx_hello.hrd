@@ -1,59 +1,59 @@
-# MummyX Hello World - Simple HTTP server example
-# Build: nimble harding_mummyx
-# Run:   ./harding examples/mummyx_hello.hrd
-# Test:  curl http://localhost:8080/
+# MummyX Hello World - Simple HTTP server example.
+# Build: nimble harding_mummyx.
+# Run:   ./harding examples/mummyx_hello.hrd.
+# Test:  curl http://localhost:8080/.
 
-Harding load: "lib/mummyx/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
 
-Server := HttpServer new.
-Router := Router new.
-ActiveRequests := 0.
-MaxConcurrentRequests := 0.
+Server := HttpServer new
+Router := Router new
+ActiveRequests := 0
+MaxConcurrentRequests := 0
 
 Router get: "/" do: [:req |
   req respondHtml: "<h1>Hello from Harding!</h1><p>MummyX-powered HTTP server.</p>"
-].
+]
 
 Router get: "/api/hello" do: [:req |
   req respondJson: "{\"message\": \"Hello, World!\"}"
-].
+]
 
 Router get: "/api/greet/@name" do: [:req |
   | name |
-  name := req pathParam: "name".
+  name := req pathParam: "name"
   req respondJson: "{\"greeting\": \"Hello, " , name , "!\"}"
-].
+]
 
 Router post: "/api/echo" do: [:req |
   req respond: 200 body: req body
-].
+]
 
 Router get: "/api/yield-work" do: [:req |
   | counter observed |
-  ActiveRequests := ActiveRequests + 1.
+  ActiveRequests := ActiveRequests + 1
   ActiveRequests > MaxConcurrentRequests ifTrue: [
     MaxConcurrentRequests := ActiveRequests
-  ].
+  ]
 
-  counter := 0.
+  counter := 0
   [counter < 500] whileTrue: [
-    counter := counter + 1.
-    Processor yield.
-  ].
+    counter := counter + 1
+    Processor yield
+  ]
 
-  observed := MaxConcurrentRequests.
-  ActiveRequests := ActiveRequests - 1.
+  observed := MaxConcurrentRequests
+  ActiveRequests := ActiveRequests - 1
   req respondJson: "{\"iterations\": 500, \"maxConcurrent\": " , observed printString , "}"
-].
+]
 
-Server router: Router.
+Server router: Router
 
-"Starting server on http://localhost:8080" println.
-"Try: curl http://localhost:8080/" println.
-"     curl http://localhost:8080/api/hello" println.
-"     curl http://localhost:8080/api/greet/World" println.
-"     curl -X POST -d test http://localhost:8080/api/echo" println.
-"     curl http://localhost:8080/api/yield-work" println.
-"     wrk -t4 -c40 -d10s http://127.0.0.1:8080/api/yield-work" println.
+"Starting server on http://localhost:8080" println
+"Try: curl http://localhost:8080/" println
+"     curl http://localhost:8080/api/hello" println
+"     curl http://localhost:8080/api/greet/World" println
+"     curl -X POST -d test http://localhost:8080/api/echo" println
+"     curl http://localhost:8080/api/yield-work" println
+"     wrk -t4 -c40 -d10s http://127.0.0.1:8080/api/yield-work" println
 
-Server serveForever: 8080.
+Server serveForever: 8080

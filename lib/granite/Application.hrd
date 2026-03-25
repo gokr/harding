@@ -8,8 +8,8 @@ Application := Object derive: #(name libraries)
 
 Application>>initialize [
   # Initialize application with defaults
-  super initialize.
-  name := "Application".
+  super initialize
+  name := "Application"
   libraries := Array new
 ]
 

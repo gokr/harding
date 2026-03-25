@@ -1,32 +1,32 @@
-# HttpRequest - Incoming HTTP request wrapper
+# HttpRequest - Incoming HTTP request wrapper.
 #
-# Native methods (registered by mummyx_bridge.nim):
-#   HttpRequest>>method                            - HTTP method string
-#   HttpRequest>>uri                               - Raw request URI
-#   HttpRequest>>path                              - Decoded request path
-#   HttpRequest>>body                              - Request body string
-#   HttpRequest>>remoteAddress                     - Client IP address
-#   HttpRequest>>header: name                      - Get header by name (case-insensitive)
-#   HttpRequest>>queryParam: name                  - Get query parameter by name
-#   HttpRequest>>formParam: name                   - Get URL-encoded form parameter by name
-#   HttpRequest>>pathParam: name                   - Get path parameter by name
-#   HttpRequest>>headers                           - All headers as Table
-#   HttpRequest>>queryParams                       - All query params as Table
-#   HttpRequest>>formParams                        - All URL-encoded form params as Table
-#   HttpRequest>>pathParams                        - All path params as Table
-#   HttpRequest>>respond: statusCode               - Send response with status only
-#   HttpRequest>>respond: statusCode body: body    - Send response with body
-#   HttpRequest>>respond: code headers: h body: b  - Send response with headers and body
-#   HttpRequest>>respondJson: body                 - Send JSON response (200 + Content-Type)
+# Native methods (registered by mummyx_bridge.nim):.
+#   HttpRequest>>method                            - HTTP method string.
+#   HttpRequest>>uri                               - Raw request URI.
+#   HttpRequest>>path                              - Decoded request path.
+#   HttpRequest>>body                              - Request body string.
+#   HttpRequest>>remoteAddress                     - Client IP address.
+#   HttpRequest>>header: name                      - Get header by name (case-insensitive).
+#   HttpRequest>>queryParam: name                  - Get query parameter by name.
+#   HttpRequest>>formParam: name                   - Get URL-encoded form parameter by name.
+#   HttpRequest>>pathParam: name                   - Get path parameter by name.
+#   HttpRequest>>headers                           - All headers as Table.
+#   HttpRequest>>queryParams                       - All query params as Table.
+#   HttpRequest>>formParams                        - All URL-encoded form params as Table.
+#   HttpRequest>>pathParams                        - All path params as Table.
+#   HttpRequest>>respond: statusCode               - Send response with status only.
+#   HttpRequest>>respond: statusCode body: body    - Send response with body.
+#   HttpRequest>>respond: code headers: h body: b  - Send response with headers and body.
+#   HttpRequest>>respondJson: body                 - Send JSON response (200 + Content-Type).
 
-# HTTP method checks
+# HTTP method checks.
 HttpRequest>>isGet    [ ^ self method = "GET" ]
 HttpRequest>>isPost   [ ^ self method = "POST" ]
 HttpRequest>>isPut    [ ^ self method = "PUT" ]
 HttpRequest>>isDelete [ ^ self method = "DELETE" ]
 HttpRequest>>isPatch  [ ^ self method = "PATCH" ]
 
-# Convenience response methods
+# Convenience response methods.
 HttpRequest>>respondNotFound [
   self respond: 404 body: "Not Found"
 ]

@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Fibonacci - A more complete example
+# Fibonacci - A more complete example.
 #
 
 "=== Fibonacci Calculator ===" println
@@ -22,17 +22,17 @@ Math>>fibonacci: n [
   # Calculate fibonacci number using iterative approach
   # (Recursive approach is too slow for larger numbers)
   | a b temp count |
-  (n <= 0) ifTrue: [ ^ 0 ].
-  (n = 1) ifTrue: [ ^ 1 ].
-  a := 0.
-  b := 1.
-  count := 2.
+  (n <= 0) ifTrue: [ ^ 0 ]
+  (n = 1) ifTrue: [ ^ 1 ]
+  a := 0
+  b := 1
+  count := 2
   [ count <= n ] whileTrue: [
-    temp := a + b.
-    a := b.
-    b := temp.
-    count := count + 1.
-  ].
+    temp := a + b
+    a := b
+    b := temp
+    count := count + 1
+  ]
   ^ b
 ]
 
@@ -41,11 +41,11 @@ math := Math new
 "" println
 "Fibonacci Numbers:" println
 
-n := 0.
+n := 0
 [ n <= 10 ] whileTrue: [
-  fibResult := math fibonacci: n.
-  ("fib(" , (n asString) , ") = " , (fibResult asString)) println.
-  n := n + 1.
+  fibResult := math fibonacci: n
+  ("fib(" , (n asString) , ") = " , (fibResult asString)) println
+  n := n + 1
 ]
 
 "" println

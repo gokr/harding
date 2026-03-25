@@ -1,54 +1,54 @@
 #!/usr/bin/env harding
 #
-# Number.nt - Number class extensions
+# Number.nt - Number class extensions.
 #
 # Note: Number is defined in the interpreter.
 #
 
-#====================================================================
-# Number class extensions
-#====================================================================
+#====================================================================.
+# Number class extensions.
+#====================================================================.
 
 Number >> max: other [
   self > other
     ifTrue: [ ^ self ]
     ifFalse: [ ^ other ]
-].
+]
 
 Number >> min: other [
   self < other
     ifTrue: [ ^ self ]
     ifFalse: [ ^ other ]
-].
+]
 
 Number >> between: min and: max [
-  (self >= min) ifFalse: [ ^ false ].
-  (self <= max) ifFalse: [ ^ false ].
+  (self >= min) ifFalse: [ ^ false ]
+  (self <= max) ifFalse: [ ^ false ]
   ^ true
-].
+]
 
 Number >> isZero [
   ^ self = 0
-].
+]
 
 Number >> isPositive [
   ^ self > 0
-].
+]
 
 Number >> isNegative [
   ^ self < 0
-].
+]
 
 Number >> sign [
-  self < 0 ifTrue: [ ^ 0 - 1 ].
-  self > 0 ifTrue: [ ^ 1 ].
+  self < 0 ifTrue: [ ^ 0 - 1 ]
+  self > 0 ifTrue: [ ^ 1 ]
   ^ 0
-].
+]
 
 Number >> asString [
   ^ self printString
-].
+]
 
 Number >> squared [
   ^ self * self
-].
+]

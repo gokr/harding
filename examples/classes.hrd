@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Class creation with instance variables
+# Class creation with instance variables.
 #
 
 "=== Class with Instance Variables ===" println

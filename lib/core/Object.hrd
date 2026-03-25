@@ -1,23 +1,23 @@
 #!/usr/bin/env harding
 #
-# Object.nt - Root object with core methods
-# This is the foundation of the Harding object system
+# Object.nt - Root object with core methods.
+# This is the foundation of the Harding object system.
 
-# Object is the root of the class hierarchy
-# It provides fundamental behaviors that all objects inherit
+# Object is the root of the class hierarchy.
+# It provides fundamental behaviors that all objects inherit.
 
-# Note: Object is set by initGlobals() in interpreter/evaluator.nim
-#====================================================================
-# Object creation and copying
-#====================================================================
+# Note: Object is set by initGlobals() in interpreter/evaluator.nim.
+#====================================================================.
+# Object creation and copying.
+#====================================================================.
 
-# Note: derive, derive:, and new are defined as class methods in initCoreClasses
-# They are installed as native methods on the Object class and create proper
+# Note: derive, derive:, and new are defined as class methods in initCoreClasses.
+# They are installed as native methods on the Object class and create proper.
 # Class-based objects with slot accessors.
 #
-# Object class>>derive - Create a subclass with no slots
-# Object class>>derive: - Create a subclass with declared slots
-# Object class>>new - Create a new instance of the class
+# Object class>>derive - Create a subclass with no slots.
+# Object class>>derive: - Create a subclass with declared slots.
+# Object class>>new - Create a new instance of the class.
 #
 # Usage: Point := Object derive: #(x y).
 #        point := Point new.
@@ -25,18 +25,18 @@
 
 Object>>clone <primitive primitiveClone>
 
-#====================================================================
-# Class-side methods (using class>> syntax)
-#====================================================================
+#====================================================================.
+# Class-side methods (using class>> syntax).
+#====================================================================.
 
 Object class>>derive: slotsArray methods: methodBlock [
-  # Create a subclass with extra slots AND define methods in one expression.
+  # Create a subclass with extra slots AND define methods in one expression
   # Usage: Person := Object derive: #(name age) methods: [
   #   self >> greet [ "Hello, I am " + name ]
   #   self >> haveBirthday [ age := age + 1 ]
   # ]
   | newClass |
-  newClass := self derive: slotsArray.
+  newClass := self derive: slotsArray
 # Object is the shared root for ordinary Harding objects and core reflection behavior.
 # It defines the baseline protocol for identity, printing, slot inspection, and dynamic sends.
 # Subclasses inherit from Object unless they intentionally start from Root or Mixin.
@@ -44,17 +44,17 @@ Object class>>derive: slotsArray methods: methodBlock [
 # Keep primitive-backed reflection methods here so they remain visible across the image.
 # Changes in this file affect almost every user-defined class in the system.
 
-  newClass extend: methodBlock.
+  newClass extend: methodBlock
   ^ newClass
 ]
 
 Object class>>derive: slotArray superclasses: superclassArray methods: methodBlock [
-  # Create a subclass with slots, additional superclasses and define methods in one expression.
-  # The receiver class determines the instance type (Integer, Float, String, Array, Table, etc.).
-  # Other superclasses must be compatible (usually Mixin subclasses with only methods, no conflicting slots).
+  # Create a subclass with slots, additional superclasses and define methods in one expression
+  # The receiver class determines the instance type (Integer, Float, String, Array, Table, etc.)
+  # Other superclasses must be compatible (usually Mixin subclasses with only methods, no conflicting slots)
   #
   # Note: Methods are applied BEFORE adding superclasses, so you can override conflicting methods
-  # from superclasses. If methods conflict and are not overridden, an error will be raised.
+  # from superclasses. If methods conflict and are not overridden, an error will be raised
   #
   # Usage:
   #   Child := Object derive: #(x) superclasses: #(Parent1 Parent2) methods: [
@@ -76,15 +76,15 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
   #
   | newClass |
   # First create the class with slots (deriving from self as first superclass)
-  newClass := self derive: slotArray.
+  newClass := self derive: slotArray
 
   # Apply methods FIRST - this allows overrides to resolve conflicts before adding superclasses
-  newClass extend: methodBlock.
+  newClass extend: methodBlock
 
   # Then add each additional superclass (this performs conflict detection)
   superclassArray do: [:superclass |
     newClass addSuperclass: superclass
-  ].
+  ]
 
   ^ newClass
 ]
@@ -104,12 +104,12 @@ Object>>printHierarchy [
 Object>>printHierarchyIndent: level [
   # Print this class and its superclasses recursively with indentation
   # Usage: MyClass printHierarchyIndent: 0  # Start with 0 indentation
-  self printClassIndent: level.
+  self printClassIndent: level
 
   # Recursively print superclasses with increased indentation
   self superclassNames do: [:superclassName |
     | superclass |
-    superclass := Harding at: superclassName ifAbsent: [ nil ].
+    superclass := Harding at: superclassName ifAbsent: [ nil ]
     superclass isNil ifFalse: [
       superclass printHierarchyIndent: (level + 1)
     ]
@@ -144,17 +144,17 @@ Object>>printClassIndent: level [
     ]
 ]
 
-#====================================================================
-# Property access
-#====================================================================
+#====================================================================.
+# Property access.
+#====================================================================.
 
 Object>>hasProperty: key <primitive primitiveHasProperty: key>
 
 Object>>properties <primitive primitiveProperties>
 
-#====================================================================
-# Class reflection
-#====================================================================
+#====================================================================.
+# Class reflection.
+#====================================================================.
 
 Object>>slotNames <primitive primitiveSlotNames>
 
@@ -165,9 +165,9 @@ Object>>conflictSelectors <primitive primitiveConflictSelectors>
 Object>>classConflictSelectors <primitive primitiveClassConflictSelectors>
 
 
-#====================================================================
-# Method management
-#====================================================================
+#====================================================================.
+# Method management.
+#====================================================================.
 
 Object>>respondsTo: selector <primitive primitiveRespondsTo: selector>
 
@@ -202,22 +202,22 @@ Object class>>allClassMethods [
 ]
 
 Object>>doesNotUnderstand: selector [
-  # Default handler for unrecognized messages with just the selector.
-  # Subclasses can override to provide custom behavior.
+  # Default handler for unrecognized messages with just the selector
+  # Subclasses can override to provide custom behavior
   self error: ("Message not understood: " , (selector asString))
 ]
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
-  # Default handler for unrecognized messages.
-  # Subclasses can override to provide custom behavior.
+  # Default handler for unrecognized messages
+  # Subclasses can override to provide custom behavior
   # selector: the message selector that was not understood
   # arg1, arg2: optional arguments that were passed with the message
   self doesNotUnderstand: selector
 ]
 
-#====================================================================
-# Dynamic message dispatch (perform:)
-#====================================================================
+#====================================================================.
+# Dynamic message dispatch (perform:).
+#====================================================================.
 
 Object>>perform: selector <primitive primitivePerform: selector>
 
@@ -225,24 +225,24 @@ Object>>perform: selector with: arg1 <primitive primitivePerform: selector with:
 
 Object>>perform: selector with: arg1 with: arg2 <primitive primitivePerform: selector with: arg1 with: arg2>
 
-#====================================================================
-# Identity and comparison
-#====================================================================
+#====================================================================.
+# Identity and comparison.
+#====================================================================.
 
 Object>>= other [
-  # Test if this object equals other (value equality).
-  # Default implementation uses identity (==).
-  # Subclasses like String, Number should override for value comparison.
+  # Test if this object equals other (value equality)
+  # Default implementation uses identity (==)
+  # Subclasses like String, Number should override for value comparison
   ^ self == other
 ]
 
 Object>>== other <primitive primitiveEquals: other>
 
 Object>>printString [
-  # Return a string representation of this object.
+  # Return a string representation of this object
   (self isClass) ifTrue: [
     ^ "<class " , self name , ">"
-  ].
+  ]
   ^ "<" , self class name , ">"
 ]
 
@@ -250,50 +250,50 @@ Object>>className <primitive primitiveClassName>
 
 Object>>class <primitive primitiveClass>
 
-#====================================================================
-# Error handling
-#====================================================================
+#====================================================================.
+# Error handling.
+#====================================================================.
 
 Object>>error: message <primitive primitiveError: message>
 
-#====================================================================
-# Testing and debugging
-#====================================================================
+#====================================================================.
+# Testing and debugging.
+#====================================================================.
 
 Object>>inspect [
-  # Open an inspector on this object.
+  # Open an inspector on this object
   Inspector openOn: self
 ]
 
 Object>>yourself [
-  # Return self - useful for cascading messages.
+  # Return self - useful for cascading messages
   ^ self
 ]
 
 Object>>activation [
   | activation |
-  activation := Process current currentActivation.
+  activation := Process current currentActivation
   ^ activation isNil ifTrue: [ nil ] ifFalse: [ activation sender ]
 ]
 
 Object>>thisContext [
   | activation |
-  activation := Process current currentActivation.
+  activation := Process current currentActivation
   ^ activation isNil ifTrue: [ nil ] ifFalse: [ activation sender ]
 ]
 
-#====================================================================
-# Initialization
-#====================================================================
+#====================================================================.
+# Initialization.
+#====================================================================.
 
 Object>>initialize [
-  # Initialize a new instance. Subclasses should override.
+  # Initialize a new instance. Subclasses should override
   ^ self
 ]
 
-#====================================================================
-# Utility methods
-#====================================================================
+#====================================================================.
+# Utility methods.
+#====================================================================.
 
 Object>>isNil [
   # Check if object is nil
@@ -317,8 +317,8 @@ Object>>htmlEscape <primitive primitiveHtmlEscape>
 Object>>asSelfDo: aBlock <primitive primitiveAsSelfDo: aBlock>
 
 Object class>>extend: aBlock [
-  # Extend this class with instance methods defined in aBlock.
-  # The block is evaluated with self bound to this object.
+  # Extend this class with instance methods defined in aBlock
+  # The block is evaluated with self bound to this object
   # Usage: Person extend: [
   #   self >> greet [ "Hello!" println ]
   #   self >> name: n [ name := n ]
@@ -327,8 +327,8 @@ Object class>>extend: aBlock [
 ]
 
 Object class>>extendClass: aBlock [
-  # Extend the class-side (metaclass) with methods defined in aBlock.
-  # These are methods on the class object itself, not instances.
+  # Extend the class-side (metaclass) with methods defined in aBlock
+  # These are methods on the class object itself, not instances
   # Usage: Person extendClass: [
   #   self >> newNamed: name [ ... create and return instance ... ]
   #   self >> withName: name age: age [ ... factory method ... ]
@@ -339,47 +339,47 @@ Object class>>extendClass: aBlock [
 Object class>>name <primitive primitiveClassName>
 
 Object class>>implements: thing [
-  # Check if this class implements an interface, mixin, or set of selectors.
+  # Check if this class implements an interface, mixin, or set of selectors
   # thing can be:
   #   - A Symbol: checks respondsTo: that selector
   #   - An Array of Symbols: checks respondsTo: for all selectors
   #   - A Mixin class: checks if all methods defined in the mixin are implemented
   |
   result |
-  result := true.
+  result := true
   
   # Handle Symbol
   (thing isKindOf: Symbol) ifTrue: [
     ^ self respondsTo: thing
-  ].
+  ]
   
   # Handle Array of Symbols
   (thing isKindOf: Array) ifTrue: [
     # Check if all selectors are responded to
     thing do: [:selector |
       (self respondsTo: selector) ifFalse: [ ^ false ]
-    ].
+    ]
     ^ true
-  ].
+  ]
   
   # Handle Mixin (class that derives from Mixin) - use isClass check
   (thing isClass) ifTrue: [
     # Get all methods defined in the mixin class (not inherited)
     thing definedMethods do: [:selector |
       (self respondsTo: selector) ifFalse: [ ^ false ]
-    ].
+    ]
     ^ true
-  ].
+  ]
   
   ^ self error: "implements: requires Symbol, Array of Symbols, or Mixin class"
 ]
 
-# Note: Object>>print and Object>>println are registered as native methods
-# in the interpreter, so they don't need to be defined here
+# Note: Object>>print and Object>>println are registered as native methods.
+# in the interpreter, so they don't need to be defined here.
 
-#====================================================================
-# Comparison
-#====================================================================
+#====================================================================.
+# Comparison.
+#====================================================================.
 
 Object>>~= other [
   # Not equal - delegates to = and negates

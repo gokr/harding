@@ -1,107 +1,107 @@
-DaisyPart := Object derive: #().
-DaisyButton := DaisyPart derive: #().
-DaisyBadge := DaisyPart derive: #().
-DaisyInput := DaisyPart derive: #().
-DaisyTextarea := DaisyPart derive: #().
-DaisyAlert := DaisyPart derive: #().
-DaisyField := DaisyPart derive: #().
-DaisyCard := DaisyPart derive: #().
-DaisyStack := DaisyPart derive: #().
-DaisyHero := DaisyPart derive: #().
+DaisyPart := Object derive: #()
+DaisyButton := DaisyPart derive: #()
+DaisyBadge := DaisyPart derive: #()
+DaisyInput := DaisyPart derive: #()
+DaisyTextarea := DaisyPart derive: #()
+DaisyAlert := DaisyPart derive: #()
+DaisyField := DaisyPart derive: #()
+DaisyCard := DaisyPart derive: #()
+DaisyStack := DaisyPart derive: #()
+DaisyHero := DaisyPart derive: #()
 
 DaisyPart class>>attrs: attrs withClass: className [
   | merged keys index key existingClass |
-  merged := #{}.
+  merged := #{}
 
   attrs notNil ifTrue: [
-    keys := attrs keys.
-    index := 0.
+    keys := attrs keys
+    index := 0
     [ index < keys size ] whileTrue: [
-      key := keys at: index.
-      merged at: key put: (attrs at: key).
+      key := keys at: index
+      merged at: key put: (attrs at: key)
       index := index + 1
     ]
-  ].
+  ]
 
-  existingClass := merged at: #class ifAbsent: [ "" ].
+  existingClass := merged at: #class ifAbsent: [ "" ]
   merged at: #class put: (existingClass isEmpty
     ifTrue: [ className ]
-    ifFalse: [ existingClass , " " , className ]).
+    ifFalse: [ existingClass , " " , className ])
 
   ^ merged
-].
+]
 
 DaisyButton class>>primary: text attrs: attrs [
   ^ Html button: (self attrs: attrs withClass: Daisy primaryButtonClass) text: text
-].
+]
 
 DaisyButton class>>ghost: text attrs: attrs [
   ^ Html button: (self attrs: attrs withClass: Daisy ghostButtonClass) text: text
-].
+]
 
 DaisyButton class>>neutral: text attrs: attrs [
   ^ Html button: (self attrs: attrs withClass: "btn btn-neutral") text: text
-].
+]
 
 DaisyButton class>>softPrimary: text attrs: attrs [
   ^ Html button: (self attrs: attrs withClass: "btn btn-primary btn-soft") text: text
-].
+]
 
 DaisyBadge class>>neutral: text attrs: attrs [
   ^ Html span: (self attrs: attrs withClass: Daisy badgeClass) text: text
-].
+]
 
 DaisyInput class>>field: attrs [
   ^ Html input: (self attrs: attrs withClass: Daisy inputClass)
-].
+]
 
 DaisyTextarea class>>field: attrs [
   ^ Html tag: "textarea" attrs: (self attrs: attrs withClass: "textarea textarea-bordered") with: ""
-].
+]
 
 DaisyAlert class>>info: content attrs: attrs [
   ^ Html div: (self attrs: attrs withClass: "alert alert-info") with: content
-].
+]
 
 DaisyAlert class>>neutral: content attrs: attrs [
   ^ Html div: (self attrs: attrs withClass: "alert") with: content
-].
+]
 
 DaisyField class>>label: labelText control: controlMarkup [
   ^ self label: labelText control: controlMarkup hint: nil attrs: #{}
-].
+]
 
 DaisyField class>>label: labelText control: controlMarkup hint: hintText attrs: attrs [
   | content |
-  content := (Html span: #{#class -> "label-text font-semibold"} text: labelText) , controlMarkup.
+  content := (Html span: #{#class -> "label-text font-semibold"} text: labelText) , controlMarkup
   hintText notNil ifTrue: [
     content := content , (Html p: #{#class -> "muted text-sm"} text: hintText)
-  ].
+  ]
   ^ Html label: (self attrs: attrs withClass: "form-control gap-2") with: content
-].
+]
 
 DaisyCard class>>panel: content [
   ^ self panel: content attrs: #{}
-].
+]
 
 DaisyCard class>>panel: content attrs: attrs [
   ^ Html div: (self attrs: attrs withClass: Daisy panelClass) with: content
-].
+]
 
 DaisyStack class>>with: content [
   ^ self with: content attrs: #{}
-].
+]
 
 DaisyStack class>>with: content attrs: attrs [
   ^ Html div: (self attrs: attrs withClass: Daisy stackClass) with: content
-].
+]
 
 DaisyHero class>>with: content [
   ^ self with: content attrs: #{}
-].
+]
 
 DaisyHero class>>with: content attrs: attrs [
   ^ Html section: (self attrs: attrs withClass: Daisy heroClass) with: (Html div: #{#class -> "hero-content", #style -> "display:block; width:100%; padding:2.25rem;"} with: content)
-].
+]
 
-DaisyComponent := DaisyPart.
+DaisyComponent := DaisyPart

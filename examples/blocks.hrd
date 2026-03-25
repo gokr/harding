@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Blocks and closures
+# Blocks and closures.
 #
 
 "=== Simple Blocks ===" println
@@ -10,7 +10,7 @@ block1 := [ 1 + 2 ]
 
 block2 := [
   | result |
-  result := 5.
+  result := 5
   result + result
 ]
 ("Double 5: " , (block2 value asString)) println
@@ -47,7 +47,7 @@ MultResult := Multiplier value: 5
 findFirstPositive := [ :arr |
   arr do: [ :n |
     (n > 0) ifTrue: [ ^ n ]
-  ].
+  ]
   ^ nil
 ]
 

@@ -1,21 +1,21 @@
-TrackedValue := Object derivePublic: #(dependents transactionDepth pendingChange valueCell).
+TrackedValue := Object derivePublic: #(dependents transactionDepth pendingChange valueCell)
 
-TrackedValue addSuperclass: TrackedSubject.
+TrackedValue addSuperclass: TrackedSubject
 
 TrackedValue class>>value: aValue [
   | tracked |
-  tracked := self basicNew initialize.
-  tracked::valueCell := aValue.
+  tracked := self basicNew initialize
+  tracked::valueCell := aValue
   ^ tracked
-].
+]
 
 TrackedValue>>value [
-  self trackRead.
+  self trackRead
   ^ valueCell
-].
+]
 
 TrackedValue>>value: aValue [
-  valueCell := aValue.
-  self changed.
+  valueCell := aValue
+  self changed
   ^ aValue
-].
+]

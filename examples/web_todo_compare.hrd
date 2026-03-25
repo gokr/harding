@@ -1,12 +1,12 @@
-Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Bootstrap.hrd".
-Harding load: "lib/web/todo/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
+Harding load: "lib/web/todo/Bootstrap.hrd"
 
-TodoApp resetRepository.
-TodoApp serveForeverOn: 8080.
+TodoApp resetRepository
+TodoApp serveForeverOn: 8080
 
-"Todo comparison app running at http://127.0.0.1:8080" println.
-"Daisy-first UI: http://127.0.0.1:8080/" println.
-"Buffer UI: http://127.0.0.1:8080/buffer" println.
-"Side-by-side compare: http://127.0.0.1:8080/compare" println.
-"Render benchmark summary: http://127.0.0.1:8080/benchmark" println.
+"Todo comparison app running at http://127.0.0.1:8080" println
+"Daisy-first UI: http://127.0.0.1:8080/" println
+"Buffer UI: http://127.0.0.1:8080/buffer" println
+"Side-by-side compare: http://127.0.0.1:8080/compare" println
+"Render benchmark summary: http://127.0.0.1:8080/benchmark" println

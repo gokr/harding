@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Error.hrd - Error class
+# Error.hrd - Error class.
 
 Error := Exception derive
 # Error represents fatal exception conditions that should normally not be resumed silently.

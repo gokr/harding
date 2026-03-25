@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Hello World - The simplest Harding program
+# Hello World - The simplest Harding program.
 #
 
 "Hello, World!" println

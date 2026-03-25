@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# DivisionByZero.hrd - DivisionByZero class
+# DivisionByZero.hrd - DivisionByZero class.
 
 DivisionByZero := Exception derive
 # DivisionByZero models arithmetic division failures detected by the interpreter or compiler.

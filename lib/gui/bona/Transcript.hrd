@@ -1,8 +1,8 @@
-# ============================================================================
-# IdeTranscript - Output stream for the IDE
-# Similar to Smalltalk's Transcript, provides logging and output
-# Now using GtkSourceView for text display (read-only)
-# ============================================================================
+# ============================================================================.
+# IdeTranscript - Output stream for the IDE.
+# Similar to Smalltalk's Transcript, provides logging and output.
+# Now using GtkSourceView for text display (read-only).
+# ============================================================================.
 
 Transcript := Object derive: #(window box scrolledWindow sourceView owner)
 # Transcript implements Bona's log and output viewer for messages emitted by the running image.
@@ -13,50 +13,50 @@ Transcript := Object derive: #(window box scrolledWindow sourceView owner)
 # Changes here affect how runtime feedback is surfaced to users during development.
 
 Transcript>>initialize [
-  window := nil.
-  sourceView := nil.
-  owner := nil.
+  window := nil
+  sourceView := nil
+  owner := nil
   ^ self
 ]
 
 Transcript>>show: anObject [
-  # Append anObject's asString to the transcript.
+  # Append anObject's asString to the transcript
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject asString).
+    sourceView insertTextAtEnd: (anObject asString)
     self scrollToBottom
   ]
 ]
 
 Transcript>>showCr: anObject [
-  # Append anObject's printString followed by a newline.
+  # Append anObject's printString followed by a newline
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString).
-    sourceView insertTextAtEnd: "\n".
+    sourceView insertTextAtEnd: (anObject printString)
+    sourceView insertTextAtEnd: "\n"
     self scrollToBottom
   ]
 ]
 
 Transcript>>showSpace: anObject [
-  # Append anObject's printString followed by a space.
+  # Append anObject's printString followed by a space
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString).
-    sourceView insertTextAtEnd: " ".
+    sourceView insertTextAtEnd: (anObject printString)
+    sourceView insertTextAtEnd: " "
     self scrollToBottom
   ]
 ]
 
 Transcript>>cr [
-  # Append a newline (carriage return) to the transcript.
+  # Append a newline (carriage return) to the transcript
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: "\n".
+    sourceView insertTextAtEnd: "\n"
     self scrollToBottom
   ]
 ]
 
 Transcript>>tab [
-  # Append a tab character to the transcript.
+  # Append a tab character to the transcript
   sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: "\t".
+    sourceView insertTextAtEnd: "\t"
     self scrollToBottom
   ]
 ]
@@ -70,7 +70,7 @@ Transcript>>clear [
 Transcript>>contents [
   sourceView notNil ifTrue: [
     ^ sourceView text
-  ].
+  ]
   ^ ""
 ]
 
@@ -85,62 +85,62 @@ Transcript>>checkSourceView [
   # Debug method to see which sourceView we're using
   sourceView notNil ifTrue: [
     ^ ("Transcript sourceView: ", sourceView text firstLine)
-  ].
+  ]
   ^ "Transcript sourceView: nil"
 ]
 
 Transcript>>openWindowFor: anOwner [
   | mainBox buttonBox clearButton |
 
-  window := GtkWindow new.
-  window title: "Transcript".
-  window iconName: "harding".
-  window setDefaultSize: 800 height: 400.
-  owner := anOwner.
+  window := GtkWindow new
+  window title: "Transcript"
+  window iconName: "harding"
+  window setDefaultSize: 800 height: 400
+  owner := anOwner
 
 
   # Create vertical box layout
-  mainBox := GtkBox vertical.
-  mainBox setSpacing: 5.
+  mainBox := GtkBox vertical
+  mainBox setSpacing: 5
 
   # Create scrolled window for source view
-  scrolledWindow := GtkScrolledWindow new.
-  scrolledWindow vexpand: true.
-  scrolledWindow hexpand: true.
+  scrolledWindow := GtkScrolledWindow new
+  scrolledWindow vexpand: true
+  scrolledWindow hexpand: true
 
   # Create source view (read-only text display)
-  sourceView := GtkSourceView new.
-  sourceView showLineNumbers: true.
-  sourceView setTabWidth: 2.
-  sourceView vexpand: true.
-  sourceView hexpand: true.
+  sourceView := GtkSourceView new
+  sourceView showLineNumbers: true
+  sourceView setTabWidth: 2
+  sourceView vexpand: true
+  sourceView hexpand: true
   sourceView editable: false.  # Read-only
 
   # Create button box with Clear button
-  buttonBox := GtkBox horizontal.
-  buttonBox setSpacing: 5.
+  buttonBox := GtkBox horizontal
+  buttonBox setSpacing: 5
 
-  clearButton := GtkButton newLabel: "Clear" iconName: "user-trash".
-  clearButton clicked: [ self clear ].
-  clearButton tooltip: "Clear all transcript output".
-  buttonBox append: clearButton.
+  clearButton := GtkButton newLabel: "Clear" iconName: "user-trash"
+  clearButton clicked: [ self clear ]
+  clearButton tooltip: "Clear all transcript output"
+  buttonBox append: clearButton
 
   # Assemble the UI
-  window setChild: mainBox.
-  mainBox append: scrolledWindow.
-  scrolledWindow setChild: sourceView.
-  mainBox append: buttonBox.
+  window setChild: mainBox
+  mainBox append: scrolledWindow
+  scrolledWindow setChild: sourceView
+  mainBox append: buttonBox
 
   # Install keyboard shortcuts (Ctrl+D for Do It on selection)
-  self installKeyboardShortcuts.
+  self installKeyboardShortcuts
 
   # Connect destroy signal to notify owner
-  window destroyed: [ self onDestroy ].
+  window destroyed: [ self onDestroy ]
 
   # Register with owner
-  anOwner notNil ifTrue: [ anOwner addWindow: self ].
+  anOwner notNil ifTrue: [ anOwner addWindow: self ]
 
-  window present.
+  window present
   ^ self
 ]
 
@@ -150,46 +150,46 @@ Transcript>>openWindow [
 
 Transcript>>installKeyboardShortcuts [
   # Install Ctrl+D for Do It (evaluate selected text)
-  sourceView enableKeyboardShortcuts.
+  sourceView enableKeyboardShortcuts
   sourceView onControlKey: "d" do: [ self doItSelection ]
 ]
 
 Transcript>>doItSelection [
   # Do It - evaluate selected text
   | code result shown |
-  code := sourceView selectedText.
+  code := sourceView selectedText
   code isEmpty not ifTrue: [
     result := [ Object eval: code ]
       on: Exception
-      do: [:ex | "IDE_ERROR: " , ex printString ].
+      do: [:ex | "IDE_ERROR: " , ex printString ]
     (result isKindOf: String)
       ifTrue: [ shown := result ]
       ifFalse: [
         shown := (result isClass)
           ifTrue: [ "<class " , result name , ">" ]
           ifFalse: [ result printString ]
-      ].
-    self showCr: shown.
+      ]
+    self showCr: shown
     ^ result
-  ].
-  self showCr: "No code selected/current line to evaluate".
+  ]
+  self showCr: "No code selected/current line to evaluate"
   ^ nil
 ]
 
 Transcript>>onDestroy [
-  window := nil.
-  sourceView := nil.
+  window := nil
+  sourceView := nil
   owner notNil ifTrue: [
-    owner removeWindow: self.
+    owner removeWindow: self
     owner := nil
   ]
 ]
 
-# Create the singleton instance at load time
-CurrentTranscript := Transcript new.
-CurrentTranscript initialize.
+# Create the singleton instance at load time.
+CurrentTranscript := Transcript new
+CurrentTranscript initialize
 
-# Class-side convenience methods that delegate to the singleton instance
+# Class-side convenience methods that delegate to the singleton instance.
 Transcript class>>current [
   ^ CurrentTranscript
 ]

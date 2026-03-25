@@ -1,61 +1,61 @@
-RenderEntry := Object derivePublic: #(key sessionKey cachedOutput dirty dependencies dependents).
+RenderEntry := Object derivePublic: #(key sessionKey cachedOutput dirty dependencies dependents)
 
 RenderEntry class>>key: aKey session: aSessionKey [
   | entry |
-  entry := self basicNew.
-  entry::key := aKey.
-  entry::sessionKey := aSessionKey.
-  entry::cachedOutput := nil.
-  entry::dirty := true.
-  entry::dependencies := Array new.
-  entry::dependents := Array new.
+  entry := self basicNew
+  entry::key := aKey
+  entry::sessionKey := aSessionKey
+  entry::cachedOutput := nil
+  entry::dirty := true
+  entry::dependencies := Array new
+  entry::dependents := Array new
   ^ entry
-].
+]
 
 RenderEntry>>addDependent: anObject [
-  (dependents includes: anObject) ifFalse: [ dependents add: anObject ].
+  (dependents includes: anObject) ifFalse: [ dependents add: anObject ]
   ^ anObject
-].
+]
 
 RenderEntry>>removeDependent: anObject [
-  dependents := dependents reject: [:each | each = anObject ].
+  dependents := dependents reject: [:each | each = anObject ]
   ^ anObject
-].
+]
 
 RenderEntry>>addDependencySource: aSource [
   (dependencies includes: aSource) ifFalse: [
-    dependencies add: aSource.
+    dependencies add: aSource
     aSource addDependent: self
-  ].
+  ]
   ^ aSource
-].
+]
 
 RenderEntry>>clearDependencies [
-  dependencies do: [:source | source removeDependent: self ].
-  dependencies := Array new.
+  dependencies do: [:source | source removeDependent: self ]
+  dependencies := Array new
   ^ self
-].
+]
 
 RenderEntry>>markDirty [
-  dirty := true.
-  dependents do: [:each | each markDirty ].
+  dirty := true
+  dependents do: [:each | each markDirty ]
   ^ self
-].
+]
 
 RenderEntry>>markClean [
-  dirty := false.
+  dirty := false
   ^ self
-].
+]
 
 RenderEntry>>cachedOutput: aString [
-  cachedOutput := aString.
+  cachedOutput := aString
   ^ aString
-].
+]
 
 RenderEntry>>cachedOutput [
   ^ cachedOutput
-].
+]
 
 RenderEntry>>valid [
   ^ (dirty not) and: [ cachedOutput notNil ]
-].
+]

@@ -1,52 +1,52 @@
-# GTK Window - Top-level window widget
-# Note: GtkWindow class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK Window - Top-level window widget.
+# Note: GtkWindow class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create new window)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create new window).
 #
-# Instance methods:
-# - title: (set window title)
-# - setDefaultSize:height: (set default size)
-# - setChild: (set child widget)
-# - present (show the window)
-# - close (close the window)
+# Instance methods:.
+# - title: (set window title).
+# - setDefaultSize:height: (set default size).
+# - setChild: (set child widget).
+# - present (show the window).
+# - close (close the window).
 
-# Size convenience
+# Size convenience.
 GtkWindow>>setSize: width height: height [
     self setDefaultSize: width height: height
-].
+]
 
 GtkWindow>>size: width height: height [
     # Alias for setSize:height:
     self setDefaultSize: width height: height
-].
+]
 
-# Child management aliases
+# Child management aliases.
 GtkWindow>>add: aWidget [
     # Alias for setChild: for single-child windows
     self setChild: aWidget
-].
+]
 
 GtkWindow>>child: aWidget [
     # Alias for setChild:
     self setChild: aWidget
-].
+]
 
-# Window lifecycle
+# Window lifecycle.
 GtkWindow>>showWindow [
     # Present/show the window
     self present
-].
+]
 
 GtkWindow>>closeWindow [
     # Close the window
     self close
-].
+]
 
-# Signal conveniences
+# Signal conveniences.
 GtkWindow>>onClose: aBlock [
     # Connect to window close/destroy signal
     self connect: "destroy" do: aBlock
-].
+]

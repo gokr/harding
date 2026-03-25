@@ -1,73 +1,73 @@
-RenderCache := Object derivePublic: #(entries entryStack).
+RenderCache := Object derivePublic: #(entries entryStack)
 
-RenderCacheCurrent := nil.
+RenderCacheCurrent := nil
 
 RenderCache class>>current [
-  RenderCacheCurrent isNil ifTrue: [ RenderCacheCurrent := self new ].
+  RenderCacheCurrent isNil ifTrue: [ RenderCacheCurrent := self new ]
   ^ RenderCacheCurrent
-].
+]
 
 RenderCache class>>resetCurrent [
-  RenderCacheCurrent := self new.
+  RenderCacheCurrent := self new
   ^ RenderCacheCurrent
-].
+]
 
 RenderCache class>>new [
   | cache |
-  cache := self basicNew.
-  cache::entries := Table new.
-  cache::entryStack := Array new.
+  cache := self basicNew
+  cache::entries := Table new
+  cache::entryStack := Array new
   ^ cache
-].
+]
 
 RenderCache>>composeKey: aKey session: aSessionKey [
-  aSessionKey isNil ifTrue: [ ^ aKey asString ].
+  aSessionKey isNil ifTrue: [ ^ aKey asString ]
   ^ aKey asString , "@@" , aSessionKey asString
-].
+]
 
 RenderCache>>entryForKey: aKey session: aSessionKey [
   | fullKey entry |
-  fullKey := self composeKey: aKey session: aSessionKey.
-  entry := entries at: fullKey ifAbsent: [ nil ].
+  fullKey := self composeKey: aKey session: aSessionKey
+  entry := entries at: fullKey ifAbsent: [ nil ]
   entry isNil ifTrue: [
-    entry := RenderEntry key: fullKey session: aSessionKey.
+    entry := RenderEntry key: fullKey session: aSessionKey
     entries at: fullKey put: entry
-  ].
+  ]
   ^ entry
-].
+]
 
 RenderCache>>pushEntry: anEntry [
-  entryStack add: anEntry.
-  Reactive pushObserver: anEntry.
+  entryStack add: anEntry
+  Reactive pushObserver: anEntry
   ^ anEntry
-].
+]
 
 RenderCache>>popEntry [
-  entryStack isEmpty ifTrue: [ ^ nil ].
-  Reactive popObserver.
+  entryStack isEmpty ifTrue: [ ^ nil ]
+  Reactive popObserver
   ^ entryStack removeAt: (entryStack size - 1)
-].
+]
 
 RenderCache>>currentEntry [
-  entryStack isEmpty ifTrue: [ ^ nil ].
+  entryStack isEmpty ifTrue: [ ^ nil ]
   ^ entryStack at: (entryStack size - 1)
-].
+]
 
 RenderCache>>markDirty: aKey session: aSessionKey [
   | fullKey entry |
-  fullKey := self composeKey: aKey session: aSessionKey.
-  entry := entries at: fullKey ifAbsent: [ nil ].
-  entry notNil ifTrue: [ entry markDirty ].
+  fullKey := self composeKey: aKey session: aSessionKey
+  entry := entries at: fullKey ifAbsent: [ nil ]
+  entry notNil ifTrue: [ entry markDirty ]
   ^ entry
-].
+]
 
 RenderCache>>markDirty: aKey [
   ^ self markDirty: aKey session: nil
-].
+]
 
 RenderCache>>reset [
-  entries keysAndValuesDo: [:key :entry | entry clearDependencies ].
-  entries := Table new.
-  entryStack := Array new.
+  entries keysAndValuesDo: [:key :entry | entry clearDependencies ]
+  entries := Table new
+  entryStack := Array new
   ^ self
-].
+]

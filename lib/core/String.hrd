@@ -1,21 +1,21 @@
 #!/usr/bin/env harding
 #
-# String.nt - String manipulation methods
-# Provides Smalltalk-style string operations
+# String.nt - String manipulation methods.
+# Provides Smalltalk-style string operations.
 #
-# Note: String class is built-in, we just add methods to it here
+# Note: String class is built-in, we just add methods to it here.
 
-#====================================================================
-# String class methods (factory methods)
-#====================================================================
+#====================================================================.
+# String class methods (factory methods).
+#====================================================================.
 
 String class>>withCapacity: capacity <primitive primitiveStringWithCapacity: capacity>
   # Create a new String with pre-allocated capacity for efficient appending
-  # Usage: buffer := String withCapacity: 1024.
+  # Usage: buffer := String withCapacity: 1024
 
-#====================================================================
-# String primitives
-#====================================================================
+#====================================================================.
+# String primitives.
+#====================================================================.
 
 String>>, other <primitive primitiveConcat: other>
   # Concatenate strings (comma operator) - returns NEW string, non-destructive
@@ -67,31 +67,31 @@ String>><< other <primitive primitiveStringAppend: other>
   # Usage: buffer << "text" << " more text"
   # For functional concatenation use #, (comma) instead
 
-#====================================================================
-# String printing
-#====================================================================
+#====================================================================.
+# String printing.
+#====================================================================.
 
 String>>printString [
-  # Return the string quoted with double quotes.
+  # Return the string quoted with double quotes
   ^ "\"" , self , "\""
 ]
 
 String>>asString [
-  # Return the string itself.
+  # Return the string itself
   ^ self
 ]
 
-#====================================================================
-# String convenience methods
-#====================================================================
+#====================================================================.
+# String convenience methods.
+#====================================================================.
 
 String>>isEmpty [
-  # Check if string is empty.
+  # Check if string is empty
   ^ self size = 0
 ]
 
 String>>notEmpty [
-  # Check if string has content.
+  # Check if string has content
   ^ self size > 0
 ]
 

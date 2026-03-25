@@ -1,33 +1,33 @@
-#!/usr/bin/env harding
+#!/usr/bin/env harding.
 
-# Plain JSON API example using MummyX + BitBarrel
-#
-# Requirements:
-#   nimble harding_mummyx
-#   ./harding lib install bitbarrel
-#   nimble harding_mummyx
-#
-# Run:
-#   ./harding examples/api_todos.hrd
+# Plain JSON API example using MummyX + BitBarrel.
+#.
+# Requirements:.
+#   nimble harding_mummyx.
+#   ./harding lib install bitbarrel.
+#   nimble harding_mummyx.
+#.
+# Run:.
+#   ./harding examples/api_todos.hrd.
 
-Harding load: "lib/mummyx/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
 
-BitBarrelAvailable := (Harding includesKey: "BarrelTable") = true.
+BitBarrelAvailable := (Harding includesKey: "BarrelTable") = true
 
 BitBarrelAvailable ifFalse: [
-    System stderr writeline: "BitBarrel is not available in this binary.".
+    System stderr writeline: "BitBarrel is not available in this binary."
     System stderr writeline: "Install with ./harding lib install bitbarrel and rebuild with nimble harding_mummyx."
-].
+]
 
 Todo := (Object derivePublic: #(id title completed createdAt))
-    jsonFieldOrder: #(id title completed createdAt).
+    jsonFieldOrder: #(id title completed createdAt)
 
 ErrorResponse := (Object derivePublic: #(error message status))
-    jsonFieldOrder: #(error message status).
+    jsonFieldOrder: #(error message status)
 
-CreateTodoRequest := Object derivePublic: #(title).
+CreateTodoRequest := Object derivePublic: #(title)
 UpdateTodoRequest := (Object derivePublic: #(title completed))
-    jsonOmitNil: #(title completed).
+    jsonOmitNil: #(title completed)
 
 Todo class>>openApiSchema [
     ^ #{
@@ -40,7 +40,7 @@ Todo class>>openApiSchema [
         },
         "required" -> #("id" "title" "completed" "createdAt")
     }
-].
+]
 
 ErrorResponse class>>openApiSchema [
     ^ #{
@@ -52,7 +52,7 @@ ErrorResponse class>>openApiSchema [
         },
         "required" -> #("error" "message" "status")
     }
-].
+]
 
 CreateTodoRequest class>>openApiSchema [
     ^ #{
@@ -62,7 +62,7 @@ CreateTodoRequest class>>openApiSchema [
         },
         "required" -> #("title")
     }
-].
+]
 
 UpdateTodoRequest class>>openApiSchema [
     ^ #{
@@ -72,230 +72,230 @@ UpdateTodoRequest class>>openApiSchema [
             "completed" -> #{"type" -> "boolean"}
         }
     }
-].
+]
 
-TodoRepository := Object derivePublic: #(todos meta).
+TodoRepository := Object derivePublic: #(todos meta)
 
 TodoRepository>>openDefault [
-    todos := BarrelTable create: "api_todos.todos".
-    meta := BarrelTable create: "api_todos.meta".
+    todos := BarrelTable create: "api_todos.todos"
+    meta := BarrelTable create: "api_todos.meta"
     ((meta includesKey: "nextId") = true) ifFalse: [
         meta at: "nextId" put: 1
-    ].
+    ]
     ^ self
-].
+]
 
 TodoRepository>>nextId [
     | value |
-    value := meta at: "nextId" ifAbsent: [ 1 ].
-    meta at: "nextId" put: value + 1.
+    value := meta at: "nextId" ifAbsent: [ 1 ]
+    meta at: "nextId" put: value + 1
     ^ value printString
-].
+]
 
 TodoRepository>>newTimestamp [
     | counter |
-    counter := meta at: "timestampCounter" ifAbsent: [ 1 ].
-    meta at: "timestampCounter" put: counter + 1.
+    counter := meta at: "timestampCounter" ifAbsent: [ 1 ]
+    meta at: "timestampCounter" put: counter + 1
     ^ counter
-].
+]
 
 TodoRepository>>todoFromRecord: record [
     | todo |
-    todo := Todo new.
-    todo::id := (record at: "id").
-    todo::title := (record at: "title").
-    todo::completed := (record at: "completed").
-    todo::createdAt := (record at: "createdAt").
+    todo := Todo new
+    todo::id := (record at: "id")
+    todo::title := (record at: "title")
+    todo::completed := (record at: "completed")
+    todo::createdAt := (record at: "createdAt")
     ^ todo
-].
+]
 
 TodoRepository>>allTodos [
     | values |
-    values := Array new.
+    values := Array new
     todos do: [:key :record |
         values add: (self todoFromRecord: record)
-    ].
+    ]
     ^ values
-].
+]
 
 TodoRepository>>findTodoById: id [
     | record |
-    record := todos at: id ifAbsent: [ nil ].
-    record isNil ifTrue: [ ^ nil ].
+    record := todos at: id ifAbsent: [ nil ]
+    record isNil ifTrue: [ ^ nil ]
     ^ self todoFromRecord: record
-].
+]
 
 TodoRepository>>createFromRequest: body [
     | id record |
-    id := self nextId.
+    id := self nextId
     record := #{
         "id" -> id,
         "title" -> (body at: "title"),
         "completed" -> false,
         "createdAt" -> self newTimestamp
-    }.
-    todos at: id put: record.
+    }
+    todos at: id put: record
     ^ self todoFromRecord: record
-].
+]
 
 TodoRepository>>updateId: id withRequest: body [
     | record |
-    record := todos at: id ifAbsent: [ nil ].
-    record isNil ifTrue: [ ^ nil ].
+    record := todos at: id ifAbsent: [ nil ]
+    record isNil ifTrue: [ ^ nil ]
 
     ((body includesKey: "title") = true) ifTrue: [
         record at: "title" put: (body at: "title")
-    ].
+    ]
     ((body includesKey: "completed") = true) ifTrue: [
         record at: "completed" put: (body at: "completed")
-    ].
+    ]
 
-    todos at: id put: record.
+    todos at: id put: record
     ^ self todoFromRecord: record
-].
+]
 
 TodoRepository>>deleteId: id [
     | existing |
-    existing := todos at: id ifAbsent: [ nil ].
-    existing isNil ifTrue: [ ^ false ].
-    todos removeKey: id ifAbsent: [].
+    existing := todos at: id ifAbsent: [ nil ]
+    existing isNil ifTrue: [ ^ false ]
+    todos removeKey: id ifAbsent: []
     ^ true
-].
+]
 
-TodoApiApp := Object derivePublic: #(server router repository).
+TodoApiApp := Object derivePublic: #(server router repository)
 
 TodoApiApp>>initialize [
-    server := HttpServer new.
-    router := Router new.
-    repository := TodoRepository new.
-    repository openDefault.
+    server := HttpServer new
+    router := Router new
+    repository := TodoRepository new
+    repository openDefault
     ^ self
-].
+]
 
 TodoApiApp>>installRoutes [
-    router get: "/health" do: [:req | self handleHealth: req ].
-    router get: "/todos" do: [:req | self handleListTodos: req ].
-    router get: "/todos/@id" do: [:req | self handleGetTodo: req ].
-    router post: "/todos" do: [:req | self handleCreateTodo: req ].
-    router patch: "/todos/@id" do: [:req | self handleUpdateTodo: req ].
-    router delete: "/todos/@id" do: [:req | self handleDeleteTodo: req ].
-    router get: "/openapi.json" do: [:req | self handleOpenApi: req ].
+    router get: "/health" do: [:req | self handleHealth: req ]
+    router get: "/todos" do: [:req | self handleListTodos: req ]
+    router get: "/todos/@id" do: [:req | self handleGetTodo: req ]
+    router post: "/todos" do: [:req | self handleCreateTodo: req ]
+    router patch: "/todos/@id" do: [:req | self handleUpdateTodo: req ]
+    router delete: "/todos/@id" do: [:req | self handleDeleteTodo: req ]
+    router get: "/openapi.json" do: [:req | self handleOpenApi: req ]
     ^ self
-].
+]
 
 TodoApiApp>>respondJson: req status: status value: value [
     req respond: status
         headers: #{"Content-Type" -> "application/json"}
         body: (Json stringify: value)
-].
+]
 
 TodoApiApp>>respondError: req status: status error: code message: message [
     | err |
-    err := ErrorResponse new.
-    err::error := code.
-    err::message := message.
-    err::status := status.
+    err := ErrorResponse new
+    err::error := code
+    err::message := message
+    err::status := status
     ^ self respondJson: req status: status value: err
-].
+]
 
 TodoApiApp>>parseJsonBody: req [
     | body |
-    req body isNil ifTrue: [ ^ nil ].
-    req body isEmpty ifTrue: [ ^ nil ].
-    body := Json parse: req body.
+    req body isNil ifTrue: [ ^ nil ]
+    req body isEmpty ifTrue: [ ^ nil ]
+    body := Json parse: req body
     ^ body
-].
+]
 
 TodoApiApp>>validatedCreateBody: body [
     | title |
-    body isNil ifTrue: [ ^ nil ].
-    (body className = "Table") ifFalse: [ ^ nil ].
-    title := body at: "title" ifAbsent: [ nil ].
-    ((title isNil) or: [ title isEmpty ]) ifTrue: [ ^ nil ].
+    body isNil ifTrue: [ ^ nil ]
+    (body className = "Table") ifFalse: [ ^ nil ]
+    title := body at: "title" ifAbsent: [ nil ]
+    ((title isNil) or: [ title isEmpty ]) ifTrue: [ ^ nil ]
     ^ body
-].
+]
 
 TodoApiApp>>validatedUpdateBody: body [
     | hasTitle hasCompleted title completed |
-    body isNil ifTrue: [ ^ nil ].
-    (body className = "Table") ifFalse: [ ^ nil ].
-    hasTitle := (body includesKey: "title") = true.
-    hasCompleted := (body includesKey: "completed") = true.
-    (hasTitle or: [ hasCompleted ]) ifFalse: [ ^ nil ].
+    body isNil ifTrue: [ ^ nil ]
+    (body className = "Table") ifFalse: [ ^ nil ]
+    hasTitle := (body includesKey: "title") = true
+    hasCompleted := (body includesKey: "completed") = true
+    (hasTitle or: [ hasCompleted ]) ifFalse: [ ^ nil ]
 
     hasTitle ifTrue: [
-        title := body at: "title".
+        title := body at: "title"
         ((title isNil) or: [ title isEmpty ]) ifTrue: [ ^ nil ]
-    ].
+    ]
 
     hasCompleted ifTrue: [
-        completed := body at: "completed".
+        completed := body at: "completed"
         ((completed = true) or: [ completed = false ]) ifFalse: [ ^ nil ]
-    ].
+    ]
 
     ^ body
-].
+]
 
 TodoApiApp>>handleHealth: req [
     ^ self respondJson: req status: 200 value: #{
         "ok" -> true,
         "service" -> "todo-api"
     }
-].
+]
 
 TodoApiApp>>handleListTodos: req [
     ^ self respondJson: req status: 200 value: (repository allTodos)
-].
+]
 
 TodoApiApp>>handleGetTodo: req [
     | todo id |
-    id := req pathParam: "id".
-    todo := repository findTodoById: id.
+    id := req pathParam: "id"
+    todo := repository findTodoById: id
     todo isNil ifTrue: [
         ^ self respondError: req status: 404 error: "not_found" message: "Todo not found"
-    ].
+    ]
     ^ self respondJson: req status: 200 value: todo
-].
+]
 
 TodoApiApp>>handleCreateTodo: req [
     | body todo |
-    body := self validatedCreateBody: (self parseJsonBody: req).
+    body := self validatedCreateBody: (self parseJsonBody: req)
     body isNil ifTrue: [
         ^ self respondError: req status: 400 error: "invalid_request" message: "Expected JSON body with non-empty 'title'"
-    ].
+    ]
 
-    todo := repository createFromRequest: body.
+    todo := repository createFromRequest: body
     ^ self respondJson: req status: 201 value: todo
-].
+]
 
 TodoApiApp>>handleUpdateTodo: req [
     | id body todo |
-    id := req pathParam: "id".
-    body := self validatedUpdateBody: (self parseJsonBody: req).
+    id := req pathParam: "id"
+    body := self validatedUpdateBody: (self parseJsonBody: req)
     body isNil ifTrue: [
         ^ self respondError: req status: 400 error: "invalid_request" message: "Expected JSON body with 'title' and/or boolean 'completed'"
-    ].
+    ]
 
-    todo := repository updateId: id withRequest: body.
+    todo := repository updateId: id withRequest: body
     todo isNil ifTrue: [
         ^ self respondError: req status: 404 error: "not_found" message: "Todo not found"
-    ].
+    ]
     ^ self respondJson: req status: 200 value: todo
-].
+]
 
 TodoApiApp>>handleDeleteTodo: req [
     | deleted id |
-    id := req pathParam: "id".
-    deleted := repository deleteId: id.
+    id := req pathParam: "id"
+    deleted := repository deleteId: id
     deleted ifFalse: [
         ^ self respondError: req status: 404 error: "not_found" message: "Todo not found"
-    ].
+    ]
     ^ self respondJson: req status: 200 value: #{"deleted" -> true}
-].
+]
 
 TodoApiApp>>schemaRef: schemaName [
     ^ #{"$ref" -> ("#/components/schemas/" , schemaName)}
-].
+]
 
 TodoApiApp>>openApiDocument [
     ^ #{
@@ -497,24 +497,24 @@ TodoApiApp>>openApiDocument [
             }
         }
     }
-].
+]
 
 TodoApiApp>>handleOpenApi: req [
     ^ self respondJson: req status: 200 value: self openApiDocument
-].
+]
 
 BitBarrelAvailable ifTrue: [
-    App := TodoApiApp new.
-    App initialize.
-    App installRoutes.
-    App::server router: App::router.
-    App::server basicRequestLogging.
+    App := TodoApiApp new
+    App initialize
+    App installRoutes
+    App::server router: App::router
+    App::server basicRequestLogging
 
-    "Todo API running at http://127.0.0.1:8080" println.
-    "Try: curl http://127.0.0.1:8080/health" println.
-    "     curl http://127.0.0.1:8080/todos" println.
-    "     curl -X POST http://127.0.0.1:8080/todos -H 'Content-Type: application/json' -d '{\"title\":\"Write docs\"}'" println.
-    "     curl http://127.0.0.1:8080/openapi.json" println.
+    "Todo API running at http://127.0.0.1:8080" println
+    "Try: curl http://127.0.0.1:8080/health" println
+    "     curl http://127.0.0.1:8080/todos" println
+    "     curl -X POST http://127.0.0.1:8080/todos -H 'Content-Type: application/json' -d '{\"title\":\"Write docs\"}'" println
+    "     curl http://127.0.0.1:8080/openapi.json" println
 
     App::server serveForever: 8080
-].
+]

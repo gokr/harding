@@ -1,143 +1,143 @@
-#!/usr/bin/env harding
-#
-# Test String withCapacity: and << operator
-# Tests efficient string building vs non-destructive concatenation
-#
+#!/usr/bin/env harding.
+#.
+# Test String withCapacity: and << operator.
+# Tests efficient string building vs non-destructive concatenation.
+#.
 
-passed := 0.
-failed := 0.
+passed := 0
+failed := 0
 
-# Test 1: Basic withCapacity creation
-s1 := String withCapacity: 50.
+# Test 1: Basic withCapacity creation.
+s1 := String withCapacity: 50
 (s1 size = 0) ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: New string with capacity should be empty" println
-].
+]
 
 (s1 = "") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: New string should equal empty string" println
-].
+]
 
-# Test 2: Single append with <<
-s2 := String withCapacity: 50.
-s2 << "Hello".
+# Test 2: Single append with <<.
+s2 := String withCapacity: 50
+s2 << "Hello"
 (s2 = "Hello") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: Single append should work" println
-].
+]
 
-# Test 3: Chained appends
-s3 := String withCapacity: 50.
-s3 << "Hello" << " " << "World".
+# Test 3: Chained appends.
+s3 := String withCapacity: 50
+s3 << "Hello" << " " << "World"
 (s3 = "Hello World") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: Chained appends should concatenate" println
-].
+]
 
-# Test 4: << returns self for chaining
-s4 := String withCapacity: 50.
-result := s4 << "A".
+# Test 4: << returns self for chaining.
+s4 := String withCapacity: 50
+result := s4 << "A"
 (result == s4) ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: << should return self for chaining" println
-].
+]
 
-# Test 5: Non-destructive concat with , operator
-base := "Hello".
-result5 := base , " World".
+# Test 5: Non-destructive concat with , operator.
+base := "Hello"
+result5 := base , " World"
 (base = "Hello") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: , operator should not mutate original" println
-].
+]
 (result5 = "Hello World") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: , operator should return concatenated string" println
-].
+]
 
-# Test 6: Mixed usage with loop
-s5 := String withCapacity: 100.
-s5 << "Count: ".
-i := 0.
+# Test 6: Mixed usage with loop.
+s5 := String withCapacity: 100
+s5 << "Count: "
+i := 0
 [i < 5] whileTrue: [
-  s5 << (i printString).
+  s5 << (i printString)
   i := i + 1
-].
+]
 (s5 = "Count: 01234") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: Appending in loop should work, got: " print. s5 println
-].
+]
 
-# Test 7: Different data types via <<
-s6 := String withCapacity: 100.
-s6 << "Value: ".
-s6 << 42.
-s6 << " done".
+# Test 7: Different data types via <<.
+s6 := String withCapacity: 100
+s6 << "Value: "
+s6 << 42
+s6 << " done"
 (s6 = "Value: 42 done") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: << should auto-convert numbers, got: " print. s6 println
-].
+]
 
-# Test 8: Large capacity with many appends
-s7 := String withCapacity: 10000.
-s7 << "start".
-j := 0.
+# Test 8: Large capacity with many appends.
+s7 := String withCapacity: 10000
+s7 << "start"
+j := 0
 [j < 500] whileTrue: [
-  s7 << "x".
+  s7 << "x"
   j := j + 1
-].
-s7 << "end".
+]
+s7 << "end"
 ((s7 size) = 508) ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: Large pre-allocated string should handle many appends, got size: " print. (s7 size) println
-].
+]
 
-# Test 9: Comparison between , and <<
-s9 := String withCapacity: 50.
-s9 << "a" << "b" << "c".
+# Test 9: Comparison between , and <<.
+s9 := String withCapacity: 50
+s9 << "a" << "b" << "c"
 
-s10 := "a" , "b" , "c".
+s10 := "a" , "b" , "c"
 (s9 = s10) ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: , and << should produce same final result" println
-].
+]
 
 (s9 = "abc") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
-  failed := failed + 1.
+  failed := failed + 1
   "FAIL: Both should equal 'abc'" println
-].
+]
 
-# Summary
-("=========================================") println.
-("Tests passed: " , (passed printString)) println.
-("Tests failed: " , (failed printString)) println.
+# Summary.
+("=========================================") println
+("Tests passed: " , (passed printString)) println
+("Tests failed: " , (failed printString)) println
 
 failed = 0 ifTrue: [
-  "All String operation tests passed!" println.
+  "All String operation tests passed!" println
 ] ifFalse: [
-  "Some tests failed!" println.
+  "Some tests failed!" println
 ]

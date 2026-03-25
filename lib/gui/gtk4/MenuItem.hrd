@@ -1,11 +1,11 @@
-# GTK MenuItem - Clickable menu item
-# Note: GtkMenuItem class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK MenuItem - Clickable menu item.
+# Note: GtkMenuItem class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create empty menu item)
-# - newLabel: (create menu item with label)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create empty menu item).
+# - newLabel: (create menu item with label).
 #
-# Instance methods:
-# - activate: (connect activate/clicked signal to a block)
+# Instance methods:.
+# - activate: (connect activate/clicked signal to a block).

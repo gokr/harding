@@ -1,8 +1,8 @@
 #!/usr/bin/env harding
 #
-# Synchronizable.hrd - Synchronization mixin
+# Synchronizable.hrd - Synchronization mixin.
 
-Synchronizable := Mixin derive.
+Synchronizable := Mixin derive
 # Synchronizable provides shared synchronization protocol for process and concurrency-related objects.
 # It groups monitor-style behavior that should be reusable across concurrent coordination types.
 # Use this class or mixin when an object participates in locking, waiting, or signaling flows.

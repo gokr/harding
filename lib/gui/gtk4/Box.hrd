@@ -1,35 +1,35 @@
-# GTK Box - Layout container for arranging children
-# Note: GtkBox class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK Box - Layout container for arranging children.
+# Note: GtkBox class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create vertical box)
-# - newOrientation:spacing: (create box with orientation and spacing)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create vertical box).
+# - newOrientation:spacing: (create box with orientation and spacing).
 #
-# Instance methods:
-# - append: (add widget to end)
-# - prepend: (add widget to start)
-# - setSpacing: (set spacing between children)
+# Instance methods:.
+# - append: (add widget to end).
+# - prepend: (add widget to start).
+# - setSpacing: (set spacing between children).
 
-# Class method constructors moved from Nim to Harding
+# Class method constructors moved from Nim to Harding.
 GtkBox class>>horizontal [
     # Create a new horizontal box (orientation 0)
     ^self newOrientation: 0 spacing: 0
-].
+]
 
 GtkBox class>>vertical [
     # Create a new vertical box (orientation 1)
     ^self newOrientation: 1 spacing: 0
-].
+]
 
-# Convenience instance methods
+# Convenience instance methods.
 GtkBox>>add: aWidget [
     # Append a widget to the box
     self append: aWidget
-].
+]
 
 GtkBox>>spacing: pixels [
     # Set spacing between children
     self setSpacing: pixels
-].
+]

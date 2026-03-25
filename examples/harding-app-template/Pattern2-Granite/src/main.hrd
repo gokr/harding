@@ -1,13 +1,13 @@
 #!/usr/bin/env harding
 #
-# Main entry point for MyApp (Granite Pattern)
+# Main entry point for MyApp (Granite Pattern).
 #
 # This file is compiled to Nim using Granite, then compiled to a native binary.
 #
 # Note: In Granite-compiled mode, you don't need a separate Nim entry point.
 # Granite generates the Nim code that includes the Harding runtime setup.
 
-# Application: Greeting with arguments
+# Application: Greeting with arguments.
 args := System arguments
 
 Stdout writeline: "=== MyApp (Pattern 2: Granite) ==="

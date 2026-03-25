@@ -1,68 +1,68 @@
-TrackedSubject := Object derivePublic: #(dependents transactionDepth pendingChange).
+TrackedSubject := Object derivePublic: #(dependents transactionDepth pendingChange)
 
 TrackedSubject>>initialize [
-  dependents := Array new.
-  transactionDepth := 0.
-  pendingChange := false.
+  dependents := Array new
+  transactionDepth := 0
+  pendingChange := false
   ^ self
-].
+]
 
 TrackedSubject>>ensureTrackingState [
-  dependents isNil ifTrue: [ dependents := Array new ].
-  transactionDepth isNil ifTrue: [ transactionDepth := 0 ].
-  pendingChange isNil ifTrue: [ pendingChange := false ].
+  dependents isNil ifTrue: [ dependents := Array new ]
+  transactionDepth isNil ifTrue: [ transactionDepth := 0 ]
+  pendingChange isNil ifTrue: [ pendingChange := false ]
   ^ self
-].
+]
 
 TrackedSubject>>addDependent: anObject [
-  self ensureTrackingState.
-  (dependents includes: anObject) ifFalse: [ dependents add: anObject ].
+  self ensureTrackingState
+  (dependents includes: anObject) ifFalse: [ dependents add: anObject ]
   ^ anObject
-].
+]
 
 TrackedSubject>>removeDependent: anObject [
-  self ensureTrackingState.
-  dependents := dependents reject: [:each | each = anObject ].
+  self ensureTrackingState
+  dependents := dependents reject: [:each | each = anObject ]
   ^ anObject
-].
+]
 
 TrackedSubject>>trackRead [
   | observer |
-  observer := Reactive currentObserver.
-  observer notNil ifTrue: [ observer addDependencySource: self ].
+  observer := Reactive currentObserver
+  observer notNil ifTrue: [ observer addDependencySource: self ]
   ^ self
-].
+]
 
 TrackedSubject>>flushChange [
-  self ensureTrackingState.
-  pendingChange := false.
-  dependents do: [:each | each markDirty ].
+  self ensureTrackingState
+  pendingChange := false
+  dependents do: [:each | each markDirty ]
   ^ self
-].
+]
 
 TrackedSubject>>changed [
-  self ensureTrackingState.
+  self ensureTrackingState
   transactionDepth > 0 ifTrue: [
-    pendingChange := true.
+    pendingChange := true
     ^ self
-  ].
+  ]
   ^ self flushChange
-].
+]
 
 TrackedSubject>>beginTransaction [
-  self ensureTrackingState.
-  transactionDepth := transactionDepth + 1.
+  self ensureTrackingState
+  transactionDepth := transactionDepth + 1
   ^ self
-].
+]
 
 TrackedSubject>>endTransaction [
-  self ensureTrackingState.
-  transactionDepth > 0 ifTrue: [ transactionDepth := transactionDepth - 1 ].
-  (transactionDepth = 0 and: [ pendingChange ]) ifTrue: [ self flushChange ].
+  self ensureTrackingState
+  transactionDepth > 0 ifTrue: [ transactionDepth := transactionDepth - 1 ]
+  (transactionDepth = 0 and: [ pendingChange ]) ifTrue: [ self flushChange ]
   ^ self
-].
+]
 
 TrackedSubject>>withTransaction: aBlock [
-  self beginTransaction.
+  self beginTransaction
   [ aBlock value ] ensure: [ self endTransaction ]
-].
+]

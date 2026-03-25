@@ -1,9 +1,9 @@
-# ============================================================================
-# ContextMenu - High-level popup menu for GTK4
-# Wraps GtkPopover with custom button content for easy context menus
-# ============================================================================
+# ============================================================================.
+# ContextMenu - High-level popup menu for GTK4.
+# Wraps GtkPopover with custom button content for easy context menus.
+# ============================================================================.
 
-ContextMenu := Object derive: #(popover items).
+ContextMenu := Object derive: #(popover items)
 # ContextMenu is a small Harding-level wrapper for building popover-based context menus in GTK4.
 # It hides the lower-level popover item wiring behind a simpler addItem:/addSeparator protocol.
 # Bona panes use this class to attach right-click menus without repeating GTK setup code.
@@ -11,57 +11,57 @@ ContextMenu := Object derive: #(popover items).
 # This wrapper is intentionally minimal and should remain easy to use from Harding code.
 # It is the canonical popup-menu helper for the current GTK4 bridge.
 
-# ----------------------------------------------------------------------------
-# Class methods
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------.
+# Class methods.
+# ----------------------------------------------------------------------------.
 
 ContextMenu class>>for: aWidget [
     # Create a new context menu for a parent widget
     ^ self new initializeFor: aWidget
 ]
 
-# ----------------------------------------------------------------------------
-# Instance methods
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------.
+# Instance methods.
+# ----------------------------------------------------------------------------.
 
 ContextMenu>>initializeFor: aWidget [
     # Initialize the context menu with a parent widget
     # Clear any existing items since popovers are cached
-    popover := GtkPopover new: aWidget.
-    popover clear.
-    items := #().
+    popover := GtkPopover new: aWidget
+    popover clear
+    items := #()
     ^ self
 ]
 
 ContextMenu>>addItem: labelString do: aBlock [
     # Add a menu item with a callback block
-    popover addItem: labelString do: aBlock.
-    items add: labelString.
+    popover addItem: labelString do: aBlock
+    items add: labelString
     ^ self
 ]
 
 ContextMenu>>addSeparator [
     # Add a horizontal separator line between menu items
-    popover addSeparator.
+    popover addSeparator
     ^ self
 ]
 
 ContextMenu>>popupAtX: x y: y [
     # Show the context menu at specific coordinates
-    popover popupAtX: x y: y.
+    popover popupAtX: x y: y
     ^ self
 ]
 
 ContextMenu>>popup [
     # Show the context menu at the default position (centered on parent)
-    popover popup.
+    popover popup
     ^ self
 ]
 
 ContextMenu>>clear [
     # Remove all menu items
-    popover clear.
-    items := #().
+    popover clear
+    items := #()
     ^ self
 ]
 

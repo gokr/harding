@@ -1,39 +1,39 @@
-# GTK TextView - Multiline text editing widget
-# Note: GtkTextView class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK TextView - Multiline text editing widget.
+# Note: GtkTextView class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create new text view)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create new text view).
 #
-# Instance methods:
-# - getBuffer (get the text buffer, returns buffer)
-# - setBuffer: (set the text buffer)
-# - getText (get all text, returns string)
-# - setText: (set text in the view)
+# Instance methods:.
+# - getBuffer (get the text buffer, returns buffer).
+# - setBuffer: (set the text buffer).
+# - getText (get all text, returns string).
+# - setText: (set text in the view).
 
-# Convenience accessors
+# Convenience accessors.
 GtkTextView>>text [
     ^self getText
-].
+]
 
 GtkTextView>>text: aString [
     self setText: aString
-].
+]
 
 GtkTextView>>buffer [
     ^self getBuffer
-].
+]
 
-# Signal conveniences
+# Signal conveniences.
 GtkTextView>>onChanged: aBlock [
     # Connect to buffer's changed signal
     | buf |
-    buf := self buffer.
+    buf := self buffer
     buf notNil ifTrue: [ buf connect: "changed" do: aBlock ]
-].
+]
 
 GtkTextView>>onTextChanged: aBlock [
     # Alias for onChanged:
     self onChanged: aBlock
-].
+]

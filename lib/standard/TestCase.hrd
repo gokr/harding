@@ -1,12 +1,12 @@
-# TestCase - Unit testing framework for Harding
+# TestCase - Unit testing framework for Harding.
 #
 # Provides assertion methods for writing unit tests in Harding.
 #
-# Example:
+# Example:.
 #   MyTests := TestCase derive.
-#   MyTests>>testAddition [
-#     self assert: (1 + 1) equals: 2
-#   ]
+#   MyTests>>testAddition [.
+#     self assert: (1 + 1) equals: 2.
+#   ].
 
 TestCase := Object derive: #(name assertions failures)
 # TestCase is the base class for unit tests written in Harding itself.

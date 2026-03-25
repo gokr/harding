@@ -1,65 +1,65 @@
-# Process Demo - Parallel Green Threads in Harding
-# Now works in the REPL with process support always enabled!
+# Process Demo - Parallel Green Threads in Harding.
+# Now works in the REPL with process support always enabled!.
 
-Stdout writeline: "=== Harding Process API Demo ===".
-Stdout writeline: "".
+Stdout writeline: "=== Harding Process API Demo ==="
+Stdout writeline: ""
 
-Stdout writeline: "1. Creating shared counter...".
-Harding at: "counter" put: 0.
+Stdout writeline: "1. Creating shared counter..."
+Harding at: "counter" put: 0
 
-Stdout writeline: "2. Forking worker processes...".
+Stdout writeline: "2. Forking worker processes..."
 
 P1 := Processor fork: [
-    Stdout writeline: "Worker 1 starting".
+    Stdout writeline: "Worker 1 starting"
     1 to: 5 do: [:i |
-        current := Harding at: "counter".
-        Harding at: "counter" put: (current + 1).
-        Stdout writeline: ("  Worker 1 increment #" , (i asString)).
+        current := Harding at: "counter"
+        Harding at: "counter" put: (current + 1)
+        Stdout writeline: ("  Worker 1 increment #" , (i asString))
         Processor yield
-    ].
+    ]
     1 to: 5 do: [:i |
-        current := Harding at: "counter".
-        Harding at: "counter" put: (current + 1).
-        Stdout writeline: ("  Worker 1 increment #" , (i asString)).
+        current := Harding at: "counter"
+        Harding at: "counter" put: (current + 1)
+        Stdout writeline: ("  Worker 1 increment #" , (i asString))
         Processor yield
-    ].
+    ]
     Stdout writeline: "Worker 1 done"
-].
+]
 
 P2 := Processor fork: [
-    Stdout writeline: "Worker 2 starting".
+    Stdout writeline: "Worker 2 starting"
     1 to: 10 do: [:i |
-        current := Harding at: "counter".
-        Harding at: "counter" put: (current + 1).
-        Stdout writeline: ("  Worker 2 increment #" , (i asString)).
+        current := Harding at: "counter"
+        Harding at: "counter" put: (current + 1)
+        Stdout writeline: ("  Worker 2 increment #" , (i asString))
         Processor yield
-    ].
+    ]
     Stdout writeline: "Worker 2 done"
-].
+]
 
-Stdout writeline: "".
-Stdout writeline: "3. Process info:".
-Stdout writeline: ("   Process 1 - PID: " , (P1 pid asString) , ", Name: " , P1 name , ", State: " , P1 state).
-Stdout writeline: ("   Process 2 - PID: " , (P2 pid asString) , ", Name: " , P2 name , ", State: " , P2 state).
+Stdout writeline: ""
+Stdout writeline: "3. Process info:"
+Stdout writeline: ("   Process 1 - PID: " , (P1 pid asString) , ", Name: " , P1 name , ", State: " , P1 state)
+Stdout writeline: ("   Process 2 - PID: " , (P2 pid asString) , ", Name: " , P2 name , ", State: " , P2 state)
 
-Stdout writeline: "".
-Stdout writeline: "4. Demonstrating suspend/resume...".
-P1 suspend.
-Stdout writeline: ("   After suspend - Process 1 state: " , P1 state).
-P1 resume.
-Stdout writeline: ("   After resume - Process 1 state: " , P1 state).
+Stdout writeline: ""
+Stdout writeline: "4. Demonstrating suspend/resume..."
+P1 suspend
+Stdout writeline: ("   After suspend - Process 1 state: " , P1 state)
+P1 resume
+Stdout writeline: ("   After resume - Process 1 state: " , P1 state)
 
-Stdout writeline: "".
-Stdout writeline: "5. Running processes...".
-Steps := Scheduler runToCompletion: 1000.
-Stdout writeline: ("   Steps executed: " , Steps asString).
+Stdout writeline: ""
+Stdout writeline: "5. Running processes..."
+Steps := Scheduler runToCompletion: 1000
+Stdout writeline: ("   Steps executed: " , Steps asString)
 
-Stdout writeline: "".
-Stdout writeline: "6. Final process states:".
-Stdout writeline: ("   Process 1 state: " , P1 state).
-Stdout writeline: ("   Process 2 state: " , P2 state).
-Stdout writeline: ("   Final counter: " , (Harding at: "counter") asString).
+Stdout writeline: ""
+Stdout writeline: "6. Final process states:"
+Stdout writeline: ("   Process 1 state: " , P1 state)
+Stdout writeline: ("   Process 2 state: " , P2 state)
+Stdout writeline: ("   Final counter: " , (Harding at: "counter") asString)
 
-Stdout writeline: "".
-Stdout writeline: "=== Demo Complete ===".
-Stdout writeline: "   Processes now execute in the REPL using Scheduler runToCompletion:".
+Stdout writeline: ""
+Stdout writeline: "=== Demo Complete ==="
+Stdout writeline: "   Processes now execute in the REPL using Scheduler runToCompletion:"

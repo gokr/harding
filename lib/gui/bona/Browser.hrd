@@ -1,8 +1,8 @@
-# ============================================================================
-# Browser - Smalltalk-style Browser for Harding
-# Four-pane layout: Libraries | Classes | Categories | Methods
-# With a source pane at the bottom for viewing/editing code
-# ============================================================================
+# ============================================================================.
+# Browser - Smalltalk-style Browser for Harding.
+# Four-pane layout: Libraries | Classes | Categories | Methods.
+# With a source pane at the bottom for viewing/editing code.
+# ============================================================================.
 
 Browser := Object derive: #(model window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView owner ignoreTextChanges)
 # Browser implements Bona's class browser, source editor, and refactoring entry points.
@@ -13,9 +13,9 @@ Browser := Object derive: #(model window mainBox panesBox libraryPane classPane 
 # Changes here directly affect how developers create, inspect, and save Harding code.
 
 Browser>>initialize [
-    model := BrowserModel new.
-    owner := nil.
-    ignoreTextChanges := false.
+    model := BrowserModel new
+    owner := nil
+    ignoreTextChanges := false
     ^ self
 ]
 
@@ -57,14 +57,14 @@ Browser>>pendingContinueBlock [ ^ model pendingContinueBlock ]
 Browser>>pendingContinueBlock: aValue [ model pendingContinueBlock: aValue. ^ self ]
 
 Browser>>markSourceClean [
-    model markSourceClean: sourceView text.
+    model markSourceClean: sourceView text
 ]
 
 Browser>>markSourceModified [
     ignoreTextChanges ifTrue: [
         ^ self
-    ].
-    model markSourceModified.
+    ]
+    model markSourceModified
 ]
 
 Browser>>hasUnsavedChanges [
@@ -78,43 +78,43 @@ Browser>>showConfirmationDialog: message onYes: yesBlock onNo: noBlock [
             showConfirmDialog: window
             message: message
             onYes: yesBlock
-            onNo: noBlock.
+            onNo: noBlock
         ^ self
-    ].
+    ]
 
-    dialog := GtkWindow new.
-    dialog title: "Confirm".
-    dialog setDefaultSize: 400 height: 140.
+    dialog := GtkWindow new
+    dialog title: "Confirm"
+    dialog setDefaultSize: 400 height: 140
     
-    box := GtkBox vertical.
-    box setSpacing: 12.
+    box := GtkBox vertical
+    box setSpacing: 12
     
-    label := GtkLabel new: message.
-    label halignStart.
+    label := GtkLabel new: message
+    label halignStart
     
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 8.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 8
     
-    noButton := GtkButton newLabel: "No".
+    noButton := GtkButton newLabel: "No"
     noButton clicked: [
-        dialog close.
+        dialog close
         noBlock value
-    ].
+    ]
     
-    yesButton := GtkButton newLabel: "Yes".
-    yesButton addCssClass: "suggested-action".
+    yesButton := GtkButton newLabel: "Yes"
+    yesButton addCssClass: "suggested-action"
     yesButton clicked: [
-        dialog close.
+        dialog close
         yesBlock value
-    ].
+    ]
     
-    buttonBox append: noButton.
-    buttonBox append: yesButton.
+    buttonBox append: noButton
+    buttonBox append: yesButton
     
-    dialog setChild: box.
-    box append: label.
-    box append: buttonBox.
-    dialog present.
+    dialog setChild: box
+    box append: label
+    box append: buttonBox
+    dialog present
 ]
 
 Browser>>showErrorDialog: messageText [
@@ -123,42 +123,42 @@ Browser>>showErrorDialog: messageText [
         GtkAlertDialog
             showAlertDialog: window
             message: messageText
-            onResponse: [ nil ].
+            onResponse: [ nil ]
         ^ self
-    ].
+    ]
 
-    dialog := GtkWindow new.
-    dialog title: "Browser Error".
-    dialog setDefaultSize: 520 height: 140.
+    dialog := GtkWindow new
+    dialog title: "Browser Error"
+    dialog setDefaultSize: 520 height: 140
 
-    box := GtkBox vertical.
+    box := GtkBox vertical
     box
         setSpacing: 8;
         marginStart: 12;
         marginEnd: 12;
         marginTop: 12;
-        marginBottom: 12.
+        marginBottom: 12
 
-    label := GtkLabel new: messageText.
-    label halignStart.
-    label wrap: true.
+    label := GtkLabel new: messageText
+    label halignStart
+    label wrap: true
 
-    okButton := GtkButton newLabel: "OK".
-    okButton clicked: [ dialog close ].
+    okButton := GtkButton newLabel: "OK"
+    okButton clicked: [ dialog close ]
 
-    dialog setChild: box.
-    box append: label.
-    box append: okButton.
-    dialog present.
+    dialog setChild: box
+    box append: label
+    box append: okButton
+    dialog present
 ]
 
 Browser>>checkUnsavedChangesThen: aBlock [
     self hasUnsavedChanges ifTrue: [
-        # Store continuation state on the browser so the async dialog can resume it.
-        self pendingContinueBlock: aBlock.
+        # Store continuation state on the browser so the async dialog can resume it
+        self pendingContinueBlock: aBlock
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
-                self markSourceClean.
+                self markSourceClean
                 (self pendingContinueBlock) value
             ]
             onNo: [
@@ -171,15 +171,15 @@ Browser>>checkUnsavedChangesThen: aBlock [
 
 Browser class>>open [
     | browser |
-    browser := self new.
-    browser openWindow.
+    browser := self new
+    browser openWindow
     ^ browser
 ]
 
 Browser class>>openFor: anOwner [
     | browser |
-    browser := self new.
-    browser openWindowFor: anOwner.
+    browser := self new
+    browser openWindowFor: anOwner
     ^ browser
 ]
 
@@ -190,274 +190,274 @@ Browser>>openWindow [
 Browser>>openWindowFor: anOwner [
     | buttonBox closeButton refreshButton |
 
-    owner := anOwner.
+    owner := anOwner
 
-    window := GtkWindow new.
-    window title: "Browser".
-    window iconName: "harding".
-    window setDefaultSize: 1200 height: 800.
+    window := GtkWindow new
+    window title: "Browser"
+    window iconName: "harding"
+    window setDefaultSize: 1200 height: 800
 
-    mainBox := GtkBox vertical.
-    mainBox setSpacing: 5.
-    mainBox marginStart: 5.
-    mainBox marginEnd: 5.
-    mainBox marginTop: 5.
-    mainBox marginBottom: 5.
+    mainBox := GtkBox vertical
+    mainBox setSpacing: 5
+    mainBox marginStart: 5
+    mainBox marginEnd: 5
+    mainBox marginTop: 5
+    mainBox marginBottom: 5
 
-    panesBox := GtkBox horizontal.
-    panesBox setSpacing: 8.
-    panesBox vexpand: true.
-    panesBox hexpand: true.
+    panesBox := GtkBox horizontal
+    panesBox setSpacing: 8
+    panesBox vexpand: true
+    panesBox hexpand: true
 
-    libraryPane := BrowserPane new.
-    libraryPane createWidgets.
-    libraryPane setLabel: "Libraries".
-    libraryPane onSelectionChanged: [:lib | self selectLibrary: lib ].
+    libraryPane := BrowserPane new
+    libraryPane createWidgets
+    libraryPane setLabel: "Libraries"
+    libraryPane onSelectionChanged: [:lib | self selectLibrary: lib ]
 
-    classPane := BrowserPane new.
-    classPane createWidgets.
-    classPane setLabel: "Classes".
-    classPane onSelectionChanged: [:cls | self selectClass: cls ].
+    classPane := BrowserPane new
+    classPane createWidgets
+    classPane setLabel: "Classes"
+    classPane onSelectionChanged: [:cls | self selectClass: cls ]
 
-    categoryPane := BrowserPane new.
-    categoryPane createWidgets.
-    categoryPane setLabel: "Categories".
-    categoryPane onSelectionChanged: [:cat | self selectCategory: cat ].
+    categoryPane := BrowserPane new
+    categoryPane createWidgets
+    categoryPane setLabel: "Categories"
+    categoryPane onSelectionChanged: [:cat | self selectCategory: cat ]
 
-    methodPane := BrowserPane new.
-    methodPane createWidgets.
-    methodPane setLabel: "Methods".
-    methodPane onSelectionChanged: [:meth | self selectMethod: meth ].
+    methodPane := BrowserPane new
+    methodPane createWidgets
+    methodPane setLabel: "Methods"
+    methodPane onSelectionChanged: [:meth | self selectMethod: meth ]
 
     # Add context menus
     methodPane onContextMenu: [:method :menu |
         menu addItem: "Print" do: [
             method notNil ifTrue: [
-                Transcript showCr: ("Method: " , method).
-            ].
-        ].
-        menu addSeparator.
+                Transcript showCr: ("Method: " , method)
+            ]
+        ]
+        menu addSeparator
         menu addItem: "Delete Method" do: [
             method notNil ifTrue: [
                 # Prepare method for deletion (sets up slots)
-                self prepareMethodForDelete: method.
+                self prepareMethodForDelete: method
                 # Then delete it
                 self deleteCurrentMethod
-            ].
-        ].
-    ].
+            ]
+        ]
+    ]
 
     classPane onContextMenu: [:class :menu |
         menu addItem: "New Class" do: [
             self createNewClass
-        ].
-        menu addSeparator.
+        ]
+        menu addSeparator
         menu addItem: "Print" do: [
             class notNil ifTrue: [
-                Transcript showCr: ("Class: " , class).
-            ].
-        ].
+                Transcript showCr: ("Class: " , class)
+            ]
+        ]
         menu addItem: "Show Class Info" do: [
             class notNil ifTrue: [
                 self showClassInfo: class
-            ].
-        ].
-        menu addSeparator.
+            ]
+        ]
+        menu addSeparator
         menu addItem: "Add Mixin..." do: [
             class notNil ifTrue: [
                 self showAddMixinDialog: class
-            ].
-        ].
-        menu addSeparator.
+            ]
+        ]
+        menu addSeparator
         menu addItem: "Delete Class" do: [
             class notNil ifTrue: [
                 self confirmDeleteClass: class
-            ].
-        ].
-    ].
+            ]
+        ]
+    ]
 
     libraryPane onContextMenu: [:lib :menu |
         menu addItem: "New Library..." do: [
             self showNewLibraryDialog
-        ].
+        ]
         menu addItem: "Rename Library..." do: [
             lib notNil ifTrue: [
                 self showRenameLibraryDialog: lib
             ] ifFalse: [
                 self showErrorDialog: "Select a library first before renaming it."
             ]
-        ].
+        ]
         menu addItem: "Delete Library..." do: [
             lib notNil ifTrue: [
                 self showDeleteLibraryDialog: lib
             ] ifFalse: [
                 self showErrorDialog: "Select a library first before deleting it."
             ]
-        ].
-        menu addSeparator.
+        ]
+        menu addSeparator
         menu addItem: "Print" do: [
             lib notNil ifTrue: [
-                Transcript showCr: ("Library: " , lib).
-            ].
-        ].
-        menu addSeparator.
+                Transcript showCr: ("Library: " , lib)
+            ]
+        ]
+        menu addSeparator
         menu addItem: "Find Class..." do: [
             self showFindClassDialog
-        ].
-    ].
+        ]
+    ]
 
-    panesBox append: (libraryPane widget).
-    panesBox append: (classPane widget).
-    panesBox append: (categoryPane widget).
-    panesBox append: (methodPane widget).
+    panesBox append: (libraryPane widget)
+    panesBox append: (classPane widget)
+    panesBox append: (categoryPane widget)
+    panesBox append: (methodPane widget)
 
-    sourceScrolled := self createSourceView.
-    sourceScrolled addCssClass: "frame".
-    sourceScrolled addCssClass: "view".
+    sourceScrolled := self createSourceView
+    sourceScrolled addCssClass: "frame"
+    sourceScrolled addCssClass: "view"
 
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 5.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 5
 
-    newClassButton := GtkButton newLabel: "New Class" iconName: "list-add".
-    newClassButton clicked: [ self createNewClass ].
-    newClassButton tooltip: "Create a new class (Ctrl+N)".
-    buttonBox append: newClassButton.
+    newClassButton := GtkButton newLabel: "New Class" iconName: "list-add"
+    newClassButton clicked: [ self createNewClass ]
+    newClassButton tooltip: "Create a new class (Ctrl+N)"
+    buttonBox append: newClassButton
 
-    newMethodButton := GtkButton newLabel: "New Method" iconName: "document-new".
-    newMethodButton clicked: [ self createNewMethod ].
-    newMethodButton tooltip: "Create a new method in the selected class".
-    buttonBox append: newMethodButton.
+    newMethodButton := GtkButton newLabel: "New Method" iconName: "document-new"
+    newMethodButton clicked: [ self createNewMethod ]
+    newMethodButton tooltip: "Create a new method in the selected class"
+    buttonBox append: newMethodButton
 
-    deleteMethodButton := GtkButton newLabel: "Delete Method" iconName: "edit-delete".
-    deleteMethodButton clicked: [ self deleteCurrentMethod ].
-    deleteMethodButton tooltip: "Delete the selected method".
-    buttonBox append: deleteMethodButton.
+    deleteMethodButton := GtkButton newLabel: "Delete Method" iconName: "edit-delete"
+    deleteMethodButton clicked: [ self deleteCurrentMethod ]
+    deleteMethodButton tooltip: "Delete the selected method"
+    buttonBox append: deleteMethodButton
 
-    refreshButton := GtkButton newLabel: "Refresh" iconName: "view-refresh".
-    refreshButton clicked: [ self refresh ].
-    refreshButton tooltip: "Refresh libraries, classes, and methods".
-    buttonBox append: refreshButton.
+    refreshButton := GtkButton newLabel: "Refresh" iconName: "view-refresh"
+    refreshButton clicked: [ self refresh ]
+    refreshButton tooltip: "Refresh libraries, classes, and methods"
+    buttonBox append: refreshButton
 
-    window setChild: mainBox.
-    mainBox append: panesBox.
-    mainBox append: sourceScrolled.
-    mainBox append: buttonBox.
+    window setChild: mainBox
+    mainBox append: panesBox
+    mainBox append: sourceScrolled
+    mainBox append: buttonBox
 
-    window destroyed: [ self onDestroy ].
+    window destroyed: [ self onDestroy ]
 
-    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+    anOwner notNil ifTrue: [ anOwner addWindow: self ]
 
-    window present.
-    self populateLibraries.
+    window present
+    self populateLibraries
 
-    Transcript showCr: "Browser opened".
+    Transcript showCr: "Browser opened"
     ^ self
 ]
 
 Browser>>createSourceView [
     | scrolled buffer |
-    scrolled := GtkScrolledWindow new.
-    scrolled vexpand: true.
-    scrolled hexpand: true.
+    scrolled := GtkScrolledWindow new
+    scrolled vexpand: true
+    scrolled hexpand: true
 
-    sourceView := GtkSourceView new.
-    sourceView text: "Select a method to view its source code".
-    sourceView showLineNumbers: true.
-    sourceView setTabWidth: 2.
-    sourceView editable: true.
+    sourceView := GtkSourceView new
+    sourceView text: "Select a method to view its source code"
+    sourceView showLineNumbers: true
+    sourceView setTabWidth: 2
+    sourceView editable: true
 
-    sourceView enableKeyboardShortcuts.
-    sourceView onControlKey: "s" do: [ self saveCurrentMethod ].
+    sourceView enableKeyboardShortcuts
+    sourceView onControlKey: "s" do: [ self saveCurrentMethod ]
     
     # Track modifications when user types
-    buffer := sourceView buffer.
-    buffer changed: [ self markSourceModified ].
+    buffer := sourceView buffer
+    buffer changed: [ self markSourceModified ]
 
-    sourceScrolled := scrolled.
-    scrolled setChild: sourceView.
+    sourceScrolled := scrolled
+    scrolled setChild: sourceView
     ^ scrolled
 ]
 
 Browser>>populateLibraries [
-    libraryPane items: (self catalog allLibraryNames).
+    libraryPane items: (self catalog allLibraryNames)
 ]
 
 Browser>>selectLibrary: aLibraryName [
-    self currentLibrary: aLibraryName.
-    Transcript showCr: ("Selected library: " , aLibraryName).
+    self currentLibrary: aLibraryName
+    Transcript showCr: ("Selected library: " , aLibraryName)
 
-    self currentClass: nil.
-    self currentCategory: nil.
-    self currentMethod: nil.
-    self currentMethodFile: nil.
-    self currentMethodOwnerClass: nil.
-    self currentMethodHeader: nil.
-    self currentMethodStartLine: nil.
-    self currentMethodEndLine: nil.
-    self currentMethodHasBlock: false.
+    self currentClass: nil
+    self currentCategory: nil
+    self currentMethod: nil
+    self currentMethodFile: nil
+    self currentMethodOwnerClass: nil
+    self currentMethodHeader: nil
+    self currentMethodStartLine: nil
+    self currentMethodEndLine: nil
+    self currentMethodHasBlock: false
 
-    classPane clear.
-    categoryPane clear.
-    methodPane clear.
-    self updateSourceView: "Select a class to view its definition.".
+    classPane clear
+    categoryPane clear
+    methodPane clear
+    self updateSourceView: "Select a class to view its definition."
 
-    self populateClassesFor: aLibraryName.
+    self populateClassesFor: aLibraryName
 ]
 
 Browser>>showNewLibraryDialog [
     | dialog box label inputBox inputField createButton cancelButton |
-    dialog := GtkWindow new.
-    dialog title: "New Library".
-    dialog setDefaultSize: 420 height: 160.
+    dialog := GtkWindow new
+    dialog title: "New Library"
+    dialog setDefaultSize: 420 height: 160
 
-    box := GtkBox vertical.
+    box := GtkBox vertical
     box
         setSpacing: 12;
         marginStart: 12;
         marginEnd: 12;
         marginTop: 12;
-        marginBottom: 12.
+        marginBottom: 12
 
-    label := GtkLabel new: "Enter a name for the new library:".
-    label halignStart.
+    label := GtkLabel new: "Enter a name for the new library:"
+    label halignStart
 
-    inputBox := GtkBox horizontal.
-    inputBox setSpacing: 8.
-    inputField := GtkEntry new.
-    inputField hexpand: true.
-    inputField placeholderText: "e.g. MyLibrary".
+    inputBox := GtkBox horizontal
+    inputBox setSpacing: 8
+    inputField := GtkEntry new
+    inputField hexpand: true
+    inputField placeholderText: "e.g. MyLibrary"
 
-    createButton := GtkButton newLabel: "Create".
-    createButton addCssClass: "suggested-action".
-    cancelButton := GtkButton newLabel: "Cancel".
+    createButton := GtkButton newLabel: "Create"
+    createButton addCssClass: "suggested-action"
+    cancelButton := GtkButton newLabel: "Cancel"
 
     createButton clicked: [
         | name lib |
-        name := inputField text trim.
+        name := inputField text trim
         name isEmpty ifTrue: [
-            self showErrorDialog: "Library name cannot be empty.".
+            self showErrorDialog: "Library name cannot be empty."
             ^ self
-        ].
-        lib := Library named: name.
+        ]
+        lib := Library named: name
         lib isNil ifTrue: [
-            lib := Library new.
+            lib := Library new
             lib name: name
-        ].
-        dialog close.
-        self populateLibraries.
-        libraryPane selectItem: name.
-        self selectLibrary: name.
-    ].
+        ]
+        dialog close
+        self populateLibraries
+        libraryPane selectItem: name
+        self selectLibrary: name
+    ]
 
-    cancelButton clicked: [ dialog close ].
+    cancelButton clicked: [ dialog close ]
 
-    dialog setChild: box.
-    box append: label.
-    box append: inputBox.
-    inputBox append: inputField.
-    box append: createButton.
-    box append: cancelButton.
-    dialog present.
+    dialog setChild: box
+    box append: label
+    box append: inputBox
+    inputBox append: inputField
+    box append: createButton
+    box append: cancelButton
+    dialog present
 ]
 
 Browser>>showRenameLibraryDialog: aLibraryName [
@@ -470,33 +470,33 @@ Browser>>showDeleteLibraryDialog: aLibraryName [
 
 Browser>>populateClassesFor: aLibraryName [
     | classNames libraryName |
-    classNames := self catalog classNamesForLibrary: aLibraryName.
+    classNames := self catalog classNamesForLibrary: aLibraryName
     libraryName := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName name asString ]
-        ifFalse: [ aLibraryName asString ].
-    Transcript showCr: ("Class count for " , libraryName , ": " , (classNames size printString)).
-    classPane items: classNames.
+        ifFalse: [ aLibraryName asString ]
+    Transcript showCr: ("Class count for " , libraryName , ": " , (classNames size printString))
+    classPane items: classNames
 ]
 
 Browser>>selectClass: aClassName [
     self hasUnsavedChanges ifTrue: [
-        # Store pending selection state for the async confirmation dialog.
-        self pendingTarget: aClassName.
-        self pendingPrevClass: classPane selectedItem.
-        self pendingPrevCategory: categoryPane selectedItem.
-        self pendingPrevMethod: methodPane selectedItem.
+        # Store pending selection state for the async confirmation dialog
+        self pendingTarget: aClassName
+        self pendingPrevClass: classPane selectedItem
+        self pendingPrevCategory: categoryPane selectedItem
+        self pendingPrevMethod: methodPane selectedItem
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
-                self markSourceClean.
+                self markSourceClean
                 self applyClassSelection: (self pendingTarget)
             ]
             onNo: [
                 (self pendingPrevClass) notNil ifTrue: [
                     classPane highlightItem: (self pendingPrevClass)
-                ].
+                ]
                 (self pendingPrevCategory) notNil ifTrue: [
                     categoryPane highlightItem: (self pendingPrevCategory)
-                ].
+                ]
                 (self pendingPrevMethod) notNil ifTrue: [
                     methodPane highlightItem: (self pendingPrevMethod)
                 ]
@@ -507,49 +507,49 @@ Browser>>selectClass: aClassName [
 ]
 
 Browser>>applyClassSelection: aClassName [
-    self currentClass: aClassName.
-    Transcript showCr: ("Selected class: " , aClassName).
+    self currentClass: aClassName
+    Transcript showCr: ("Selected class: " , aClassName)
 
-    self currentMethod: nil.
-    self currentMethodFile: nil.
-    self currentMethodOwnerClass: nil.
-    self currentMethodHeader: nil.
-    self currentMethodStartLine: nil.
-    self currentMethodEndLine: nil.
-    self currentMethodHasBlock: false.
+    self currentMethod: nil
+    self currentMethodFile: nil
+    self currentMethodOwnerClass: nil
+    self currentMethodHeader: nil
+    self currentMethodStartLine: nil
+    self currentMethodEndLine: nil
+    self currentMethodHasBlock: false
 
-    categoryPane clear.
-    methodPane clear.
+    categoryPane clear
+    methodPane clear
 
-    self populateCategoriesFor: aClassName.
+    self populateCategoriesFor: aClassName
 
-    self currentCategory: "all".
-    Transcript showCr: "Auto-selecting category: all".
+    self currentCategory: "all"
+    Transcript showCr: "Auto-selecting category: all"
     [ self populateMethodsFor: aClassName category: self currentCategory ]
         on: Exception
         do: [:ex |
             Transcript showCr: ("selectClass auto-populate error: " , ex printString)
-        ].
+        ]
 
     self showClassDefinition: aClassName
 ]
 
 Browser>>showClassDefinition: aClassName [
     | info found sourceText |
-    info := Harding methodSourceInfoForClass: aClassName selector: "<classDefinition>".
-    found := info at: "found" ifAbsent: [ false ].
+    info := Harding methodSourceInfoForClass: aClassName selector: "<classDefinition>"
+    found := info at: "found" ifAbsent: [ false ]
 
-    self currentMethod: "<classDefinition>".
-    self currentMethodOwnerClass: aClassName.
-    self currentMethodFile: (info at: "file" ifAbsent: [ nil ]).
-    self currentMethodHeader: (info at: "header" ifAbsent: [ nil ]).
-    self currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]).
-    self currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]).
-    self currentMethodHasBlock: false.
+    self currentMethod: "<classDefinition>"
+    self currentMethodOwnerClass: aClassName
+    self currentMethodFile: (info at: "file" ifAbsent: [ nil ])
+    self currentMethodHeader: (info at: "header" ifAbsent: [ nil ])
+    self currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ])
+    self currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ])
+    self currentMethodHasBlock: false
 
     found ifTrue: [
-        sourceText := info at: "source" ifAbsent: [ "" ].
-        self updateSourceView: sourceText.
+        sourceText := info at: "source" ifAbsent: [ "" ]
+        self updateSourceView: sourceText
     ] ifFalse: [
         self showClassInfo: aClassName
     ]
@@ -557,8 +557,8 @@ Browser>>showClassDefinition: aClassName [
 
 Browser>>populateCategoriesFor: aClassName [
     | categories |
-    categories := self inferCategoriesFor: aClassName.
-    categoryPane items: categories.
+    categories := self inferCategoriesFor: aClassName
+    categoryPane items: categories
 ]
 
 Browser>>classForName: aClassName [
@@ -571,19 +571,19 @@ Browser>>inferCategoriesFor: aClassName [
 
 Browser>>selectCategory: aCategory [
     self hasUnsavedChanges ifTrue: [
-        # Store pending selection state for the async confirmation dialog.
-        self pendingTarget: aCategory.
-        self pendingPrevCategory: categoryPane selectedItem.
-        self pendingPrevMethod: methodPane selectedItem.
+        # Store pending selection state for the async confirmation dialog
+        self pendingTarget: aCategory
+        self pendingPrevCategory: categoryPane selectedItem
+        self pendingPrevMethod: methodPane selectedItem
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
-                self markSourceClean.
+                self markSourceClean
                 self applyCategorySelection: (self pendingTarget)
             ]
             onNo: [
                 (self pendingPrevCategory) notNil ifTrue: [
                     categoryPane highlightItem: (self pendingPrevCategory)
-                ].
+                ]
                 (self pendingPrevMethod) notNil ifTrue: [
                     methodPane highlightItem: (self pendingPrevMethod)
                 ]
@@ -594,10 +594,10 @@ Browser>>selectCategory: aCategory [
 ]
 
 Browser>>applyCategorySelection: aCategory [
-    self currentCategory: aCategory.
-    Transcript showCr: ("Selected category: " , aCategory).
+    self currentCategory: aCategory
+    Transcript showCr: ("Selected category: " , aCategory)
 
-    methodPane clear.
+    methodPane clear
 
     [ self populateMethodsFor: self currentClass category: aCategory ]
         on: Exception
@@ -607,18 +607,18 @@ Browser>>applyCategorySelection: aCategory [
 ]
 
 Browser>>populateMethodsFor: aClassName category: aCategory [
-    methodPane items: (self catalog methodNamesForClass: aClassName category: aCategory currentLibrary: self currentLibrary).
+    methodPane items: (self catalog methodNamesForClass: aClassName category: aCategory currentLibrary: self currentLibrary)
 ]
 
 Browser>>selectMethod: aMethodName [
     self hasUnsavedChanges ifTrue: [
-        # Store pending method state for the async confirmation dialog.
-        self pendingTarget: aMethodName.
-        self pendingPrevMethod: methodPane selectedItem.
+        # Store pending method state for the async confirmation dialog
+        self pendingTarget: aMethodName
+        self pendingPrevMethod: methodPane selectedItem
         self showConfirmationDialog: "You have unsaved changes. Discard them?"
             onYes: [
-                self markSourceClean.
-                self currentMethod: self pendingTarget.
+                self markSourceClean
+                self currentMethod: self pendingTarget
                 (self pendingTarget) notNil ifTrue: [
                     self showMethodSource: (self pendingTarget)
                 ]
@@ -629,7 +629,7 @@ Browser>>selectMethod: aMethodName [
                 ]
             ]
     ] ifFalse: [
-        self currentMethod: aMethodName.
+        self currentMethod: aMethodName
         self showMethodSource: aMethodName
     ]
 ]
@@ -642,13 +642,13 @@ Browser>>showMethodSource: aMethodName [
     | info found sourceText editorHeader |
 
     aMethodName isNil ifTrue: [
-        Transcript showCr: "showMethodSource: aMethodName is nil!".
-        self updateSourceView: "Error: no method name provided".
+        Transcript showCr: "showMethodSource: aMethodName is nil!"
+        self updateSourceView: "Error: no method name provided"
         ^ self
-    ].
+    ]
 
-    info := self methodSourceInfoFor: aMethodName.
-    found := info at: "found" ifAbsent: [ false ].
+    info := self methodSourceInfoFor: aMethodName
+    found := info at: "found" ifAbsent: [ false ]
 
     found ifFalse: [
         self
@@ -658,12 +658,12 @@ Browser>>showMethodSource: aMethodName [
             currentMethodSuffix: "";
             currentMethodStartLine: nil;
             currentMethodEndLine: nil;
-            currentMethodHasBlock: false.
+            currentMethodHasBlock: false
 
-        sourceText := (aMethodName asString) , "\n\nMethod source not found in .hrd files.".
-        self updateSourceView: sourceText.
+        sourceText := (aMethodName asString) , "\n\nMethod source not found in .hrd files."
+        self updateSourceView: sourceText
         ^ self
-    ].
+    ]
 
     self
         currentMethodFile: (info at: "file" ifAbsent: [ nil ]);
@@ -672,12 +672,12 @@ Browser>>showMethodSource: aMethodName [
         currentMethodSuffix: (info at: "suffix" ifAbsent: [ "" ]);
         currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]);
         currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]);
-        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ]).
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ])
 
-    editorHeader := self editableHeaderFromMethodHeader: self currentMethodHeader.
-    editorHeader isNil ifTrue: [ editorHeader := aMethodName asString ].
-    sourceText := info at: "source" ifAbsent: [ "" ].
-    sourceText isNil ifTrue: [ sourceText := "" ].
+    editorHeader := self editableHeaderFromMethodHeader: self currentMethodHeader
+    editorHeader isNil ifTrue: [ editorHeader := aMethodName asString ]
+    sourceText := info at: "source" ifAbsent: [ "" ]
+    sourceText isNil ifTrue: [ sourceText := "" ]
 
     self currentMethodHasBlock ifTrue: [
         sourceText := editorHeader , "\n" , sourceText
@@ -685,8 +685,8 @@ Browser>>showMethodSource: aMethodName [
         sourceText isEmpty
             ifTrue: [ sourceText := editorHeader ]
             ifFalse: [ sourceText := editorHeader , "\n" , sourceText ]
-    ].
-    self updateSourceView: sourceText.
+    ]
+    self updateSourceView: sourceText
 ]
 
 Browser>>editableHeaderFromMethodHeader: aHeader [
@@ -695,18 +695,18 @@ Browser>>editableHeaderFromMethodHeader: aHeader [
 
 Browser>>refreshCurrentMethodLocation [
     | selector info found |
-    self currentMethodOwnerClass isNil ifTrue: [ ^ false ].
-    selector := self currentMethod.
+    self currentMethodOwnerClass isNil ifTrue: [ ^ false ]
+    selector := self currentMethod
     selector isNil ifTrue: [
         self currentMethodHeader notNil ifTrue: [
             selector := self editableHeaderFromMethodHeader: self currentMethodHeader
         ]
-    ].
-    selector isNil ifTrue: [ ^ false ].
+    ]
+    selector isNil ifTrue: [ ^ false ]
 
-    info := Harding methodSourceInfoForClass: self currentMethodOwnerClass selector: selector.
-    found := info at: "found" ifAbsent: [ false ].
-    found ifFalse: [ ^ false ].
+    info := Harding methodSourceInfoForClass: self currentMethodOwnerClass selector: selector
+    found := info at: "found" ifAbsent: [ false ]
+    found ifFalse: [ ^ false ]
 
     self
         currentMethodFile: (info at: "file" ifAbsent: [ self currentMethodFile ]);
@@ -714,7 +714,7 @@ Browser>>refreshCurrentMethodLocation [
         currentMethodSuffix: (info at: "suffix" ifAbsent: [ self currentMethodSuffix ]);
         currentMethodStartLine: (info at: "startLine" ifAbsent: [ self currentMethodStartLine ]);
         currentMethodEndLine: (info at: "endLine" ifAbsent: [ self currentMethodEndLine ]);
-        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ self currentMethodHasBlock ]).
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ self currentMethodHasBlock ])
     ^ true
 ]
 
@@ -724,61 +724,61 @@ Browser>>methodTextFromInfo: info [
 
 Browser>>managedMethodInfosForCurrentClass [
     | infos i entries info file selector |
-    infos := Array new.
-    self currentClass isNil ifTrue: [ ^ infos ].
-    self currentMethodFile isNil ifTrue: [ ^ infos ].
+    infos := Array new
+    self currentClass isNil ifTrue: [ ^ infos ]
+    self currentMethodFile isNil ifTrue: [ ^ infos ]
 
-    entries := self catalog sourceEntriesForClass: self currentClass.
-    i := 0.
+    entries := self catalog sourceEntriesForClass: self currentClass
+    i := 0
     [ i < entries size ] whileTrue: [
-        info := entries at: i.
-        file := info at: "file" ifAbsent: [ nil ].
-        selector := info at: "selector" ifAbsent: [ nil ].
+        info := entries at: i
+        file := info at: "file" ifAbsent: [ nil ]
+        selector := info at: "selector" ifAbsent: [ nil ]
         ((file = self currentMethodFile) and: [ selector ~= "<classDefinition>" ]) ifTrue: [
             infos add: info
-        ].
+        ]
         i := i + 1
-    ].
+    ]
 
     ^ infos
 ]
 
 Browser>>rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: overrideSelector methodText: overrideMethodText removeSelector: removeSelector [
     | infos parts i info selector replaced text |
-    infos := self managedMethodInfosForCurrentClass.
-    parts := Array new.
-    replaced := false.
+    infos := self managedMethodInfosForCurrentClass
+    parts := Array new
+    replaced := false
 
     classDefText notNil ifTrue: [
         classDefText trim isEmpty ifFalse: [
             parts add: classDefText trim
         ]
-    ].
+    ]
 
-    i := 0.
+    i := 0
     [ i < infos size ] whileTrue: [
-        info := infos at: i.
+        info := infos at: i
         selector := (info at: "header" ifAbsent: [ nil ])
-            ifNotNil: [:header | self editableHeaderFromMethodHeader: header].
+            ifNotNil: [:header | self editableHeaderFromMethodHeader: header]
 
         selector = removeSelector ifFalse: [
             selector = overrideSelector
                 ifTrue: [
-                    overrideMethodText notNil ifTrue: [ parts add: overrideMethodText trim ].
+                    overrideMethodText notNil ifTrue: [ parts add: overrideMethodText trim ]
                     replaced := true
                 ]
                 ifFalse: [ parts add: (self methodTextFromInfo: info) trim ]
-        ].
+        ]
         i := i + 1
-    ].
+    ]
 
     (overrideSelector notNil and: [ overrideMethodText notNil and: [ replaced not ] ]) ifTrue: [
         parts add: overrideMethodText trim
-    ].
+    ]
 
-    text := self linesToText: parts.
-    File write: text to: self currentMethodFile.
-    self reloadCurrentMethodFile.
+    text := self linesToText: parts
+    File write: text to: self currentMethodFile
+    self reloadCurrentMethodFile
     ^ text
 ]
 
@@ -786,131 +786,131 @@ Browser>>saveCurrentMethod [
     | editorLines bodyLines selectorLine fullHeader originalHeader creatingNew methodText classDefText index |
 
     self currentMethodFile isNil ifTrue: [
-        Transcript showCr: "No method source selected to save".
+        Transcript showCr: "No method source selected to save"
         ^ self
-    ].
+    ]
 
     (self currentMethod = "<classDefinition>") ifTrue: [
         | classText refreshed |
-        classText := sourceView text.
+        classText := sourceView text
         (self refreshCurrentMethodLocation) ifFalse: [
-            Transcript showCr: "Could not refresh class definition location; save aborted".
+            Transcript showCr: "Could not refresh class definition location; save aborted"
             ^ self
-        ].
-        self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil.
-        refreshed := self refreshCurrentMethodLocation.
-        refreshed ifTrue: [ self updateSourceView: classText ].
-        Transcript showCr: ("Saved class definition for " , self currentClass , " to " , self currentMethodFile).
+        ]
+        self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil
+        refreshed := self refreshCurrentMethodLocation
+        refreshed ifTrue: [ self updateSourceView: classText ]
+        Transcript showCr: ("Saved class definition for " , self currentClass , " to " , self currentMethodFile)
         ^ self
-    ].
+    ]
 
     self currentMethodHasBlock ifFalse: [
-        Transcript showCr: "Saving primitive-line methods is not supported yet".
+        Transcript showCr: "Saving primitive-line methods is not supported yet"
         ^ self
-    ].
+    ]
 
     self currentMethodHeader isNil ifTrue: [
-        Transcript showCr: "Method header is missing; cannot save".
+        Transcript showCr: "Method header is missing; cannot save"
         ^ self
-    ].
+    ]
 
-    editorLines := sourceView text split: "\n".
+    editorLines := sourceView text split: "\n"
     editorLines isEmpty ifTrue: [
-        Transcript showCr: "Editor is empty; cannot save".
+        Transcript showCr: "Editor is empty; cannot save"
         ^ self
-    ].
+    ]
 
-    selectorLine := ((editorLines at: 0) asString) trim.
+    selectorLine := ((editorLines at: 0) asString) trim
     selectorLine isEmpty ifTrue: [
-        Transcript showCr: "Method selector line is empty; cannot save".
+        Transcript showCr: "Method selector line is empty; cannot save"
         ^ self
-    ].
+    ]
 
-    fullHeader := self currentMethodOwnerClass , ">>" , selectorLine.
-    originalHeader := self editableHeaderFromMethodHeader: self currentMethodHeader.
-    creatingNew := self currentMethodStartLine isNil or: [ (selectorLine = originalHeader) not ].
+    fullHeader := self currentMethodOwnerClass , ">>" , selectorLine
+    originalHeader := self editableHeaderFromMethodHeader: self currentMethodHeader
+    creatingNew := self currentMethodStartLine isNil or: [ (selectorLine = originalHeader) not ]
 
     creatingNew ifFalse: [
         (self refreshCurrentMethodLocation) ifFalse: [
-            Transcript showCr: "Could not refresh method source location; save aborted".
+            Transcript showCr: "Could not refresh method source location; save aborted"
             ^ self
         ]
-    ].
+    ]
 
-    bodyLines := Array new.
-    index := 1.
+    bodyLines := Array new
+    index := 1
     [ index < editorLines size ] whileTrue: [
-        bodyLines add: (editorLines at: index).
+        bodyLines add: (editorLines at: index)
         index := index + 1
-    ].
+    ]
 
-    methodText := fullHeader , " [\n" , (self linesToText: bodyLines) , "\n]" , self currentMethodSuffix.
-    classDefText := self sourceView text.
+    methodText := fullHeader , " [\n" , (self linesToText: bodyLines) , "\n]" , self currentMethodSuffix
+    classDefText := self sourceView text
     (self currentClass notNil and: [ self currentMethodFile notNil ]) ifTrue: [
         | classInfo |
-        classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>".
+        classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>"
         (classInfo at: "found" ifAbsent: [ false ]) ifTrue: [
             classDefText := classInfo at: "source"
         ]
-    ].
+    ]
 
-    self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: selectorLine methodText: methodText removeSelector: nil.
+    self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: selectorLine methodText: methodText removeSelector: nil
 
-    self installMethodInImage: fullHeader bodyLines: bodyLines.
-    self reloadCurrentMethodFile.
+    self installMethodInImage: fullHeader bodyLines: bodyLines
+    self reloadCurrentMethodFile
 
-    self currentMethod: selectorLine.
-    self currentMethodHeader: fullHeader.
+    self currentMethod: selectorLine
+    self currentMethodHeader: fullHeader
 
     creatingNew ifTrue: [
         Transcript showCr: ("Saved new method " , self currentMethodOwnerClass , ">>" , selectorLine , " to " , self currentMethodFile)
     ] ifFalse: [
         Transcript showCr: ("Saved " , self currentMethodOwnerClass , ">>" , selectorLine , " to " , self currentMethodFile)
-    ].
+    ]
 
-    creatingNew ifTrue: [ self currentCategory: "defined" ].
-    self populateMethodsFor: self currentClass category: self currentCategory.
-    self showMethodSource: selectorLine.
+    creatingNew ifTrue: [ self currentCategory: "defined" ]
+    self populateMethodsFor: self currentClass category: self currentCategory
+    self showMethodSource: selectorLine
 ]
 
 Browser>>reloadCurrentMethodFile [
     | result |
-    self currentMethodFile isNil ifTrue: [ ^ self ].
+    self currentMethodFile isNil ifTrue: [ ^ self ]
 
     result := [ Harding load: self currentMethodFile ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ].
+        do: [:ex | "IDE_ERROR: " , ex printString ]
 
     ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
         Transcript showCr: ("Failed to reload file: " , result)
-    ].
+    ]
 ]
 
 Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
     | methodText bodyText result selector classObj installed |
-    bodyText := self linesToText: bodyLines.
-    methodText := fullHeader , " [\n" , bodyText , "\n]".
-    selector := self editableHeaderFromMethodHeader: fullHeader.
+    bodyText := self linesToText: bodyLines
+    methodText := fullHeader , " [\n" , bodyText , "\n]"
+    selector := self editableHeaderFromMethodHeader: fullHeader
 
     result := [ Object eval: methodText ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ].
+        do: [:ex | "IDE_ERROR: " , ex printString ]
 
     ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
-        Transcript showCr: ("Failed to install method in image: " , result).
+        Transcript showCr: ("Failed to install method in image: " , result)
         ^ self
-    ].
+    ]
 
-    classObj := self classForName: self currentClass.
+    classObj := self classForName: self currentClass
     classObj isNil ifTrue: [
-        Transcript showCr: "Method install verification failed: class not found".
+        Transcript showCr: "Method install verification failed: class not found"
         ^ self
-    ].
+    ]
 
-    installed := classObj methods includes: (selector asSymbol).
+    installed := classObj methods includes: (selector asSymbol)
     installed ifFalse: [
         Transcript showCr: ("Method install verification failed for " , selector)
-    ].
+    ]
 ]
 
 Browser>>isErrorResult: result [
@@ -929,91 +929,91 @@ Browser>>isErrorResult: result [
 
 Browser>>linesToText: lines [
     | out first |
-    out := "".
-    first := true.
+    out := ""
+    first := true
 
     lines do: [:line |
-        first ifFalse: [ out := out , "\n" ].
-        out := out , line asString.
+        first ifFalse: [ out := out , "\n" ]
+        out := out , line asString
         first := false
-    ].
+    ]
 
     ^ out
 ]
 
 Browser>>updateSourceView: aString [
     sourceView notNil ifTrue: [
-        ignoreTextChanges := true.
-        sourceView text: aString.
-        self markSourceClean.
-        ignoreTextChanges := false.
+        ignoreTextChanges := true
+        sourceView text: aString
+        self markSourceClean
+        ignoreTextChanges := false
     ]
 ]
 
 Browser>>refresh [
-    classPane clear.
-    categoryPane clear.
-    methodPane clear.
+    classPane clear
+    categoryPane clear
+    methodPane clear
 
-    self currentLibrary: nil.
-    model reset.
-    self currentClass: nil.
-    self currentCategory: nil.
-    self currentMethod: nil.
-    self currentMethodFile: nil.
-    self currentMethodOwnerClass: nil.
-    self currentMethodHeader: nil.
-    self currentMethodSuffix: "".
-    self currentMethodStartLine: nil.
-    self currentMethodEndLine: nil.
-    self currentMethodHasBlock: false.
+    self currentLibrary: nil
+    model reset
+    self currentClass: nil
+    self currentCategory: nil
+    self currentMethod: nil
+    self currentMethodFile: nil
+    self currentMethodOwnerClass: nil
+    self currentMethodHeader: nil
+    self currentMethodSuffix: ""
+    self currentMethodStartLine: nil
+    self currentMethodEndLine: nil
+    self currentMethodHasBlock: false
 
-    self updateSourceView: "Select a method to view its source code".
-    self populateLibraries.
-    Transcript showCr: "Browser refreshed".
+    self updateSourceView: "Select a method to view its source code"
+    self populateLibraries
+    Transcript showCr: "Browser refreshed"
 ]
 
 Browser>>close [
     window notNil ifTrue: [
         window close
-    ].
+    ]
 ]
 
 Browser>>onDestroy [
     owner notNil ifTrue: [
-        [ owner removeWindow: self ] on: Exception do: [:ex | nil ].
+        [ owner removeWindow: self ] on: Exception do: [:ex | nil ]
         owner := nil
-    ].
-    window := nil.
+    ]
+    window := nil
 ]
 
 Browser>>resolveMethodFileForCurrentClass [
     | classObj candidates index selector info found owner file |
-    self currentMethodFile notNil ifTrue: [ ^ self currentMethodFile ].
+    self currentMethodFile notNil ifTrue: [ ^ self currentMethodFile ]
 
-    classObj := self classForName: self currentClass.
-    classObj isNil ifTrue: [ ^ nil ].
+    classObj := self classForName: self currentClass
+    classObj isNil ifTrue: [ ^ nil ]
 
-    candidates := classObj definedMethods.
+    candidates := classObj definedMethods
     candidates isEmpty ifTrue: [
         candidates := classObj methods
-    ].
+    ]
 
-    file := nil.
-    index := 0.
+    file := nil
+    index := 0
     [ file isNil and: [ index < candidates size ] ] whileTrue: [
-        selector := (candidates at: index) asString.
-        info := self methodSourceInfoFor: selector.
-    found := info at: "found" ifAbsent: [ false ].
+        selector := (candidates at: index) asString
+        info := self methodSourceInfoFor: selector
+    found := info at: "found" ifAbsent: [ false ]
 
         found ifTrue: [
-    owner := info at: "ownerClass" ifAbsent: [ self currentClass ].
+    owner := info at: "ownerClass" ifAbsent: [ self currentClass ]
             (owner = self currentClass) ifTrue: [
     file := info at: "file" ifAbsent: [ nil ]
             ]
-        ].
+        ]
         index := index + 1
-    ].
+    ]
 
     ^ file
 ]
@@ -1021,18 +1021,18 @@ Browser>>resolveMethodFileForCurrentClass [
 Browser>>createNewMethod [
     | resolvedFile |
     self currentClass isNil ifTrue: [
-        Transcript showCr: "No class selected; cannot create new method".
+        Transcript showCr: "No class selected; cannot create new method"
         ^ self
-    ].
+    ]
 
     self checkUnsavedChangesThen: [
-        resolvedFile := self resolveMethodFileForCurrentClass.
-        self currentMethodFile: resolvedFile.
+        resolvedFile := self resolveMethodFileForCurrentClass
+        self currentMethodFile: resolvedFile
 
         self currentMethodFile isNil ifTrue: [
-            Transcript showCr: "No .hrd file found for class; cannot create new method".
+            Transcript showCr: "No .hrd file found for class; cannot create new method"
             ^ self
-        ].
+        ]
 
         self
             currentMethodOwnerClass: self currentClass;
@@ -1041,10 +1041,10 @@ Browser>>createNewMethod [
             currentMethodSuffix: "";
             currentMethodStartLine: nil;
             currentMethodEndLine: nil;
-            currentMethodHasBlock: true.
+            currentMethodHasBlock: true
 
-        self updateSourceView: "newMethod" , "\n\n^ nil".
-        Transcript showCr: ("Created new method stub for " , self currentClass , " in " , self currentMethodFile).
+        self updateSourceView: "newMethod" , "\n\n^ nil"
+        Transcript showCr: ("Created new method stub for " , self currentClass , " in " , self currentMethodFile)
     ]
 ]
 
@@ -1052,52 +1052,52 @@ Browser>>deleteCurrentMethod [
     | confirmMessage |
 
     self currentMethod isNil ifTrue: [
-        Transcript showCr: "No method selected to delete".
+        Transcript showCr: "No method selected to delete"
         ^ self
-    ].
+    ]
 
     self currentMethodFile isNil ifTrue: [
-        Transcript showCr: "No method file found; cannot delete".
+        Transcript showCr: "No method file found; cannot delete"
         ^ self
-    ].
+    ]
 
     self currentMethodHasBlock ifFalse: [
-        Transcript showCr: "Cannot delete primitive methods".
+        Transcript showCr: "Cannot delete primitive methods"
         ^ self
-    ].
+    ]
 
     (self refreshCurrentMethodLocation) ifFalse: [
-        Transcript showCr: "Could not refresh method source location; cannot delete".
+        Transcript showCr: "Could not refresh method source location; cannot delete"
         ^ self
-    ].
+    ]
 
     self currentMethodStartLine isNil ifTrue: [
-        Transcript showCr: "Method is new and not saved yet; nothing to delete".
+        Transcript showCr: "Method is new and not saved yet; nothing to delete"
         ^ self
-    ].
+    ]
 
-    confirmMessage := "Delete method " , self currentClass , ">>" , self currentMethod , "?".
+    confirmMessage := "Delete method " , self currentClass , ">>" , self currentMethod , "?"
     
     self showConfirmationDialog: confirmMessage
         onYes: [
             | classDefText classInfo |
-            classDefText := "".
-            classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>".
+            classDefText := ""
+            classInfo := Harding methodSourceInfoForClass: self currentClass selector: "<classDefinition>"
             (classInfo at: "found" ifAbsent: [ false ]) ifTrue: [
                 classDefText := classInfo at: "source"
-            ].
-            self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: self currentMethod.
+            ]
+            self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: self currentMethod
 
-            self removeMethodFromClass: self currentMethod.
+            self removeMethodFromClass: self currentMethod
 
-            Transcript showCr: ("Deleted method " , self currentClass , ">>" , self currentMethod).
+            Transcript showCr: ("Deleted method " , self currentClass , ">>" , self currentMethod)
 
-            self currentMethod: nil.
-            self currentMethodHeader: nil.
-            self currentMethodStartLine: nil.
-            self currentMethodEndLine: nil.
+            self currentMethod: nil
+            self currentMethodHeader: nil
+            self currentMethodStartLine: nil
+            self currentMethodEndLine: nil
 
-            self updateSourceView: "Method deleted. Select another method or create new.".
+            self updateSourceView: "Method deleted. Select another method or create new."
             self populateMethodsFor: self currentClass category: self currentCategory
         ]
         onNo: [
@@ -1111,10 +1111,10 @@ Browser>>prepareMethodForDelete: aMethodName [
     # This sets currentMethod and loads its metadata
     | info found |
     
-    self currentMethod: aMethodName.
+    self currentMethod: aMethodName
     
-    info := self methodSourceInfoFor: aMethodName.
-    found := info at: "found" ifAbsent: [ false ].
+    info := self methodSourceInfoFor: aMethodName
+    found := info at: "found" ifAbsent: [ false ]
 
     found ifFalse: [
         self
@@ -1124,9 +1124,9 @@ Browser>>prepareMethodForDelete: aMethodName [
             currentMethodSuffix: "";
             currentMethodStartLine: nil;
             currentMethodEndLine: nil;
-            currentMethodHasBlock: false.
+            currentMethodHasBlock: false
         ^ false
-    ].
+    ]
 
     self
         currentMethodFile: (info at: "file" ifAbsent: [ nil ]);
@@ -1135,226 +1135,226 @@ Browser>>prepareMethodForDelete: aMethodName [
         currentMethodSuffix: (info at: "suffix" ifAbsent: [ "" ]);
         currentMethodStartLine: (info at: "startLine" ifAbsent: [ nil ]);
         currentMethodEndLine: (info at: "endLine" ifAbsent: [ nil ]);
-        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ]).
+        currentMethodHasBlock: (info at: "hasBlock" ifAbsent: [ false ])
     
     ^ true
 ]
 
 Browser>>removeMethodFromClass: aSelector [
     | classObj |
-    classObj := self classForName: self currentClass.
+    classObj := self classForName: self currentClass
     classObj isNil ifTrue: [
-        Transcript showCr: "Cannot find class object to remove method".
+        Transcript showCr: "Cannot find class object to remove method"
         ^ self
-    ].
+    ]
 
-    classObj removeMethod: aSelector.
-    Transcript showCr: ("Removed method " , aSelector , " from class " , self currentClass).
+    classObj removeMethod: aSelector
+    Transcript showCr: ("Removed method " , aSelector , " from class " , self currentClass)
 ]
 
 Browser>>showFindClassDialog [
     | dialog box label inputBox inputField searchButton cancelButton result |
     
-    dialog := GtkWindow new.
-    dialog title: "Find Class".
-    dialog setDefaultSize: 350 height: 120.
+    dialog := GtkWindow new
+    dialog title: "Find Class"
+    dialog setDefaultSize: 350 height: 120
     
-    box := GtkBox vertical.
+    box := GtkBox vertical
     box
         setSpacing: 12;
         marginStart: 12;
         marginEnd: 12;
         marginTop: 12;
-        marginBottom: 12.
+        marginBottom: 12
     
-    label := GtkLabel new: "Class name (or partial name):".
-    label halignStart.
+    label := GtkLabel new: "Class name (or partial name):"
+    label halignStart
     
-    inputBox := GtkBox horizontal.
-    inputBox setSpacing: 8.
+    inputBox := GtkBox horizontal
+    inputBox setSpacing: 8
     
-    inputField := GtkEntry new.
-    inputField hexpand: true.
-    inputField placeholderText: "e.g. Array or Col".
+    inputField := GtkEntry new
+    inputField hexpand: true
+    inputField placeholderText: "e.g. Array or Col"
     
-    searchButton := GtkButton newLabel: "Find".
-    searchButton addCssClass: "suggested-action".
+    searchButton := GtkButton newLabel: "Find"
+    searchButton addCssClass: "suggested-action"
     
-    cancelButton := GtkButton newLabel: "Cancel".
+    cancelButton := GtkButton newLabel: "Cancel"
     
     searchButton clicked: [
         | searchText |
-        searchText := inputField text trim.
+        searchText := inputField text trim
         searchText isEmpty ifFalse: [
-            dialog close.
+            dialog close
             self findAndSelectClass: searchText
         ]
-    ].
+    ]
     
     cancelButton clicked: [
         dialog close
-    ].
+    ]
     
-    inputBox append: inputField.
-    inputBox append: searchButton.
-    inputBox append: cancelButton.
+    inputBox append: inputField
+    inputBox append: searchButton
+    inputBox append: cancelButton
     
-    dialog setChild: box.
-    box append: label.
-    box append: inputBox.
+    dialog setChild: box
+    box append: label
+    box append: inputBox
     
-    dialog present.
+    dialog present
 ]
 
 Browser>>findAndSelectClass: aPattern [
     | libraryNames matchedLib matchedClass li li2 |
     
-    libraryNames := Library allNames.
-    matchedLib := nil.
-    matchedClass := nil.
+    libraryNames := Library allNames
+    matchedLib := nil
+    matchedClass := nil
     
     libraryNames isNil ifFalse: [
-        li := 0.
+        li := 0
         [ li < libraryNames size and: [matchedClass isNil] ] whileTrue: [
             | libName lib classNames |
-            libName := libraryNames at: li.
-            lib := Library named: libName.
+            libName := libraryNames at: li
+            lib := Library named: libName
             lib notNil ifTrue: [
 libName = "Harding" ifTrue: [
                     | names keysResult i2 |
-                    names := Array new.
-                    keysResult := Harding keys.
+                    names := Array new
+                    keysResult := Harding keys
                     keysResult isNil ifFalse: [
-                        i2 := 0.
+                        i2 := 0
                         [ i2 < keysResult size ] whileTrue: [
                             | k |
-                            k := keysResult at: i2.
+                            k := keysResult at: i2
                             ((Harding at: k) isClass) ifTrue: [
                                 names add: k
-                            ].
+                            ]
                             i2 := i2 + 1
                         ]
-                    ].
+                    ]
                     classNames := names
                 ] ifFalse: [
-                    classNames := lib classNames.
-                ].
+                    classNames := lib classNames
+                ]
                 classNames isNil ifFalse: [
-                    li2 := 0.
+                    li2 := 0
                     [ li2 < classNames size and: [matchedClass isNil] ] whileTrue: [
                         | className |
-                        className := classNames at: li2.
+                        className := classNames at: li2
                         (((className asString lowercase) includesSubString: (aPattern lowercase))) ifTrue: [
-                            matchedLib := libName.
+                            matchedLib := libName
                             matchedClass := className
-                        ].
+                        ]
                         li2 := li2 + 1
                     ]
                 ]
-            ].
+            ]
             li := li + 1
         ]
-    ].
+    ]
     
     matchedClass isNil ifTrue: [
-        Transcript showCr: ("No class found matching: " , aPattern).
+        Transcript showCr: ("No class found matching: " , aPattern)
         ^ self
-    ].
+    ]
     
-    Transcript showCr: ("Found: " , matchedClass , " in " , matchedLib).
+    Transcript showCr: ("Found: " , matchedClass , " in " , matchedLib)
     
-    self selectLibrary: matchedLib.
-    classPane selectItem: matchedClass.
-    self applyClassSelection: matchedClass.
+    self selectLibrary: matchedLib
+    classPane selectItem: matchedClass
+    self applyClassSelection: matchedClass
 ]
 
 Browser>>createNewClass [
     | className parentName slotsArray result fileName filePath classDefCode lib |
 
     self currentLibrary isNil ifTrue: [
-        self showErrorDialog: "Select a library first before creating a class.".
+        self showErrorDialog: "Select a library first before creating a class."
         ^ self
-    ].
+    ]
 
-    className := self nextAutoClassName.
-    parentName := "Object".
-    slotsArray := #().
+    className := self nextAutoClassName
+    parentName := "Object"
+    slotsArray := #()
 
-    classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray.
-    fileName := className , ".hrd".
-    filePath := self resolveClassFilePath: className defaultName: fileName.
+    classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray
+    fileName := className , ".hrd"
+    filePath := self resolveClassFilePath: className defaultName: fileName
 
     filePath isNil ifTrue: [
-        Transcript showCr: ("Cannot determine file path for class: " , className).
+        Transcript showCr: ("Cannot determine file path for class: " , className)
     ] ifFalse: [
-        self writeClassDefinition: classDefCode toFile: filePath forClass: className.
-        lib := Library named: self currentLibrary.
+        self writeClassDefinition: classDefCode toFile: filePath forClass: className
+        lib := Library named: self currentLibrary
         result := lib notNil
             ifTrue: [ [ lib load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ]
-            ifFalse: [ [ Harding load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ].
+            ifFalse: [ [ Harding load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ]
 
         (result isKindOf: String) ifTrue: [
             result startsWith: "ERROR:" ifTrue: [
-                Transcript showCr: ("Failed to load new class: " , result).
+                Transcript showCr: ("Failed to load new class: " , result)
                 ^ self
             ]
-        ].
+        ]
 
-        self currentMethodFile: filePath.
-        self currentMethodOwnerClass: className.
-        self currentMethodStartLine: nil.
-        self currentMethodEndLine: nil.
-        self currentMethodHasBlock: false.
-    ].
+        self currentMethodFile: filePath
+        self currentMethodOwnerClass: className
+        self currentMethodStartLine: nil
+        self currentMethodEndLine: nil
+        self currentMethodHasBlock: false
+    ]
 
-    Transcript showCr: ("Created class: " , className , " (default parent: Object)").
+    Transcript showCr: ("Created class: " , className , " (default parent: Object)")
 
-    self populateClassesFor: self currentLibrary.
-    classPane selectItem: className.
-    self applyClassSelection: className.
+    self populateClassesFor: self currentLibrary
+    classPane selectItem: className
+    self applyClassSelection: className
 ]
 
 Browser>>nextAutoClassName [
     | i name |
-    i := 1.
-    name := "NewClass".
+    i := 1
+    name := "NewClass"
     [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
-        i := i + 1.
+        i := i + 1
         name := "NewClass" , (i printString)
-    ].
+    ]
     ^ name
 ]
 
 Browser>>showClassInfo: aClassName [
     | classObj infoText superclasses slots isMixin methodCount |
     
-    classObj := self classForName: aClassName.
+    classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName).
+        Transcript showCr: ("Class not found: " , aClassName)
         ^ self
-    ].
+    ]
     
-    superclasses := classObj superclassNames.
-    slots := [ classObj slotNames ] on: Exception do: [ #() ].
-    isMixin := [ classObj isMixin ] on: Exception do: [ false ].
-    methodCount := classObj definedMethods size.
+    superclasses := classObj superclassNames
+    slots := [ classObj slotNames ] on: Exception do: [ #() ]
+    isMixin := [ classObj isMixin ] on: Exception do: [ false ]
+    methodCount := classObj definedMethods size
     
-    infoText := aClassName , (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"]).
-    infoText := infoText , "\n\n".
-    infoText := infoText , "Superclasses: " , (superclasses isEmpty ifTrue: ["(none)"] ifFalse: [superclasses join: ", "]).
-    infoText := infoText , "\n".
-    infoText := infoText , "Slots: " , (slots isEmpty ifTrue: ["(none)"] ifFalse: [slots join: ", "]).
-    infoText := infoText , "\n".
-    infoText := infoText , "Defined Methods: " , methodCount printString.
-    infoText := infoText , "\n\n".
+    infoText := aClassName , (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"])
+    infoText := infoText , "\n\n"
+    infoText := infoText , "Superclasses: " , (superclasses isEmpty ifTrue: ["(none)"] ifFalse: [superclasses join: ", "])
+    infoText := infoText , "\n"
+    infoText := infoText , "Slots: " , (slots isEmpty ifTrue: ["(none)"] ifFalse: [slots join: ", "])
+    infoText := infoText , "\n"
+    infoText := infoText , "Defined Methods: " , methodCount printString
+    infoText := infoText , "\n\n"
     isMixin ifFalse: [
         infoText := infoText , "Right-click class to add mixins."
     ] ifTrue: [
         infoText := infoText , "Mixins cannot be modified (library-provided)."
-    ].
+    ]
     
-    self updateSourceView: infoText.
-    Transcript showCr: ("Showing info for class: " , aClassName).
+    self updateSourceView: infoText
+    Transcript showCr: ("Showing info for class: " , aClassName)
 ]
 
 Browser>>showAddMixinDialog: aClassName [
@@ -1362,101 +1362,101 @@ Browser>>showAddMixinDialog: aClassName [
     
     aClassName isNil ifTrue: [
         ^ self
-    ].
+    ]
     
-    selectedMixin := nil.
+    selectedMixin := nil
     
-    dialog := GtkWindow new.
-    dialog title: "Add Mixin to " , aClassName.
-    dialog setDefaultSize: 350 height: 250.
+    dialog := GtkWindow new
+    dialog title: "Add Mixin to " , aClassName
+    dialog setDefaultSize: 350 height: 250
     
-    box := GtkBox vertical.
+    box := GtkBox vertical
     box
         setSpacing: 12;
         marginStart: 12;
         marginEnd: 12;
         marginTop: 12;
-        marginBottom: 12.
+        marginBottom: 12
     
-    label := GtkLabel new: "Select a mixin to add:".
-    label halignStart.
+    label := GtkLabel new: "Select a mixin to add:"
+    label halignStart
     
-    mixinList := GtkListBox new.
-    mixinList append: "Comparable".
-    mixinList append: "Equatable".
-    mixinList append: "Iterable".
-    mixinList append: "Printable".
+    mixinList := GtkListBox new
+    mixinList append: "Comparable"
+    mixinList append: "Equatable"
+    mixinList append: "Iterable"
+    mixinList append: "Printable"
     
     mixinList onRowSelected: [:row |
-        selectedMixin := row label.
-    ].
+        selectedMixin := row label
+    ]
     
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 8.
-    buttonBox hexpand: true.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 8
+    buttonBox hexpand: true
     
-    cancelButton := GtkButton newLabel: "Cancel".
-    addButton := GtkButton newLabel: "Add".
-    addButton addCssClass: "suggested-action".
+    cancelButton := GtkButton newLabel: "Cancel"
+    addButton := GtkButton newLabel: "Add"
+    addButton addCssClass: "suggested-action"
     
     addButton clicked: [
         selectedMixin isNil ifTrue: [
-            Transcript showCr: "Select a mixin first".
+            Transcript showCr: "Select a mixin first"
             ^ self
-        ].
+        ]
         
-        dialog close.
-        self addMixinToClass: aClassName mixinName: selectedMixin.
-    ].
+        dialog close
+        self addMixinToClass: aClassName mixinName: selectedMixin
+    ]
     
     cancelButton clicked: [
         dialog close
-    ].
+    ]
     
-    buttonBox append: cancelButton.
-    buttonBox append: addButton.
+    buttonBox append: cancelButton
+    buttonBox append: addButton
     
-    dialog setChild: box.
-    box append: label.
-    box append: mixinList.
-    box append: buttonBox.
+    dialog setChild: box
+    box append: label
+    box append: mixinList
+    box append: buttonBox
     
-    dialog present.
+    dialog present
 ]
 
 Browser>>addMixinToClass: aClassName mixinName: aMixinName [
     | classObj mixinClass result |
     
-    classObj := self classForName: aClassName.
+    classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName).
+        Transcript showCr: ("Class not found: " , aClassName)
         ^ self
-    ].
+    ]
     
     ([ classObj isMixin ] on: Exception do: [ false ]) ifTrue: [
-        Transcript showCr: "Cannot add mixins to a Mixin class".
+        Transcript showCr: "Cannot add mixins to a Mixin class"
         ^ self
-    ].
+    ]
     
-    mixinClass := Harding at: aMixinName.
+    mixinClass := Harding at: aMixinName
     mixinClass isNil ifTrue: [
-        Transcript showCr: ("Mixin not found: " , aMixinName).
+        Transcript showCr: ("Mixin not found: " , aMixinName)
         ^ self
-    ].
+    ]
     
     result := [ classObj addSuperclass: mixinClass ]
         on: Exception 
-        do: [:ex | "ERROR: " , ex printString ].
+        do: [:ex | "ERROR: " , ex printString ]
     
     (result isKindOf: String) ifTrue: [
         result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to add mixin: " , result).
+            Transcript showCr: ("Failed to add mixin: " , result)
             ^ self
         ]
-    ].
+    ]
     
-    Transcript showCr: ("Added " , aMixinName , " to " , aClassName).
-    self showClassInfo: aClassName.
+    Transcript showCr: ("Added " , aMixinName , " to " , aClassName)
+    self showClassInfo: aClassName
 ]
 
 Browser>>confirmDeleteClass: aClassName [
@@ -1464,105 +1464,105 @@ Browser>>confirmDeleteClass: aClassName [
     
     aClassName isNil ifTrue: [
         ^ self
-    ].
+    ]
     
     ((aClassName = "Object") or: [(aClassName = "Root") or: [aClassName = "Mixin"]]) ifTrue: [
-        Transcript showCr: "Cannot delete built-in classes: " , aClassName.
+        Transcript showCr: "Cannot delete built-in classes: " , aClassName
         ^ self
-    ].
+    ]
     
-    dialog := GtkWindow new.
-    dialog title: "Delete Class: " , aClassName.
-    dialog setDefaultSize: 400 height: 200.
+    dialog := GtkWindow new
+    dialog title: "Delete Class: " , aClassName
+    dialog setDefaultSize: 400 height: 200
     
-    box := GtkBox vertical.
+    box := GtkBox vertical
     box
         setSpacing: 12;
         marginStart: 12;
         marginEnd: 12;
         marginTop: 12;
-        marginBottom: 12.
+        marginBottom: 12
     
-    label := GtkLabel new: ("Are you sure you want to delete class " , aClassName , "?").
-    label halignStart.
-    label wrap: true.
+    label := GtkLabel new: ("Are you sure you want to delete class " , aClassName , "?")
+    label halignStart
+    label wrap: true
     
-    info := GtkLabel new: "Note: This will NOT delete the .hrd file, just the class definition in memory.".
-    info halignStart.
-    info addCssClass: "dim-label".
+    info := GtkLabel new: "Note: This will NOT delete the .hrd file, just the class definition in memory."
+    info halignStart
+    info addCssClass: "dim-label"
     
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 8.
-    buttonBox hexpand: true.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 8
+    buttonBox hexpand: true
     
-    cancelButton := GtkButton newLabel: "Cancel".
-    deleteButton := GtkButton newLabel: "Delete".
-    deleteButton addCssClass: "destructive-action".
+    cancelButton := GtkButton newLabel: "Cancel"
+    deleteButton := GtkButton newLabel: "Delete"
+    deleteButton addCssClass: "destructive-action"
     
     deleteButton clicked: [
-        dialog close.
-        self deleteClass: aClassName.
-    ].
+        dialog close
+        self deleteClass: aClassName
+    ]
     
     cancelButton clicked: [
         dialog close
-    ].
+    ]
     
-    buttonBox append: cancelButton.
-    buttonBox append: deleteButton.
+    buttonBox append: cancelButton
+    buttonBox append: deleteButton
     
-    dialog setChild: box.
-    box append: label.
-    box append: info.
-    box append: buttonBox.
+    dialog setChild: box
+    box append: label
+    box append: info
+    box append: buttonBox
     
-    dialog present.
+    dialog present
 ]
 
 Browser>>deleteClass: aClassName [
     | classObj result |
     
-    classObj := self classForName: aClassName.
+    classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName).
+        Transcript showCr: ("Class not found: " , aClassName)
         ^ self
-    ].
+    ]
     
     result := [ classObj become: Object ]
         on: Exception
-        do: [:ex | "ERROR: " , ex printString ].
+        do: [:ex | "ERROR: " , ex printString ]
     
     (result isKindOf: String) ifTrue: [
         result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to delete class: " , result).
+            Transcript showCr: ("Failed to delete class: " , result)
             ^ self
         ]
-    ].
+    ]
     
     self currentLibrary notNil ifTrue: [
         | lib libKeys i |
-        lib := Library named: self currentLibrary.
+        lib := Library named: self currentLibrary
         lib notNil ifTrue: [
-            libKeys := lib keys.
+            libKeys := lib keys
             libKeys isNil ifFalse: [
-                i := 0.
+                i := 0
                 [ i < libKeys size ] whileTrue: [
                     | key |
-                    key := libKeys at: i.
+                    key := libKeys at: i
                     ((lib at: key) = classObj) ifTrue: [
                         lib at: key put: Object
-                    ].
+                    ]
                     i := i + 1
                 ]
             ]
         ]
-    ].
+    ]
     
-    Transcript showCr: ("Deleted class: " , aClassName).
+    Transcript showCr: ("Deleted class: " , aClassName)
     
-    self currentClass: nil.
-    self updateSourceView: "Class deleted. Select another class.".
-    self populateClassesFor: self currentLibrary.
+    self currentClass: nil
+    self updateSourceView: "Class deleted. Select another class."
+    self populateClassesFor: self currentLibrary
 ]
 
 Browser>>generateClassDefinition: className parent: parentName slots: slotsArray [
@@ -1570,21 +1570,21 @@ Browser>>generateClassDefinition: className parent: parentName slots: slotsArray
     
     parentClass := parentName = "Mixin" 
         ifTrue: ["Mixin"] 
-        ifFalse: [parentName = "Root" ifTrue: ["Root"] ifFalse: ["Object"]].
+        ifFalse: [parentName = "Root" ifTrue: ["Root"] ifFalse: ["Object"]]
     
-    code := "# " , className , ".hrd - " , className , " class definition".
-    code := code , "\n\n".
+    code := "# " , className , ".hrd - " , className , " class definition"
+    code := code , "\n\n"
 
     slotList := slotsArray isEmpty
         ifTrue: [ "" ]
-        ifFalse: [ slotsArray join: " " ].
+        ifFalse: [ slotsArray join: " " ]
 
-    code := code , className , " := " , parentClass , " derive: #(" , slotList , ") read: #(" , slotList , ") write: #(" , slotList , ") superclasses: #().\n\n".
+    code := code , className , " := " , parentClass , " derive: #(" , slotList , ") read: #(" , slotList , ") write: #(" , slotList , ") superclasses: #().\n\n"
 
-    code := code , "# Methods\n".
-    code := code , className , ">>printOn: stream [\n".
-    code := code , "    stream show: \"" , className , "\".\n".
-    code := code , "]\n".
+    code := code , "# Methods\n"
+    code := code , className , ">>printOn: stream [\n"
+    code := code , "    stream show: \"" , className , "\".\n"
+    code := code , "]\n"
     
     ^ code
 ]
@@ -1592,26 +1592,26 @@ Browser>>generateClassDefinition: className parent: parentName slots: slotsArray
 Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     | lib libPath classDir candidatePath sourceDir |
     
-    self currentLibrary isNil ifTrue: [ ^ nil ].
+    self currentLibrary isNil ifTrue: [ ^ nil ]
     
-    lib := Library named: self currentLibrary.
-    lib isNil ifTrue: [ ^ nil ].
+    lib := Library named: self currentLibrary
+    lib isNil ifTrue: [ ^ nil ]
     
-    libPath := System cwd.
-    sourceDir := lib at: #"__sourceDir" ifAbsent: [ lib at: "__sourceDir" ifAbsent: [ nil ] ].
+    libPath := System cwd
+    sourceDir := lib at: #"__sourceDir" ifAbsent: [ lib at: "__sourceDir" ifAbsent: [ nil ] ]
     classDir := sourceDir isNil
         ifTrue: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ]
-        ifFalse: [ libPath , "/" , sourceDir asString ].
+        ifFalse: [ libPath , "/" , sourceDir asString ]
 
-    candidatePath := classDir , "/" , defaultFileName.
+    candidatePath := classDir , "/" , defaultFileName
 
     ^ candidatePath
 ]
 
 Browser>>writeClassDefinition: code toFile: filePath forClass: className [
-    File write: code to: filePath.
+    File write: code to: filePath
     
-    Transcript showCr: ("Wrote class definition to: " , filePath).
+    Transcript showCr: ("Wrote class definition to: " , filePath)
     
-    self reloadCurrentMethodFile.
+    self reloadCurrentMethodFile
 ]

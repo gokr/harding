@@ -1,11 +1,11 @@
 #!/usr/bin/env harding
 #
-# FileStream.hrd - File I/O operations
-# Provides Smalltalk-style file streaming
+# FileStream.hrd - File I/O operations.
+# Provides Smalltalk-style file streaming.
 
-#====================================================================
-# FileStream methods
-#====================================================================
+#====================================================================.
+# FileStream methods.
+#====================================================================.
 
 FileStream := Object derive: #(file mode isOpen)
 # FileStream provides stream-oriented reading and writing on filesystem-backed text or binary data.
@@ -45,9 +45,9 @@ FileStream>>isOpen [
   ^ self getSlot: "isOpen"
 ]
 
-#====================================================================
-# Class methods for convenience
-#====================================================================
+#====================================================================.
+# Class methods for convenience.
+#====================================================================.
 
 FileStream class>>openRead: filename [
   # Open file for reading
@@ -66,24 +66,24 @@ FileStream class>>openAppend: filename [
 
 FileStream class>>readAll: filename [
   | stream contents |
-  stream := self openRead: filename.
-  contents := stream readAll.
-  stream close.
+  stream := self openRead: filename
+  contents := stream readAll
+  stream close
   ^ contents
 ]
 
 FileStream class>>write: content to: filename [
   | stream |
-  stream := self openWrite: filename.
-  stream write: content.
-  stream close.
+  stream := self openWrite: filename
+  stream write: content
+  stream close
   ^ content
 ]
 
 FileStream class>>append: content to: filename [
   | stream |
-  stream := self openAppend: filename.
-  stream write: content.
-  stream close.
+  stream := self openAppend: filename
+  stream write: content
+  stream close
   ^ content
 ]

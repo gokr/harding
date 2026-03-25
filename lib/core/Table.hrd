@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
 #
-# Table.hrd - Table (Dictionary) class methods
-# Uses primitive selectors registered in vm.nim initGlobals()
+# Table.hrd - Table (Dictionary) class methods.
+# Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================
-# Table primitives
-#====================================================================
+#====================================================================.
+# Table primitives.
+#====================================================================.
 
 Table>>at: key <primitive primitiveTableAt: key>
 
@@ -18,15 +18,15 @@ Table>>includesKey: key <primitive primitiveIncludesKey: key>
 
 Table>>removeKey: key <primitive primitiveRemoveKey: key>
 
-#====================================================================
-# Table class methods
-#====================================================================
+#====================================================================.
+# Table class methods.
+#====================================================================.
 
 Table class>>new <primitive primitiveTableNew>
 
-#====================================================================
-# Table iteration
-#====================================================================
+#====================================================================.
+# Table iteration.
+#====================================================================.
 
 Table>>do: block [
     # Iterate over key-value pairs in the table
@@ -45,76 +45,76 @@ Table>>copyEmpty [
 
 Table>>collect: block [
     | result |
-    result := Array new.
+    result := Array new
     self keysAndValuesDo: [:key :value |
         result add: (block value: key value: value)
-    ].
+    ]
     ^ result
 ]
 
 Table>>select: block [
     | result |
-    result := self copyEmpty.
+    result := self copyEmpty
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [
             result at: key put: value
         ]
-    ].
+    ]
     ^ result
 ]
 
 Table>>reject: block [
     | result |
-    result := self copyEmpty.
+    result := self copyEmpty
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifFalse: [
             result at: key put: value
         ]
-    ].
+    ]
     ^ result
 ]
 
 Table>>detect: block [
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [ ^ value ]
-    ].
+    ]
     ^ nil
 ]
 
 Table>>detect: block ifNone: noneBlock [
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [ ^ value ]
-    ].
+    ]
     ^ noneBlock value
 ]
 
 Table>>inject: initialValue into: block [
     | result |
-    result := initialValue.
+    result := initialValue
     self keysAndValuesDo: [:key :value |
         result := block value: result value: key value: value
-    ].
+    ]
     ^ result
 ]
 
 Table>>anySatisfy: block [
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [ ^ true ]
-    ].
+    ]
     ^ false
 ]
 
 Table>>allSatisfy: block [
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifFalse: [ ^ false ]
-    ].
+    ]
     ^ true
 ]
 
 Table>>noneSatisfy: block [
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [ ^ false ]
-    ].
+    ]
     ^ true
 ]
 
@@ -124,10 +124,10 @@ Table>>sum [
 
 Table>>count: block [
     | count |
-    count := 0.
+    count := 0
     self keysAndValuesDo: [:key :value |
         (block value: key value: value) ifTrue: [ count := count + 1 ]
-    ].
+    ]
     ^ count
 ]
 
@@ -138,9 +138,9 @@ Table>>keysAndValuesDo: block [
     ]
 ]
 
-#====================================================================
-# Table testing
-#====================================================================
+#====================================================================.
+# Table testing.
+#====================================================================.
 
 Table>>isEmpty [
     ^ self size = 0
@@ -154,18 +154,18 @@ Table>>includes: value [
     # Check if value exists in table (searches values, not keys)
     self keys do: [:key |
         (self at: key) = value ifTrue: [ ^ true ]
-    ].
+    ]
     ^ false
 ]
 
 Table>>printString [
     | result isFirst |
-    result := "#{".
-    isFirst := true.
+    result := "#{"
+    isFirst := true
     self keys do: [:key |
-        isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ].
+        isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ]
         result := result , (key printString) , " -> " , ((self at: key) printString)
-    ].
+    ]
     ^ result , "}"
 ]
 
@@ -174,9 +174,9 @@ Table>>size [
     ^ self keys size
 ]
 
-#====================================================================
-# Table accessing
-#====================================================================
+#====================================================================.
+# Table accessing.
+#====================================================================.
 
 Table>>at: key ifAbsent: block [
     # Get value at key, or evaluate block if absent
@@ -193,19 +193,19 @@ Table>>at: key ifAbsentPut: block [
         ^ self at: key
     ] ifFalse: [
         | value |
-        value := block value.
-        self at: key put: value.
+        value := block value
+        self at: key put: value
         ^ value
     ]
 ]
 
 Table>>at: key ifPresent: presentBlock [
-    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ].
+    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ]
     ^ nil
 ]
 
 Table>>at: key ifPresent: presentBlock ifAbsent: absentBlock [
-    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ].
+    (self includesKey: key) ifTrue: [ ^ presentBlock value: (self at: key) ]
     ^ absentBlock value
 ]
 
@@ -218,29 +218,29 @@ Table>>removeKey: key ifAbsent: block [
     ]
 ]
 
-#====================================================================
-# Table conversion
-#====================================================================
+#====================================================================.
+# Table conversion.
+#====================================================================.
 
 Table>>values [
     # Return Array of all values
     | result |
-    result := Array new.
+    result := Array new
     self keys do: [:key |
         result add: (self at: key)
-    ].
+    ]
     ^ result
 ]
 
 Table>>associations [
     # Return Array of #(key value) pairs
     | result pair |
-    result := Array new.
+    result := Array new
     self keys do: [:key |
-        pair := Array new: 2.
-        pair at: 0 put: key.
-        pair at: 1 put: (self at: key).
+        pair := Array new: 2
+        pair at: 0 put: key
+        pair at: 1 put: (self at: key)
         result add: pair
-    ].
+    ]
     ^ result
 ]

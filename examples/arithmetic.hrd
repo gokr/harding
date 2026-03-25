@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Basic arithmetic operations
+# Basic arithmetic operations.
 #
 
 "=== Basic Arithmetic ===" println

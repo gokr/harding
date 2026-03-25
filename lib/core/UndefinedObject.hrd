@@ -1,7 +1,7 @@
 #!/usr/bin/env harding
 #
-# UndefinedObject.hrd - nil object extensions
+# UndefinedObject.hrd - nil object extensions.
 
 UndefinedObject>>printString [
   ^ "nil"
-].
+]

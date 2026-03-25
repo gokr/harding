@@ -1,22 +1,22 @@
 #!/usr/bin/env harding
 #
-# Main application logic for MyApp
+# Main application logic for MyApp.
 #
 # This file contains the Harding-side application code.
-# It is loaded and executed by src/myapp.nim
+# It is loaded and executed by src/myapp.nim.
 
-# Access command-line arguments passed from Nim
+# Access command-line arguments passed from Nim.
 args := System arguments
 
 Stdout writeline: "Welcome to MyApp!"
 Stdout writeline: ("Received " , (args size) asString , " arguments:")
 
-# Process arguments
+# Process arguments.
 args do: [:arg :index |
   Stdout writeline: ((index + 1) asString , ". " , arg)
 ]
 
-# Example: Simple calculator if arguments provided
+# Example: Simple calculator if arguments provided.
 (args size >= 3) ifTrue: [
   op := args at: 0
   a := (args at: 1) asNumber

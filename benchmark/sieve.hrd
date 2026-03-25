@@ -1,9 +1,9 @@
 #!/usr/bin/env harding
-# Sieve of Eratosthenes Benchmark
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Expected result: 669 primes below 5000
+# Sieve of Eratosthenes Benchmark.
+# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
+# Expected result: 669 primes below 5000.
 
-# Count primes using trial division
+# Count primes using trial division.
 primeCount := 0
 
 i := 2
@@ -16,13 +16,13 @@ i := 2
     (i \\ d = 0) ifTrue: [
       isPrime := false
       d := i  # Exit loop using d = i (break)
-    ].
+    ]
     d := d + 1
-  ].
+  ]
 
   isPrime ifTrue: [
     primeCount := primeCount + 1
-  ].
+  ]
 
   i := i + 1
 ]

@@ -1,86 +1,86 @@
-# ============================================================================
-# InspectorModel - Non-GTK state holder for Inspector
-# ============================================================================
+# ============================================================================.
+# InspectorModel - Non-GTK state holder for Inspector.
+# ============================================================================.
 
-InspectorModel := Object derive: #(catalog inspectedObject selectedObject selectedSlotName expandedPaths).
+InspectorModel := Object derive: #(catalog inspectedObject selectedObject selectedSlotName expandedPaths)
 
 InspectorModel>>initialize [
-    catalog := Catalog new.
-    expandedPaths := Table new.
-    inspectedObject := nil.
-    selectedObject := nil.
-    selectedSlotName := nil.
+    catalog := Catalog new
+    expandedPaths := Table new
+    inspectedObject := nil
+    selectedObject := nil
+    selectedSlotName := nil
     ^ self
-].
+]
 
-InspectorModel>>catalog [ ^ catalog ].
-InspectorModel>>catalog: aCatalog [ catalog := aCatalog. ^ self ].
-InspectorModel>>inspectedObject [ ^ inspectedObject ].
-InspectorModel>>inspectedObject: anObject [ inspectedObject := anObject. ^ self ].
-InspectorModel>>selectedObject [ ^ selectedObject ].
-InspectorModel>>selectedObject: anObject [ selectedObject := anObject. ^ self ].
-InspectorModel>>selectedSlotName [ ^ selectedSlotName ].
-InspectorModel>>selectedSlotName: aName [ selectedSlotName := aName. ^ self ].
-InspectorModel>>expandedPaths [ ^ expandedPaths ].
+InspectorModel>>catalog [ ^ catalog ]
+InspectorModel>>catalog: aCatalog [ catalog := aCatalog. ^ self ]
+InspectorModel>>inspectedObject [ ^ inspectedObject ]
+InspectorModel>>inspectedObject: anObject [ inspectedObject := anObject. ^ self ]
+InspectorModel>>selectedObject [ ^ selectedObject ]
+InspectorModel>>selectedObject: anObject [ selectedObject := anObject. ^ self ]
+InspectorModel>>selectedSlotName [ ^ selectedSlotName ]
+InspectorModel>>selectedSlotName: aName [ selectedSlotName := aName. ^ self ]
+InspectorModel>>expandedPaths [ ^ expandedPaths ]
 
 InspectorModel>>inspect: anObject [
-    inspectedObject := anObject.
-    selectedObject := anObject.
-    selectedSlotName := nil.
-    expandedPaths := Table new.
+    inspectedObject := anObject
+    selectedObject := anObject
+    selectedSlotName := nil
+    expandedPaths := Table new
     ^ self
-].
+]
 
 InspectorModel>>togglePath: path [
     | current |
-    current := expandedPaths at: path ifAbsent: [ false ].
+    current := expandedPaths at: path ifAbsent: [ false ]
     current ifTrue: [
         expandedPaths removeKey: path
     ] ifFalse: [
         expandedPaths at: path put: true
-    ].
+    ]
     ^ self
-].
+]
 
 InspectorModel>>selectValue: value name: name [
-    selectedObject := value.
-    selectedSlotName := name.
+    selectedObject := value
+    selectedSlotName := name
     ^ self
-].
+]
 
 InspectorModel>>workspaceLabelText [
     selectedSlotName notNil ifTrue: [
         ^ selectedSlotName , ": " , (self formatValue: selectedObject)
-    ].
-    inspectedObject isNil ifTrue: [ ^ "" ].
+    ]
+    inspectedObject isNil ifTrue: [ ^ "" ]
     ^ inspectedObject printString
-].
+]
 
 InspectorModel>>formatValue: aValue [
-    aValue isNil ifTrue: [ ^ "nil" ].
+    aValue isNil ifTrue: [ ^ "nil" ]
     (aValue isKindOf: String) ifTrue: [
         aValue size > 50 ifTrue: [
             ^ ("\"" , (aValue copyFrom: 0 to: 47) , "...\"")
-        ].
+        ]
         ^ ("\"" , aValue , "\"")
-    ].
-    (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Boolean) ifTrue: [ ^ aValue printString ].
-    (aValue isKindOf: Array) ifTrue: [ ^ ("Array(" , (aValue size printString) , ")") ].
-    (aValue isKindOf: Table) ifTrue: [ ^ ("Table(" , (aValue size printString) , ")") ].
+    ]
+    (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ]
+    (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ]
+    (aValue isKindOf: Boolean) ifTrue: [ ^ aValue printString ]
+    (aValue isKindOf: Array) ifTrue: [ ^ ("Array(" , (aValue size printString) , ")") ]
+    (aValue isKindOf: Table) ifTrue: [ ^ ("Table(" , (aValue size printString) , ")") ]
     ^ aValue className
-].
+]
 
 InspectorModel>>isExpandable: aValue [
     | slotNames |
-    aValue isNil ifTrue: [ ^ false ].
-    (aValue isKindOf: Boolean) ifTrue: [ ^ false ].
-    (aValue isKindOf: Integer) ifTrue: [ ^ false ].
-    (aValue isKindOf: Float) ifTrue: [ ^ false ].
-    (aValue isKindOf: String) ifTrue: [ ^ false ].
-    (aValue isKindOf: Array) ifTrue: [ ^ aValue size > 0 ].
-    (aValue isKindOf: Table) ifTrue: [ ^ aValue size > 0 ].
-    slotNames := aValue slotNames.
+    aValue isNil ifTrue: [ ^ false ]
+    (aValue isKindOf: Boolean) ifTrue: [ ^ false ]
+    (aValue isKindOf: Integer) ifTrue: [ ^ false ]
+    (aValue isKindOf: Float) ifTrue: [ ^ false ]
+    (aValue isKindOf: String) ifTrue: [ ^ false ]
+    (aValue isKindOf: Array) ifTrue: [ ^ aValue size > 0 ]
+    (aValue isKindOf: Table) ifTrue: [ ^ aValue size > 0 ]
+    slotNames := aValue slotNames
     ^ slotNames size > 0
-].
+]

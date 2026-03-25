@@ -1,16 +1,16 @@
 #!/usr/bin/env harding
 #
-# Block.nt - Block (closure) methods
-# Provides Smalltalk-style iteration and control flow
+# Block.nt - Block (closure) methods.
+# Provides Smalltalk-style iteration and control flow.
 #
 # Note: The Block class is defined in the interpreter.
 # This file extends it with additional methods using >> syntax.
 
-#====================================================================
-# Block control flow
-#====================================================================
+#====================================================================.
+# Block control flow.
+#====================================================================.
 
-# Block value methods for evaluating blocks
+# Block value methods for evaluating blocks.
 Block>>value <primitive primitiveValue>
   # Evaluate this block with no arguments
 
@@ -26,12 +26,12 @@ Block>>value: arg1 value: arg2 value: arg3 <primitive primitiveValue: arg1 value
 Block>>parameterCount <primitive primitiveParameterCount>
   # Number of declared block parameters
 
-# while loops - receiver is condition block, argument is body block
+# while loops - receiver is condition block, argument is body block.
 Block>>whileTrue: bodyBlock <primitive primitiveWhileTrue: bodyBlock>
 
 Block>>whileFalse: bodyBlock <primitive primitiveWhileFalse: bodyBlock>
 
-# repeat loops
+# repeat loops.
 Block>>repeat [
   # Execute this block repeatedly forever (use non-local return to exit)
   [ true ] whileTrue: [ self value ]
@@ -42,7 +42,7 @@ Block>>repeat: count [
   count timesRepeat: [ self value ]
 ]
 
-# Exception handling
+# Exception handling.
 Block>>on: exceptionClass do: handlerBlock <primitive primitiveOnDo: exceptionClass do: handlerBlock>
 
 Block>>ifError: errorBlock [

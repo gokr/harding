@@ -1,9 +1,9 @@
-# GTK ScrolledWindow - Scrollable container widget
-# Note: GtkScrolledWindow class is registered by Nim bridge
+# GTK ScrolledWindow - Scrollable container widget.
+# Note: GtkScrolledWindow class is registered by Nim bridge.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create new scrolled window)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create new scrolled window).
 #
-# Instance methods:
-# - setChild: (set the child widget)
+# Instance methods:.
+# - setChild: (set the child widget).

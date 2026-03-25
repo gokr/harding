@@ -1,9 +1,9 @@
-Htmx := Object derive: #().
+Htmx := Object derive: #()
 
 Htmx class>>cdnUrl [
   ^ "https://unpkg.com/htmx.org@2.0.4"
-].
+]
 
 Htmx class>>scriptTag [
   ^ Html scriptSrc: self cdnUrl
-].
+]

@@ -1,13 +1,13 @@
-Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Bootstrap.hrd".
-Harding load: "lib/web/todo/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
+Harding load: "lib/web/todo/Bootstrap.hrd"
 
-TodoApp resetRepository.
+TodoApp resetRepository
 
-TodoApp startOn: 8080.
+TodoApp startOn: 8080
 
-"Todo app running at http://127.0.0.1:8080" println.
-"Web and WebTodo now appear as Browser libraries after evaluation." println.
-"Edit TodoApp, TodoPageComponent, TodoPanelComponent, or TodoItemComponent in Bona Browser and refresh the browser to see updates." println.
-"If the Browser was already open, Bona refreshes it automatically after this evaluation." println.
-"If you change route definitions, evaluate: TodoApp reloadRoutes" println.
+"Todo app running at http://127.0.0.1:8080" println
+"Web and WebTodo now appear as Browser libraries after evaluation." println
+"Edit TodoApp, TodoPageComponent, TodoPanelComponent, or TodoItemComponent in Bona Browser and refresh the browser to see updates." println
+"If the Browser was already open, Bona refreshes it automatically after this evaluation." println
+"If you change route definitions, evaluate: TodoApp reloadRoutes" println

@@ -1,10 +1,10 @@
 #!/usr/bin/env harding
 #
-# SortedCollection.hrd - Collection that maintains sorted order
-# Uses composition with an internal Array, not inheritance
+# SortedCollection.hrd - Collection that maintains sorted order.
+# Uses composition with an internal Array, not inheritance.
 #
 
-SortedCollection := Object derive: #(sortBlock elements).
+SortedCollection := Object derive: #(sortBlock elements)
 # SortedCollection maintains ordered elements according to the collection's comparison policy.
 # It builds on the collection protocol while preserving sorted insertion and traversal order.
 # Use this class when callers need deterministic ordered results instead of append order.
@@ -14,23 +14,23 @@ SortedCollection := Object derive: #(sortBlock elements).
 
 SortedCollection class>>new [
     | sc |
-    sc := self basicNew.
-    sc setSortBlock: [:a :b | a < b].
-    sc initElements.
+    sc := self basicNew
+    sc setSortBlock: [:a :b | a < b]
+    sc initElements
     ^sc
 ]
 
 SortedCollection class>>new: items sortBlock: aBlock [
     | sc index size |
-    sc := self basicNew.
-    sc setSortBlock: aBlock.
-    sc initElements.
-    index := 0.
-    size := items size.
+    sc := self basicNew
+    sc setSortBlock: aBlock
+    sc initElements
+    index := 0
+    size := items size
     [ index < size ] whileTrue: [
-        sc add: (items at: index).
-        index := index + 1.
-    ].
+        sc add: (items at: index)
+        index := index + 1
+    ]
     ^sc
 ]
 
@@ -39,11 +39,11 @@ SortedCollection class>>sortBlock: aBlock [
 ]
 
 SortedCollection>>initElements [
-    elements := Array new.
+    elements := Array new
 ]
 
 SortedCollection>>setSortBlock: aBlock [
-    sortBlock := aBlock.
+    sortBlock := aBlock
 ]
 
 SortedCollection>>sortBlock [
@@ -51,49 +51,49 @@ SortedCollection>>sortBlock [
 ]
 
 SortedCollection>>sortBlock: aBlock [
-    sortBlock := aBlock.
-    self resort.
+    sortBlock := aBlock
+    self resort
 ]
 
 SortedCollection>>add: anObject [
     # Add in sorted position using binary search for efficiency
     | insertIndex low high mid |
     self size = 0 ifTrue: [
-        elements add: anObject.
+        elements add: anObject
         ^anObject
-    ].
+    ]
 
     # Binary search for insertion point (0-based)
-    low := 0.
-    high := self size - 1.
+    low := 0
+    high := self size - 1
     insertIndex := self size.  # Default to end (insert after last element)
 
     [ low <= high ] whileTrue: [
-        mid := (low + high) // 2.
+        mid := (low + high) // 2
         (sortBlock value: (self at: mid) value: anObject)
             ifTrue: [ low := mid + 1 ]
             ifFalse: [
-                insertIndex := mid.
-                high := mid - 1.
-            ].
-    ].
+                insertIndex := mid
+                high := mid - 1
+            ]
+    ]
 
     # Insert at insertIndex (0-based)
-    self insert: anObject at: insertIndex.
+    self insert: anObject at: insertIndex
     ^anObject
 ]
 
 SortedCollection>>insert: anObject at: index [
     # Insert object at specific index (0-based), shifting elements
     | i idx |
-    i := self size - 1.
+    i := self size - 1
     elements add: nil.  # Expand array by 1
-    idx := index.
+    idx := index
     [ i >= idx ] whileTrue: [
-        self at: (i + 1) put: (self at: i).
-        i := i - 1.
-    ].
-    self at: idx put: anObject.
+        self at: (i + 1) put: (self at: i)
+        i := i - 1
+    ]
+    self at: idx put: anObject
     ^anObject
 ]
 
@@ -106,12 +106,12 @@ SortedCollection>>at: index [
 ]
 
 SortedCollection>>at: index put: value [
-    elements at: index put: value.
+    elements at: index put: value
     ^value
 ]
 
 SortedCollection>>do: aBlock [
-    elements do: aBlock.
+    elements do: aBlock
     ^self
 ]
 
@@ -121,54 +121,54 @@ SortedCollection>>copyEmpty [
 
 SortedCollection>>collect: aBlock [
     | result |
-    result := self copyEmpty.
-    self do: [:each | result add: (aBlock value: each)].
+    result := self copyEmpty
+    self do: [:each | result add: (aBlock value: each)]
     ^result
 ]
 
 SortedCollection>>select: aBlock [
     | result |
-    result := self copyEmpty.
-    self do: [:each | (aBlock value: each) ifTrue: [ result add: each ]].
+    result := self copyEmpty
+    self do: [:each | (aBlock value: each) ifTrue: [ result add: each ]]
     ^result
 ]
 
 SortedCollection>>reject: aBlock [
     | result |
-    result := self copyEmpty.
-    self do: [:each | (aBlock value: each) ifFalse: [ result add: each ]].
+    result := self copyEmpty
+    self do: [:each | (aBlock value: each) ifFalse: [ result add: each ]]
     ^result
 ]
 
 SortedCollection>>detect: aBlock [
-    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
+    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]]
     ^nil
 ]
 
 SortedCollection>>detect: aBlock ifNone: noneBlock [
-    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]].
+    self do: [:each | (aBlock value: each) ifTrue: [ ^each ]]
     ^noneBlock value
 ]
 
 SortedCollection>>inject: initialValue into: aBlock [
     | result |
-    result := initialValue.
-    self do: [:each | result := aBlock value: result value: each].
+    result := initialValue
+    self do: [:each | result := aBlock value: result value: each]
     ^result
 ]
 
 SortedCollection>>anySatisfy: aBlock [
-    self do: [:each | (aBlock value: each) ifTrue: [ ^true ]].
+    self do: [:each | (aBlock value: each) ifTrue: [ ^true ]]
     ^false
 ]
 
 SortedCollection>>allSatisfy: aBlock [
-    self do: [:each | (aBlock value: each) ifFalse: [ ^false ]].
+    self do: [:each | (aBlock value: each) ifFalse: [ ^false ]]
     ^true
 ]
 
 SortedCollection>>noneSatisfy: aBlock [
-    self do: [:each | (aBlock value: each) ifTrue: [ ^false ]].
+    self do: [:each | (aBlock value: each) ifTrue: [ ^false ]]
     ^true
 ]
 
@@ -178,22 +178,22 @@ SortedCollection>>sum [
 
 SortedCollection>>count: aBlock [
     | count |
-    count := 0.
-    self do: [:each | (aBlock value: each) ifTrue: [ count := count + 1 ]].
+    count := 0
+    self do: [:each | (aBlock value: each) ifTrue: [ count := count + 1 ]]
     ^count
 ]
 
 SortedCollection>>resort [
     # Re-sort all elements after sortBlock change
     | sorted |
-    sorted := elements sorted: sortBlock.
-    self removeAll.
-    sorted do: [:item | elements add: item].
+    sorted := elements sorted: sortBlock
+    self removeAll
+    sorted do: [:item | elements add: item]
     ^self
 ]
 
 SortedCollection>>removeAll [
-    elements removeAll.
+    elements removeAll
     ^self
 ]
 
@@ -204,51 +204,51 @@ SortedCollection>>removeAt: index [
 SortedCollection>>includes: anObject [
     # Use binary search for O(log n) lookup
     | found result |
-    found := self find: anObject.
-    result := true.
-    found isNil ifTrue: [ result := false ].
+    found := self find: anObject
+    result := true
+    found isNil ifTrue: [ result := false ]
     ^ result
 ]
 
 SortedCollection>>find: anObject [
     # Binary search for object, return it if found, nil otherwise
     | low high mid found |
-    low := 0.
-    high := self size - 1.
-    found := nil.
+    low := 0
+    high := self size - 1
+    found := nil
 
     [ (low <= high) and: [found isNil] ] whileTrue: [
-        mid := (low + high) // 2.
-        (self at: mid) = anObject ifTrue: [ found := self at: mid ].
+        mid := (low + high) // 2
+        (self at: mid) = anObject ifTrue: [ found := self at: mid ]
         (sortBlock value: (self at: mid) value: anObject)
             ifTrue: [ low := mid + 1 ]
-            ifFalse: [ high := mid - 1 ].
-    ].
+            ifFalse: [ high := mid - 1 ]
+    ]
     ^ found
 ]
 
 SortedCollection>>remove: anObject [
     # Remove first occurrence of anObject
     | index |
-    index := self indexOf: anObject.
-    index notNil ifTrue: [ self removeAt: index ].
+    index := self indexOf: anObject
+    index notNil ifTrue: [ self removeAt: index ]
     ^anObject
 ]
 
 SortedCollection>>indexOf: anObject [
     # Binary search for index of object
     | low high mid found |
-    low := 0.
-    high := self size - 1.
-    found := nil.
+    low := 0
+    high := self size - 1
+    found := nil
 
     [ (low <= high) and: [found isNil] ] whileTrue: [
-        mid := (low + high) // 2.
-        (self at: mid) = anObject ifTrue: [ found := mid ].
+        mid := (low + high) // 2
+        (self at: mid) = anObject ifTrue: [ found := mid ]
         (sortBlock value: (self at: mid) value: anObject)
             ifTrue: [ low := mid + 1 ]
-            ifFalse: [ high := mid - 1 ].
-    ].
+            ifFalse: [ high := mid - 1 ]
+    ]
     ^ found
 ]
 
@@ -265,8 +265,8 @@ SortedCollection>>last [
 SortedCollection>>copy [
     # Return copy with same sortBlock
     | copy |
-    copy := SortedCollection new: #() sortBlock: sortBlock.
-    self do: [:item | copy add: item].
+    copy := SortedCollection new: #() sortBlock: sortBlock
+    self do: [:item | copy add: item]
     ^copy
 ]
 
@@ -277,8 +277,8 @@ SortedCollection>>asSortedCollection [
 SortedCollection>>asArray [
     # Return a copy of the elements as Array
     | result |
-    result := Array new.
-    self do: [:item | result add: item].
+    result := Array new
+    self do: [:item | result add: item]
     ^result
 ]
 

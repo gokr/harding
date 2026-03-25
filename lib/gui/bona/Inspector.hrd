@@ -1,7 +1,7 @@
-# ============================================================================
-# Inspector - Smalltalk-style Object Inspector for Harding
-# Two-pane layout: tree view with expand/collapse | embedded workspace
-# ============================================================================
+# ============================================================================.
+# Inspector - Smalltalk-style Object Inspector for Harding.
+# Two-pane layout: tree view with expand/collapse | embedded workspace.
+# ============================================================================.
 
 Inspector := Object derive: #(model window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel owner)
 # Inspector presents object structure and nested values through a browsable tree-style view.
@@ -13,26 +13,26 @@ Inspector := Object derive: #(model window mainBox paned treeScroll treeBox work
 
 Inspector class>>openOn: anObject [
     | inspector |
-    inspector := self new.
-    inspector inspect: anObject.
+    inspector := self new
+    inspector inspect: anObject
     ^ inspector openWindow
 ]
 
 Inspector class>>openOn: anObject for: anOwner [
     | inspector |
-    inspector := self new.
-    inspector inspect: anObject.
+    inspector := self new
+    inspector inspect: anObject
     ^ inspector openWindowFor: anOwner
 ]
 
 Inspector>>initialize [
-    model := InspectorModel new.
-    owner := nil.
+    model := InspectorModel new
+    owner := nil
     ^ self
 ]
 
 Inspector>>inspect: anObject [
-    model inspect: anObject.
+    model inspect: anObject
     ^ self
 ]
 
@@ -43,167 +43,167 @@ Inspector>>openWindow [
 Inspector>>openWindowFor: anOwner [
     | buttonBox inspectButton |
 
-    owner := anOwner.
+    owner := anOwner
 
     # Create main window
-    window := GtkWindow new.
-    window title: ("Inspector: " , ((model inspectedObject) printString)).
-    window iconName: "harding".
-    window setDefaultSize: 750 height: 500.
+    window := GtkWindow new
+    window title: ("Inspector: " , ((model inspectedObject) printString))
+    window iconName: "harding"
+    window setDefaultSize: 750 height: 500
 
     # Create vertical box layout
-    mainBox := GtkBox vertical.
-    mainBox setSpacing: 5.
-    mainBox marginStart: 5.
-    mainBox marginEnd: 5.
-    mainBox marginTop: 5.
-    mainBox marginBottom: 5.
+    mainBox := GtkBox vertical
+    mainBox setSpacing: 5
+    mainBox marginStart: 5
+    mainBox marginEnd: 5
+    mainBox marginTop: 5
+    mainBox marginBottom: 5
 
     # Create horizontal paned split
-    paned := GtkPaned horizontal.
-    paned setPosition: 300.
-    paned setShrinkStartChild: false.
-    paned setShrinkEndChild: false.
-    paned setVexpand: true.
-    paned setHexpand: true.
+    paned := GtkPaned horizontal
+    paned setPosition: 300
+    paned setShrinkStartChild: false
+    paned setShrinkEndChild: false
+    paned setVexpand: true
+    paned setHexpand: true
 
     # Left pane - tree view in scrolled window
-    treeScroll := GtkScrolledWindow new.
-    treeScroll setVexpand: true.
-    treeScroll setHexpand: true.
+    treeScroll := GtkScrolledWindow new
+    treeScroll setVexpand: true
+    treeScroll setHexpand: true
 
-    treeBox := GtkBox vertical.
-    treeBox setSpacing: 0.
-    treeScroll setChild: treeBox.
+    treeBox := GtkBox vertical
+    treeBox setSpacing: 0
+    treeScroll setChild: treeBox
 
     # Right pane - workspace
-    workspaceBox := self createWorkspacePane.
+    workspaceBox := self createWorkspacePane
 
-    paned setStartChild: treeScroll.
-    paned setEndChild: workspaceBox.
+    paned setStartChild: treeScroll
+    paned setEndChild: workspaceBox
 
     # Create button box
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 5.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 5
 
-    inspectButton := GtkButton newLabel: "Inspect Selected".
-    inspectButton tooltip: "Open a new Inspector on the currently selected value".
-    inspectButton clicked: [ self inspectSelected ].
-    buttonBox append: inspectButton.
+    inspectButton := GtkButton newLabel: "Inspect Selected"
+    inspectButton tooltip: "Open a new Inspector on the currently selected value"
+    inspectButton clicked: [ self inspectSelected ]
+    buttonBox append: inspectButton
 
     # Assemble the UI
-    window setChild: mainBox.
-    mainBox append: paned.
-    mainBox append: buttonBox.
+    window setChild: mainBox
+    mainBox append: paned
+    mainBox append: buttonBox
 
     # Connect destroy signal
-    window destroyed: [ self onDestroy ].
+    window destroyed: [ self onDestroy ]
 
     # Register with owner
-    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+    anOwner notNil ifTrue: [ anOwner addWindow: self ]
 
-    window present.
+    window present
 
     # Populate the tree
-    self renderTree.
-    self updateWorkspaceLabel.
+    self renderTree
+    self updateWorkspaceLabel
 
     ^ self
 ]
 
 Inspector>>createWorkspacePane [
     | box scrolled |
-    box := GtkBox vertical.
-    box setSpacing: 2.
+    box := GtkBox vertical
+    box setSpacing: 2
 
     # Label showing selected value info
-    workspaceLabel := GtkLabel new: "Selected: self".
-    workspaceLabel setHexpand: true.
-    workspaceLabel setHalignStart.
-    box append: workspaceLabel.
+    workspaceLabel := GtkLabel new: "Selected: self"
+    workspaceLabel setHexpand: true
+    workspaceLabel setHalignStart
+    box append: workspaceLabel
 
     # Embedded workspace sourceview
-    scrolled := GtkScrolledWindow new.
-    scrolled setVexpand: true.
-    scrolled setHexpand: true.
+    scrolled := GtkScrolledWindow new
+    scrolled setVexpand: true
+    scrolled setHexpand: true
 
-    workspaceSourceView := GtkSourceView new.
-    workspaceSourceView showLineNumbers: false.
-    workspaceSourceView setText: "self printString".
+    workspaceSourceView := GtkSourceView new
+    workspaceSourceView showLineNumbers: false
+    workspaceSourceView setText: "self printString"
 
-    scrolled setChild: workspaceSourceView.
-    box append: scrolled.
+    scrolled setChild: workspaceSourceView
+    box append: scrolled
 
-    self installWorkspaceShortcuts.
+    self installWorkspaceShortcuts
 
     ^ box
 ]
 
 Inspector>>installWorkspaceShortcuts [
-    workspaceSourceView enableKeyboardShortcuts.
-    workspaceSourceView onControlKey: "d" do: [ self doItInWorkspace ].
-    workspaceSourceView onControlKey: "p" do: [ self printItInWorkspace ].
-    workspaceSourceView onControlKey: "i" do: [ self inspectItInWorkspace ].
+    workspaceSourceView enableKeyboardShortcuts
+    workspaceSourceView onControlKey: "d" do: [ self doItInWorkspace ]
+    workspaceSourceView onControlKey: "p" do: [ self printItInWorkspace ]
+    workspaceSourceView onControlKey: "i" do: [ self inspectItInWorkspace ]
 ]
 
-# ============================================================================
-# Tree rendering
-# ============================================================================
+# ============================================================================.
+# Tree rendering.
+# ============================================================================.
 
 Inspector>>renderTree [
     # Clear and rebuild the tree
-    treeBox := GtkBox vertical.
-    treeBox setSpacing: 0.
-    treeScroll setChild: treeBox.
+    treeBox := GtkBox vertical
+    treeBox setSpacing: 0
+    treeScroll setChild: treeBox
 
     # Add self header
-    self addTreeHeader: ("self (" , ((model inspectedObject) className) , ")") to: treeBox.
+    self addTreeHeader: ("self (" , ((model inspectedObject) className) , ")") to: treeBox
 
     # Render the inspected object's slots
-    self renderSlotsOf: (model inspectedObject) atDepth: 0 pathPrefix: "root" into: treeBox.
+    self renderSlotsOf: (model inspectedObject) atDepth: 0 pathPrefix: "root" into: treeBox
 ]
 
 Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
     | slotNames inspector |
-    inspector := self.
+    inspector := self
 
     # Handle different object types
     (anObject isKindOf: Array) ifTrue: [
         ^ self renderArraySlots: anObject atDepth: depth pathPrefix: prefix into: box
-    ].
+    ]
     (anObject isKindOf: Table) ifTrue: [
         ^ self renderTableSlots: anObject atDepth: depth pathPrefix: prefix into: box
-    ].
+    ]
 
     # Regular object - show named slots
-    slotNames := anObject slotNames.
+    slotNames := anObject slotNames
     (slotNames size = 0) ifTrue: [
-        slotNames := (Harding at: (anObject className)) slotNames.
-    ].
+        slotNames := (Harding at: (anObject className)) slotNames
+    ]
 
     slotNames do: [:slotName |
         | slotNameString slotValue |
-        slotNameString := slotName asString.
-        slotValue := anObject slotAt: slotName.
-        inspector addLeafItem: (slotNameString , ": " , (inspector formatValue: slotValue)) depth: depth into: box.
-    ].
+        slotNameString := slotName asString
+        slotValue := anObject slotAt: slotName
+        inspector addLeafItem: (slotNameString , ": " , (inspector formatValue: slotValue)) depth: depth into: box
+    ]
 
     # If no slots, show a note
     (slotNames size = 0) ifTrue: [
-        inspector addLeafItem: "(no slots)" depth: depth into: box.
-    ].
+        inspector addLeafItem: "(no slots)" depth: depth into: box
+    ]
 ]
 
 Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box [
     | idx pathsTable inspector |
-    inspector := self.
-    pathsTable := model expandedPaths.
-    idx := 0.
+    inspector := self
+    pathsTable := model expandedPaths
+    idx := 0
     anArray do: [:element |
         | name path expanded |
-        name := "[" , (idx printString) , "]".
-        path := prefix , "." , name.
-        expanded := pathsTable at: path ifAbsent: [ false ].
+        name := "[" , (idx printString) , "]"
+        path := prefix , "." , name
+        expanded := pathsTable at: path ifAbsent: [ false ]
 
         inspector addTreeButton: name
              value: element
@@ -211,29 +211,29 @@ Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box
              expanded: expanded
              expandable: (model isExpandable: element)
              path: path
-             into: box.
+             into: box
 
         expanded ifTrue: [
-            inspector renderSlotsOf: element atDepth: depth + 1 pathPrefix: path into: box.
-        ].
+            inspector renderSlotsOf: element atDepth: depth + 1 pathPrefix: path into: box
+        ]
 
-        idx := idx + 1.
-    ].
+        idx := idx + 1
+    ]
 
     anArray isEmpty ifTrue: [
-        inspector addLeafItem: "(empty array)" depth: depth into: box.
-    ].
+        inspector addLeafItem: "(empty array)" depth: depth into: box
+    ]
 ]
 
 Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box [
     | pathsTable inspector |
-    inspector := self.
-    pathsTable := model expandedPaths.
+    inspector := self
+    pathsTable := model expandedPaths
     aTable keysAndValuesDo: [:key :value |
         | name path expanded |
-        name := key printString.
-        path := prefix , "." , name.
-        expanded := pathsTable at: path ifAbsent: [ false ].
+        name := key printString
+        path := prefix , "." , name
+        expanded := pathsTable at: path ifAbsent: [ false ]
 
         inspector addTreeButton: name
              value: value
@@ -241,97 +241,97 @@ Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box 
              expanded: expanded
              expandable: (model isExpandable: value)
              path: path
-             into: box.
+             into: box
 
         expanded ifTrue: [
-            inspector renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box.
-        ].
-    ].
+            inspector renderSlotsOf: value atDepth: depth + 1 pathPrefix: path into: box
+        ]
+    ]
 
     aTable isEmpty ifTrue: [
-        inspector addLeafItem: "(empty table)" depth: depth into: box.
-    ].
+        inspector addLeafItem: "(empty table)" depth: depth into: box
+    ]
 ]
 
 Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expandable: expandable path: path into: box [
     | button label indent icon |
-    button := GtkButton new.
-    button setHexpand: true.
-    button addCssClass: "flat".
+    button := GtkButton new
+    button setHexpand: true
+    button addCssClass: "flat"
 
     # Build indentation
-    indent := "".
-    depth timesRepeat: [ indent := indent , "    " ].
+    indent := ""
+    depth timesRepeat: [ indent := indent , "    " ]
 
     # Build icon prefix
     expandable ifTrue: [
-        icon := expanded ifTrue: [ "▼ " ] ifFalse: [ "▶ " ].
+        icon := expanded ifTrue: [ "▼ " ] ifFalse: [ "▶ " ]
     ] ifFalse: [
-        icon := "   ".
-    ].
+        icon := "   "
+    ]
 
     # Build label
-    label := indent , icon , name , ": " , (model formatValue: value).
-    button label: label.
+    label := indent , icon , name , ": " , (model formatValue: value)
+    button label: label
 
     # Click handler: toggle expansion and select
     button clicked: [
         expandable ifTrue: [
-            self togglePath: path.
-        ].
-        self selectValue: value name: name.
-    ].
+            self togglePath: path
+        ]
+        self selectValue: value name: name
+    ]
 
-    box append: button.
-    button show.
+    box append: button
+    button show
 ]
 
 Inspector>>addSimpleItem: name value: value depth: depth into: box [
     | label |
-    label := GtkLabel new: (name , ": " , (value printString)).
-    label setHexpand: true.
-    label setHalignStart.
-    box append: label.
-    label show.
+    label := GtkLabel new: (name , ": " , (value printString))
+    label setHexpand: true
+    label setHalignStart
+    box append: label
+    label show
 ]
 
 Inspector>>addLeafItem: text depth: depth into: box [
     | label indent |
-    indent := "".
-    depth timesRepeat: [ indent := indent , "    " ].
-    label := GtkLabel new: (indent , text).
-    label setHexpand: true.
-    label setHalignStart.
-    label addCssClass: "dim-label".
-    box append: label.
+    indent := ""
+    depth timesRepeat: [ indent := indent , "    " ]
+    label := GtkLabel new: (indent , text)
+    label setHexpand: true
+    label setHalignStart
+    label addCssClass: "dim-label"
+    box append: label
 ]
 
 Inspector>>addTreeHeader: headerText to: aBox [
     | header |
-    header := GtkLabel new: headerText.
-    header addCssClass: "heading".
-    header setHexpand: true.
-    header setHalignStart.
-    aBox append: header.
+    header := GtkLabel new: headerText
+    header addCssClass: "heading"
+    header setHexpand: true
+    header setHalignStart
+    aBox append: header
 ]
 
 Inspector>>togglePath: path [
-    model togglePath: path.
-    self renderTree.
+    model togglePath: path
+    self renderTree
 ]
 
 Inspector>>selectValue: value name: name [
-    model selectValue: value name: name.
-    self updateWorkspaceLabel.
+    model selectValue: value name: name
+    self updateWorkspaceLabel
 ]
 
 Inspector>>updateWorkspaceLabel [
-    workspaceLabel text: (model workspaceLabelText).
+    workspaceLabel text: (model workspaceLabelText)
 ]
 
-# ============================================================================
-# Value formatting and type checks
-# ============================================================================
+# ============================================================================.
+# Value formatting and type checks.
+# ============================================================================.
 
 Inspector>>formatValue: aValue [
     ^ model formatValue: aValue
@@ -341,112 +341,112 @@ Inspector>>isExpandable: aValue [
     ^ model isExpandable: aValue
 ]
 
-# ============================================================================
-# Workspace evaluation with self binding
-# ============================================================================
+# ============================================================================.
+# Workspace evaluation with self binding.
+# ============================================================================.
 
 Inspector>>evaluationSourceCode [
     | code |
-    code := workspaceSourceView selectedText.
+    code := workspaceSourceView selectedText
     (code isNil or: [ code isEmpty ]) ifTrue: [
         code := workspaceSourceView getText
-    ].
-    code isNil ifTrue: [ ^ "" ].
+    ]
+    code isNil ifTrue: [ ^ "" ]
     ^ code trim
 ]
 
 Inspector>>evalInContext: codeString [
     | wrappedCode |
     # Bind self to the selected object in the evaluated code
-    Harding at: "_inspectorSelf" put: (model selectedObject).
+    Harding at: "_inspectorSelf" put: (model selectedObject)
     wrappedCode := "| self |
-self := Harding at: \"_inspectorSelf\".
-" , codeString.
+self := Harding at: \"_inspectorSelf\"
+" , codeString
     ^ [ Object eval: wrappedCode ]
         on: Exception
         do: [:ex | "Error: " , ex printString ]
 ]
 
 Inspector>>isErrorResult: aResult [
-    (aResult isKindOf: String) ifFalse: [ ^ false ].
-    (aResult startsWith: "Error:") ifTrue: [ ^ true ].
-    (aResult startsWith: "IDE_ERROR:") ifTrue: [ ^ true ].
-    (aResult startsWith: "Runtime error:") ifTrue: [ ^ true ].
-    (aResult startsWith: "Parse error:") ifTrue: [ ^ true ].
+    (aResult isKindOf: String) ifFalse: [ ^ false ]
+    (aResult startsWith: "Error:") ifTrue: [ ^ true ]
+    (aResult startsWith: "IDE_ERROR:") ifTrue: [ ^ true ]
+    (aResult startsWith: "Runtime error:") ifTrue: [ ^ true ]
+    (aResult startsWith: "Parse error:") ifTrue: [ ^ true ]
     ^ false
 ]
 
 Inspector>>doItInWorkspace [
     | code result |
-    code := self evaluationSourceCode.
-    code isEmpty ifTrue: [ ^ nil ].
-    result := self evalInContext: code.
+    code := self evaluationSourceCode
+    code isEmpty ifTrue: [ ^ nil ]
+    result := self evalInContext: code
     (self isErrorResult: result) ifTrue: [
-        window title: result.
+        window title: result
     ] ifFalse: [
-        window title: ("Inspector: " , ((model inspectedObject) printString)).
-    ].
+        window title: ("Inspector: " , ((model inspectedObject) printString))
+    ]
     ^ result
 ]
 
 Inspector>>printItInWorkspace [
     | code result resultString cursorPos insertedEnd |
-    code := self evaluationSourceCode.
-    code isEmpty ifTrue: [ ^ nil ].
-    result := self evalInContext: code.
+    code := self evaluationSourceCode
+    code isEmpty ifTrue: [ ^ nil ]
+    result := self evalInContext: code
     (self isErrorResult: result) ifTrue: [
-        window title: result.
+        window title: result
         ^ nil
-    ].
+    ]
 
     # Convert result to string
-    resultString := " " , (result printString).
+    resultString := " " , (result printString)
 
     # Insert at selection end
-    cursorPos := workspaceSourceView getSelectionEnd.
-    cursorPos isNil ifTrue: [ cursorPos := workspaceSourceView text size ].
-    workspaceSourceView insertText: resultString at: cursorPos.
-    insertedEnd := cursorPos + resultString size.
-    workspaceSourceView selectRangeFrom: cursorPos to: insertedEnd.
+    cursorPos := workspaceSourceView getSelectionEnd
+    cursorPos isNil ifTrue: [ cursorPos := workspaceSourceView text size ]
+    workspaceSourceView insertText: resultString at: cursorPos
+    insertedEnd := cursorPos + resultString size
+    workspaceSourceView selectRangeFrom: cursorPos to: insertedEnd
 ]
 
 Inspector>>inspectItInWorkspace [
     | code result |
-    code := self evaluationSourceCode.
-    code isEmpty ifTrue: [ ^ nil ].
-    result := self evalInContext: code.
+    code := self evaluationSourceCode
+    code isEmpty ifTrue: [ ^ nil ]
+    result := self evalInContext: code
     (self isErrorResult: result) ifTrue: [
-        window title: result.
+        window title: result
         ^ nil
-    ].
-    result inspect.
+    ]
+    result inspect
 ]
 
-# ============================================================================
-# Actions
-# ============================================================================
+# ============================================================================.
+# Actions.
+# ============================================================================.
 
 Inspector>>inspectSelected [
     (model selectedObject) notNil ifTrue: [
-        Inspector openOn: (model selectedObject) for: owner.
-    ].
+        Inspector openOn: (model selectedObject) for: owner
+    ]
 ]
 
 Inspector>>refresh [
-    self renderTree.
-    self updateWorkspaceLabel.
+    self renderTree
+    self updateWorkspaceLabel
 ]
 
 Inspector>>close [
     window notNil ifTrue: [
         window close
-    ].
+    ]
 ]
 
 Inspector>>onDestroy [
     owner notNil ifTrue: [
-        owner removeWindow: self.
+        owner removeWindow: self
         owner := nil
-    ].
-    window := nil.
+    ]
+    window := nil
 ]

@@ -4,6 +4,7 @@ Harding at: #WebTodoLibrary put: WebTodo.
 WebTodo at: #"__sourceDir" put: "lib/web/todo".
 
 Harding load: "lib/web/todo/TodoRepository.hrd".
+Harding load: "lib/web/todo/MySqlTodoRepository.hrd".
 Harding load: "lib/web/todo/TodoItem.hrd".
 Harding load: "lib/web/todo/TodoComponents.hrd".
 Harding load: "lib/web/todo/TodoApp.hrd".

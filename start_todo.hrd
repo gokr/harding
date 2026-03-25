@@ -1,0 +1,10 @@
+#!/usr/bin/env harding
+#
+# Start the todo server.
+
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
+Harding load: "lib/web/todo/Bootstrap.hrd"
+
+TodoApp resetRepository
+TodoApp serveForeverOn: 3000

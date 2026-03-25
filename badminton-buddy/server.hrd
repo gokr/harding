@@ -1,17 +1,17 @@
 # Badminton Buddy - Standalone Server
 # Run with: ./harding badminton-buddy/server.hrd
 
-Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
 
 # Load application
-Harding load: "badminton-buddy/Components/Layout.hrd".
-Harding load: "badminton-buddy/BadmintonApp.hrd".
+Harding load: "badminton-buddy/Components/Layout.hrd"
+Harding load: "badminton-buddy/BadmintonApp.hrd"
 
-"==================================================" println.
-"  Badminton Buddy" println.
-"  Starting server..." println.
-"==================================================" println.
+"==================================================" println
+"  Badminton Buddy" println
+"  Starting server..." println
+"==================================================" println
 
 # Start the server
-BadmintonApp startOn: 8080.
+BadmintonApp startOn: 8080

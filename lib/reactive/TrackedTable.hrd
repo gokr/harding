@@ -1,51 +1,51 @@
-TrackedTable := Object derivePublic: #(dependents transactionDepth pendingChange storage).
+TrackedTable := Object derivePublic: #(dependents transactionDepth pendingChange storage)
 
-TrackedTable addSuperclass: TrackedSubject.
+TrackedTable addSuperclass: TrackedSubject
 
 TrackedTable class>>new [
   | tracked |
-  tracked := self basicNew initialize.
-  tracked::storage := Table new.
+  tracked := self basicNew initialize
+  tracked::storage := Table new
   ^ tracked
-].
+]
 
 TrackedTable>>at: key [
-  self trackRead.
+  self trackRead
   ^ storage at: key
-].
+]
 
 TrackedTable>>at: key ifAbsent: aBlock [
-  self trackRead.
+  self trackRead
   ^ storage at: key ifAbsent: aBlock
-].
+]
 
 TrackedTable>>at: key put: value [
-  storage at: key put: value.
-  self changed.
+  storage at: key put: value
+  self changed
   ^ value
-].
+]
 
 TrackedTable>>includesKey: key [
-  self trackRead.
+  self trackRead
   ^ storage includesKey: key
-].
+]
 
 TrackedTable>>keys [
-  self trackRead.
+  self trackRead
   ^ storage keys
-].
+]
 
 TrackedTable>>keysAndValuesDo: aBlock [
-  self trackRead.
+  self trackRead
   ^ storage keysAndValuesDo: aBlock
-].
+]
 
 TrackedTable>>size [
-  self trackRead.
+  self trackRead
   ^ storage size
-].
+]
 
 TrackedTable>>isEmpty [
-  self trackRead.
+  self trackRead
   ^ storage isEmpty
-].
+]

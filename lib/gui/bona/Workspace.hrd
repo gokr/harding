@@ -1,8 +1,8 @@
-# ============================================================================
-# Workspace - Code editing and evaluation window
-# Workspace provides a source code editor with do-it and print-it functionality
-# Now using GtkSourceView for syntax highlighting
-# ============================================================================
+# ============================================================================.
+# Workspace - Code editing and evaluation window.
+# Workspace provides a source code editor with do-it and print-it functionality.
+# Now using GtkSourceView for syntax highlighting.
+# ============================================================================.
 
 Workspace := Object derive: #(window box scrolledWindow sourceView owner workspaceId filePath)
 # Workspace provides the free-form code editing and evaluation surface in Bona.
@@ -14,152 +14,152 @@ Workspace := Object derive: #(window box scrolledWindow sourceView owner workspa
 
 Workspace class>>open [
     ^self openFor: nil
-].
+]
 
 Workspace class>>openFor: anOwner [
     ^self openFor: anOwner id: 1
-].
+]
 
 Workspace class>>openFor: anOwner id: anId [
     ^self new openWindowFor: anOwner id: anId
-].
+]
 
 Workspace>>openWindow [
     ^self openWindowFor: nil id: 1
-].
+]
 
 Workspace>>openWindowFor: anOwner [
     ^self openWindowFor: anOwner id: 1
-].
+]
 
 Workspace>>openWindowFor: anOwner id: anId [
     | buttonBox doItButton printItButton inspectItButton saveButton |
 
     # Set workspace ID and file path
-    workspaceId := anId.
-    filePath := "workspace-" , (workspaceId asString) , ".hrd".
+    workspaceId := anId
+    filePath := "workspace-" , (workspaceId asString) , ".hrd"
 
     # Create main window
-    window := GtkWindow new.
-    window title: ("Workspace #" , (workspaceId printString)).
-    window iconName: "harding".
-    window setDefaultSize: 800 height: 600.
+    window := GtkWindow new
+    window title: ("Workspace #" , (workspaceId printString))
+    window iconName: "harding"
+    window setDefaultSize: 800 height: 600
 
     # Create vertical box layout
-    box := GtkBox vertical.
-    box setSpacing: 5.
-    box marginStart: 5.
-    box marginEnd: 5.
-    box marginTop: 5.
-    box marginBottom: 5.
+    box := GtkBox vertical
+    box setSpacing: 5
+    box marginStart: 5
+    box marginEnd: 5
+    box marginTop: 5
+    box marginBottom: 5
 
     # Create scrolled window for source view
-    scrolledWindow := GtkScrolledWindow new.
-    scrolledWindow vexpand: true.
-    scrolledWindow hexpand: true.
+    scrolledWindow := GtkScrolledWindow new
+    scrolledWindow vexpand: true
+    scrolledWindow hexpand: true
 
     # Create source view with syntax highlighting
-    sourceView := GtkSourceView new.
-    sourceView showLineNumbers: true.
-    sourceView setTabWidth: 2.
-    sourceView vexpand: true.
-    sourceView hexpand: true.
+    sourceView := GtkSourceView new
+    sourceView showLineNumbers: true
+    sourceView setTabWidth: 2
+    sourceView vexpand: true
+    sourceView hexpand: true
 
     # Create button box for Do It and Print It buttons
-    buttonBox := GtkBox horizontal.
-    buttonBox setSpacing: 5.
+    buttonBox := GtkBox horizontal
+    buttonBox setSpacing: 5
 
     # Create Do It button
-    doItButton := GtkButton new.
-    doItButton label: "Do It" iconName: "system-run".
-    doItButton tooltip: "Evaluate selection/current line (Ctrl+D)".
-    doItButton clicked: [ self doItSelection ].
-    buttonBox append: doItButton.
+    doItButton := GtkButton new
+    doItButton label: "Do It" iconName: "system-run"
+    doItButton tooltip: "Evaluate selection/current line (Ctrl+D)"
+    doItButton clicked: [ self doItSelection ]
+    buttonBox append: doItButton
 
     # Create Print It button
-    printItButton := GtkButton new.
-    printItButton label: "Print It" iconName: "insert-text".
-    printItButton tooltip: "Evaluate and insert result (Ctrl+P)".
-    printItButton clicked: [ self printItSelection ].
-    buttonBox append: printItButton.
+    printItButton := GtkButton new
+    printItButton label: "Print It" iconName: "insert-text"
+    printItButton tooltip: "Evaluate and insert result (Ctrl+P)"
+    printItButton clicked: [ self printItSelection ]
+    buttonBox append: printItButton
 
     # Create Inspect It button
-    inspectItButton := GtkButton new.
-    inspectItButton label: "Inspect It" iconName: "system-search".
-    inspectItButton tooltip: "Evaluate and open inspector (Ctrl+I)".
-    inspectItButton clicked: [ self inspectItSelection ].
-    buttonBox append: inspectItButton.
+    inspectItButton := GtkButton new
+    inspectItButton label: "Inspect It" iconName: "system-search"
+    inspectItButton tooltip: "Evaluate and open inspector (Ctrl+I)"
+    inspectItButton clicked: [ self inspectItSelection ]
+    buttonBox append: inspectItButton
 
     # Create Save button
-    saveButton := GtkButton new.
-    saveButton label: "Save" iconName: "document-save".
-    saveButton tooltip: "Save workspace content (Ctrl+S)".
-    saveButton clicked: [ self saveContent ].
-    buttonBox append: saveButton.
+    saveButton := GtkButton new
+    saveButton label: "Save" iconName: "document-save"
+    saveButton tooltip: "Save workspace content (Ctrl+S)"
+    saveButton clicked: [ self saveContent ]
+    buttonBox append: saveButton
 
     # Set owner
-    owner := anOwner.
+    owner := anOwner
 
     # Assemble the UI
-    window setChild: box.
-    box append: scrolledWindow.
-    scrolledWindow setChild: sourceView.
-    box append: buttonBox.
+    window setChild: box
+    box append: scrolledWindow
+    scrolledWindow setChild: sourceView
+    box append: buttonBox
 
     # Install keyboard shortcuts
-    self installKeyboardShortcuts.
+    self installKeyboardShortcuts
 
     # Connect destroy signal to notify owner
-    window destroyed: [ self onDestroy ].
+    window destroyed: [ self onDestroy ]
 
     # Register with owner
-    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+    anOwner notNil ifTrue: [ anOwner addWindow: self ]
 
     # Load existing content if file exists
-    self loadContent.
+    self loadContent
 
-    window present.
+    window present
     ^self
-].
+]
 
 Workspace>>installKeyboardShortcuts [
     # Install Ctrl+D for Do It, Ctrl+P for Print It, Ctrl+I for Inspect It
     # Enable keyboard handling on source view
-    sourceView enableKeyboardShortcuts.
+    sourceView enableKeyboardShortcuts
 
     # Ctrl+D - Do It
-    sourceView onControlKey: "d" do: [ self doItSelection ].
+    sourceView onControlKey: "d" do: [ self doItSelection ]
 
     # Ctrl+P - Print It
-    sourceView onControlKey: "p" do: [ self printItSelection ].
+    sourceView onControlKey: "p" do: [ self printItSelection ]
 
     # Ctrl+I - Inspect It
-    sourceView onControlKey: "i" do: [ self inspectItSelection ].
+    sourceView onControlKey: "i" do: [ self inspectItSelection ]
 
     # Ctrl+S - Save
-    sourceView onControlKey: "s" do: [ self saveContent ].
-].
+    sourceView onControlKey: "s" do: [ self saveContent ]
+]
 
 Workspace>>showContextMenu [
     # Show popup menu with Do It and Print It options
     # This is called when user right-clicks in the source view
     # For now, we just evaluate the selection as a simple approach
-    self doItSelection.
-].
+    self doItSelection
+]
 
 Workspace>>onDestroy [
     # Save content before closing
-    self saveContent.
+    self saveContent
     owner notNil ifTrue: [ owner removeWindow: self ]
-].
+]
 
 Workspace>>workspaceId [
     ^ workspaceId
-].
+]
 
 Workspace>>workspaceId: anId [
     workspaceId := anId
-].
+]
 
 Workspace>>doIt: codeString [
     ^ [ Object eval: codeString ]
@@ -170,7 +170,7 @@ Workspace>>doIt: codeString [
 Workspace>>notifyCodeChanged [
     owner notNil ifTrue: [
         [ owner refreshBrowsers ] on: Exception do: [:ex | nil ]
-    ].
+    ]
     ^ self
 ]
 
@@ -191,21 +191,21 @@ Workspace>>isErrorResult: result [
 Workspace>>doItSelection [
     # Do It - evaluate selected text or current line
     | code result |
-    code := self evaluationSourceCode.
+    code := self evaluationSourceCode
     code isEmpty ifTrue: [
-        self showError: "No code selected/current line to evaluate".
+        self showError: "No code selected/current line to evaluate"
         ^ nil
-    ].
+    ]
 
-    result := self doIt: code.
+    result := self doIt: code
     (self isErrorResult: result) ifTrue: [
-        self showError: result.
-        self showErrorDialog: result.
+        self showError: result
+        self showErrorDialog: result
         ^ nil
-    ].
+    ]
 
-    self clearError.
-    self notifyCodeChanged.
+    self clearError
+    self notifyCodeChanged
     ^ result
 ]
 
@@ -213,38 +213,38 @@ Workspace>>printItSelection [
     # Print It - evaluate and insert result after selection or at end of current line
     # The inserted text is then selected so it can be easily deleted
     | code result resultString insertPos insertedEnd |
-    code := self evaluationSourceCode.
+    code := self evaluationSourceCode
     code isEmpty ifTrue: [
-        self showError: "No code selected/current line to evaluate".
+        self showError: "No code selected/current line to evaluate"
         ^ nil
-    ].
+    ]
 
-    result := self doIt: code.
+    result := self doIt: code
     (self isErrorResult: result) ifTrue: [
-        self showError: result.
-        self showErrorDialog: result.
+        self showError: result
+        self showErrorDialog: result
         ^ nil
-    ].
+    ]
 
-    self clearError.
-    self notifyCodeChanged.
+    self clearError
+    self notifyCodeChanged
     resultString := (result isClass)
         ifTrue: [ "<class " , result name , ">" ]
-        ifFalse: [ result printString ].
+        ifFalse: [ result printString ]
 
     # Insert result after selection or at end of current line
-    insertPos := sourceView insertTextAtSelectedEnd: resultString.
+    insertPos := sourceView insertTextAtSelectedEnd: resultString
     
     # Calculate end position based on inserted text length only
     insertPos isNil ifTrue: [
         insertPos := sourceView getSelectionEnd
-    ].
-    insertedEnd := insertPos + (resultString size).
+    ]
+    insertedEnd := insertPos + (resultString size)
     
     # Select the inserted text so it can be easily deleted
     insertPos notNil ifTrue: [
         sourceView selectRangeFrom: insertPos to: insertedEnd
-    ].
+    ]
     
     ^ result
 ]
@@ -252,40 +252,40 @@ Workspace>>printItSelection [
 Workspace>>inspectItSelection [
     # Inspect It - evaluate and open inspector on result
     | code result |
-    code := self evaluationSourceCode.
+    code := self evaluationSourceCode
     code isEmpty ifTrue: [
-        self showError: "No code selected/current line to evaluate".
+        self showError: "No code selected/current line to evaluate"
         ^ nil
-    ].
+    ]
 
-    result := self doIt: code.
+    result := self doIt: code
     (self isErrorResult: result) ifTrue: [
-        self showError: result.
-        self showErrorDialog: result.
+        self showError: result
+        self showErrorDialog: result
         ^ nil
-    ].
+    ]
 
-    self clearError.
-    self notifyCodeChanged.
+    self clearError
+    self notifyCodeChanged
     result notNil ifTrue: [
-        result inspect.
-        Transcript showCr: ("Inspecting: " , (result printString)).
-    ].
+        result inspect
+        Transcript showCr: ("Inspecting: " , (result printString))
+    ]
     ^ result
 ]
 
 Workspace>>evaluationSourceCode [
     | code |
-    code := sourceView selectedText.
+    code := sourceView selectedText
     (code isNil or: [ code isEmpty ]) ifTrue: [
         code := sourceView text
-    ].
-    code isNil ifTrue: [ ^ "" ].
+    ]
+    code isNil ifTrue: [ ^ "" ]
     ^ code trim
 ]
 
 Workspace>>showError: messageText [
-    Transcript showCr: messageText.
+    Transcript showCr: messageText
     window notNil ifTrue: [
         window title: ("Workspace - " , messageText)
     ]
@@ -298,27 +298,27 @@ Workspace>>showErrorDialog: messageText [
         GtkAlertDialog
             showAlertDialog: window
             message: messageText
-            onResponse: [ nil ].
+            onResponse: [ nil ]
         ^ self
-    ].
+    ]
 
-    dialog := GtkWindow new.
-    dialog title: "Workspace Error".
-    dialog setDefaultSize: 520 height: 140.
+    dialog := GtkWindow new
+    dialog title: "Workspace Error"
+    dialog setDefaultSize: 520 height: 140
 
-    box := GtkBox vertical.
-    box setSpacing: 8.
+    box := GtkBox vertical
+    box setSpacing: 8
 
-    label := GtkLabel new: messageText.
-    label halignStart.
+    label := GtkLabel new: messageText
+    label halignStart
 
-    okButton := GtkButton newLabel: "OK".
-    okButton clicked: [ dialog close ].
+    okButton := GtkButton newLabel: "OK"
+    okButton clicked: [ dialog close ]
 
-    dialog setChild: box.
-    box append: label.
-    box append: okButton.
-    dialog present.
+    dialog setChild: box
+    box append: label
+    box append: okButton
+    dialog present
 ]
 
 Workspace>>clearError [
@@ -330,89 +330,89 @@ Workspace>>clearError [
 Workspace>>evalAll [
     # Evaluate all code in the workspace
     ^self doIt: sourceView text
-].
+]
 
-# Accessor methods
+# Accessor methods.
 Workspace>>window: aWindow [
     window := aWindow
-].
+]
 
 Workspace>>box: aBox [
     box := aBox
-].
+]
 
 Workspace>>scrolledWindow: aScrolledWindow [
     scrolledWindow := aScrolledWindow
-].
+]
 
 Workspace>>sourceView: aSourceView [
     sourceView := aSourceView
-].
+]
 
 Workspace>>owner: anOwner [
     owner := anOwner
-].
+]
 
 Workspace>>window [
     ^window
-].
+]
 
 Workspace>>box [
     ^box
-].
+]
 
 Workspace>>scrolledWindow [
     ^scrolledWindow
-].
+]
 
 Workspace>>sourceView [
     ^sourceView
-].
+]
 
 Workspace>>owner [
     ^owner
-].
+]
 
 Workspace>>text [
     # Get all text from the editor
     ^sourceView text
-].
+]
 
 Workspace>>text: aString [
     # Set all text in the editor
     sourceView text: aString
-].
+]
 
 Workspace>>loadContent [
     # Load content from file if it exists
     filePath notNil ifTrue: [
         (File exists: filePath) ifTrue: [
             | content |
-            content := File readAll: filePath.
-            sourceView text: content.
-        ].
-    ].
-].
+            content := File readAll: filePath
+            sourceView text: content
+        ]
+    ]
+]
 
 Workspace>>saveContent [
     # Save content to file, delete if empty
     | content |
-    filePath isNil ifTrue: [ ^self ].
+    filePath isNil ifTrue: [ ^self ]
     
-    content := sourceView text.
+    content := sourceView text
     (content isNil or: [content isEmpty]) ifTrue: [
         # Delete file if content is empty
         (File exists: filePath) ifTrue: [
-            File delete: filePath.
-            Transcript showCr: ("Deleted empty workspace file: " , filePath).
-        ].
+            File delete: filePath
+            Transcript showCr: ("Deleted empty workspace file: " , filePath)
+        ]
         ^self
-    ].
+    ]
     
     # Write content to file
-    File write: content to: filePath.
-    Transcript showCr: ("Saved workspace #" , (workspaceId printString) , " to " , filePath).
-].
+    File write: content to: filePath
+    Transcript showCr: ("Saved workspace #" , (workspaceId printString) , " to " , filePath)
+]
 
 Workspace>>checkSourceView [
   # Debug method to see which sourceView we're using

@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
 #
-# Multiple Inheritance Example
+# Multiple Inheritance Example.
 #
-# Harding supports ordered multiple inheritance via addSuperclass:
+# Harding supports ordered multiple inheritance via addSuperclass:.
 
 "=== Multiple Inheritance ===" println
 
-# Define parent classes
+# Define parent classes.
 Animal := Object derivePublic: #(name)
 # Animal is used by the example suite to demonstrate Harding usage.
 # This class definition is the canonical Browser-managed source entry.
@@ -32,7 +32,7 @@ Pet>>speak [
   ^ "I am a pet and I say hello!"
 ]
 
-# Create a class with multiple parents using addSuperclass:
+# Create a class with multiple parents using addSuperclass:.
 Dog := Object derivePublic: #(breed)
 
 # Both Animal and Pet define #speak. The first parent wins, and conflicts are tracked.
@@ -43,7 +43,7 @@ Dog>>speak [
 Dog addSuperclass: Animal
 Dog addSuperclass: Pet
 
-# Create an instance
+# Create an instance.
 MyDog := Dog new
 MyDog::name := "Buddy"
 MyDog::owner := "Alice"

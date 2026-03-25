@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Conditionals and loops
+# Conditionals and loops.
 #
 
 "=== If-Then-Else ===" println

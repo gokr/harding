@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
 #
-# Integer.hrd - Integer class methods
-# Uses primitive selectors registered in vm.nim initGlobals()
+# Integer.hrd - Integer class methods.
+# Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================
-# Integer arithmetic primitives
-#====================================================================
+#====================================================================.
+# Integer arithmetic primitives.
+#====================================================================.
 
 Integer>>+ other <primitive primitivePlus: other>
 
@@ -20,9 +20,9 @@ Integer>>// other <primitive primitiveIntDiv: other>
 
 Integer>>\\ other <primitive primitiveBackslashModulo: other>
 
-#====================================================================
-# Integer comparison primitives
-#====================================================================
+#====================================================================.
+# Integer comparison primitives.
+#====================================================================.
 
 Integer>>< other <primitive primitiveLessThan: other>
 
@@ -36,9 +36,9 @@ Integer>>>= other <primitive primitiveGreaterOrEq: other>
 
 Integer>><> other <primitive primitiveNotEquals: other>
 
-#====================================================================
-# Integer other primitives
-#====================================================================
+#====================================================================.
+# Integer other primitives.
+#====================================================================.
 
 Integer>>sqrt <primitive primitiveSqrt>
 
@@ -46,85 +46,85 @@ Integer>>printString <primitive primitivePrintString>
 
 Integer>>abs [
   self < 0
-    ifTrue: [ ^ 0 - self ].
+    ifTrue: [ ^ 0 - self ]
   ^ self
-].
+]
 
 Integer>>negated [
   ^ 0 - self
-].
+]
 
 Integer>>even [
   ^ (self \\ 2) = 0
-].
+]
 
 Integer>>odd [
   ^ (self \\ 2) <> 0
-].
+]
 
 Integer>>to: end do: block [
   | i |
-  i := self.
+  i := self
   [ i <= end ] whileTrue: [
-    block value: i.
+    block value: i
     i := i + 1
   ]
-].
+]
 
 Integer>>to: end by: step do: block [
   | i |
-  i := self.
+  i := self
   step > 0
     ifTrue: [
       [ i <= end ] whileTrue: [
-        block value: i.
+        block value: i
         i := i + step
       ]
     ]
     ifFalse: [
       [ i >= end ] whileTrue: [
-        block value: i.
+        block value: i
         i := i + step
       ]
     ]
-].
+]
 
 Integer>>timesRepeat: block [
   | count |
-  count := self.
+  count := self
   [ count > 0 ] whileTrue: [
-    block value.
+    block value
     count := count - 1
   ]
-].
+]
 
 Integer>>factorial [
   | n acc |
-  n := self.
-  acc := 1.
+  n := self
+  acc := 1
   [ n > 1 ] whileTrue: [
-    acc := acc * n.
+    acc := acc * n
     n := n - 1
-  ].
+  ]
   ^ acc
-].
+]
 
 Integer>>gcd: other [
   | a b |
-  a := self abs.
-  b := other abs.
+  a := self abs
+  b := other abs
   [ b > 0 ] whileTrue: [
     | temp |
-    temp := b.
-    b := a \\ b.
+    temp := b
+    b := a \\ b
     a := temp
-  ].
+  ]
   ^ a
-].
+]
 
 Integer>>lcm: other [
   | gcd |
-  gcd := self gcd: other.
-  gcd = 0 ifTrue: [ ^ 0 ].
+  gcd := self gcd: other
+  gcd = 0 ifTrue: [ ^ 0 ]
   ^ (self * other) abs // gcd
-].
+]

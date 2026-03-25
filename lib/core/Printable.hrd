@@ -1,8 +1,8 @@
 #!/usr/bin/env harding
 #
-# Printable.hrd - Printable mixin
+# Printable.hrd - Printable mixin.
 
-Printable := Mixin derive.
+Printable := Mixin derive
 # Printable is a mixin for classes that want a stable human-readable textual representation.
 # It centralizes printString-style behavior that would otherwise be repeated in many classes.
 # Use Printable when a type needs clear Transcript, debugger, or Browser output.
@@ -11,15 +11,15 @@ Printable := Mixin derive.
 # Classes may override only the pieces needed for their own textual representation.
 
 Printable>>printOn: stream [
-  stream show: (self class name).
-  stream show: "@".
+  stream show: (self class name)
+  stream show: "@"
   stream show: (self identityHash printString)
 ]
 
 Printable>>printString [
   | stream |
-  stream := "" writeStream.
-  self printOn: stream.
+  stream := "" writeStream
+  self printOn: stream
   ^ stream contents
 ]
 
@@ -37,7 +37,7 @@ Printable>>displayOn: stream [
 
 Printable>>displayString [
   | stream |
-  stream := "" writeStream.
-  self displayOn: stream.
+  stream := "" writeStream
+  self displayOn: stream
   ^ stream contents
 ]

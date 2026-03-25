@@ -1,4 +1,4 @@
-SimpleGUI := Application derive: #().
+SimpleGUI := Application derive: #()
 # SimpleGUI is a sample Application that exercises Granite together with the GTK GUI bridge.
 # It demonstrates creating a window, wiring a button, and running the main widget loop.
 # Builder uses it as a visual starter template for GUI-oriented applications.
@@ -8,15 +8,15 @@ SimpleGUI := Application derive: #().
 
 SimpleGUI>>main: args [
   | window button |
-  window := GtkWindow new.
-  window title: "SimpleGUI".
-  window setDefaultSize: 400 height: 300.
+  window := GtkWindow new
+  window title: "SimpleGUI"
+  window setDefaultSize: 400 height: 300
 
-  button := GtkButton newLabel: "Click Me!".
-  button clicked: [ Transcript showCr: "Button clicked!" ].
+  button := GtkButton newLabel: "Click Me!"
+  button clicked: [ Transcript showCr: "Button clicked!" ]
 
-  window setChild: button.
-  window present.
-  GtkWidget main.
+  window setChild: button
+  window present
+  GtkWidget main
   ^ 0
-].
+]

@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
 #
-# Library.hrd - Library (Namespace) class methods
-# Uses primitive selectors registered in vm.nim initGlobals()
+# Library.hrd - Library (Namespace) class methods.
+# Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================
-# Library primitives
-#====================================================================
+#====================================================================.
+# Library primitives.
+#====================================================================.
 
 Library>>at: key <primitive primitiveLibraryAt: key>
 
@@ -20,9 +20,9 @@ Library>>name <primitive primitiveLibraryName>
 
 Library>>name: value <primitive primitiveLibraryName: value>
 
-#====================================================================
-# Library class methods
-#====================================================================
+#====================================================================.
+# Library class methods.
+#====================================================================.
 
 Library class>>new <primitive primitiveLibraryNew>
 
@@ -32,22 +32,22 @@ Library class>>named: aString <primitive primitiveLibraryNamed: aString>
 
 Library>>classNames [
     | names keys i key |
-    names := Array new.
-    keys := self keys.
+    names := Array new
+    keys := self keys
     keys isNil ifFalse: [
-        i := 0.
+        i := 0
         [ i < keys size ] whileTrue: [
-            key := keys at: i.
-            names add: key.
+            key := keys at: i
+            names add: key
             i := i + 1
         ]
-    ].
+    ]
     ^ names
 ]
 
-#====================================================================
-# Library iteration
-#====================================================================
+#====================================================================.
+# Library iteration.
+#====================================================================.
 
 Library>>do: block [
     # Iterate over values in the library
@@ -63,9 +63,9 @@ Library>>keysAndValuesDo: block [
     ]
 ]
 
-#====================================================================
-# Library testing
-#====================================================================
+#====================================================================.
+# Library testing.
+#====================================================================.
 
 Library>>isEmpty [
     ^ self keys isEmpty
@@ -79,9 +79,9 @@ Library>>size [
     ^ self keys size
 ]
 
-#====================================================================
-# Library accessing
-#====================================================================
+#====================================================================.
+# Library accessing.
+#====================================================================.
 
 Library>>at: key ifAbsent: block [
     # Get value at key, or evaluate block if absent
@@ -98,8 +98,8 @@ Library>>at: key ifAbsentPut: block [
         ^ self at: key
     ] ifFalse: [
         | value |
-        value := block value.
-        self at: key put: value.
+        value := block value
+        self at: key put: value
         ^ value
     ]
 ]
@@ -114,8 +114,8 @@ Library>>removeKey: key ifAbsent: block [
     ]
 ]
 
-#====================================================================
-# Library slot accessors
-#====================================================================
+#====================================================================.
+# Library slot accessors.
+#====================================================================.
 
 Library>>bindings <primitive primitiveLibraryBindings>

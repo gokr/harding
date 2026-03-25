@@ -1,5 +1,5 @@
 #!/usr/bin/env harding
-# Granite compiler integration
+# Granite compiler integration.
 
 Granite := Object derive: #()
 # Granite exposes the compiler-facing API for turning Harding applications into native binaries.
@@ -20,28 +20,28 @@ Granite class>>build: anApplication <primitive primitiveGraniteBuild: anApplicat
 Granite class>>collectFilesFor: anApplication [
   # Starting from Application, collect all transitively referenced classes
   | visited toProcess classes |
-  visited := Set new.
-  toProcess := Array with: anApplication class.
-  classes := Array new.
+  visited := Set new
+  toProcess := Array with: anApplication class
+  classes := Array new
 
   [toProcess isEmpty] whileFalse: [
     | cls |
-    cls := toProcess removeFirst.
+    cls := toProcess removeFirst
     (visited includes: cls) ifFalse: [
-      visited add: cls.
-      classes add: cls.
+      visited add: cls
+      classes add: cls
 
       # Add superclass if not Object
       (cls superclass ~= Object) ifTrue: [
         toProcess add: cls superclass
-      ].
+      ]
 
       # Add classes referenced in method bodies
       cls methods do: [:meth |
         toProcess addAll: (self classesReferencedIn: meth)
       ]
     ]
-  ].
+  ]
 
   ^classes
 ]

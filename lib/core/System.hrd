@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# System.hrd - process-level utilities
+# System.hrd - process-level utilities.
 
 System := Object derive: #()
 # System exposes process-level services such as filesystem, environment, and runtime queries.

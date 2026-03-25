@@ -1,56 +1,56 @@
-# Badminton Buddy Layout Component
+# Badminton Buddy Layout Component.
 
-BadmintonLayoutComponent := Object derivePublic: #(user).
+BadmintonLayoutComponent := Object derivePublic: #(user)
 
 BadmintonLayoutComponent class>>user: aUser [
     | component |
-    component := self basicNew.
-    component::user := aUser.
+    component := self basicNew
+    component::user := aUser
     ^ component
-].
+]
 
 BadmintonLayoutComponent>>homePage [
     ^ self renderPage: "Badminton Buddy" body: self homeContent
-].
+]
 
 BadmintonLayoutComponent>>loginPage [
     ^ self renderPage: "Login" body: self loginContent
-].
+]
 
 BadmintonLayoutComponent>>courtsPage [
     ^ self renderPage: "Courts" body: self courtsContent
-].
+]
 
 BadmintonLayoutComponent>>bookingsPage [
     ^ self renderPage: "My Bookings" body: self bookingsContent
-].
+]
 
 BadmintonLayoutComponent>>partnersPage [
     ^ self renderPage: "Find Partners" body: self partnersContent
-].
+]
 
 BadmintonLayoutComponent>>recurringPage [
     ^ self renderPage: "Recurring Spots" body: self recurringContent
-].
+]
 
 BadmintonLayoutComponent>>profilePage [
     ^ self renderPage: "Profile" body: self profileContent
-].
+]
 
 BadmintonLayoutComponent>>courtDetailPage: aCourt [
     ^ self renderPage: (aCourt at: #name) body: (self courtDetailContent: aCourt)
-].
+]
 
-# ============================================================================
-# Content Methods
-# ============================================================================
+# ============================================================================.
+# Content Methods.
+# ============================================================================.
 
 BadmintonLayoutComponent>>homeContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
         self heroSection ,
         self featuresSection
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>loginContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
@@ -63,7 +63,7 @@ BadmintonLayoutComponent>>loginContent [
             )
         )
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>courtsContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
@@ -74,7 +74,7 @@ BadmintonLayoutComponent>>courtsContent [
             )
         )
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>bookingsContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
@@ -85,28 +85,28 @@ BadmintonLayoutComponent>>bookingsContent [
             )
         )
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>partnersContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
         Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "Find Partners" ,
         Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>recurringContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
         Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "Recurring Spots" ,
         Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>profileContent [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
         Html h1: #{#class -> "text-3xl font-bold mb-6"} text: "My Profile" ,
         Html p: #{#class -> "text-gray-500"} text: "Coming soon!"
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>courtDetailContent: aCourt [
     ^ (Html div: #{#class -> "container mx-auto px-4 py-8"} with: (
@@ -122,7 +122,7 @@ BadmintonLayoutComponent>>courtDetailContent: aCourt [
             )
         )
     )) renderString
-].
+]
 
 BadmintonLayoutComponent>>heroSection [
     ^ Html div: #{#class -> "hero bg-base-200 rounded-box mb-8"} with: (
@@ -137,7 +137,7 @@ BadmintonLayoutComponent>>heroSection [
             )
         )
     )
-].
+]
 
 BadmintonLayoutComponent>>featuresSection [
     ^ Html div: #{#class -> "grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"} with: (
@@ -145,7 +145,7 @@ BadmintonLayoutComponent>>featuresSection [
         self featureCard: "Find Partners" description: "Connect with players at your skill level." ,
         self featureCard: "Recurring Spots" description: "Set up weekly games with automatic bookings."
     )
-].
+]
 
 BadmintonLayoutComponent>>featureCard: title description: desc [
     ^ Html div: #{#class -> "card bg-base-100 shadow-xl"} with: (
@@ -154,11 +154,11 @@ BadmintonLayoutComponent>>featureCard: title description: desc [
             Html p: desc
         )
     )
-].
+]
 
-# ============================================================================
-# Layout Helpers
-# ============================================================================
+# ============================================================================.
+# Layout Helpers.
+# ============================================================================.
 
 BadmintonLayoutComponent>>renderPage: title body: bodyContent [
     ^ Html documentTitle: title
@@ -168,7 +168,7 @@ BadmintonLayoutComponent>>renderPage: title body: bodyContent [
             Html div: #{#class -> "min-h-screen"} with: bodyContent ,
             self footer
         ))
-].
+]
 
 BadmintonLayoutComponent>>headContent [
     ^ (Html metaCharset: "utf-8") ,
@@ -177,7 +177,7 @@ BadmintonLayoutComponent>>headContent [
     (Html linkRel: "manifest" href: "/manifest.json") ,
     (Html linkStylesheet: "/assets/daisyui.css") ,
     (Html scriptSrc: "https://unpkg.com/htmx.org@2.0.4")
-].
+]
 
 BadmintonLayoutComponent>>navbar [
     | navItems userMenu loginButton |
@@ -187,15 +187,15 @@ BadmintonLayoutComponent>>navbar [
             Html li: (Html a: #{#href -> "/courts"} text: "Courts") ,
             Html li: (Html a: #{#href -> "/partners"} text: "Partners")
         )
-    ).
+    )
     
-    loginButton := Html a: #{#class -> "btn btn-primary btn-sm", #href -> "/login"} text: "Login".
+    loginButton := Html a: #{#class -> "btn btn-primary btn-sm", #href -> "/login"} text: "Login"
     
     user isNil ifTrue: [
         userMenu := Html div: #{#class -> "flex-none"} with: loginButton
     ] ifFalse: [
         userMenu := Html div: #{#class -> "flex-none"} with: loginButton
-    ].
+    ]
     
     ^ Html div: #{#class -> "navbar bg-base-100 sticky top-0 z-50 shadow-sm"} with: (
         Html div: #{#class -> "navbar-start"} with: (
@@ -216,10 +216,10 @@ BadmintonLayoutComponent>>navbar [
         navItems ,
         Html div: #{#class -> "navbar-end"} with: userMenu
     )
-].
+]
 
 BadmintonLayoutComponent>>footer [
     ^ Html footer: #{#class -> "footer footer-center p-4 bg-base-200 text-base-content mt-8"} with: (
         Html aside: (Html p: "Badminton Buddy - Find courts and partners")
     )
-].
+]

@@ -2,13 +2,25 @@ TodoApp := Object derivePublic: #(server router repository port).
 
 TodoAppCurrent := nil.
 TodoRepositoryCurrent := nil.
+MySqlTodoRepositoryCurrent := nil.
+UseMySql := false.
 TodoAppDaisyStylesheet := nil.
 
 TodoApp class>>current [
   ^ TodoAppCurrent
 ].
 
+TodoApp class>>useMySql: aBoolean [
+  UseMySql := aBoolean
+].
+
 TodoApp class>>repository [
+  UseMySql ifTrue: [
+    MySqlTodoRepositoryCurrent isNil ifTrue: [
+      MySqlTodoRepositoryCurrent := MySqlTodoRepository new
+    ].
+    ^ MySqlTodoRepositoryCurrent
+  ].
   TodoRepositoryCurrent isNil ifTrue: [
     TodoRepositoryCurrent := TodoRepository new
   ].
@@ -16,9 +28,10 @@ TodoApp class>>repository [
 ].
 
 TodoApp class>>resetRepository [
-  TodoRepositoryCurrent := TodoRepository new.
+  TodoRepositoryCurrent := nil.
+  MySqlTodoRepositoryCurrent := nil.
   RenderCache current reset.
-  ^ TodoRepositoryCurrent
+  ^ self repository
 ].
 
 TodoApp class>>prepareAssets [

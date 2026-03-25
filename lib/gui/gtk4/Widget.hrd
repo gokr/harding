@@ -1,92 +1,92 @@
-# GTK Widget - Base class for all GTK widgets
-# Note: Widget class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK Widget - Base class for all GTK widgets.
+# Note: Widget class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# - show (show the widget)
-# - hide (hide the widget)
-# - setSizeRequest: (set minimum size)
-# - addCssClass: (add CSS class for styling)
-# - removeCssClass: (remove CSS class)
-# - connect:do: (connect a signal to a block)
-# - marginStart: / marginEnd: / marginTop: / marginBottom: (set margins)
+# Native methods (registered in Nim bridge):.
+# - show (show the widget).
+# - hide (hide the widget).
+# - setSizeRequest: (set minimum size).
+# - addCssClass: (add CSS class for styling).
+# - removeCssClass: (remove CSS class).
+# - connect:do: (connect a signal to a block).
+# - marginStart: / marginEnd: / marginTop: / marginBottom: (set margins).
 
-# Signal connection conveniences
+# Signal connection conveniences.
 GtkWidget>>onDestroy: aBlock [
     # Connect to destroy signal
     self connect: "destroy" do: aBlock
-].
+]
 
 GtkWidget>>onShow: aBlock [
     # Connect to show signal
     self connect: "show" do: aBlock
-].
+]
 
 GtkWidget>>onHide: aBlock [
     # Connect to hide signal
     self connect: "hide" do: aBlock
-].
+]
 
 GtkWidget>>onRealize: aBlock [
     # Connect to realize signal
     self connect: "realize" do: aBlock
-].
+]
 
-# Test/automation helpers
+# Test/automation helpers.
 GtkWidget>>emit: aSignalName [
     # Emit a GTK signal programmatically (for automation)
     self emitSignal: aSignalName
-].
+]
 
 GtkWidget class>>flushEvents [
     # Process pending GTK events
     self pumpEvents
-].
+]
 
 GtkWidget class>>flushEvents: count [
     # Process pending GTK events multiple times
     self pumpEvents: count
-].
+]
 
-# Visibility conveniences
+# Visibility conveniences.
 GtkWidget>>showWidget [
     # Show the widget
     self show
-].
+]
 
 GtkWidget>>hideWidget [
     # Hide the widget
     self hide
-].
+]
 
-# CSS styling conveniences
+# CSS styling conveniences.
 GtkWidget>>addClass: aClassName [
     # Add a CSS class
     self addCssClass: aClassName
-].
+]
 
 GtkWidget>>removeClass: aClassName [
     # Remove a CSS class
     self removeCssClass: aClassName
-].
+]
 
 GtkWidget>>tooltip: aString [
     # Set tooltip text
     self setTooltipText: aString
-].
+]
 
-# Expand properties (GTK4 only) - control how widget fills available space
+# Expand properties (GTK4 only) - control how widget fills available space.
 GtkWidget>>vexpand: aBoolean [
     # Set vertical expand property
     self setVexpand: aBoolean
-].
+]
 
 GtkWidget>>hexpand: aBoolean [
     # Set horizontal expand property
     self setHexpand: aBoolean
-].
+]
 
 GtkWidget>>halignStart [
     # Align widget to the start of the horizontal axis
     self setHalignStart
-].
+]

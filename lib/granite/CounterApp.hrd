@@ -1,4 +1,4 @@
-CounterApp := Application derive: #(count).
+CounterApp := Application derive: #(count)
 # CounterApp is a stateful sample Application that demonstrates mutable UI state in Granite apps.
 # It combines declared slots with a small GTK interface to show live updates from callbacks.
 # Builder surfaces this template for users who need more than a single button example.
@@ -7,30 +7,30 @@ CounterApp := Application derive: #(count).
 # It should remain a straightforward example of interactive Harding GUI state.
 
 CounterApp>>initialize [
-  super initialize.
-  count := 0.
-].
+  super initialize
+  count := 0
+]
 
 CounterApp>>main: args [
   | window label button box |
-  window := GtkWindow new.
-  window title: "CounterApp".
-  window setDefaultSize: 300 height: 180.
+  window := GtkWindow new
+  window title: "CounterApp"
+  window setDefaultSize: 300 height: 180
 
-  box := GtkBox vertical.
-  box setSpacing: 8.
+  box := GtkBox vertical
+  box setSpacing: 8
 
-  label := GtkLabel new: "Count: 0".
-  button := GtkButton newLabel: "Increment".
+  label := GtkLabel new: "Count: 0"
+  button := GtkButton newLabel: "Increment"
   button clicked: [
-    count := count + 1.
-    label label: ("Count: " , (count printString)).
-  ].
+    count := count + 1
+    label label: ("Count: " , (count printString))
+  ]
 
-  box append: label.
-  box append: button.
-  window setChild: box.
-  window present.
-  GtkWidget main.
+  box append: label
+  box append: button
+  window setChild: box
+  window present
+  GtkWidget main
   ^ 0
-].
+]

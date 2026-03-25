@@ -1,87 +1,87 @@
-TrackedList := Object derivePublic: #(dependents transactionDepth pendingChange items).
+TrackedList := Object derivePublic: #(dependents transactionDepth pendingChange items)
 
-TrackedList addSuperclass: TrackedSubject.
+TrackedList addSuperclass: TrackedSubject
 
 TrackedList class>>new [
   | tracked |
-  tracked := self basicNew initialize.
-  tracked::items := Array new.
+  tracked := self basicNew initialize
+  tracked::items := Array new
   ^ tracked
-].
+]
 
 TrackedList>>at: index [
-  self trackRead.
+  self trackRead
   ^ items at: index
-].
+]
 
 TrackedList>>add: value [
-  items add: value.
-  self changed.
+  items add: value
+  self changed
   ^ value
-].
+]
 
 TrackedList>>addAll: values [
-  values do: [:each | items add: each ].
-  self changed.
+  values do: [:each | items add: each ]
+  self changed
   ^ self
-].
+]
 
 TrackedList>>remove: value [
-  items := items reject: [:each | each = value ].
-  self changed.
+  items := items reject: [:each | each = value ]
+  self changed
   ^ value
-].
+]
 
 TrackedList>>removeAt: index [
   | removed |
-  removed := items at: index.
-  items removeAt: index.
-  self changed.
+  removed := items at: index
+  items removeAt: index
+  self changed
   ^ removed
-].
+]
 
 TrackedList>>clear [
-  items := Array new.
-  self changed.
+  items := Array new
+  self changed
   ^ self
-].
+]
 
 TrackedList>>size [
-  self trackRead.
+  self trackRead
   ^ items size
-].
+]
 
 TrackedList>>isEmpty [
-  self trackRead.
+  self trackRead
   ^ items isEmpty
-].
+]
 
 TrackedList>>do: aBlock [
-  self trackRead.
+  self trackRead
   ^ items do: aBlock
-].
+]
 
 TrackedList>>select: aBlock [
-  self trackRead.
+  self trackRead
   ^ items select: aBlock
-].
+]
 
 TrackedList>>reject: aBlock [
-  self trackRead.
+  self trackRead
   ^ items reject: aBlock
-].
+]
 
 TrackedList>>detect: aBlock ifNone: noneBlock [
-  self trackRead.
+  self trackRead
   ^ items detect: aBlock ifNone: noneBlock
-].
+]
 
 TrackedList>>includes: value [
-  self trackRead.
+  self trackRead
   ^ items includes: value
-].
+]
 
 TrackedList>>asArray [
-  self trackRead.
+  self trackRead
   ^ items
-].
+]

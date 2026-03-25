@@ -1,24 +1,24 @@
 #!/usr/bin/env harding
 #
-# Boolean.nt - Boolean class extensions
+# Boolean.nt - Boolean class extensions.
 #
 # Note: Boolean is defined in the interpreter.
 # This file extends them with additional methods using >> syntax.
 #
 
-#====================================================================
-# Boolean class extensions
-#====================================================================
+#====================================================================.
+# Boolean class extensions.
+#====================================================================.
 
 Boolean>>printString [
   # Subclasses should override
   ^ "<Boolean>"
-].
+]
 
 Boolean>>asString [
   ^ self printString
-].
+]
 
 Boolean>>ifFalse: falseBlock ifTrue: trueBlock [
   ^ self ifTrue: trueBlock ifFalse: falseBlock
-].
+]

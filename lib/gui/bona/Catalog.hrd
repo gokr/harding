@@ -1,260 +1,260 @@
-# ============================================================================
-# Catalog - Shared code discovery and source handling for Bona tools
-# ============================================================================
+# ============================================================================.
+# Catalog - Shared code discovery and source handling for Bona tools.
+# ============================================================================.
 
-Catalog := Object derive.
+Catalog := Object derive
 
 Catalog>>allLibraryNames [
     | libraryNames unique i name |
-    libraryNames := Library allNames.
-    unique := Array new.
-    i := 0.
+    libraryNames := Library allNames
+    unique := Array new
+    i := 0
     [ i < libraryNames size ] whileTrue: [
-        name := (libraryNames at: i) asString.
+        name := (libraryNames at: i) asString
         (unique includes: name) ifFalse: [
             unique add: name
-        ].
+        ]
         i := i + 1
-    ].
+    ]
     ^ unique
-].
+]
 
 Catalog>>classNamesForLibrary: aLibraryName [
     | libb classNames libraryName keysResult i keyName |
     aLibraryName isNil ifTrue: [
         ^ #()
-    ].
+    ]
 
     libraryName := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName name asString ]
-        ifFalse: [ aLibraryName asString ].
+        ifFalse: [ aLibraryName asString ]
 
     libb := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName ]
         ifFalse: [
             | lib |
-            lib := Library named: libraryName.
+            lib := Library named: libraryName
             (lib isNil or: [(lib isKindOf: Library) not]) ifTrue: [
-                lib := Harding at: libraryName.
+                lib := Harding at: libraryName
                 ((lib isKindOf: Library) not) ifTrue: [
                     lib := nil
                 ]
-            ].
+            ]
             lib
-        ].
+        ]
 
-    classNames := Array new.
+    classNames := Array new
 
     libraryName = "Process" ifTrue: [
-        classNames add: "Process".
-        classNames add: "Scheduler".
-        classNames add: "Processor".
-        classNames add: "Monitor".
-        classNames add: "Semaphore".
-        classNames add: "SharedQueue".
-        classNames add: "Synchronizable".
-    ].
+        classNames add: "Process"
+        classNames add: "Scheduler"
+        classNames add: "Processor"
+        classNames add: "Monitor"
+        classNames add: "Semaphore"
+        classNames add: "SharedQueue"
+        classNames add: "Synchronizable"
+    ]
     libraryName = "Standard" ifTrue: [
-        classNames add: "SortedCollection".
-        classNames add: "Interval".
-        classNames add: "File".
-        classNames add: "FileStream".
-        classNames add: "TestCase".
-    ].
+        classNames add: "SortedCollection"
+        classNames add: "Interval"
+        classNames add: "File"
+        classNames add: "FileStream"
+        classNames add: "TestCase"
+    ]
     libraryName = "Granite" ifTrue: [
-        classNames add: "Application".
-        classNames add: "Granite".
-    ].
+        classNames add: "Application"
+        classNames add: "Granite"
+    ]
     libraryName = "Core" ifTrue: [
-        classNames add: "Root".
-        classNames add: "Mixin".
-        classNames add: "Object".
-        classNames add: "Class".
-        classNames add: "Block".
-        classNames add: "String".
-        classNames add: "Number".
-        classNames add: "Integer".
-        classNames add: "Float".
-        classNames add: "Array".
-        classNames add: "Table".
-        classNames add: "Set".
-        classNames add: "Boolean".
-        classNames add: "True".
-        classNames add: "False".
-        classNames add: "UndefinedObject".
-        classNames add: "Library".
-        classNames add: "Exception".
-        classNames add: "Error".
-        classNames add: "Notification".
-        classNames add: "MessageNotUnderstood".
-        classNames add: "SubscriptOutOfBounds".
-        classNames add: "DivisionByZero".
-        classNames add: "UnhandledError".
-        classNames add: "Comparable".
-        classNames add: "Equatable".
-        classNames add: "Iterable".
-        classNames add: "Printable".
-    ].
+        classNames add: "Root"
+        classNames add: "Mixin"
+        classNames add: "Object"
+        classNames add: "Class"
+        classNames add: "Block"
+        classNames add: "String"
+        classNames add: "Number"
+        classNames add: "Integer"
+        classNames add: "Float"
+        classNames add: "Array"
+        classNames add: "Table"
+        classNames add: "Set"
+        classNames add: "Boolean"
+        classNames add: "True"
+        classNames add: "False"
+        classNames add: "UndefinedObject"
+        classNames add: "Library"
+        classNames add: "Exception"
+        classNames add: "Error"
+        classNames add: "Notification"
+        classNames add: "MessageNotUnderstood"
+        classNames add: "SubscriptOutOfBounds"
+        classNames add: "DivisionByZero"
+        classNames add: "UnhandledError"
+        classNames add: "Comparable"
+        classNames add: "Equatable"
+        classNames add: "Iterable"
+        classNames add: "Printable"
+    ]
     libraryName = "Harding" ifTrue: [
-        classNames add: "Root".
-        classNames add: "Mixin".
-        classNames add: "Object".
-        classNames add: "Class".
-        classNames add: "Block".
-        classNames add: "String".
-        classNames add: "Number".
-        classNames add: "Integer".
-        classNames add: "Float".
-        classNames add: "Array".
-        classNames add: "Table".
-        classNames add: "Set".
-        classNames add: "Boolean".
-        classNames add: "True".
-        classNames add: "False".
-        classNames add: "UndefinedObject".
-        classNames add: "Library".
-        classNames add: "Exception".
-        classNames add: "Error".
-        classNames add: "Notification".
-        classNames add: "MessageNotUnderstood".
-        classNames add: "SubscriptOutOfBounds".
-        classNames add: "DivisionByZero".
-        classNames add: "UnhandledError".
-        classNames add: "Comparable".
-        classNames add: "Equatable".
-        classNames add: "Iterable".
-        classNames add: "Printable".
-        classNames add: "Process".
-        classNames add: "Scheduler".
-        classNames add: "Processor".
-        classNames add: "Monitor".
-        classNames add: "Semaphore".
-        classNames add: "SharedQueue".
-        classNames add: "SortedCollection".
-        classNames add: "Interval".
-        classNames add: "File".
-        classNames add: "FileStream".
-        classNames add: "TestCase".
-        classNames add: "Application".
-        classNames add: "Granite".
-    ].
+        classNames add: "Root"
+        classNames add: "Mixin"
+        classNames add: "Object"
+        classNames add: "Class"
+        classNames add: "Block"
+        classNames add: "String"
+        classNames add: "Number"
+        classNames add: "Integer"
+        classNames add: "Float"
+        classNames add: "Array"
+        classNames add: "Table"
+        classNames add: "Set"
+        classNames add: "Boolean"
+        classNames add: "True"
+        classNames add: "False"
+        classNames add: "UndefinedObject"
+        classNames add: "Library"
+        classNames add: "Exception"
+        classNames add: "Error"
+        classNames add: "Notification"
+        classNames add: "MessageNotUnderstood"
+        classNames add: "SubscriptOutOfBounds"
+        classNames add: "DivisionByZero"
+        classNames add: "UnhandledError"
+        classNames add: "Comparable"
+        classNames add: "Equatable"
+        classNames add: "Iterable"
+        classNames add: "Printable"
+        classNames add: "Process"
+        classNames add: "Scheduler"
+        classNames add: "Processor"
+        classNames add: "Monitor"
+        classNames add: "Semaphore"
+        classNames add: "SharedQueue"
+        classNames add: "SortedCollection"
+        classNames add: "Interval"
+        classNames add: "File"
+        classNames add: "FileStream"
+        classNames add: "TestCase"
+        classNames add: "Application"
+        classNames add: "Granite"
+    ]
 
     libraryName = "Harding" ifTrue: [
         keysResult := Harding keys
     ] ifFalse: [
         libb isNil ifTrue: [
             ^ classNames
-        ].
+        ]
         keysResult := libb keys
-    ].
+    ]
 
     keysResult notNil ifTrue: [
         [
-            i := 0.
+            i := 0
             [ i < keysResult size ] whileTrue: [
-                keyName := (keysResult at: i) asString.
+                keyName := (keysResult at: i) asString
                 (classNames includes: keyName) ifFalse: [
                     classNames add: keyName
-                ].
+                ]
                 i := i + 1
             ]
         ] on: Exception do: [:ex |
             Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
         ]
-    ].
+    ]
 
     ^ [ classNames sorted ] on: Exception do: [:ex | classNames]
-].
+]
 
 Catalog>>classForName: aClassName currentLibrary: aLibraryName [
     | lib classObj found |
-    found := nil.
+    found := nil
 
     aLibraryName notNil ifTrue: [
-        lib := Library named: aLibraryName.
+        lib := Library named: aLibraryName
         lib notNil ifTrue: [
-            classObj := lib at: aClassName.
-            classObj notNil ifTrue: [ found := classObj ].
+            classObj := lib at: aClassName
+            classObj notNil ifTrue: [ found := classObj ]
 
             found isNil ifTrue: [
                 | libKeys i |
-                libKeys := lib keys.
+                libKeys := lib keys
                 libKeys isNil ifFalse: [
-                    i := 0.
+                    i := 0
                     [ i < libKeys size ] whileTrue: [
                         | key |
-                        key := libKeys at: i.
+                        key := libKeys at: i
                         ((key asString) = (aClassName asString) and: [found isNil]) ifTrue: [
                             found := lib at: key
-                        ].
+                        ]
                         i := i + 1
                     ]
                 ]
             ]
         ]
-    ].
+    ]
 
     found isNil ifTrue: [
         (Harding includesKey: aClassName) ifTrue: [
             found := Harding at: aClassName
         ]
-    ].
+    ]
 
     found isNil ifTrue: [
         | hKeys i |
-        hKeys := Harding keys.
+        hKeys := Harding keys
         hKeys isNil ifFalse: [
-            i := 0.
+            i := 0
             [ i < hKeys size ] whileTrue: [
                 | key |
-                key := hKeys at: i.
+                key := hKeys at: i
                 ((key asString) = (aClassName asString) and: [found isNil]) ifTrue: [
                     found := Harding at: key
-                ].
+                ]
                 i := i + 1
             ]
         ]
-    ].
+    ]
 
     ^ found
-].
+]
 
 Catalog>>categoriesForClass: aClassName [
     | categories |
-    categories := Array new.
-    categories add: "all".
-    categories add: "defined".
-    categories add: "inherited".
-    categories add: "class".
+    categories := Array new
+    categories add: "all"
+    categories add: "defined"
+    categories add: "inherited"
+    categories add: "class"
     ^ categories
-].
+]
 
 Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLibraryName [
     | classObj methods definedMethods methodNames stringNames rawNames |
 
     aClassName isNil ifTrue: [
-        Transcript showCr: "methodNamesForClass: class is nil".
+        Transcript showCr: "methodNamesForClass: class is nil"
         ^ #()
-    ].
+    ]
 
-    classObj := self classForName: aClassName currentLibrary: aLibraryName.
+    classObj := self classForName: aClassName currentLibrary: aLibraryName
     classObj isNil ifTrue: [
-        Transcript showCr: ("No class object found for " , aClassName).
+        Transcript showCr: ("No class object found for " , aClassName)
         ^ #()
-    ].
+    ]
 
     (classObj isClass) ifFalse: [
-        Transcript showCr: ("Resolved object is not a class for " , aClassName).
+        Transcript showCr: ("Resolved object is not a class for " , aClassName)
         ^ #()
-    ].
+    ]
 
-    methods := classObj methods.
+    methods := classObj methods
     methods isNil ifTrue: [
-        Transcript showCr: "methods is nil!".
+        Transcript showCr: "methods is nil!"
         ^ #()
-    ].
-    definedMethods := classObj definedMethods.
-    rawNames := Array new.
+    ]
+    definedMethods := classObj definedMethods
+    rawNames := Array new
 
     (aCategory = "all") ifTrue: [
         methods do: [:selector | rawNames add: selector ]
@@ -276,84 +276,84 @@ Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLi
                 ]
             ]
         ]
-    ].
+    ]
 
-    methodNames := Array new.
+    methodNames := Array new
     rawNames do: [:selector |
         ((selector asString startsWith: "primitive") not) ifTrue: [
             methodNames add: selector
         ]
-    ].
+    ]
 
-    stringNames := methodNames collect: [:selector | selector asString ].
+    stringNames := methodNames collect: [:selector | selector asString ]
     ^ [ stringNames sorted ]
         on: Exception
         do: [:ex |
-            Transcript showCr: ("Method sort failed: " , ex printString).
+            Transcript showCr: ("Method sort failed: " , ex printString)
             stringNames
         ]
-].
+]
 
 Catalog>>methodSourceInfoForClass: aClassName selector: aMethodName [
     ^ Harding methodSourceInfoForClass: aClassName selector: aMethodName
-].
+]
 
 Catalog>>editableHeaderFromMethodHeader: aHeader fallback: aFallback [
     | sep |
-    aHeader isNil ifTrue: [ ^ aFallback ].
+    aHeader isNil ifTrue: [ ^ aFallback ]
 
-    sep := aHeader indexOf: ">>".
-    sep >= 0 ifFalse: [ ^ aHeader ].
+    sep := aHeader indexOf: ">>"
+    sep >= 0 ifFalse: [ ^ aHeader ]
     ^ (aHeader from: (sep + 2) to: (aHeader size - 1)) trim
-].
+]
 
 Catalog>>methodTextFromInfo: info [
     | header source suffix hasBlock |
-    header := info at: "header" ifAbsent: [ "" ].
-    source := info at: "source" ifAbsent: [ "" ].
-    suffix := info at: "suffix" ifAbsent: [ "" ].
-    hasBlock := info at: "hasBlock" ifAbsent: [ false ].
+    header := info at: "header" ifAbsent: [ "" ]
+    source := info at: "source" ifAbsent: [ "" ]
+    suffix := info at: "suffix" ifAbsent: [ "" ]
+    hasBlock := info at: "hasBlock" ifAbsent: [ false ]
 
     hasBlock ifTrue: [
         ^ header , " [\n" , source , "\n]" , suffix
-    ].
+    ]
     ^ header
-].
+]
 
 Catalog>>sourceEntriesForClass: aClassName [
     ^ Harding sourceEntriesForClass: aClassName
-].
+]
 
 Catalog>>applicationSubclasses [
     | result |
-    result := Array new.
+    result := Array new
 
     Harding keys do: [:key |
         | obj supers className |
-        obj := Harding at: key.
+        obj := Harding at: key
         (obj notNil and: [ obj isClass ]) ifTrue: [
-            className := [ obj name asString ] on: Exception do: [ obj className asString ].
+            className := [ obj name asString ] on: Exception do: [ obj className asString ]
             className = "Application" ifFalse: [
-                supers := [ obj superclassNames ] on: Exception do: [ Array new ].
+                supers := [ obj superclassNames ] on: Exception do: [ Array new ]
                 ((supers includes: "Application") or: [ supers includes: #Application ]) ifTrue: [
                     result add: obj
                 ]
             ]
-        ].
-    ].
+        ]
+    ]
 
     ^ result
-].
+]
 
 Catalog>>nextAvailableClassNameFrom: baseName [
     | counter name |
-    counter := 1.
-    name := baseName.
+    counter := 1
+    name := baseName
 
     [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
-        counter := counter + 1.
-        name := baseName , (counter printString).
-    ].
+        counter := counter + 1
+        name := baseName , (counter printString)
+    ]
 
     ^ name
-].
+]

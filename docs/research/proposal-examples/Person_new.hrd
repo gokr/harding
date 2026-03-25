@@ -1,24 +1,24 @@
-#!/usr/bin/env harding
-#
-# Person.hrd - Person class definition
-# Instance variables: name (string), age (int)
-#
-# PARSED BY: Harding Definition Parser (special syntax for method definitions)
+#!/usr/bin/env harding.
+#.
+# Person.hrd - Person class definition.
+# Instance variables: name (string), age (int).
+#.
+# PARSED BY: Harding Definition Parser (special syntax for method definitions).
 
 Person := Object derive: #(name age)
 
-#---------------------------------------------------------------------
-# Initialization
-#---------------------------------------------------------------------
+#---------------------------------------------------------------------.
+# Initialization.
+#---------------------------------------------------------------------.
 Person>>initialize [
   # Initialize instance variables with defaults
   name := "Anonymous"
   age := 0
 ]
 
-#---------------------------------------------------------------------
-# Accessors
-#---------------------------------------------------------------------
+#---------------------------------------------------------------------.
+# Accessors.
+#---------------------------------------------------------------------.
 Person>>name [ ^ name ]
 
 Person>>name: aName [
@@ -34,9 +34,9 @@ Person>>age: anAge [
   age := anAge
 ]
 
-#---------------------------------------------------------------------
-# Behavior methods
-#---------------------------------------------------------------------
+#---------------------------------------------------------------------.
+# Behavior methods.
+#---------------------------------------------------------------------.
 Person>>greet [
   # Return a greeting message using the person's name
   ^ "Hello, my name is " + name
@@ -53,9 +53,9 @@ Person>>birthday [
   ^ self
 ]
 
-#---------------------------------------------------------------------
-# Class-side methods
-#---------------------------------------------------------------------
+#---------------------------------------------------------------------.
+# Class-side methods.
+#---------------------------------------------------------------------.
 Person>>newWithName: aName age: anAge [
   # Create a new person with given name and age
   ^ self derive initialize

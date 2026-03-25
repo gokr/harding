@@ -1,8 +1,8 @@
 #!/usr/bin/env harding
 #
-# Bootstrap.hrd - Loads the core library and optional layers
+# Bootstrap.hrd - Loads the core library and optional layers.
 
-# Load core classes and methods into globals
+# Load core classes and methods into globals.
 Harding load: "lib/core/Object.hrd"
 Harding load: "lib/core/Boolean.hrd"
 Harding load: "lib/core/True.hrd"
@@ -31,16 +31,16 @@ Harding load: "lib/core/Comparable.hrd"
 Harding load: "lib/core/Iterable.hrd"
 Harding load: "lib/core/Printable.hrd"
 
-# Add mixins to collections (after mixin classes are loaded)
-(Array superclassNames includes: "Iterable") ifFalse: [ Array addSuperclass: Iterable ].
-(Table superclassNames includes: "Iterable") ifFalse: [ Table addSuperclass: Iterable ].
-(Set superclassNames includes: "Iterable") ifFalse: [ Set addSuperclass: Iterable ].
+# Add mixins to collections (after mixin classes are loaded).
+(Array superclassNames includes: "Iterable") ifFalse: [ Array addSuperclass: Iterable ]
+(Table superclassNames includes: "Iterable") ifFalse: [ Table addSuperclass: Iterable ]
+(Set superclassNames includes: "Iterable") ifFalse: [ Set addSuperclass: Iterable ]
 
-# Add Comparable to number types
-(Number superclassNames includes: "Comparable") ifFalse: [ Number addSuperclass: Comparable ].
-(String superclassNames includes: "Comparable") ifFalse: [ String addSuperclass: Comparable ].
+# Add Comparable to number types.
+(Number superclassNames includes: "Comparable") ifFalse: [ Number addSuperclass: Comparable ]
+(String superclassNames includes: "Comparable") ifFalse: [ String addSuperclass: Comparable ]
 
-# Load optional higher-level libraries
+# Load optional higher-level libraries.
 Harding load: "lib/process/Bootstrap.hrd"
 Harding load: "lib/reactive/Bootstrap.hrd"
 Harding load: "lib/standard/Bootstrap.hrd"

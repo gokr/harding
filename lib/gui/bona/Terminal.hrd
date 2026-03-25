@@ -1,187 +1,187 @@
-# ============================================================================
-# Terminal - VTE-backed shell and command window
-# ============================================================================
+# ============================================================================.
+# Terminal - VTE-backed shell and command window.
+# ============================================================================.
 
 Terminal := Object derive: #(window box terminal owner workingDirectory launchCommand)
 
 Terminal class>>open [
     ^self openFor: nil in: System cwd command: nil
-].
+]
 
 Terminal class>>openFor: anOwner [
     ^self openFor: anOwner in: System cwd command: nil
-].
+]
 
 Terminal class>>openIn: aPath [
     ^self openFor: nil in: aPath command: nil
-].
+]
 
 Terminal class>>openCommand: aCommandString [
     ^self openFor: nil in: System cwd command: aCommandString
-].
+]
 
 Terminal class>>openCommand: aCommandString in: aPath [
     ^self openFor: nil in: aPath command: aCommandString
-].
+]
 
 Terminal class>>openOpenCode [
     ^self openCommand: "opencode"
-].
+]
 
 Terminal class>>openOpenCodeFor: anOwner [
     ^self openFor: anOwner in: System cwd command: "opencode"
-].
+]
 
 Terminal class>>openFor: anOwner in: aPath command: aCommandString [
     ^self new openWindowFor: anOwner in: aPath command: aCommandString
-].
+]
 
 Terminal>>openWindow [
     ^self openWindowFor: nil in: System cwd command: nil
-].
+]
 
 Terminal>>openWindowFor: anOwner in: aPath command: aCommandString [
-    owner := anOwner.
-    workingDirectory := aPath.
-    launchCommand := aCommandString.
+    owner := anOwner
+    workingDirectory := aPath
+    launchCommand := aCommandString
 
-    window := GtkWindow new.
-    window title: self windowTitle.
-    window iconName: "harding".
-    window setDefaultSize: 900 height: 600.
+    window := GtkWindow new
+    window title: self windowTitle
+    window iconName: "harding"
+    window setDefaultSize: 900 height: 600
 
-    box := GtkBox vertical.
-    box setSpacing: 0.
-    box marginStart: 5.
-    box marginEnd: 5.
-    box marginTop: 5.
-    box marginBottom: 5.
+    box := GtkBox vertical
+    box setSpacing: 0
+    box marginStart: 5
+    box marginEnd: 5
+    box marginTop: 5
+    box marginBottom: 5
 
-    terminal := VteTerminal new.
-    terminal vexpand: true.
-    terminal hexpand: true.
+    terminal := VteTerminal new
+    terminal vexpand: true
+    terminal hexpand: true
 
-    window setChild: box.
-    box append: terminal.
+    window setChild: box
+    box append: terminal
 
-    self installKeyboardShortcuts.
-    self installContextMenu.
+    self installKeyboardShortcuts
+    self installContextMenu
 
-    window destroyed: [ self onDestroy ].
-    anOwner notNil ifTrue: [ anOwner addWindow: self ].
+    window destroyed: [ self onDestroy ]
+    anOwner notNil ifTrue: [ anOwner addWindow: self ]
 
-    self launchSession.
+    self launchSession
 
-    window present.
+    window present
     ^self
-].
+]
 
 Terminal>>windowTitle [
     (launchCommand notNil and: [ launchCommand isEmpty not ]) ifTrue: [
         ^ "Terminal - " , launchCommand
-    ].
+    ]
     ^ "Terminal"
-].
+]
 
 Terminal>>launchSession [
     (launchCommand notNil and: [ launchCommand isEmpty not ])
         ifTrue: [ terminal spawnCommand: launchCommand in: workingDirectory ]
-        ifFalse: [ terminal spawnShellIn: workingDirectory ].
-    window title: self windowTitle.
+        ifFalse: [ terminal spawnShellIn: workingDirectory ]
+    window title: self windowTitle
     ^ self
-].
+]
 
 Terminal>>installKeyboardShortcuts [
-    terminal enableKeyboardShortcuts.
-    terminal onControlShiftKey: "C" do: [ self copySelection ].
-    terminal onControlShiftKey: "V" do: [ self pasteClipboard ].
-    terminal onControlShiftKey: "A" do: [ self selectAll ].
-    terminal onControlShiftKey: "L" do: [ self clearTerminal ].
-    terminal onControlShiftKey: "R" do: [ self restartShell ].
-    terminal onControlShiftKey: "N" do: [ self openNewTerminal ].
-    terminal onControlShiftKey: "O" do: [ self openOpenCodeTerminal ].
+    terminal enableKeyboardShortcuts
+    terminal onControlShiftKey: "C" do: [ self copySelection ]
+    terminal onControlShiftKey: "V" do: [ self pasteClipboard ]
+    terminal onControlShiftKey: "A" do: [ self selectAll ]
+    terminal onControlShiftKey: "L" do: [ self clearTerminal ]
+    terminal onControlShiftKey: "R" do: [ self restartShell ]
+    terminal onControlShiftKey: "N" do: [ self openNewTerminal ]
+    terminal onControlShiftKey: "O" do: [ self openOpenCodeTerminal ]
     terminal onControlShiftKey: "W" do: [ self closeWindow ]
-].
+]
 
 Terminal>>installContextMenu [
     terminal onRightClick: [:point |
         self showContextMenuAtX: (point at: 0) y: (point at: 1)
-    ].
+    ]
     ^ self
-].
+]
 
 Terminal>>showContextMenuAtX: x y: y [
     | menu |
-    menu := ContextMenu for: terminal.
-    menu addItem: "New Terminal" do: [ self openNewTerminal ].
-    menu addItem: "Open OpenCode Terminal" do: [ self openOpenCodeTerminal ].
-    menu addSeparator.
-    menu addItem: "Copy" do: [ self copySelection ].
-    menu addItem: "Paste" do: [ self pasteClipboard ].
-    menu addItem: "Select All" do: [ self selectAll ].
-    menu addSeparator.
-    menu addItem: "Clear" do: [ self clearTerminal ].
-    menu addItem: "Restart Shell" do: [ self restartShell ].
-    menu addSeparator.
-    menu addItem: "Close Window" do: [ self closeWindow ].
-    menu popupAtX: x y: y.
+    menu := ContextMenu for: terminal
+    menu addItem: "New Terminal" do: [ self openNewTerminal ]
+    menu addItem: "Open OpenCode Terminal" do: [ self openOpenCodeTerminal ]
+    menu addSeparator
+    menu addItem: "Copy" do: [ self copySelection ]
+    menu addItem: "Paste" do: [ self pasteClipboard ]
+    menu addItem: "Select All" do: [ self selectAll ]
+    menu addSeparator
+    menu addItem: "Clear" do: [ self clearTerminal ]
+    menu addItem: "Restart Shell" do: [ self restartShell ]
+    menu addSeparator
+    menu addItem: "Close Window" do: [ self closeWindow ]
+    menu popupAtX: x y: y
     ^ self
-].
+]
 
 Terminal>>copySelection [
-    terminal copyClipboard.
+    terminal copyClipboard
     ^ self
-].
+]
 
 Terminal>>pasteClipboard [
-    terminal pasteClipboard.
+    terminal pasteClipboard
     ^ self
-].
+]
 
 Terminal>>selectAll [
-    terminal selectAll.
+    terminal selectAll
     ^ self
-].
+]
 
 Terminal>>clearTerminal [
-    terminal clear.
+    terminal clear
     ^ self
-].
+]
 
 Terminal>>restartShell [
-    launchCommand := nil.
-    terminal reset.
-    terminal spawnShellIn: workingDirectory.
-    window title: self windowTitle.
+    launchCommand := nil
+    terminal reset
+    terminal spawnShellIn: workingDirectory
+    window title: self windowTitle
     ^ self
-].
+]
 
 Terminal>>sendLine: aString [
-    terminal feedLine: aString.
+    terminal feedLine: aString
     ^ self
-].
+]
 
 Terminal>>openNewTerminal [
-    Terminal openFor: owner in: workingDirectory command: nil.
+    Terminal openFor: owner in: workingDirectory command: nil
     ^ self
-].
+]
 
 Terminal>>openOpenCodeTerminal [
-    Terminal openFor: owner in: workingDirectory command: "opencode".
+    Terminal openFor: owner in: workingDirectory command: "opencode"
     ^ self
-].
+]
 
 Terminal>>closeWindow [
-    window close.
+    window close
     ^ self
-].
+]
 
 Terminal>>onDestroy [
-    window := nil.
-    box := nil.
-    terminal := nil.
+    window := nil
+    box := nil
+    terminal := nil
     owner notNil ifTrue: [
-        owner removeWindow: self.
+        owner removeWindow: self
         owner := nil
     ]
-].
+]

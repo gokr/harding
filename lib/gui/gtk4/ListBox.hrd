@@ -1,39 +1,39 @@
-# GTK ListBox - Scrollable list container widget
-# Note: GtkListBox class is registered by Nim bridge, we add methods here
-# No derive: needed - we extend the existing class
+# GTK ListBox - Scrollable list container widget.
+# Note: GtkListBox class is registered by Nim bridge, we add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Class methods:
-# - new (create empty list box)
+# Native methods (registered in Nim bridge):.
+# Class methods:.
+# - new (create empty list box).
 #
-# Instance methods:
-# - append: (add widget to list)
-# - removeAll (remove all items)
-# - setSelectionMode: (0=none, 1=single, 2=multiple, 3=browse)
-# - selectedRowIndex (get selected row index, -1 if none)
-# - selectRowAtIndex: (select row by index)
+# Instance methods:.
+# - append: (add widget to list).
+# - removeAll (remove all items).
+# - setSelectionMode: (0=none, 1=single, 2=multiple, 3=browse).
+# - selectedRowIndex (get selected row index, -1 if none).
+# - selectRowAtIndex: (select row by index).
 
-# Convenience class method
+# Convenience class method.
 GtkListBox class>>singleSelection [
     # Create a list box with single selection mode
     | box |
-    box := self new.
-    box setSelectionMode: 1.
+    box := self new
+    box setSelectionMode: 1
     ^ box
-].
+]
 
-# Convenience instance methods
+# Convenience instance methods.
 GtkListBox>>clear [
     # Remove all items from the list
     self removeAll
-].
+]
 
 GtkListBox>>selectedIndex [
     # Get the index of the selected row (-1 if none selected)
     ^ self selectedRowIndex
-].
+]
 
 GtkListBox>>selectIndex: anIndex [
     # Select the row at the given index
     self selectRowAtIndex: anIndex
-].
+]

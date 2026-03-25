@@ -1,12 +1,12 @@
 #!/usr/bin/env harding
-# Permutation Benchmark
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# Generates all permutations of 7 elements and counts them
-# Expected result: 8660 (includes intermediate states)
+# Permutation Benchmark.
+# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
+# Generates all permutations of 7 elements and counts them.
+# Expected result: 8660 (includes intermediate states).
 
 | Permute count array |
 
-Permute := Object derivePublic: #(elements count).
+Permute := Object derivePublic: #(elements count)
 # Permute supports the benchmark suite for runtime performance measurement.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -21,13 +21,13 @@ Permute := Object derivePublic: #(elements count).
 
 Permute>>initialize [
   | i |
-  elements := (Array new: 7).
-  count := 0.
+  elements := (Array new: 7)
+  count := 0
   
   # Initialize with values 1-7
-  i := 1.
+  i := 1
   [ i <= 7 ] whileTrue: [
-    elements at: i put: i.
+    elements at: i put: i
     i := i + 1
   ]
 ]
@@ -40,19 +40,19 @@ Permute>>permute: n [
     count := (count + 1)
   ] ifFalse: [
     # Recursive case
-    i := 1.
+    i := 1
     [ i <= n ] whileTrue: [
       # Swap elements[i] and elements[n]
-      self swap: i with: n.
+      self swap: i with: n
       
       # Recurse
-      self permute: (n - 1).
+      self permute: (n - 1)
       
       # Swap back (restore)
-      self swap: i with: n.
+      self swap: i with: n
       
       i := i + 1
-    ].
+    ]
     # Count intermediate state
     count := (count + 1)
   ]
@@ -61,15 +61,15 @@ Permute>>permute: n [
 Permute>>swap: i with: j [
   # Swap elements at positions i and j
   | temp |
-  temp := elements at: i.
-  elements at: i put: (elements at: j).
+  temp := elements at: i
+  elements at: i put: (elements at: j)
   elements at: j put: temp
 ]
 
-# Run the benchmark
-perm := Permute new.
-perm initialize.
-perm permute: 7.
+# Run the benchmark.
+perm := Permute new
+perm initialize
+perm permute: 7
 
-# Return the count
+# Return the count.
 perm::count

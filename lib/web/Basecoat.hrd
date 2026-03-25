@@ -1,45 +1,45 @@
-Basecoat := Object derive: #().
+Basecoat := Object derive: #()
 
 Basecoat class>>stylesheetPath [
   ^ "lib/web/Basecoat.css"
-].
+]
 
 Basecoat class>>stylesheet [
   ^ File readAll: self stylesheetPath
-].
+]
 
 Basecoat class>>shellClass [
   ^ "shell"
-].
+]
 
 Basecoat class>>heroClass [
   ^ "hero-card"
-].
+]
 
 Basecoat class>>panelClass [
   ^ "panel"
-].
+]
 
 Basecoat class>>stackClass [
   ^ "stack"
-].
+]
 
 Basecoat class>>inputClass [
   ^ "input"
-].
+]
 
 Basecoat class>>primaryButtonClass [
   ^ "btn btn-primary"
-].
+]
 
 Basecoat class>>ghostButtonClass [
   ^ "btn btn-ghost"
-].
+]
 
 Basecoat class>>badgeClass [
   ^ "badge"
-].
+]
 
 Basecoat class>>mutedClass [
   ^ "muted"
-].
+]

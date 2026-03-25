@@ -1,22 +1,22 @@
 #!/usr/bin/env harding
-# N-Queens Benchmark
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM)
-# 
-# This is a simplified version that validates Harding language features:
-# - Class definition with derivePublic:
-# - Array creation and manipulation (at:, at:put:)
-# - While loops (whileTrue:)
-# - Method definition with parameters
-# - Object instantiation and method calls
+# N-Queens Benchmark.
+# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
+# .
+# This is a simplified version that validates Harding language features:.
+# - Class definition with derivePublic:.
+# - Array creation and manipulation (at:, at:put:).
+# - While loops (whileTrue:).
+# - Method definition with parameters.
+# - Object instantiation and method calls.
 #
-# The full 8-queens algorithm requires complex constraint checking
-# that works in full Smalltalk but has issues in the current Harding
+# The full 8-queens algorithm requires complex constraint checking.
+# that works in full Smalltalk but has issues in the current Harding.
 # interpreter. This version runs successfully and returns true.
 
 | Queens solver arr result count i |
 
-# Define a Queens class
-Queens := Object derivePublic: #(positions).
+# Define a Queens class.
+Queens := Object derivePublic: #(positions)
 # Queens supports the benchmark suite for runtime performance measurement.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -37,37 +37,37 @@ Queens>>solve [
   | i valid |
   # Simplified validation: create positions 1-8
   # In full version, this would check all constraints
-  i := 1.
-  valid := 1.
+  i := 1
+  valid := 1
   [ i <= 8 ] whileTrue: [
-    positions at: i put: i.
+    positions at: i put: i
     i := i + 1
-  ].
+  ]
   
   # Verify we placed 8 positions
-  i := 1.
-  count := 0.
+  i := 1
+  count := 0
   [ i <= 8 ] whileTrue: [
     (positions at: i) > 0 ifTrue: [
       count := count + 1
-    ].
+    ]
     i := i + 1
-  ].
+  ]
   
   ^ count = 8
 ]
 
-# Run the benchmark 5000 times for measurable duration
-n := 5000.
-total := 0.
+# Run the benchmark 5000 times for measurable duration.
+n := 5000
+total := 0
 
 [ n > 0 ] whileTrue: [
-  q := Queens new.
-  q initialize.
-  q solve.
-  total := total + 1.
-  n := n - 1.
-].
+  q := Queens new
+  q initialize
+  q solve
+  total := total + 1
+  n := n - 1
+]
 
-# Return total iterations completed
+# Return total iterations completed.
 total

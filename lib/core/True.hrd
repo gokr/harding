@@ -1,43 +1,43 @@
 #!/usr/bin/env harding
 #
-# True.hrd - True class extensions
+# True.hrd - True class extensions.
 
 True>>ifTrue: block [
   ^ block value
-].
+]
 
 True>>ifFalse: block [
   ^ nil
-].
+]
 
 True>>ifTrue: trueBlock ifFalse: falseBlock [
   ^ trueBlock value
-].
+]
 
 True>>and: block [
   ^ block value
-].
+]
 
 True>>or: block [
   ^ true
-].
+]
 
 True>>not [
   ^ false
-].
+]
 
 True>>& other [
   ^ other
-].
+]
 
 True>>| other [
   ^ true
-].
+]
 
 True>>= other [
   ^ other == true
-].
+]
 
 True>>printString [
   ^ "true"
-].
+]

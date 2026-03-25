@@ -1,8 +1,8 @@
-# GTK Menu - Popup menu containing menu items
-# Note: GtkMenu class is registered by Nim bridge, we just add methods here
-# No derive: needed - we extend the existing class
+# GTK Menu - Popup menu containing menu items.
+# Note: GtkMenu class is registered by Nim bridge, we just add methods here.
+# No derive: needed - we extend the existing class.
 
-# Native methods (registered in Nim bridge):
-# Instance methods:
-# - append: (add menu item to menu)
-# - popup (show menu at current pointer position)
+# Native methods (registered in Nim bridge):.
+# Instance methods:.
+# - append: (add menu item to menu).
+# - popup (show menu at current pointer position).

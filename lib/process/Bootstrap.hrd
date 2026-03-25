@@ -1,18 +1,18 @@
 #!/usr/bin/env harding
 #
-# Bootstrap.hrd - Loads process/concurrency support
+# Bootstrap.hrd - Loads process/concurrency support.
 
-ProcessLibrary := Library new.
-ProcessLibrary name: "Process".
-Harding at: "ProcessLibrary" put: ProcessLibrary.
+ProcessLibrary := Library new
+ProcessLibrary name: "Process"
+Harding at: "ProcessLibrary" put: ProcessLibrary
 
-ProcessLibrary load: "lib/process/Synchronizable.hrd".
+ProcessLibrary load: "lib/process/Synchronizable.hrd"
 
-ProcessLibrary at: "Process" put: Process.
-ProcessLibrary at: "Scheduler" put: Scheduler.
-ProcessLibrary at: "Processor" put: Processor.
-ProcessLibrary at: "Monitor" put: Monitor.
-ProcessLibrary at: "Semaphore" put: Semaphore.
-ProcessLibrary at: "SharedQueue" put: SharedQueue.
+ProcessLibrary at: "Process" put: Process
+ProcessLibrary at: "Scheduler" put: Scheduler
+ProcessLibrary at: "Processor" put: Processor
+ProcessLibrary at: "Monitor" put: Monitor
+ProcessLibrary at: "Semaphore" put: Semaphore
+ProcessLibrary at: "SharedQueue" put: SharedQueue
 
-Harding import: ProcessLibrary.
+Harding import: ProcessLibrary

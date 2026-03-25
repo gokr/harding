@@ -1,8 +1,8 @@
 #!/usr/bin/env harding
 #
-# Iterable.hrd - Iterable mixin
+# Iterable.hrd - Iterable mixin.
 
-Iterable := Mixin derive.
+Iterable := Mixin derive
 # Iterable is a mixin for objects that can enumerate contained elements in sequence.
 # It defines shared traversal-oriented behavior used by collection-like classes.
 # Classes adopting Iterable are expected to supply a basic iteration primitive or method.
@@ -20,68 +20,68 @@ Iterable>>copyEmpty [
 
 Iterable>>collect: block [
   | result |
-  result := self copyEmpty.
-  self do: [ :each | result add: (block value: each) ].
+  result := self copyEmpty
+  self do: [ :each | result add: (block value: each) ]
   ^ result
 ]
 
 Iterable>>select: block [
   | result |
-  result := self copyEmpty.
+  result := self copyEmpty
   self do: [ :each |
     (block value: each) ifTrue: [ result add: each ]
-  ].
+  ]
   ^ result
 ]
 
 Iterable>>reject: block [
   | result |
-  result := self copyEmpty.
+  result := self copyEmpty
   self do: [ :each |
     (block value: each) ifFalse: [ result add: each ]
-  ].
+  ]
   ^ result
 ]
 
 Iterable>>detect: block [
   self do: [ :each |
     (block value: each) ifTrue: [ ^ each ]
-  ].
+  ]
   ^ nil
 ]
 
 Iterable>>detect: block ifNone: noneBlock [
   self do: [ :each |
     (block value: each) ifTrue: [ ^ each ]
-  ].
+  ]
   ^ noneBlock value
 ]
 
 Iterable>>inject: initialValue into: block [
   | result |
-  result := initialValue.
-  self do: [ :each | result := block value: result value: each ].
+  result := initialValue
+  self do: [ :each | result := block value: result value: each ]
   ^ result
 ]
 
 Iterable>>anySatisfy: block [
   self do: [ :each |
     (block value: each) ifTrue: [ ^ true ]
-  ].
+  ]
   ^ false
 ]
 
 Iterable>>allSatisfy: block [
   self do: [ :each |
     (block value: each) ifFalse: [ ^ false ]
-  ].
+  ]
   ^ true
 ]
 
 Iterable>>noneSatisfy: block [
   self do: [ :each |
     (block value: each) ifTrue: [ ^ false ]
-  ].
+  ]
   ^ true
 ]
 
@@ -91,9 +91,9 @@ Iterable>>sum [
 
 Iterable>>count: block [
   | count |
-  count := 0.
+  count := 0
   self do: [ :each |
     (block value: each) ifTrue: [ count := count + 1 ]
-  ].
+  ]
   ^ count
 ]

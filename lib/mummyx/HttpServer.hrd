@@ -1,17 +1,17 @@
-# HttpServer - MummyX HTTP server wrapper
+# HttpServer - MummyX HTTP server wrapper.
 #
-# Native methods (registered by mummyx_bridge.nim):
-#   HttpServer class>>new
-#   HttpServer>>router: aRouter
-#   HttpServer>>start: port                    (non-blocking, for Bona)
-#   HttpServer>>start: port address: address   (non-blocking, explicit bind address)
-#   HttpServer>>processRequests                (process pending requests, call periodically)
-#   HttpServer>>serveForever: port             (blocking, for standalone scripts)
-#   HttpServer>>requestLogLevel                (off/basic/detailed)
-#   HttpServer>>requestLogLevel: level         (string/int/bool)
-#   HttpServer>>isRunning
-#   HttpServer>>stop
-#   HttpServer>>port
+# Native methods (registered by mummyx_bridge.nim):.
+#   HttpServer class>>new.
+#   HttpServer>>router: aRouter.
+#   HttpServer>>start: port                    (non-blocking, for Bona).
+#   HttpServer>>start: port address: address   (non-blocking, explicit bind address).
+#   HttpServer>>processRequests                (process pending requests, call periodically).
+#   HttpServer>>serveForever: port             (blocking, for standalone scripts).
+#   HttpServer>>requestLogLevel                (off/basic/detailed).
+#   HttpServer>>requestLogLevel: level         (string/int/bool).
+#   HttpServer>>isRunning.
+#   HttpServer>>stop.
+#   HttpServer>>port.
 
 HttpServer>>disableRequestLogging [
   ^ self requestLogLevel: "off"
@@ -25,16 +25,16 @@ HttpServer>>detailedRequestLogging [
   ^ self requestLogLevel: "detailed"
 ]
 
-# Convenience: start on 0.0.0.0 (externally accessible)
+# Convenience: start on 0.0.0.0 (externally accessible).
 HttpServer>>startPublic: port [
   self start: port address: "0.0.0.0"
 ]
 
-# Convenience: serve forever on 0.0.0.0
+# Convenience: serve forever on 0.0.0.0.
 HttpServer>>servePublic: port [
-  self start: port address: "0.0.0.0".
+  self start: port address: "0.0.0.0"
   [self isRunning] whileTrue: [
-    self processRequests.
+    self processRequests
     # Yield briefly to avoid busy-waiting
   ]
 ]

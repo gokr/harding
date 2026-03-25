@@ -1,8 +1,8 @@
 #!/usr/bin/env harding
 #
-# Equatable.hrd - Equality comparison mixin
+# Equatable.hrd - Equality comparison mixin.
 
-Equatable := Mixin derive.
+Equatable := Mixin derive
 # Equatable is a mixin for classes that provide value-oriented equality semantics.
 # It complements Object identity by letting classes define richer comparison behavior.
 # Methods in this file should stay focused on equality and inequality protocol only.

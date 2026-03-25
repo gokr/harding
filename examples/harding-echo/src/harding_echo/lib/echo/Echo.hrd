@@ -1,9 +1,9 @@
 #!/usr/bin/env harding
 #
-# Echo.hrd - Harding API for the echo package
+# Echo.hrd - Harding API for the echo package.
 #
 # This file defines the Harding-side interface.
-# The actual implementation is in Nim (primitives.nim)
+# The actual implementation is in Nim (primitives.nim).
 
 Echo := Object derive: #()
 # Echo is the example service class for the harding-echo sample application.
@@ -13,14 +13,14 @@ Echo := Object derive: #()
 # This file acts as a reference for one-class-per-file library layout in example projects.
 # Changes here should preserve the clarity of the harding-echo demonstration.
 
-# Echo a string back (returns what was sent)
+# Echo a string back (returns what was sent).
 Echo class>>echo: message <primitive primitiveEchoEcho: message>
 
-# Echo with a prefix
+# Echo with a prefix.
 Echo class>>echo: message withPrefix: prefix <primitive primitiveEchoWithPrefix:message: prefix>
 
-# Get the number of times echo was called
+# Get the number of times echo was called.
 Echo class>>count <primitive primitiveEchoCount>
 
-# Reset the counter
+# Reset the counter.
 Echo class>>reset <primitive primitiveEchoReset>

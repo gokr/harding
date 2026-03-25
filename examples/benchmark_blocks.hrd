@@ -1,23 +1,23 @@
-# Block Compilation Benchmark
-# Compare compiled blocks performance
+# Block Compilation Benchmark.
+# Compare compiled blocks performance.
 
-"Starting block benchmark..." println.
+"Starting block benchmark..." println
 
-# Simple arithmetic block
-addBlock := [:a :b | a + b].
+# Simple arithmetic block.
+addBlock := [:a :b | a + b]
 
-# Run many iterations
-iterations := 100000.
+# Run many iterations.
+iterations := 100000
 
-"Running " print. iterations print. " iterations of compiled block..." println.
+"Running " print. iterations print. " iterations of compiled block..." println
 
-# The compiled block should be fast
-i := 0.
-result := 0.
+# The compiled block should be fast.
+i := 0
+result := 0
 [i < iterations] whileTrue: [
-  result := addBlock value: i value: 1.
+  result := addBlock value: i value: 1
   i := i + 1
-].
+]
 
-"Final result: " print. result println.
-"Benchmark complete!" println.
+"Final result: " print. result println
+"Benchmark complete!" println

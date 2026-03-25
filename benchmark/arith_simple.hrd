@@ -1,22 +1,22 @@
-# Simple Arithmetic Benchmark for Harding
+# Simple Arithmetic Benchmark for Harding.
 
-# Test basic arithmetic operations
+# Test basic arithmetic operations.
 a := 10 + 20
 b := 30 - 10
 c := 5 * 6
 d := 100 / 5
 
-# Sum results (30 + 20 + 30 + 20 = 100)
+# Sum results (30 + 20 + 30 + 20 = 100).
 result := a + b + c + d
 
-# Print results using proper message send syntax
+# Print results using proper message send syntax.
 ("10 + 20 = " , (a printString)) println
 ("30 - 10 = " , (b printString)) println
 ("5 * 6 = " , (c asString)) println
 ("100 / 5 = " , (d asString)) println
 ("Total = " , (result asString)) println
 
-# Verify result
+# Verify result.
 (result = 100) ifTrue: [
   "Arith: PASS" println
 ]

@@ -1,40 +1,40 @@
-# ============================================================================
-# Libraries - Library organization for Bonadventure IDE
-# ============================================================================
+# ============================================================================.
+# Libraries - Library organization for Bonadventure IDE.
+# ============================================================================.
 
-# Global registry of all libraries
-Libraries := Array new.
+# Global registry of all libraries.
+Libraries := Array new
 
-# Core library (classes loaded into Harding globals)
-CoreLib := Library new.
-CoreLib name: "Core".
-Libraries addLast: CoreLib.
+# Core library (classes loaded into Harding globals).
+CoreLib := Library new
+CoreLib name: "Core"
+Libraries addLast: CoreLib
 
-# Process/concurrency library (classes and related globals)
+# Process/concurrency library (classes and related globals).
 ProcessLib := (Harding includesKey: "ProcessLibrary")
     ifTrue: [ ProcessLibrary ]
     ifFalse: [
         | lib |
-        lib := Library new.
-        lib name: "Process".
+        lib := Library new
+        lib name: "Process"
         lib
-    ].
-Libraries addLast: ProcessLib.
+    ]
+Libraries addLast: ProcessLib
 
-# Standard and Granite libraries are created by bootstrap
-Libraries addLast: Standard.
-Libraries addLast: GraniteLib.
+# Standard and Granite libraries are created by bootstrap.
+Libraries addLast: Standard
+Libraries addLast: GraniteLib
 
-# GUI/Bona libraries are IDE-local
-GUILib := Library new.
-GUILib name: "GUI".
-Libraries addLast: GUILib.
+# GUI/Bona libraries are IDE-local.
+GUILib := Library new
+GUILib name: "GUI"
+Libraries addLast: GUILib
 
-BonaLib := Library new.
-BonaLib name: "Bona".
-Libraries addLast: BonaLib.
+BonaLib := Library new
+BonaLib name: "Bona"
+Libraries addLast: BonaLib
 
-# Library class methods for accessing registered libraries
+# Library class methods for accessing registered libraries.
 Library class>>syncDynamicLibraries [
     # Refresh GUI and Bona library entries from currently loaded globals
     | obj bonaNames index name |
@@ -42,101 +42,101 @@ Library class>>syncDynamicLibraries [
     # GUI classes (all Gtk* classes loaded by the GTK bridge)
     Harding keys do: [:key |
         (key startsWith: "Gtk") ifTrue: [
-            obj := Harding at: key.
+            obj := Harding at: key
             (obj notNil and: [ obj isClass ]) ifTrue: [
                 GUILib at: key put: obj
             ]
         ]
-    ].
+    ]
 
     # Bona classes (loaded from lib/gui/bona/*.hrd)
-    # Keep this explicit so unrelated classes are not pulled in.
-    bonaNames := #("Launcher" "Workspace" "Terminal" "Transcript" "Browser" "BrowserPane" "Inspector" "BonaMCP").
-    index := 0.
+    # Keep this explicit so unrelated classes are not pulled in
+    bonaNames := #("Launcher" "Workspace" "Terminal" "Transcript" "Browser" "BrowserPane" "Inspector" "BonaMCP")
+    index := 0
     [ index < bonaNames size ] whileTrue: [
-        name := bonaNames at: index.
+        name := bonaNames at: index
         (Harding includesKey: name) ifTrue: [
-            obj := Harding at: name.
+            obj := Harding at: name
             (obj notNil and: [ obj isClass ]) ifTrue: [
                 BonaLib at: name put: obj
             ]
-        ].
+        ]
         index := index + 1
-    ].
-].
+    ]
+]
 
 Library class>>allLibraries [
-    self syncDynamicLibraries.
+    self syncDynamicLibraries
     ^ Libraries
-].
+]
 
 Library class>>named: aName [
-    self syncDynamicLibraries.
+    self syncDynamicLibraries
     ^ Libraries detect: [:lib | lib name = aName ]
-].
+]
 
 Library class>>allNames [
-    self syncDynamicLibraries.
+    self syncDynamicLibraries
     ^ Libraries collect: [:lib | lib name ]
-].
+]
 
-# Instance method to get classes in a library
+# Instance method to get classes in a library.
 Library>>classes [
-    # Return class objects whose binding key matches their className.
-    # This excludes non-class globals such as Processor.
+    # Return class objects whose binding key matches their className
+    # This excludes non-class globals such as Processor
     ^ self classNames collect: [:className | self at: className ]
-].
+]
 
-# Instance method to get class names in a library
+# Instance method to get class names in a library.
 Library>>classNames [
-    # Return binding keys that map to class objects.
+    # Return binding keys that map to class objects
     | result |
-    result := Array new.
+    result := Array new
 
     self keys do: [:key |
         | obj |
-        obj := self at: key.
+        obj := self at: key
         (obj notNil and: [ obj isClass ]) ifTrue: [ result add: key ]
-    ].
+    ]
     ^ result sorted
-].
+]
 
-# Register core classes with CoreLib
-CoreLib at: "Root" put: Root.
-CoreLib at: "Mixin" put: Mixin.
-CoreLib at: "Object" put: Object.
-CoreLib at: "Class" put: Class.
-CoreLib at: "Block" put: Block.
-CoreLib at: "String" put: String.
-CoreLib at: "Number" put: Number.
-CoreLib at: "Integer" put: Integer.
-CoreLib at: "Float" put: Float.
-CoreLib at: "Array" put: Array.
-CoreLib at: "Table" put: Table.
-CoreLib at: "Set" put: Set.
-CoreLib at: "Boolean" put: Boolean.
-CoreLib at: "True" put: True.
-CoreLib at: "False" put: False.
-CoreLib at: "UndefinedObject" put: UndefinedObject.
-CoreLib at: "Library" put: Library.
-CoreLib at: "Exception" put: Exception.
-CoreLib at: "Error" put: Error.
-CoreLib at: "Notification" put: Notification.
-CoreLib at: "MessageNotUnderstood" put: MessageNotUnderstood.
-CoreLib at: "SubscriptOutOfBounds" put: SubscriptOutOfBounds.
-CoreLib at: "DivisionByZero" put: DivisionByZero.
-CoreLib at: "UnhandledError" put: UnhandledError.
-CoreLib at: "Comparable" put: Comparable.
-CoreLib at: "Iterable" put: Iterable.
-CoreLib at: "Printable" put: Printable.
+# Register core classes with CoreLib.
+CoreLib at: "Root" put: Root
+CoreLib at: "Mixin" put: Mixin
+CoreLib at: "Object" put: Object
+CoreLib at: "Class" put: Class
+CoreLib at: "Block" put: Block
+CoreLib at: "String" put: String
+CoreLib at: "Number" put: Number
+CoreLib at: "Integer" put: Integer
+CoreLib at: "Float" put: Float
+CoreLib at: "Array" put: Array
+CoreLib at: "Table" put: Table
+CoreLib at: "Set" put: Set
+CoreLib at: "Boolean" put: Boolean
+CoreLib at: "True" put: True
+CoreLib at: "False" put: False
+CoreLib at: "UndefinedObject" put: UndefinedObject
+CoreLib at: "Library" put: Library
+CoreLib at: "Exception" put: Exception
+CoreLib at: "Error" put: Error
+CoreLib at: "Notification" put: Notification
+CoreLib at: "MessageNotUnderstood" put: MessageNotUnderstood
+CoreLib at: "SubscriptOutOfBounds" put: SubscriptOutOfBounds
+CoreLib at: "DivisionByZero" put: DivisionByZero
+CoreLib at: "UnhandledError" put: UnhandledError
+CoreLib at: "Comparable" put: Comparable
+CoreLib at: "Iterable" put: Iterable
+CoreLib at: "Printable" put: Printable
 
-# Register process/concurrency classes and globals
-ProcessLib at: "Process" put: Process.
-ProcessLib at: "Scheduler" put: Scheduler.
-ProcessLib at: "Processor" put: Processor.
-ProcessLib at: "Monitor" put: Monitor.
-ProcessLib at: "Semaphore" put: Semaphore.
-ProcessLib at: "SharedQueue" put: SharedQueue.
-ProcessLib at: "Synchronizable" put: Synchronizable.
+# Register process/concurrency classes and globals.
+ProcessLib at: "Process" put: Process
+ProcessLib at: "Scheduler" put: Scheduler
+ProcessLib at: "Processor" put: Processor
+ProcessLib at: "Monitor" put: Monitor
+ProcessLib at: "Semaphore" put: Semaphore
+ProcessLib at: "SharedQueue" put: SharedQueue
+ProcessLib at: "Synchronizable" put: Synchronizable
 
-# Bona classes are registered when the tool files load
+# Bona classes are registered when the tool files load.

@@ -1,10 +1,10 @@
 #!/usr/bin/env harding
 #
-# Bootstrap.hrd - Loads the standard library
+# Bootstrap.hrd - Loads the standard library.
 
-Standard := Library new.
-Standard name: "Standard".
-Harding at: "StandardLibrary" put: Standard.
+Standard := Library new
+Standard name: "Standard"
+Harding at: "StandardLibrary" put: Standard
 
 Standard load: "lib/standard/SortedCollection.hrd"
 Standard load: "lib/standard/Interval.hrd"
@@ -13,4 +13,4 @@ Standard load: "lib/standard/File.hrd"
 Standard load: "lib/standard/FileStream.hrd"
 Standard load: "lib/standard/TestCase.hrd"
 
-Harding import: Standard.
+Harding import: Standard

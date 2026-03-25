@@ -1,14 +1,14 @@
 #!/usr/bin/env harding
 #
-# Symbol.hrd - Symbol class (immutable interned strings)
-# Symbols are unique, immutable identifiers that can be compared by identity
+# Symbol.hrd - Symbol class (immutable interned strings).
+# Symbols are unique, immutable identifiers that can be compared by identity.
 #
 
-#====================================================================
-# Symbol class - Immutable interned string
-#====================================================================
+#====================================================================.
+# Symbol class - Immutable interned string.
+#====================================================================.
 
-Symbol := String derive.
+Symbol := String derive
 # Symbol models interned identifiers used as stable names for selectors, keys, and protocol terms.
 # Symbols are value-like and should compare efficiently across repeated lookups.
 # The runtime uses Symbol heavily for message sends, source indexing, and table-style access.
@@ -17,21 +17,21 @@ Symbol := String derive.
 # This file defines the standard library behavior for symbol manipulation.
 
 Symbol>>printString [
-  # Symbols print with # prefix and without quotes.
+  # Symbols print with # prefix and without quotes
   ^ "#" , self
 ]
 
 Symbol>>asString [
-  # Return the symbol's string representation.
+  # Return the symbol's string representation
   ^ "" , self
 ]
 
 Symbol>>= other [
-  # Symbols are equal if they are the same object (identity).
+  # Symbols are equal if they are the same object (identity)
   ^ self == other
 ]
 
 Symbol>><> other [
-  # Not equal comparison.
+  # Not equal comparison
   ^ (self = other) not
 ]

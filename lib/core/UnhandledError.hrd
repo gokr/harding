@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# UnhandledError.hrd - UnhandledError class
+# UnhandledError.hrd - UnhandledError class.
 
 UnhandledError := Error derive
 # UnhandledError wraps failures that leave the protected computation without a matching handler.

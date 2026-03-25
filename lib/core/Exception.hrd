@@ -1,11 +1,11 @@
 #!/usr/bin/env harding
 #
-# Exception.nt - Exception handling for Harding
-# Provides Smalltalk-style on:do: exception handling
+# Exception.nt - Exception handling for Harding.
+# Provides Smalltalk-style on:do: exception handling.
 
-#====================================================================
-# Exception hierarchy
-#====================================================================
+#====================================================================.
+# Exception hierarchy.
+#====================================================================.
 
 Exception := Object derive: #(message stackTrace signaler)
 # Exception is the root of Harding's resumable exception hierarchy.
@@ -21,8 +21,8 @@ Exception>>signal <primitive primitiveSignal>
 Exception class>>signal: messageText [
   # Create a new instance, set the message, and signal the exception
   | ex |
-  ex := self new.
-  ex message: messageText.
+  ex := self new
+  ex message: messageText
   ^ ex signal
 ]
 
@@ -94,7 +94,7 @@ Exception>>defaultAction [
 Exception>>printStackTrace [
   # Print stack trace if available
   stackTrace isNil not ifTrue: [
-    "Stack trace:" println.
+    "Stack trace:" println
     stackTrace println
   ]
 ]

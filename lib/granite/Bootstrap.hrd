@@ -1,15 +1,15 @@
 #!/usr/bin/env harding
 #
-# Bootstrap.hrd - Loads Granite compiler support
+# Bootstrap.hrd - Loads Granite compiler support.
 
-GraniteLib := Library new.
-GraniteLib name: "Granite".
-Harding at: "GraniteLibrary" put: GraniteLib.
+GraniteLib := Library new
+GraniteLib name: "Granite"
+Harding at: "GraniteLibrary" put: GraniteLib
 
 GraniteLib load: "lib/granite/Application.hrd"
 GraniteLib load: "lib/granite/Granite.hrd"
 
-Harding import: GraniteLib.
+Harding import: GraniteLib
 
 # Load sample application subclasses into globals for Builder discovery.
 Harding load: "lib/granite/HelloWorld.hrd"

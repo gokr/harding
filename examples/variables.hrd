@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Variable assignment and usage
+# Variable assignment and usage.
 #
 
 "=== Variable Assignment ===" println

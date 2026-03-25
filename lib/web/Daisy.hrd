@@ -1,49 +1,49 @@
-Daisy := Object derive: #().
+Daisy := Object derive: #()
 
 Daisy class>>stylesheetPath [
   ^ "lib/web/daisyui.css"
-].
+]
 
 Daisy class>>stylesheet [
   ^ File readAll: self stylesheetPath
-].
+]
 
 Daisy class>>shellClass [
   ^ "daisy-shell"
-].
+]
 
 Daisy class>>themeName [
-  ^ "autumn"
-].
+  ^ "business"
+]
 
 Daisy class>>heroClass [
   ^ "hero bg-base-200 rounded-box shadow-xl"
-].
+]
 
 Daisy class>>panelClass [
   ^ "card bg-base-100 shadow-xl"
-].
+]
 
 Daisy class>>stackClass [
   ^ "card-body"
-].
+]
 
 Daisy class>>inputClass [
   ^ "input input-bordered"
-].
+]
 
 Daisy class>>primaryButtonClass [
   ^ "btn btn-primary"
-].
+]
 
 Daisy class>>ghostButtonClass [
   ^ "btn btn-ghost"
-].
+]
 
 Daisy class>>badgeClass [
   ^ "badge badge-outline"
-].
+]
 
 Daisy class>>mutedClass [
   ^ "text-base-content"
-].
+]

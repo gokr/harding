@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Method definition and calling
+# Method definition and calling.
 #
 
 "=== Defining Methods ===" println

@@ -1,5 +1,5 @@
 "A simple class definition for testing Library load:"
-LibTestClass := Object derivePublic: #(value).
+LibTestClass := Object derivePublic: #(value)
 # LibTestClass is a test-support class used by automated regression coverage.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -11,4 +11,4 @@ LibTestClass := Object derivePublic: #(value).
 # Reflection and source indexing use this section to describe the class.
 # Update this comment when the responsibilities of LibTestClass change.
 
-LibTestConstant := 42.
+LibTestConstant := 42

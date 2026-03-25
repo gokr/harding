@@ -1,9 +1,9 @@
 #!/usr/bin/env harding
 #
-# Bootstrap.hrd - Package initialization
+# Bootstrap.hrd - Package initialization.
 #
-# This file sets up the Echo package and imports it into Harding
+# This file sets up the Echo package and imports it into Harding.
 
-EchoLib := Library new.
-EchoLib load: "lib/echo/Echo.hrd".
-Harding import: EchoLib.
+EchoLib := Library new
+EchoLib load: "lib/echo/Echo.hrd"
+Harding import: EchoLib

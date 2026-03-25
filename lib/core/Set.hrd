@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Set.hrd - Set class methods
+# Set.hrd - Set class methods.
 
 Set>>new <primitive primitiveSetNew>
 
@@ -25,6 +25,6 @@ Set>>difference: otherSet <primitive primitiveSetDifference: otherSet>
 Set>>asArray <primitive primitiveSetAsArray>
 
 Set>>do: block [
-  self asArray do: block.
+  self asArray do: block
   ^ self
 ]

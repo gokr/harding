@@ -1,15 +1,15 @@
-Harding load: "lib/mummyx/Bootstrap.hrd".
-Harding load: "lib/web/Bootstrap.hrd".
-Harding load: "lib/web/todo/Bootstrap.hrd".
+Harding load: "lib/mummyx/Bootstrap.hrd"
+Harding load: "lib/web/Bootstrap.hrd"
+Harding load: "lib/web/todo/Bootstrap.hrd"
 
-TodoApp resetRepository.
-TodoServer := HttpServer new.
-TodoRouter := Router new.
-TodoApp installRoutesOn: TodoRouter.
-TodoServer router: TodoRouter.
+TodoApp resetRepository
+TodoServer := HttpServer new
+TodoRouter := Router new
+TodoApp installRoutesOn: TodoRouter
+TodoServer router: TodoRouter
 TodoServer basicRequestLogging
 
-"Todo app running at http://127.0.0.1:8080" println.
-"For Bona live editing, use TodoApp startOn: 8080 in a Workspace instead." println.
+"Todo app running at http://127.0.0.1:8080" println
+"For Bona live editing, use TodoApp startOn: 8080 in a Workspace instead." println
 
-TodoServer serveForever: 8080.
+TodoServer serveForever: 8080

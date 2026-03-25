@@ -1,6 +1,6 @@
 #!/usr/bin/env harding
 #
-# Notification.hrd - Notification class
+# Notification.hrd - Notification class.
 
 Notification := Exception derive
 # Notification represents non-fatal signals used to communicate noteworthy events.

@@ -1,11 +1,11 @@
 #!/usr/bin/env harding
 #
-# Inheritance Examples - Single Inheritance and Super
+# Inheritance Examples - Single Inheritance and Super.
 #
 
 "=== Basic Single Inheritance ===" println
 
-# Define base class with slots
+# Define base class with slots.
 Animal := Object derivePublic: #(name)
 # Animal is used by the example suite to demonstrate Harding usage.
 # This class definition is the canonical Browser-managed source entry.
@@ -31,7 +31,7 @@ Animal>>describe [
   ^ "Animal: " , name
 ]
 
-# Define subclass with super support
+# Define subclass with super support.
 Dog := Animal derivePublic: #(breed)
 
 Dog>>initialize [
@@ -74,7 +74,7 @@ dog::breed := "Labrador"
 "" println
 "=== Inheritance Chain ===" println
 
-# Define another subclass
+# Define another subclass.
 Cat := Animal derivePublic: #(color)
 
 Cat>>initialize [
@@ -90,7 +90,7 @@ Cat>>describe [
   ^ super describe , " (Color: " , color , ")"
 ]
 
-# Create instances
+# Create instances.
 myCat := Cat new initialize
 myCat::name := "Whiskers"
 myCat::color := "orange"
