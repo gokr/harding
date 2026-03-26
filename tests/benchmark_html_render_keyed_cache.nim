@@ -47,8 +47,8 @@ proc runCase(name: string, code: string, runs: int = 3): float =
 
 when isMainModule:
   configureLogging(lvlWarn)
-  echo "Html keyed cache benchmark"
-  echo "=========================="
+  echo "Html render benchmark"
+  echo "====================="
 
   let uncachedRender = """
     Counter := 0.
@@ -74,59 +74,29 @@ when isMainModule:
     Result := Output size
   """
 
-  let cachedRender = """
+  let repeatedRender = """
     Counter := 0.
-    Template := Html canvas: #benchHtmlDyn with: [:h |
-      h div: [
-        h h1: "Benchmark page".
-        h p: "Static section alpha".
-        h p: "Static section beta".
-        h p: "Static section gamma".
-        h ul: [
-          h li: "One".
-          h li: "Two".
-          h li: "Three"
-        ].
-        h p: [ Counter := Counter + 1. "Counter: " , Counter printString ] dyn.
-        h p: "Trailing footer"
-      ]
-    ].
     I := 0.
     [I < 100] whileTrue: [
-      Output := Template render.
+      Output := Html render: [:h |
+        h div: [
+          h h1: "Benchmark page".
+          h p: "Static section alpha".
+          h p: "Static section beta".
+          h p: "Static section gamma".
+          h ul: [
+            h li: "One".
+            h li: "Two".
+            h li: "Three"
+          ].
+          h p: [ Counter := Counter + 1. "Counter: " , Counter printString ] dyn.
+          h p: "Trailing footer"
+        ]
+      ].
       I := I + 1
     ].
     Result := Output size
   """
 
-  let cacheInspection = """
-    Counter := 0.
-    Template := Html canvas: #benchHtmlDynInspect with: [:h |
-      h div: [
-        h h1: "Benchmark page".
-        h p: "Static section alpha".
-        h p: "Static section beta".
-        h p: "Static section gamma".
-        h ul: [
-          h li: "One".
-          h li: "Two".
-          h li: "Three"
-        ].
-        h p: [ Counter := Counter + 1. "Counter: " , Counter printString ] dyn.
-        h p: "Trailing footer"
-      ]
-    ].
-    Cache := TemplateCache at: #benchHtmlDynInspect ifAbsent: [ nil ].
-    Cache isNil ifTrue: [ ^ "cache-miss" ].
-    Count := Cache segments isNil ifTrue: [ -1 ] ifFalse: [ Cache segments size ].
-    ^ Count printString
-  """
-
   discard runCase("uncached canvas", uncachedRender)
-  discard runCase("keyed dyn template", cachedRender)
-
-  var interp = newWebInterp()
-  let inspected = interp.evalStatements(cacheInspection)
-  if inspected[1].len > 0:
-    raise newException(ValueError, "cache inspection failed: " & inspected[1])
-  echo "       captured segments: " & inspected[0][^1].strVal
+  discard runCase("repeated render", repeatedRender)

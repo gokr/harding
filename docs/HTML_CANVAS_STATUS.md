@@ -37,56 +37,25 @@ html canvas: [:h |
 **5. Boolean Attributes**
 - `disabled`, `checked`, `selected`, `readonly`, `required`, `autofocus`, `multiple`
 
-### Current Caching (Limited)
+### Current Rendering Model
 
-The `canvas:with:` method caches the **output string**, not the template structure:
-
-```harding
-html canvas: #myTemplate with: [:h |
-  h div: [ h h1: "Cached" ]
-]
-# First call: Builds HTML, caches result
-# Subsequent calls: Returns cached HTML string (no re-rendering)
-```
-
-**Limitation**: Dynamic content in blocks is evaluated at cache creation time, not at render time.
-
-### What's NOT Implemented (Phase 2)
-
-**1. Template Structure Caching with Re-evaluable Dynamic Content**
-
-The ideal implementation would:
-- Cache the template structure (tag hierarchy)
-- Store dynamic blocks as closures
-- Re-evaluate blocks on each render with fresh data
+`Html` now renders directly. Caching belongs at the `Component` / `RenderCache` layer, not in `HtmlCanvas` itself.
 
 ```harding
-# Desired API (NOT YET WORKING):
-TodoItem>>renderWith: item [
-  html canvas: #todoItem with: [:h |
-    h div: [
-      h h1: [ item title ].  # Block re-evaluated each render with current item
-      h p: [ item description ]
-    ]
-  ] context: item
+Html render: [:h |
+  h div: [ h h1: "Hello" ]
 ]
 ```
 
-**2. Symbol Selectors for Context Access**
+If output depends on tracked state, ordinary reads during component rendering are what register dependencies.
 
-```harding
-# Desired API:
-html canvas: [:h |
-  h div: [
-    h h1: #title.  # Would call context title
-    h p: #description
-  ]
-] context: self
-```
+### What We No Longer Rely On
 
-**3. True Dynamic Content**
+- template-structure caching in `Html`
+- dynamic holes in cached Html templates (removed from the active design)
+- auto-generated Html cache keys
 
-Currently, blocks are evaluated immediately when building the template. We need blocks that are stored and re-evaluated on each cached template reuse.
+Those ideas were replaced by component-level cached HTML plus tracked-state invalidation.
 
 ## Usage Examples
 
@@ -103,30 +72,16 @@ MyComponent>>render [
 ]
 ```
 
-### Example 2: With Dynamic Data (Current Limitation)
+### Example 2: With Dynamic Data
 ```harding
 MyComponent>>render [
   | title |
-  title := self getTitle.  # Must get data before canvas
+  title := self getTitle.
   html canvas: [:h |
     h div: [
-      h h1: title  # Static string used
+      h h1: title
     ]
   ]
-]
-```
-
-### Example 3: Cached Template (Static Only)
-```harding
-MyComponent class>>cachedTemplate [
-  CachedTemplate isNil ifTrue: [
-    CachedTemplate := html canvas: #myView with: [:h |
-      h div: [
-        h h1: "Static Title"  # This is cached
-      ]
-    ]
-  ].
-  ^ CachedTemplate
 ]
 ```
 

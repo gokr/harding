@@ -21,10 +21,10 @@ proc newWebInterp(loadTodo: bool = false): Interpreter =
     raise newException(ValueError, setupResult[1])
 
 suite "Html render helpers":
-  test "keyed canvas renders directly to html":
+  test "render builds html directly":
     var interp = newWebInterp()
     let script = """
-      Html canvas: #directRender with: [:h |
+      Html render: [:h |
         h div: [
           h h1: "Title".
           h p: "Body"
@@ -35,13 +35,13 @@ suite "Html render helpers":
     check(err.len == 0)
     check(result.strVal == "<div><h1>Title</h1><p>Body</p></div>")
 
-  test "renderKey renders html directly":
+  test "render with context builds html directly":
     var interp = newWebInterp()
     let script = """
-      Html renderKey: #personCard with: [:h |
+      Html render: [:h |
         h attr: #class value: "Alice".
         h div: "Hello"
-      ]
+      ] context: nil
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)

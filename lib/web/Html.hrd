@@ -52,25 +52,6 @@ Html class>>render: aBlock [
   ^ self render: aBlock context: nil
 ]
 
-Html class>>canvas: aSymbol with: aBlock context: anObject [
-  | builder |
-  builder := HtmlCanvas new
-  builder context: anObject
-  ^ builder render: aBlock
-]
-
-Html class>>canvas: aSymbol with: aBlock [
-  ^ self canvas: aSymbol with: aBlock context: nil
-]
-
-Html class>>renderKey: aKey with: aBlock context: anObject [
-  ^ self render: aBlock context: anObject
-]
-
-Html class>>renderKey: aKey with: aBlock [
-  ^ self renderKey: aKey with: aBlock context: nil
-]
-
 HtmlCanvas>>initialize [
   output := String withCapacity: 256
   attributes := Table new

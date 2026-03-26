@@ -1,6 +1,6 @@
 #!/usr/bin/env nim
 #
-# Tests for HtmlCanvas DSL with template caching
+# Tests for HtmlCanvas DSL direct rendering
 #
 
 import std/[unittest, strutils]
@@ -35,36 +35,37 @@ suite "HtmlCanvas DSL":
     check(err.len == 0)
     check(result.strVal == "<div><h1>Title</h1><p>Content</p></div>")
 
-  test "dynamic block content evaluates each time":
+  test "captured values can vary across separate renders":
     let script = """
       Counter := 0.
-      Template := Html canvas: #dynamicTest with: [:h |
-        h div: [ h span: [ Counter := Counter + 1. Counter printString ] ]
+      Counter := Counter + 1.
+      First := Html render: [:h |
+        h div: [ h span: Counter printString ]
       ].
-      First := Template render.
-      Second := Template render.
+      Counter := Counter + 1.
+      Second := Html render: [:h |
+        h div: [ h span: Counter printString ]
+      ].
       First , " " , Second
     """
     let (result, err) = interp.evalStatements(script)
     check(err.len == 0)
-    check("1" in result[0][^1].strVal)
-    check("2" in result[0][^1].strVal)
+    check("1" in result[^1].strVal)
+    check("2" in result[^1].strVal)
 
-  test "symbol selector performs on context":
+  test "render accepts explicit context":
     let script = """
       TestObj := Object derivePublic: #(name).
-      TestObj>>getName [ ^"Alice" ].
-      
       Obj := TestObj new.
       Obj::name := "Bob".
-      
-      Html canvas: [:h |
-        h div: [ h span: #getName ]
-      ] withContext: Obj
+
+      Html render: [:h |
+        h div: [ h span: "Hello" ]
+      ] context: Obj
     """
     let (result, err) = interp.evalStatements(script)
     check(err.len == 0)
-    check(result[0][^1].strVal == "<div><span>Alice</span></div>")
+    check(result[^1].strVal == "<div><span>Hello</span></div>")
 
   test "attribute cascades accumulate":
     let (result, err) = interp.doit("""
@@ -163,31 +164,36 @@ suite "HtmlCanvas DSL":
     check(result.strVal.contains("<footer>"))
     check(result.strVal.contains("</section>"))
 
-suite "HtmlCanvas Caching":
+suite "HtmlCanvas repeated rendering":
   var interp {.used.}: Interpreter
 
   setup:
     interp = newWebInterp()
 
-  test "cached template reuses structure":
+  test "render evaluates the block each call":
     let script = """
       RenderCount := 0.
-      
-      MyTemplate := Html canvas: #testCache with: [:h |
+
+      First := Html render: [:h |
         RenderCount := RenderCount + 1.
         h div: [ h span: "cached" ]
       ].
-      
-      First := MyTemplate.
-      Second := MyTemplate.
-      Third := MyTemplate.
-      
+
+      Second := Html render: [:h |
+        RenderCount := RenderCount + 1.
+        h div: [ h span: "cached" ]
+      ].
+
+      Third := Html render: [:h |
+        RenderCount := RenderCount + 1.
+        h div: [ h span: "cached" ]
+      ].
+
       RenderCount
     """
-    let result = interp.evalStatements(script)
-    check(result[1].len == 0)
-    # Template built once, so RenderCount should be 1
-    check(result[0][^1].intVal == 1)
+    let (result, err) = interp.evalStatements(script)
+    check(err.len == 0)
+    check(result[^1].intVal == 3)
 
   test "non-cached canvas builds each time":
     let script = """
@@ -203,7 +209,7 @@ suite "HtmlCanvas Caching":
       
       RenderCount
     """
-    let result = interp.evalStatements(script)
-    check(result[1].len == 0)
+    let (result, err) = interp.evalStatements(script)
+    check(err.len == 0)
     # No caching, so RenderCount should be 2
-    check(result[0][^1].intVal == 2)
+    check(result[^1].intVal == 2)

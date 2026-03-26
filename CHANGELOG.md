@@ -33,6 +33,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Class definitions in core libraries now include class-specific comments.
 - BitBarrel support now ships as an external library instead of built-in Harding source and build flags.
 - The Todo web example now renders through component-level `RenderCache` plus tracked-state invalidation, updates counters with HTMX out-of-band swaps, and drops the old template/benchmark routes.
+- Html rendering now uses direct `Html render:` / `Html canvas:` entry points for the active web path, and the old auto-keyed Html cache helpers have been removed.
 - MummyX request handling now runs through scheduler-backed green worker processes instead of executing on the socket thread.
 - Granite block/codegen parity now covers captured block expressions, top-level block returns, 0-based collection access, and more runtime selector coverage.
 - MummyX routes can now be cleared and rebuilt, and URL-encoded form data is exposed on `HttpRequest`.
