@@ -2,15 +2,21 @@
 #
 # Bootstrap.hrd - Loads the standard library.
 
-Standard := Library new
-Standard name: "Standard"
-Harding at: "StandardLibrary" put: Standard
+Standard := Harding at: "StandardLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "Standard"
+  Harding at: "StandardLibrary" put: lib
+  lib
+]
+Standard at: "__sourceDir" put: "lib/standard"
 
-Standard load: "lib/standard/SortedCollection.hrd"
-Standard load: "lib/standard/Interval.hrd"
-Standard load: "lib/standard/Json.hrd"
-Standard load: "lib/standard/File.hrd"
-Standard load: "lib/standard/FileStream.hrd"
-Standard load: "lib/standard/TestCase.hrd"
+Standard isEmpty ifTrue: [
+  Standard load: "SortedCollection.hrd"
+  Standard load: "Interval.hrd"
+  Standard load: "Json.hrd"
+  Standard load: "File.hrd"
+  Standard load: "FileStream.hrd"
+  Standard load: "TestCase.hrd"
+]
 
 Harding import: Standard

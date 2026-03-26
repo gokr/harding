@@ -1148,6 +1148,9 @@ Harding provides a Library class for organizing code into isolated namespaces. L
 # Create a new library
 MyLib := Library new.
 
+# Convenience constructor
+MyLib := Library name: "MyLib".
+
 # Add bindings (classes, constants, etc.)
 MyLib at: "MyClass" put: SomeClass.
 MyLib at: "Constant" put: 42.
@@ -1175,6 +1178,12 @@ MyLib at: "UtilityClass"        # Returns the class
 Harding includesKey: "MyClass"  # Returns false
 ```
 
+Successive `load:` calls on the same library evaluate with that library's existing
+bindings visible, so later files can reference names defined by earlier ones.
+
+If the library defines `__sourceDir`, relative paths passed to `load:` are resolved
+from that directory first.
+
 ### Importing Libraries
 
 Import a library to make its bindings accessible for name resolution:
@@ -1189,18 +1198,22 @@ Instance := MyClass new.
 Value := UtilityClass doSomething.
 ```
 
+`import:` currently adds the library to a lookup stack; it does not copy bindings
+into the receiver. Importing a library that conflicts with an already imported
+library now raises an error instead of silently changing lookup precedence.
+
 ### Variable Lookup Order
 
 When resolving a variable name, Harding searches in this order:
 
 1. **Local scope** (temporaries, captured variables, method locals)
 2. **Instance variables** (slots on `self`)
-3. **Imported Libraries** (most recent first)
+3. **Imported Libraries** (most recent first, if there are no name conflicts)
 4. **Global table** (fallback)
 
 **Important**: Each method activation has its own isolated local scope. Methods cannot see the local variables of their calling method (unlike some dynamic languages). This prevents accidental coupling and ensures proper encapsulation.
 
-Most recently imported libraries take precedence for conflict resolution:
+Imports with overlapping exported names are rejected:
 
 ```smalltalk
 Lib1 := Library new.
@@ -1210,9 +1223,7 @@ Lib2 := Library new.
 Lib2 at: "SharedKey" put: 2.
 
 Harding import: Lib1.
-Harding import: Lib2.
-
-SharedKey  # Returns 2 (Lib2 was imported last)
+Harding import: Lib2.  # Error: import conflict between Lib2 and Lib1: SharedKey
 ```
 
 ### The Standard Library

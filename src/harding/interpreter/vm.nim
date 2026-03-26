@@ -6051,16 +6051,54 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   if filePath.len == 0:
     return nilValue()
 
-  let (ok, source, displayPath) = resolveLoadInput(interp, filePath)
+  proc librarySourceDir(lib: Instance): string =
+    let bindings = getLibraryBindings(lib)
+    if bindings == nil:
+      return ""
+    for key, value in bindings.entries:
+      let keyName = case key.kind
+        of vkString: key.strVal
+        of vkSymbol: key.symVal
+        else: ""
+      if keyName == "__sourceDir":
+        return case value.kind
+          of vkString: value.strVal
+          of vkSymbol: value.symVal
+          else: ""
+    ""
+
+  var resolvedRequest = filePath
+  if not filePath.isAbsolute:
+    let sourceDir = librarySourceDir(self)
+    if sourceDir.len > 0:
+      resolvedRequest = sourceDir / filePath
+
+  var (ok, source, displayPath) = resolveLoadInput(interp, resolvedRequest)
+  if not ok and resolvedRequest != filePath:
+    (ok, source, displayPath) = resolveLoadInput(interp, filePath)
   if not ok:
     writeStderr("Error: File not found: " & displayPath)
     return nilValue()
 
-  # Save original globals and create a copy for capturing new definitions
+  # Save original globals and create a copy for capturing new definitions.
+  # Seed the temporary scope with existing library bindings so later files in
+  # the same library can see names defined by earlier loads.
   let originalGlobals = interp.globals
+  let bindings = getLibraryBindings(self)
   var tempGlobals: ref Table[string, NodeValue]
   new(tempGlobals)
   tempGlobals[] = originalGlobals[]
+
+  if bindings != nil:
+    for key, val in bindings.entries:
+      let keyName = case key.kind
+        of vkString: key.strVal
+        of vkSymbol: key.symVal
+        else: ""
+      if keyName.len > 0:
+        tempGlobals[][keyName] = val
+
+  let startingGlobals = tempGlobals[]
 
   # Swap globals to temp table so new definitions go there
   interp.globals = tempGlobals
@@ -6079,11 +6117,10 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     # Restore original globals
     interp.globals = originalGlobals
 
-    # Copy new entries into the Library's bindings table
-    let bindings = getLibraryBindings(self)
+    # Copy new or changed entries into the Library's bindings table.
     if bindings != nil:
       for key, val in tempGlobals[]:
-        if key notin originalGlobals[]:
+        if key notin startingGlobals or not identityEqual(val, startingGlobals[key]):
           setTableValue(bindings, toValue(key), val)
           debug("Library captured: ", key)
 
@@ -6114,6 +6151,49 @@ proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[No
   if lib.class != libraryClass:
     writeStderr("Error: import: argument must be a Library instance")
     return nilValue()
+
+  proc libraryDisplayName(libInst: Instance): string =
+    if libInst == nil or libInst.slots.len < 3:
+      return "<anonymous>"
+    case libInst.slots[2].kind
+    of vkString:
+      if libInst.slots[2].strVal.len > 0: libInst.slots[2].strVal else: "<anonymous>"
+    of vkSymbol:
+      if libInst.slots[2].symVal.len > 0: libInst.slots[2].symVal else: "<anonymous>"
+    else:
+      "<anonymous>"
+
+  proc conflictingBindingNames(a, b: Instance): seq[string] =
+    let aBindings = getLibraryBindings(a)
+    let bBindings = getLibraryBindings(b)
+    if aBindings == nil or bBindings == nil:
+      return @[]
+    for aKey, _ in aBindings.entries:
+      let aName = case aKey.kind
+        of vkString: aKey.strVal
+        of vkSymbol: aKey.symVal
+        else: ""
+      if aName.len == 0 or aName.startsWith("__"):
+        continue
+      let lookup = libraryBindingLookup(bBindings.toValue(), aName)
+      if lookup.found:
+        result.add(aName)
+
+  for imported in interp.importedLibraries:
+    if imported == lib:
+      debug("Library already imported: ", libraryDisplayName(lib))
+      return toValue(true)
+
+  for imported in interp.importedLibraries:
+    if imported == nil:
+      continue
+    let conflicts = conflictingBindingNames(lib, imported)
+    if conflicts.len > 0:
+      writeStderr(
+        "Error: import conflict between " & libraryDisplayName(lib) &
+        " and " & libraryDisplayName(imported) & ": " & conflicts.join(", ")
+      )
+      return nilValue()
 
   interp.importedLibraries.add(lib)
   debug("Imported library, total imports: ", $interp.importedLibraries.len)

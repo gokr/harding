@@ -1,55 +1,20 @@
-Web := Library new
-Web name: "Web"
-Harding at: #WebLibrary put: Web
-Web at: #"__sourceDir" put: "lib/web"
+Web := Harding at: "WebLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "Web"
+  Harding at: "WebLibrary" put: lib
+  lib
+]
+Web at: "__sourceDir" put: "lib/web"
 
-Harding load: "lib/web/RenderEntry.hrd"
-Harding load: "lib/web/RenderCache.hrd"
-Harding load: "lib/web/Component.hrd"
-Harding load: "lib/web/Html.hrd"
-Harding load: "lib/web/Htmx.hrd"
-Harding load: "lib/web/Daisy.hrd"
-Harding load: "lib/web/DaisyComponents.hrd"
-Harding load: "lib/web/Basecoat.hrd"
-
-Web at: #Component put: Component
-Web at: #RenderEntry put: RenderEntry
-Web at: #RenderCache put: RenderCache
-Web at: #Html put: Html
-Web at: #WebHtml put: WebHtml
-Web at: #Htmx put: Htmx
-Web at: #Daisy put: Daisy
-Web at: #DaisyPart put: DaisyPart
-Web at: #DaisyComponent put: DaisyComponent
-Web at: #DaisyButton put: DaisyButton
-Web at: #DaisyBadge put: DaisyBadge
-Web at: #DaisyInput put: DaisyInput
-Web at: #DaisyTextarea put: DaisyTextarea
-Web at: #DaisyAlert put: DaisyAlert
-Web at: #DaisyField put: DaisyField
-Web at: #DaisyCard put: DaisyCard
-Web at: #DaisyStack put: DaisyStack
-Web at: #DaisyHero put: DaisyHero
-Web at: #Basecoat put: Basecoat
-
-Harding at: #Component put: Component
-Harding at: #RenderEntry put: RenderEntry
-Harding at: #RenderCache put: RenderCache
-Harding at: #Html put: Html
-Harding at: #WebHtml put: WebHtml
-Harding at: #Htmx put: Htmx
-Harding at: #Daisy put: Daisy
-Harding at: #DaisyPart put: DaisyPart
-Harding at: #DaisyComponent put: DaisyComponent
-Harding at: #DaisyButton put: DaisyButton
-Harding at: #DaisyBadge put: DaisyBadge
-Harding at: #DaisyInput put: DaisyInput
-Harding at: #DaisyTextarea put: DaisyTextarea
-Harding at: #DaisyAlert put: DaisyAlert
-Harding at: #DaisyField put: DaisyField
-Harding at: #DaisyCard put: DaisyCard
-Harding at: #DaisyStack put: DaisyStack
-Harding at: #DaisyHero put: DaisyHero
-Harding at: #Basecoat put: Basecoat
+Web isEmpty ifTrue: [
+  Web load: "RenderEntry.hrd"
+  Web load: "RenderCache.hrd"
+  Web load: "Component.hrd"
+  Web load: "Html.hrd"
+  Web load: "Htmx.hrd"
+  Web load: "Daisy.hrd"
+  Web load: "DaisyComponents.hrd"
+  Web load: "Basecoat.hrd"
+]
 
 Harding import: Web

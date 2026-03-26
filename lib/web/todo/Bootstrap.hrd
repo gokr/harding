@@ -1,19 +1,17 @@
-WebTodo := Library new.
-WebTodo name: "WebTodo".
-Harding at: #WebTodoLibrary put: WebTodo.
-WebTodo at: #"__sourceDir" put: "lib/web/todo".
+WebTodo := Harding at: "WebTodoLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "WebTodo"
+  Harding at: "WebTodoLibrary" put: lib
+  lib
+].
+WebTodo at: "__sourceDir" put: "lib/web/todo".
 
-Harding load: "lib/web/todo/TodoRepository.hrd".
-Harding load: "lib/web/todo/MySqlTodoRepository.hrd".
-Harding load: "lib/web/todo/TodoItem.hrd".
-Harding load: "lib/web/todo/TodoComponents.hrd".
-Harding load: "lib/web/todo/TodoApp.hrd".
-
-WebTodo at: #TodoRepository put: TodoRepository.
-WebTodo at: #TodoItem put: TodoItem.
-WebTodo at: #TodoItemComponent put: TodoItemComponent.
-WebTodo at: #TodoPanelComponent put: TodoPanelComponent.
-WebTodo at: #TodoPageComponent put: TodoPageComponent.
-WebTodo at: #TodoApp put: TodoApp.
+WebTodo isEmpty ifTrue: [
+  WebTodo load: "TodoRepository.hrd".
+  WebTodo load: "MySqlTodoRepository.hrd".
+  WebTodo load: "TodoItem.hrd".
+  WebTodo load: "TodoComponents.hrd".
+  WebTodo load: "TodoApp.hrd".
+].
 
 Harding import: WebTodo.

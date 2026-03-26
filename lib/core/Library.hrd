@@ -26,6 +26,13 @@ Library>>name: value <primitive primitiveLibraryName: value>
 
 Library class>>new <primitive primitiveLibraryNew>
 
+Library class>>name: aString [
+    | lib |
+    lib := self new
+    lib name: aString
+    ^ lib
+]
+
 Library class>>allNames <primitive primitiveLibraryAllNames>
 
 Library class>>named: aString <primitive primitiveLibraryNamed: aString>

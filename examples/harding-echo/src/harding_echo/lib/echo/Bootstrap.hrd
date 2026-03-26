@@ -4,6 +4,14 @@
 #
 # This file sets up the Echo package and imports it into Harding.
 
-EchoLib := Library new
-EchoLib load: "lib/echo/Echo.hrd"
+EchoLib := Harding at: "EchoLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "Echo"
+  Harding at: "EchoLibrary" put: lib
+  lib
+]
+EchoLib at: "__sourceDir" put: "lib/echo"
+EchoLib isEmpty ifTrue: [
+  EchoLib load: "Echo.hrd"
+]
 Harding import: EchoLib

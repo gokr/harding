@@ -2,12 +2,18 @@
 #
 # Bootstrap.hrd - Loads Granite compiler support.
 
-GraniteLib := Library new
-GraniteLib name: "Granite"
-Harding at: "GraniteLibrary" put: GraniteLib
+GraniteLib := Harding at: "GraniteLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "Granite"
+  Harding at: "GraniteLibrary" put: lib
+  lib
+]
+GraniteLib at: "__sourceDir" put: "lib/granite"
 
-GraniteLib load: "lib/granite/Application.hrd"
-GraniteLib load: "lib/granite/Granite.hrd"
+GraniteLib isEmpty ifTrue: [
+  GraniteLib load: "Application.hrd"
+  GraniteLib load: "Granite.hrd"
+]
 
 Harding import: GraniteLib
 

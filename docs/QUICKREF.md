@@ -764,6 +764,7 @@ obj respondsTo: #greet ifTrue: [obj greet]
 
 ```smalltalk
 MyLib := Library new
+MyLib := Library name: "MyLib"
 MyLib at: "MyClass" put: SomeClass
 MyLib at: "Constant" put: 42
 
@@ -791,6 +792,10 @@ MyLib := Library new
 MyLib load: "path/to/file.hrd"       # Loads code, captures new globals into MyLib
 ```
 
+Later `load:` calls on the same library can see bindings created by earlier ones.
+If `__sourceDir` is present in the library bindings, relative `load:` paths are
+resolved from there first.
+
 ### Importing Libraries
 
 ```smalltalk
@@ -802,6 +807,9 @@ Harding import: MyLib                # Make MyLib bindings accessible
 Instance := MyClass new
 ```
 
+`import:` uses library lookup during name resolution; it does not copy bindings
+into `Harding`. Import conflicts with already imported libraries are errors.
+
 ### Variable Lookup Order
 
 1. Local scope (temporaries, parameters, block params)
@@ -810,16 +818,6 @@ Instance := MyClass new
 4. Global table (fallback)
 
 Note: Methods cannot see calling method's locals (proper Smalltalk scoping).
-
-### Most Recent Import Wins
-
-```smalltalk
-Lib1 at: "SharedKey" put: 1.
-Lib2 at: "SharedKey" put: 2.
-Harding import: Lib1.
-Harding import: Lib2.
-SharedKey  # Returns 2 (Lib2 was imported last)
-```
 
 ### Load to Globals
 

@@ -1,24 +1,17 @@
-ReactiveLibrary := Library new
-ReactiveLibrary name: "Reactive"
-Harding at: #ReactiveLibrary put: ReactiveLibrary
-ReactiveLibrary at: #"__sourceDir" put: "lib/reactive"
+ReactiveLibrary := Harding at: "ReactiveLibrary" ifAbsent: [
+  | lib |
+  lib := Library name: "Reactive"
+  Harding at: "ReactiveLibrary" put: lib
+  lib
+]
+ReactiveLibrary at: "__sourceDir" put: "lib/reactive"
 
-Harding load: "lib/reactive/Reactive.hrd"
-Harding load: "lib/reactive/TrackedSubject.hrd"
-Harding load: "lib/reactive/TrackedValue.hrd"
-Harding load: "lib/reactive/TrackedTable.hrd"
-Harding load: "lib/reactive/TrackedList.hrd"
-
-ReactiveLibrary at: #Reactive put: Reactive
-ReactiveLibrary at: #TrackedSubject put: TrackedSubject
-ReactiveLibrary at: #TrackedValue put: TrackedValue
-ReactiveLibrary at: #TrackedTable put: TrackedTable
-ReactiveLibrary at: #TrackedList put: TrackedList
-
-Harding at: #Reactive put: Reactive
-Harding at: #TrackedSubject put: TrackedSubject
-Harding at: #TrackedValue put: TrackedValue
-Harding at: #TrackedTable put: TrackedTable
-Harding at: #TrackedList put: TrackedList
+ReactiveLibrary isEmpty ifTrue: [
+  ReactiveLibrary load: "Reactive.hrd"
+  ReactiveLibrary load: "TrackedSubject.hrd"
+  ReactiveLibrary load: "TrackedValue.hrd"
+  ReactiveLibrary load: "TrackedTable.hrd"
+  ReactiveLibrary load: "TrackedList.hrd"
+]
 
 Harding import: ReactiveLibrary
