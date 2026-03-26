@@ -22,8 +22,9 @@ MySqlTodoRepositoryPort := 3306
 MySqlTodoRepositoryDatabase := "todo_app"
 MySqlTodoRepositoryUser := "harding"
 MySqlTodoRepositoryPassword := "harding123"
+MySqlTodoRepositoryConnection := nil
 
-MySqlTodoRepository := TodoRepository derivePublic: #(connection)
+MySqlTodoRepository := TodoRepository derivePublic: #()
 
 # Configuration accessors
 MySqlTodoRepository class>>host [ ^ MySqlTodoRepositoryHost ]
@@ -36,59 +37,71 @@ MySqlTodoRepository class>>user [ ^ MySqlTodoRepositoryUser ]
 MySqlTodoRepository class>>user: aString [ MySqlTodoRepositoryUser := aString ]
 MySqlTodoRepository class>>password [ ^ MySqlTodoRepositoryPassword ]
 MySqlTodoRepository class>>password: aString [ MySqlTodoRepositoryPassword := aString ]
+MySqlTodoRepository class>>connection [ ^ MySqlTodoRepositoryConnection ]
+MySqlTodoRepository class>>connection: aConnection [ MySqlTodoRepositoryConnection := aConnection ]
 
 MySqlTodoRepository class>>connectionString [
     ^ self host, ":", (self port printString), "/", self database
 ]
 
 MySqlTodoRepository>>initialize [
-    super initialize
-    connection := MysqlConnection open: self class connectionString user: self class user password: self class password
-    connection isConnected ifTrue: [
-        self ensureTableExists
-        self loadFromDatabase
+    | conn |
+    items := TrackedList new.
+    nextId := 1.
+    self class connection: nil.
+    self class connection: (MysqlConnection open: self class connectionString user: self class user password: self class password).
+    conn := self class connection.
+    conn isConnected ifTrue: [
+        self ensureTableExists.
+        self loadFromDatabase.
+        self count = 0 ifTrue: [ self seedDemoData ]
     ] ifFalse: [
         System stderr writeline: "MySQL connection failed, using RAM fallback"
     ]
 ]
 
 MySqlTodoRepository>>ensureTableExists [
-    | result |
-    connection isNil ifTrue: [ ^ self ]
-    connection isConnected ifFalse: [ ^ self ]
-    connection execute: "CREATE DATABASE IF NOT EXISTS ", self class database
-    connection execute: "USE ", self class database
-    connection execute: "CREATE TABLE IF NOT EXISTS todos (
+    | conn result |
+    conn := self class connection.
+    conn isNil ifTrue: [ ^ self ]
+    conn isConnected ifFalse: [ ^ self ]
+    conn execute: "CREATE DATABASE IF NOT EXISTS ", self class database
+    conn execute: "USE ", self class database
+    conn execute: "CREATE TABLE IF NOT EXISTS todos (
         id INT PRIMARY KEY AUTO_INCREMENT,
         title VARCHAR(255) NOT NULL,
         completed BOOLEAN DEFAULT FALSE
     )"
-    result := connection query: "SHOW TABLES LIKE 'todos'"
+    result := conn query: "SHOW TABLES LIKE 'todos'"
     result close
 ]
 
 MySqlTodoRepository>>loadFromDatabase [
-    | result row |
-    connection isNil ifTrue: [ ^ self ]
-    connection isConnected ifFalse: [ ^ self ]
-    items clear
-    result := connection query: "SELECT id, title, completed FROM todos ORDER BY id"
+    | conn result row |
+    conn := self class connection.
+    conn isNil ifTrue: [ ^ self ]
+    conn isConnected ifFalse: [ ^ self ]
+    items clear.
+    result := conn query: "SELECT id, title, completed FROM todos ORDER BY id"
     [row := result next. row notNil] whileTrue: [
-        | todo |
-        todo := TodoItem id: (row at: 0) title: (row at: 1) completed: (row at: 2)
+        | completed todo todoId |
+        todoId := (row at: 0) asInteger.
+        completed := ((row at: 2) = "1") ifTrue: [ true ] ifFalse: [ (row at: 2) = "true" ].
+        todo := TodoItem id: todoId title: (row at: 1) completed: completed
         items add: todo
-        (todo id) > nextId ifTrue: [ nextId := (todo id) + 1 ]
+        (todoId >= nextId) ifTrue: [ nextId := todoId + 1 ]
     ]
     result close
 ]
 
 MySqlTodoRepository>>addTitle: title [
-    | todo |
+    | conn todo |
     todo := super addTitle: title
     todo isNil ifFalse: [
-        connection notNil ifTrue: [
-            connection isConnected ifTrue: [
-                connection execute: "INSERT INTO todos (id, title, completed) VALUES (", (todo id printString), ", '", (self escapeSql: todo title), "', ", (todo completed printString), ")"
+        conn := self class connection.
+        conn notNil ifTrue: [
+            conn isConnected ifTrue: [
+                conn execute: "INSERT INTO todos (id, title, completed) VALUES (", (todo id printString), ", '", (self escapeSql: todo title), "', ", (todo completed printString), ")"
             ]
         ]
     ]
@@ -96,12 +109,13 @@ MySqlTodoRepository>>addTitle: title [
 ]
 
 MySqlTodoRepository>>toggle: rawId [
-    | todo |
+    | conn todo |
     todo := super toggle: rawId
     todo isNil ifFalse: [
-        connection notNil ifTrue: [
-            connection isConnected ifTrue: [
-                connection execute: "UPDATE todos SET completed = ", (todo completed printString), " WHERE id = ", (todo id printString)
+        conn := self class connection.
+        conn notNil ifTrue: [
+            conn isConnected ifTrue: [
+                conn execute: "UPDATE todos SET completed = ", (todo completed printString), " WHERE id = ", (todo id printString)
             ]
         ]
     ]
@@ -109,11 +123,12 @@ MySqlTodoRepository>>toggle: rawId [
 ]
 
 MySqlTodoRepository>>delete: rawId [
-    | id |
+    | conn id |
     id := (rawId isKindOf: String) ifTrue: [ rawId asInteger ] ifFalse: [ rawId ]
-    connection notNil ifTrue: [
-        connection isConnected ifTrue: [
-            connection execute: "DELETE FROM todos WHERE id = ", (id printString)
+    conn := self class connection.
+    conn notNil ifTrue: [
+        conn isConnected ifTrue: [
+            conn execute: "DELETE FROM todos WHERE id = ", (id printString)
         ]
     ]
     ^ super delete: rawId

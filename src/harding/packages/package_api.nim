@@ -46,8 +46,6 @@ proc rebindDeclarativePrimitives(interp: var Interpreter) =
     for selector, meth in methodTable.mpairs:
       discard selector
       if meth == nil or meth.primitiveSelector.len == 0 or meth.nativeImpl != nil:
-        if cls.name == "MysqlConnection":
-          debug("Skipping MysqlConnection>>", selector, " - no primitive or already bound")
         continue
       # Check both instance and class method tables for the primitive
       var primMethod: BlockNode = nil
@@ -70,8 +68,6 @@ proc rebindDeclarativePrimitives(interp: var Interpreter) =
     if value.kind != vkClass or value.classVal == nil:
       continue
     var cls = value.classVal
-    if cls.name == "MysqlConnection":
-      debug("Found MysqlConnection class for rebind")
     rebindMethodTable(cls, cls.methods, cls.allMethods, cls.allClassMethods)
     rebindMethodTable(cls, cls.classMethods, cls.allMethods, cls.allClassMethods)
 
