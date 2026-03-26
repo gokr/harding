@@ -16,8 +16,3 @@ GraniteLib isEmpty ifTrue: [
 ]
 
 Harding import: GraniteLib
-
-# Load sample application subclasses into globals for Builder discovery.
-Harding load: "lib/granite/HelloWorld.hrd"
-Harding load: "lib/granite/SimpleGUI.hrd"
-Harding load: "lib/granite/CounterApp.hrd"
