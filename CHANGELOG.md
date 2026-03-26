@@ -21,7 +21,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - **Constant literal optimization** - Array and Table literals with only constant elements (literals, no variables or message sends) are evaluated at parse time and cached. Interpreter uses pre-computed values, Granite generates compile-time Nim constants. Nested collections not yet optimized.
 - Triple-quoted multiline string literals (`"""..."""`) for raw multi-line text with embedded `"` characters.
 - Process and activation introspection APIs including `Process current`, `Scheduler current`, `Object>>activation`, and `Object>>thisContext`.
-- Automatic Html template cache keys via `Html canvasAuto:...` built from the current activation cache key plus an optional suffix.
 - Reactive state primitives in `lib/reactive/` (`TrackedValue`, `TrackedTable`, `TrackedList`) plus web render caching via `RenderCache`/`RenderEntry`.
 - Simplified the Todo web example to a single tracked-state cached rendering path and removed the older parallel Todo rendering variants.
 - Compiled JSON object serialization with class-side configuration (`jsonExclude:`, `jsonOnly:`, `jsonRename:`, `jsonOmitNil:`, `jsonOmitEmpty:`, `jsonFormat:`, `jsonFieldOrder:`, `jsonReset`) and `Object>>toJson`.

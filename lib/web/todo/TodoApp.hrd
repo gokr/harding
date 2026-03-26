@@ -44,19 +44,10 @@ TodoApp class>>prepareAssets [
 ].
 
 TodoApp class>>installRoutesOn: aRouter [
-  ^ self configureRoutesOn: aRouter handlingWith: self
-].
-
-TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
-  self prepareAssets.
-  aRouter clear.
-  aRouter get: "/" do: [:req | aHandler home: req ].
-  aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
-  aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
-  aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
-  aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
-  aRouter get: "/assets/daisyui.css" do: [:req | aHandler daisyStylesheet: req ].
-  ^ aRouter
+  | app |
+  app := self basicNew.
+  app::router := aRouter.
+  ^ app installRoutes
 ].
 
 TodoApp class>>pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
@@ -139,7 +130,15 @@ TodoApp>>runLoop [
 ].
 
 TodoApp>>installRoutes [
-  ^ TodoApp configureRoutesOn: router handlingWith: self
+  TodoApp prepareAssets.
+  router clear.
+  router get: "/" do: [:req | self home: req ].
+  router get: "/todos/panel" do: [:req | self panel: req ].
+  router post: "/todos" do: [:req | self createTodo: req ].
+  router post: "/todos/@id/toggle" do: [:req | self toggleTodo: req ].
+  router post: "/todos/@id/delete" do: [:req | self deleteTodo: req ].
+  router get: "/assets/daisyui.css" do: [:req | self daisyStylesheet: req ].
+  ^ router
 ].
 
 TodoApp>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [

@@ -1,8 +1,7 @@
 Html := Object derive: #()
-HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag tagStack voidTags currentTagBuilder context captureSegments segments staticBuffer)
+HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag tagStack voidTags currentTagBuilder context)
 HtmlTagBuilder := Object derivePublic: #(canvas tagName attributes isVoid isOpen)
 HtmlRawFragment := Object derivePublic: #(markup)
-HtmlDynamicSelector := Object derivePublic: #(selector)
 
 HtmlRenderContextStack := nil
 
@@ -72,63 +71,6 @@ Html class>>renderKey: aKey with: aBlock [
   ^ self renderKey: aKey with: aBlock context: nil
 ]
 
-Html class>>autoCacheKey [
-  ^ self autoCacheKey: nil
-]
-
-Html class>>autoCacheActivation [
-  | activation receiverClass |
-  activation := Processor current currentActivation
-  activation isNil ifTrue: [ ^ nil ]
-  activation := activation sender
-  [ activation notNil ] whileTrue: [
-    receiverClass := activation receiver className
-    ((receiverClass = "Html") or: [ receiverClass = "WebHtml" ])
-      ifTrue: [ activation := activation sender ]
-      ifFalse: [ ^ activation ]
-  ]
-  ^ nil
-]
-
-Html class>>autoCacheKey: aSuffix [
-  | activation key |
-  activation := self autoCacheActivation
-  key := activation isNil ifTrue: [ "HtmlAuto" ] ifFalse: [ activation cacheKey ]
-  aSuffix isNil ifTrue: [ ^ key ]
-  ^ key , "::" , aSuffix asString
-]
-
-Html class>>canvasAuto: aBlock [
-  ^ self canvas: (self autoCacheKey) with: aBlock
-]
-
-Html class>>canvasAuto: aBlock context: anObject [
-  ^ self canvas: (self autoCacheKey) with: aBlock context: anObject
-]
-
-Html class>>canvasAuto: aSuffix with: aBlock [
-  ^ self canvas: (self autoCacheKey: aSuffix) with: aBlock
-]
-
-Html class>>canvasAuto: aSuffix with: aBlock context: anObject [
-  ^ self canvas: (self autoCacheKey: aSuffix) with: aBlock context: anObject
-]
-
-Html class>>renderAuto: aSuffix with: aBlock context: anObject [
-  ^ self renderKey: (self autoCacheKey: aSuffix) with: aBlock context: anObject
-]
-
-Html class>>renderAuto: aSuffix with: aBlock [
-  ^ self renderAuto: aSuffix with: aBlock context: nil
-]
-
-Html class>>isDynamicValue: anObject [
-  | name |
-  anObject isNil ifTrue: [ ^ false ]
-  name := anObject className
-  ^ (name = "HtmlDynamicBlock") or: [ name = "HtmlDynamicSelector" ]
-]
-
 HtmlCanvas>>initialize [
   output := String withCapacity: 256
   attributes := Table new
@@ -138,33 +80,6 @@ HtmlCanvas>>initialize [
   voidTags := Html voidTags
   currentTagBuilder := nil
   context := nil
-  captureSegments := false
-  segments := nil
-  staticBuffer := nil
-]
-
-HtmlCanvas>>captureSegments [
-  ^ captureSegments
-]
-
-HtmlCanvas>>captureSegments: aBool [
-  captureSegments := aBool
-  (aBool = true) ifTrue: [
-    segments := Array new
-    staticBuffer := String withCapacity: 128
-  ]
-]
-
-HtmlCanvas>>flushStaticBuffer [
-  staticBuffer isNil ifTrue: [ ^ self ]
-  (staticBuffer isEmpty not and: [ segments notNil ]) ifTrue: [
-    segments add: (HtmlOptimizedSegment static: staticBuffer)
-    staticBuffer := String withCapacity: 128
-  ]
-]
-
-HtmlCanvas>>segments [
-  ^ segments
 ]
 
 HtmlCanvas>>context [
@@ -333,30 +248,9 @@ HtmlCanvas>>render: aBlock [
 ]
 
 HtmlCanvas>>render: aBlock withKey: aKey [
-  self captureSegments: true
+  discard aKey
   self renderBlock: aBlock
-  self flushStaticBuffer
-  self storeOptimizedTemplateForKey: aKey
-  self captureSegments: false
   ^ output
-]
-
-HtmlCanvas>>renderCached: aTemplate withBlock: aBlock [
-  | cachedSegments |
-  cachedSegments := aTemplate segments
-  cachedSegments isNil ifTrue: [ ^ aTemplate renderWithBlock: aBlock on: self ]
-  ^ aTemplate renderWithSegments: cachedSegments on: self
-]
-
-HtmlCanvas>>storeTemplateForKey: aKey [
-  TemplateCache at: aKey put: (HtmlCachedTemplate for: output)
-]
-
-HtmlCanvas>>storeOptimizedTemplateForKey: aKey [
-  | template |
-  template := HtmlCachedTemplate for: output
-  template::segments := segments
-  TemplateCache at: aKey put: template
 ]
 
 HtmlCanvas>>renderBlock: aBlock [
@@ -364,53 +258,7 @@ HtmlCanvas>>renderBlock: aBlock [
 ]
 
 HtmlCanvas>>write: aString [
-  (captureSegments = true) ifTrue: [
-    staticBuffer isNil ifTrue: [ output << aString ] ifFalse: [ staticBuffer << aString ]
-  ] ifFalse: [
-    output << aString
-  ]
-]
-
-HtmlCanvas>>appendDynamicResult: value [
-  | isArray isString isRawFragment hasRenderString hasRenderInto |
-  value isNil ifTrue: [ ^ self ]
-
-  isArray := (value className = "Array")
-  isArray ifTrue: [
-    value do: [:each | self appendDynamicResult: each ]
-    ^ self
-  ]
-
-  isString := (value isKindOf: String)
-  isString ifTrue: [
-    output << (Html escape: value)
-    ^ self
-  ]
-
-  isRawFragment := (value className = "HtmlRawFragment")
-  isRawFragment ifTrue: [
-    output << value markup
-    ^ self
-  ]
-
-  hasRenderInto := value respondsTo: #renderInto:
-  hasRenderInto ifTrue: [
-    value renderInto: output
-    ^ self
-  ]
-
-  hasRenderString := value respondsTo: #renderString
-  hasRenderString ifTrue: [
-    output << value renderString
-    ^ self
-  ]
-
-  output << (Html escape: value)
-]
-
-HtmlCanvas>>appendDynamicResultTo: buffer value: value [
-  self appendDynamicResult: value
-  ^ buffer
+  output << aString
 ]
 
 HtmlCanvas>>writeIndent [
@@ -432,20 +280,12 @@ HtmlCanvas>>decreaseIndent [
 ]
 
 HtmlCanvas>>renderContent: anObject [
-  | isDynamic |
-  "Ask object to render itself on this canvas"
   anObject isNil ifTrue: [ ^ self ]
-  isDynamic := Html isDynamicValue: anObject
-  isDynamic ifTrue: [
-    (captureSegments = true) ifTrue: [
-      self flushStaticBuffer
-      segments add: (HtmlOptimizedSegment dynamic: anObject)
-    ] ifFalse: [
-      self appendDynamicResult: (anObject evaluateWith: context)
-    ]
-    ^ self
+  (anObject respondsTo: #renderOn:) ifTrue: [
+    anObject renderOn: self
+  ] ifFalse: [
+    self text: anObject asString
   ]
-  anObject renderOn: self
 ]
 
 HtmlCanvas>>class: aString [
@@ -607,33 +447,14 @@ HtmlCanvas>>writeAttributes [
 ]
 
 HtmlCanvas>>appendAttributeNamed: aName value: value [
-  | isDynamic resolved |
-  isDynamic := Html isDynamicValue: value
-  isDynamic ifTrue: [
-    (captureSegments = true) ifTrue: [
-      self flushStaticBuffer
-      segments add: (HtmlDynamicAttributeSegment name: aName block: value)
-    ] ifFalse: [
-      resolved := value evaluateWith: context
-      resolved isNil ifFalse: [
-        self write: " "
-        self write: aName
-        resolved isEmpty ifFalse: [
-          self write: "=\""
-          self write: (Html escape: resolved)
-          self write: "\""
-        ]
-      ]
-    ]
-    ^ self
-  ]
-
+  | textValue |
   value isNil ifTrue: [ ^ self ]
+  textValue := value asString
   self write: " "
   self write: aName
-  value isEmpty ifFalse: [
+  textValue isEmpty ifFalse: [
     self write: "=\""
-    self write: (Html escape: value)
+    self write: (Html escape: textValue)
     self write: "\""
   ]
 ]
@@ -860,208 +681,6 @@ Html class>>appendFragment: content to: buffer with: context [
   ]
 
   buffer << content asString
-]
-
-TemplateCache := Table new
-
-HtmlCachedTemplate := Object derivePublic: #(segments)
-
-HtmlCachedTemplate class>>for: output [
-  | template |
-  template := self basicNew
-  template::segments := nil
-  ^ template
-]
-
-HtmlCachedTemplate>>renderWithBlock: aBlock on: canvas [
-  aBlock value: canvas
-  ^ canvas output
-]
-
-HtmlCachedTemplate>>segments [
-  ^ segments
-]
-
-HtmlOptimizedSegment := Object derivePublic: #(isStatic value)
-
-HtmlOptimizedSegment class>>static: aString [
-  | seg |
-  seg := self basicNew
-  seg::isStatic := true
-  seg::value := aString
-  ^ seg
-]
-
-HtmlOptimizedSegment class>>dynamic: aBlock [
-  | seg |
-  seg := self basicNew
-  seg::isStatic := false
-  seg::value := aBlock
-  ^ seg
-]
-
-HtmlOptimizedSegment>>isStatic [
-  ^ isStatic
-]
-
-HtmlOptimizedSegment>>value [
-  ^ value
-]
-
-HtmlDynamicBlock := Object derivePublic: #(block)
-
-HtmlDynamicBlock class>>block: aBlock [
-  | dyn |
-  dyn := self basicNew
-  dyn::block := aBlock
-  ^ dyn
-]
-
-Block>>dyn [
-  ^ HtmlDynamicBlock block: self
-]
-
-HtmlDynamicBlock>>block [
-  ^ block
-]
-
-HtmlDynamicBlock>>evaluateWith: anObject [
-  anObject isNil ifTrue: [ ^ self block value ]
-  ^ self block value: anObject
-]
-
-HtmlDynamicBlock>>renderOn: canvas [
-  | result |
-  result := self evaluateWith: canvas context
-  canvas appendDynamicResult: result
-]
-
-HtmlDynamicSelector class>>selector: aSymbol [
-  | dynamic |
-  dynamic := self basicNew
-  dynamic::selector := aSymbol
-  ^ dynamic
-]
-
-Symbol>>dyn [
-  ^ HtmlDynamicSelector selector: self
-]
-
-HtmlDynamicSelector>>selector [
-  ^ selector
-]
-
-HtmlDynamicSelector>>evaluateWith: anObject [
-  anObject isNil ifTrue: [ ^ nil ]
-  ^ anObject perform: selector
-]
-
-HtmlDynamicSelector>>renderOn: canvas [
-  | result |
-  result := self evaluateWith: canvas context
-  canvas appendDynamicResult: result
-]
-
-HtmlCachedTemplate>>renderWithSegments: aSegments on: canvas [
-  | isOptimized isAttrSegment |
-  aSegments do: [:seg |
-    isOptimized := (seg className = "HtmlOptimizedSegment")
-    isAttrSegment := (seg className = "HtmlDynamicAttributeSegment")
-    isOptimized ifTrue: [
-      seg isStatic ifTrue: [
-        canvas::output << seg value
-      ] ifFalse: [
-        canvas appendDynamicResult: (seg value evaluateWith: canvas context)
-      ]
-    ] ifFalse: [
-      isAttrSegment ifTrue: [
-        seg appendOn: canvas context: canvas context
-      ] ifFalse: [
-        canvas::output << seg
-      ]
-    ]
-  ]
-  ^ canvas::output
-]
-
-HtmlDynamicAttributeSegment := Object derivePublic: #(name valueBlock)
-
-HtmlDynamicAttributeSegment class>>name: aName block: aBlock [
-  | segment |
-  segment := self basicNew
-  segment::name := aName
-  segment::valueBlock := aBlock
-  ^ segment
-]
-
-HtmlDynamicAttributeSegment>>appendOn: canvas context: aContext [
-  | value |
-  value := valueBlock evaluateWith: aContext
-  value isNil ifTrue: [ ^ canvas ]
-  canvas::output << " "
-  canvas::output << name
-  value isEmpty ifFalse: [
-    canvas::output << "=\""
-    canvas::output << (Html escape: value)
-    canvas::output << "\""
-  ]
-  ^ canvas
-]
-
-HtmlTemplate := Object derivePublic: #(key block cachedTemplate context)
-
-HtmlTemplate class>>key: aKey block: aBlock [
-  | template |
-  template := self basicNew
-  template::key := aKey
-  template::block := aBlock
-  template::cachedTemplate := nil
-  template::context := nil
-  ^ template
-]
-
-HtmlTemplate>>cachedTemplate [
-  cachedTemplate isNil ifTrue: [
-    cachedTemplate := TemplateCache at: key ifAbsent: [ nil ]
-  ]
-  ^ cachedTemplate
-]
-
-HtmlTemplate>>render [
-  | builder |
-  builder := HtmlCanvas new
-  context notNil ifTrue: [ builder context: context ]
-  self cachedTemplate notNil ifTrue: [
-    ^ builder renderCached: cachedTemplate withBlock: block
-  ]
-  ^ builder render: block withKey: key
-]
-
-HtmlTemplate>>renderWith: anObject [
-  | builder |
-  builder := HtmlCanvas new
-  builder context: anObject
-  self cachedTemplate notNil ifTrue: [
-    ^ builder renderCached: cachedTemplate withBlock: block
-  ]
-  ^ builder render: block withKey: key
-]
-
-HtmlTemplate>>renderString [
-  ^ self render
-]
-
-HtmlTemplate>>renderStringWith: anObject [
-  ^ self renderWith: anObject
-]
-
-HtmlTemplate>>renderInto: buffer with: anObject [
-  buffer << (self renderWith: anObject)
-  ^ buffer
-]
-
-HtmlTemplate>>printString [
-  ^ self render
 ]
 
 String>>renderOn: html [

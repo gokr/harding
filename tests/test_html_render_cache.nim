@@ -20,94 +20,58 @@ proc newWebInterp(loadTodo: bool = false): Interpreter =
   if setupResult[1].len > 0:
     raise newException(ValueError, setupResult[1])
 
-suite "Html render cache":
-  test "keyed template captures segments and updates dyn content":
+suite "Html render helpers":
+  test "keyed canvas renders directly to html":
     var interp = newWebInterp()
     let script = """
-      Counter := 0.
-      Template := Html canvas: #dynSegments with: [:h |
+      Html canvas: #directRender with: [:h |
         h div: [
           h h1: "Title".
-          h p: [ Counter := Counter + 1. Counter printString ] dyn
+          h p: "Body"
         ]
-      ].
-      Cache := TemplateCache at: #dynSegments.
-      (Cache segments size printString) , "|" , (Template render) , "|" , (Template render)
+      ]
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)
-    check(result.strVal.startsWith("3|"))
-    check(result.strVal.contains("<p>1</p>"))
-    check(result.strVal.contains("<p>2</p>"))
+    check(result.strVal == "<div><h1>Title</h1><p>Body</p></div>")
 
-  test "keyed template resolves dyn attributes with context":
+  test "renderKey renders html directly":
     var interp = newWebInterp()
     let script = """
-      Person := Object derivePublic: #(name).
-      Person>>nameText [ ^ name ].
-      Obj := Person new.
-      Obj::name := "Alice".
-      Template := Html canvas: #dynAttrs with: [:h |
-        h attr: #class value: ([ :person | person nameText ] dyn).
+      Html renderKey: #personCard with: [:h |
+        h attr: #class value: "Alice".
         h div: "Hello"
-      ] context: Obj.
-      Template render
+      ]
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)
     check(result.strVal == "<div class=\"Alice\">Hello</div>")
 
-  test "auto cache key uses current activation with suffix":
-    var interp = newWebInterp()
-    let script = """
-      Probe := Object derivePublic: #(counter lastKey).
-      Probe>>renderWidget [
-        lastKey := Html autoCacheKey: #widget.
-        ^ (Html canvasAuto: #widget with: [:h |
-          h div: [
-            h p: [ Counter := counter isNil ifTrue: [ 0 ] ifFalse: [ counter ].
-                   Counter := Counter + 1.
-                   counter := Counter.
-                   Counter printString ] dyn
-          ]
-        ] context: self) renderString
-      ].
-      Obj := Probe new.
-      First := Obj renderWidget.
-      Second := Obj renderWidget.
-      Obj::lastKey , "|" , First , "|" , Second
-    """
-    let (result, err) = interp.doit(script)
-    check(err.len == 0)
-    check(result.strVal.contains("Probe>>renderWidget@"))
-    check(result.strVal.contains("<p>1</p>"))
-    check(result.strVal.contains("<p>2</p>"))
-
 suite "Todo render cache":
-  test "template todo page renders without dyn placeholders":
+  test "todo page renders without dyn placeholders":
     var interp = newWebInterp(loadTodo = true)
     let script = """
       Repo := TodoRepository new.
       Repo addTitle: "<done>".
-      (TodoPageComponent repository: Repo routePrefix: "/template" panelId: "template-todo-panel") renderString
+      (TodoPageComponent repository: Repo routePrefix: "" panelId: "todo-panel") renderString
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)
     let html = result.strVal
-    check(html.contains("template-todo-panel"))
+    check(html.contains("todo-panel"))
     check(html.contains("&lt;done&gt;"))
     check(not html.contains("HtmlDynamicBlock"))
 
-  test "template item cache reuses output and invalidates on tracked state change":
+  test "todo item cache reuses output and invalidates on tracked state change":
     var interp = newWebInterp(loadTodo = true)
     let script = """
       Repo := TodoApp resetRepository.
-      Item1 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      Item1 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "" panelId: "todo-panel".
       First := Item1 renderString.
-      Item2 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      Item2 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "" panelId: "todo-panel".
       Second := Item2 renderString.
       Repo toggle: 1.
-      Item3 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "/template" panelId: "template-todo-panel".
+      Item3 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "" panelId: "todo-panel".
       Third := Item3 renderString.
       (First = Second) printString , "|" , (First = Third) printString , "|" , Third
     """
