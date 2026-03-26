@@ -67,57 +67,6 @@ TodoApp class>>panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId
   ^ TodoPanelComponent repository: aRepository routePrefix: aRoutePrefix panelId: aPanelId
 ].
 
-TodoApp class>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
-  ^ (self panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) renderString
-].
-
-TodoApp class>>panelAndStatsHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
-  | page |
-  page := self pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId.
-  ^ (self panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) , (page statsOobHtml)
-].
-
-TodoApp class>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId triggerStats: shouldTriggerStats [
-  | headers |
-  # HTMX swaps the panel target with the main fragment. For mutating requests
-  # we append an out-of-band stats fragment in the same response.
-  headers := #{"Content-Type" -> "text/html"}.
-  req respond: 200
-       headers: headers
-       body: (shouldTriggerStats
-         ifTrue: [ self panelAndStatsHtmlFor: self repository routePrefix: aRoutePrefix panelId: aPanelId ]
-         ifFalse: [ self panelHtmlFor: self repository routePrefix: aRoutePrefix panelId: aPanelId ])
-].
-
-TodoApp class>>home: req [
-  req respondHtml: ((self pageFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
-].
-
-TodoApp class>>panel: req [
-  self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: false
-].
-
-TodoApp class>>createTodo: req [
-  # The repository is shared at the class level so every request sees the
-  # same tracked state and the same cache invalidation graph.
-  self repository addTitle: (req formParam: "title").
-  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
-].
-
-TodoApp class>>toggleTodo: req [
-  self repository toggle: (req pathParam: "id").
-  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
-].
-
-TodoApp class>>deleteTodo: req [
-  self repository delete: (req pathParam: "id").
-  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
-].
-
-TodoApp class>>daisyStylesheet: req [
-  req respondCss: TodoAppDaisyStylesheet
-].
-
 TodoApp class>>start [
   ^ self startOn: 8080
 ].
@@ -193,9 +142,54 @@ TodoApp>>installRoutes [
   ^ TodoApp configureRoutesOn: router handlingWith: self
 ].
 
-TodoApp>>home: req [ ^ TodoApp home: req ].
-TodoApp>>panel: req [ ^ TodoApp panel: req ].
-TodoApp>>createTodo: req [ ^ TodoApp createTodo: req ].
-TodoApp>>toggleTodo: req [ ^ TodoApp toggleTodo: req ].
-TodoApp>>deleteTodo: req [ ^ TodoApp deleteTodo: req ].
-TodoApp>>daisyStylesheet: req [ req respondCss: TodoAppDaisyStylesheet ].
+TodoApp>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  ^ (TodoApp panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) renderString
+].
+
+TodoApp>>panelAndStatsHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  | page |
+  page := TodoApp pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId.
+  ^ (self panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) , (page statsOobHtml)
+].
+
+TodoApp>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId triggerStats: shouldTriggerStats [
+  | headers repository |
+  # The repository is shared at the class level so every request sees the
+  # same tracked state and the same cache invalidation graph.
+  repository := TodoApp repository.
+  # HTMX swaps the panel target with the main fragment. For mutating requests
+  # we append an out-of-band stats fragment in the same response.
+  headers := #{"Content-Type" -> "text/html"}.
+  req respond: 200
+       headers: headers
+       body: (shouldTriggerStats
+         ifTrue: [ self panelAndStatsHtmlFor: repository routePrefix: aRoutePrefix panelId: aPanelId ]
+         ifFalse: [ self panelHtmlFor: repository routePrefix: aRoutePrefix panelId: aPanelId ])
+].
+
+TodoApp>>home: req [
+  req respondHtml: ((TodoApp pageFor: TodoApp repository routePrefix: "" panelId: "todo-panel") renderString)
+].
+
+TodoApp>>panel: req [
+  self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: false
+].
+
+TodoApp>>createTodo: req [
+  TodoApp repository addTitle: (req formParam: "title").
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
+].
+
+TodoApp>>toggleTodo: req [
+  TodoApp repository toggle: (req pathParam: "id").
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
+].
+
+TodoApp>>deleteTodo: req [
+  TodoApp repository delete: (req pathParam: "id").
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
+].
+
+TodoApp>>daisyStylesheet: req [
+  req respondCss: TodoAppDaisyStylesheet
+].
