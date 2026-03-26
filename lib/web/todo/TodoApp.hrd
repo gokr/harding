@@ -1,4 +1,4 @@
-TodoApp := Object derivePublic: #(server router repository port).
+TodoApp := Object derivePublic: #(server router port).
 
 TodoAppCurrent := nil.
 TodoRepositoryCurrent := nil.
@@ -28,6 +28,8 @@ TodoApp class>>repository [
 ].
 
 TodoApp class>>resetRepository [
+  # Clear both the shared repository and cached HTML so the next request
+  # rebuilds from fresh tracked state.
   TodoRepositoryCurrent := nil.
   MySqlTodoRepositoryCurrent := nil.
   RenderCache current reset.
@@ -50,18 +52,9 @@ TodoApp class>>configureRoutesOn: aRouter handlingWith: aHandler [
   aRouter clear.
   aRouter get: "/" do: [:req | aHandler home: req ].
   aRouter get: "/todos/panel" do: [:req | aHandler panel: req ].
-  aRouter get: "/todos/stats" do: [:req | aHandler stats: req ].
   aRouter post: "/todos" do: [:req | aHandler createTodo: req ].
   aRouter post: "/todos/@id/toggle" do: [:req | aHandler toggleTodo: req ].
   aRouter post: "/todos/@id/delete" do: [:req | aHandler deleteTodo: req ].
-
-  aRouter get: "/template" do: [:req | aHandler templateHome: req ].
-  aRouter get: "/template/todos/panel" do: [:req | aHandler templatePanel: req ].
-  aRouter post: "/template/todos" do: [:req | aHandler templateCreateTodo: req ].
-  aRouter post: "/template/todos/@id/toggle" do: [:req | aHandler templateToggleTodo: req ].
-  aRouter post: "/template/todos/@id/delete" do: [:req | aHandler templateDeleteTodo: req ].
-
-  aRouter get: "/benchmark" do: [:req | aHandler benchmark: req ].
   aRouter get: "/assets/daisyui.css" do: [:req | aHandler daisyStylesheet: req ].
   ^ aRouter
 ].
@@ -74,93 +67,51 @@ TodoApp class>>panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId
   ^ TodoPanelComponent repository: aRepository routePrefix: aRoutePrefix panelId: aPanelId
 ].
 
+TodoApp class>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  ^ (self panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) renderString
+].
+
+TodoApp class>>panelAndStatsHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
+  | page |
+  page := self pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId.
+  ^ (self panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) , (page statsOobHtml)
+].
+
+TodoApp class>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId triggerStats: shouldTriggerStats [
+  | headers |
+  # HTMX swaps the panel target with the main fragment. For mutating requests
+  # we append an out-of-band stats fragment in the same response.
+  headers := #{"Content-Type" -> "text/html"}.
+  req respond: 200
+       headers: headers
+       body: (shouldTriggerStats
+         ifTrue: [ self panelAndStatsHtmlFor: self repository routePrefix: aRoutePrefix panelId: aPanelId ]
+         ifFalse: [ self panelHtmlFor: self repository routePrefix: aRoutePrefix panelId: aPanelId ])
+].
+
 TodoApp class>>home: req [
   req respondHtml: ((self pageFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
 ].
 
 TodoApp class>>panel: req [
-  req respondHtml: ((self panelFor: self repository routePrefix: "" panelId: "todo-panel") renderString)
-].
-
-# Responds with just the stats badges HTML for HTMX updates
-# This endpoint is triggered by htmx after successful POST operations
-TodoApp class>>stats: req [
-  req respondHtml: ((self pageFor: self repository routePrefix: "" panelId: "todo-panel") statsHtml)
-].
-
-TodoApp class>>templateHome: req [
-  req respondHtml: ((self pageFor: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
-].
-
-TodoApp class>>templatePanel: req [
-  req respondHtml: ((self panelFor: self repository routePrefix: "/template" panelId: "template-todo-panel") renderString)
+  self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: false
 ].
 
 TodoApp class>>createTodo: req [
+  # The repository is shared at the class level so every request sees the
+  # same tracked state and the same cache invalidation graph.
   self repository addTitle: (req formParam: "title").
-  ^ self panel: req
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp class>>toggleTodo: req [
   self repository toggle: (req pathParam: "id").
-  ^ self panel: req
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp class>>deleteTodo: req [
   self repository delete: (req pathParam: "id").
-  ^ self panel: req
-].
-
-TodoApp class>>templateCreateTodo: req [
-  self repository addTitle: (req formParam: "title").
-  ^ self templatePanel: req
-].
-
-TodoApp class>>templateToggleTodo: req [
-  self repository toggle: (req pathParam: "id").
-  ^ self templatePanel: req
-].
-
-TodoApp class>>templateDeleteTodo: req [
-  self repository delete: (req pathParam: "id").
-  ^ self templatePanel: req
-].
-
-TodoApp class>>benchmark: req [
-  | page panel item pageEntry panelEntry itemEntry buffer |
-  page := self pageFor: self repository routePrefix: "" panelId: "todo-panel".
-  panel := self panelFor: self repository routePrefix: "" panelId: "todo-panel".
-  item := TodoItemComponent todo: (self repository all at: 0) routePrefix: "" panelId: "todo-panel".
-
-  page renderString.
-  panel renderString.
-  item renderString.
-
-  pageEntry := RenderCache current entryForKey: page renderCacheKey session: nil.
-  panelEntry := RenderCache current entryForKey: panel renderCacheKey session: nil.
-  itemEntry := RenderCache current entryForKey: item renderCacheKey session: nil.
-
-  buffer := String withCapacity: 4096.
-  buffer << """<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harding Todo Benchmark</title>
-<link rel="stylesheet" href="/assets/daisyui.css">
-</head><body>
-<main data-theme=""".
-  buffer << Daisy themeName.
-  buffer << """" style="max-width:960px; margin:0 auto; padding:2rem 1rem 4rem;">
-<div class="card bg-base-100 shadow-xl"><div class="card-body">
-<h1 class="card-title text-3xl">Todo render cache benchmark</h1>
-<p class="opacity-80">This page reports steady-state render cache data for the tracked-state Html todo app. Run <code>nim c -r tests/benchmark_todo_render.nim</code> for timings.</p>
-<div class="stats stats-vertical lg:stats-horizontal shadow">
-""".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Page bytes</div><div class=\"stat-value text-primary\">" << (pageEntry cachedOutput size printString) << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Panel bytes</div><div class=\"stat-value text-secondary\">" << (panelEntry cachedOutput size printString) << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Item bytes</div><div class=\"stat-value\">" << (itemEntry cachedOutput size printString) << "</div></div>".
-  buffer << "<div class=\"stat\"><div class=\"stat-title\">Render cache entries</div><div class=\"stat-value\">" << (RenderCache current entries size printString) << "</div></div>".
-  buffer << """</div></div></div></main></body></html>
-""".
-  req respondHtml: buffer
+  ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp class>>daisyStylesheet: req [
@@ -244,13 +195,7 @@ TodoApp>>installRoutes [
 
 TodoApp>>home: req [ ^ TodoApp home: req ].
 TodoApp>>panel: req [ ^ TodoApp panel: req ].
-TodoApp>>templateHome: req [ ^ TodoApp templateHome: req ].
-TodoApp>>templatePanel: req [ ^ TodoApp templatePanel: req ].
-TodoApp>>createTodo: req [ TodoApp repository addTitle: (req formParam: "title"). ^ self panel: req ].
-TodoApp>>toggleTodo: req [ TodoApp repository toggle: (req pathParam: "id"). ^ self panel: req ].
-TodoApp>>deleteTodo: req [ TodoApp repository delete: (req pathParam: "id"). ^ self panel: req ].
-TodoApp>>templateCreateTodo: req [ TodoApp repository addTitle: (req formParam: "title"). ^ self templatePanel: req ].
-TodoApp>>templateToggleTodo: req [ TodoApp repository toggle: (req pathParam: "id"). ^ self templatePanel: req ].
-TodoApp>>templateDeleteTodo: req [ TodoApp repository delete: (req pathParam: "id"). ^ self templatePanel: req ].
-TodoApp>>benchmark: req [ ^ TodoApp benchmark: req ].
+TodoApp>>createTodo: req [ ^ TodoApp createTodo: req ].
+TodoApp>>toggleTodo: req [ ^ TodoApp toggleTodo: req ].
+TodoApp>>deleteTodo: req [ ^ TodoApp deleteTodo: req ].
 TodoApp>>daisyStylesheet: req [ req respondCss: TodoAppDaisyStylesheet ].

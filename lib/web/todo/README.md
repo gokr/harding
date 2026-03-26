@@ -1,337 +1,148 @@
-# Harding Todo App
+# Harding Todo
 
-A live-editable todo application demonstrating Harding's web capabilities with server-side rendering, HTMX for dynamic updates, and reactive state management.
+This example shows the current Harding web direction:
 
-## Quick Start
+- plain `Html` DSL for markup
+- tracked state in `lib/reactive/`
+- cache entries owned by `Component` / `RenderCache`
+- invalidation driven by tracked reads and writes
+- HTMX fragment updates for interactivity
 
-```harding
-Harding load: "lib/mummyx/Bootstrap.hrd"
-Harding load: "lib/web/Bootstrap.hrd"
-Harding load: "lib/web/todo/Bootstrap.hrd"
+The app does not rely on the old Html template-hole approach anymore.
 
-TodoApp resetRepository
-TodoApp serve
+## Run It
+
+Build a binary with MummyX support:
+
+```bash
+nimble harding_mummyx_release
 ```
 
-Then visit http://localhost:8080
+Start the app:
 
-## Architecture Overview
-
-```mermaid
-graph TB
-    Browser[Browser with HTMX] -->|HTTP GET/POST| MummyX[MummyX Server]
-    MummyX --> Router[Router]
-    Router --> TodoApp[TodoApp]
-    TodoApp --> Components[UI Components]
-    TodoApp --> Repository[TodoRepository]
-    Components --> HtmlRenderer[Html Renderer]
-    HtmlRenderer -->|Cached Templates| RenderCache[Render Cache]
-    Repository --> TrackedList[TrackedList]
-    TrackedList --> TrackedValue[TrackedValue]
-    
-    style Browser fill:#e1f5fe
-    style MummyX fill:#fff3e0
-    style TodoApp fill:#e8f5e9
-    style RenderCache fill:#fce4ec
+```bash
+./harding -e 'Harding load: "lib/mummyx/Bootstrap.hrd". Harding load: "lib/web/Bootstrap.hrd". Harding load: "lib/web/todo/Bootstrap.hrd". TodoApp resetRepository. TodoApp serveForeverOn: 8080.'
 ```
 
-## Request Flow
+Then open `http://127.0.0.1:8080`.
+
+## What Happens On A Request
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser
-    participant S as MummyX Server
-    participant R as Router
-    participant A as TodoApp
-    participant C as Component
-    participant RC as RenderCache
-    
-    B->>S: POST /todos (new task)
-    S->>R: Route request
-    R->>A: createTodo:
-    A->>A: Update repository
-    A->>C: Create panel component
-    C->>RC: Check cache
-    alt Cache miss
-        RC->>C: Render fresh
-        C->>RC: Store in cache
-    else Cache hit
-        RC->>C: Return cached
-    end
-    C->>A: HTML string
-    A->>S: respondHtml:
-    S->>B: HTML (htmx swaps content)
+    participant Browser
+    participant Router
+    participant TodoApp
+    participant Repo as TodoRepository
+    participant Cache as RenderCache
+
+    Browser->>Router: POST /todos/1/toggle
+    Router->>TodoApp: toggleTodo:
+    TodoApp->>Repo: toggle: 1
+    Repo-->>Cache: tracked write marks dependents dirty
+    TodoApp->>Cache: render panel component
+    TodoApp->>Cache: render stats fragment
+    TodoApp-->>Browser: panel HTML + OOB stats HTML
 ```
 
-## Component Hierarchy
+## Structure
 
 ```mermaid
-classDiagram
-    Component <|-- TodoPageComponent
-    Component <|-- TodoPanelComponent
-    Component <|-- TodoItemComponent
-    Component <|-- TodoEmptyStateComponent
-    
+graph TD
+    TodoApp --> TodoRepository
+    TodoApp --> TodoPageComponent
     TodoPageComponent --> TodoPanelComponent
     TodoPanelComponent --> TodoItemComponent
     TodoPanelComponent --> TodoEmptyStateComponent
     TodoItemComponent --> TodoItem
-    TodoPanelComponent --> TodoRepository
-    
-    class Component {
-        +render()
-        +renderCacheKey()
-    }
-    
-    class TodoPageComponent {
-        +repository
-        +routePrefix
-        +panelId
-        +renderCacheKey()
-        +bodyMarkup()
-    }
-    
-    class TodoPanelComponent {
-        +repository
-        +routePrefix
-        +panelId
-        +listComponents()
-        +renderCacheKey()
-    }
-    
-    class TodoItemComponent {
-        +todo
-        +routePrefix
-        +panelId
-        +statusClass()
-        +toggleUrl()
-        +deleteUrl()
-    }
-    
-    class TodoEmptyStateComponent {
-        +renderCacheKey()
-    }
+    TodoRepository --> TrackedList
+    TodoItem --> TrackedValue
+    TrackedList --> RenderCache
+    TrackedValue --> RenderCache
 ```
 
-## Data Flow
+## File Layout
 
-```mermaid
-flowchart LR
-    User[User Action] --> HTMX[HTMX Request]
-    HTMX --> Handler[Route Handler]
-    Handler --> Repo[Update Repository]
-    Repo --> Track[TrackedValue/TrackedList]
-    Track --> Change[State Change]
-    Change --> Render[Re-render Panel]
-    Render --> Cache[Update RenderCache]
-    Render --> Response[HTML Response]
-    Response --> HTMXSwap[HTMX swaps DOM]
-```
-
-## Key Concepts
-
-### 1. Server-Side Rendering with Html DSL
-
-Components render HTML using Harding's Html DSL:
-
-```harding
-h div: [:card |
-  card class: "card bg-base-100"
-  card div: [:body |
-    body class: "card-body"
-    body h2: "Today"
-  ]
-]
-```
-
-### 2. HTMX for Dynamic Updates
-
-The app uses HTMX attributes for progressive enhancement:
-- `post:` - POST to server
-- `target:` - Element to update
-- `swap:` - How to update (outerHTML, innerHTML)
-
-Example from TodoItemComponent:
-```harding
-button post: "/todos/1/toggle"
-       target: "#todo-panel"
-       swap: "outerHTML"
-```
-
-### 3. Render Caching
-
-Each component has a `renderCacheKey` that identifies its cached output:
-
-```harding
-TodoItemComponent>>renderCacheKey [
-  ^ "todo-item:" , (todo id printString) , ":" , panelId
-]
-```
-
-The RenderCache stores rendered HTML and only re-renders when:
-- Cache miss (first time or expired)
-- Dependencies change (TrackedValue/TrackedList notify dependents)
-
-### 4. Reactive State with TrackedValue
-
-Todo items use TrackedValue for reactive properties:
-
-```harding
-TodoItem class>>id: title: completed: [
-  item::titleState := TrackedValue value: aTitle
-  item::completedState := TrackedValue value: aBool
-]
-```
-
-When a todo is toggled:
-1. `completedState value:` is called
-2. TrackedValue notifies dependents
-3. RenderCache entries that depend on this value are marked dirty
-4. Next render re-renders the affected components
-
-## File Structure
-
-```
+```text
 lib/web/todo/
-├── Bootstrap.hrd              # Entry point - loads all files
-├── README.md                  # This file
-├── TodoApp.hrd               # Application controller & routes
-├── TodoComponents.hrd        # UI components (Page, Panel, Item)
-├── TodoItem.hrd              # Domain model for a single todo
-└── TodoRepository.hrd        # Data access & business logic
+|- Bootstrap.hrd
+|- README.md
+|- TodoApp.hrd
+|- TodoComponents.hrd
+|- TodoItem.hrd
+`- TodoRepository.hrd
 ```
+
+## Current Flow
+
+### 1. State
+
+- `TodoRepository` owns a `TrackedList` of `TodoItem`s
+- each `TodoItem` stores `title` and `completed` in `TrackedValue`s
+- reads during rendering register dependencies automatically
+
+### 2. Rendering
+
+- each component provides a stable `renderCacheKey`
+- `Component>>renderInto:` looks up the shared `RenderCache`
+- if the entry is clean, cached HTML is reused
+- if tracked state changed, the entry is marked dirty and re-rendered
+
+### 3. HTMX updates
+
+- the panel is the normal HTMX target
+- mutating requests also return a stats fragment with `hx-swap-oob="true"`
+- that updates the counters in place without a full page refresh
 
 ## Routes
 
-| Route | Method | Action |
-|-------|--------|--------|
-| `/` | GET | Full page render |
-| `/todos/panel` | GET | Panel only (for HTMX) |
-| `/todos/stats` | GET | Stats badges only (for HTMX) |
-| `/todos` | POST | Create new todo |
-| `/todos/:id/toggle` | POST | Toggle completion |
-| `/todos/:id/delete` | POST | Delete todo |
-| `/assets/daisyui.css` | GET | Stylesheet |
+| Route | Method | Purpose |
+|---|---|---|
+| `/` | GET | full page |
+| `/todos/panel` | GET | panel fragment |
+| `/todos` | POST | add todo |
+| `/todos/:id/toggle` | POST | toggle completed |
+| `/todos/:id/delete` | POST | delete todo |
+| `/assets/daisyui.css` | GET | stylesheet |
 
-## State Management
+## Cache Model
 
 ```mermaid
-graph LR
-    subgraph "Class Level"
-        TAC[TodoAppCurrent]
-        TRC[TodoRepositoryCurrent]
-    end
-    
-    subgraph "Repository"
-        TL[TrackedList]
-        TV[TrackedValue]
-    end
-    
-    subgraph "Render Cache"
-        RC[RenderCache entries]
-    end
-    
-    TAC -->|references| TRC
-    TRC -->|contains| TL
-    TL -->|contains| TV
-    TV -->|notifies| RC
+flowchart LR
+    A[Component render] --> B[Tracked read]
+    B --> C[RenderEntry depends on tracked object]
+    D[Tracked write] --> E[TrackedSubject changed]
+    E --> F[RenderEntry markDirty]
+    F --> G[Next render rebuilds HTML]
 ```
 
-## Development Tips
+Important points:
 
-### Live Editing
+- component instances are created per request
+- cached HTML is shared in `RenderCache`, not stored on the component
+- `renderCacheKey` identifies the fragment
+- `renderSessionKey` can partition cache entries when output differs per session
+- session-specific output should use `renderSessionKey`, not overloaded cache keys
 
-One of Harding's strengths is live code editing:
+## Why The Todo Example Matters
 
-1. Start the server with `TodoApp serve`
-2. Open Bona IDE
-3. Edit any component method (e.g., `TodoItemComponent>>renderCacheKey`)
-4. Refresh browser - changes appear immediately!
+This example exercises the exact model we want:
 
-The server keeps running while you edit - no restart needed.
+- page-level cache reuse
+- panel-level invalidation when the list changes
+- item-level invalidation when a single todo changes
+- no component tree persistence between requests
+- no Html-specific dynamic placeholder machinery required in the app code
 
-### Reset State
+## Optional MySQL Backend
 
-During development, reset the repository to clear all todos:
-```harding
-TodoApp resetRepository
-```
+The app defaults to the in-memory repository.
 
-This also clears the RenderCache, so all components re-render fresh.
+If you explicitly enable MySQL through `TodoApp useMySql: true`, `TodoApp class>>repository` switches to `MySqlTodoRepository`.
 
-### Debug with Transcript
+That backend is optional and is not used by default.
 
-Add debugging output:
-```harding
-TodoApp>>createTodo: req [
-  Transcript showCr: "Creating todo: " , (req formParam: "title")
-  ...
-]
-```
+## Notes For Future Cleanup
 
-## Dependencies
-
-This app depends on:
-- **lib/web/** - Html DSL, Component base class, RenderCache
-- **lib/mummyx/** - HTTP server (MummyX)
-- **lib/reactive/** - TrackedValue, TrackedList for reactive state
-
-## MySQL Backend (optional)
-
-To use MySQL for persistence instead of RAM:
-
-### 1. Create a MySQL user and database
-
-Run these commands (requires sudo):
-
-```bash
-sudo mysql -e "CREATE USER IF NOT EXISTS 'harding'@'127.0.0.1' IDENTIFIED BY 'harding123'"
-sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'harding'@'127.0.0.1'"
-sudo mysql -e "CREATE DATABASE IF NOT EXISTS todo_app"
-sudo mysql -e "FLUSH PRIVILEGES"
-```
-
-### 2. Rebuild Harding with MySQL support
-
-```bash
-nimble harding
-```
-
-This will compile the MySQL library into the Harding binary.
-
-### 3. Start the server with MySQL backend
-
-```bash
-./harding start_todo_mysql.hrd
-```
-
-Or configure manually:
-```harding
-MySqlTodoRepository host: "127.0.0.1"
-MySqlTodoRepository port: 3306
-MySqlTodoRepository database: "todo_app"
-MySqlTodoRepository user: "harding"
-MySqlTodoRepository password: "harding123"
-TodoApp useMySql: true
-TodoApp serve
-```
-
-The MySQL backend will persist todos to the database, so they survive server restarts.
-
-## How It All Works Together
-
-1. **Initial Load**: User visits `/`, TodoPageComponent renders full page with TodoPanelComponent inside
-
-2. **Add Todo**: User submits form → HTMX POSTs to `/todos` → `createTodo:` adds to repository → Panel re-renders with new item → HTMX swaps `#todo-panel` content
-
-3. **Toggle**: User clicks "Mark done" → HTMX POSTs to `/todos/1/toggle` → `toggleTodo:` updates TrackedValue → Repository state changes → Panel re-renders → HTMX swaps content
-
-4. **Caching**: First render of each component stores HTML in RenderCache. Subsequent renders check cache first. Changes to TrackedValue invalidate dependent cache entries.
-
-## Why This Architecture?
-
-- **Server-side rendering**: No client-side JS framework needed
-- **HTMX**: Progressive enhancement, works without JavaScript (though better with it)
-- **Render caching**: Fast response times even with complex UIs
-- **Reactive state**: Automatic cache invalidation when data changes
-- **Live editing**: Development workflow matches Smalltalk tradition
+- `renderAuto` is still named after the older auto-key idea and could be renamed
+- the old template-cache support in `lib/web/Html.hrd` should continue to be trimmed back now that component-level caching is the active path

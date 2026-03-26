@@ -2,6 +2,8 @@ TodoItem := Object derivePublic: #(id titleState completedState).
 
 TodoItem class>>id: anId title: aTitle completed: aBool [
   | item |
+  # Keep mutable fields in tracked wrappers so component renders register
+  # reads and invalidate cached fragments when the value changes.
   item := self basicNew.
   item::id := anId.
   item::titleState := TrackedValue value: aTitle.

@@ -42,21 +42,22 @@ Html class>>canvas: aBlock [
   ^ builder render: aBlock
 ]
 
-Html class>>canvas: aSymbol with: aBlock context: anObject [
-  | builder cached template |
+Html class>>render: aBlock context: anObject [
+  | builder |
   builder := HtmlCanvas new
   builder context: anObject
-  cached := TemplateCache at: aSymbol ifAbsent: [ nil ]
-  cached notNil ifTrue: [
-    template := HtmlTemplate key: aSymbol block: aBlock
-    template::cachedTemplate := cached
-    template::context := anObject
-    ^ template
-  ]
-  template := HtmlTemplate key: aSymbol block: aBlock
-  template::context := anObject
-  builder render: aBlock withKey: aSymbol
-  ^ template
+  ^ builder render: aBlock
+]
+
+Html class>>render: aBlock [
+  ^ self render: aBlock context: nil
+]
+
+Html class>>canvas: aSymbol with: aBlock context: anObject [
+  | builder |
+  builder := HtmlCanvas new
+  builder context: anObject
+  ^ builder render: aBlock
 ]
 
 Html class>>canvas: aSymbol with: aBlock [
@@ -64,19 +65,7 @@ Html class>>canvas: aSymbol with: aBlock [
 ]
 
 Html class>>renderKey: aKey with: aBlock context: anObject [
-  | builder cached renderedBuilder |
-  builder := HtmlCanvas new
-  builder context: anObject
-  cached := TemplateCache at: aKey ifAbsent: [ nil ]
-  cached notNil ifTrue: [
-    ^ builder renderCached: cached withBlock: aBlock
-  ]
-  builder render: aBlock withKey: aKey
-  cached := TemplateCache at: aKey ifAbsent: [ nil ]
-  cached isNil ifTrue: [ ^ builder output ]
-  renderedBuilder := HtmlCanvas new
-  renderedBuilder context: anObject
-  ^ renderedBuilder renderCached: cached withBlock: aBlock
+  ^ self render: aBlock context: anObject
 ]
 
 Html class>>renderKey: aKey with: aBlock [

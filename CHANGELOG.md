@@ -33,6 +33,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
 - Class definitions in core libraries now include class-specific comments.
 - BitBarrel support now ships as an external library instead of built-in Harding source and build flags.
+- The Todo web example now renders through component-level `RenderCache` plus tracked-state invalidation, updates counters with HTMX out-of-band swaps, and drops the old template/benchmark routes.
 - MummyX request handling now runs through scheduler-backed green worker processes instead of executing on the socket thread.
 - Granite block/codegen parity now covers captured block expressions, top-level block returns, 0-based collection access, and more runtime selector coverage.
 - MummyX routes can now be cleared and rebuilt, and URL-encoded form data is exposed on `HttpRequest`.
@@ -43,6 +44,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Removed native collection block iteration paths in favor of interpreted implementations for consistency.
 - `nimble test` now discovers and runs external library tests automatically.
 - MummyX now includes request logging for debugging HTTP handlers.
+- `lib/web/Html.hrd` now renders directly for the active todo path instead of routing through the older template-cache segment layer.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
