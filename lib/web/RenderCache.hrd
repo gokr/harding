@@ -1,18 +1,23 @@
 RenderCache := Object derivePublic: #(entries entryStack)
 
-RenderCacheCurrent := nil
-
 # RenderCache stores HTML per logical component key. The entry stack also acts
 # as the active observer stack for tracked reads during rendering.
 
 RenderCache class>>current [
-  RenderCacheCurrent isNil ifTrue: [ RenderCacheCurrent := self new ]
-  ^ RenderCacheCurrent
+  | cache |
+  cache := Harding at: "RenderCacheCurrent" ifAbsent: [ nil ].
+  cache isNil ifTrue: [
+    cache := self new.
+    Harding at: "RenderCacheCurrent" put: cache
+  ].
+  ^ cache
 ]
 
 RenderCache class>>resetCurrent [
-  RenderCacheCurrent := self new
-  ^ RenderCacheCurrent
+  | cache |
+  cache := self new.
+  Harding at: "RenderCacheCurrent" put: cache.
+  ^ cache
 ]
 
 RenderCache class>>new [

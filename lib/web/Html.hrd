@@ -6,17 +6,18 @@ HtmlRawFragment := Object derivePublic: #(markup)
 # Html is now a direct renderer. It builds markup immediately, while higher
 # level caching belongs to Component/RenderCache rather than Html itself.
 
-HtmlRenderContextStack := nil
-
 Html class>>voidTags [
   ^ #(#area #base #br #col #embed #hr #img #input #link #meta #param #source #track #wbr)
 ]
 
 Html class>>renderContextStack [
-  HtmlRenderContextStack isNil ifTrue: [
-    HtmlRenderContextStack := Array new
-  ]
-  ^ HtmlRenderContextStack
+  | stack |
+  stack := Harding at: "HtmlRenderContextStack" ifAbsent: [ nil ].
+  stack isNil ifTrue: [
+    stack := Array new.
+    Harding at: "HtmlRenderContextStack" put: stack
+  ].
+  ^ stack
 ]
 
 Html class>>pushRenderContext: anObject [

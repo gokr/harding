@@ -692,6 +692,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
           let lookup = libraryBindingLookup(bindings.toValue(), name)
           if lookup.found:
             setTableValue(bindings, toValue(name), value)
+            interp.globals[][name] = value
             debug("Imported library binding updated: ", name, " = ", value.toString())
             return
 
@@ -6210,6 +6211,15 @@ proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[No
       return nilValue()
 
   interp.importedLibraries.add(lib)
+  let bindings = getLibraryBindings(lib)
+  if bindings != nil:
+    for key, val in bindings.entries:
+      let keyName = case key.kind
+        of vkString: key.strVal
+        of vkSymbol: key.symVal
+        else: ""
+      if keyName.len > 0 and not keyName.startsWith("__"):
+        interp.globals[][keyName] = val
   debug("Imported library, total imports: ", $interp.importedLibraries.len)
   return toValue(true)
 

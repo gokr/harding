@@ -1,12 +1,13 @@
 Reactive := Object derive: #()
 
-ReactiveObserverStack := nil
-
 Reactive class>>observerStack [
-  ReactiveObserverStack isNil ifTrue: [
-    ReactiveObserverStack := Array new
-  ]
-  ^ ReactiveObserverStack
+  | stack |
+  stack := Harding at: "ReactiveObserverStack" ifAbsent: [ nil ].
+  stack isNil ifTrue: [
+    stack := Array new.
+    Harding at: "ReactiveObserverStack" put: stack
+  ].
+  ^ stack
 ]
 
 Reactive class>>pushObserver: anObject [

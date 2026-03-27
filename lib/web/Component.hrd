@@ -18,9 +18,6 @@ Component>>renderSessionKey [
 
 Component>>renderFreshInto: buffer [
   | rendered errorOccurred |
-  # While rendering, this component becomes the active render context so
-  # tracked reads can be associated with the current RenderEntry.
-  Html pushRenderContext: self
   errorOccurred := false
 
   [
@@ -28,11 +25,9 @@ Component>>renderFreshInto: buffer [
     Html appendFragment: rendered to: buffer with: self
   ] on: Exception do: [:ex |
     errorOccurred := true
-    Html popRenderContext
     ex pass
   ]
 
-  errorOccurred ifFalse: [ Html popRenderContext ]
   ^ self
 ]
 

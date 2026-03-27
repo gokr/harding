@@ -1,46 +1,53 @@
-TodoApp := Object derivePublic: #(server router port).
+TodoApp := Object derivePublic: #(server router repository port).
 
-TodoAppCurrent := nil.
-TodoRepositoryCurrent := nil.
-MySqlTodoRepositoryCurrent := nil.
-UseMySql := false.
-TodoAppDaisyStylesheet := nil.
+Harding at: "TodoAppUseMySql" put: false.
 
 TodoApp class>>current [
-  ^ TodoAppCurrent
+  ^ Harding at: "TodoAppCurrent" ifAbsent: [ nil ]
 ].
 
 TodoApp class>>useMySql: aBoolean [
-  UseMySql := aBoolean
+  Harding at: "TodoAppUseMySql" put: aBoolean
 ].
 
 TodoApp class>>repository [
-  UseMySql ifTrue: [
-    MySqlTodoRepositoryCurrent isNil ifTrue: [
-      MySqlTodoRepositoryCurrent := MySqlTodoRepository new
+  | repo |
+  ((Harding at: "TodoAppUseMySql" ifAbsent: [ false ]) = true) ifTrue: [
+    repo := Harding at: "MySqlTodoRepositoryCurrent" ifAbsent: [ nil ].
+    repo isNil ifTrue: [
+      repo := MySqlTodoRepository new.
+      Harding at: "MySqlTodoRepositoryCurrent" put: repo
     ].
-    ^ MySqlTodoRepositoryCurrent
+    ^ repo
   ].
-  TodoRepositoryCurrent isNil ifTrue: [
-    TodoRepositoryCurrent := TodoRepository new
+  repo := Harding at: "TodoRepositoryCurrent" ifAbsent: [ nil ].
+  repo isNil ifTrue: [
+    repo := TodoRepository new.
+    Harding at: "TodoRepositoryCurrent" put: repo
   ].
-  ^ TodoRepositoryCurrent
+  ^ repo
 ].
 
 TodoApp class>>resetRepository [
+  | currentApp |
   # Clear both the shared repository and cached HTML so the next request
   # rebuilds from fresh tracked state.
-  TodoRepositoryCurrent := nil.
-  MySqlTodoRepositoryCurrent := nil.
+  Harding at: "TodoRepositoryCurrent" put: nil.
+  Harding at: "MySqlTodoRepositoryCurrent" put: nil.
   RenderCache current reset.
+  currentApp := self current.
+  currentApp notNil ifTrue: [ currentApp::repository := self repository ].
   ^ self repository
 ].
 
 TodoApp class>>prepareAssets [
-  TodoAppDaisyStylesheet isNil ifTrue: [
-    TodoAppDaisyStylesheet := Daisy stylesheet
+  | stylesheet |
+  stylesheet := Harding at: "TodoAppDaisyStylesheet" ifAbsent: [ nil ].
+  stylesheet isNil ifTrue: [
+    stylesheet := Daisy stylesheet.
+    Harding at: "TodoAppDaisyStylesheet" put: stylesheet
   ].
-  ^ TodoAppDaisyStylesheet
+  ^ stylesheet
 ].
 
 TodoApp class>>installRoutesOn: aRouter [
@@ -68,31 +75,31 @@ TodoApp class>>serve [
 
 TodoApp class>>serveForeverOn: aPort [
   | app |
-  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
+  self current notNil ifTrue: [ self current stop ].
   app := self basicNew.
-  TodoAppCurrent := app.
+  Harding at: "TodoAppCurrent" put: app.
   app serveForeverOn: aPort.
   ^ app
 ].
 
 TodoApp class>>startOn: aPort [
   | app |
-  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
+  self current notNil ifTrue: [ self current stop ].
   app := self basicNew.
   app startOn: aPort.
-  TodoAppCurrent := app.
+  Harding at: "TodoAppCurrent" put: app.
   ^ app
 ].
 
 TodoApp class>>stop [
-  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent stop ].
-  TodoAppCurrent := nil.
+  self current notNil ifTrue: [ self current stop ].
+  Harding at: "TodoAppCurrent" put: nil.
   ^ nil
 ].
 
 TodoApp class>>reloadRoutes [
-  TodoAppCurrent notNil ifTrue: [ TodoAppCurrent installRoutes ].
-  ^ TodoAppCurrent
+  self current notNil ifTrue: [ self current installRoutes ].
+  ^ self current
 ].
 
 TodoApp>>startOn: aPort [
@@ -112,6 +119,7 @@ TodoApp>>serveForeverOn: aPort [
 TodoApp>>bootOn: aPort with: aServerBlock [
   server isNil ifTrue: [ server := HttpServer new ].
   router isNil ifTrue: [ router := Router new ].
+  repository isNil ifTrue: [ repository := TodoApp repository ].
   port := aPort.
   self installRoutes.
   server router: router.
@@ -146,10 +154,7 @@ TodoApp>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
 ].
 
 TodoApp>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId triggerStats: shouldTriggerStats [
-  | repository panel page |
-  # The repository is shared at the class level so every request sees the
-  # same tracked state and the same cache invalidation graph.
-  repository := TodoApp repository.
+  | panel page |
   panel := TodoApp panelFor: repository routePrefix: aRoutePrefix panelId: aPanelId.
   shouldTriggerStats ifFalse: [ ^ req respondFragment: panel ].
 
@@ -160,7 +165,7 @@ TodoApp>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId trigger
 ].
 
 TodoApp>>home: req [
-  req respondHtml: ((TodoApp pageFor: TodoApp repository routePrefix: "" panelId: "todo-panel") renderString)
+  req respondHtml: ((TodoApp pageFor: repository routePrefix: "" panelId: "todo-panel") renderString)
 ].
 
 TodoApp>>panel: req [
@@ -168,20 +173,20 @@ TodoApp>>panel: req [
 ].
 
 TodoApp>>createTodo: req [
-  TodoApp repository addTitle: (req formParam: "title").
+  repository addTitle: (req formParam: "title").
   ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp>>toggleTodo: req [
-  TodoApp repository toggle: (req pathParam: "id").
+  repository toggle: (req pathParam: "id").
   ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp>>deleteTodo: req [
-  TodoApp repository delete: (req pathParam: "id").
+  repository delete: (req pathParam: "id").
   ^ self respondPanelTo: req routePrefix: "" panelId: "todo-panel" triggerStats: true
 ].
 
 TodoApp>>daisyStylesheet: req [
-  req respondCss: TodoAppDaisyStylesheet
+  req respondCss: (TodoApp prepareAssets)
 ].
