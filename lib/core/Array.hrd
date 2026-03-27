@@ -32,6 +32,21 @@ Array class>>new: size <primitive primitiveArrayNew: size>
 
 Array class>>new: size withAll: value <primitive primitiveArrayNew: size withAll: value>
 
+Array class>>with: first [
+    | array |
+    array := self new
+    array add: first
+    ^ array
+]
+
+Array class>>with: first with: second [
+    | array |
+    array := self new
+    array add: first
+    array add: second
+    ^ array
+]
+
 #====================================================================.
 # Array iteration.
 #====================================================================.

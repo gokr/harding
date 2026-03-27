@@ -6,12 +6,14 @@ ReactiveLibrary := Harding at: "ReactiveLibrary" ifAbsent: [
 ]
 ReactiveLibrary at: "__sourceDir" put: "lib/reactive"
 
-ReactiveLibrary isEmpty ifTrue: [
+(ReactiveLibrary at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   ReactiveLibrary load: "Reactive.hrd"
   ReactiveLibrary load: "TrackedSubject.hrd"
   ReactiveLibrary load: "TrackedValue.hrd"
   ReactiveLibrary load: "TrackedTable.hrd"
   ReactiveLibrary load: "TrackedList.hrd"
+
+  ReactiveLibrary at: "__initialized" put: true
 ]
 
 Harding import: ReactiveLibrary

@@ -94,6 +94,16 @@ lib/web/todo/
 - mutating requests also return a stats fragment with `hx-swap-oob="true"`
 - that updates the counters in place without a full page refresh
 
+On the server side this now goes through thin response helpers on
+`HttpRequest`:
+
+```harding
+req respondFragment: panel oob: page statsOobHtml
+```
+
+That keeps the Harding API close to HTMX's own concepts: one main fragment,
+plus optional out-of-band fragments piggy-backed in the same response.
+
 ## Routes
 
 | Route | Method | Purpose |

@@ -681,6 +681,20 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
 
       parentActivation = parentActivation.sender
 
+    # Check imported libraries before globals. This allows mutable library state
+    # like RenderCacheCurrent or TodoAppCurrent to live with the rest of the
+    # library bindings instead of being shadowed by a separate global.
+    for i in countdown(interp.importedLibraries.high, 0):
+      let lib = interp.importedLibraries[i]
+      if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
+        let bindings = getLibraryBindings(lib)
+        if bindings != nil:
+          let lookup = libraryBindingLookup(bindings.toValue(), name)
+          if lookup.found:
+            setTableValue(bindings, toValue(name), value)
+            debug("Imported library binding updated: ", name, " = ", value.toString())
+            return
+
     # Check if variable exists in globals - if so, update it there
     if name in interp.globals[]:
       # Check for protected global

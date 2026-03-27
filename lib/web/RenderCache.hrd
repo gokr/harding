@@ -2,6 +2,9 @@ RenderCache := Object derivePublic: #(entries entryStack)
 
 RenderCacheCurrent := nil
 
+# RenderCache stores HTML per logical component key. The entry stack also acts
+# as the active observer stack for tracked reads during rendering.
+
 RenderCache class>>current [
   RenderCacheCurrent isNil ifTrue: [ RenderCacheCurrent := self new ]
   ^ RenderCacheCurrent
@@ -38,6 +41,7 @@ RenderCache>>entryForKey: aKey session: aSessionKey [
 
 RenderCache>>pushEntry: anEntry [
   entryStack add: anEntry
+  # A RenderEntry observes TrackedValue/TrackedList reads while it is current.
   Reactive pushObserver: anEntry
   ^ anEntry
 ]

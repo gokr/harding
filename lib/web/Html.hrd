@@ -3,6 +3,9 @@ HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag ta
 HtmlTagBuilder := Object derivePublic: #(canvas tagName attributes isVoid isOpen)
 HtmlRawFragment := Object derivePublic: #(markup)
 
+# Html is now a direct renderer. It builds markup immediately, while higher
+# level caching belongs to Component/RenderCache rather than Html itself.
+
 HtmlRenderContextStack := nil
 
 Html class>>voidTags [
@@ -43,6 +46,9 @@ Html class>>canvas: aBlock [
 
 Html class>>render: aBlock context: anObject [
   | builder |
+  # Context remains available for callers that want to thread an explicit
+  # rendering object through helper code, even though the active todo path no
+  # longer relies on Html-specific dynamic placeholders.
   builder := HtmlCanvas new
   builder context: anObject
   ^ builder render: aBlock

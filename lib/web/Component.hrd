@@ -1,5 +1,9 @@
 Component := Object derive: #()
 
+# Components are request-local objects whose rendered HTML is cached in the
+# shared RenderCache. The component instance itself is disposable; the cache
+# entry is what survives across requests.
+
 Component>>render [
   self error: "Subclass must implement render"
 ]
@@ -14,6 +18,8 @@ Component>>renderSessionKey [
 
 Component>>renderFreshInto: buffer [
   | rendered errorOccurred |
+  # While rendering, this component becomes the active render context so
+  # tracked reads can be associated with the current RenderEntry.
   Html pushRenderContext: self
   errorOccurred := false
 
@@ -35,6 +41,8 @@ Component>>renderInto: buffer [
   key := self renderCacheKey
   key isNil ifTrue: [ ^ self renderFreshInto: buffer ]
 
+  # renderCacheKey identifies the fragment. renderSessionKey optionally
+  # partitions cached HTML when output differs per session or user.
   cache := RenderCache current
   entry := cache entryForKey: key session: self renderSessionKey
   parentEntry := cache currentEntry

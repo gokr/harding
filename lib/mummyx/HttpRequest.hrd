@@ -41,6 +41,35 @@ HttpRequest>>respondHtml: body [
        body: body
 ]
 
+HttpRequest>>htmlBodyFrom: fragment [
+  | buffer |
+  # Accept plain strings, Components, or any object that already knows how
+  # to render itself through Html appendFragment:to:with:.
+  buffer := String withCapacity: 256
+  Html appendFragment: fragment to: buffer with: nil
+  ^ buffer
+]
+
+HttpRequest>>htmlBodyFrom: fragment oobs: fragments [
+  | buffer |
+  buffer := String withCapacity: 256
+  Html appendFragment: fragment to: buffer with: nil
+  fragments do: [:each | Html appendFragment: each to: buffer with: nil ]
+  ^ buffer
+]
+
+HttpRequest>>respondFragment: fragment [
+  ^ self respondHtml: (self htmlBodyFrom: fragment)
+]
+
+HttpRequest>>respondFragment: fragment oob: oobFragment [
+  ^ self respondFragment: fragment oobs: (Array with: oobFragment)
+]
+
+HttpRequest>>respondFragment: fragment oobs: oobFragments [
+  ^ self respondHtml: (self htmlBodyFrom: fragment oobs: oobFragments)
+]
+
 HttpRequest>>respondCss: body [
   self respond: 200
        headers: #{"Content-Type" -> "text/css"}

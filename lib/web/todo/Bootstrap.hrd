@@ -6,12 +6,16 @@ WebTodo := Harding at: "WebTodoLibrary" ifAbsent: [
 ].
 WebTodo at: "__sourceDir" put: "lib/web/todo".
 
-WebTodo isEmpty ifTrue: [
+Harding load: "lib/reactive/Bootstrap.hrd".
+
+(WebTodo at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   WebTodo load: "TodoRepository.hrd".
   WebTodo load: "MySqlTodoRepository.hrd".
   WebTodo load: "TodoItem.hrd".
   WebTodo load: "TodoComponents.hrd".
   WebTodo load: "TodoApp.hrd".
+
+  WebTodo at: "__initialized" put: true.
 ].
 
 Harding import: WebTodo.

@@ -26,7 +26,7 @@ MummyX := Harding at: "MummyXLibrary" ifAbsent: [
 MummyX at: "__sourceDir" put: "lib/mummyx".
 
 # Load Harding-side class extensions.
-MummyX isEmpty ifTrue: [
+(MummyX at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   MummyX load: "HttpServer.hrd".
   MummyX load: "HttpRequest.hrd".
   MummyX load: "Router.hrd".
@@ -34,6 +34,12 @@ MummyX isEmpty ifTrue: [
   MummyX at: "HttpServer" put: HttpServer.
   MummyX at: "HttpRequest" put: HttpRequest.
   MummyX at: "Router" put: Router.
+
+  Harding at: "HttpServer" put: HttpServer.
+  Harding at: "HttpRequest" put: HttpRequest.
+  Harding at: "Router" put: Router.
+
+  MummyX at: "__initialized" put: true.
 ].
 
 Harding import: MummyX.

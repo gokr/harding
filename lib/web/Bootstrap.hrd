@@ -1,3 +1,6 @@
+Harding load: "lib/standard/Bootstrap.hrd"
+Harding load: "lib/reactive/Bootstrap.hrd"
+
 Web := Harding at: "WebLibrary" ifAbsent: [
   | lib |
   lib := Library name: "Web"
@@ -6,7 +9,7 @@ Web := Harding at: "WebLibrary" ifAbsent: [
 ]
 Web at: "__sourceDir" put: "lib/web"
 
-Web isEmpty ifTrue: [
+(Web at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   Web load: "RenderEntry.hrd"
   Web load: "RenderCache.hrd"
   Web load: "Component.hrd"
@@ -15,6 +18,8 @@ Web isEmpty ifTrue: [
   Web load: "Daisy.hrd"
   Web load: "DaisyComponents.hrd"
   Web load: "Basecoat.hrd"
+
+  Web at: "__initialized" put: true
 ]
 
 Harding import: Web

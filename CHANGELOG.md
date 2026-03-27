@@ -27,6 +27,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - JSON serialization benchmarks for nested Table/Array payloads and ordinary Harding object graphs.
 - JSON API server tutorial with complete example application demonstrating REST patterns.
 - MCP (Model Context Protocol) integration documentation for AI-assisted development workflows.
+- Thin HTMX response helpers on `HttpRequest` for main fragments plus out-of-band fragments (`respondFragment:`, `oob:`, `oobs:`).
+- `Array class>>with:` and `Array class>>with:with:` convenience constructors for small runtime-built collections.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).
@@ -45,6 +47,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `nimble test` now discovers and runs external library tests automatically.
 - MummyX now includes request logging for debugging HTTP handlers.
 - `lib/web/Html.hrd` now renders directly for the active todo path instead of routing through the older template-cache segment layer.
+- Web-related bootstraps now use explicit initialization guards instead of `isEmpty`, so setting `__sourceDir` no longer prevents library contents from loading.
+- The todo app now builds HTMX panel responses through `HttpRequest` fragment helpers instead of manually stitching response bodies.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.

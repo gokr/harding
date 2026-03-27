@@ -1,5 +1,11 @@
 Htmx := Object derive: #()
 
+# HTMX stays intentionally thin in Harding.
+#
+# The browser-side API is still expressed as normal hx-* attributes on tags,
+# and the server-side API should stay close to HTMX concepts like fragments,
+# out-of-band swaps, and HX-* response headers.
+
 Htmx class>>cdnUrl [
   ^ "https://unpkg.com/htmx.org@2.0.4"
 ]

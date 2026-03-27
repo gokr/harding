@@ -10,15 +10,17 @@ ProcessLibrary := Harding at: "ProcessLibrary" ifAbsent: [
 ]
 ProcessLibrary at: "__sourceDir" put: "lib/process"
 
-ProcessLibrary isEmpty ifTrue: [
+ProcessLibrary at: "Process" put: Process.
+ProcessLibrary at: "Scheduler" put: Scheduler.
+ProcessLibrary at: "Processor" put: Processor.
+ProcessLibrary at: "Monitor" put: Monitor.
+ProcessLibrary at: "Semaphore" put: Semaphore.
+ProcessLibrary at: "SharedQueue" put: SharedQueue.
+
+(ProcessLibrary at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   ProcessLibrary load: "Synchronizable.hrd"
 
-  ProcessLibrary at: "Process" put: Process
-  ProcessLibrary at: "Scheduler" put: Scheduler
-  ProcessLibrary at: "Processor" put: Processor
-  ProcessLibrary at: "Monitor" put: Monitor
-  ProcessLibrary at: "Semaphore" put: Semaphore
-  ProcessLibrary at: "SharedQueue" put: SharedQueue
+  ProcessLibrary at: "__initialized" put: true
 ]
 
 Harding import: ProcessLibrary

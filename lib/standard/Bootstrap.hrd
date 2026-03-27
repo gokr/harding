@@ -10,13 +10,15 @@ Standard := Harding at: "StandardLibrary" ifAbsent: [
 ]
 Standard at: "__sourceDir" put: "lib/standard"
 
-Standard isEmpty ifTrue: [
+(Standard at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   Standard load: "SortedCollection.hrd"
   Standard load: "Interval.hrd"
   Standard load: "Json.hrd"
   Standard load: "File.hrd"
   Standard load: "FileStream.hrd"
   Standard load: "TestCase.hrd"
+
+  Standard at: "__initialized" put: true
 ]
 
 Harding import: Standard

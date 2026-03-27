@@ -145,25 +145,18 @@ TodoApp>>panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
   ^ (TodoApp panelFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) renderString
 ].
 
-TodoApp>>panelAndStatsHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId [
-  | page |
-  page := TodoApp pageFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId.
-  ^ (self panelHtmlFor: aRepository routePrefix: aRoutePrefix panelId: aPanelId) , (page statsOobHtml)
-].
-
 TodoApp>>respondPanelTo: req routePrefix: aRoutePrefix panelId: aPanelId triggerStats: shouldTriggerStats [
-  | headers repository |
+  | repository panel page |
   # The repository is shared at the class level so every request sees the
   # same tracked state and the same cache invalidation graph.
   repository := TodoApp repository.
-  # HTMX swaps the panel target with the main fragment. For mutating requests
-  # we append an out-of-band stats fragment in the same response.
-  headers := #{"Content-Type" -> "text/html"}.
-  req respond: 200
-       headers: headers
-       body: (shouldTriggerStats
-         ifTrue: [ self panelAndStatsHtmlFor: repository routePrefix: aRoutePrefix panelId: aPanelId ]
-         ifFalse: [ self panelHtmlFor: repository routePrefix: aRoutePrefix panelId: aPanelId ])
+  panel := TodoApp panelFor: repository routePrefix: aRoutePrefix panelId: aPanelId.
+  shouldTriggerStats ifFalse: [ ^ req respondFragment: panel ].
+
+  # HTMX swaps the panel as the main response and updates the counters with an
+  # out-of-band fragment in the same round trip.
+  page := TodoApp pageFor: repository routePrefix: aRoutePrefix panelId: aPanelId.
+  ^ req respondFragment: panel oob: page statsOobHtml
 ].
 
 TodoApp>>home: req [
