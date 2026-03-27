@@ -749,6 +749,26 @@ Install the external `bitbarrel` library and rebuild Harding.
 - **BarrelTable** - Persistent hash-based key-value storage
 - **BarrelSortedTable** - Persistent ordered storage with range queries
 
+### SQLite (Optional)
+
+Install the external `sqlite` library and rebuild Harding.
+
+```bash
+./harding lib install sqlite
+nimble harding
+```
+
+```smalltalk
+conn := SqliteConnection open: ":memory:".
+conn execute: "CREATE TABLE players (name TEXT, score INTEGER)".
+conn execute: "INSERT INTO players (name, score) VALUES ('Ada', 1200)".
+result := conn query: "SELECT name, score FROM players".
+row := result next.
+((row at: 0) , " => " , (row at: 1)) println.
+result close.
+conn close.
+```
+
 ---
 
 ## Type Checking Pattern

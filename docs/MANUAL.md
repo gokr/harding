@@ -1279,6 +1279,7 @@ Harding includes a library management system for installing third-party packages
 harding lib list           # List available libraries from registry
 harding lib fetch          # Refresh metadata from remote repositories
 harding lib info mysql     # Show detailed info about a library
+harding lib info sqlite    # Show detailed info about SQLite support
 ```
 
 #### Installing Libraries
@@ -1286,6 +1287,7 @@ harding lib info mysql     # Show detailed info about a library
 ```bash
 harding lib install mysql           # Install latest version
 harding lib install mysql@1.0.0    # Install specific version
+harding lib install sqlite         # Install SQLite library
 ```
 
 Libraries are installed to the `external/` directory and compiled into Harding on the next build.
@@ -1295,8 +1297,10 @@ Libraries are installed to the `external/` directory and compiled into Harding o
 ```bash
 harding lib installed      # List installed libraries
 harding lib update mysql   # Update a specific library
+harding lib update sqlite  # Update the SQLite library
 harding lib update --all   # Update all libraries
 harding lib remove mysql   # Remove a library
+harding lib remove sqlite  # Remove the SQLite library
 ```
 
 #### Building with External Libraries
@@ -1305,6 +1309,22 @@ After installing or updating libraries:
 
 ```bash
 nimble harding             # Rebuild with new libraries
+```
+
+SQLite is a good fit for local storage and tests because it works with file
+paths and `":memory:"` databases instead of a separate database server.
+
+```smalltalk
+conn := SqliteConnection open: ":memory:".
+conn execute: "CREATE TABLE players (name TEXT, score INTEGER)".
+conn execute: "INSERT INTO players (name, score) VALUES ('Ada', 1200)".
+
+result := conn query: "SELECT name, score FROM players ORDER BY score DESC".
+row := result next.
+((row at: 0) , " => " , (row at: 1)) println.
+
+result close.
+conn close.
 ```
 
 #### Creating External Libraries
