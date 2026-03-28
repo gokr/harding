@@ -6,18 +6,18 @@
 "=== Simple Blocks ===" println
 
 block1 := [ 1 + 2 ]
-("Block value: " , (block1 value asString)) println
+("Block value: " & (block1 value asString)) println
 
 block2 := [
   | result |
   result := 5
   result + result
 ]
-("Double 5: " , (block2 value asString)) println
+("Double 5: " & (block2 value asString)) println
 
 block3 := [ :a :b | a + b ]
 SumResult := block3 value: 3 value: 4
-("Sum 3 + 4: " , (SumResult asString)) println
+("Sum 3 + 4: " & (SumResult asString)) println
 
 "" println
 "=== Blocks with Temporaries ===" println
@@ -30,7 +30,7 @@ compute := [ :n |
 ]
 
 ComputeResult := compute value: 5
-("Compute with 5: " , (ComputeResult asString)) println
+("Compute with 5: " & (ComputeResult asString)) println
 
 "" println
 "=== Closures Capturing Variables ===" println
@@ -39,7 +39,7 @@ Factor := 10
 Multiplier := [ :n | n + n + Factor ]
 
 MultResult := Multiplier value: 5
-("10 + 10 + 5 = " , (MultResult asString)) println
+("10 + 10 + 5 = " & (MultResult asString)) println
 
 "" println
 "=== Returning from Blocks ===" println
@@ -51,5 +51,5 @@ findFirstPositive := [ :arr |
   ^ nil
 ]
 
-result := findFirstPositive value: #(-5 -3 7 2 8)
-("First positive: " , (result asString)) println
+result := findFirstPositive value: #(-5, -3, 7, 2, 8)
+("First positive: " & (result asString)) println

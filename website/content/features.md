@@ -50,7 +50,7 @@ Create classes dynamically with slots and methods:
 | p |
 
 # Create a new class with two slots
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 
 # Add methods using >> syntax and direct slot access
 Point >> x: val [ x := val ]
@@ -88,7 +88,7 @@ ColoredPoint addSuperclass: Printable
 
 ```harding
 # Create a class with auto-generated getters and setters
-Person := Object deriveWithAccessors: #(name age)
+Person := Object deriveWithAccessors: #(name, age)
 p := Person new
 p name: "Alice"    # Auto-generated setter
 p age: 30
@@ -99,8 +99,8 @@ p name             # Auto-generated getter - returns "Alice"
 
 ```harding
 # Generate getters for both, setter only for balance
-Account := Object derive: #(balance owner)
-                       getters: #(balance owner)
+Account := Object derive: #(balance, owner)
+                       getters: #(balance, owner)
                        setters: #(balance)
 ```
 
@@ -136,7 +136,7 @@ Comparable >> between: min and: max [
 ]
 
 # Add mixin to any class
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 Point addSuperclass: Comparable
 Point >> compareTo: other [
     ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
@@ -312,7 +312,7 @@ When using multiple inheritance, specify which parent's method to call:
 # Multiple inheritance scenario
 A := Object derive: #() methods: #{ #foo -> [ ^ 'A' ] }
 B := Object derive: #() methods: #{ #bar -> [ ^ 'B' ] }
-C := Object derive: #() parents: #(A B)
+C := Object derive: #() parents: #(A, B)
 
 # In C, call specific parent's implementation
 C>>foo [
@@ -332,7 +332,7 @@ Define methods on the class itself (analogous to static methods):
 
 ```harding
 # Instance method
-Person>>greet [ ^ "Hello, I am " + name ]
+Person>>greet [ ^ "Hello, I am " & name ]
 
 # Class-side method syntax using "class>>"
 Person class>>newNamed: n aged: a [
@@ -436,7 +436,7 @@ content := File readAll: "README.md"
 File write: content to: "README.copy.md"
 
 # Process info and stdio
-System stdout writeline: ("args: " , (System arguments size) asString)
+System stdout writeline: ("args: " & (System arguments size) asString)
 ```
 
 ### Green Threads (Processes)
@@ -537,11 +537,11 @@ harding> 3 + 4
 harding> "Hello, World!" println
 Hello, World!
 
-harding> numbers := #(1 2 3 4 5)
-#(1 2 3 4 5)
+harding> numbers := #(1, 2, 3, 4, 5)
+#(1, 2, 3, 4, 5)
 
 harding> numbers collect: [:n | n * n]
-#(1 4 9 16 25)
+#(1, 4, 9, 16, 25)
 ```
 
 ### File-Based Development
@@ -596,7 +596,7 @@ Full IDE support for `.hrd` files:
 - `size`, `at:`, `println`
 
 **Collections**
-- **Array** - Ordered collection `#(1 2 3)` (0-based indexing)
+- **Array** - Ordered collection `#(1, 2, 3)` (0-based indexing)
 - **Table** - Dictionary `#{"key" -> "value"}`
 - **Set** - Unordered unique-element collection with union, intersection, difference
 - **Interval** - Numeric range: `1 to: 10`, `1 to: 10 by: 2`
@@ -607,7 +607,7 @@ Full IDE support for `.hrd` files:
 
 ```harding
 # Array literal
-numbers := #(1 2 3 4 5)
+numbers := #(1, 2, 3, 4, 5)
 
 # Table literal
 scores := #{"Alice" -> 95, "Bob" -> 87}

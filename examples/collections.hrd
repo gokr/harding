@@ -10,15 +10,15 @@ arr add: 10
 arr add: 20
 arr add: 30
 
-("Array size: " , (arr size asString)) println
-("First element: " , (arr at: 1) asString) println
-("Last element: " , (arr last) asString) println
+("Array size: " & (arr size asString)) println
+("First element: " & (arr at: 1) asString) println
+("Last element: " & (arr last) asString) println
 
 "" println
 "=== Array Literals ===" println
 
-numbers := #(1 2 3 4 5)
-("Array literal: " , numbers asString) println
+numbers := #(1, 2, 3, 4, 5)
+("Array literal: " & numbers asString) println
 
 "" println
 "=== Array Iteration ===" println
@@ -31,13 +31,13 @@ numbers do: [ :n | n printString print ]
 "=== Array Methods ===" println
 
 squared := numbers collect: [ :n | n * n ]
-("Squared: " , squared asString) println
+("Squared: " & squared asString) println
 
 evens := numbers select: [ :n | n even ]
-("Evens: " , evens asString) println
+("Evens: " & evens asString) println
 
 sum := numbers inject: 0 into: [ :acc :n | acc + n ]
-("Sum: " , sum asString) println
+("Sum: " & sum asString) println
 
 "" println
 "=== Tables (Dictionaries) ===" println
@@ -47,8 +47,8 @@ table at: "name" put: "Alice"
 table at: "age" put: 30
 table at: "city" put: "Wonderland"
 
-("Name: " , (table at: "name")) println
-("Age: " , (table at: "age") asString) println
+("Name: " & (table at: "name")) println
+("Age: " & (table at: "age") asString) println
 
 "" println
 "=== Table Keys ===" println

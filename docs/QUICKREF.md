@@ -276,7 +276,7 @@ If no `^`, a method returns the last evaluated expression.
 
 ```smalltalk
 # Unary method
-Person>>greet [ ^ "Hello, " + name ]
+Person>>greet [ ^ "Hello, " & name ]
 
 # One parameter
 Person>>name: aName [ name := aName ]
@@ -293,7 +293,7 @@ Point>>moveX: dx y: dy [
 
 ```smalltalk
 Person extend: [
-  self >> greet [ ^ "Hello, " + name ].
+  self >> greet [ ^ "Hello, " & name ].
   self >> name: aName [ name := aName ].
   self >> haveBirthday [ age := age + 1 ]
 ]
@@ -317,7 +317,7 @@ Person extendClass: [
 
 ```smalltalk
 Person := Object derive: #(name, age) methods: [
-  self >> greet [ ^ "Hello, I am " + name ].
+  self >> greet [ ^ "Hello, I am " & name ].
   self >> haveBirthday [ age := age + 1 ]
 ]
 ```

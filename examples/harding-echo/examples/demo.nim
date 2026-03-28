@@ -50,7 +50,7 @@ proc main() =
   echo "Example 3: Counter"
   (_, err) = interp.evalStatements("""
     count := Echo count
-    Stdout writeline: ("Echo called " , count asString , " times")
+    Stdout writeline: ("Echo called " & count asString & " times")
     
     Echo reset
     Stdout writeline: "Counter reset"
@@ -58,7 +58,7 @@ proc main() =
     Echo echo: "One"
     Echo echo: "Two"
     count := Echo count
-    Stdout writeline: ("Now called " , count asString , " times")
+    Stdout writeline: ("Now called " & count asString & " times")
   """)
   if err.len > 0:
     echo "Error: ", err

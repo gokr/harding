@@ -17,7 +17,7 @@ tagline: Smalltalk feeling, modern tooling
 ```harding
 # Define a Point class with x and y slots
 # auto generate setter and getter methods
-Point := Object deriveWithAccessors: #(x y)
+Point := Object deriveWithAccessors: #(x, y)
 
 # Add a method to the class using selector:put:
 # and a block representing the code

@@ -14,12 +14,12 @@ Stdout writeline: "=== MyApp (Pattern 2: Granite) ==="
 Stdout writeline: ""
 
 (args size > 0) ifTrue: [
-  Stdout writeline: ("Hello, " , (args at: 0) , "!")
+  Stdout writeline: ("Hello, " & (args at: 0) & "!")
   
   (args size > 1) ifTrue: [
     Stdout writeline: "Additional arguments:"
     1 to: (args size - 1) do: [:i |
-      Stdout writeline: (("  " , i asString , ". ") , (args at: i))
+      Stdout writeline: (("  " & i asString & ". ") & (args at: i))
     ]
   ]
 ] ifFalse: [

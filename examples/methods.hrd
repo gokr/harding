@@ -37,13 +37,13 @@ calc := Calculator new
 "=== Calling Methods ===" println
 
 result1 := calc add: 3 and: 4
-("3 + 4 = " , result1 asString) println
+("3 + 4 = " & result1 asString) println
 
 result2 := calc subtract: 5 from: 20
-("20 - 5 = " , result2 asString) println
+("20 - 5 = " & result2 asString) println
 
 result3 := calc factorial: 5
-("5! = " , result3 asString) println
+("5! = " & result3 asString) println
 
 "" println
 "=== Method Definition with >> ===" println
@@ -51,10 +51,10 @@ result3 := calc factorial: 5
 GreeterClass := Object derivePublic: #(greeting)
 
 GreeterClass>>greet: name [
-  ^ greeting , ", " , name , "!"
+  ^ greeting & ", " & name & "!"
 ]
 
 Greeter := GreeterClass new
 Greeter::greeting := "Hello"
 
-("Greeting: " , (Greeter greet: "World")) println
+("Greeting: " & (Greeter greet: "World")) println

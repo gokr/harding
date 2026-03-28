@@ -26,15 +26,15 @@ BitBarrelAvailable ifFalse: [
     System stderr writeline: "Install with ./harding lib install bitbarrel and rebuild with nimble harding_mummyx."
 ]
 
-Todo := (Object derivePublic: #(id title completed createdAt))
-    jsonFieldOrder: #(id title completed createdAt)
+Todo := (Object derivePublic: #(id, title, completed, createdAt))
+    jsonFieldOrder: #(id, title, completed, createdAt)
 
-ErrorResponse := (Object derivePublic: #(error message status))
-    jsonFieldOrder: #(error message status)
+ErrorResponse := (Object derivePublic: #(error, message, status))
+    jsonFieldOrder: #(error, message, status)
 
 CreateTodoRequest := Object derivePublic: #(title)
-UpdateTodoRequest := (Object derivePublic: #(title completed))
-    jsonOmitNil: #(title completed)
+UpdateTodoRequest := (Object derivePublic: #(title, completed))
+    jsonOmitNil: #(title, completed)
 
 Todo class>>openApiSchema [
     ^ #{
@@ -45,7 +45,7 @@ Todo class>>openApiSchema [
             "completed" -> #{"type" -> "boolean"},
             "createdAt" -> #{"type" -> "integer"}
         },
-        "required" -> #("id" "title" "completed" "createdAt")
+        "required" -> #("id", "title", "completed", "createdAt")
     }
 ]
 
@@ -57,7 +57,7 @@ ErrorResponse class>>openApiSchema [
             "message" -> #{"type" -> "string"},
             "status" -> #{"type" -> "integer"}
         },
-        "required" -> #("error" "message" "status")
+        "required" -> #("error", "message", "status")
     }
 ]
 
@@ -81,7 +81,7 @@ UpdateTodoRequest class>>openApiSchema [
     }
 ]
 
-TodoRepository := Object derivePublic: #(todos meta)
+TodoRepository := Object derivePublic: #(todos, meta)
 
 TodoRepository>>openDefault [
     todos := BarrelTable create: "api_todos.todos"
@@ -169,7 +169,7 @@ TodoRepository>>deleteId: id [
     ^ true
 ]
 
-TodoApiApp := Object derivePublic: #(server router repository)
+TodoApiApp := Object derivePublic: #(server, router, repository)
 
 TodoApiApp>>initialize [
     server := HttpServer new
@@ -301,7 +301,7 @@ TodoApiApp>>handleDeleteTodo: req [
 ]
 
 TodoApiApp>>schemaRef: schemaName [
-    ^ #{"$ref" -> ("#/components/schemas/" , schemaName)}
+    ^ #{"$ref" -> ("#/components/schemas/" & schemaName)}
 ]
 
 TodoApiApp>>openApiDocument [

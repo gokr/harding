@@ -19,7 +19,7 @@ x := 10
 
 count := 0
 [ count < 5 ] whileTrue: [
-  ("Count: " , count asString) println
+  ("Count: " & count asString) println
   count := count + 1
 ]
 
@@ -32,7 +32,7 @@ count := 0
 "=== To-Do Loop ===" println
 
 1 to: 5 do: [ :i |
-  ("Number: " , i asString) println
+  ("Number: " & i asString) println
 ]
 
 "" println
@@ -41,8 +41,8 @@ count := 0
 trueValue := true
 falseValue := false
 
-("true and: [false] = " , (trueValue and: [ false ]) asString) println
-("true or: [false] = " , (trueValue or: [ false ]) asString) println
-("true & false = " , (trueValue & falseValue) asString) println
-("true | false = " , (trueValue | falseValue) asString) println
-("true not = " , (trueValue not) asString) println
+("true and: [false] = " & (trueValue and: [ false ]) asString) println
+("true or: [false] = " & (trueValue or: [ false ]) asString) println
+("true & false = " & (trueValue & falseValue) asString) println
+("true | false = " & (trueValue | falseValue) asString) println
+("true not = " & (trueValue not) asString) println

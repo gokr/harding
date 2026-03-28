@@ -44,7 +44,7 @@ math := Math new
 n := 0
 [ n <= 10 ] whileTrue: [
   fibResult := math fibonacci: n
-  ("fib(" , (n asString) , ") = " , (fibResult asString)) println
+  ("fib(" & (n asString) & ") = " & (fibResult asString)) println
   n := n + 1
 ]
 

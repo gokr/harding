@@ -9,11 +9,11 @@
 args := System arguments
 
 Stdout writeline: "Welcome to MyApp!"
-Stdout writeline: ("Received " , (args size) asString , " arguments:")
+Stdout writeline: ("Received " & (args size) asString & " arguments:")
 
 # Process arguments.
 args do: [:arg :index |
-  Stdout writeline: ((index + 1) asString , ". " , arg)
+  Stdout writeline: ((index + 1) asString & ". " & arg)
 ]
 
 # Example: Simple calculator if arguments provided.
@@ -29,7 +29,7 @@ args do: [:arg :index |
               ifFalse: [nil]]]]
   
   result ifNotNil: [
-    Stdout writeline: ("Result: " , result asString)
+    Stdout writeline: ("Result: " & result asString)
   ] ifNil: [
     Stdout writeline: "Unknown operation. Use: add, sub, mul, div"
   ]

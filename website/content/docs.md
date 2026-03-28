@@ -85,7 +85,7 @@ Start here if you know Smalltalk:
 - Optional periods - newlines also separate statements
 - Hash-with-space `# <- a space` for comments (not double quotes)
 - Double quotes for strings (not single quotes)
-- Class creation: `Point := Object derive: #(x y)`
+- Class creation: `Point := Object derive: #(x, y)`
 - File-based, git-friendly source
 
 Additional resources:

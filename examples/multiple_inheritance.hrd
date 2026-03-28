@@ -25,7 +25,7 @@ Animal>>speak [
 
 Pet := Object derivePublic: #(owner)
 Pet>>greet [
-  ^ "Hello, " , owner , "!"
+  ^ "Hello, " & owner & "!"
 ]
 
 Pet>>speak [
@@ -52,10 +52,10 @@ MyDog::breed := "Golden Retriever"
 "" println
 "=== Testing inherited methods ===" println
 
-("Name: " , MyDog::name) println
-("Owner: " , MyDog::owner) println
-("Breed: " , MyDog::breed) println
+("Name: " & MyDog::name) println
+("Owner: " & MyDog::owner) println
+("Breed: " & MyDog::breed) println
 
 "" println
-("Speak: " , MyDog speak) println
-("Greet: " , MyDog greet) println
+("Speak: " & MyDog speak) println
+("Greet: " & MyDog greet) println

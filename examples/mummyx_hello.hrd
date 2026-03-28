@@ -21,7 +21,7 @@ Router get: "/api/hello" do: [:req |
 Router get: "/api/greet/@name" do: [:req |
   | name |
   name := req pathParam: "name"
-  req respondJson: "{\"greeting\": \"Hello, " , name , "!\"}"
+  req respondJson: "{\"greeting\": \"Hello, " & name & "!\"}"
 ]
 
 Router post: "/api/echo" do: [:req |
@@ -43,7 +43,7 @@ Router get: "/api/yield-work" do: [:req |
 
   observed := MaxConcurrentRequests
   ActiveRequests := ActiveRequests - 1
-  req respondJson: "{\"iterations\": 500, \"maxConcurrent\": " , observed printString , "}"
+  req respondJson: "{\"iterations\": 500, \"maxConcurrent\": " & observed printString & "}"
 ]
 
 Server router: Router

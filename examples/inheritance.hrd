@@ -24,11 +24,11 @@ Animal>>initialize [
 ]
 
 Animal>>speak [
-  ^ name , " makes a sound"
+  ^ name & " makes a sound"
 ]
 
 Animal>>describe [
-  ^ "Animal: " , name
+  ^ "Animal: " & name
 ]
 
 # Define subclass with super support.
@@ -40,11 +40,11 @@ Dog>>initialize [
 ]
 
 Dog>>speak [
-  ^ name , " barks"
+  ^ name & " barks"
 ]
 
 Dog>>describe [
-  ^ super describe , " (Breed: " , breed , ")"
+  ^ super describe & " (Breed: " & breed & ")"
 ]
 
 "" println
@@ -53,23 +53,23 @@ Dog>>describe [
 animal := Animal new initialize
 animal::name := "Generic Animal"
 
-("Animal speak: " , animal speak) println
-("Animal describe: " , animal describe) println
+("Animal speak: " & animal speak) println
+("Animal describe: " & animal describe) println
 
 dog := Dog new initialize
 dog::name := "Buddy"
 dog::breed := "Labrador"
 
 "" println
-("Dog speak: " , dog speak) println
-("Dog describe: " , dog describe) println
+("Dog speak: " & dog speak) println
+("Dog describe: " & dog describe) println
 
 "" println
 "=== Checking Inheritance ===" println
 
-("Dog is kind of Animal: " , (dog isKindOf: Animal) asString) println
-("Dog is kind of Object: " , (dog isKindOf: Object) asString) println
-("Animal is kind of Dog: " , (animal isKindOf: Dog) asString) println
+("Dog is kind of Animal: " & (dog isKindOf: Animal) asString) println
+("Dog is kind of Object: " & (dog isKindOf: Object) asString) println
+("Animal is kind of Dog: " & (animal isKindOf: Dog) asString) println
 
 "" println
 "=== Inheritance Chain ===" println
@@ -87,7 +87,7 @@ Cat>>speak [
 ]
 
 Cat>>describe [
-  ^ super describe , " (Color: " , color , ")"
+  ^ super describe & " (Color: " & color & ")"
 ]
 
 # Create instances.
@@ -96,10 +96,10 @@ myCat::name := "Whiskers"
 myCat::color := "orange"
 
 "" println
-("Cat name: " , myCat::name) println
-("Cat color: " , myCat::color) println
-("Cat speaks: " , myCat speak) println
-("Cat describes: " , myCat describe) println
+("Cat name: " & myCat::name) println
+("Cat color: " & myCat::color) println
+("Cat speaks: " & myCat speak) println
+("Cat describes: " & myCat describe) println
 
 "" println
 "=== Method Lookup ===" println

@@ -8,20 +8,20 @@
 x := 42
 y := "Hello"
 
-("x = " , x asString) println
-("y = " , y) println
+("x = " & x asString) println
+("y = " & y) println
 
 "" println
 "=== Variable Reassignment ===" println
 
 counter := 0
-("Counter: " , counter asString) println
+("Counter: " & counter asString) println
 
 counter := counter + 1
-("Counter after increment: " , counter asString) println
+("Counter after increment: " & counter asString) println
 
 counter := counter + 1
-("Counter after increments: " , counter asString) println
+("Counter after increments: " & counter asString) println
 
 "" println
 "=== Multiple Variables ===" println
@@ -33,5 +33,5 @@ c := 30
 sum := a + b + c
 product := a * b * c
 
-("Sum: " , sum asString) println
-("Product: " , product asString) println
+("Sum: " & sum asString) println
+("Product: " & product asString) println

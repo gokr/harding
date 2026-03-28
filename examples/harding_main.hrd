@@ -51,8 +51,8 @@ Harding main: [
     MyDog::owner := "Alice"
     MyDog::breed := "Golden Retriever"
     
-    ("Name: " , MyDog::name) println
-    ("Owner: " , MyDog::owner) println
-    ("Breed: " , MyDog::breed) println
-    ("Greet: " , MyDog greet) println
+    ("Name: " & MyDog::name) println
+    ("Owner: " & MyDog::owner) println
+    ("Breed: " & MyDog::breed) println
+    ("Greet: " & MyDog greet) println
 ]

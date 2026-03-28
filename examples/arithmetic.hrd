@@ -5,27 +5,27 @@
 
 "=== Basic Arithmetic ===" println
 
-("3 + 4 = " , (3 + 4) asString) println
-("10 - 3 = " , (10 - 3) asString) println
-("5 * 6 = " , (5 * 6) asString) println
-("20 / 4 = " , (20 / 4) asString) println
-("17 // 5 = " , (17 // 5) asString) println
-("17 \\ 5 = " , (17 \\ 5) asString) println
+("3 + 4 = " & (3 + 4) asString) println
+("10 - 3 = " & (10 - 3) asString) println
+("5 * 6 = " & (5 * 6) asString) println
+("20 / 4 = " & (20 / 4) asString) println
+("17 // 5 = " & (17 // 5) asString) println
+("17 \\ 5 = " & (17 \\ 5) asString) println
 
 "" println
 "=== Comparisons ===" println
 
-("10 > 5: " , (10 > 5) asString) println
-("3 < 7: " , (3 < 7) asString) println
-("5 = 5: " , (5 = 5) asString) println
-("5 == 5: " , (5 == 5) asString) println
-("5 ~= 6: " , (5 ~= 6) asString) println
+("10 > 5: " & (10 > 5) asString) println
+("3 < 7: " & (3 < 7) asString) println
+("5 = 5: " & (5 = 5) asString) println
+("5 == 5: " & (5 == 5) asString) println
+("5 ~= 6: " & (5 ~= 6) asString) println
 
 "" println
 "=== Number Methods ===" println
 
-("10 abs = " , (10 abs) asString) println
-("-5 abs = " , (-5 abs) asString) println
-("4 even = " , (4 even) asString) println
-("5 odd = " , (5 odd) asString) println
-("5 negated = " , (5 negated) asString) println
+("10 abs = " & (10 abs) asString) println
+("-5 abs = " & (-5 abs) asString) println
+("4 even = " & (4 even) asString) println
+("5 odd = " & (5 odd) asString) println
+("5 negated = " & (5 negated) asString) println

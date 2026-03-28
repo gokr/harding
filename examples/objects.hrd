@@ -5,7 +5,7 @@
 
 "=== Creating a Class with Slots ===" println
 
-Person := Object derivePublic: #(name age)
+Person := Object derivePublic: #(name, age)
 # Person is used by the example suite to demonstrate Harding usage.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -31,12 +31,12 @@ person2 := Person new
 person2::name := "Bob"
 person2::age := 25
 
-("Person 1: " , (person1::name) , ", age: " , (person1::age) asString) println
-("Person 2: " , (person2::name) , ", age: " , (person2::age) asString) println
+("Person 1: " & (person1::name) & ", age: " & (person1::age) asString) println
+("Person 2: " & (person2::name) & ", age: " & (person2::age) asString) println
 
 "" println
 "=== Reading Properties ===" println
 
-("person1 name: " , person1::name) println
-("person1 age as string: " , (person1::age asString)) println
-("person2 name: " , person2::name) println
+("person1 name: " & person1::name) println
+("person1 age as string: " & (person1::age asString)) println
+("person2 name: " & person2::name) println

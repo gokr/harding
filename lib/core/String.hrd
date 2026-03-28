@@ -56,6 +56,14 @@ String>>split: delimiter <primitive primitiveSplit: delimiter>
 String>>asInteger <primitive primitiveAsInteger>
   # Parse as integer
 
+String>>asFloat <primitive primitiveAsFloat>
+  # Parse as float
+
+String>>asNumber [
+  # Parse as number (integer or float)
+  ^ self asInteger ifNil: [ self asFloat ]
+]
+
 String>>asSymbol <primitive primitiveAsSymbol>
   # Convert to symbol
 

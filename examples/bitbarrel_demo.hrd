@@ -21,8 +21,8 @@ users at: "user:2" put: "Bob"
 users at: "user:3" put: "Charlie"
 
 # Retrieve data.
-Transcript showCr: ("User 1: " , (users at: "user:1"))
-Transcript showCr: ("User 2: " , (users at: "user:2"))
+Transcript showCr: ("User 1: " & (users at: "user:1"))
+Transcript showCr: ("User 2: " & (users at: "user:2"))
 
 # Check if key exists.
 (users includesKey: "user:1") ifTrue: [
@@ -32,11 +32,11 @@ Transcript showCr: ("User 2: " , (users at: "user:2"))
 # Iterate over all entries.
 Transcript showCr: "All users:"
 users do: [:key :value |
-    Transcript showCr: (("  " , key) , " => " , value)
+    Transcript showCr: (("  " & key) & " => " & value)
 ]
 
 # Get all keys.
-Transcript showCr: ("Keys: " , (users keys printString))
+Transcript showCr: ("Keys: " & (users keys printString))
 
 #============================================================.
 # Example 2: BarrelSortedTable (Ordered storage).
@@ -53,15 +53,15 @@ logs at: "2024-01-02:001" put: "Backup completed"
 
 # Range query - get logs from Jan 1.
 jan1Logs := logs rangeFrom: "2024-01-01:" to: "2024-01-02:"
-Transcript showCr: ("Jan 1 logs: " , (jan1Logs printString))
+Transcript showCr: ("Jan 1 logs: " & (jan1Logs printString))
 
 # Prefix query - get all logs from Jan 1.
 jan1Logs2 := logs prefix: "2024-01-01:"
-Transcript showCr: ("Jan 1 logs (prefix): " , (jan1Logs2 printString))
+Transcript showCr: ("Jan 1 logs (prefix): " & (jan1Logs2 printString))
 
 # Get first and last entries.
-Transcript showCr: ("First log: " , (logs first printString))
-Transcript showCr: ("Last log: " , (logs last printString))
+Transcript showCr: ("First log: " & (logs first printString))
+Transcript showCr: ("Last log: " & (logs last printString))
 
 #============================================================.
 # Example 3: Using select: for filtering.
@@ -71,7 +71,7 @@ Transcript showCr: ("Last log: " , (logs last printString))
 aUsers := users select: [:key :value |
     (value at: 1) = "A"
 ]
-Transcript showCr: ("A users: " , (aUsers printString))
+Transcript showCr: ("A users: " & (aUsers printString))
 
 #============================================================.
 # Cleanup (optional).
