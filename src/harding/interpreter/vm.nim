@@ -8550,58 +8550,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Pop the receiver for processing (we'll push results back)
     discard interp.popValue()
 
-    # Save original receiver and set cascade receiver
-    let savedReceiver = interp.currentReceiver
-
-    # Convert receiverVal to Instance
-    var receiver: Instance
-    case receiverVal.kind
-    of vkInstance:
-      receiver = receiverVal.instVal
-    of vkInt:
-      receiver = newIntInstance(integerClass, receiverVal.intVal)
-    of vkFloat:
-      receiver = newFloatInstance(floatClass, receiverVal.floatVal)
-    of vkString:
-      receiver = newStringInstance(stringClass, receiverVal.strVal)
-    of vkArray:
-      receiver = newArrayInstance(arrayClass, receiverVal.arrayVal)
-    of vkTable:
-      receiver = newTableInstance(tableClass, receiverVal.tableVal)
-    of vkBool:
-      let p = cast[pointer](new(bool))
-      cast[ptr bool](p)[] = receiverVal.boolVal
-      receiver = Instance(
-        kind: ikObject,
-        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
-        slots: @[],
-        isNimProxy: true,
-        nimValue: p
-      )
-    of vkBlock:
-      # Register BlockNode to keep it alive for ARC
-      registerBlockNode(receiverVal.blockVal)
-      receiver = Instance(
-        kind: ikObject,
-        class: blockClass,
-        slots: @[],
-        isNimProxy: false,
-        nimValue: cast[pointer](receiverVal.blockVal)
-      )
-    of vkClass:
-      receiver = Instance(
-        kind: ikObject,
-        class: objectClass,
-        slots: @[],
-        isNimProxy: false,
-        nimValue: cast[pointer](receiverVal.classVal)
-      )
-    else:
-      raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)
-
-    # Set current receiver for message sends
-    interp.currentReceiver = receiver
-
     # For now, handle single message (push result) or loop for all messages
     # To properly handle multiple messages without recursion, we need to:
     # 1. Push frames for each message in reverse order
@@ -8615,9 +8563,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushValue(receiverVal)  # Push receiver back for the message send
     else:
       # Multiple messages - push them in reverse order with cascade continuation
-      # Push a final frame to restore receiver and keep only last result
-      interp.pushWorkFrame(newRestoreReceiverFrame(savedReceiver))
-
       # Push all message frames in reverse order
       for i in countdown(messages.len - 1, 0):
         let msg = cast[MessageNode](messages[i])
@@ -8662,55 +8607,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
   of wfCascadeMessage, wfCascadeMessageDiscard:
     # Send a message in a cascade - receiver is stored in cascadeReceiver
     let receiverVal = frame.cascadeReceiver
-
-    # Convert receiver to Instance
-    var receiver: Instance
-    case receiverVal.kind
-    of vkInstance:
-      receiver = receiverVal.instVal
-    of vkInt:
-      receiver = newIntInstance(integerClass, receiverVal.intVal)
-    of vkFloat:
-      receiver = newFloatInstance(floatClass, receiverVal.floatVal)
-    of vkString:
-      receiver = newStringInstance(stringClass, receiverVal.strVal)
-    of vkArray:
-      receiver = newArrayInstance(arrayClass, receiverVal.arrayVal)
-    of vkTable:
-      receiver = newTableInstance(tableClass, receiverVal.tableVal)
-    of vkBool:
-      let p = cast[pointer](new(bool))
-      cast[ptr bool](p)[] = receiverVal.boolVal
-      receiver = Instance(
-        kind: ikObject,
-        class: if receiverVal.boolVal: trueClassCache else: falseClassCache,
-        slots: @[],
-        isNimProxy: true,
-        nimValue: p
-      )
-    of vkBlock:
-      # Register BlockNode to keep it alive for ARC
-      registerBlockNode(receiverVal.blockVal)
-      receiver = Instance(
-        kind: ikObject,
-        class: blockClass,
-        slots: @[],
-        isNimProxy: false,
-        nimValue: cast[pointer](receiverVal.blockVal)
-      )
-    of vkClass:
-      receiver = Instance(
-        kind: ikObject,
-        class: objectClass,
-        slots: @[],
-        isNimProxy: false,
-        nimValue: cast[pointer](receiverVal.classVal)
-      )
-    else:
-      raise newException(ValueError, "Cascade to unsupported value kind: " & $receiverVal.kind)
-
-    # Set current receiver
-    interp.currentReceiver = receiver
 
     # Push receiver value for message send
     interp.pushValue(receiverVal)

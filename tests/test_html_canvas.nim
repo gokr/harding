@@ -67,6 +67,26 @@ suite "HtmlCanvas DSL":
     check(err.len == 0)
     check(result[^1].strVal == "<div><span>Hello</span></div>")
 
+  test "self stays lexical inside cascaded Html blocks":
+    let script = """
+      TestComponent := Object derive: #().
+      TestComponent>>panelIdText [ ^ "todo-panel" ].
+      TestComponent>>renderWidget [
+        ^ Html render: [:h |
+          h div: [:card |
+            card id: self panelIdText;
+              class: "demo".
+            card text: "ok"
+          ]
+        ]
+      ].
+
+      TestComponent new renderWidget
+    """
+    let (result, err) = interp.evalStatements(script)
+    check(err.len == 0)
+    check(result[^1].strVal == "<div id=\"todo-panel\" class=\"demo\">ok</div>")
+
   test "attribute cascades accumulate":
     let (result, err) = interp.doit("""
       Html canvas: [:h |
