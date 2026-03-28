@@ -250,7 +250,7 @@ proc createCoreMethod*(name: string): BlockNode =
   let blk = BlockNode()
   blk.parameters = if ':' in name:
                       name.split(':').filterIt(it.len > 0)
-                    elif name in ["+", "-", "*", "/", "//", ">", "<", ">=", "<=", "=", "==", "!=", ",", "**"]:
+                    elif name in ["+", "-", "*", "/", "//", ">", "<", ">=", "<=", "=", "==", "!=", "&", "**"]:
                       # Binary operators take one argument (the receiver is implicit)
                       @["arg"]
                     else:

@@ -3,7 +3,7 @@
 # Interval.hrd - Numeric range for iteration.
 #
 
-Interval := Object derive: #(start stop step)
+Interval := Object derive: #(start, stop, step)
 # Interval represents a numeric range that can be iterated without materializing every element eagerly.
 # It is useful for loops, bounded traversal, and range-based calculations.
 # Methods here should preserve the compact range abstraction rather than forcing array conversion.
@@ -250,7 +250,7 @@ Interval>>reversed [
 
 Interval>>printString [
     # String representation: (1 to: 10 by: 2)
-    ^"(" , (start printString) , " to: " , (stop printString) , " by: " , (step printString) , ")"
+    ^"(" & (start printString) & " to: " & (stop printString) & " by: " & (step printString) & ")"
 ]
 
 Interval>>= anInterval [

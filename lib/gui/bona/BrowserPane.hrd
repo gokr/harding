@@ -3,7 +3,7 @@
 # Uses GtkListBox for proper list behavior with native selection.
 # ============================================================================.
 
-BrowserPane := Object derive: #(scrolledWindow listBox items selectedItem selectionCallback headerLabel contextMenuCallback rightClickCallback containerBox isHandlingSelection)
+BrowserPane := Object derive: #(scrolledWindow, listBox, items, selectedItem, selectionCallback, headerLabel, contextMenuCallback, rightClickCallback, containerBox, isHandlingSelection)
 # BrowserPane wraps a labeled list pane used by Browser for libraries, classes, and methods.
 # It centralizes pane-specific selection, highlighting, and context-menu support.
 # Browser composes several BrowserPane instances instead of duplicating pane widget code.

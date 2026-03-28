@@ -46,7 +46,7 @@ suite "HtmlCanvas DSL":
       Second := Html render: [:h |
         h div: [ h span: Counter printString ]
       ].
-      First , " " , Second
+      First & " " & Second
     """
     let (result, err) = interp.evalStatements(script)
     check(err.len == 0)

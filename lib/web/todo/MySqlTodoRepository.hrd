@@ -41,7 +41,7 @@ MySqlTodoRepository class>>connection [ ^ MySqlTodoRepositoryConnection ]
 MySqlTodoRepository class>>connection: aConnection [ MySqlTodoRepositoryConnection := aConnection ]
 
 MySqlTodoRepository class>>connectionString [
-    ^ self host, ":", (self port printString), "/", self database
+    ^ self host & ":" & (self port printString) & "/" & self database
 ]
 
 MySqlTodoRepository>>initialize [
@@ -65,8 +65,8 @@ MySqlTodoRepository>>ensureTableExists [
     conn := self class connection.
     conn isNil ifTrue: [ ^ self ]
     conn isConnected ifFalse: [ ^ self ]
-    conn execute: "CREATE DATABASE IF NOT EXISTS ", self class database
-    conn execute: "USE ", self class database
+    conn execute: "CREATE DATABASE IF NOT EXISTS " & self class database
+    conn execute: "USE " & self class database
     conn execute: "CREATE TABLE IF NOT EXISTS todos (
         id INT PRIMARY KEY AUTO_INCREMENT,
         title VARCHAR(255) NOT NULL,
@@ -101,7 +101,7 @@ MySqlTodoRepository>>addTitle: title [
         conn := self class connection.
         conn notNil ifTrue: [
             conn isConnected ifTrue: [
-                conn execute: "INSERT INTO todos (id, title, completed) VALUES (", (todo id printString), ", '", (self escapeSql: todo title), "', ", (todo completed printString), ")"
+                conn execute: "INSERT INTO todos (id, title, completed) VALUES (" & (todo id printString) & ", '" & (self escapeSql: todo title) & "', " & (todo completed printString) & ")"
             ]
         ]
     ]
@@ -115,7 +115,7 @@ MySqlTodoRepository>>toggle: rawId [
         conn := self class connection.
         conn notNil ifTrue: [
             conn isConnected ifTrue: [
-                conn execute: "UPDATE todos SET completed = ", (todo completed printString), " WHERE id = ", (todo id printString)
+                conn execute: "UPDATE todos SET completed = " & (todo completed printString) & " WHERE id = " & (todo id printString)
             ]
         ]
     ]
@@ -128,7 +128,7 @@ MySqlTodoRepository>>delete: rawId [
     conn := self class connection.
     conn notNil ifTrue: [
         conn isConnected ifTrue: [
-            conn execute: "DELETE FROM todos WHERE id = ", (id printString)
+            conn execute: "DELETE FROM todos WHERE id = " & (id printString)
         ]
     ]
     ^ super delete: rawId

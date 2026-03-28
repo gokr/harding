@@ -58,8 +58,8 @@ Harding automatically optimizes constant Array and Table literals at parse time:
 
 ### What Gets Optimized
 
-- `#(1 2 3)` - Flat arrays with literal elements
-- `#("a" "b" "c")` - Arrays with string literals
+- `#(1, 2, 3)` - Flat arrays with literal elements
+- `#("a", "b", "c")` - Arrays with string literals
 - `#{"key" -> 1}` - Tables with literal keys and values
 - `#()` - Empty arrays
 - `#{}` - Empty tables
@@ -75,12 +75,12 @@ Harding automatically optimizes constant Array and Table literals at parse time:
 
 | Scenario | Before | After |
 |----------|--------|-------|
-| `#(1 2 3)` | N work frames + build operation | Single push of cached value |
+| `#(1, 2, 3)` | N work frames + build operation | Single push of cached value |
 | `#{"a" -> 1}` | 2N work frames + build operation | Single push of cached value |
 
 ### Limitations
 
-- Nested arrays/tables are not cached (e.g., `#(#(1 2))` evaluates at runtime)
+- Nested arrays/tables are not cached (e.g., `#(#(1, 2))` evaluates at runtime)
 - Arrays/tables containing variables or message sends are not cached
 - Conservative approach avoids type mismatch between cached values and runtime instances
 

@@ -32,7 +32,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "withIndexDo: passes element and index":
     let result = interp.evalStatements("""
-      Arr := #(10 20 30).
+      Arr := #(10, 20, 30).
       sum := 0.
       Arr withIndexDo: [:elem :idx | sum := sum + idx].
       Result := sum
@@ -43,7 +43,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "copyFrom:to: extracts subarray":
     let result = interp.evalStatements("""
-      Arr := #(10 20 30 40 50).
+      Arr := #(10, 20, 30, 40, 50).
       Sub := Arr copyFrom: 1 to: 3.
       Result := Sub size
     """)
@@ -53,7 +53,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "copyFrom:to: contains correct elements":
     let result = interp.evalStatements("""
-      Arr := #(10 20 30 40 50).
+      Arr := #(10, 20, 30, 40, 50).
       Sub := Arr copyFrom: 1 to: 3.
       Result := Sub at: 0
     """)
@@ -63,7 +63,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "indexOf: returns 0-based index of element":
     let result = interp.evalStatements("""
-      Arr := #(10 20 30).
+      Arr := #(10, 20, 30).
       Result := Arr indexOf: 20
     """)
     check(result[1].len == 0)
@@ -72,7 +72,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "indexOf: returns nil when not found":
     let result = interp.evalStatements("""
-      Arr := #(10 20 30).
+      Arr := #(10, 20, 30).
       Result := Arr indexOf: 99
     """)
     check(result[1].len == 0)
@@ -103,20 +103,20 @@ suite "Stdlib: Arrays - Advanced":
     check(result[0][^1].intVal == 20)
 
   test "includes: returns true for present element":
-    let (result, err) = interp.doit("#(1 2 3) includes: 2")
+    let (result, err) = interp.doit("#(1, 2, 3) includes: 2")
     check(err.len == 0)
     check(result.kind == vkBool)
     check(result.boolVal == true)
 
   test "includes: returns false for absent element":
-    let (result, err) = interp.doit("#(1 2 3) includes: 99")
+    let (result, err) = interp.doit("#(1, 2, 3) includes: 99")
     check(err.len == 0)
     check(result.kind == vkBool)
     check(result.boolVal == false)
 
   test "sorted returns elements in ascending order":
     let result = interp.evalStatements("""
-      Arr := #(3 1 4 1 5 9 2 6).
+      Arr := #(3, 1, 4, 1, 5, 9, 2, 6).
       Sorted := Arr sorted.
       Result := Sorted first
     """)
@@ -126,7 +126,7 @@ suite "Stdlib: Arrays - Advanced":
 
   test "sorted: with custom block sorts descending":
     let result = interp.evalStatements("""
-      Arr := #(3 1 4 1 5 9 2 6).
+      Arr := #(3, 1, 4, 1, 5, 9, 2, 6).
       Sorted := Arr sorted: [:a :b | a > b].
       Result := Sorted first
     """)

@@ -139,7 +139,7 @@ suite "GTK automation helpers":
 
     let interp = guiInterp()
     let (result, err) = interp[].doit("""
-      Probe := Object derive: #(buttons results).
+      Probe := Object derive: #(buttons, results).
       Probe>>initialize [
         buttons := Array new.
         results := Array new.
@@ -186,7 +186,7 @@ suite "GTK automation helpers":
 
     let interp = guiInterp()
     let (result, err) = interp[].doit("""
-      Probe := Object derive: #(button total).
+      Probe := Object derive: #(button, total).
       Probe>>initialize [
         total := 0.
         ^ self
@@ -220,7 +220,7 @@ suite "GTK automation helpers":
 
     let interp = guiInterp()
     let (result, err) = interp[].doit("""
-      Probe := Object derive: #(listBox seen).
+      Probe := Object derive: #(listBox, seen).
       Probe>>initialize [
         seen := Array new.
         ^ self
@@ -405,7 +405,7 @@ suite "GTK automation helpers":
         pane := BrowserPane new.
         pane createWidgets.
         pane onSelectionChanged: [:item | self className ].
-        pane items: #("One" "Two").
+        pane items: #("One", "Two").
         GtkWidget flushEvents: 10.
         ^ self
       ].
@@ -448,7 +448,7 @@ suite "GTK automation helpers":
     let interp = ideInterp()
 
     let (result, err) = interp[].doit("""
-      TestOwner := Object derive: #(refreshCount windows).
+      TestOwner := Object derive: #(refreshCount, windows).
       TestOwner>>initialize [
         refreshCount := 0.
         windows := #().
@@ -527,7 +527,7 @@ suite "GTK automation helpers":
     let interp = ideInterp()
 
     let (result, err) = interp[].doit("""
-      Person := Object derive: #(name age).
+      Person := Object derive: #(name, age).
       Obj := Person new.
       Insp := Inspector openOn: Obj.
       GtkWidget flushEvents: 10.
@@ -546,7 +546,7 @@ suite "GTK automation helpers":
 
     let (result, err) = interp[].doit("""
       Obj := #{
-        "items" -> #(1 #{"inner" -> 2})
+        "items" -> #(1, #{"inner" -> 2})
       }.
       Insp := Inspector new initialize.
       Insp inspect: Obj.

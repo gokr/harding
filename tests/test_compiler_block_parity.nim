@@ -298,7 +298,7 @@ suite "Compiler Block Parity: Collection Methods":
 
   test "do: with block":
     let code = """
-      arr := #(1 2 3).
+      arr := #(1, 2, 3).
       sum := 0.
       arr do: [:each | sum := sum + each].
       sum
@@ -310,7 +310,7 @@ suite "Compiler Block Parity: Collection Methods":
 
   test "collect: with block":
     let code = """
-      arr := #(1 2 3).
+      arr := #(1, 2, 3).
       result := arr collect: [:each | each * 2].
       result at: 0
     """
@@ -321,7 +321,7 @@ suite "Compiler Block Parity: Collection Methods":
 
   test "select: with block":
     let code = """
-      arr := #(1 2 3 4 5).
+      arr := #(1, 2, 3, 4, 5).
       result := arr select: [:each | each > 3].
       result size
     """
@@ -332,7 +332,7 @@ suite "Compiler Block Parity: Collection Methods":
 
   test "detect: with block":
     let code = """
-      arr := #(1 2 3 4 5).
+      arr := #(1, 2, 3, 4, 5).
       arr detect: [:each | each > 3]
     """
     let (result, err) = interpretCode(sharedInterp, code)

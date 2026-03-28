@@ -99,7 +99,7 @@ suite "Website Examples - Block Return":
           ^ nil
       ]
       f := Finder new
-      f findPositive: #(-1 -2 5 -3)
+      f findPositive: #(-1, -2, 5, -3)
     """)
     check(results[1].len == 0)
     # Note: Non-local returns from blocks in do: may have issues
@@ -114,7 +114,7 @@ suite "Website Examples - REPL Workflows":
 
   test "REPL sequence - Collections":
     let results = interp.evalStatements("""
-      numbers := #(1 2 3 4 5)
+      numbers := #(1, 2, 3, 4, 5)
       Result := numbers size
     """)
     check(results[1].len == 0)
@@ -141,7 +141,7 @@ suite "Website Examples - Class Creation":
     check(result.kind == vkClass)
 
   test "Class creation with derive":
-    let results = interp.evalStatements("PointW := Object derive: #(x y)")
+    let results = interp.evalStatements("PointW := Object derive: #(x, y)")
     check(results[1].len == 0)
     check(results[0][0].kind == vkClass)
 
@@ -158,7 +158,7 @@ suite "Website Examples - Class Creation":
 
   test "Instance creation with new":
     let results = interp.evalStatements("""
-      PointW2 := Object derive: #(x y)
+      PointW2 := Object derive: #(x, y)
       p := PointW2 new
       Result := p class
     """)
@@ -173,7 +173,7 @@ suite "Website Examples - Point Class with extend:":
 
   test "Point class with extend: for multiple methods and cascade":
     let results = interp.evalStatements("""
-      PointE := Object derive: #(x y)
+      PointE := Object derive: #(x, y)
       PointE >> x: val [ x := val ]
       PointE >> y: val [ y := val ]
 
@@ -202,7 +202,7 @@ suite "Website Examples - Class-Side Methods":
 
   test "class>> defines class-side factory method":
     let results = interp.evalStatements("""
-      PersonC := Object derive: #(name age)
+      PersonC := Object derive: #(name, age)
       PersonC >> name: n [ name := n ]
       PersonC >> age: a [ age := a ]
       PersonC >> age [ ^age ]
@@ -226,7 +226,7 @@ suite "Website Examples - Dynamic Dispatch":
 
   test "perform: without arguments":
     let results = interp.evalStatements("""
-      numbers := #(1 2 3)
+      numbers := #(1, 2, 3)
       Result := numbers perform: #size
     """)
     check(results[1].len == 0)
@@ -234,7 +234,7 @@ suite "Website Examples - Dynamic Dispatch":
 
   test "perform:with: with one argument":
     let results = interp.evalStatements("""
-      numbers := #(10 20 30)
+      numbers := #(10, 20, 30)
       Result := numbers perform: #at: with: 2
     """)
     check(results[1].len == 0)
@@ -309,7 +309,7 @@ suite "Website Examples - Accessor Patterns":
 
   test "derivePublic creates direct slot access":
     let results = interp.evalStatements("""
-      PointA := Object derivePublic: #(x y)
+      PointA := Object derivePublic: #(x, y)
       p := PointA new
       p::x := 100
       p::y := 200
@@ -320,7 +320,7 @@ suite "Website Examples - Accessor Patterns":
 
   test "Point + operator with aPoint x accessor access":
     let results = interp.evalStatements("""
-      PointA2 := Object derivePublic: #(x y)
+      PointA2 := Object derivePublic: #(x, y)
       PointA2 >>+ aPoint [
           x := x + aPoint::x
           y := y + aPoint::y
@@ -375,7 +375,7 @@ suite "Website Examples - Docs Page Examples":
 
   test "Collections example from docs - collect":
     let results = interp.evalStatements("""
-      Numbers := #(1 2 3 4 5)
+      Numbers := #(1, 2, 3, 4, 5)
       Result := Numbers collect: [:n | n * n]
     """)
     check(results[1].len == 0)
@@ -384,7 +384,7 @@ suite "Website Examples - Docs Page Examples":
 
   test "Collections example from docs - select":
     let results = interp.evalStatements("""
-      Numbers := #(1 2 3 4 5)
+      Numbers := #(1, 2, 3, 4, 5)
       Result := Numbers select: [:n | (n % 2) = 0]
     """)
     check(results[1].len == 0)
@@ -393,7 +393,7 @@ suite "Website Examples - Docs Page Examples":
 
   test "Collections example from docs - inject":
     let results = interp.evalStatements("""
-      Numbers := #(1 2 3 4 5)
+      Numbers := #(1, 2, 3, 4, 5)
       Result := Numbers inject: 0 into: [:a :n | a + n]
     """)
     check(results[1].len == 0)
@@ -433,8 +433,8 @@ suite "Website Examples - Multiple Inheritance":
 
   test "derive:read:write: for selective direct access":
     let results = interp.evalStatements("""
-      Account := Object derive: #(balance owner)
-                             read: #(balance owner)
+      Account := Object derive: #(balance, owner)
+                             read: #(balance, owner)
                              write: #(balance)
       acc := Account new
       acc::balance := 100
@@ -477,7 +477,7 @@ suite "Website Examples - Super Sends":
 
   test "Unqualified super send":
     let results = interp.evalStatements("""
-      RectangleS := Object derive: #(width height)
+      RectangleS := Object derive: #(width, height)
       RectangleS >> width: w [ width := w ]
       RectangleS >> height: h [ height := h ]
       RectangleS >> area [ ^ width * height ]
@@ -519,7 +519,7 @@ suite "Website Examples - Introspection":
 
   test "superclassNames returns inheritance chain":
     let results = interp.evalStatements("""
-      PointI := Object derive: #(x y)
+      PointI := Object derive: #(x, y)
       Result := PointI superclassNames
     """)
     check(results[1].len == 0)
@@ -527,7 +527,7 @@ suite "Website Examples - Introspection":
 
   test "respondsTo: checks method existence":
     let results = interp.evalStatements("""
-      PointI2 := Object derive: #(x y)
+      PointI2 := Object derive: #(x, y)
       PointI2 >> x [ ^ x ]
       p := PointI2 new
       Result := p respondsTo: #x
@@ -537,7 +537,7 @@ suite "Website Examples - Introspection":
 
   test "slotNames returns instance variable names":
     let results = interp.evalStatements("""
-      PointI3 := Object derive: #(x y)
+      PointI3 := Object derive: #(x, y)
       Result := PointI3 slotNames
     """)
     check(results[1].len == 0)

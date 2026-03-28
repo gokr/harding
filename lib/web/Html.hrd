@@ -1,13 +1,13 @@
 Html := Object derive: #()
-HtmlCanvas := Object derivePublic: #(output attributes indentLevel currentTag tagStack voidTags currentTagBuilder context)
-HtmlTagBuilder := Object derivePublic: #(canvas tagName attributes isVoid isOpen)
+HtmlCanvas := Object derivePublic: #(output, attributes, indentLevel, currentTag, tagStack, voidTags, currentTagBuilder, context)
+HtmlTagBuilder := Object derivePublic: #(canvas, tagName, attributes, isVoid, isOpen)
 HtmlRawFragment := Object derivePublic: #(markup)
 
 # Html is now a direct renderer. It builds markup immediately, while higher
 # level caching belongs to Component/RenderCache rather than Html itself.
 
 Html class>>voidTags [
-  ^ #(#area #base #br #col #embed #hr #img #input #link #meta #param #source #track #wbr)
+  ^ #(#area, #base, #br, #col, #embed, #hr, #img, #input, #link, #meta, #param, #source, #track, #wbr)
 ]
 
 Html class>>renderContextStack [
@@ -99,7 +99,7 @@ HtmlTagBuilder>>class: aString [
   current := attributes at: #class ifAbsent: [ "" ]
   current isEmpty 
     ifTrue: [ attributes at: #class put: aString ]
-    ifFalse: [ attributes at: #class put: (current , " " , aString) ]
+    ifFalse: [ attributes at: #class put: (current & " " & aString) ]
 ]
 
 HtmlTagBuilder>>id: aString [
@@ -196,7 +196,7 @@ HtmlTagBuilder>>readonly [ self attr: #readonly value: "" ]
 HtmlTagBuilder>>required [ self attr: #required value: "" ]
 HtmlTagBuilder>>autofocus [ self attr: #autofocus value: "" ]
 HtmlTagBuilder>>multiple [ self attr: #multiple value: "" ]
-HtmlTagBuilder>>data: key value: value [ self attr: ("data-" , key asString) asSymbol value: value ]
+HtmlTagBuilder>>data: key value: value [ self attr: ("data-" & key asString) asSymbol value: value ]
 HtmlTagBuilder>>get: value [ self attr: #"hx-get" value: value ]
 HtmlTagBuilder>>post: value [ self attr: #"hx-post" value: value ]
 HtmlTagBuilder>>put: value [ self attr: #"hx-put" value: value ]
@@ -282,7 +282,7 @@ HtmlCanvas>>class: aString [
   current := attributes at: #class ifAbsent: [ "" ]
   current isEmpty 
     ifTrue: [ attributes at: #class put: aString ]
-    ifFalse: [ attributes at: #class put: (current , " " , aString) ]
+    ifFalse: [ attributes at: #class put: (current & " " & aString) ]
 ]
 
 HtmlCanvas>>id: aString [
@@ -346,7 +346,7 @@ HtmlCanvas>>for: aString [
 ]
 
 HtmlCanvas>>data: key value: value [
-  self attr: ("data-" , key asString) asSymbol value: value
+  self attr: ("data-" & key asString) asSymbol value: value
 ]
 
 HtmlCanvas>>get: value [
@@ -617,11 +617,11 @@ Html class>>escape: aString [
 ]
 
 Html class>>scriptSrc: aUrl [
-  ^ "<script src=\"" , (self escape: aUrl) , "\"></script>"
+  ^ "<script src=\"" & (self escape: aUrl) & "\"></script>"
 ]
 
 Html class>>linkStylesheet: aUrl [
-  ^ "<link rel=\"stylesheet\" href=\"" , (self escape: aUrl) , "\">"
+  ^ "<link rel=\"stylesheet\" href=\"" & (self escape: aUrl) & "\">"
 ]
 
 Html class>>rawFragment: aString [

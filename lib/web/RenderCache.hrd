@@ -1,4 +1,4 @@
-RenderCache := Object derivePublic: #(entries entryStack)
+RenderCache := Object derivePublic: #(entries, entryStack)
 
 # RenderCache stores HTML per logical component key. The entry stack also acts
 # as the active observer stack for tracked reads during rendering.
@@ -30,7 +30,7 @@ RenderCache class>>new [
 
 RenderCache>>composeKey: aKey session: aSessionKey [
   aSessionKey isNil ifTrue: [ ^ aKey asString ]
-  ^ aKey asString , "@@" , aSessionKey asString
+  ^ aKey asString & "@@" & aSessionKey asString
 ]
 
 RenderCache>>entryForKey: aKey session: aSessionKey [

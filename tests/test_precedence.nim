@@ -34,7 +34,7 @@ suite "Parser Precedence - Unary Messages":
 
   test "unary before keyword argument":
     # "arr at: 1 + 1" should be "arr at: (1 + 1)"
-    let (result, err) = interp.doit("Arr := #(10 20 30). Arr at: 1 + 1")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30). Arr at: 1 + 1")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 30)
@@ -70,14 +70,14 @@ suite "Parser Precedence - Binary Operators":
     check(result.intVal == 3)
 
   test "binary before keyword":
-    let (result, err) = interp.doit("Arr := #(10 20 30 40 50 60 70 80 90 100). Arr at: 1 + 2")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30, 40, 50, 60, 70, 80, 90, 100). Arr at: 1 + 2")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 40)
 
-  test "binary in keyword argument (comma operator)":
+  test "binary in keyword argument (concatenation operator)":
     let result = interp.evalStatements("""
-    Arr := #(10 20 30 40 50 60 70 80).
+    Arr := #(10, 20, 30, 40, 50, 60, 70, 80).
     Result := Arr at: 2 + 3
     """)
     check(result[1].len == 0)
@@ -86,7 +86,7 @@ suite "Parser Precedence - Binary Operators":
 
   test "binary minus in keyword argument":
     let result = interp.evalStatements("""
-    Arr := #(10 20 30 40 50 60 70 80).
+    Arr := #(10, 20, 30, 40, 50, 60, 70, 80).
     Result := Arr at: 10 - 3
     """)
     check(result[1].len == 0)
@@ -126,7 +126,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
 
   test "binary has higher precedence than keyword":
     let result = interp.evalStatements("""
-    Arr := #(1 2 3 4 5).
+    Arr := #(1, 2, 3, 4, 5).
     Result := Arr at: 1 + 2
     """)
     check(result[1].len == 0)
@@ -139,12 +139,12 @@ suite "Message Precedence: Unary > Binary > Keyword":
     Container >> items [ ^self at: #items ].
 
     C := Container new.
-    C at: #items put: #(1 2 3).
+    C at: #items put: #(1, 2, 3).
     Result := C items at: 2
     """)
     check(result[1].len == 0)
     if result[0].len >= 1:
-      check(result[0][^1].intVal == 3)  # #(1 2 3) at: 2 = 3
+      check(result[0][^1].intVal == 3)  # #(1, 2, 3) at: 2 = 3
 
   test "keyword message with complex binary expression argument":
     let result = interp.evalStatements("""
@@ -188,7 +188,7 @@ suite "Parser Precedence - Assignment":
     check(result.intVal == 9)
 
   test "assignment with keyword message":
-    let (result, err) = interp.doit("Arr := #(10 20 30). X := Arr at: 1. X")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30). X := Arr at: 1. X")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 20)
@@ -209,14 +209,14 @@ suite "Parser Precedence - Parentheses Override":
     check(result.intVal == 9)
 
   test "parentheses in keyword argument":
-    let (result, err) = interp.doit("Arr := #(10 20 30 40). Arr at: (1 + 2)")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30, 40). Arr at: (1 + 2)")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 40)
 
   test "explicit parentheses work correctly":
     let result = interp.evalStatements("""
-    Arr := #(10 20 30 40 50 60 70 80).
+    Arr := #(10, 20, 30, 40, 50, 60, 70, 80).
     Result := Arr at: (2 + 3)
     """)
     check(result[1].len == 0)
@@ -245,7 +245,7 @@ suite "Parser Precedence - Message Cascades":
     loadStdlib(interp)
 
   test "cascade sends multiple messages to same receiver":
-    let (result, err) = interp.doit("Arr := #(10 20 30). Arr at: 0; at: 1")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30). Arr at: 0; at: 1")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 20)
@@ -291,13 +291,13 @@ suite "Parser Precedence - Complex Combinations":
     loadStdlib(interp)
 
   test "complex expression with all precedence levels":
-    let (result, err) = interp.doit("Arr := #(10 20 30). X := 0. Arr at: X + 1")
+    let (result, err) = interp.doit("Arr := #(10, 20, 30). X := 0. Arr at: X + 1")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 20)
 
   test "binary after unary in keyword arg":
-    let (result, err) = interp.doit("Arr := #(-10 20 30). X := 0. Arr at: X negated + 1")
+    let (result, err) = interp.doit("Arr := #(-10, 20, 30). X := 0. Arr at: X negated + 1")
     check(err.len == 0)
     check(result.kind == vkInt)
     check(result.intVal == 20)

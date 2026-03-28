@@ -32,21 +32,6 @@ Array class>>new: size <primitive primitiveArrayNew: size>
 
 Array class>>new: size withAll: value <primitive primitiveArrayNew: size withAll: value>
 
-Array class>>with: first [
-    | array |
-    array := self new
-    array add: first
-    ^ array
-]
-
-Array class>>with: first with: second [
-    | array |
-    array := self new
-    array add: first
-    array add: second
-    ^ array
-]
-
 #====================================================================.
 # Array iteration.
 #====================================================================.
@@ -67,8 +52,8 @@ Array>>join: separator [
     result := ""
     first := true
     self do: [:elem |
-        first ifFalse: [ result := result , separator ]
-        result := result , elem printString
+        first ifFalse: [ result := result & separator ]
+        result := result & elem printString
         first := false
     ]
     ^ result
@@ -79,11 +64,11 @@ Array>>printString [
     out := "#("
     first := true
     self do: [:elem |
-        first ifFalse: [ out := out , " " ]
-        out := out , (elem printString)
+        first ifFalse: [ out := out & " " ]
+        out := out & (elem printString)
         first := false
     ]
-    ^ out , ")"
+    ^ out & ")"
 ]
 
 #====================================================================.

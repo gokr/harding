@@ -1,4 +1,4 @@
-TodoItem := Object derivePublic: #(id titleState completedState).
+TodoItem := Object derivePublic: #(id, titleState, completedState).
 
 TodoItem class>>id: anId title: aTitle completed: aBool [
   | item |

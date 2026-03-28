@@ -47,7 +47,7 @@ suite "Json Literal Syntax":
     check nodes[0].kind == nkMessage
 
   test "handles json{} with arrays":
-    let tokens = lex("json{\"items\": #(1 2 3)}")
+    let tokens = lex("json{\"items\": #(1, 2, 3)}")
     var p = initParser(tokens)
     let nodes = p.parseStatements()
     check nodes.len == 1
@@ -129,7 +129,7 @@ suite "Json Class":
 
   test "json{} with arrays":
     let (results, err) = interp.evalStatements("""
-    Result := json{"items": #(1 2 3)}
+    Result := json{"items": #(1, 2, 3)}
     """)
     check err.len == 0
     check results.len >= 1

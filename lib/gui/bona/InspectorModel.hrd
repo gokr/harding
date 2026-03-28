@@ -2,7 +2,7 @@
 # InspectorModel - Non-GTK state holder for Inspector.
 # ============================================================================.
 
-InspectorModel := Object derive: #(catalog inspectedObject selectedObject selectedSlotName expandedPaths)
+InspectorModel := Object derive: #(catalog, inspectedObject, selectedObject, selectedSlotName, expandedPaths)
 
 InspectorModel>>initialize [
     catalog := Catalog new
@@ -50,7 +50,7 @@ InspectorModel>>selectValue: value name: name [
 
 InspectorModel>>workspaceLabelText [
     selectedSlotName notNil ifTrue: [
-        ^ selectedSlotName , ": " , (self formatValue: selectedObject)
+        ^ selectedSlotName & ": " & (self formatValue: selectedObject)
     ]
     inspectedObject isNil ifTrue: [ ^ "" ]
     ^ inspectedObject printString
@@ -60,15 +60,15 @@ InspectorModel>>formatValue: aValue [
     aValue isNil ifTrue: [ ^ "nil" ]
     (aValue isKindOf: String) ifTrue: [
         aValue size > 50 ifTrue: [
-            ^ ("\"" , (aValue copyFrom: 0 to: 47) , "...\"")
+            ^ ("\"" & (aValue copyFrom: 0 to: 47) & "...\"")
         ]
-        ^ ("\"" , aValue , "\"")
+        ^ ("\"" & aValue & "\"")
     ]
     (aValue isKindOf: Integer) ifTrue: [ ^ aValue printString ]
     (aValue isKindOf: Float) ifTrue: [ ^ aValue printString ]
     (aValue isKindOf: Boolean) ifTrue: [ ^ aValue printString ]
-    (aValue isKindOf: Array) ifTrue: [ ^ ("Array(" , (aValue size printString) , ")") ]
-    (aValue isKindOf: Table) ifTrue: [ ^ ("Table(" , (aValue size printString) , ")") ]
+    (aValue isKindOf: Array) ifTrue: [ ^ ("Array(" & (aValue size printString) & ")") ]
+    (aValue isKindOf: Table) ifTrue: [ ^ ("Table(" & (aValue size printString) & ")") ]
     ^ aValue className
 ]
 

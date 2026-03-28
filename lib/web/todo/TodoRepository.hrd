@@ -1,4 +1,4 @@
-TodoRepository := Object derivePublic: #(items nextId).
+TodoRepository := Object derivePublic: #(items, nextId).
 
 TodoRepository>>initialize [
   super initialize.

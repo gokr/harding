@@ -100,7 +100,7 @@ For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](T
   multi
   line
 """               # Triple-quoted multiline symbol
-#(1 2 3)            # Array
+#(1, 2, 3)            # Array
 #{"key" -> "value"} # Table (dictionary)
 json{"x": 10}       # JSON literal (returns JSON string)
 ```
@@ -273,20 +273,20 @@ chmod +x script.hrd
 
 ```smalltalk
 # Create a class with slots (no accessors)
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 
 # Create a class with public slots (auto accessors + :: access)
-Person := Object derivePublic: #(name age)
+Person := Object derivePublic: #(name, age)
 
 # Canonical form with explicit read/write slot lists (v0.8.0+)
-Account := Object derive: #(balance owner)
-                       read: #(balance owner)
+Account := Object derive: #(balance, owner)
+                       read: #(balance, owner)
                        write: #(balance)
 
 # With multiple inheritance (v0.8.0+)
-ColoredPoint := Object derive: #(color x y)
-                       read: #(color x y)
-                       write: #(color x y)
+ColoredPoint := Object derive: #(color, x, y)
+                       read: #(color, x, y)
+                       write: #(color, x, y)
                        superclasses: #(Point)
 
 # Create an instance
@@ -316,7 +316,7 @@ Harding provides several methods for generating getters and setters:
 Creates a class and auto-generates both getters and setters for all slots:
 
 ```smalltalk
-Person := Object derivePublic: #(name age)
+Person := Object derivePublic: #(name, age)
 p := Person new
 p name: "Alice"    # Auto-generated setter
 p age: 30          # Auto-generated setter
@@ -334,8 +334,8 @@ Creates a class with selective accessor generation:
 
 ```smalltalk
 # Generate getters for both slots, but setter only for 'name'
-Person := Object derive: #(name age)
-                       read: #(name age)
+Person := Object derive: #(name, age)
+                       read: #(name, age)
                        write: #(name)
 
 p := Person new
@@ -384,7 +384,7 @@ Comparable >> between: min and: max [
 ]
 
 # Mix into any class
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 Point addSuperclass: Comparable
 
 # Implement the required method
@@ -515,20 +515,20 @@ The canonical form for class creation uses explicit read/write slot lists:
 
 ```smalltalk
 # All slots readable and writable (equivalent to derivePublic:)
-Person := Object derive: #(name age)
-                       read: #(name age)
-                       write: #(name age)
+Person := Object derive: #(name, age)
+                       read: #(name, age)
+                       write: #(name, age)
 
 # Read-only age, read-write name
-Person := Object derive: #(name age)
-                       read: #(name age)
+Person := Object derive: #(name, age)
+                       read: #(name, age)
                        write: #(name)
 
 # With multiple inheritance
 Child := Object derive: #(x)
                        read: #(x)
                        write: #(x)
-                       superclasses: #(Parent1 Parent2)
+                       superclasses: #(Parent1, Parent2)
 ```
 
 **Note**: `derivePublic:` is shorthand for `derive:read:write:` with all slots in both lists.
@@ -575,7 +575,7 @@ Class methods (factory methods) are defined using `class>>` syntax but are simpl
 
 ```smalltalk
 # Instance method - sent to instances
-Person>>greet [ ^ "Hello, " , name ]
+Person>>greet [ ^ "Hello, " & name ]
 
 # Class method - sent to the class itself
 Person class>>newNamed: aName [
@@ -757,7 +757,7 @@ Employee>>calculatePay [
 
 ```smalltalk
 # Unary method
-Person>>greet [ ^ "Hello, " , name ]
+Person>>greet [ ^ "Hello, " & name ]
 
 # Method with one parameter
 Person>>name: aName [ name := aName ]
@@ -776,7 +776,7 @@ Define multiple methods in a single block:
 
 ```smalltalk
 Person extend: [
-  self >> greet [ ^ "Hello, " , name ].
+  self >> greet [ ^ "Hello, " & name ].
   self >> name: aName [ name := aName ].
   self >> haveBirthday [ age := age + 1 ]
 ]
@@ -806,8 +806,8 @@ p := Person newNamed: "Alice" aged: 30
 Create a class with slots AND define methods in one expression:
 
 ```smalltalk
-Person := Object derive: #(name age) methods: [
-  self >> greet [ ^ "Hello, I am " , name ].
+Person := Object derive: #(name, age) methods: [
+  self >> greet [ ^ "Hello, I am " & name ].
   self >> haveBirthday [ age := age + 1 ]
 ]
 ```
@@ -822,12 +822,28 @@ obj class
 # Binary (one argument, operator)
 3 + 4
 5 > 3
-"a" , "b"          # String concatenation
+"a" & "b"          # String concatenation
 
 # Keyword (one or more arguments)
 dict at: key put: value
 obj moveBy: 10 and: 20
 ```
+
+Binary selectors are made from operator punctuation rather than identifier
+characters. The common built-in forms are:
+
+```text
++  -  *  /  <  >  =  ==  %  //  \\  <=  >=  ~=  <<  &  |
+```
+
+Preferred meanings in current Harding:
+
+- `&` generic concatenation
+- `and:` logical AND with short-circuit
+- `|` logical OR
+
+`,` is reserved for collection/object literal separators and is no longer used
+as a binary message selector.
 
 ### Cascading
 
@@ -991,7 +1007,7 @@ collection select: [:each | each > 5]
 collection detect: [:each | each > 5]
 
 # Inject:into: - fold/reduce
-#(1 2 3 4) inject: 0 into: [:sum :each | sum + each]
+#(1, 2, 3, 4) inject: 0 into: [:sum :each | sum + each]
 ```
 
 ---
@@ -1321,7 +1337,7 @@ conn execute: "INSERT INTO players (name, score) VALUES ('Ada', 1200)".
 
 result := conn query: "SELECT name, score FROM players ORDER BY score DESC".
 row := result next.
-((row at: 0) , " => " , (row at: 1)) println.
+((row at: 0) & " => " & (row at: 1)) println.
 
 result close.
 conn close.
@@ -1639,7 +1655,7 @@ Granite supports a special syntax for organizing compiled code:
 ```harding
 Harding compile: [
     # Class and method definitions go here
-    Dog := Object derivePublic: #(name age)
+    Dog := Object derivePublic: #(name, age)
     Dog>>bark [ ^ "Woof!" ]
 ]
 
@@ -1746,10 +1762,10 @@ a >= b           # Greater than or equal
 a // b           # Integer division
 a \ b            # Modulo
 a ~~ b           # Not identity
-"a" , "b"        # String concatenation (non-destructive, returns new string)
-"Value: " , 42    # Auto-converts to string: "Value: 42"
+"a" & "b"        # String concatenation (non-destructive, returns new string)
+"Value: " & 42    # Auto-converts to string: "Value: 42"
 s << "text"        # In-place append (mutates string, returns self)
-a & b              # Logical AND
+a and: [ b ]        # Logical AND with short-circuit
 a | b              # Logical OR
 ```
 
@@ -1759,14 +1775,14 @@ a | b              # Logical OR
 
 Harding provides two complementary ways to work with strings:
 
-### Non-Destructive Concatenation (` , `)
+### Non-Destructive Concatenation (`&`)
 
-The comma operator creates new strings:
+The `&` operator creates new strings:
 
 ```smalltalk
 str1 := "Hello".
-str2 := str1 , " World".    # str1 is still "Hello", str2 is "Hello World"
-result := "A" , "B" , "C". # Creates intermediate strings: "A" -> "AB" -> "ABC"
+str2 := str1 & " World".    # str1 is still "Hello", str2 is "Hello World"
+result := "A" & "B" & "C". # Creates intermediate strings: "A" -> "AB" -> "ABC"
 ```
 
 **Use for**: Simple concatenation, functional style, short strings.
@@ -1787,7 +1803,7 @@ html := buffer.  # The string itself is the result (no .contents needed)
 
 **Key differences:**
 - `<<` mutates the string in-place (O(1) amortized with pre-allocated capacity)
-- ` , ` creates new strings each time (O(n) per operation)
+- `&` creates new strings each time (O(n) per operation)
 - `<<` returns `self` for method chaining
 - `withCapacity:` hints the initial buffer size to avoid reallocations
 
@@ -1853,7 +1869,7 @@ json{
 
 **Key features:**
 - Native JSON object syntax: `{"key": value}`
-- JSON array syntax: `[1, 2, 3]` (not `#(1 2 3)`)
+- JSON array syntax: `[1, 2, 3]` (not `#(1, 2, 3)`)
 - Nested objects and arrays
 - Dynamic values via variables and expressions
 - Commas separate items (not `->` arrows)
@@ -1892,7 +1908,7 @@ user := Json parse: "{\"name\":\"Alice\",\"admin\":true,\"scores\":[1,2,3]}".
 
 user at: "name"          # "Alice"
 user at: "admin"         # true
-user at: "scores"        # #(1 2 3)
+user at: "scores"        # #(1, 2, 3)
 ```
 
 If parsing fails, `Json parse:` currently returns `nil`.
@@ -1902,7 +1918,7 @@ If parsing fails, `Json parse:` currently returns `nil`.
 `Json stringify:` converts Harding values into compact JSON text:
 
 ```smalltalk
-Json stringify: #{"a" -> 1, "b" -> #(2 3 4)}
+Json stringify: #{"a" -> 1, "b" -> #(2, 3, 4)}
 ```
 
 Current supported inputs:
@@ -1922,7 +1938,7 @@ Example:
 payload := #{
     "name" -> "Alice".
     "age" -> 30.
-    "roles" -> #("admin" "editor").
+    "roles" -> #("admin", "editor").
     "active" -> true
 }.
 
@@ -1936,7 +1952,7 @@ Output is compact JSON with no pretty-print formatting.
 Ordinary Harding objects now serialize as JSON objects using slot order by default:
 
 ```smalltalk
-Person := Object derivePublic: #(name age).
+Person := Object derivePublic: #(name, age).
 person := Person new.
 person::name := "Alice".
 person::age := 30.
@@ -1952,7 +1968,7 @@ Inherited slots are included as well.
 Harding supports declarative class-side JSON configuration for common cases:
 
 ```smalltalk
-User := Object derivePublic: #(id username password avatarUrl)
+User := Object derivePublic: #(id, username, password, avatarUrl)
     ; jsonExclude: #(password)
     ; jsonRename: #{#username -> "userName"}
     ; jsonOmitNil: #(avatarUrl).
@@ -1980,7 +1996,7 @@ Supported built-in formatter symbols:
 Example with formatting:
 
 ```smalltalk
-Envelope := Object derivePublic: #(payload kind).
+Envelope := Object derivePublic: #(payload, kind).
 Envelope jsonFormat: #{#payload -> #rawJson, #kind -> #symbolName}.
 ```
 
@@ -1991,7 +2007,7 @@ When declarative slot-based serialization is not enough, a class can define `jso
 The method should return a Harding value that `Json stringify:` already understands, typically a Table, Array, primitive, or nested combination of those.
 
 ```smalltalk
-Invoice := Object derivePublic: #(id lines).
+Invoice := Object derivePublic: #(id, lines).
 
 Invoice>>jsonRepresentation [
     ^ #{
@@ -2163,12 +2179,12 @@ b not                    # Negation
 "hello"                          # String literal
 str size                         # Length
 str at: 0                        # Character at index
-str1 , str2                      # Non-destructive concatenation (returns new String)
+str1 & str2                      # Non-destructive concatenation (returns new String)
 buffer := String withCapacity: 100.   # Pre-allocated string for efficient building
 buffer << "part1" << "part2".       # In-place append (returns self for chaining)
 
 # Arrays (0-based indexing)
-#(1 2 3)            # Array literal
+#(1, 2, 3)            # Array literal
 arr at: 0           # First element
 arr at: 0 put: 99   # Set element
 arr size
@@ -2194,7 +2210,7 @@ block value: 10     # Invoke block
 
 ```smalltalk
 # Create array
-arr := #(1 2 3)
+arr := #(1, 2, 3)
 arr := Array new: 5     # Empty array with 5 slots
 
 # Access (0-based indexing)

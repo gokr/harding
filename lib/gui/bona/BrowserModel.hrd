@@ -2,7 +2,7 @@
 # BrowserModel - Non-GTK state holder for Browser.
 # ============================================================================.
 
-BrowserModel := Object derive: #(catalog currentLibrary currentClass currentCategory currentMethod currentMethodFile currentMethodOwnerClass currentMethodHeader currentMethodSuffix currentMethodStartLine currentMethodEndLine currentMethodHasBlock sourceModified originalSource pendingTarget pendingPrevClass pendingPrevCategory pendingPrevMethod pendingContinueBlock)
+BrowserModel := Object derive: #(catalog, currentLibrary, currentClass, currentCategory, currentMethod, currentMethodFile, currentMethodOwnerClass, currentMethodHeader, currentMethodSuffix, currentMethodStartLine, currentMethodEndLine, currentMethodHasBlock, sourceModified, originalSource, pendingTarget, pendingPrevClass, pendingPrevCategory, pendingPrevMethod, pendingContinueBlock)
 
 BrowserModel>>initialize [
     catalog := Catalog new

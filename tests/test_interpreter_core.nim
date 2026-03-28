@@ -63,7 +63,7 @@ suite "Interpreter: Method Execution with Parameters":
 
   test "executes methods with multiple keyword parameters":
     let result = interp.evalStatements("""
-      Point := Object derivePublic: #(x y).
+      Point := Object derivePublic: #(x, y).
       Point>>setX: newX setY: newY [
         x := newX.
         y := newY
@@ -123,7 +123,7 @@ suite "Interpreter: Process and Activation Introspection":
 
   test "exposes current process and scheduler":
     let (result, err) = interp.doit("""
-      (Process current className) , "|" , (Scheduler current className) , "|" , (Processor current className)
+      (Process current className) & "|" & (Scheduler current className) & "|" & (Processor current className)
     """)
     check(err.len == 0)
     check(result.kind == vkString)
@@ -135,7 +135,7 @@ suite "Interpreter: Process and Activation Introspection":
       Probe>>activationInfo [
         | act |
         act := Process current currentActivation.
-        ^ (act className) , "|" , (act selector) , "|" , (act receiver className) , "|" , (act cacheKey)
+        ^ (act className) & "|" & (act selector) & "|" & (act receiver className) & "|" & (act cacheKey)
       ].
       Probe new activationInfo
     """)
@@ -147,7 +147,7 @@ suite "Interpreter: Process and Activation Introspection":
     let (result, err) = interp.doit("""
       Probe := Object derive.
       Probe>>activationAliases [
-        ^ (self activation selector) , "|" , (self thisContext selector)
+        ^ (self activation selector) & "|" & (self thisContext selector)
       ].
       Probe new activationAliases
     """)
@@ -165,7 +165,7 @@ suite "Interpreter: Process and Activation Introspection":
 
   test "methods can access self and slots":
     let result = interp.evalStatements("""
-      Person := Object derivePublic: #(name age).
+      Person := Object derivePublic: #(name, age).
       Person >> getName [ ^name ].
       Person >> getAge [ ^age ].
 
@@ -432,7 +432,7 @@ suite "Interpreter: Non-Local Returns":
       TestObj := Object derive.
       TestObj>>firstGreaterThanTwo [
         | arr |
-        arr := #(1 3 5).
+        arr := #(1, 3, 5).
         arr do: [:each |
           each > 2 ifTrue: [ ^each ]
         ].
@@ -477,7 +477,7 @@ suite "Interpreter: Non-Local Returns":
         ^nil
       ].
 
-      Result := Finder new firstPositive: #(-2 -1 7 9)
+      Result := Finder new firstPositive: #(-2, -1, 7, 9)
     """)
 
     check(result[1].len == 0)
@@ -550,7 +550,7 @@ suite "Interpreter: Error Handling":
 
   test "named access can be receiver and keyword argument":
     let result = sharedInterp.evalStatements("""
-    Holder := Object derivePublic: #(server router).
+    Holder := Object derivePublic: #(server, router).
     H := Holder new.
     H::server := #{}.
     H::router := 42.

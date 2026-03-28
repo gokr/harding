@@ -209,18 +209,18 @@ suite "Compiler: Symbols":
 
 suite "Compiler: Analyzer":
   test "extracts derive chain from assignment":
-    let tokens = lex("Point := Object derive: #(x y)")
+    let tokens = lex("Point := Object derive: #(x, y)")
     var p = initParser(tokens)
     let nodes = p.parseStatements()
     
     let chain = extractDeriveChain(nodes[0])
     check chain[0] == "Point"
     check chain[1] == "Object"
-    check chain[2] == "#(x y)"
+    check chain[2] == "#(x, y)"
 
   test "builds class graph":
     let source = """
-      Point := Object derive: #(x y)
+      Point := Object derive: #(x, y)
       Point3D := Point derive: #(z)
     """
     let tokens = lex(source)
@@ -233,7 +233,7 @@ suite "Compiler: Analyzer":
     check "Point3D" in result.classes
 
   test "parses type list":
-    let slots = parseTypeList("#(x: Int y: Float name)")
+    let slots = parseTypeList("#(x:, Int, y:, Float, name)")
     check slots.len == 3
     check slots[0].name == "x"
     check slots[0].constraint == tcInt

@@ -229,7 +229,7 @@ proc newJsonInterp(): Interpreter =
         "name" -> "Alice Example",
         "email" -> "alice@example.com",
         "vip" -> true,
-        "tags" -> #("newsletter" "priority" "beta"),
+        "tags" -> #("newsletter", "priority", "beta"),
         "address" -> #{
           "street" -> "123 River Road",
           "city" -> "Portland",
@@ -239,11 +239,11 @@ proc newJsonInterp(): Interpreter =
         }
       },
       "items" -> #(
-        #{"sku" -> "RKT-01", "title" -> "Rocket Skates", "qty" -> 2, "price" -> 129.95, "taxable" -> true, "discounts" -> #(10.0 5.5)}
+        #{"sku" -> "RKT-01", "title" -> "Rocket Skates", "qty" -> 2, "price" -> 129.95, "taxable" -> true, "discounts" -> #(10.0, 5.5)}
         #{"sku" -> "ANV-02", "title" -> "Travel Anvil", "qty" -> 1, "price" -> 349.0, "taxable" -> true, "discounts" -> #(25.0)}
         #{"sku" -> "MAP-03", "title" -> "Desert Map", "qty" -> 4, "price" -> 7.5, "taxable" -> false, "discounts" -> #()}
       ),
-      "notes" -> #("leave at front desk" "fragile" "gift wrap"),
+      "notes" -> #("leave at front desk", "fragile", "gift wrap"),
       "subtotal" -> 646.4,
       "tax" -> 51.71,
       "total" -> 698.11,

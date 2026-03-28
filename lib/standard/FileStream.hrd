@@ -7,7 +7,7 @@
 # FileStream methods.
 #====================================================================.
 
-FileStream := Object derive: #(file mode isOpen)
+FileStream := Object derive: #(file, mode, isOpen)
 # FileStream provides stream-oriented reading and writing on filesystem-backed text or binary data.
 # It is the low-level streaming complement to the coarse-grained File utility class.
 # Use FileStream when code needs incremental reads, writes, or cursor-based file access.

@@ -285,7 +285,7 @@ suite "Stdlib: Reflection":
 
   test "collect: preserves Array species":
     let result = interp.evalStatements("""
-      Arr := #(1 2 3).
+      Arr := #(1, 2, 3).
       Doubles := Arr collect: [ :n | n * 2 ].
       Result := Doubles className
     """)

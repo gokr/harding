@@ -159,7 +159,7 @@ Catalog>>classNamesForLibrary: aLibraryName [
                 i := i + 1
             ]
         ] on: Exception do: [:ex |
-            Transcript showCr: ("Failed to iterate keys for " , libraryName , ": " , ex printString)
+            Transcript showCr: ("Failed to iterate keys for " & libraryName & ": " & ex printString)
         ]
     ]
 
@@ -239,12 +239,12 @@ Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLi
 
     classObj := self classForName: aClassName currentLibrary: aLibraryName
     classObj isNil ifTrue: [
-        Transcript showCr: ("No class object found for " , aClassName)
+        Transcript showCr: ("No class object found for " & aClassName)
         ^ #()
     ]
 
     (classObj isClass) ifFalse: [
-        Transcript showCr: ("Resolved object is not a class for " , aClassName)
+        Transcript showCr: ("Resolved object is not a class for " & aClassName)
         ^ #()
     ]
 
@@ -289,7 +289,7 @@ Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLi
     ^ [ stringNames sorted ]
         on: Exception
         do: [:ex |
-            Transcript showCr: ("Method sort failed: " , ex printString)
+            Transcript showCr: ("Method sort failed: " & ex printString)
             stringNames
         ]
 ]
@@ -315,7 +315,7 @@ Catalog>>methodTextFromInfo: info [
     hasBlock := info at: "hasBlock" ifAbsent: [ false ]
 
     hasBlock ifTrue: [
-        ^ header , " [\n" , source , "\n]" , suffix
+        ^ header & " [\n" & source & "\n]" & suffix
     ]
     ^ header
 ]
@@ -352,7 +352,7 @@ Catalog>>nextAvailableClassNameFrom: baseName [
 
     [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
         counter := counter + 1
-        name := baseName , (counter printString)
+        name := baseName & (counter printString)
     ]
 
     ^ name

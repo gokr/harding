@@ -87,7 +87,7 @@ The syntax definition provides highlighting for:
 | Assignment | `:=` |
 | Return | `^` |
 | Method def | `>>` |
-| Arrays | `#(1 2 3)` |
+| Arrays | `#(1, 2, 3)` |
 | Tables | `#{"key" -> "value"}` |
 
 ## Troubleshooting

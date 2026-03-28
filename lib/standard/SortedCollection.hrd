@@ -4,7 +4,7 @@
 # Uses composition with an internal Array, not inheritance.
 #
 
-SortedCollection := Object derive: #(sortBlock elements)
+SortedCollection := Object derive: #(sortBlock, elements)
 # SortedCollection maintains ordered elements according to the collection's comparison policy.
 # It builds on the collection protocol while preserving sorted insertion and traversal order.
 # Use this class when callers need deterministic ordered results instead of append order.

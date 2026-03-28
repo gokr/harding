@@ -2,7 +2,7 @@
 # BonaMCP - NimCP-backed MCP server for live Bona and Harding access.
 # ==========================================================================.
 
-BonaMCP := Object derive: #(server catalog)
+BonaMCP := Object derive: #(server, catalog)
 
 BonaMCP>>initialize [
     server := nil
@@ -102,7 +102,7 @@ BonaMCP>>isErrorResult: result [
 BonaMCP>>printableResultFor: anObject [
     anObject isNil ifTrue: [ ^ "nil" ]
     (anObject isClass) ifTrue: [
-        ^ "<class " , anObject name , ">"
+        ^ "<class " & anObject name & ">"
     ]
     ^ anObject printString
 ]
@@ -113,8 +113,8 @@ BonaMCP>>linesToText: lines [
     first := true
 
     lines do: [:line |
-        first ifFalse: [ out := out , "\n" ]
-        out := out , line asString
+        first ifFalse: [ out := out & "\n" ]
+        out := out & line asString
         first := false
     ]
 
@@ -163,7 +163,7 @@ BonaMCP>>toolEval: args [
 
     result := [ Object eval: code ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ]
+        do: [:ex | "IDE_ERROR: " & ex printString ]
 
     (self isErrorResult: result) ifTrue: [
         ^ self jsonError: result
@@ -237,7 +237,7 @@ BonaMCP>>toolGetMethodSource: args [
     info := catalog methodSourceInfoForClass: className selector: selector
     found := info at: "found" ifAbsent: [ false ]
     found ifFalse: [
-        ^ self jsonError: ("Method source not found for " , className , ">>" , selector)
+        ^ self jsonError: ("Method source not found for " & className & ">>" & selector)
     ]
 
     payload := Table new
@@ -257,12 +257,12 @@ BonaMCP>>toolLoadFile: args [
     ]
 
     (File exists: path) ifFalse: [
-        ^ self jsonError: ("File not found: " , path)
+        ^ self jsonError: ("File not found: " & path)
     ]
 
     result := [ Harding load: path ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ]
+        do: [:ex | "IDE_ERROR: " & ex printString ]
 
     (self isErrorResult: result) ifTrue: [
         ^ self jsonError: result
@@ -320,7 +320,7 @@ BonaMCP>>registerDefaultToolsOn: aServer [
     properties at: "selector" put: (self stringProperty: "Method selector to retrieve")
     aServer toolNamed: "bona_get_method_source"
         description: "Return method source and file metadata for a class selector"
-        schema: (self schemaWithRequired: #("className" "selector") properties: properties)
+        schema: (self schemaWithRequired: #("className", "selector") properties: properties)
         do: [:args | self toolGetMethodSource: args ]
 
     properties := Table new
@@ -341,7 +341,7 @@ BonaMCP>>startOn: aPort host: aHost [
     server := NimCP bonaDefault
     self registerDefaultToolsOn: server
     server listenOn: aPort host: aHost
-    Transcript showCr: ("Bona MCP listening on " , server url)
+    Transcript showCr: ("Bona MCP listening on " & server url)
     ^ server
 ]
 

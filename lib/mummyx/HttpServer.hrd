@@ -40,5 +40,5 @@ HttpServer>>servePublic: port [
 ]
 
 HttpServer>>printString [
-  ^ "<HttpServer port: " , self port printString , ">"
+  ^ "<HttpServer port: " & self port printString & ">"
 ]

@@ -63,7 +63,7 @@ HttpRequest>>respondFragment: fragment [
 ]
 
 HttpRequest>>respondFragment: fragment oob: oobFragment [
-  ^ self respondFragment: fragment oobs: (Array with: oobFragment)
+  ^ self respondFragment: fragment oobs: #(oobFragment)
 ]
 
 HttpRequest>>respondFragment: fragment oobs: oobFragments [
@@ -91,5 +91,5 @@ HttpRequest>>respondRedirect: url [
 ]
 
 HttpRequest>>printString [
-  ^ "<HttpRequest " , self method , " " , self path , ">"
+  ^ "<HttpRequest " & self method & " " & self path & ">"
 ]

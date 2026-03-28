@@ -15,7 +15,7 @@ suite "Json Object Serialization":
 
   test "serializes ordinary objects by slot order":
     let (results, err) = interp.evalStatements("""
-      Person := Object derivePublic: #(name age).
+      Person := Object derivePublic: #(name, age).
       person := Person new.
       person::name := "Alice".
       person::age := 30.
@@ -42,7 +42,7 @@ suite "Json Object Serialization":
 
   test "supports exclude and rename rules":
     let (results, err) = interp.evalStatements("""
-      User := Object derivePublic: #(id username password).
+      User := Object derivePublic: #(id, username, password).
       User jsonExclude: #(password);
            jsonRename: #{#username -> "userName"}.
       user := User new.
@@ -59,8 +59,8 @@ suite "Json Object Serialization":
 
   test "supports jsonOnly and omit rules":
     let (results, err) = interp.evalStatements("""
-      Profile := Object derivePublic: #(id email avatar bio).
-      Profile jsonOnly: #(id email avatar bio);
+      Profile := Object derivePublic: #(id, email, avatar, bio).
+      Profile jsonOnly: #(id, email, avatar, bio);
               jsonOmitNil: #(avatar);
               jsonOmitEmpty: #(bio).
       profile := Profile new.
@@ -78,8 +78,8 @@ suite "Json Object Serialization":
 
   test "supports explicit field order":
     let (results, err) = interp.evalStatements("""
-      Person := Object derivePublic: #(name age city).
-      Person jsonFieldOrder: #(city name).
+      Person := Object derivePublic: #(name, age, city).
+      Person jsonFieldOrder: #(city, name).
       person := Person new.
       person::name := "Alice".
       person::age := 30.
@@ -91,7 +91,7 @@ suite "Json Object Serialization":
 
   test "supports rawJson and symbolName formatters":
     let (results, err) = interp.evalStatements("""
-      Envelope := Object derivePublic: #(payload kind).
+      Envelope := Object derivePublic: #(payload, kind).
       Envelope jsonFormat: #{#payload -> #rawJson, #kind -> #symbolName}.
       envelope := Envelope new.
       envelope::payload := "{\"ok\":true}".
@@ -105,7 +105,7 @@ suite "Json Object Serialization":
 
   test "supports string and className formatters":
     let (results, err) = interp.evalStatements("""
-      Wrapper := Object derivePublic: #(count type).
+      Wrapper := Object derivePublic: #(count, type).
       Wrapper jsonFormat: #{#count -> #string, #type -> #className}.
       wrapper := Wrapper new.
       wrapper::count := 42.
@@ -119,7 +119,7 @@ suite "Json Object Serialization":
 
   test "supports jsonRepresentation fallback":
     let (results, err) = interp.evalStatements("""
-      Invoice := Object derivePublic: #(id lines).
+      Invoice := Object derivePublic: #(id, lines).
       Invoice>>jsonRepresentation [
         ^ #{
           "id" -> id,
@@ -128,7 +128,7 @@ suite "Json Object Serialization":
       ].
       invoice := Invoice new.
       invoice::id := 9.
-      invoice::lines := #(1 2 3 4).
+      invoice::lines := #(1, 2, 3, 4).
       Result := Json stringify: invoice.
     """)
     check err.len == 0

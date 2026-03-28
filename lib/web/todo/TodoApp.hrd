@@ -1,4 +1,4 @@
-TodoApp := Object derivePublic: #(server router repository port).
+TodoApp := Object derivePublic: #(server, router, repository, port).
 
 Harding at: "TodoAppUseMySql" put: false.
 

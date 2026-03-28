@@ -73,7 +73,7 @@ suite "Todo render cache":
       Repo toggle: 1.
       Item3 := TodoItemComponent todo: (Repo all at: 0) routePrefix: "" panelId: "todo-panel".
       Third := Item3 renderString.
-      (First = Second) printString , "|" , (First = Third) printString , "|" , Third
+      (First = Second) printString & "|" & (First = Third) printString & "|" & Third
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)

@@ -17,8 +17,8 @@ String class>>withCapacity: capacity <primitive primitiveStringWithCapacity: cap
 # String primitives.
 #====================================================================.
 
-String>>, other <primitive primitiveConcat: other>
-  # Concatenate strings (comma operator) - returns NEW string, non-destructive
+String>>& other <primitive primitiveConcat: other>
+  # Concatenate strings with the preferred operator - returns NEW string
 
 String>>size <primitive primitiveStringSize>
   # Return string length
@@ -65,7 +65,7 @@ String>>repeat: count <primitive primitiveRepeat: count>
 String>><< other <primitive primitiveStringAppend: other>
   # Append in place - MUTATES the string and returns self for chaining
   # Usage: buffer << "text" << " more text"
-  # For functional concatenation use #, (comma) instead
+  # For functional concatenation use & instead
 
 #====================================================================.
 # String printing.
@@ -73,7 +73,7 @@ String>><< other <primitive primitiveStringAppend: other>
 
 String>>printString [
   # Return the string quoted with double quotes
-  ^ "\"" , self , "\""
+  ^ "\"" & self & "\""
 ]
 
 String>>asString [
@@ -98,6 +98,3 @@ String>>notEmpty [
 String>>startsWith: prefix <primitive primitiveStartsWith: prefix>
 
 String>>endsWith: suffix <primitive primitiveEndsWith: suffix>
-
-
-

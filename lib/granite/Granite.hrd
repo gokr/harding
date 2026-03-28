@@ -21,7 +21,7 @@ Granite class>>collectFilesFor: anApplication [
   # Starting from Application, collect all transitively referenced classes
   | visited toProcess classes |
   visited := Set new
-  toProcess := Array with: anApplication class
+  toProcess := #(anApplication class)
   classes := Array new
 
   [toProcess isEmpty] whileFalse: [

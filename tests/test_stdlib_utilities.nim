@@ -43,7 +43,7 @@ suite "Stdlib: Direct Access":
 
   test "derivePublic: allows readable and writable slots":
     let result = interp.evalStatements("""
-      Auto := Object derivePublic: #(x y).
+      Auto := Object derivePublic: #(x, y).
       AutoInst := Auto new.
       AutoInst::x := 10.
       AutoInst::y := 20.
@@ -67,8 +67,8 @@ suite "Stdlib: Direct Access":
 
   test "derive:read:write: stores selective direct access":
     let result = interp.evalStatements("""
-      Selective := Object derive: #(x y)
-                              read: #(x y)
+      Selective := Object derive: #(x, y)
+                              read: #(x, y)
                               write: #(x).
       SelInst := Selective new.
       SelInst::x := 5.
@@ -81,7 +81,7 @@ suite "Stdlib: Direct Access":
 
   test "derive:read:write: only grants specified direct access":
     let result = interp.evalStatements("""
-      Selective := Object derive: #(x y)
+      Selective := Object derive: #(x, y)
                               read: #(x)
                               write: #(x).
       SelInst := Selective new.
@@ -93,7 +93,7 @@ suite "Stdlib: Direct Access":
 
   test "derivePublic: works with multiple slots":
     let result = interp.evalStatements("""
-      Multi := Object derivePublic: #(a b c d).
+      Multi := Object derivePublic: #(a, b, c, d).
       MultiInst := Multi new.
       MultiInst::a := 1.
       MultiInst::b := 2.
@@ -108,7 +108,7 @@ suite "Stdlib: Direct Access":
 
   test "derivePublic: works with string slots":
     let result = interp.evalStatements("""
-      Person := Object derivePublic: #(name age).
+      Person := Object derivePublic: #(name, age).
       PersonInst := Person new.
       PersonInst::name := "Alice".
       PersonInst::age := 30.
@@ -131,7 +131,7 @@ suite "Stdlib: Direct Access":
 
   test "derivePublic: creates readable and writable slot metadata":
     let result = interp.evalStatements("""
-      PublicThing := Object derivePublic: #(name age).
+      PublicThing := Object derivePublic: #(name, age).
       Result := PublicThing
     """)
     check(result[1].len == 0)
@@ -145,8 +145,8 @@ suite "Stdlib: Direct Access":
 
   test "derive:read:write: stores direct access metadata":
     let result = interp.evalStatements("""
-      Selective2 := Object derive: #(x y z)
-                               read: #(x z)
+      Selective2 := Object derive: #(x, y, z)
+                               read: #(x, z)
                                write: #(y).
       Result := Selective2
     """)
@@ -204,7 +204,7 @@ suite "Stdlib: Direct Access":
 
   test ":: reads and writes declared public slots":
     let result = interp.evalStatements("""
-      Point := Object derivePublic: #(x y).
+      Point := Object derivePublic: #(x, y).
       P := Point new.
       P::x := 10.
       P::y := 20.

@@ -28,7 +28,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - JSON API server tutorial with complete example application demonstrating REST patterns.
 - MCP (Model Context Protocol) integration documentation for AI-assisted development workflows.
 - Thin HTMX response helpers on `HttpRequest` for main fragments plus out-of-band fragments (`respondFragment:`, `oob:`, `oobs:`).
-- `Array class>>with:` and `Array class>>with:with:` convenience constructors for small runtime-built collections.
+- `&` is now available as generic concatenation, and `#(...)` now accepts comma-separated elements as part of the syntax migration.
 
 ### Changed
 - Bona workspace artifacts are no longer tracked in git (added to .gitignore).

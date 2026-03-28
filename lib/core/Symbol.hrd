@@ -18,12 +18,12 @@ Symbol := String derive
 
 Symbol>>printString [
   # Symbols print with # prefix and without quotes
-  ^ "#" , self
+  ^ "#" & self
 ]
 
 Symbol>>asString [
   # Return the symbol's string representation
-  ^ "" , self
+  ^ "" & self
 ]
 
 Symbol>>= other [

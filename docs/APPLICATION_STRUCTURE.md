@@ -131,7 +131,7 @@ when isMainModule:
 args := System arguments
 
 # Application logic
-Stdout writeline: ("Arguments: " , (args size) asString)
+Stdout writeline: ("Arguments: " & (args size) asString)
 
 args do: [:arg |
   Stdout writeline: arg

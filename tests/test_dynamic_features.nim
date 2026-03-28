@@ -32,7 +32,7 @@ suite "Dynamic Message Sending (perform:)":
   test "perform: with keyword selector (perform:with:)":
     let result = interp.evalStatements("""
       MyClass := Object derive.
-      MyClass >> greet: name [ ^"hello " , name ].
+      MyClass >> greet: name [ ^"hello " & name ].
       obj := MyClass new.
       Result := obj perform: #greet: with: "world"
     """)
@@ -123,7 +123,7 @@ suite "Reflection: respondsTo:":
     check(results[0][^1].boolVal == true)
 
   test "Array responds to #do:":
-    let (result, err) = interp.doit("#(1 2 3) respondsTo: #do:")
+    let (result, err) = interp.doit("#(1, 2, 3) respondsTo: #do:")
     check(err.len == 0)
     check(result.kind == vkBool)
     check(result.boolVal == true)
@@ -172,7 +172,7 @@ suite "Reflection: slotNames":
 
   test "slotNames returns array of correct size":
     let results = interp.evalStatements("""
-      Dog := Object derive: #(name breed age)
+      Dog := Object derive: #(name, breed, age)
       Result := Dog slotNames size
     """)
     check(results[1].len == 0)
@@ -181,7 +181,7 @@ suite "Reflection: slotNames":
 
   test "slotNames contains correct names":
     let results = interp.evalStatements("""
-      Cat := Object derive: #(name color)
+      Cat := Object derive: #(name, color)
       names := Cat slotNames
       Result := names size
     """)
@@ -191,7 +191,7 @@ suite "Reflection: slotNames":
 
   test "slotAt: returns slot value":
     let results = interp.evalStatements("""
-      Person := Object derive: #(name age)
+      Person := Object derive: #(name, age)
       p := Person new
       p slotAt: #name put: "Alice"
       Result := p slotAt: #name
@@ -202,7 +202,7 @@ suite "Reflection: slotNames":
 
   test "slotAt:put: sets slot value":
     let results = interp.evalStatements("""
-      Person := Object derive: #(name age)
+      Person := Object derive: #(name, age)
       p := Person new
       p slotAt: #age put: 30
       Result := p slotAt: #age
@@ -240,7 +240,7 @@ suite "Reflection: hasProperty: and properties":
 
   test "properties returns correct size":
     let results = interp.evalStatements("""
-      Vehicle := Object derive: #(make model year)
+      Vehicle := Object derive: #(make, model, year)
       v := Vehicle new
       Result := v properties size
     """)

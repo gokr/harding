@@ -9,7 +9,7 @@ HelloWorld := Application derive: #()
 HelloWorld>>main: args [
   Transcript showCr: "Hello, World!"
   args size > 0 ifTrue: [
-    Transcript showCr: ("Arguments: " , (args printString))
+    Transcript showCr: ("Arguments: " & (args printString))
   ]
   ^ 0
 ]

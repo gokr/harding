@@ -8,7 +8,7 @@
 | Float | `3.14`, `-0.5` | Floating point numbers |
 | String | `"hello"`, `"""multi\nline"""` | Double-quoted or triple-quoted |
 | Symbol | `#symbol`, `#at:put:`, `#"""multi\nline"""` | Used as selectors, keys |
-| Array | `#(1 2 3)`, `#("a" "b")` | Sequences of values |
+| Array | `#(1, 2, 3)`, `#("a", "b")` | Sequences of values |
 | Table | `#{"key" -> "value"}` | Key-value mappings (Harding syntax) |
 | JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |
 | JSON Array | `json{"items": [1, 2, 3]}` | Arrays use JSON [] syntax inside json{} |
@@ -53,14 +53,14 @@ json{"value": X, "items": [1, 2, X]}
 
 ```smalltalk
 Json parse: "{\"name\":\"Alice\"}"      # Parse JSON to Harding values
-Json stringify: #("a" 1 true)                 # Emit compact JSON string
+Json stringify: #("a", 1, true)                 # Emit compact JSON string
 someObject toJson                             # Convenience alias for Json stringify:
 ```
 
 ### Object Serialization
 
 ```smalltalk
-User := Object derivePublic: #(id username password avatarUrl)
+User := Object derivePublic: #(id, username, password, avatarUrl)
     ; jsonExclude: #(password)
     ; jsonRename: #{#username -> "userName"}
     ; jsonOmitNil: #(avatarUrl).
@@ -165,11 +165,20 @@ x >= y                           # Greater than or equal
 a // b                           # Integer division
 a \\ b                           # Modulo
 a ~~ b                           # Not identity
-"a" , "b"                        # String concatenation (non-destructive)
+"a" & "b"                        # String concatenation (non-destructive)
 s << "text"                      # In-place append (mutates, returns self)
-a & b                            # Logical AND
+a and: [ b ]                     # Logical AND with short-circuit
 a | b                            # Logical OR
 ```
+
+Common binary selectors:
+
+```text
++  -  *  /  <  >  =  ==  %  //  \\  <=  >=  ~=  <<  &  |
+```
+
+`,` is now reserved for separators inside literals such as `#(...)`, `#{...}`,
+and `json{...}`.
 
 ### Keyword (one or more arguments)
 
@@ -307,7 +316,7 @@ Person extendClass: [
 ### Combined Class Creation
 
 ```smalltalk
-Person := Object derive: #(name age) methods: [
+Person := Object derive: #(name, age) methods: [
   self >> greet [ ^ "Hello, I am " + name ].
   self >> haveBirthday [ age := age + 1 ]
 ]
@@ -319,20 +328,20 @@ Person := Object derive: #(name age) methods: [
 
 ```smalltalk
 # Class with direct slot access (no accessors generated)
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 
 # Class with public slots (auto-generated accessors + :: access)
-Person := Object derivePublic: #(name age)
+Person := Object derivePublic: #(name, age)
 
 # Canonical form with explicit read/write slot lists
-Account := Object derive: #(balance owner)
-                       read: #(balance owner)
+Account := Object derive: #(balance, owner)
+                       read: #(balance, owner)
                        write: #(balance)
 
 # With multiple inheritance
-ColoredPoint := Object derive: #(color x y)
-                       read: #(color x y)
-                       write: #(color x y)
+ColoredPoint := Object derive: #(color, x, y)
+                       read: #(color, x, y)
+                       write: #(color, x, y)
                        superclasses: #(Point)
 
 # Subclass (single inheritance)
@@ -361,15 +370,15 @@ Point>>moveBy: dx y: dy [
 
 ```smalltalk
 # Class with auto-generated getters and setters (v0.8.0+)
-Person := Object derivePublic: #(name age)
+Person := Object derivePublic: #(name, age)
 p := Person new
 p name: "Alice"      # Setter
 p age: 30            # Setter
 p name               # Getter - returns "Alice"
 
 # Selective accessor generation (v0.8.0+)
-Account := Object derive: #(balance owner)
-                       read: #(balance owner)
+Account := Object derive: #(balance, owner)
+                       read: #(balance, owner)
                        write: #(balance)
 acc := Account new
 acc balance: 100     # Setter for balance
@@ -378,8 +387,8 @@ acc owner            # Getter - returns nil (not set)
 # acc owner: "Bob"   # Error - no setter for owner
 
 # Canonical form with explicit read/write slot lists (v0.8.0+)
-Account := Object derive: #(balance owner)
-                       read: #(balance owner)
+Account := Object derive: #(balance, owner)
+                       read: #(balance, owner)
                        write: #(balance)
 ```
 
@@ -432,7 +441,7 @@ Comparable := Mixin derive
 Comparable >> < other [ ^ (self compareTo: other) < 0 ]
 
 # Mix into a class
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 Point addSuperclass: Comparable
 ```
 
@@ -666,7 +675,7 @@ arr add: 1.
 arr add: 2.
 
 # Or
-arr := #(1 2 3)
+arr := #(1, 2, 3)
 ```
 
 ### Table Construction
@@ -701,8 +710,8 @@ sorted first  # Returns 2
 
 # Custom sort block
 sorted := SortedCollection sortBlock: [:a :b | a > b].  # Descending
-sorted addAll: #(3 1 4 1 5).
-sorted asArray  # Returns #(5 4 3 1 1)
+sorted addAll: #(3, 1, 4, 1, 5).
+sorted asArray  # Returns #(5, 4, 3, 1, 1)
 ```
 
 ### Set
@@ -764,7 +773,7 @@ conn execute: "CREATE TABLE players (name TEXT, score INTEGER)".
 conn execute: "INSERT INTO players (name, score) VALUES ('Ada', 1200)".
 result := conn query: "SELECT name, score FROM players".
 row := result next.
-((row at: 0) , " => " , (row at: 1)) println.
+((row at: 0) & " => " & (row at: 1)) println.
 result close.
 conn close.
 ```

@@ -24,7 +24,7 @@ CounterApp>>main: args [
   button := GtkButton newLabel: "Increment"
   button clicked: [
     count := count + 1
-    label label: ("Count: " , (count printString))
+    label label: ("Count: " & (count printString))
   ]
 
   box append: label

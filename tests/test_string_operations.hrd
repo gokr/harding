@@ -53,20 +53,20 @@ result := s4 << "A"
   "FAIL: << should return self for chaining" println
 ]
 
-# Test 5: Non-destructive concat with , operator.
+# Test 5: Non-destructive concat with & operator.
 base := "Hello"
-result5 := base , " World"
+result5 := base & " World"
 (base = "Hello") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
   failed := failed + 1
-  "FAIL: , operator should not mutate original" println
+  "FAIL: & operator should not mutate original" println
 ]
 (result5 = "Hello World") ifTrue: [
   passed := passed + 1
 ] ifFalse: [
   failed := failed + 1
-  "FAIL: , operator should return concatenated string" println
+  "FAIL: & operator should return concatenated string" println
 ]
 
 # Test 6: Mixed usage with loop.
@@ -112,16 +112,16 @@ s7 << "end"
   "FAIL: Large pre-allocated string should handle many appends, got size: " print. (s7 size) println
 ]
 
-# Test 9: Comparison between , and <<.
+# Test 9: Comparison between & and <<.
 s9 := String withCapacity: 50
 s9 << "a" << "b" << "c"
 
-s10 := "a" , "b" , "c"
+s10 := "a" & "b" & "c"
 (s9 = s10) ifTrue: [
   passed := passed + 1
 ] ifFalse: [
   failed := failed + 1
-  "FAIL: , and << should produce same final result" println
+  "FAIL: & and << should produce same final result" println
 ]
 
 (s9 = "abc") ifTrue: [
@@ -133,8 +133,8 @@ s10 := "a" , "b" , "c"
 
 # Summary.
 ("=========================================") println
-("Tests passed: " , (passed printString)) println
-("Tests failed: " , (failed printString)) println
+("Tests passed: " & (passed printString)) println
+("Tests failed: " & (failed printString)) println
 
 failed = 0 ifTrue: [
   "All String operation tests passed!" println

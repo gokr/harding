@@ -96,7 +96,7 @@ Request flow:
 - The MummyX thread accepts a request and packages it as a native `PendingRequest`.
 - `mummyx_bridge.nim` pushes that request into a native queue shared with the interpreter side.
 - The scheduler polls active `NimChannel`s before each slice. When data is available, it unblocks one waiting worker process and delivers the job through `interp.nimChannelResult`.
-- The worker process resumes its `MummyXRequestChannel receive`, gets a Harding array shaped like `#(request handlerBlock)`, and evaluates the handler block with the request as argument.
+- The worker process resumes its `MummyXRequestChannel receive`, gets a Harding array shaped like `#(request, handlerBlock)`, and evaluates the handler block with the request as argument.
 - The request object seen by Harding is a proxy `HttpRequest` instance backed by a Nim `RequestProxy`.
 - When Harding code responds with `respond:body:`, `respondHtml:`, or `respondJson:`, the bridge sends a `PendingResponse` back to the MummyX thread, which writes the HTTP response to the socket.
 
@@ -125,7 +125,7 @@ sequenceDiagram
     MX->>Bridge: create PendingRequest
     Bridge->>Bridge: enqueue native request
     Sched->>Bridge: poll NimChannel
-    Bridge-->>Sched: #(HttpRequest handlerBlock)
+    Bridge-->>Sched: #(HttpRequest, handlerBlock)
     Sched->>Worker: unblock waiting worker
     Worker->>VM: MummyXRequestChannel receive
     VM->>Worker: deliver request job

@@ -4,7 +4,7 @@
 # Now using GtkSourceView for text display (read-only).
 # ============================================================================.
 
-Transcript := Object derive: #(window box scrolledWindow sourceView owner)
+Transcript := Object derive: #(window, box, scrolledWindow, sourceView, owner)
 # Transcript implements Bona's log and output viewer for messages emitted by the running image.
 # It provides a read-oriented window for status text, diagnostics, and ad hoc printed output.
 # Tools such as Workspace, Builder, and Browser rely on Transcript for user-visible feedback.
@@ -84,7 +84,7 @@ Transcript>>scrollToBottom [
 Transcript>>checkSourceView [
   # Debug method to see which sourceView we're using
   sourceView notNil ifTrue: [
-    ^ ("Transcript sourceView: ", sourceView text firstLine)
+    ^ ("Transcript sourceView: " & sourceView text firstLine)
   ]
   ^ "Transcript sourceView: nil"
 ]
@@ -161,12 +161,12 @@ Transcript>>doItSelection [
   code isEmpty not ifTrue: [
     result := [ Object eval: code ]
       on: Exception
-      do: [:ex | "IDE_ERROR: " , ex printString ]
+      do: [:ex | "IDE_ERROR: " & ex printString ]
     (result isKindOf: String)
       ifTrue: [ shown := result ]
       ifFalse: [
         shown := (result isClass)
-          ifTrue: [ "<class " , result name , ">" ]
+          ifTrue: [ "<class " & result name & ">" ]
           ifFalse: [ result printString ]
       ]
     self showCr: shown

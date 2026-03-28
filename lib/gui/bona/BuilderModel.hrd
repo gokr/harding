@@ -2,7 +2,7 @@
 # BuilderModel - Non-GTK state holder for Builder.
 # ============================================================================.
 
-BuilderModel := Object derive: #(catalog currentApp appClasses isRefreshing outputText)
+BuilderModel := Object derive: #(catalog, currentApp, appClasses, isRefreshing, outputText)
 
 BuilderModel>>initialize [
     catalog := Catalog new
@@ -25,7 +25,7 @@ BuilderModel>>outputText [ ^ outputText ]
 BuilderModel>>appendOutput: text [
     outputText isEmpty
         ifTrue: [ outputText := text ]
-        ifFalse: [ outputText := outputText , "\n" , text ]
+        ifFalse: [ outputText := outputText & "\n" & text ]
     ^ self
 ]
 

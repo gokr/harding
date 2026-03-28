@@ -26,7 +26,7 @@ DaisyPart class>>attrs: attrs withClass: className [
   existingClass := merged at: #class ifAbsent: [ "" ]
   merged at: #class put: (existingClass isEmpty
     ifTrue: [ className ]
-    ifFalse: [ existingClass , " " , className ])
+    ifFalse: [ existingClass & " " & className ])
 
   ^ merged
 ]
@@ -73,9 +73,9 @@ DaisyField class>>label: labelText control: controlMarkup [
 
 DaisyField class>>label: labelText control: controlMarkup hint: hintText attrs: attrs [
   | content |
-  content := (Html span: #{#class -> "label-text font-semibold"} text: labelText) , controlMarkup
+  content := (Html span: #{#class -> "label-text font-semibold"} text: labelText) & controlMarkup
   hintText notNil ifTrue: [
-    content := content , (Html p: #{#class -> "muted text-sm"} text: hintText)
+    content := content & (Html p: #{#class -> "muted text-sm"} text: hintText)
   ]
   ^ Html label: (self attrs: attrs withClass: "form-control gap-2") with: content
 ]

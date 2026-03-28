@@ -101,7 +101,7 @@ suite "Bona headless models":
     var interp = newHeadlessToolInterpreter()
     let (result, err) = interp.doit("""
       M := InspectorModel new.
-      Obj := #("one" "two").
+      Obj := #("one", "two").
       M inspect: Obj.
       M togglePath: "root.[0]".
       M selectValue: 42 name: "answer".

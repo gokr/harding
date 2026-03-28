@@ -4,7 +4,7 @@
 # Now using GtkSourceView for syntax highlighting.
 # ============================================================================.
 
-Workspace := Object derive: #(window box scrolledWindow sourceView owner workspaceId filePath)
+Workspace := Object derive: #(window, box, scrolledWindow, sourceView, owner, workspaceId, filePath)
 # Workspace provides the free-form code editing and evaluation surface in Bona.
 # It is the main tool for ad hoc expressions, Print It, Do It, and inspection workflows.
 # The workspace integrates source editing with the live Harding image and GUI actions.
@@ -37,11 +37,11 @@ Workspace>>openWindowFor: anOwner id: anId [
 
     # Set workspace ID and file path
     workspaceId := anId
-    filePath := "workspace-" , (workspaceId asString) , ".hrd"
+    filePath := "workspace-" & (workspaceId asString) & ".hrd"
 
     # Create main window
     window := GtkWindow new
-    window title: ("Workspace #" , (workspaceId printString))
+    window title: ("Workspace #" & (workspaceId printString))
     window iconName: "harding"
     window setDefaultSize: 800 height: 600
 
@@ -164,7 +164,7 @@ Workspace>>workspaceId: anId [
 Workspace>>doIt: codeString [
     ^ [ Object eval: codeString ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ]
+        do: [:ex | "IDE_ERROR: " & ex printString ]
 ]
 
 Workspace>>notifyCodeChanged [
@@ -229,7 +229,7 @@ Workspace>>printItSelection [
     self clearError
     self notifyCodeChanged
     resultString := (result isClass)
-        ifTrue: [ "<class " , result name , ">" ]
+        ifTrue: [ "<class " & result name & ">" ]
         ifFalse: [ result printString ]
 
     # Insert result after selection or at end of current line
@@ -269,7 +269,7 @@ Workspace>>inspectItSelection [
     self notifyCodeChanged
     result notNil ifTrue: [
         result inspect
-        Transcript showCr: ("Inspecting: " , (result printString))
+        Transcript showCr: ("Inspecting: " & (result printString))
     ]
     ^ result
 ]
@@ -287,7 +287,7 @@ Workspace>>evaluationSourceCode [
 Workspace>>showError: messageText [
     Transcript showCr: messageText
     window notNil ifTrue: [
-        window title: ("Workspace - " , messageText)
+        window title: ("Workspace - " & messageText)
     ]
 ]
 
@@ -404,17 +404,17 @@ Workspace>>saveContent [
         # Delete file if content is empty
         (File exists: filePath) ifTrue: [
             File delete: filePath
-            Transcript showCr: ("Deleted empty workspace file: " , filePath)
+            Transcript showCr: ("Deleted empty workspace file: " & filePath)
         ]
         ^self
     ]
     
     # Write content to file
     File write: content to: filePath
-    Transcript showCr: ("Saved workspace #" , (workspaceId printString) , " to " , filePath)
+    Transcript showCr: ("Saved workspace #" & (workspaceId printString) & " to " & filePath)
 ]
 
 Workspace>>checkSourceView [
   # Debug method to see which sourceView we're using
-  ^ ("Workspace sourceView: ", sourceView text firstLine)
+  ^ ("Workspace sourceView: " & sourceView text firstLine)
 ]

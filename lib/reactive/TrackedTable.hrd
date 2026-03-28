@@ -1,4 +1,4 @@
-TrackedTable := Object derivePublic: #(dependents transactionDepth pendingChange storage)
+TrackedTable := Object derivePublic: #(dependents, transactionDepth, pendingChange, storage)
 
 TrackedTable addSuperclass: TrackedSubject
 

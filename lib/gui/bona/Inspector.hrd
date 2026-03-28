@@ -3,7 +3,7 @@
 # Two-pane layout: tree view with expand/collapse | embedded workspace.
 # ============================================================================.
 
-Inspector := Object derive: #(model window mainBox paned treeScroll treeBox workspaceBox workspaceSourceView workspaceLabel owner)
+Inspector := Object derive: #(model, window, mainBox, paned, treeScroll, treeBox, workspaceBox, workspaceSourceView, workspaceLabel, owner)
 # Inspector presents object structure and nested values through a browsable tree-style view.
 # It is used to inspect arbitrary Harding objects, collections, and nested slot contents.
 # Workspace and other tools rely on this class to turn live objects into explorable UI state.
@@ -47,7 +47,7 @@ Inspector>>openWindowFor: anOwner [
 
     # Create main window
     window := GtkWindow new
-    window title: ("Inspector: " , ((model inspectedObject) printString))
+    window title: ("Inspector: " & ((model inspectedObject) printString))
     window iconName: "harding"
     window setDefaultSize: 750 height: 500
 
@@ -157,7 +157,7 @@ Inspector>>renderTree [
     treeScroll setChild: treeBox
 
     # Add self header
-    self addTreeHeader: ("self (" , ((model inspectedObject) className) , ")") to: treeBox
+    self addTreeHeader: ("self (" & ((model inspectedObject) className) & ")") to: treeBox
 
     # Render the inspected object's slots
     self renderSlotsOf: (model inspectedObject) atDepth: 0 pathPrefix: "root" into: treeBox
@@ -185,7 +185,7 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
         | slotNameString slotValue |
         slotNameString := slotName asString
         slotValue := anObject slotAt: slotName
-        inspector addLeafItem: (slotNameString , ": " , (inspector formatValue: slotValue)) depth: depth into: box
+        inspector addLeafItem: (slotNameString & ": " & (inspector formatValue: slotValue)) depth: depth into: box
     ]
 
     # If no slots, show a note
@@ -201,8 +201,8 @@ Inspector>>renderArraySlots: anArray atDepth: depth pathPrefix: prefix into: box
     idx := 0
     anArray do: [:element |
         | name path expanded |
-        name := "[" , (idx printString) , "]"
-        path := prefix , "." , name
+        name := "[" & (idx printString) & "]"
+        path := prefix & "." & name
         expanded := pathsTable at: path ifAbsent: [ false ]
 
         inspector addTreeButton: name
@@ -232,7 +232,7 @@ Inspector>>renderTableSlots: aTable atDepth: depth pathPrefix: prefix into: box 
     aTable keysAndValuesDo: [:key :value |
         | name path expanded |
         name := key printString
-        path := prefix , "." , name
+        path := prefix & "." & name
         expanded := pathsTable at: path ifAbsent: [ false ]
 
         inspector addTreeButton: name
@@ -261,7 +261,7 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
 
     # Build indentation
     indent := ""
-    depth timesRepeat: [ indent := indent , "    " ]
+    depth timesRepeat: [ indent := indent & "    " ]
 
     # Build icon prefix
     expandable ifTrue: [
@@ -271,7 +271,7 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
     ]
 
     # Build label
-    label := indent , icon , name , ": " , (model formatValue: value)
+    label := indent & icon & name & ": " & (model formatValue: value)
     button label: label
 
     # Click handler: toggle expansion and select
@@ -288,7 +288,7 @@ Inspector>>addTreeButton: name value: value depth: depth expanded: expanded expa
 
 Inspector>>addSimpleItem: name value: value depth: depth into: box [
     | label |
-    label := GtkLabel new: (name , ": " , (value printString))
+    label := GtkLabel new: (name & ": " & (value printString))
     label setHexpand: true
     label setHalignStart
     box append: label
@@ -298,8 +298,8 @@ Inspector>>addSimpleItem: name value: value depth: depth into: box [
 Inspector>>addLeafItem: text depth: depth into: box [
     | label indent |
     indent := ""
-    depth timesRepeat: [ indent := indent , "    " ]
-    label := GtkLabel new: (indent , text)
+    depth timesRepeat: [ indent := indent & "    " ]
+    label := GtkLabel new: (indent & text)
     label setHexpand: true
     label setHalignStart
     label addCssClass: "dim-label"
@@ -361,10 +361,10 @@ Inspector>>evalInContext: codeString [
     Harding at: "_inspectorSelf" put: (model selectedObject)
     wrappedCode := "| self |
 self := Harding at: \"_inspectorSelf\"
-" , codeString
+" & codeString
     ^ [ Object eval: wrappedCode ]
         on: Exception
-        do: [:ex | "Error: " , ex printString ]
+        do: [:ex | "Error: " & ex printString ]
 ]
 
 Inspector>>isErrorResult: aResult [
@@ -384,7 +384,7 @@ Inspector>>doItInWorkspace [
     (self isErrorResult: result) ifTrue: [
         window title: result
     ] ifFalse: [
-        window title: ("Inspector: " , ((model inspectedObject) printString))
+        window title: ("Inspector: " & ((model inspectedObject) printString))
     ]
     ^ result
 ]
@@ -400,7 +400,7 @@ Inspector>>printItInWorkspace [
     ]
 
     # Convert result to string
-    resultString := " " , (result printString)
+    resultString := " " & (result printString)
 
     # Insert at selection end
     cursorPos := workspaceSourceView getSelectionEnd

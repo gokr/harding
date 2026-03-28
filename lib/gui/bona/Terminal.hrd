@@ -2,7 +2,7 @@
 # Terminal - VTE-backed shell and command window.
 # ============================================================================.
 
-Terminal := Object derive: #(window box terminal owner workingDirectory launchCommand)
+Terminal := Object derive: #(window, box, terminal, owner, workingDirectory, launchCommand)
 
 Terminal class>>open [
     ^self openFor: nil in: System cwd command: nil
@@ -78,7 +78,7 @@ Terminal>>openWindowFor: anOwner in: aPath command: aCommandString [
 
 Terminal>>windowTitle [
     (launchCommand notNil and: [ launchCommand isEmpty not ]) ifTrue: [
-        ^ "Terminal - " , launchCommand
+        ^ "Terminal - " & launchCommand
     ]
     ^ "Terminal"
 ]

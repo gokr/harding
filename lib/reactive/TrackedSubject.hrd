@@ -1,4 +1,4 @@
-TrackedSubject := Object derivePublic: #(dependents transactionDepth pendingChange)
+TrackedSubject := Object derivePublic: #(dependents, transactionDepth, pendingChange)
 
 TrackedSubject>>initialize [
   dependents := Array new

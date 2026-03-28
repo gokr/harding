@@ -672,8 +672,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # Convert to string
     return fmt("nt_asString({receiverCode})")
 
-  of ",":
-    # String concatenation
+  of "&":
+    # Generic concatenation via string conversion
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
       return fmt("nt_comma({receiverCode}, {argCode})")

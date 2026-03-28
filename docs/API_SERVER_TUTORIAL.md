@@ -119,11 +119,11 @@ The example is organized around a few simple classes:
 The example uses ordinary Harding objects as JSON DTOs.
 
 ```smalltalk
-Todo := Object derivePublic: #(id title completed createdAt)
-    ; jsonFieldOrder: #(id title completed createdAt).
+Todo := Object derivePublic: #(id, title, completed, createdAt)
+    ; jsonFieldOrder: #(id, title, completed, createdAt).
 
-ErrorResponse := Object derivePublic: #(error message status)
-    ; jsonFieldOrder: #(error message status).
+ErrorResponse := Object derivePublic: #(error, message, status)
+    ; jsonFieldOrder: #(error, message, status).
 ```
 
 Because Harding now supports ordinary object serialization through `Json stringify:`, these DTOs can be returned directly as JSON.
@@ -313,7 +313,7 @@ Todo class>>openApiSchema [
     ^ #{
         "type" -> "object",
         "properties" -> #{ ... },
-        "required" -> #("id" "title" "completed" "createdAt")
+        "required" -> #("id", "title", "completed", "createdAt")
     }
 ]
 ```

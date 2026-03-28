@@ -270,12 +270,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkString, strVal: receiver.toString())
   of "printString":
     return NodeValue(kind: vkString, strVal: receiver.toString())
-  of ",":
-    if args.len > 0:
-      let aStr = receiver.toString()
-      let bStr = args[0].toString()
-      return NodeValue(kind: vkString, strVal: aStr & bStr)
-    return receiver
   of "+", "plus":
     if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
       return NodeValue(kind: vkInt, intVal: receiver.intVal + args[0].intVal)
@@ -491,9 +485,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkNil)
 
   of "&":
-    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
-      return NodeValue(kind: vkBool, boolVal: receiver.boolVal and args[0].boolVal)
-    return NodeValue(kind: vkNil)
+    if args.len > 0:
+      let aStr = receiver.toString()
+      let bStr = args[0].toString()
+      return NodeValue(kind: vkString, strVal: aStr & bStr)
+    return receiver
 
   of "|":
     if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:

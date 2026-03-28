@@ -78,7 +78,7 @@ The grammar provides scopes for the following constructs:
 | Method def | `keyword.operator.method-definition.harding` | `>>` |
 | Arrow | `keyword.operator.arrow.harding` | `->` |
 | Operators | `keyword.operator.harding` | `+`, `-`, `*`, `/`, `&`, `\|` |
-| Arrays | `meta.array.literal.harding` | `#(1 2 3)` |
+| Arrays | `meta.array.literal.harding` | `#(1, 2, 3)` |
 | Tables | `meta.table.literal.harding` | `#{"key" -> "value"}` |
 | Objects | `meta.object.literal.harding` | `{\| x: 1 \|}` |
 | Primitives | `support.function.primitive.harding` | `<primitive>...</primitive>` |

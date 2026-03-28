@@ -10,7 +10,7 @@ import ../core/types
 
 # Set of all binary operator tokens for quick lookup
 const BinaryOpTokens* = {
-  tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+  tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent,
   tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe
 }
 
@@ -252,7 +252,7 @@ proc parsePrimary(parser: var Parser): Node =
         # Check if this is a super send (followed by message selector)
         let nextTok = parser.peek()
         if nextTok.kind in {tkIdent, tkKeyword, tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq,
-                            tkPercent, tkComma, tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft,
+                             tkPercent, tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft,
                             tkAmpersand, tkPipe, tkTag}:
           # This is a super send, parse it
           var explicitParent: string = ""
@@ -647,7 +647,7 @@ proc parseExpression*(parser: var Parser; parseMessages = true,
         return current
       else:
         return accessedPrimary
-    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent,
        tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe:
       # Binary operator directly after primary
       current = parser.parseBinaryOperators(accessedPrimary, binaryTokens)
@@ -712,7 +712,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
       else:
         parser.parseError("Expected message after ;")
         return nil
-    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma,
+    of tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent,
        tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft, tkAmpersand, tkPipe:
       # Binary operator
       discard parser.next()  # Skip operator
@@ -871,11 +871,20 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
       return nil
 
     # Parse expression (element) - don't parse messages inside arrays
-    let element = parser.parseExpression(parseMessages = false)
+    let element = parser.parseExpression(parseMessages = false,
+                                         binaryTokens = TableValueBinaryOpTokens)
     if element == nil:
       parser.parseError("Expected array element")
       return nil
     array.elements.add(element)
+
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkRParen:
+      continue
+    if not parser.expect(tkComma):
+      parser.parseError("Expected ',' or ')' after array element")
+      return nil
 
   # Analyze and cache if constant
   analyzeAndCacheArray(array)

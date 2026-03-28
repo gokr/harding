@@ -225,10 +225,10 @@ proc newJsonInterp(): Interpreter =
   initSymbolTable()
   loadStdlib(result)
   let setup = result.evalStatements("""
-    Address := Object derivePublic: #(street city region postalCode country).
-    Customer := Object derivePublic: #(id name email vip tags address).
-    OrderItem := Object derivePublic: #(sku title qty price taxable discounts).
-    OrderPayload := Object derivePublic: #(orderId status customer items notes subtotal tax total paid).
+    Address := Object derivePublic: #(street, city, region, postalCode, country).
+    Customer := Object derivePublic: #(id, name, email, vip, tags, address).
+    OrderItem := Object derivePublic: #(sku, title, qty, price, taxable, discounts).
+    OrderPayload := Object derivePublic: #(orderId, status, customer, items, notes, subtotal, tax, total, paid).
 
     address := Address new.
     address::street := "123 River Road".
@@ -242,7 +242,7 @@ proc newJsonInterp(): Interpreter =
     customer::name := "Alice Example".
     customer::email := "alice@example.com".
     customer::vip := true.
-    customer::tags := #("newsletter" "priority" "beta").
+    customer::tags := #("newsletter", "priority", "beta").
     customer::address := address.
 
     item1 := OrderItem new.
@@ -251,7 +251,7 @@ proc newJsonInterp(): Interpreter =
     item1::qty := 2.
     item1::price := 129.95.
     item1::taxable := true.
-    item1::discounts := #(10.0 5.5).
+    item1::discounts := #(10.0, 5.5).
 
     item2 := OrderItem new.
     item2::sku := "ANV-02".
@@ -273,8 +273,8 @@ proc newJsonInterp(): Interpreter =
     payload::orderId := 1001.
     payload::status := "processing".
     payload::customer := customer.
-    payload::items := #(item1 item2 item3).
-    payload::notes := #("leave at front desk" "fragile" "gift wrap").
+    payload::items := #(item1, item2, item3).
+    payload::notes := #("leave at front desk", "fragile", "gift wrap").
     payload::subtotal := 646.4.
     payload::tax := 51.71.
     payload::total := 698.11.

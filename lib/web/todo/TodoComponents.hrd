@@ -1,7 +1,7 @@
 TodoEmptyStateComponent := Component derive: #().
-TodoItemComponent := Component derivePublic: #(todo routePrefix panelId).
-TodoPanelComponent := Component derivePublic: #(repository routePrefix panelId).
-TodoPageComponent := Component derivePublic: #(repository routePrefix panelId).
+TodoItemComponent := Component derivePublic: #(todo, routePrefix, panelId).
+TodoPanelComponent := Component derivePublic: #(repository, routePrefix, panelId).
+TodoPageComponent := Component derivePublic: #(repository, routePrefix, panelId).
 
 TodoItemComponent class>>todo: aTodo routePrefix: aRoutePrefix panelId: aPanelId [
   | component |
@@ -67,21 +67,21 @@ TodoItemComponent>>titleText [
 ].
 
 TodoItemComponent>>toggleUrl [
-  ^ routePrefix , "/todos/" , (todo id printString) , "/toggle"
+  ^ routePrefix & "/todos/" & (todo id printString) & "/toggle"
 ].
 
 TodoItemComponent>>deleteUrl [
-  ^ routePrefix , "/todos/" , (todo id printString) , "/delete"
+  ^ routePrefix & "/todos/" & (todo id printString) & "/delete"
 ].
 
 TodoItemComponent>>panelTarget [
-  ^ "#" , panelId
+  ^ "#" & panelId
 ].
 
 TodoItemComponent>>renderCacheKey [
   # Item fragments are shared across requests until tracked reads during
   # rendering mark this entry dirty.
-  ^ "todo-template-item:" , (todo id printString) , ":" , panelId
+  ^ "todo-template-item:" & (todo id printString) & ":" & panelId
 ].
 
 TodoItemComponent>>render [
@@ -179,13 +179,13 @@ TodoPanelComponent>>panelIdText [
 ].
 
 TodoPanelComponent>>panelTarget [
-  ^ "#" , panelId
+  ^ "#" & panelId
 ].
 
 TodoPanelComponent>>renderCacheKey [
   # The panel cache key is stable across requests. Invalidation comes from
   # tracked reads of the repository and todo items during render.
-  ^ "todo-template-panel:" , routePrefix , ":" , panelId
+  ^ "todo-template-panel:" & routePrefix & ":" & panelId
 ].
 
 TodoPanelComponent>>listComponents [
@@ -226,7 +226,7 @@ TodoPanelComponent>>render [
 
         body form: [:form |
           form class: "todo-form";
-            post: self routePrefixText , "/todos";
+            post: self routePrefixText & "/todos";
             target: self panelTarget;
             swap: "outerHTML".
 
@@ -276,15 +276,15 @@ TodoPanelComponent>>render [
 ].
 
 TodoPageComponent>>heroTotalText [
-  ^ repository count printString , " total"
+  ^ repository count printString & " total"
 ].
 
 TodoPageComponent>>heroRemainingText [
-  ^ repository remainingCount printString , " remaining"
+  ^ repository remainingCount printString & " remaining"
 ].
 
 TodoPageComponent>>heroCompletedText [
-  ^ repository completedCount printString , " completed"
+  ^ repository completedCount printString & " completed"
 ].
 
 TodoPageComponent>>statsHtml [
@@ -343,7 +343,7 @@ TodoPageComponent>>panelComponent [
 ].
 
 TodoPageComponent>>renderCacheKey [
-  ^ "todo-template-page:" , routePrefix , ":" , panelId
+  ^ "todo-template-page:" & routePrefix & ":" & panelId
 ].
 
 TodoPageComponent>>bodyMarkup [
@@ -385,6 +385,6 @@ TodoPageComponent>>bodyMarkup [
 
 TodoPageComponent>>render [
   ^ Html documentTitle: "Harding Todo"
-      head: ((Html linkStylesheet: "/assets/daisyui.css") , (Htmx scriptTag))
+      head: ((Html linkStylesheet: "/assets/daisyui.css") & (Htmx scriptTag))
       body: self bodyMarkup
 ].

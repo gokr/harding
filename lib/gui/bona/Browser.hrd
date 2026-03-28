@@ -4,7 +4,7 @@
 # With a source pane at the bottom for viewing/editing code.
 # ============================================================================.
 
-Browser := Object derive: #(model window mainBox panesBox libraryPane classPane categoryPane methodPane sourceScrolled sourceView owner ignoreTextChanges)
+Browser := Object derive: #(model, window, mainBox, panesBox, libraryPane, classPane, categoryPane, methodPane, sourceScrolled, sourceView, owner, ignoreTextChanges)
 # Browser implements Bona's class browser, source editor, and refactoring entry points.
 # It coordinates library, class, category, and method panes together with the source view.
 # Browser source tracking, managed-file rewriting, and class-definition editing all live here.
@@ -233,7 +233,7 @@ Browser>>openWindowFor: anOwner [
     methodPane onContextMenu: [:method :menu |
         menu addItem: "Print" do: [
             method notNil ifTrue: [
-                Transcript showCr: ("Method: " , method)
+                Transcript showCr: ("Method: " & method)
             ]
         ]
         menu addSeparator
@@ -254,7 +254,7 @@ Browser>>openWindowFor: anOwner [
         menu addSeparator
         menu addItem: "Print" do: [
             class notNil ifTrue: [
-                Transcript showCr: ("Class: " , class)
+                Transcript showCr: ("Class: " & class)
             ]
         ]
         menu addItem: "Show Class Info" do: [
@@ -297,7 +297,7 @@ Browser>>openWindowFor: anOwner [
         menu addSeparator
         menu addItem: "Print" do: [
             lib notNil ifTrue: [
-                Transcript showCr: ("Library: " , lib)
+                Transcript showCr: ("Library: " & lib)
             ]
         ]
         menu addSeparator
@@ -384,7 +384,7 @@ Browser>>populateLibraries [
 
 Browser>>selectLibrary: aLibraryName [
     self currentLibrary: aLibraryName
-    Transcript showCr: ("Selected library: " , aLibraryName)
+    Transcript showCr: ("Selected library: " & aLibraryName)
 
     self currentClass: nil
     self currentCategory: nil
@@ -461,11 +461,11 @@ Browser>>showNewLibraryDialog [
 ]
 
 Browser>>showRenameLibraryDialog: aLibraryName [
-    self showErrorDialog: ("Rename Library is not implemented yet for " , aLibraryName , ".")
+    self showErrorDialog: ("Rename Library is not implemented yet for " & aLibraryName & ".")
 ]
 
 Browser>>showDeleteLibraryDialog: aLibraryName [
-    self showErrorDialog: ("Delete Library is not implemented yet for " , aLibraryName , ".")
+    self showErrorDialog: ("Delete Library is not implemented yet for " & aLibraryName & ".")
 ]
 
 Browser>>populateClassesFor: aLibraryName [
@@ -474,7 +474,7 @@ Browser>>populateClassesFor: aLibraryName [
     libraryName := (aLibraryName isKindOf: Library)
         ifTrue: [ aLibraryName name asString ]
         ifFalse: [ aLibraryName asString ]
-    Transcript showCr: ("Class count for " , libraryName , ": " , (classNames size printString))
+    Transcript showCr: ("Class count for " & libraryName & ": " & (classNames size printString))
     classPane items: classNames
 ]
 
@@ -508,7 +508,7 @@ Browser>>selectClass: aClassName [
 
 Browser>>applyClassSelection: aClassName [
     self currentClass: aClassName
-    Transcript showCr: ("Selected class: " , aClassName)
+    Transcript showCr: ("Selected class: " & aClassName)
 
     self currentMethod: nil
     self currentMethodFile: nil
@@ -528,7 +528,7 @@ Browser>>applyClassSelection: aClassName [
     [ self populateMethodsFor: aClassName category: self currentCategory ]
         on: Exception
         do: [:ex |
-            Transcript showCr: ("selectClass auto-populate error: " , ex printString)
+            Transcript showCr: ("selectClass auto-populate error: " & ex printString)
         ]
 
     self showClassDefinition: aClassName
@@ -595,14 +595,14 @@ Browser>>selectCategory: aCategory [
 
 Browser>>applyCategorySelection: aCategory [
     self currentCategory: aCategory
-    Transcript showCr: ("Selected category: " , aCategory)
+    Transcript showCr: ("Selected category: " & aCategory)
 
     methodPane clear
 
     [ self populateMethodsFor: self currentClass category: aCategory ]
         on: Exception
         do: [:ex |
-            Transcript showCr: ("selectCategory error: " , ex printString)
+            Transcript showCr: ("selectCategory error: " & ex printString)
         ]
 ]
 
@@ -660,7 +660,7 @@ Browser>>showMethodSource: aMethodName [
             currentMethodEndLine: nil;
             currentMethodHasBlock: false
 
-        sourceText := (aMethodName asString) , "\n\nMethod source not found in .hrd files."
+        sourceText := (aMethodName asString) & "\n\nMethod source not found in .hrd files."
         self updateSourceView: sourceText
         ^ self
     ]
@@ -680,11 +680,11 @@ Browser>>showMethodSource: aMethodName [
     sourceText isNil ifTrue: [ sourceText := "" ]
 
     self currentMethodHasBlock ifTrue: [
-        sourceText := editorHeader , "\n" , sourceText
+        sourceText := editorHeader & "\n" & sourceText
     ] ifFalse: [
         sourceText isEmpty
             ifTrue: [ sourceText := editorHeader ]
-            ifFalse: [ sourceText := editorHeader , "\n" , sourceText ]
+            ifFalse: [ sourceText := editorHeader & "\n" & sourceText ]
     ]
     self updateSourceView: sourceText
 ]
@@ -800,7 +800,7 @@ Browser>>saveCurrentMethod [
         self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil
         refreshed := self refreshCurrentMethodLocation
         refreshed ifTrue: [ self updateSourceView: classText ]
-        Transcript showCr: ("Saved class definition for " , self currentClass , " to " , self currentMethodFile)
+        Transcript showCr: ("Saved class definition for " & self currentClass & " to " & self currentMethodFile)
         ^ self
     ]
 
@@ -826,7 +826,7 @@ Browser>>saveCurrentMethod [
         ^ self
     ]
 
-    fullHeader := self currentMethodOwnerClass , ">>" , selectorLine
+    fullHeader := self currentMethodOwnerClass & ">>" & selectorLine
     originalHeader := self editableHeaderFromMethodHeader: self currentMethodHeader
     creatingNew := self currentMethodStartLine isNil or: [ (selectorLine = originalHeader) not ]
 
@@ -844,7 +844,7 @@ Browser>>saveCurrentMethod [
         index := index + 1
     ]
 
-    methodText := fullHeader , " [\n" , (self linesToText: bodyLines) , "\n]" , self currentMethodSuffix
+    methodText := fullHeader & " [\n" & (self linesToText: bodyLines) & "\n]" & self currentMethodSuffix
     classDefText := self sourceView text
     (self currentClass notNil and: [ self currentMethodFile notNil ]) ifTrue: [
         | classInfo |
@@ -863,9 +863,9 @@ Browser>>saveCurrentMethod [
     self currentMethodHeader: fullHeader
 
     creatingNew ifTrue: [
-        Transcript showCr: ("Saved new method " , self currentMethodOwnerClass , ">>" , selectorLine , " to " , self currentMethodFile)
+        Transcript showCr: ("Saved new method " & self currentMethodOwnerClass & ">>" & selectorLine & " to " & self currentMethodFile)
     ] ifFalse: [
-        Transcript showCr: ("Saved " , self currentMethodOwnerClass , ">>" , selectorLine , " to " , self currentMethodFile)
+        Transcript showCr: ("Saved " & self currentMethodOwnerClass & ">>" & selectorLine & " to " & self currentMethodFile)
     ]
 
     creatingNew ifTrue: [ self currentCategory: "defined" ]
@@ -879,25 +879,25 @@ Browser>>reloadCurrentMethodFile [
 
     result := [ Harding load: self currentMethodFile ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ]
+        do: [:ex | "IDE_ERROR: " & ex printString ]
 
     ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
-        Transcript showCr: ("Failed to reload file: " , result)
+        Transcript showCr: ("Failed to reload file: " & result)
     ]
 ]
 
 Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
     | methodText bodyText result selector classObj installed |
     bodyText := self linesToText: bodyLines
-    methodText := fullHeader , " [\n" , bodyText , "\n]"
+    methodText := fullHeader & " [\n" & bodyText & "\n]"
     selector := self editableHeaderFromMethodHeader: fullHeader
 
     result := [ Object eval: methodText ]
         on: Exception
-        do: [:ex | "IDE_ERROR: " , ex printString ]
+        do: [:ex | "IDE_ERROR: " & ex printString ]
 
     ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
-        Transcript showCr: ("Failed to install method in image: " , result)
+        Transcript showCr: ("Failed to install method in image: " & result)
         ^ self
     ]
 
@@ -909,7 +909,7 @@ Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
 
     installed := classObj methods includes: (selector asSymbol)
     installed ifFalse: [
-        Transcript showCr: ("Method install verification failed for " , selector)
+        Transcript showCr: ("Method install verification failed for " & selector)
     ]
 ]
 
@@ -933,8 +933,8 @@ Browser>>linesToText: lines [
     first := true
 
     lines do: [:line |
-        first ifFalse: [ out := out , "\n" ]
-        out := out , line asString
+        first ifFalse: [ out := out & "\n" ]
+        out := out & line asString
         first := false
     ]
 
@@ -1037,14 +1037,14 @@ Browser>>createNewMethod [
         self
             currentMethodOwnerClass: self currentClass;
             currentMethod: "newMethod";
-            currentMethodHeader: self currentClass , ">>newMethod";
+            currentMethodHeader: self currentClass & ">>newMethod";
             currentMethodSuffix: "";
             currentMethodStartLine: nil;
             currentMethodEndLine: nil;
             currentMethodHasBlock: true
 
-        self updateSourceView: "newMethod" , "\n\n^ nil"
-        Transcript showCr: ("Created new method stub for " , self currentClass , " in " , self currentMethodFile)
+        self updateSourceView: "newMethod" & "\n\n^ nil"
+        Transcript showCr: ("Created new method stub for " & self currentClass & " in " & self currentMethodFile)
     ]
 ]
 
@@ -1076,7 +1076,7 @@ Browser>>deleteCurrentMethod [
         ^ self
     ]
 
-    confirmMessage := "Delete method " , self currentClass , ">>" , self currentMethod , "?"
+    confirmMessage := "Delete method " & self currentClass & ">>" & self currentMethod & "?"
     
     self showConfirmationDialog: confirmMessage
         onYes: [
@@ -1090,7 +1090,7 @@ Browser>>deleteCurrentMethod [
 
             self removeMethodFromClass: self currentMethod
 
-            Transcript showCr: ("Deleted method " , self currentClass , ">>" , self currentMethod)
+            Transcript showCr: ("Deleted method " & self currentClass & ">>" & self currentMethod)
 
             self currentMethod: nil
             self currentMethodHeader: nil
@@ -1149,7 +1149,7 @@ Browser>>removeMethodFromClass: aSelector [
     ]
 
     classObj removeMethod: aSelector
-    Transcript showCr: ("Removed method " , aSelector , " from class " , self currentClass)
+    Transcript showCr: ("Removed method " & aSelector & " from class " & self currentClass)
 ]
 
 Browser>>showFindClassDialog [
@@ -1257,11 +1257,11 @@ libName = "Harding" ifTrue: [
     ]
     
     matchedClass isNil ifTrue: [
-        Transcript showCr: ("No class found matching: " , aPattern)
+        Transcript showCr: ("No class found matching: " & aPattern)
         ^ self
     ]
     
-    Transcript showCr: ("Found: " , matchedClass , " in " , matchedLib)
+    Transcript showCr: ("Found: " & matchedClass & " in " & matchedLib)
     
     self selectLibrary: matchedLib
     classPane selectItem: matchedClass
@@ -1281,21 +1281,21 @@ Browser>>createNewClass [
     slotsArray := #()
 
     classDefCode := self generateClassDefinition: className parent: parentName slots: slotsArray
-    fileName := className , ".hrd"
+    fileName := className & ".hrd"
     filePath := self resolveClassFilePath: className defaultName: fileName
 
     filePath isNil ifTrue: [
-        Transcript showCr: ("Cannot determine file path for class: " , className)
+        Transcript showCr: ("Cannot determine file path for class: " & className)
     ] ifFalse: [
         self writeClassDefinition: classDefCode toFile: filePath forClass: className
         lib := Library named: self currentLibrary
         result := lib notNil
-            ifTrue: [ [ lib load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ]
-            ifFalse: [ [ Harding load: filePath ] on: Exception do: [:ex | "ERROR: " , ex printString ] ]
+            ifTrue: [ [ lib load: filePath ] on: Exception do: [:ex | "ERROR: " & ex printString ] ]
+            ifFalse: [ [ Harding load: filePath ] on: Exception do: [:ex | "ERROR: " & ex printString ] ]
 
         (result isKindOf: String) ifTrue: [
             result startsWith: "ERROR:" ifTrue: [
-                Transcript showCr: ("Failed to load new class: " , result)
+                Transcript showCr: ("Failed to load new class: " & result)
                 ^ self
             ]
         ]
@@ -1307,7 +1307,7 @@ Browser>>createNewClass [
         self currentMethodHasBlock: false
     ]
 
-    Transcript showCr: ("Created class: " , className , " (default parent: Object)")
+    Transcript showCr: ("Created class: " & className & " (default parent: Object)")
 
     self populateClassesFor: self currentLibrary
     classPane selectItem: className
@@ -1320,7 +1320,7 @@ Browser>>nextAutoClassName [
     name := "NewClass"
     [ (Harding at: name ifAbsent: [ nil ]) notNil ] whileTrue: [
         i := i + 1
-        name := "NewClass" , (i printString)
+        name := "NewClass" & (i printString)
     ]
     ^ name
 ]
@@ -1330,7 +1330,7 @@ Browser>>showClassInfo: aClassName [
     
     classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName)
+        Transcript showCr: ("Class not found: " & aClassName)
         ^ self
     ]
     
@@ -1339,22 +1339,22 @@ Browser>>showClassInfo: aClassName [
     isMixin := [ classObj isMixin ] on: Exception do: [ false ]
     methodCount := classObj definedMethods size
     
-    infoText := aClassName , (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"])
-    infoText := infoText , "\n\n"
-    infoText := infoText , "Superclasses: " , (superclasses isEmpty ifTrue: ["(none)"] ifFalse: [superclasses join: ", "])
-    infoText := infoText , "\n"
-    infoText := infoText , "Slots: " , (slots isEmpty ifTrue: ["(none)"] ifFalse: [slots join: ", "])
-    infoText := infoText , "\n"
-    infoText := infoText , "Defined Methods: " , methodCount printString
-    infoText := infoText , "\n\n"
+    infoText := aClassName & (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"])
+    infoText := infoText & "\n\n"
+    infoText := infoText & "Superclasses: " & (superclasses isEmpty ifTrue: ["(none)"] ifFalse: [superclasses join: ", "])
+    infoText := infoText & "\n"
+    infoText := infoText & "Slots: " & (slots isEmpty ifTrue: ["(none)"] ifFalse: [slots join: ", "])
+    infoText := infoText & "\n"
+    infoText := infoText & "Defined Methods: " & methodCount printString
+    infoText := infoText & "\n\n"
     isMixin ifFalse: [
-        infoText := infoText , "Right-click class to add mixins."
+        infoText := infoText & "Right-click class to add mixins."
     ] ifTrue: [
-        infoText := infoText , "Mixins cannot be modified (library-provided)."
+        infoText := infoText & "Mixins cannot be modified (library-provided)."
     ]
     
     self updateSourceView: infoText
-    Transcript showCr: ("Showing info for class: " , aClassName)
+    Transcript showCr: ("Showing info for class: " & aClassName)
 ]
 
 Browser>>showAddMixinDialog: aClassName [
@@ -1367,7 +1367,7 @@ Browser>>showAddMixinDialog: aClassName [
     selectedMixin := nil
     
     dialog := GtkWindow new
-    dialog title: "Add Mixin to " , aClassName
+    dialog title: "Add Mixin to " & aClassName
     dialog setDefaultSize: 350 height: 250
     
     box := GtkBox vertical
@@ -1429,7 +1429,7 @@ Browser>>addMixinToClass: aClassName mixinName: aMixinName [
     
     classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName)
+        Transcript showCr: ("Class not found: " & aClassName)
         ^ self
     ]
     
@@ -1440,22 +1440,22 @@ Browser>>addMixinToClass: aClassName mixinName: aMixinName [
     
     mixinClass := Harding at: aMixinName
     mixinClass isNil ifTrue: [
-        Transcript showCr: ("Mixin not found: " , aMixinName)
+        Transcript showCr: ("Mixin not found: " & aMixinName)
         ^ self
     ]
     
     result := [ classObj addSuperclass: mixinClass ]
         on: Exception 
-        do: [:ex | "ERROR: " , ex printString ]
+        do: [:ex | "ERROR: " & ex printString ]
     
     (result isKindOf: String) ifTrue: [
         result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to add mixin: " , result)
+            Transcript showCr: ("Failed to add mixin: " & result)
             ^ self
         ]
     ]
     
-    Transcript showCr: ("Added " , aMixinName , " to " , aClassName)
+    Transcript showCr: ("Added " & aMixinName & " to " & aClassName)
     self showClassInfo: aClassName
 ]
 
@@ -1467,12 +1467,12 @@ Browser>>confirmDeleteClass: aClassName [
     ]
     
     ((aClassName = "Object") or: [(aClassName = "Root") or: [aClassName = "Mixin"]]) ifTrue: [
-        Transcript showCr: "Cannot delete built-in classes: " , aClassName
+        Transcript showCr: "Cannot delete built-in classes: " & aClassName
         ^ self
     ]
     
     dialog := GtkWindow new
-    dialog title: "Delete Class: " , aClassName
+    dialog title: "Delete Class: " & aClassName
     dialog setDefaultSize: 400 height: 200
     
     box := GtkBox vertical
@@ -1483,7 +1483,7 @@ Browser>>confirmDeleteClass: aClassName [
         marginTop: 12;
         marginBottom: 12
     
-    label := GtkLabel new: ("Are you sure you want to delete class " , aClassName , "?")
+    label := GtkLabel new: ("Are you sure you want to delete class " & aClassName & "?")
     label halignStart
     label wrap: true
     
@@ -1524,17 +1524,17 @@ Browser>>deleteClass: aClassName [
     
     classObj := self classForName: aClassName
     classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " , aClassName)
+        Transcript showCr: ("Class not found: " & aClassName)
         ^ self
     ]
     
     result := [ classObj become: Object ]
         on: Exception
-        do: [:ex | "ERROR: " , ex printString ]
+        do: [:ex | "ERROR: " & ex printString ]
     
     (result isKindOf: String) ifTrue: [
         result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to delete class: " , result)
+            Transcript showCr: ("Failed to delete class: " & result)
             ^ self
         ]
     ]
@@ -1558,7 +1558,7 @@ Browser>>deleteClass: aClassName [
         ]
     ]
     
-    Transcript showCr: ("Deleted class: " , aClassName)
+    Transcript showCr: ("Deleted class: " & aClassName)
     
     self currentClass: nil
     self updateSourceView: "Class deleted. Select another class."
@@ -1572,19 +1572,19 @@ Browser>>generateClassDefinition: className parent: parentName slots: slotsArray
         ifTrue: ["Mixin"] 
         ifFalse: [parentName = "Root" ifTrue: ["Root"] ifFalse: ["Object"]]
     
-    code := "# " , className , ".hrd - " , className , " class definition"
-    code := code , "\n\n"
+    code := "# " & className & ".hrd - " & className & " class definition"
+    code := code & "\n\n"
 
     slotList := slotsArray isEmpty
         ifTrue: [ "" ]
         ifFalse: [ slotsArray join: " " ]
 
-    code := code , className , " := " , parentClass , " derive: #(" , slotList , ") read: #(" , slotList , ") write: #(" , slotList , ") superclasses: #().\n\n"
+    code := code & className & " := " & parentClass & " derive: #(" & slotList & ") read: #(" & slotList & ") write: #(" & slotList & ") superclasses: #().\n\n"
 
-    code := code , "# Methods\n"
-    code := code , className , ">>printOn: stream [\n"
-    code := code , "    stream show: \"" , className , "\".\n"
-    code := code , "]\n"
+    code := code & "# Methods\n"
+    code := code & className & ">>printOn: stream [\n"
+    code := code & "    stream show: \"" & className & "\".\n"
+    code := code & "]\n"
     
     ^ code
 ]
@@ -1600,10 +1600,10 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
     libPath := System cwd
     sourceDir := lib at: #"__sourceDir" ifAbsent: [ lib at: "__sourceDir" ifAbsent: [ nil ] ]
     classDir := sourceDir isNil
-        ifTrue: [ libPath , "/lib/" , (self currentLibrary asString lowercase) ]
-        ifFalse: [ libPath , "/" , sourceDir asString ]
+        ifTrue: [ libPath & "/lib/" & (self currentLibrary asString lowercase) ]
+        ifFalse: [ libPath & "/" & sourceDir asString ]
 
-    candidatePath := classDir , "/" , defaultFileName
+    candidatePath := classDir & "/" & defaultFileName
 
     ^ candidatePath
 ]
@@ -1611,7 +1611,7 @@ Browser>>resolveClassFilePath: aClassName defaultName: defaultFileName [
 Browser>>writeClassDefinition: code toFile: filePath forClass: className [
     File write: code to: filePath
     
-    Transcript showCr: ("Wrote class definition to: " , filePath)
+    Transcript showCr: ("Wrote class definition to: " & filePath)
     
     self reloadCurrentMethodFile
 ]

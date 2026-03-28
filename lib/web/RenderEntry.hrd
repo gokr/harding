@@ -1,4 +1,4 @@
-RenderEntry := Object derivePublic: #(key sessionKey cachedOutput dirty dependencies dependents)
+RenderEntry := Object derivePublic: #(key, sessionKey, cachedOutput, dirty, dependencies, dependents)
 
 # A RenderEntry is both cached HTML and a reactive dependency node. Tracked
 # subjects mark entries dirty, and dirty entries recursively dirty dependents.

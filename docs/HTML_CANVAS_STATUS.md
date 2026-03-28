@@ -91,7 +91,7 @@ MyComponent>>render [
 ```harding
 Html div: #{#class -> "container"} with: (
   Html h1: #{} text: "Title"
-) , (
+) & (
   Html p: #{} text: "Content"
 )
 ```

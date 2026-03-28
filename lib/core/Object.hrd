@@ -19,7 +19,7 @@
 # Object class>>derive: - Create a subclass with declared slots.
 # Object class>>new - Create a new instance of the class.
 #
-# Usage: Point := Object derive: #(x y).
+# Usage: Point := Object derive: #(x, y).
 #        point := Point new.
 #        point x: 10.
 
@@ -31,7 +31,7 @@ Object>>clone <primitive primitiveClone>
 
 Object class>>derive: slotsArray methods: methodBlock [
   # Create a subclass with extra slots AND define methods in one expression
-  # Usage: Person := Object derive: #(name age) methods: [
+  # Usage: Person := Object derive: #(name, age) methods: [
   #   self >> greet [ "Hello, I am " + name ]
   #   self >> haveBirthday [ age := age + 1 ]
   # ]
@@ -57,7 +57,7 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
   # from superclasses. If methods conflict and are not overridden, an error will be raised
   #
   # Usage:
-  #   Child := Object derive: #(x) superclasses: #(Parent1 Parent2) methods: [
+  #   Child := Object derive: #(x) superclasses: #(Parent1, Parent2) methods: [
   #     self >> bar [ 42 ]
   #   ]
   #
@@ -70,7 +70,7 @@ Object class>>derive: slotArray superclasses: superclassArray methods: methodBlo
   #     self >> bar [ 2 ]
   #   ]
   #
-  #   Combined := Object derive: #() superclasses: #(Mixin1 Mixin2) methods: [
+  #   Combined := Object derive: #() superclasses: #(Mixin1, Mixin2) methods: [
   #     self >> both [ self foo + self bar ]
   #   ]
   #
@@ -128,7 +128,7 @@ Object>>printClassIndent: level [
       self slotNames size = 0
         ifTrue: [ "#()" ]
         ifFalse: [
-          "#(" , ((self slotNames collect: [:name | name asString]) join: ", ") , ")"
+          "#(" & ((self slotNames collect: [:name | name asString]) join: ", ") & ")"
         ]
     ]
 
@@ -139,7 +139,7 @@ Object>>printClassIndent: level [
       self superclassNames size = 0
         ifTrue: [ slotsString println ]
         ifFalse: [
-          (slotsString , " superclasses: #(" , (self superclassNames join: ", ") , ")") println
+          (slotsString & " superclasses: #(" & (self superclassNames join: ", ") & ")") println
         ]
     ]
 ]
@@ -204,7 +204,7 @@ Object class>>allClassMethods [
 Object>>doesNotUnderstand: selector [
   # Default handler for unrecognized messages with just the selector
   # Subclasses can override to provide custom behavior
-  self error: ("Message not understood: " , (selector asString))
+  self error: ("Message not understood: " & (selector asString))
 ]
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
@@ -241,9 +241,9 @@ Object>>== other <primitive primitiveEquals: other>
 Object>>printString [
   # Return a string representation of this object
   (self isClass) ifTrue: [
-    ^ "<class " , self name , ">"
+    ^ "<class " & self name & ">"
   ]
-  ^ "<" , self class name , ">"
+  ^ "<" & self class name & ">"
 ]
 
 Object>>className <primitive primitiveClassName>

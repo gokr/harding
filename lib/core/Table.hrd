@@ -163,10 +163,10 @@ Table>>printString [
     result := "#{"
     isFirst := true
     self keys do: [:key |
-        isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result , ", " ]
-        result := result , (key printString) , " -> " , ((self at: key) printString)
+        isFirst ifTrue: [ isFirst := false ] ifFalse: [ result := result & ", " ]
+        result := result & (key printString) & " -> " & ((self at: key) printString)
     ]
-    ^ result , "}"
+    ^ result & "}"
 ]
 
 Table>>size [
@@ -233,7 +233,7 @@ Table>>values [
 ]
 
 Table>>associations [
-    # Return Array of #(key value) pairs
+    # Return Array of #(key, value) pairs
     | result pair |
     result := Array new
     self keys do: [:key |

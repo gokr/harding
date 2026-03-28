@@ -60,9 +60,9 @@ type
     tkSpecial  # ; & | etc
     tkArrayStart, tkTableStart, tkArrow, tkColon, tkDoubleColon
     tkTag, tkNimCode
-    tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and concatenation operators
+    tkPlus, tkMinus, tkStar, tkSlash, tkLt, tkGt, tkEq, tkEqEq, tkPercent, tkComma  # Arithmetic, comparison and literal separator tokens
     tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft  # Multi-character binary operators: // \\ <= >= ~= <<
-    tkAmpersand, tkPipe  # & and | for logical operations
+    tkAmpersand, tkPipe  # & for concatenation, | for logical OR
     tkMethodDef  # >> for method definitions
   Token* = object
     kind*: TokenKind

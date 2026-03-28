@@ -365,7 +365,7 @@ The preserved `ExceptionContext` enables Smalltalk-style handler actions:
     "outer" printLine.
     Error signal: "Something went wrong"
 ] on: Error do: [:ex |
-    "Caught: " , ex message printLine
+    "Caught: " & ex message printLine
 ]
 ```
 
@@ -664,7 +664,7 @@ Non-local return follows sender chain to find method activation
 When a class defines slots:
 
 ```smalltalk
-Point := Object derive: #(x y)
+Point := Object derive: #(x, y)
 ```
 
 The compiler generates:

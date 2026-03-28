@@ -2,7 +2,7 @@
 # test_literals.nim - Tests for literals including newlines and constant optimization
 #
 
-import std/[unittest, tables, logging]
+import std/[unittest, tables, logging, strutils]
 import ../src/harding/core/types
 import ../src/harding/parser/parser
 import ../src/harding/interpreter/vm
@@ -20,8 +20,8 @@ suite "Array Literals with Newlines":
   test "array literal with newline between elements":
     let result = interp.evalStatements("""
       Arr := #(
-        1
-        2
+        1,
+        2,
         3
       ).
       Result := Arr size
@@ -32,8 +32,8 @@ suite "Array Literals with Newlines":
 
   test "array literal with mixed newlines and spaces":
     let result = interp.evalStatements("""
-      Arr := #(1
-        2 3
+      Arr := #(1,
+        2, 3,
         4).
       Result := Arr size
     """)
@@ -41,11 +41,27 @@ suite "Array Literals with Newlines":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 4)
 
+  test "array literal with comma separators":
+    let result = interp.evalStatements("""
+      Arr := #(1, 2, 3, 4).
+      Result := Arr size
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkInt)
+    check(result[0][^1].intVal == 4)
+
+  test "array literal without commas is rejected":
+    let result = interp.evalStatements("""
+      Arr := #(1 2 3).
+      Result := Arr size
+    """)
+    check(result[1].len > 0)
+
   test "array literal with elements on separate lines":
     let result = interp.evalStatements("""
       Arr := #(
-        "first"
-        "second"
+        "first",
+        "second",
         "third"
       ).
       Result := Arr size
@@ -57,9 +73,9 @@ suite "Array Literals with Newlines":
   test "nested array literal with newlines":
     let result = interp.evalStatements("""
       Arr := #(
-        #(1 2)
-        #(3 4)
-        #(5 6)
+        #(1, 2),
+        #(3, 4),
+        #(5, 6)
       ).
       Result := Arr size
     """)
@@ -125,7 +141,7 @@ suite "Table Literals with Newlines":
   test "table literal newline entries do not require trailing commas":
     let result = interp.evalStatements("""
       T := #{
-        "count" -> #(1 2 3) size
+        "count" -> #(1, 2, 3) size
         "age" -> 42
       }.
       Result := T size
@@ -177,7 +193,7 @@ suite "Constant Literal Optimization":
     loadStdlib(interp)
 
   test "constant array literal is analyzed as constant":
-    let (nodes, parser) = parse("#(1 2 3)")
+    let (nodes, parser) = parse("#(1, 2, 3)")
     check(nodes.len == 1)
     check(nodes[0].kind == nkArray)
     let arr = cast[ArrayNode](nodes[0])
@@ -221,7 +237,7 @@ suite "Constant Literal Optimization":
     check(tbl.cachedValue.tableVal.len == 2)
 
   test "empty table is analyzed as constant":
-    let (nodes, parser) = parse("#{")
+    let (nodes, parser) = parse("#{ }")
     check(nodes.len == 1)
     check(nodes[0].kind == nkTable)
     let tbl = cast[TableNode](nodes[0])
@@ -241,7 +257,7 @@ suite "Constant Literal Optimization":
 
   test "constant array works correctly at runtime":
     let code = """
-    Arr := #(1 2 3).
+    Arr := #(1, 2, 3).
     Arr at: 0
     """
     let (result, err) = interp.doit(code)
@@ -269,7 +285,7 @@ suite "Constant Literal Optimization":
     check(arr.elements.len == 1)
 
   test "array with mixed literals and symbols is constant":
-    let (nodes, parser) = parse("#(1 #symbol \"string\")")
+    let (nodes, parser) = parse("#(1, #symbol, \"string\")")
     check(nodes.len == 1)
     check(nodes[0].kind == nkArray)
     let arr = cast[ArrayNode](nodes[0])
@@ -283,7 +299,7 @@ suite "Constant Literal Optimization":
 
   test "multiple evaluations of same constant array work":
     let code = """
-    Arr := #(1 2 3).
+    Arr := #(1, 2, 3).
     First := Arr at: 0.
     Second := Arr at: 1.
     Third := Arr at: 2.
@@ -296,7 +312,7 @@ suite "Constant Literal Optimization":
 
   test "table with nested constant values works at runtime":
     let code = """
-    Tbl := #{"arr" -> #(1 2), "val" -> 42}.
+    Tbl := #{"arr" -> #(1, 2), "val" -> 42}.
     Tbl at: "val"
     """
     let (result, err) = interp.doit(code)

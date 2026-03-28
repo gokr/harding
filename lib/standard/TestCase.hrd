@@ -8,7 +8,7 @@
 #     self assert: (1 + 1) equals: 2.
 #   ].
 
-TestCase := Object derive: #(name assertions failures)
+TestCase := Object derive: #(name, assertions, failures)
 # TestCase is the base class for unit tests written in Harding itself.
 # It collects assertion and test-running behavior used by the standard test framework.
 # User-defined test classes should inherit from TestCase rather than rebuilding assertion logic.
@@ -34,7 +34,7 @@ TestCase>>name [
 TestCase>>assert: aBoolean [
   assertions := assertions + 1
   aBoolean ifFalse: [
-    failures add: "Assertion failed in " , name
+    failures add: "Assertion failed in " & name
     Error signal: "Assertion failed"
   ]
 ]
@@ -42,7 +42,7 @@ TestCase>>assert: aBoolean [
 TestCase>>assert: actual equals: expected [
   assertions := assertions + 1
   (actual = expected) ifFalse: [
-    failures add: "Assertion failed in " , name
+    failures add: "Assertion failed in " & name
     Error signal: "Assertion failed"
   ]
 ]

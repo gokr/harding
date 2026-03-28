@@ -7559,7 +7559,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Fast-path for class, isNil, notNil, ==, ~= before MIC/PIC
     # ============================================================================
     case frame.selector
-    of ",":
+    of "&":
       if hasSingleArg:
         case receiverVal.kind
         of vkString:
@@ -7568,8 +7568,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         of vkSymbol:
           interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.symVal & singleArg.toString()))
           return true
+        of vkInt, vkFloat, vkBool, vkNil:
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString() & singleArg.toString()))
+          return true
         else:
-          discard
+          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString() & singleArg.toString()))
+          return true
 
     of "asString":
       if args.len == 0:

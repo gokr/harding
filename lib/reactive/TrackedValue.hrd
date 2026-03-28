@@ -1,4 +1,4 @@
-TrackedValue := Object derivePublic: #(dependents transactionDepth pendingChange valueCell)
+TrackedValue := Object derivePublic: #(dependents, transactionDepth, pendingChange, valueCell)
 
 TrackedValue addSuperclass: TrackedSubject
 

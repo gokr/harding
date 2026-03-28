@@ -65,7 +65,7 @@ when isMainModule:
             h li: "Two".
             h li: "Three"
           ].
-          h p: [ Counter := Counter + 1. "Counter: " , Counter printString ] dyn.
+          h p: [ Counter := Counter + 1. "Counter: " & Counter printString ] dyn.
           h p: "Trailing footer"
         ]
       ].
@@ -89,7 +89,7 @@ when isMainModule:
             h li: "Two".
             h li: "Three"
           ].
-          h p: [ Counter := Counter + 1. "Counter: " , Counter printString ] dyn.
+          h p: [ Counter := Counter + 1. "Counter: " & Counter printString ] dyn.
           h p: "Trailing footer"
         ]
       ].

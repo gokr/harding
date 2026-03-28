@@ -6,7 +6,7 @@
 # using the Granite compiler. All work is captured in Application subclasses.
 # and auto-saved to .hrd files like the Browser.
 
-Builder := Object derive: #(model owner window appList appEditor outputView)
+Builder := Object derive: #(model, owner, window, appList, appEditor, outputView)
 # Builder implements Bona's Granite application builder and starter-template workflow.
 # It discovers Application subclasses, edits main: methods, and triggers Granite builds.
 # Sample app creation, build output, and app selection behavior all flow through this class.
@@ -91,7 +91,7 @@ Builder>>openInstance [
 
   # Populate application list after window is visible
   [ self refreshAppList ] on: Exception do: [:ex |
-    Transcript showCr: ("Builder refresh failed: " , ex printString)
+    Transcript showCr: ("Builder refresh failed: " & ex printString)
   ]
 
   Transcript showCr: "Application Builder opened"
@@ -260,7 +260,7 @@ Builder>>createEditorPane [
 #   box setSpacing: 10.
 #   box vexpand: false.
 #
-#   libraries := #(Core Standard Process Granite GUI Bona BitBarrel).
+#   libraries := #(Core, Standard, Process, Granite, GUI, Bona, BitBarrel).
 #
 #   libraries do: [:libName |.
 #     | check |.
@@ -313,9 +313,9 @@ Builder>>refreshAppList [
         ]
       ]
 
-    Transcript showCr: ("Found ", (apps size printString), " applications")
+    Transcript showCr: ("Found " & (apps size printString) & " applications")
   ] on: Exception do: [:ex |
-    Transcript showCr: ("Builder refresh failed: " , ex printString)
+    Transcript showCr: ("Builder refresh failed: " & ex printString)
   ]
 
   model isRefreshing: false
@@ -360,7 +360,7 @@ Builder>>loadApp: appClass [
   appName := self appDisplayName: appClass
 
   # Update window title
-  window title: ("Application Builder - ", appName)
+  window title: ("Application Builder - " & appName)
 
   # Method source extraction is currently placeholder-based
   # appClass methods returns an Array of selectors, not a method table
@@ -372,7 +372,7 @@ Builder>>loadApp: appClass [
   libraries := self getLibrariesFor: appClass
   self setLibraryCheckboxes: libraries
 
-  Transcript showCr: ("Loaded application: ", appName)
+  Transcript showCr: ("Loaded application: " & appName)
 ]
 
 Builder>>getLibrariesFor: appClass [
@@ -408,14 +408,14 @@ Builder>>buildCurrentApp [
   ]
 
   appName := self appDisplayName: (model currentApp)
-  self showOutput: ("Building ", appName, "...")
+  self showOutput: ("Building " & appName & "...")
 
   # Save current edits first
   self saveCurrentApp
 
   # Call Granite build
   result := [ Granite build: ((model currentApp) new) ] on: Exception do: [:ex |
-    "Error: " , ex printString , " (Granite build primitive may be unavailable in this bona build)"
+    "Error: " & ex printString & " (Granite build primitive may be unavailable in this bona build)"
   ]
 
   output := (result class name = "String")
@@ -443,7 +443,7 @@ Builder>>saveCurrentApp [
   self saveLibraries: libraries for: (model currentApp)
 
   appName := self appDisplayName: (model currentApp)
-  Transcript showCr: ("Saved ", appName)
+  Transcript showCr: ("Saved " & appName)
 ]
 
 Builder>>getSelectedLibraries [
@@ -468,13 +468,13 @@ Builder>>compileMethod: source for: appClass [
     ifTrue: [ source ]
     ifFalse: [
       (source startsWith: "main:")
-        ifTrue: [ appName, ">>", source ]
-        ifFalse: [ appName, ">>main: args [", source, "]" ]
+        ifTrue: [ appName & ">>" & source ]
+        ifFalse: [ appName & ">>main: args [" & source & "]" ]
     ]
 
   # Compile and install in interpreter mode
   [ Object eval: fullSource ] on: Exception do: [:ex |
-    self showOutput: ("Error compiling method: " , ex printString)
+    self showOutput: ("Error compiling method: " & ex printString)
   ]
 ]
 
@@ -487,12 +487,12 @@ Builder>>runCurrentApp [
   ]
 
   appName := self appDisplayName: (model currentApp)
-  binaryPath := "./build/", appName
+  binaryPath := "./build/" & appName
 
-  self showOutput: ("Running: ", binaryPath)
+  self showOutput: ("Running: " & binaryPath)
 
   # Run the binary
-  cmd := binaryPath, " &"
+  cmd := binaryPath & " &"
   System perform: cmd
 ]
 
@@ -508,22 +508,22 @@ Builder>>createNewApp [
 
   # Check if class already exists
   ((Harding at: name ifAbsent: [ nil ]) notNil) ifTrue: [
-    self showOutput: ("Error: Class ", name, " already exists")
+    self showOutput: ("Error: Class " & name & " already exists")
     ^ self
   ]
 
   # Create the Application subclass
-  source := name, " := Application derive: #()
+  source := name & " := Application derive: #()
 
-", name, ">>main: args [
-  Transcript showCr: \"Hello from ", name, "!\"
+" & name & ">>main: args [
+  Transcript showCr: \"Hello from " & name & "!\"
   ^ 0
 ]
 "
 
   # Compile and install the class
   appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating application: " , ex printString)
+    self showOutput: ("Error creating application: " & ex printString)
     ^ self
   ]
 
@@ -541,7 +541,7 @@ Builder>>createNewApp [
   # Select the new app
   appClass := Harding at: name ifAbsent: [ appClass ]
   appClass isNil ifTrue: [
-    self showOutput: ("Error: Created source but class not registered: " , name)
+    self showOutput: ("Error: Created source but class not registered: " & name)
     ^ self
   ]
 
@@ -560,11 +560,11 @@ Builder>>createNewApp [
   ]
 
   [ self loadApp: appClass ] on: Exception do: [:ex |
-    self showOutput: ("Created app but failed to load editor: " , ex printString)
+    self showOutput: ("Created app but failed to load editor: " & ex printString)
   ]
 
-  self showOutput: ("Created new application: ", name)
-  Transcript showCr: ("Builder: created new application " , name)
+  self showOutput: ("Created new application: " & name)
+  Transcript showCr: ("Builder: created new application " & name)
 ]
 
 Builder>>createTemplateApp: templateName [
@@ -573,7 +573,7 @@ Builder>>createTemplateApp: templateName [
   name = "HelloWorld" ifTrue: [ ^ self createHelloWorldApp ]
   name = "SimpleGUI" ifTrue: [ ^ self createSimpleGUIApp ]
   name = "CounterApp" ifTrue: [ ^ self createCounterApp ]
-  self showOutput: ("Unknown template: " , name)
+  self showOutput: ("Unknown template: " & name)
   ^ self
 ]
 
@@ -582,19 +582,19 @@ Builder>>createHelloWorldApp [
 
   name := self uniqueAppName: "HelloWorld"
 
-  source := name, " := Application derive: #()
+  source := name & " := Application derive: #()
 
-", name, ">>main: args [
+" & name & ">>main: args [
   Transcript showCr: \"Hello, World!\"
   args size > 0 ifTrue: [
-    Transcript showCr: (\"Arguments: \" , (args printString))
+    Transcript showCr: (\"Arguments: \" & (args printString))
   ]
   ^ 0
 ]
 "
 
   appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " , ex printString)
+    self showOutput: ("Error creating template: " & ex printString)
     ^ self
   ]
 
@@ -611,10 +611,10 @@ Builder>>createHelloWorldApp [
   appClass := Harding at: name ifAbsent: [ appClass ]
   model currentApp: appClass
   [ self loadApp: appClass ] on: Exception do: [:ex |
-    self showOutput: ("Created template but failed to load editor: " , ex printString)
+    self showOutput: ("Created template but failed to load editor: " & ex printString)
   ]
 
-  self showOutput: ("Created HelloWorld application: ", name)
+  self showOutput: ("Created HelloWorld application: " & name)
 ]
 
 Builder>>createSimpleGUIApp [
@@ -622,12 +622,12 @@ Builder>>createSimpleGUIApp [
 
   name := self uniqueAppName: "SimpleGUI"
 
-  source := name, " := Application derive: #()
+  source := name & " := Application derive: #()
 
-", name, ">>main: args [
+" & name & ">>main: args [
   | window button |
   window := GtkWindow new
-  window title: \"", name, "\"
+  window title: \"" & name & "\"
   window setDefaultSize: 400 height: 300
 
   button := GtkButton newLabel: \"Click Me!\"
@@ -643,7 +643,7 @@ Builder>>createSimpleGUIApp [
 "
 
   appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " , ex printString)
+    self showOutput: ("Error creating template: " & ex printString)
     ^ self
   ]
 
@@ -660,10 +660,10 @@ Builder>>createSimpleGUIApp [
   appClass := Harding at: name ifAbsent: [ appClass ]
   model currentApp: appClass
   [ self loadApp: appClass ] on: Exception do: [:ex |
-    self showOutput: ("Created template but failed to load editor: " , ex printString)
+    self showOutput: ("Created template but failed to load editor: " & ex printString)
   ]
 
-  self showOutput: ("Created SimpleGUI application: ", name)
+  self showOutput: ("Created SimpleGUI application: " & name)
 ]
 
 Builder>>createCounterApp [
@@ -671,14 +671,14 @@ Builder>>createCounterApp [
 
   name := self uniqueAppName: "CounterApp"
 
-  source := name, " := Application derive: #(count)
+  source := name & " := Application derive: #(count)
 
-", name, ">>initialize [
+" & name & ">>initialize [
   super initialize
   count := 0
 ]
 
-", name, ">>main: args [
+" & name & ">>main: args [
   | window label incrementButton |
   window := GtkWindow new
   window title: \"Counter Application\"
@@ -689,7 +689,7 @@ Builder>>createCounterApp [
   incrementButton := GtkButton newLabel: \"Increment\"
   incrementButton clicked: [
     count := count + 1
-    label label: (\"Count: \" , (count printString))
+    label label: (\"Count: \" & (count printString))
   ]
 
   window setChild: label
@@ -701,7 +701,7 @@ Builder>>createCounterApp [
 "
 
   appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " , ex printString)
+    self showOutput: ("Error creating template: " & ex printString)
     ^ self
   ]
 
@@ -718,10 +718,10 @@ Builder>>createCounterApp [
   appClass := Harding at: name ifAbsent: [ appClass ]
   model currentApp: appClass
   [ self loadApp: appClass ] on: Exception do: [:ex |
-    self showOutput: ("Created template but failed to load editor: " , ex printString)
+    self showOutput: ("Created template but failed to load editor: " & ex printString)
   ]
 
-  self showOutput: ("Created CounterApp application: ", name)
+  self showOutput: ("Created CounterApp application: " & name)
 ]
 
 Builder>>uniqueAppName: baseName [
