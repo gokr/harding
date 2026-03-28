@@ -85,18 +85,9 @@ TodoItemComponent>>renderCacheKey [
 ].
 
 TodoItemComponent>>render [
-  | myStatusClass myStatusText myTitleClass myTitleText myMetaText myToggleUrl myPanelTarget myToggleLabel myDeleteUrl |
-  # Resolve tracked values before entering the Html DSL so ordinary reads
-  # are captured by RenderCache without Html-specific dynamic placeholders.
-  myStatusClass := self statusClass.
-  myStatusText := self statusText.
-  myTitleClass := self titleClass.
-  myTitleText := self titleText.
-  myMetaText := self metaText.
-  myToggleUrl := self toggleUrl.
-  myPanelTarget := self panelTarget.
-  myToggleLabel := self toggleLabel.
-  myDeleteUrl := self deleteUrl.
+  # Direct self reads inside the Html block are intentional. Blocks keep
+  # lexical self, so tracked values are read against this component while it
+  # renders.
   ^ Html render: [:h |
     h li: [:item |
       item class: "card bg-base-200 border border-base-300 shadow-sm";
@@ -115,20 +106,20 @@ TodoItemComponent>>render [
               headline style: "display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;".
 
               headline span: [:badge |
-                badge class: myStatusClass.
-                badge text: myStatusText
+                badge class: self statusClass.
+                badge text: self statusText
               ].
 
               headline div: [:title |
                 title style: "font-size:1rem; font-weight:600;";
-                  class: myTitleClass.
-                title text: myTitleText
+                  class: self titleClass.
+                title text: self titleText
               ]
             ].
 
             content div: [:meta |
               meta style: "opacity:0.72; font-size:0.92rem;".
-              meta text: myMetaText
+              meta text: self metaText
             ]
           ].
 
@@ -137,16 +128,16 @@ TodoItemComponent>>render [
 
             actions button: [:toggle |
               toggle class: "btn btn-ghost btn-sm";
-                post: myToggleUrl;
-                target: myPanelTarget;
+                post: self toggleUrl;
+                target: self panelTarget;
                 swap: "outerHTML".
-              toggle text: myToggleLabel
+              toggle text: self toggleLabel
             ].
 
             actions button: [:delete |
               delete class: "btn btn-ghost btn-sm";
-                post: myDeleteUrl;
-                target: myPanelTarget;
+                post: self deleteUrl;
+                target: self panelTarget;
                 swap: "outerHTML".
               delete text: "Delete"
             ]
@@ -214,16 +205,11 @@ TodoPanelComponent>>listComponents [
 ].
 
 TodoPanelComponent>>render [
-  | myPanelId myRoutePrefix myPanelTarget myListComponents |
-  # The list is materialized before rendering so TrackedList reads are
-  # associated with this panel cache entry.
-  myPanelId := self panelIdText.
-  myRoutePrefix := self routePrefixText.
-  myPanelTarget := self panelTarget.
-  myListComponents := self listComponents.
+  # The panel reads repository state lazily while building HTML so the cache
+  # entry is dirtied by the same tracked reads that drive the visible output.
   ^ Html render: [:h |
     h div: [:card |
-      card id: myPanelId;
+      card id: self panelIdText;
         class: "card bg-base-100 shadow-xl".
 
       card div: [:body |
@@ -240,8 +226,8 @@ TodoPanelComponent>>render [
 
         body form: [:form |
           form class: "todo-form";
-            post: myRoutePrefix , "/todos";
-            target: myPanelTarget;
+            post: self routePrefixText , "/todos";
+            target: self panelTarget;
             swap: "outerHTML".
 
           form div: [:row |
@@ -276,7 +262,7 @@ TodoPanelComponent>>render [
 
         body ul: [:list |
           list style: "padding:0; margin:0;".
-          list renderContent: myListComponents
+          list renderContent: self listComponents
         ].
 
         body div: [:note |
@@ -302,10 +288,6 @@ TodoPageComponent>>heroCompletedText [
 ].
 
 TodoPageComponent>>statsHtml [
-  | myTotalText myRemainingText myCompletedText |
-  myTotalText := self heroTotalText.
-  myRemainingText := self heroRemainingText.
-  myCompletedText := self heroCompletedText.
   ^ Html render: [:h |
     h div: [:stats |
       stats id: "todo-stats";
@@ -313,48 +295,44 @@ TodoPageComponent>>statsHtml [
 
       stats span: [:total |
         total class: "badge badge-outline".
-        total text: myTotalText
+        total text: self heroTotalText
       ].
 
       stats span: [:remaining |
         remaining class: "badge badge-outline".
-        remaining text: myRemainingText
+        remaining text: self heroRemainingText
       ].
 
       stats span: [:completed |
         completed class: "badge badge-outline".
-        completed text: myCompletedText
+        completed text: self heroCompletedText
       ]
     ]
   ]
 ].
 
 TodoPageComponent>>statsOobHtml [
-  | myTotalText myRemainingText myCompletedText |
-  myTotalText := self heroTotalText.
-  myRemainingText := self heroRemainingText.
-  myCompletedText := self heroCompletedText.
   ^ Html render: [:h |
     h div: [:stats |
       # HTMX swaps this fragment back into the existing page while the main
-      # request still targets only the todo panel.
+      # response still targets only the todo panel.
       stats id: "todo-stats";
         attr: #"hx-swap-oob" value: "true";
         style: "display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem;".
 
       stats span: [:total |
         total class: "badge badge-outline".
-        total text: myTotalText
+        total text: self heroTotalText
       ].
 
       stats span: [:remaining |
         remaining class: "badge badge-outline".
-        remaining text: myRemainingText
+        remaining text: self heroRemainingText
       ].
 
       stats span: [:completed |
         completed class: "badge badge-outline".
-        completed text: myCompletedText
+        completed text: self heroCompletedText
       ]
     ]
   ]
@@ -369,9 +347,6 @@ TodoPageComponent>>renderCacheKey [
 ].
 
 TodoPageComponent>>bodyMarkup [
-  | myStatsHtml myPanelComponent |
-  myStatsHtml := self statsHtml.
-  myPanelComponent := self panelComponent.
   ^ Html render: [:h |
     h main: [:main |
       main class: Daisy shellClass;
@@ -399,11 +374,11 @@ TodoPageComponent>>bodyMarkup [
             lead text: "Built with the Html DSL, htmx interactions, and tracked-state render caching so the page stays responsive while you iterate."
           ].
 
-          content renderContent: (Html rawFragment: myStatsHtml)
+          content renderContent: (Html rawFragment: self statsHtml)
         ]
       ].
 
-      main renderContent: myPanelComponent
+      main renderContent: self panelComponent
     ]
   ]
 ].
