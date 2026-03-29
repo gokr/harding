@@ -95,3 +95,7 @@ registry-full.json
 # Machine-local external library integration output
 src/harding/external/external_libs_generated.nim
 src/harding/external/generator
+
+# SQLite databases
+*.db
+badminton-buddy/badminton.db

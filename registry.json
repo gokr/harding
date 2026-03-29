@@ -2,8 +2,13 @@
   "version": "1.0.0",
   "libraries": {
     "bitbarrel": "https://github.com/gokr/harding-bitbarrel.git",
+    "corral": "https://github.com/gokr/harding-corral.git",
+    "curly": "https://github.com/gokr/harding-curly.git",
+    "googleoauth": "https://github.com/gokr/harding-google-oauth.git",
+    "jwt": "https://github.com/gokr/harding-jwt.git",
     "mysql": "https://github.com/gokr/harding-mysql.git",
-    "sqlite": "https://github.com/gokr/harding-sqlite.git",
-    "nimcp": "https://github.com/gokr/harding-nimcp.git"
+    "nimcp": "https://github.com/gokr/harding-nimcp.git",
+    "oauth2": "https://github.com/gokr/harding-oauth2.git",
+    "sqlite": "https://github.com/gokr/harding-sqlite.git"
   }
 }
