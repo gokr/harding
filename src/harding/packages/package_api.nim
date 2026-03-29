@@ -34,7 +34,7 @@ proc hasPackageSource*(interp: Interpreter, path: string): bool =
     return false
   path in interp.packageSources[]
 
-proc rebindDeclarativePrimitives(interp: var Interpreter) =
+proc rebindDeclarativePrimitives*(interp: var Interpreter) =
   ## Rebind methods with declarative primitive syntax (<primitive ...>) to their
   ## native implementations after all primitives have been registered.
   if interp.globals == nil:
@@ -44,7 +44,6 @@ proc rebindDeclarativePrimitives(interp: var Interpreter) =
                          allMethods: Table[string, BlockNode],
                          allClassMethods: Table[string, BlockNode]) =
     for selector, meth in methodTable.mpairs:
-      discard selector
       if meth == nil or meth.primitiveSelector.len == 0 or meth.nativeImpl != nil:
         continue
       # Check both instance and class method tables for the primitive
@@ -55,14 +54,15 @@ proc rebindDeclarativePrimitives(interp: var Interpreter) =
       elif meth.primitiveSelector in allClassMethods:
         primMethod = allClassMethods[meth.primitiveSelector]
         debug("Rebinding ", cls.name, ">>", selector, " from allClassMethods to ", meth.primitiveSelector)
-      else:
-        if cls.name == "MysqlConnection":
-          debug("Could not find primitive for MysqlConnection>>", selector, ": ", meth.primitiveSelector)
       
       if primMethod != nil and primMethod.nativeImpl != nil:
         meth.nativeImpl = primMethod.nativeImpl
         meth.nativeValueImpl = primMethod.nativeValueImpl
         meth.hasInterpreterParam = primMethod.hasInterpreterParam
+      elif primMethod != nil:
+        debug("Found primitive but has no nativeImpl: ", cls.name, ">>", selector)
+      else:
+        debug("Could not find primitive: ", cls.name, ">>", selector, " primitive: ", meth.primitiveSelector)
 
   for _, value in interp.globals[].mpairs:
     if value.kind != vkClass or value.classVal == nil:
@@ -90,7 +90,7 @@ proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
       let (_, err) = evalStatementsCallback(interp, interp.packageSources[][spec.bootstrapPath])
       if err.len > 0:
         warn("installPackage: bootstrap evaluation failed for package ", spec.name,
-             ": ", err)
+            ": ", err)
         return false
     else:
       warn("installPackage: evalStatements callback not set")

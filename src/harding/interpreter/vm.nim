@@ -5508,6 +5508,10 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   # Install external libraries (if any are installed and compiled in)
   when declared(installExternalLibraries):
     installExternalLibraries(interp)
+  
+  # Rebuild method tables again after external libraries are installed
+  # This ensures declarative primitives in external libraries get rebound
+  rebuildAllMethodTables()
 
 # Simple test function (incomplete - commented out)
 ## proc testBasicArithmetic*(): bool =
@@ -6010,6 +6014,12 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     # Rebuild all method tables after batch loading
     rebuildAllMethodTables()
     interp.methodTableDeferRebuild = false
+    
+    # Rebind declarative primitives for classes loaded from embedded sources
+    # (external libraries with <primitive ...> syntax need rebinding after class redefinition)
+    when declared(rebindDeclarativePrimitives):
+      rebindDeclarativePrimitives(interp)
+    
     reindexSourceFile(interp, displayPath)
 
     debug("Successfully loaded: ", displayPath)
