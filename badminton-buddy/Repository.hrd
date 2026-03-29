@@ -1,0 +1,356 @@
+BadmintonRepository := Object derivePublic: #(connection, courts, slots, bookings, partnerRequests, currentUser, dbPath).
+
+BadmintonRepository class>>open: aPath [
+  | repo |
+  repo := self basicNew.
+  repo::dbPath := aPath.
+  repo ensureConnection.
+  repo ensureTables.
+  repo seedDataIfNeeded.
+  repo loadData.
+  ^ repo
+].
+
+BadmintonRepository class>>openDefault [
+  ^ self open: "badminton-buddy/badminton.db"
+].
+
+BadmintonRepository>>ensureConnection [
+  connection isNil ifTrue: [
+    connection := SqliteConnection open: dbPath
+  ]
+].
+
+BadmintonRepository>>ensureTables [
+  | conn |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  conn isConnected ifFalse: [ ^ self ].
+
+  conn execute: "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT, avatar_url TEXT, skill_level INTEGER DEFAULT 1)".
+  conn execute: "CREATE TABLE IF NOT EXISTS courts (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, location TEXT, latitude REAL, longitude REAL, amenities TEXT, active INTEGER DEFAULT 1)".
+  conn execute: "CREATE TABLE IF NOT EXISTS time_slots (id INTEGER PRIMARY KEY AUTOINCREMENT, court_id INTEGER NOT NULL, day_of_week INTEGER NOT NULL, start_time TEXT NOT NULL, duration INTEGER DEFAULT 60, max_players INTEGER DEFAULT 4)".
+  conn execute: "CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT, slot_id INTEGER NOT NULL, user_id INTEGER NOT NULL, status TEXT DEFAULT 'confirmed')".
+  conn execute: "CREATE TABLE IF NOT EXISTS partner_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id INTEGER NOT NULL, user_id INTEGER NOT NULL, message TEXT, status TEXT DEFAULT 'open')"
+].
+
+BadmintonRepository>>seedDataIfNeeded [
+  | conn userCount |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  conn isConnected ifFalse: [ ^ self ].
+
+  userCount := 0.
+  [ | result |
+    result := conn query: "SELECT COUNT(*) FROM users".
+    userCount := (result next at: 0) asInteger.
+    result close
+  ] on: Exception do: [:ex | nil ].
+
+  userCount = 0 ifTrue: [ self seedDemoData ]
+].
+
+BadmintonRepository>>seedDemoData [
+  | conn demoUserId courtId result |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+
+  [ conn execute: "INSERT INTO users (email, name, skill_level) VALUES ('demo@example.com', 'Demo User', 2)".
+    result := conn query: "SELECT last_insert_rowid()".
+    demoUserId := (result next at: 0) asInteger.
+    result close
+  ] on: Exception do: [:ex | nil ].
+
+  [ conn execute: "INSERT INTO courts (name, location, latitude, longitude, amenities) VALUES ('City Sports Hall', 'Downtown', 59.3293, 18.0686, 'Parking, Showers, Cafe')".
+    result := conn query: "SELECT last_insert_rowid()".
+    courtId := (result next at: 0) asInteger.
+    result close.
+    self seedTimeSlotsFor: courtId
+  ] on: Exception do: [:ex | nil ].
+
+  [ conn execute: "INSERT INTO courts (name, location, latitude, longitude, amenities) VALUES ('Nordic Badminton Center', 'North District', 59.3456, 18.0923, 'Parking, Pro Shop, Cafe')".
+    result := conn query: "SELECT last_insert_rowid()".
+    courtId := (result next at: 0) asInteger.
+    result close.
+    self seedTimeSlotsFor: courtId
+  ] on: Exception do: [:ex | nil ].
+
+  [ conn execute: "INSERT INTO courts (name, location, latitude, longitude, amenities) VALUES ('Lakeside Sports Complex', 'West End', 59.3123, 18.0456, 'Parking, Swimming Pool, Restaurant')".
+    result := conn query: "SELECT last_insert_rowid()".
+    courtId := (result next at: 0) asInteger.
+    result close.
+    self seedTimeSlotsFor: courtId
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>seedTimeSlotsFor: courtId [
+  | conn times |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  times := Array new.
+  times add: "09:00".
+  times add: "11:00".
+  times add: "14:00".
+  times add: "16:00".
+  times add: "18:00".
+  times add: "20:00".
+
+  times do: [:time |
+    [ conn execute: "INSERT INTO time_slots (court_id, day_of_week, start_time, duration, max_players) VALUES (" & (courtId printString) & ", 1, '" & time & "', 120, 4)"
+    ] on: Exception do: [:ex | nil ]
+  ]
+].
+
+BadmintonRepository>>escapeSql: aString [
+  aString isNil ifTrue: [ ^ "" ].
+  ^ aString replace: "'" with: "''"
+].
+
+BadmintonRepository>>loadData [
+  self loadUsers.
+  self loadCourts.
+  self loadSlots.
+  self loadBookings.
+  self loadPartnerRequests
+].
+
+BadmintonRepository>>loadUsers [
+  | conn result row user |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  [ result := conn query: "SELECT id, email, name, avatar_url, skill_level FROM users ORDER BY id".
+    [row := result next. row notNil] whileTrue: [
+      user := User basicNew.
+      user::id := ((row at: 0) asInteger ifNil: [ 0 ]).
+      user::email := (row at: 1).
+      user::name := (row at: 2).
+      user::avatarUrl := (row at: 3).
+      user::skillLevel := ((row at: 4) asInteger ifNil: [ 1 ]).
+      (user::email) = "demo@example.com" ifTrue: [ currentUser := user ]
+    ].
+    result close
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>loadCourts [
+  | conn result row court |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  courts := TrackedList new.
+  [ result := conn query: "SELECT id, name, location, latitude, longitude, amenities, active FROM courts WHERE active = 1 ORDER BY name".
+    [row := result next. row notNil] whileTrue: [
+      court := Court basicNew.
+      court::id := ((row at: 0) asInteger ifNil: [ 0 ]).
+      court::name := (row at: 1).
+      court::location := (row at: 2).
+      court::latitude := ((row at: 3) asNumber ifNil: [ 0.0 ]).
+      court::longitude := ((row at: 4) asNumber ifNil: [ 0.0 ]).
+      court::amenities := (row at: 5).
+      court::active := (((row at: 6) asInteger) = 1).
+      courts add: court
+    ].
+    result close
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>loadSlots [
+  | conn result row slot count |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  slots := TrackedList new.
+  count := 0.
+  [ result := conn query: "SELECT id, court_id, day_of_week, start_time, duration, max_players FROM time_slots ORDER BY court_id, day_of_week, start_time".
+    [row := result next. row notNil] whileTrue: [
+      slot := TimeSlot basicNew.
+      slot::id := ((row at: 0) asInteger ifNil: [ 0 ]).
+      slot::courtId := ((row at: 1) asInteger ifNil: [ 0 ]).
+      slot::dayOfWeek := ((row at: 2) asInteger ifNil: [ 1 ]).
+      slot::startTime := (row at: 3).
+      slot::duration := ((row at: 4) asInteger ifNil: [ 60 ]).
+      slot::maxPlayers := ((row at: 5) asInteger ifNil: [ 4 ]).
+      slots add: slot.
+      count := count + 1
+    ].
+    result close
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>loadBookings [
+  | conn result row booking |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  bookings := TrackedList new.
+  [ result := conn query: "SELECT id, slot_id, user_id, status FROM bookings ORDER BY id DESC".
+    [row := result next. row notNil] whileTrue: [
+      booking := Booking basicNew.
+      booking::id := ((row at: 0) asInteger ifNil: [ 0 ]).
+      booking::slotId := ((row at: 1) asInteger ifNil: [ 0 ]).
+      booking::userId := ((row at: 2) asInteger ifNil: [ 0 ]).
+      booking::status := (row at: 3).
+      bookings add: booking
+    ].
+    result close
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>loadPartnerRequests [
+  | conn result row request |
+  conn := connection.
+  conn isNil ifTrue: [ ^ self ].
+  partnerRequests := TrackedList new.
+  [ result := conn query: "SELECT id, booking_id, user_id, message, status FROM partner_requests ORDER BY id DESC".
+    [row := result next. row notNil] whileTrue: [
+      request := PartnerRequest basicNew.
+      request::id := (row at: 0).
+      request::bookingId := (row at: 1).
+      request::userId := (row at: 2).
+      request::message := (row at: 3).
+      request::status := (row at: 4).
+      partnerRequests add: request
+    ].
+    result close
+  ] on: Exception do: [:ex | nil ]
+].
+
+BadmintonRepository>>allCourts [ ^ courts ]
+
+BadmintonRepository>>courtById: anId [
+  | numericId |
+  numericId := (anId isKindOf: String) ifTrue: [ anId asInteger ] ifFalse: [ anId ].
+  ^ courts detect: [:c | c::id = numericId ] ifNone: [ nil ]
+].
+
+BadmintonRepository>>slotsForCourt: courtId [
+  | numericId |
+  numericId := (courtId isKindOf: String) ifTrue: [ courtId asInteger ] ifFalse: [ courtId ].
+  ^ slots select: [:s | s::courtId = numericId ]
+].
+
+BadmintonRepository>>slotById: anId [
+  | numericId |
+  numericId := (anId isKindOf: String) ifTrue: [ anId asInteger ] ifFalse: [ anId ].
+  ^ slots detect: [:s | s::id = numericId ] ifNone: [ nil ]
+].
+
+BadmintonRepository>>bookingsForUser: userId [
+  | numericId |
+  numericId := (userId isKindOf: String) ifTrue: [ userId asInteger ] ifFalse: [ userId ].
+  ^ bookings select: [:b | b::userId = numericId ]
+].
+
+BadmintonRepository>>bookingById: anId [
+  | numericId |
+  numericId := (anId isKindOf: String) ifTrue: [ anId asInteger ] ifFalse: [ anId ].
+  ^ bookings detect: [:b | b::id = numericId ] ifNone: [ nil ]
+].
+
+BadmintonRepository>>openPartnerRequests [
+  ^ partnerRequests select: [:p | p::status = "open" ]
+].
+
+BadmintonRepository>>currentUser [ ^ currentUser ]
+
+BadmintonRepository>>createBookingForSlot: slotId userId: userId [
+  | conn bookingId booking slot numericSlotId numericUserId |
+  numericSlotId := (slotId isKindOf: String) ifTrue: [ slotId asInteger ] ifFalse: [ slotId ].
+  numericUserId := (userId isKindOf: String) ifTrue: [ userId asInteger ] ifFalse: [ userId ].
+  
+  slot := self slotById: numericSlotId.
+  slot isNil ifTrue: [ ^ nil ].
+
+  (bookings detect: [:b | b::slotId = numericSlotId and: [ b::status = "confirmed" ]] ifNone: [ nil ]) notNil
+    ifTrue: [ ^ nil ].
+
+  conn := connection.
+  conn isNil ifTrue: [ ^ nil ].
+  
+  [ | result row |
+    conn execute: "INSERT INTO bookings (slot_id, user_id, status) VALUES (" & (numericSlotId printString) & ", " & (numericUserId printString) & ", 'confirmed')".
+    result := conn query: "SELECT last_insert_rowid()".
+    row := result next.
+    bookingId := (row at: 0) asInteger.
+    result close.
+
+    booking := Booking basicNew.
+    booking::id := bookingId.
+    booking::slotId := numericSlotId.
+    booking::userId := numericUserId.
+    booking::status := "confirmed".
+    bookings add: booking.
+    ^ booking
+  ] on: Exception do: [:ex |
+    System stderr writeline: "Failed to create booking".
+    ^ nil
+  ]
+].
+
+BadmintonRepository>>cancelBooking: bookingId [
+  | booking conn numericId |
+  numericId := (bookingId isKindOf: String) ifTrue: [ bookingId asInteger ] ifFalse: [ bookingId ].
+  booking := self bookingById: numericId.
+  booking isNil ifTrue: [ ^ nil ].
+
+  conn := connection.
+  conn isNil ifTrue: [ ^ nil ].
+
+  [ conn execute: "UPDATE bookings SET status = 'cancelled' WHERE id = " & (numericId printString).
+    booking::status := "cancelled".
+    ^ booking
+  ] on: Exception do: [:ex |
+    System stderr writeline: "Failed to cancel booking".
+    ^ nil
+  ]
+].
+
+BadmintonRepository>>createPartnerRequestForBooking: bookingId userId: userId message: msg [
+  | conn requestId request numericBookingId numericUserId |
+  numericBookingId := (bookingId isKindOf: String) ifTrue: [ bookingId asInteger ] ifFalse: [ bookingId ].
+  numericUserId := (userId isKindOf: String) ifTrue: [ userId asInteger ] ifFalse: [ userId ].
+  
+  conn := connection.
+  conn isNil ifTrue: [ ^ nil ].
+
+  [ | result |
+    conn execute: "INSERT INTO partner_requests (booking_id, user_id, message, status) VALUES (" & (numericBookingId printString) & ", " & (numericUserId printString) & ", '" & (self escapeSql: msg) & "', 'open')".
+    result := conn query: "SELECT last_insert_rowid()".
+    requestId := (result next at: 0) asInteger.
+    result close.
+
+    request := PartnerRequest basicNew.
+    request::id := requestId.
+    request::bookingId := numericBookingId.
+    request::userId := numericUserId.
+    request::message := msg.
+    request::status := "open".
+    partnerRequests add: request.
+    ^ request
+  ] on: Exception do: [:ex |
+    System stderr writeline: "Failed to create partner request".
+    ^ nil
+  ]
+].
+
+BadmintonRepository>>respondToPartnerRequest: requestId status: newStatus [
+  | request conn numericId |
+  numericId := (requestId isKindOf: String) ifTrue: [ requestId asInteger ] ifFalse: [ requestId ].
+  request := partnerRequests detect: [:p | p::id = numericId ] ifNone: [ nil ].
+  request isNil ifTrue: [ ^ nil ].
+
+  conn := connection.
+  conn isNil ifTrue: [ ^ nil ].
+
+  [ conn execute: "UPDATE partner_requests SET status = '" & (self escapeSql: newStatus) & "' WHERE id = " & (numericId printString).
+    request::status := newStatus.
+    ^ request
+  ] on: Exception do: [:ex |
+    System stderr writeline: "Failed to respond to partner request".
+    ^ nil
+  ]
+].
+
+BadmintonRepository>>close [
+  connection notNil ifTrue: [
+    connection close.
+    connection := nil
+  ]
+].

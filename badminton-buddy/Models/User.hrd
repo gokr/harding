@@ -1,39 +1,30 @@
 # User model for Badminton Buddy.
 
-User := Object derivePublic: #(id email name avatarUrl skillLevel createdAt)
-
-User class>>fromRow: aRow [
-    | user |
-    user := self new
-    user id: (aRow at: #id)
-    user email: (aRow at: #email)
-    user name: (aRow at: #name)
-    user avatarUrl: (aRow at: #avatarUrl)
-    user skillLevel: (aRow at: #skillLevel)
-    user createdAt: (aRow at: #createdAt)
-    ^ user
-]
+User := Object derivePublic: #(id, email, name, avatarUrl, skillLevel, createdAt).
 
 User>>skillLevelName [
-    skillLevel = 1 ifTrue: [ ^ "Beginner" ]
-    skillLevel = 2 ifTrue: [ ^ "Intermediate" ]
-    skillLevel = 3 ifTrue: [ ^ "Advanced" ]
-    skillLevel = 4 ifTrue: [ ^ "Expert" ]
-    ^ "Unknown"
-]
+  | level |
+  level := skillLevel.
+  level = 1 ifTrue: [ ^ "Beginner" ].
+  level = 2 ifTrue: [ ^ "Intermediate" ].
+  level = 3 ifTrue: [ ^ "Advanced" ].
+  level = 4 ifTrue: [ ^ "Expert" ].
+  ^ "Unknown"
+].
 
 User>>displayName [
-    name isEmpty ifTrue: [ ^ email ]
-    ^ name
-]
+  | n |
+  n := name.
+  (n isNil or: [ n isEmpty ]) ifTrue: [ ^ email ].
+  ^ n
+].
 
-User>>toJson [
-    ^ "{"
-        , "\"id\": \"" , id , "\","
-        , "\"email\": \"" , email , "\","
-        , "\"name\": \"" , (name ifNil: [ "" ]) , "\","
-        , "\"avatarUrl\": \"" , (avatarUrl ifNil: [ "" ]) , "\","
-        , "\"skillLevel\": " , (skillLevel printString) , ","
-        , "\"skillLevelName\": \"" , self skillLevelName , "\""
-        , "}"
-]
+User>>skillBadgeClass [
+  | level |
+  level := skillLevel.
+  level = 1 ifTrue: [ ^ "badge badge-info" ].
+  level = 2 ifTrue: [ ^ "badge badge-success" ].
+  level = 3 ifTrue: [ ^ "badge badge-warning" ].
+  level = 4 ifTrue: [ ^ "badge badge-error" ].
+  ^ "badge badge-ghost"
+].

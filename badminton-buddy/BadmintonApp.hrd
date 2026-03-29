@@ -1,91 +1,214 @@
-# Badminton Buddy - Main Application
+BadmintonApp := Object derivePublic: #(server, router, repository, port, daisy).
+BadmintonAppCurrent := nil.
 
-BadmintonApp := Object derive: #(server, router, port)
-BadmintonAppCurrent := nil
-
-BadmintonApp class>>current [ ^ BadmintonAppCurrent ]
-
-BadmintonApp class>>start [
-  ^ self startOn: 8080
-]
-
+BadmintonApp class>>current [ ^ BadmintonAppCurrent ].
+BadmintonApp class>>start [ ^ self startOn: 8080 ].
 BadmintonApp class>>startOn: aPort [
-  | app |
   BadmintonAppCurrent notNil ifTrue: [ BadmintonAppCurrent stop ].
-  app := self basicNew.
-  app startOn: aPort.
-  BadmintonAppCurrent := app.
-  ^ app
-]
-
+  BadmintonAppCurrent := self basicNew startOn: aPort.
+  ^ BadmintonAppCurrent
+].
 BadmintonApp class>>serveForeverOn: aPort [
-  | app |
   BadmintonAppCurrent notNil ifTrue: [ BadmintonAppCurrent stop ].
-  app := self basicNew.
-  app serveForeverOn: aPort.
-  BadmintonAppCurrent := app.
-  ^ app
-]
-
+  BadmintonAppCurrent := self basicNew serveForeverOn: aPort.
+  ^ BadmintonAppCurrent
+].
 BadmintonApp class>>stop [
-  BadmintonAppCurrent notNil ifTrue: [
-    BadmintonAppCurrent stop.
-    BadmintonAppCurrent := nil
-  ].
+  BadmintonAppCurrent notNil ifTrue: [ BadmintonAppCurrent stop. BadmintonAppCurrent := nil ].
   ^ nil
-]
-
-BadmintonApp>>server [ ^ server ]
-BadmintonApp>>router [ ^ router ]
-BadmintonApp>>port [ ^ port ]
-BadmintonApp>>server: value [ server := value ]
-BadmintonApp>>router: value [ router := value ]
-BadmintonApp>>port: value [ port := value ]
+].
 
 BadmintonApp>>startOn: aPort [
   ^ self bootOn: aPort with: [:httpServer :runningPort |
     httpServer start: runningPort.
     Processor fork: [ self runLoop ]
   ]
-]
-
+].
 BadmintonApp>>serveForeverOn: aPort [
   ^ self bootOn: aPort with: [:httpServer :runningPort |
     httpServer basicRequestLogging.
     httpServer serveForever: runningPort
   ]
-]
-
+].
 BadmintonApp>>bootOn: aPort with: aServerBlock [
   server := HttpServer new.
   router := Router new.
+  repository := BadmintonRepository openDefault.
   port := aPort.
-
+  daisy := Daisy withCDN.
   self installRoutes.
   server router: router.
-
-  "Badminton Buddy starting on port " print.
-  aPort println.
-  "Open http://localhost:" print.
-  aPort print.
-  "/ in your browser" println.
-
+  "Badminton Buddy starting on port " print. aPort println.
   aServerBlock value: server value: port.
   ^ self
-]
+].
+BadmintonApp>>pageHead: title [
+  ^ "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>" & title & "</title>" & (daisy headContent) & "</head><body class='" & (daisy shellClass) & "' " & (daisy themeAttribute) & ">"
+].
 
 BadmintonApp>>stop [
   server notNil ifTrue: [ server stop ].
+  repository notNil ifTrue: [ repository close ].
   ^ self
-]
-
+].
 BadmintonApp>>runLoop [
   [ server isRunning ] whileTrue: [ server processRequests ].
   ^ self
-]
+].
 
 BadmintonApp>>installRoutes [
-  router clear.
-  router get: "/" do: [:req | req respondHtml: "<h1>Badminton Buddy</h1>" ].
+  router get: "/" do: [:req | self home: req ].
+  router get: "/courts" do: [:req | self courts: req ].
+  router get: "/bookings" do: [:req | self bookings: req ].
+  router get: "/partners" do: [:req | self partners: req ].
+  router post: "/bookings" do: [:req | self createBooking: req ].
+  router post: "/bookings/@id/cancel" do: [:req | self cancelBooking: req ].
+  router post: "/partner-requests/@id/respond" do: [:req | self respondPartnerRequest: req ].
   ^ router
-]
+].
+
+BadmintonApp>>home: req [ req respondHtml: self homePage ].
+BadmintonApp>>courts: req [ req respondHtml: self courtsPage ].
+BadmintonApp>>bookings: req [ req respondHtml: self bookingsPage ].
+BadmintonApp>>partners: req [ req respondHtml: self partnersPage ].
+
+BadmintonApp>>createBooking: req [
+  | slotId user booking headers |
+  slotId := req formParam: "slotId".
+  user := repository currentUser.
+  (slotId notNil and: [ user notNil ]) ifTrue: [
+    booking := repository createBookingForSlot: slotId userId: user::id.
+    booking notNil ifTrue: [
+      headers := Table new.
+      headers at: "Location" put: "/bookings".
+      ^ req respond: 302 headers: headers body: ""
+    ]
+  ].
+  headers := Table new.
+  headers at: "Location" put: "/courts".
+  req respond: 302 headers: headers body: ""
+].
+BadmintonApp>>cancelBooking: req [
+  | bookingId headers |
+  bookingId := req pathParam: "id".
+  bookingId notNil ifTrue: [ repository cancelBooking: bookingId ].
+  headers := Table new.
+  headers at: "Location" put: "/bookings".
+  req respond: 302 headers: headers body: ""
+].
+
+BadmintonApp>>respondPartnerRequest: req [
+  | requestId status headers |
+  requestId := req pathParam: "id".
+  status := req formParam: "status".
+  (requestId notNil and: [ status notNil ]) ifTrue: [
+    repository respondToPartnerRequest: requestId status: status
+  ].
+  headers := Table new.
+  headers at: "Location" put: "/partners".
+  req respond: 302 headers: headers body: ""
+].
+
+BadmintonApp>>homePage [
+  | page |
+  page := self pageHead: "Badminton Buddy".
+  page := page & "<style>section.hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }</style>".
+  page := page & self navbar.
+  page := page & "<section class='hero min-h-[70vh] text-white relative overflow-hidden'><div class='hero-content text-center py-20 relative z-10'><div class='mb-6'><span class='badge badge-lg badge-accent mb-4 text-lg px-6 py-3'>Badminton Buddy</span></div><h1 class='text-6xl font-bold mb-6 leading-tight'>Find Courts<br/><span class='text-accent'>& Partners</span></h1><p class='text-2xl mb-12 max-w-2xl mx-auto opacity-90'>Book premium badminton courts and connect with players</p><div class='flex gap-4 justify-center flex-wrap'><a href='/courts' class='btn btn-primary btn-lg text-lg px-8'>Browse Courts</a><a href='/bookings' class='btn btn-secondary btn-lg text-lg px-8'>My Bookings</a></div><div class='mt-16 flex justify-center gap-8 flex-wrap'><div class='bg-white/10 backdrop-blur rounded-2xl p-6 text-center'><div class='text-4xl font-bold mb-2'>3</div><div class='text-sm opacity-80'>Courts</div></div><div class='bg-white/10 backdrop-blur rounded-2xl p-6 text-center'><div class='text-4xl font-bold mb-2'>42</div><div class='text-sm opacity-80'>Slots</div></div></div></div></section>".
+  page := page & self footer.
+  page := page & "</body></html>".
+  ^ page
+].
+
+BadmintonApp>>courtsPage [
+  | page courts courtList |
+  courts := repository allCourts.
+  courtList := "".
+  courts notNil ifTrue: [
+    courts do: [:court |
+      courtList := courtList & (self courtCard: court)
+    ]
+  ].
+  page := self pageHead: "Courts - Badminton Buddy".
+  page := page & self navbar.
+  page := page & "<main class='min-h-screen'><div class='container mx-auto px-4 py-12'><div class='text-center mb-12'><h1 class='text-5xl font-bold mb-4'>Our Courts</h1><p class='text-xl text-base-content/70'>Choose from our premium facilities</p></div><div class='grid gap-8 max-w-5xl mx-auto'>".
+  page := page & courtList.
+  page := page & "</div></div></main>".
+  page := page & self footer.
+  page := page & "</body></html>".
+  ^ page
+].
+
+BadmintonApp>>courtCard: court [
+  | card slots slotHtml slotCount |
+  slots := repository slotsForCourt: court::id.
+  slotCount := slots notNil ifTrue: [ slots size ] ifFalse: [ 0 ].
+  slotHtml := "".
+  slots notNil ifTrue: [
+    slots do: [:slot |
+      slotHtml := slotHtml & "<form method='POST' action='/bookings' class='inline'><input type='hidden' name='slotId' value='" & (slot::id printString) & "'><button type='submit' class='btn btn-outline btn-block hover:btn-primary hover:scale-105 transition-all'>" & slot::startTime & "</button></form>"
+    ]
+  ].
+  card := "<div class='card bg-base-100 shadow-xl border border-base-200 hover:shadow-2xl transition-shadow'><div class='card-body p-8'><div class='flex flex-col lg:flex-row lg:items-start gap-6'><div class='flex-1'><div class='flex items-center gap-4 mb-4'><div class='w-14 h-14 rounded-full bg-primary flex items-center justify-center text-white text-2xl'>&#127992;</div><div><h2 class='card-title text-2xl'>" & court::name & "</h2><p class='text-base-content/60'>Location: " & court::location & "</p></div></div><div class='flex flex-wrap gap-2 mb-4'>".
+  court::amenities notNil ifTrue: [
+    (court::amenities split: ",") do: [:a |
+      card := card & "<span class='badge badge-outline'>" & (a trim) & "</span>"
+    ]
+  ].
+  card := card & "</div></div><div class='text-right'><span class='badge badge-primary badge-lg'>Available</span></div></div><div class='divider'></div><div><h3 class='font-semibold mb-4 text-lg'>Available Time Slots (" & slotCount printString & " found)</h3><div class='grid grid-cols-3 md:grid-cols-6 gap-3'>" & slotHtml & "</div></div></div></div>".
+  ^ card
+].
+
+BadmintonApp>>bookingsPage [
+  | page bookings content currentUser userId bookingCards |
+  currentUser := repository currentUser.
+  userId := currentUser notNil ifTrue: [ currentUser::id ] ifFalse: [ nil ].
+  bookings := userId notNil ifTrue: [ repository bookingsForUser: userId ] ifFalse: [ Array new ].
+  bookingCards := "".
+  bookings do: [:b |
+    bookingCards := bookingCards & (self bookingCard: b)
+  ].
+  page := self pageHead: "Bookings - Badminton Buddy".
+  page := page & self navbar.
+  bookingCards isEmpty ifTrue: [
+    page := page & "<main class='min-h-screen'><div class='container mx-auto px-4 py-12 max-w-4xl'><div class='text-center mb-12'><h1 class='text-5xl font-bold mb-4'>My Bookings</h1><p class='text-xl text-base-content/70'>Manage your reservations</p></div><div class='text-center py-16 bg-base-200 rounded-3xl'><div class='text-6xl mb-6'>&#128197;</div><h2 class='text-2xl font-bold mb-4'>No Bookings Yet</h2><p class='text-base-content/70 mb-8'>Start by browsing available courts</p><a href='/courts' class='btn btn-primary btn-lg'>Browse Courts</a></div></div></main>"
+  ] ifFalse: [
+    content := "<main class='min-h-screen'><div class='container mx-auto px-4 py-12 max-w-4xl'><div class='text-center mb-12'><h1 class='text-5xl font-bold mb-4'>My Bookings</h1><p class='text-xl text-base-content/70'>Manage your reservations</p></div><div class='space-y-6'>" & bookingCards & "</div></div></main>".
+    page := page & content
+  ].
+  page := page & self footer & "</body></html>".
+  ^ page
+].
+
+BadmintonApp>>bookingCard: booking [
+  | card slot court courtName slotTime borderClass badgeClass |
+  slot := repository slotById: booking::slotId.
+  court := slot notNil ifTrue: [ repository courtById: slot::courtId ] ifFalse: [ nil ].
+  courtName := court notNil ifTrue: [ court::name ] ifFalse: [ "Unknown" ].
+  slotTime := slot notNil ifTrue: [ slot::startTime ] ifFalse: [ "" ].
+  borderClass := booking::status = "confirmed" ifTrue: [ "border-primary" ] ifFalse: [ "border-error" ].
+  badgeClass := booking::status = "confirmed" ifTrue: [ "badge-success" ] ifFalse: [ "badge-error" ].
+  card := "<div class='card bg-base-100 shadow-lg border-l-4 " & borderClass & "'><div class='card-body'><div class='flex flex-col md:flex-row md:items-center justify-between gap-4'><div class='flex items-center gap-4'><div class='w-14 h-14 rounded-full bg-base-200 flex items-center justify-center text-2xl'>&#127992;</div><div><h3 class='card-title'>" & courtName & "</h3><p class='text-base-content/70'>" & slotTime & " | Monday</p><span class='badge " & badgeClass & " mt-2'>" & booking::status & "</span></div></div>".
+  booking::status = "confirmed" ifTrue: [
+    card := card & "<div class='flex gap-2'><form method='POST' action='/bookings/" & (booking::id printString) & "/cancel'><button type='submit' class='btn btn-error btn-sm'>Cancel</button></form></div>"
+  ].
+  card := card & "</div></div></div>".
+  ^ card
+].
+
+BadmintonApp>>partnersPage [
+  | page |
+  page := self pageHead: "Partners - Badminton Buddy".
+  page := page & self navbar.
+  page := page & "<main class='min-h-screen'><div class='container mx-auto px-4 py-12 max-w-4xl'><div class='text-center mb-12'><h1 class='text-5xl font-bold mb-4'>Find a Partner</h1><p class='text-xl text-base-content/70'>Connect with players</p></div><div class='text-center py-16 bg-base-200 rounded-3xl'><div class='text-6xl mb-6'>&#128101;</div><h2 class='text-2xl font-bold mb-4'>No Open Requests</h2><p class='text-base-content/70'>No one is looking for a partner right now</p></div></div></main>".
+  page := page & self footer & "</body></html>".
+  ^ page
+].
+
+BadmintonApp>>navbar [
+  ^ "<nav class='navbar bg-base-100 shadow-lg sticky top-0 z-50'><div class='container mx-auto px-4 py-3 flex justify-between items-center'><a href='/' class='text-xl font-bold flex items-center gap-2'>&#127992; Badminton Buddy</a><div class='flex gap-4'><a href='/courts' class='btn btn-ghost'>Courts</a><a href='/bookings' class='btn btn-ghost'>Bookings</a><a href='/partners' class='btn btn-ghost'>Partners</a></div></div></nav>"
+].
+
+BadmintonApp>>footer [
+  ^ "<footer class='bg-base-200 p-8 text-center'><div class='text-xl font-bold mb-2'>&#127992; Badminton Buddy</div><p class='text-base-content/70'>Find courts and partners</p><p class='text-sm opacity-70 mt-2'>Built with Harding + DaisyUI</p></footer>"
+].

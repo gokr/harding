@@ -1,38 +1,37 @@
 # PartnerRequest model for Badminton Buddy.
 
-PartnerRequest := Object derivePublic: #(id bookingId userId message status createdAt)
-
-PartnerRequest class>>fromRow: aRow [
-    | request |
-    request := self new
-    request id: (aRow at: #id)
-    request bookingId: (aRow at: #bookingId)
-    request userId: (aRow at: #userId)
-    request message: (aRow at: #message)
-    request status: (aRow at: #status)
-    request createdAt: (aRow at: #createdAt)
-    ^ request
-]
+PartnerRequest := Object derivePublic: #(id, bookingId, userId, message, status, createdAt).
 
 PartnerRequest>>isOpen [
-    ^ status = "open"
-]
+  ^ status = "open"
+].
 
 PartnerRequest>>isAccepted [
-    ^ status = "accepted"
-]
+  ^ status = "accepted"
+].
 
 PartnerRequest>>isRejected [
-    ^ status = "rejected"
-]
+  ^ status = "rejected"
+].
 
-PartnerRequest>>toJson [
-    ^ "{"
-        , "\"id\": \"" , id , "\","
-        , "\"bookingId\": \"" , bookingId , "\","
-        , "\"userId\": \"" , userId , "\","
-        , "\"message\": \"" , (message ifNil: [ "" ]) , "\","
-        , "\"status\": \"" , status , "\","
-        , "\"createdAt\": " , (createdAt printString)
-        , "}"
-]
+PartnerRequest>>isPending [
+  ^ status = "open"
+].
+
+PartnerRequest>>statusBadgeClass [
+  self isOpen ifTrue: [ ^ "badge badge-info" ].
+  self isAccepted ifTrue: [ ^ "badge badge-success" ].
+  self isRejected ifTrue: [ ^ "badge badge-error" ].
+  ^ "badge badge-ghost"
+].
+
+PartnerRequest>>statusText [
+  self isOpen ifTrue: [ ^ "Looking for partner" ].
+  self isAccepted ifTrue: [ ^ "Partner found" ].
+  self isRejected ifTrue: [ ^ "Declined" ].
+  ^ "Unknown"
+].
+
+PartnerRequest>>messagePreview [
+  ^ message ifNil: [ "" ]
+].

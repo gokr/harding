@@ -1,43 +1,41 @@
 # Booking model for Badminton Buddy.
 
-Booking := Object derivePublic: #(id slotId userId status createdAt)
-
-Booking class>>fromRow: aRow [
-    | booking |
-    booking := self new
-    booking id: (aRow at: #id)
-    booking slotId: (aRow at: #slotId)
-    booking userId: (aRow at: #userId)
-    booking status: (aRow at: #status)
-    booking createdAt: (aRow at: #createdAt)
-    ^ booking
-]
+Booking := Object derivePublic: #(id, slotId, userId, status, createdAt).
 
 Booking>>isConfirmed [
-    ^ status = "confirmed"
-]
+  ^ status = "confirmed"
+].
 
 Booking>>isPending [
-    ^ status = "pending"
-]
+  ^ status = "pending"
+].
 
 Booking>>isCancelled [
-    ^ status = "cancelled"
-]
+  ^ status = "cancelled"
+].
+
+Booking>>isActive [
+  ^ self isConfirmed or: [ self isPending ]
+].
 
 Booking>>statusBadgeClass [
-    isConfirmed ifTrue: [ ^ "badge-success" ]
-    isPending ifTrue: [ ^ "badge-warning" ]
-    isCancelled ifTrue: [ ^ "badge-error" ]
-    ^ "badge-ghost"
-]
+  self isConfirmed ifTrue: [ ^ "badge badge-success" ].
+  self isPending ifTrue: [ ^ "badge badge-warning" ].
+  self isCancelled ifTrue: [ ^ "badge badge-error" ].
+  ^ "badge badge-ghost"
+].
 
-Booking>>toJson [
-    ^ "{"
-        , "\"id\": \"" , id , "\","
-        , "\"slotId\": \"" , slotId , "\","
-        , "\"userId\": \"" , userId , "\","
-        , "\"status\": \"" , status , "\","
-        , "\"createdAt\": " , (createdAt printString)
-        , "}"
-]
+Booking>>statusText [
+  self isConfirmed ifTrue: [ ^ "Confirmed" ].
+  self isPending ifTrue: [ ^ "Pending" ].
+  self isCancelled ifTrue: [ ^ "Cancelled" ].
+  ^ "Unknown"
+].
+
+Booking>>canBeCancelled [
+  ^ self isActive
+].
+
+Booking>>hasPartnerRequest [
+  ^ false
+].
