@@ -420,6 +420,25 @@ blockquote {
     gap: 12px;
 }
 
+.scroll-cue {
+    margin-top: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(212, 168, 75, 0.18);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+}
+
+.scroll-cue-arrow {
+    color: var(--color-gold);
+    font-weight: 700;
+}
+
 .btn {
     display: inline-flex;
     align-items: center;

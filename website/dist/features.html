@@ -90,6 +90,21 @@ payload := json{"ok": true, "count": values size}</code></pre>
 
             <div class="feature-detail">
                 <div class="feature-text">
+                    <h3>Dynamic Collection Literals</h3>
+                    <p>Array, Table, and JSON literals fit naturally into normal expression flow.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Dynamic Literals</div>
+<pre><code>skills := #(user primarySkill, user secondarySkill, "reserve")
+profile := #{"name" -&gt; user name, "active" -&gt; true}
+payload := json{"skills": skills, "count": skills size}</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail">
+                <div class="feature-text">
                     <h3>Current Class Definition Style</h3>
                     <p>Harding now emphasizes canonical derive APIs and direct slot access when you want explicit control.</p>
                     <ul>
@@ -130,7 +145,33 @@ Point&gt;&gt;moveBy: dx and: dy [
                     <h3>Processes And Synchronization</h3>
                     <p>Use <code>Process</code>, <code>Processor</code>, <code>Monitor</code>, <code>Semaphore</code>, and <code>SharedQueue</code> for cooperative concurrency.</p>
                 </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Green Processes</div>
+<pre><code>worker := Processor fork: [
+    1 to: 10 do: [:i |
+        i println.
+        Processor yield
+    ]
+]
+
+worker suspend.
+worker resume.
+
+monitor := Monitor new.
+monitor critical: [ shared := shared + 1 ]
+
+queue := SharedQueue new.
+queue nextPut: "item".
+item := queue next.
+
+sem := Semaphore forMutualExclusion.
+sem wait.
+sem signal</code></pre>
+                    </div>
+                </div>
             </div>
+            <p style="margin-top: 1.5rem; color: var(--color-text-secondary);">Processes remain inspectable at runtime through the scheduler and process APIs.</p>
         </div>
     </section>
 
@@ -210,13 +251,131 @@ Point&gt;&gt;moveBy: dx and: dy [
 
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">JSON, Packages, And Tooling</h2>
+            <h2 class="section-title">Reflection, Dispatch, And Runtime Tools</h2>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Reflection And Dynamic Dispatch</h3>
+                    <p>Harding supports dynamic messaging and runtime inspection when you need it.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Reflection</div>
+<pre><code>obj perform: #description.
+obj perform: #at: with: 5.
+obj perform: #at:put: with: 5 with: "value".
+
+Point superclassNames.
+obj class.
+obj slotNames.
+obj respondsTo: #do:</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse">
+                <div class="feature-text">
+                    <h3>Super Sends And Class-Side Methods</h3>
+                    <p>Harding supports both class-side methods and qualified or unqualified super sends.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Class-Side And Super</div>
+<pre><code>Person class&gt;&gt;newNamed: aName [
+    | p |
+    p := self new.
+    p name: aName.
+    ^ p
+]
+
+ColoredRectangle&gt;&gt;area [
+    ^ super area + colorAdjustment
+]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h3>Live REPL</h3>
+                    <p>The interactive REPL is still a first-class part of the development workflow.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">REPL</div>
+<pre><code>$ harding
+harding&gt; 3 + 4
+7
+
+harding&gt; numbers := #(1, 2, 3, 4, 5)
+#(1, 2, 3, 4, 5)
+
+harding&gt; numbers collect: [:n | n * n]
+#(1, 4, 9, 16, 25)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section alt">
+        <div class="container">
 
             <div class="feature-grid">
                 <div class="feature-card"><h3>JSON Literals</h3><p>Use <code>json{...}</code> for direct JSON creation and object serialization configuration for API work.</p></div>
                 <div class="feature-card"><h3>External Libraries</h3><p>Install packages with <code>harding lib</code> and ship native Nim code together with matching Harding <code>.hrd</code> sources.</p></div>
                 <div class="feature-card"><h3>Bona IDE</h3><p>Launcher, Workspace, Transcript, Browser/Inspector work, and an Application Builder workflow.</p></div>
                 <div class="feature-card"><h3>Granite</h3><p>Compile Harding code to native binaries through Nim and C toolchains.</p></div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Collections</h3>
+                    <p>Harding includes arrays, tables, sets, intervals, and the classic collection protocol.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Collections</div>
+<pre><code>numbers := #(1, 2, 3, 4, 5).
+scores := #{"Alice" -&gt; 95, "Bob" -&gt; 87}.
+
+numbers do: [:n | n println].
+squares := numbers collect: [:n | n * n].
+evens := numbers select: [:n | (n % 2) = 0].
+sum := numbers inject: 0 into: [:acc :n | acc + n]</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail reverse" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Granite Compiler</h3>
+                    <p>Compile Harding code to native binaries through Granite.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Granite</div>
+<pre><code>granite compile myprogram.hrd -o myprogram
+granite build myprogram.hrd --release
+granite run myprogram.hrd
+
+Harding source -&gt; AST -&gt; Granite -&gt; Nim -&gt; C toolchain -&gt; native binary</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-detail" style="margin-top: 3rem;">
+                <div class="feature-text">
+                    <h3>Debugging Tools</h3>
+                    <p>Use log levels, AST output, and scheduler inspection to understand running programs.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Debugging</div>
+<pre><code>harding --loglevel DEBUG script.hrd
+harding --ast script.hrd</code></pre>
+                    </div>
+                </div>
             </div>
         </div>
     </section>

@@ -40,6 +40,16 @@ values := #(1, 2, 3)
 payload := json{"ok": true, "count": values size}
 ```
 
+### Dynamic Collection Literals
+
+Array, Table, and JSON literals now fit better into normal expression flow.
+
+```harding
+skills := #(user primarySkill, user secondarySkill, "reserve")
+profile := #{"name" -> user name, "active" -> true}
+payload := json{"skills": skills, "count": skills size}
+```
+
 ### Current Class Definition Style
 
 Harding now has a clearer class-definition surface with direct slot access when needed.
@@ -81,6 +91,23 @@ config::theme := "business".
 WebTodo::TodoApp resetRepository
 ```
 
+### Conflict Handling In Multiple Inheritance
+
+Harding supports multiple inheritance with explicit conflict handling when parent classes overlap.
+
+```harding
+Parent1 := Object derive: #(a)
+Parent1>>foo [ ^ "foo1" ]
+
+Parent2 := Object derive: #(b)
+Parent2>>foo [ ^ "foo2" ]
+
+Child := Object derive: #(x)
+Child>>foo [ ^ "child" ]
+Child addSuperclass: Parent1.
+Child addSuperclass: Parent2.
+```
+
 ## Runtime Features
 
 ### Stackless VM
@@ -106,6 +133,14 @@ result := [
 
 Handlers can `resume`, `resume:`, `retry`, `pass`, or `return:`.
 
+```harding
+result := [
+    riskyOperation value
+] on: Error do: [:ex |
+    ex resume: 42
+]
+```
+
 ### Green Threads And Synchronization
 
 Harding includes cooperative processes and synchronization primitives:
@@ -115,6 +150,42 @@ Harding includes cooperative processes and synchronization primitives:
 - `Monitor`
 - `Semaphore`
 - `SharedQueue`
+
+```harding
+worker := Processor fork: [
+    1 to: 10 do: [:i |
+        i println.
+        Processor yield
+    ]
+]
+
+worker suspend.
+worker resume.
+
+monitor := Monitor new.
+monitor critical: [ shared := shared + 1 ]
+
+queue := SharedQueue new.
+queue nextPut: "item".
+item := queue next.
+
+sem := Semaphore forMutualExclusion.
+sem wait.
+sem signal
+```
+
+Processes remain inspectable at runtime through the scheduler and process APIs.
+
+### System And File I/O
+
+Harding includes practical process and file helpers in the standard library.
+
+```harding
+content := File readAll: "README.md".
+File write: content to: "README.copy.md".
+
+System stdout writeline: ("args: " & (System arguments size) asString)
+```
 
 ## Web And Reactive Rendering
 
@@ -231,6 +302,50 @@ h button: [:button |
 ]
 ```
 
+## Reflection And Dynamic Dispatch
+
+Harding supports dynamic messaging and runtime inspection when you need it.
+
+```harding
+obj perform: #description.
+obj perform: #at: with: 5.
+obj perform: #at:put: with: 5 with: "value".
+
+Point superclassNames.
+obj class.
+obj slotNames.
+obj respondsTo: #do:
+```
+
+## Super Sends And Class-Side Methods
+
+Harding supports both class-side methods and qualified or unqualified super sends.
+
+```harding
+Person class>>newNamed: aName [
+    | p |
+    p := self new.
+    p name: aName.
+    ^ p
+]
+
+ColoredRectangle>>area [
+    ^ super area + colorAdjustment
+]
+```
+
+## Primitives And Nim Interop
+
+Primitives provide the bridge between Harding code and native Nim-backed behavior.
+
+```harding
+Array>>at: index <primitive primitiveAt: index>
+
+String>>& other <primitive primitiveConcat: other>
+```
+
+This is also the basis for the package model where native Nim code and Harding source ship together.
+
 ## JSON And API Workflows
 
 ### `json{...}` Literals
@@ -252,6 +367,36 @@ Harding supports object serialization through `Json stringify:` plus class-side 
 ### API Server Patterns
 
 The repo includes a JSON API tutorial and Todo API examples using MummyX and BitBarrel.
+
+## Collections
+
+Harding includes the classic Smalltalk collection style with arrays, tables, sets, intervals, and rich iteration protocols.
+
+```harding
+numbers := #(1, 2, 3, 4, 5).
+scores := #{"Alice" -> 95, "Bob" -> 87}.
+
+numbers do: [:n | n println].
+squares := numbers collect: [:n | n * n].
+evens := numbers select: [:n | (n % 2) = 0].
+sum := numbers inject: 0 into: [:acc :n | acc + n]
+```
+
+## Live REPL
+
+The interactive REPL is still a first-class part of the development workflow.
+
+```text
+$ harding
+harding> 3 + 4
+7
+
+harding> numbers := #(1, 2, 3, 4, 5)
+#(1, 2, 3, 4, 5)
+
+harding> numbers collect: [:n | n * n]
+#(1, 4, 9, 16, 25)
+```
 
 ## External Libraries And Packages
 
@@ -294,6 +439,31 @@ The VSCode extension provides:
 - syntax highlighting
 - language server support
 - debugger integration
+
+## Granite Compiler
+
+Compile Harding code to native binaries through Granite.
+
+```bash
+granite compile myprogram.hrd -o myprogram
+granite build myprogram.hrd --release
+granite run myprogram.hrd
+```
+
+Compilation flow:
+
+```text
+Harding source -> AST -> Granite -> Nim -> C toolchain -> native binary
+```
+
+## Debugging Tools
+
+Use log levels, AST output, and scheduler inspection to understand running programs.
+
+```bash
+harding --loglevel DEBUG script.hrd
+harding --ast script.hrd
+```
 
 ## Current Strengths
 
