@@ -7,72 +7,69 @@ tagline: Smalltalk feeling, modern tooling
 
 **Title:** Harding Smalltalk
 **Subtitle:** Smalltalk feeling, modern tooling.
-**Description:** A modern Smalltalk dialect aiming at native compilation. File-based, git-friendly, and designed for modern tooling.
+**Description:** A modern Smalltalk dialect with a stackless VM, native compilation through Granite, reactive server-rendered web support, and file-based source that works well with git.
 
 **CTA Primary:** Get Started
-**CTA Secondary:** See Examples
+**CTA Secondary:** See Features
 
 ### Hero Code Example
 
 ```harding
-# Define a Point class with x and y slots
-# auto generate setter and getter methods
-Point := Object deriveWithAccessors: #(x, y)
+Point := Object derivePublic: #(x, y)
 
-# Add a method to the class using selector:put:
-# and a block representing the code
-Point selector: #moveBy:and: put: [:dx :dy |
-    x := x + dx
+Point>>moveBy: dx and: dy [
+    x := x + dx.
     y := y + dy
 ]
 
-# Simpler way to add a method using >> syntactic sugar
-Point>>+ aPoint [
-    x := x + aPoint x
-    y := y + aPoint y
+Point>>printString [
+    ^ "Point(" & x asString & ", " & y asString & ")"
 ]
 
-# Create and use a Point, cascades work fine
-p := Point new
-p x: 100; y: 200
-p moveBy: 5 and: 10
+p := Point new.
+p::x := 100.
+p::y := 200.
+p moveBy: 5 and: 10.
+p printString println
 ```
 
 ## Features
 
-### Smalltalk Heritage
-Everything you love about Smalltalk - message passing, blocks, live programming - preserved and modernized.
+### Smalltalk Semantics
+Message sends, blocks, non-local returns, resumable exceptions, and live-editable class definitions remain central to the language.
 
-### Native Performance
-Two execution models: a stackless VM written in Nim and the Granite compiler for native binaries via Nim → C.
+### Two Execution Paths
+Use the interpreter for interactive development and Granite for standalone native binaries.
 
-### File-Based
-No image files. Source lives in `.hrd` files you can version control, diff, and edit with any editor.
+### File-Based And Git-Friendly
+Harding code lives in `.hrd` files. No image is required for normal development workflows.
 
-### Multiple Inheritance
-Multiple inheritance with automatic conflict detection at class definition time.
+### Reactive Server Rendering
+Build web apps with the Html DSL, HTMX fragment updates, and `RenderCache` invalidation driven by tracked state.
 
-### Green Threads
-Cooperative multitasking with first-class Process objects. Built-in scheduler with Monitor, SharedQueue, and Semaphore synchronization.
+### Improved Ergonomics
+Use dynamic literals such as `#(1, 2, 3)` and `#{"name" -> user name}`, `json{...}` support, `&` concatenation, direct member access with `::`, and optional `.` at line ends.
 
-### Smalltalk-Style Exceptions
-Resumable exception handling with `on:do:`, `signal`, `resume`, `retry`, and `pass`. Full signal point preservation.
+### External Libraries And Packages
+Install Harding libraries with `harding lib`, and use a package system that can bundle native Nim code and Harding code together in one versioned unit.
 
-### Native Compilation
-Granite compiler produces standalone native binaries. No runtime dependencies, true native performance.
+### Web Server Built In
+Harding can be built with integrated MummyX, a fast scalable native multithreaded HTTP server written in Nim.
 
-### Nim Interop
-Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.
-
-### Nim-Harding Package Model
-Bundle Nim primitive implementations and matching `.hrd` sources in one package. Load package code through `load:` and keep Harding and Nim APIs versioned together.
-
-### Practical I/O and Process API
-Built-in `File`, `FileStream`, and `System` helpers provide file read/write, current directory, stdio streams (`Stdin`, `Stdout`, `Stderr`), and command-line arguments.
+### GTK4 Integration
+Harding includes GTK4 bindings so you can write native GTK applications directly in Harding.
 
 ### IDE Tooling
-VSCode extension with full LSP and DAP support. GTK-based Bona IDE currently includes Launcher, Workspace, and Transcript; Browser and Inspector are in progress, with Debugger planned.
+Bona builds on the GTK integration and provides a Launcher, Workspace, Transcript, Browser, Inspector work, and an Application Builder workflow. VSCode support includes syntax highlighting, LSP, and DAP.
+
+## What You Can Build
+
+- command-line tools with `System`, `File`, and `FileStream`
+- native binaries with Granite
+- JSON APIs with `json{...}` and object serialization
+- reactive HTMX web apps with MummyX
+- installable packages that bundle Harding code and native Nim code together
 
 ## Get Started
 
-[Install Harding](/docs) and try the REPL, or explore the [full feature list](/features).
+[Install Harding](/docs) and try the REPL, explore the [full feature list](/features), or jump into the current docs for web, JSON, and packages.

@@ -6,821 +6,302 @@ title: Features
 
 ### Smalltalk Semantics
 
-Harding preserves the essence of Smalltalk:
+Harding keeps the core Smalltalk model:
 
-- **Everything is an object** - Numbers, strings, blocks, classes
-- **Everything happens via message passing** - No function calls, only messages
-- **Late binding** - Method lookup happens at message send time
-- **Blocks with non-local returns** - True lexical closures with `^` return
+- everything is an object
+- message sends are unary, binary, or keyword
+- blocks are lexical closures with non-local return support
+- method lookup stays late-bound
 
 ```harding
-# Message passing
-3 + 4                    # binary message
-obj size                 # unary message
-dict at: key put: value  # keyword message
+3 + 4
+dict at: key put: value
 
-# Blocks with non-local return
 findPositive := [:arr |
     arr do: [:n |
-        (n > 0) ifTrue: [^ n]   # Returns from findPositive:
+        (n > 0) ifTrue: [ ^ n ]
     ].
     ^ nil
 ]
 ```
 
-### Modern Syntax
+### Modernized Syntax
 
-Optional periods, hash comments, double-quoted strings:
+- `#` comments instead of quoted comments
+- double-quoted strings
+- periods optional at line ends
+- `&` for concatenation
+- comma-separated collection literals
 
 ```harding
-# This is a comment, as long as it has a space after hash
-x := 1                  # No period needed at end of line
-y := 2
-z := x + y              # But periods work too if you prefer
-
-"Double quotes for strings" # More standard for most languages
+# comment
+greeting := "Hello, " & name
+values := #(1, 2, 3)
+payload := json{"ok": true, "count": values size}
 ```
 
-### Class-Based with Multiple Inheritance
+### Current Class Definition Style
 
-Create classes dynamically with slots and methods:
+Harding now has a clearer class-definition surface with direct slot access when needed.
 
 ```harding
-# Declare a temporary variable to hold an instance
-| p |
+Point := Object derivePublic: #(x, y)
 
-# Create a new class with two slots
-Point := Object derive: #(x, y)
-
-# Add methods using >> syntax and direct slot access
-Point >> x: val [ x := val ]
-Point >> y: val [ y := val ]
-
-# Add multiple methods at a time
-Point extend: [
-    self >> moveBy: dx and: dy [
-        x := x + dx
-        y := y + dy
-    ]
-    self >> distanceFromOrigin [
-        ^ ((x * x) + (y * y)) sqrt
-    ]
+Point>>moveBy: dx and: dy [
+    x := x + dx.
+    y := y + dy
 ]
 
-# Create and use a Point
-p := Point new
-p x: 100; y: 200
-p distanceFromOrigin println   # 223.6068...
+Point>>distanceSquared [
+    ^ (x * x) + (y * y)
+]
 ```
 
-#### Multiple Inheritance
+### Multiple Inheritance And Mixins
 
-Harding supports multiple inheritance with conflict detection:
-
-```harding
-# Inherit from multiple parents
-ColoredPoint := Point derive: #(color)
-ColoredPoint addSuperclass: Comparable
-ColoredPoint addSuperclass: Printable
-```
-
-**Automatic Accessors:**
+Harding supports multiple inheritance plus mixin-style behavior sharing.
 
 ```harding
-# Create a class with auto-generated getters and setters
-Person := Object deriveWithAccessors: #(name, age)
-p := Person new
-p name: "Alice"    # Auto-generated setter
-p age: 30
-p name             # Auto-generated getter - returns "Alice"
-```
-
-**Selective Accessors:**
-
-```harding
-# Generate getters for both, setter only for balance
-Account := Object derive: #(balance, owner)
-                       getters: #(balance, owner)
-                       setters: #(balance)
-```
-
-**Conflict Detection:**
-
-When multiple parents define the same method, Harding detects conflicts at class definition time. Override conflicting methods in the child class to resolve:
-
-```harding
-Parent1 := Object derive: #(a)
-Parent1 >> foo [ ^ "foo1" ]
-
-Parent2 := Object derive: #(b)
-Parent2 >> foo [ ^ "foo2" ]
-
-# Override first, then add parents
-Child := Object derive: #(x)
-Child >> foo [ ^ "child" ]
-Child addSuperclass: Parent1
-Child addSuperclass: Parent2
-```
-
-#### Mixins
-
-Mixin is a slotless class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots:
-
-```harding
-# Create a mixin (naming convention: prefix with T)
 Comparable := Mixin derive.
-Comparable >> < other [ ^ (self compareTo: other) < 0 ]
-Comparable >> > other [ ^ (self compareTo: other) > 0 ]
-Comparable >> between: min and: max [
+Comparable>>between: min and: max [
     ^ (self >= min) and: [ self <= max ]
 ]
 
-# Add mixin to any class
-Point := Object derive: #(x, y)
-Point addSuperclass: Comparable
-Point >> compareTo: other [
-    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
-]
-# Now Point supports <, >, between:and:, etc.
+Point := Object derive: #(x, y).
+Point addSuperclass: Comparable.
 ```
 
-**Built-in Mixins:**
+### Direct Slot / Binding Access
 
-| Mixin | Requires | Provides |
-|-------|----------|----------|
-| `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:` |
-| `Equatable` | `compareTo:` | `=`, `~=` |
-| `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:` |
-| `Printable` | `printOn:` | `printString`, `print`, `printCr` |
-| `Synchronizable` | — | `critical:`, `acquire`, `release` |
-
-## Advanced Features
-
-### Smalltalk-Style Exception Handling
-
-Harding implements **Smalltalk-style resumable exceptions** with full signal point preservation. Unlike traditional exception handling that unwinds the stack, Harding's exceptions can be resumed, retried, or delegated.
-
-**Basic Exception Handling:**
+The `::` syntax gives explicit access to slots, table entries, and library bindings.
 
 ```harding
-# Catch and handle exceptions
-result := [
-    riskyOperation value
-] on: Error do: [:ex |
-    Transcript showCr: "Caught: " + ex message.
-    ex resume: 42  # Resume with a value
-]
-```
-
-**Exception Actions:**
-
-From within a handler block, you can:
-
-| Message | Effect |
-|---------|--------|
-| `ex resume` | Resume execution at the signal point, `signal` returns nil |
-| `ex resume: value` | Resume execution, `signal` returns the given value |
-| `ex retry` | Re-execute the protected block from the beginning |
-| `ex pass` | Delegate to the next outer matching handler |
-| `ex return: value` | Return value from the `on:do:` expression |
-
-**Signaling Exceptions:**
-
-```harding
-# Signal an exception
-MyError signal: "Something went wrong"
-
-# Signal with resume capability
-result := MyError signal: "Need input"
-
-# Check if resumed with value
-result ifNotNil: [
-    Transcript showCr: "Resumed with: " + result
-]
-```
-
-**Stackless Design:**
-
-The exception system is built on Harding's stackless VM design:
-- No native stack unwinding - works seamlessly with green threads
-- Signal point preserved in `ExceptionContext` for resumption
-- VM state explicitly restored to handler checkpoint
-- Multiple handlers can be nested naturally
-
-**Exception Hierarchy:**
-
-```harding
-# Custom exception classes
-MyDomainError := Error derive: #()
-MySpecificError := MyDomainError derive: #()
-
-# Catch specific or general exceptions
-[
-    operation value
-] on: MySpecificError do: [:ex |
-    # Handle specific error
-] on: Error do: [:ex |
-    # Handle any error
-]
-```
-
-**Arithmetic Exceptions:**
-
-Division by zero signals a `DivisionByZero` exception:
-
-```harding
-# Integer division
-result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
-    ex resume: 0  # Return 0 instead of error
-]
-
-# Float division
-result := [ 10.0 / 0.0 ] on: DivisionByZero do: [:ex |
-    "Cannot divide by zero!" println
-    ex resume: 42
-]
-```
-
-### Primitives
-
-Primitives provide direct access to VM-level operations and Nim interop. They use a declarative syntax:
-
-```harding
-# Basic primitive syntax
-Array>>at: index <primitive primitiveAt: index>
-
-# Primitive with validation wrapper
-Array>>at: index [
-    (index < 0 or: [index >= self size]) ifTrue: [
-        self error: "Index out of bounds"
-    ].
-    ^ <primitive primitiveAt: index>
-]
-```
-
-**Available Primitives:**
-
-| Primitive | Description |
-|-----------|-------------|
-| `primitiveClone` | Create a shallow copy of an object |
-| `primitiveAt:` | Access element at index (0-based) |
-| `primitiveAt:put:` | Set element at index |
-| `primitiveIdentity:` | Check object identity |
-| `primitiveCCall:with:` | Call C library functions |
-
-**Nim Integration via Primitives:**
-
-Primitives enable calling Nim code directly from Harding:
-
-```harding
-# Call Nim primitive
-String>>size <primitive primitiveStringSize>
-
-# Wrapper with error handling
-String>>at: index [
-    (index < 0 or: [index >= self size]) ifTrue: [
-        self error: "Index out of bounds"
-    ].
-    ^ <primitive primitiveStringAt: index>
-]
-```
-
-### Super Sends
-
-Harding supports both unqualified and qualified super sends for method overriding.
-
-**Unqualified Super:**
-
-```harding
-# Call parent implementation without specifying which parent
-Rectangle>>area [
-    ^ width * height
-]
-
-ColoredRectangle>>area [
-    # Do colored rectangle specific work
-    baseArea := super area.  # Calls Rectangle>>area
-    ^ baseArea + colorAdjustment
-]
-```
-
-**Qualified Super:**
-
-When using multiple inheritance, specify which parent's method to call:
-
-```harding
-# Multiple inheritance scenario
-A := Object derive: #() methods: #{ #foo -> [ ^ 'A' ] }
-B := Object derive: #() methods: #{ #bar -> [ ^ 'B' ] }
-C := Object derive: #() parents: #(A, B)
-
-# In C, call specific parent's implementation
-C>>foo [
-    # Explicitly call A's foo
-    ^ super<A> foo, " from C"
-]
-
-C>>bar [
-    # Explicitly call B's bar
-    ^ super<B> bar, " from C"
-]
-```
-
-### Class-Side Methods
-
-Define methods on the class itself (analogous to static methods):
-
-```harding
-# Instance method
-Person>>greet [ ^ "Hello, I am " & name ]
-
-# Class-side method syntax using "class>>"
-Person class>>newNamed: n aged: a [
-    | p |
-    p := self new.
-    p name: n.
-    p age: a.
-    ^ p
-]
-
-# Usage
-alice := Person newNamed: "Alice" aged: 30
-```
-
-**Alternative Pattern:**
-
-Since classes are first-class objects, you can also define class methods by sending `selector:put:` to the class:
-
-```harding
-Person selector: #createDefault put: [
-    ^ self new initialize
-]
-```
-
-### Dynamic Dispatch
-
-Send messages dynamically at runtime using `perform:` family of methods:
-
-```harding
-# Perform a selector with no arguments
-obj perform: #description   # Same as: obj description
-
-# Perform with one argument
-obj perform: #at: with: 5    # Same as: obj at: 5
-
-# Perform with two arguments
-obj perform: #at:put: with: 5 with: 'value'  # Same as: obj at: 5 put: 'value'
-
-# Dynamic method invocation
-methodName := condition ifTrue: [#process] ifFalse: [#skip]
-result := obj perform: methodName
-```
-
-**Use Cases:**
-
-- Implementing proxy objects
-- Message forwarding
-- Building interpreters or DSLs
-- Reflection-based tools
-
-### Introspection
-
-Inspect and query objects and classes at runtime:
-
-**Superclass Hierarchy:**
-
-```harding
-# Get list of superclass names
-Point superclassNames   # Returns array like #(Object)
-
-# Check inheritance
-obj isKindOf: Collection
-obj respondsTo: #do:
-```
-
-**Root Class:**
-
-Harding provides a `Root` class that serves as the proxy/DNU base:
-
-```harding
-# Root is the ultimate parent class
-# Object and Mixin both derive from Root
-Object superclass   # Root
-
-# Mixin is a slotless class for shared behavior
-Comparable := Mixin derive
-```
-
-**Object Inspection:**
-
-```harding
-obj class           # Get the class of an object
-obj class name      # Get class name
-obj slotNames       # Get list of slot names
+person::name := "Alice".
+config::theme := "business".
+WebTodo::TodoApp resetRepository
 ```
 
 ## Runtime Features
 
-### System and File I/O
-
-Harding includes practical process/file utilities in the stdlib:
-
-- `System arguments` for CLI/runtime arguments
-- `System cwd`, `System stdin`, `System stdout`, `System stderr`
-- `File` class convenience messages (`readAll:`, `write:to:`, `append:to:`, `exists:`)
-- `FileStream` for stream-style open/read/write
-
-```harding
-# File helpers
-content := File readAll: "README.md"
-File write: content to: "README.copy.md"
-
-# Process info and stdio
-System stdout writeline: ("args: " & (System arguments size) asString)
-```
-
-### Green Threads (Processes)
-
-Cooperative multitasking with first-class Process objects:
-
-```harding
-# Fork a new process
-worker := Processor fork: [
-    1 to: 10 do: [:i |
-        i println
-        Processor yield
-    ]
-]
-
-# Process control
-worker suspend
-worker resume
-worker terminate
-
-# Check state
-worker state    # ready, running, blocked, suspended, terminated
-```
-
-Each process has:
-- Unique PID
-- Name
-- State tracking
-- Independent execution
-
-**Process States:**
-
-| State | Description |
-|-------|-------------|
-| `ready` | Waiting for CPU time |
-| `running` | Currently executing |
-| `blocked` | Waiting for I/O or condition |
-| `suspended` | Paused via `suspend` message |
-| `terminated` | Finished execution |
-
-**Scheduler Operations:**
-
-```harding
-# Yield CPU to another process
-Processor yield
-
-# List all processes
-Scheduler listProcesses
-
-# Get current process
-Processor activeProcess
-
-# Set process priority (higher = more CPU)
-process priority: 5
-```
-
-### Synchronization Primitives
-
-Coordinate between green processes using built-in primitives:
-
-```harding
-# Monitor - mutual exclusion
-monitor := Monitor new
-monitor critical: [
-    sharedResource := sharedResource + 1
-]
-
-# SharedQueue - producer/consumer
-queue := SharedQueue new
-queue nextPut: "item"     # Producer
-item := queue next        # Consumer (blocks if empty)
-
-# Semaphore - counting/binary locks
-sem := Semaphore forMutualExclusion
-sem wait
-sem signal
-```
-
 ### Stackless VM
 
-Each Process runs in its own stackless VM, enabling:
-- Lightweight processes
-- Easy serialization
-- Path to true parallelism
+Harding runs on a stackless VM with an explicit work queue instead of relying on the native call stack.
 
-## Development Features
+This enables:
 
-### REPL
+- green threads
+- resumable exceptions
+- explicit control-flow scheduling
+- safer long-running evaluation paths
 
-Interactive development environment:
-
-```bash
-$ harding
-Harding REPL (:help for commands, :quit to exit)
-harding> 3 + 4
-7
-
-harding> "Hello, World!" println
-Hello, World!
-
-harding> numbers := #(1, 2, 3, 4, 5)
-#(1, 2, 3, 4, 5)
-
-harding> numbers collect: [:n | n * n]
-#(1, 4, 9, 16, 25)
-```
-
-### File-Based Development
-
-Source code lives in `.hrd` files:
-
-```bash
-# Run it
-harding myprogram.hrd
-
-# Pass runtime args available via System arguments
-harding myprogram.hrd -- alpha beta
-
-# Git friendly
-git add myprogram.hrd
-git commit -m "Add feature"
-```
-
-### VSCode Extension
-
-Full IDE support for `.hrd` files:
-
-- **Syntax highlighting** with TextMate grammar
-- **Language Server Protocol (LSP)** - Completions, hover info, go to definition, document/workspace symbols
-- **Debug Adapter Protocol (DAP)** - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions
-- Comment toggling, bracket matching, code folding
-
-## Standard Library
-
-### Core Classes
-
-**Object** - The root of all classes
-- `clone`, `derive`, `class`, `isNil`
-- `at:`, `at:put:`, `respondsTo:`
-- `perform:`, `perform:with:`
-
-**Block** - Closures
-- `value`, `value:`, `value:value:`
-- `whileTrue:`, `whileFalse:`
-
-**Boolean** - true/false
-- `ifTrue:`, `ifFalse:`, `ifTrue:ifFalse:`
-- `and:`, `or:`, `not`
-
-**Number** - Integers and floats
-- Arithmetic: `+`, `-`, `*`, `/`, `//`, `\`
-- Comparison: `<`, `>`, `<=`, `>=`, `=`, `==`
-- `to:do:`, `to:by:do:`, `timesRepeat:`
-
-**String** - Text
-- `,` (concatenation)
-- `size`, `at:`, `println`
-
-**Collections**
-- **Array** - Ordered collection `#(1, 2, 3)` (0-based indexing)
-- **Table** - Dictionary `#{"key" -> "value"}`
-- **Set** - Unordered unique-element collection with union, intersection, difference
-- **Interval** - Numeric range: `1 to: 10`, `1 to: 10 by: 2`
-- **SortedCollection** - Automatically sorted collection with configurable sort blocks
-- Methods: `do:`, `collect:`, `select:`, `detect:`, `inject:into:`
-
-### Collection Examples
+### Smalltalk-Style Resumable Exceptions
 
 ```harding
-# Array literal
-numbers := #(1, 2, 3, 4, 5)
-
-# Table literal
-scores := #{"Alice" -> 95, "Bob" -> 87}
-
-# Iteration
-numbers do: [:n | n println]
-
-# Transformation
-squares := numbers collect: [:n | n * n]
-
-# Filter
-evens := numbers select: [:n | (n \\ 2) = 0]
-
-# Reduce
-sum := numbers inject: 0 into: [:acc :n | acc + n]
-
-# Find
-ten := numbers detect: [:n | n = 10]  # nil if not found
-```
-
-## Compilation Pipeline
-
-Harding offers two execution models: a stackless interpreter VM and the Granite compiler for native binaries.
-
-### Interpreter (Current)
-
-The default execution model - a stackless VM written in Nim:
-
-```
-Harding source (.hrd)
-       ↓
-   Parser (AST)
-       ↓
-   Interpreter VM (Nim)
-       ↓
-   Execution
-```
-
-### Granite Compiler (Available)
-
-Compile Harding code to native binaries via Nim → C:
-
-```
-Harding source (.hrd)
-       ↓
-   Parser (AST)
-       ↓
-   Granite Compiler
-       ↓
-   Nim source (.nim)
-       ↓
-   C Compiler
-       ↓
-   Native binary
-```
-
-**Using Granite:**
-
-```bash
-# Compile to native binary
-granite compile myprogram.hrd -o myprogram
-
-# Build with release optimizations
-granite build myprogram.hrd --release
-
-# Run directly
-granite run myprogram.hrd
-```
-
-**Benefits:**
-- True native performance
-- Single distributable binary
-- No runtime dependencies
-- Full Nim ecosystem access
-
-## Interoperability
-
-### Nim Integration
-
-Call Nim code directly via primitives:
-
-```harding
-# Access Nim functions
-Array>>at: index <primitive primitiveAt: index>
-
-# With validation
-Array>>at: index [
-    (index < 0 or: [index >= self size]) ifTrue: [
-        self error: "Index out of bounds"
-    ].
-    ^ <primitive primitiveAt: index>
+result := [
+    10 // 0
+] on: DivisionByZero do: [:ex |
+    ex resume: 0
 ]
 ```
 
-**Native FFI Fields:**
+Handlers can `resume`, `resume:`, `retry`, `pass`, or `return:`.
 
-Objects can hold references to Nim values through special fields:
+### Green Threads And Synchronization
 
-```harding
-# Objects can have native Nim backing
-obj isNimProxy     # true if object wraps a Nim value
-obj hardingType    # Get the Harding type name
-obj nimValue       # Access the underlying Nim value
-```
+Harding includes cooperative processes and synchronization primitives:
 
-These fields enable seamless integration with the Nim ecosystem, allowing Harding objects to wrap Nim structs, pointers, and other native types.
+- `Process`
+- `Processor`
+- `Monitor`
+- `Semaphore`
+- `SharedQueue`
 
-### Nim-Harding Package Model
+## Web And Reactive Rendering
 
-Harding supports packaging Nim primitives and Harding source files together:
+### MummyX HTTP Support
 
-- Package `.hrd` files are embedded and loaded through the same `load:` message
-- Nim primitive registration is bundled with package install
-- One package version controls both Nim implementation and Harding API surface
-
-For a full walkthrough, see the [Nim Package Tutorial](https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md).
-
-### C Library Access
-
-Through Nim's FFI:
+Build Harding with MummyX, a fast scalable native multithreaded HTTP server, and define routes directly in Harding code.
 
 ```harding
-# Can wrap C libraries
-<primitive primitiveCCall: function with: args>
+Harding load: "lib/mummyx/Bootstrap.hrd".
+
+Server := HttpServer new.
+Router := Router new.
+Router get: "/" do: [:req | req respondHtml: "<h1>Hello</h1>" ].
+Server router: Router.
+Server serveForever: 8080.
 ```
 
+You can keep handlers small and HTML-first:
 
-## Debugging Tools
+```harding
+Router get: "/" do: [:req |
+    req respondHtml: (Html render: [:h |
+        h main: [:main |
+            main h1: "Harding Todo".
+            main p: "Reactive server rendering with HTMX"
+        ]
+    ])
+].
+```
 
-### Log Levels
+And router actions can stay tiny while still feeling declarative:
 
-Control verbosity of execution output:
+```harding
+Router post: "/todos/@id/toggle" do: [:req |
+    repository toggle: (req pathParam: "id").
+    req respondFragment: panel oob: page statsOobHtml
+].
+```
+
+The Html side stays just as small:
+
+```harding
+Html render: [:h |
+    h section: [:panel |
+        panel id: "todo-panel".
+        panel button: [:button |
+            button class: "btn";
+                post: "/todos/1/toggle";
+                target: "#todo-panel";
+                swap: "outerHTML".
+            button text: "Mark done"
+        ]
+    ]
+]
+```
+
+### Html DSL
+
+Harding's Html DSL renders directly and stays intentionally simple.
+
+```harding
+Html render: [:h |
+    h div: [:card |
+        card class: "card".
+        card h1: "Hello"
+    ]
+]
+```
+
+```harding
+Html render: [:h |
+    h section: [:panel |
+        panel id: "todo-panel".
+        panel button: [:button |
+            button class: "btn";
+                post: "/todos/1/toggle";
+                target: "#todo-panel";
+                swap: "outerHTML".
+            button text: "Mark done"
+        ]
+    ]
+]
+```
+
+### Reactive Server Rendering
+
+The current web model is:
+
+- `TrackedValue` / `TrackedList` in `lib/reactive/`
+- `RenderCache` / `RenderEntry` in `lib/web/`
+- invalidation driven by tracked reads and writes during component rendering
+
+This supports fragment-level cache reuse without reviving the older Html template-hole design.
+
+### HTMX-Friendly Responses
+
+Harding now has thin response helpers for HTMX-style fragment workflows:
+
+```harding
+req respondFragment: panel oob: page statsOobHtml
+```
+
+That keeps the API close to HTMX concepts rather than inventing a separate framework layer.
+
+And the HTML side stays close to HTMX too:
+
+```harding
+h button: [:button |
+    button class: "btn";
+        post: "/todos/1/toggle";
+        target: "#todo-panel";
+        swap: "outerHTML".
+    button text: "Mark done"
+]
+```
+
+## JSON And API Workflows
+
+### `json{...}` Literals
+
+```harding
+json{"status": "ok", "count": 42}
+```
+
+### Object Serialization
+
+Harding supports object serialization through `Json stringify:` plus class-side configuration such as:
+
+- `jsonExclude:`
+- `jsonOnly:`
+- `jsonFieldOrder:`
+- `jsonOmitNil:`
+- `jsonFormat:`
+
+### API Server Patterns
+
+The repo includes a JSON API tutorial and Todo API examples using MummyX and BitBarrel.
+
+## External Libraries And Packages
+
+### `harding lib`
+
+Install external Harding libraries through the built-in library manager.
 
 ```bash
-# Debug level shows detailed execution flow
-harding --loglevel DEBUG script.hrd
-
-# Available levels: DEBUG, INFO, WARN, ERROR, FATAL
-harding --loglevel INFO script.hrd
+harding lib list
+harding lib install bitbarrel
 ```
 
-**DEBUG level shows:**
-- Each AST node being evaluated
-- Message sends with receiver and selector
-- Method lookups and execution
-- Variable assignments and lookups
-- Activation stack push/pop operations
+### Nim + Harding Package Model
 
-### AST Output
+Harding's package model can bundle native Nim implementations together with Harding source so both layers ship as one installable unit.
 
-View the parsed Abstract Syntax Tree before execution:
-
-```bash
-# Show AST and then execute
-harding --ast script.hrd
-
-# Combine with debug logging for full visibility
-harding --ast --loglevel DEBUG script.hrd
+```text
+package/
+|- src/        # Nim primitives and support code
+|- lib/        # Harding .hrd sources
+`- .harding-lib.json
 ```
 
-The AST output shows the hierarchical structure of parsed expressions, useful for understanding how code is interpreted.
+## Tooling
 
-### Process Inspection
+### Bona IDE
 
-Inspect running processes:
+Current Bona workflows include:
 
-```harding
-# List all processes
-Scheduler listProcesses
+- Launcher
+- Workspace
+- Transcript
+- Browser / Inspector work
+- Application Builder for Granite-oriented app creation
 
-# Check process properties
-process state      # ready, running, blocked, suspended, terminated
-process pid        # Unique process ID
-process name       # Process name
-process priority   # Scheduling priority
-```
+### VSCode
 
-### REPL Debugging Commands
+The VSCode extension provides:
 
-When in the REPL, use these commands:
+- syntax highlighting
+- language server support
+- debugger integration
 
-```
-harding> :help        # Show available commands
-harding> :vars        # Show current variables
-harding> :quit        # Exit REPL
-```
+## Current Strengths
 
-## What's Next
+If you want Harding today, the strongest areas are:
 
-See [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) for:
-- True parallelism with actor-based concurrency
-- Enhanced GTK GUI bindings
-- AI integration hooks
-- Package manager and ecosystem
-
-## Current Status: v0.7.1
-
-**Implemented:**
-- Functional interpreter with green threads and synchronization primitives
-- MIC/PIC method caching for performance
-- Smalltalk-style resumable exceptions with signal point preservation
-- GTK IDE (Bona) with Launcher, Workspace, and Transcript
-- VSCode extension with full LSP and DAP support
-- Granite compiler for native binary compilation
-- BitBarrel integration for persistent storage (optional)
-- Automatic accessor generation (`deriveWithAccessors:`)
-- Collections: Array, Table, Set, Interval, SortedCollection
-- System/File I/O stdlib (`System`, `File`, `FileStream`, stdio globals)
-- CLI/runtime arg forwarding via `System arguments` (including `harding ... -- args`)
-- Nim-Harding package model for bundled primitives + embedded `.hrd` sources
-
-**In Progress:**
-- Actor-based shared-nothing concurrency
-- Enhanced standard library
-- Bona System Browser and Inspector
-- Bona Debugger
+- Smalltalk-style object/block semantics
+- stackless VM + green threads
+- Granite native compilation
+- reactive server-rendered web apps
+- JSON / API workflows
+- external library packaging

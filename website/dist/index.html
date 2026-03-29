@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Harding Smalltalk - Smalltalk Semantics, Nim Performance</title>
+    <title>Harding Smalltalk - Smalltalk feeling, modern tooling</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <a href="index.html" class="logo">
@@ -18,20 +17,18 @@
                 <span class="logo-text">Harding Smalltalk</span>
             </a>
             <button class="nav-toggle" aria-label="Toggle navigation">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span></span><span></span><span></span>
             </button>
             <ul class="nav-menu">
                 <li><a href="why.html">Why Harding?</a></li>
                 <li><a href="features.html">Features</a></li>
                 <li><a href="docs.html">Docs</a></li>
+                <li><a href="libraries.html">Libraries</a></li>
                 <li><a href="https://github.com/gokr/harding" class="nav-cta">GitHub</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Hero Section -->
     <section class="hero">
         <div class="hero-bg">
             <div class="gradient-orb orb-1"></div>
@@ -47,203 +44,67 @@
                     <span class="badge-dot"></span>
                     A tribute to Dan Ingalls
                 </div>
-                <h1 class="hero-title">
-                    <span class="gradient-text">Harding Smalltalk</span>
-                </h1>
+                <h1 class="hero-title"><span class="gradient-text">Harding Smalltalk</span></h1>
                 <p class="hero-subtitle">
-                    Smalltalk feeling, modern tooling.
-                    A modern Smalltalk dialect aiming at native compilation.
-                    File-based, git-friendly, and designed for modern tooling.
+                    Smalltalk feeling, modern tooling. A modern Smalltalk dialect with a stackless VM,
+                    Granite native compilation, reactive server-rendered web support, and file-based source that works well with git.
                 </p>
                 <div class="hero-cta">
                     <a href="docs.html" class="btn btn-primary">Get Started</a>
-                    <a href="features.html" class="btn btn-secondary">See Examples</a>
+                    <a href="features.html" class="btn btn-secondary">See Features</a>
                 </div>
             </div>
             <div class="hero-code">
                 <div class="code-window">
                     <div class="code-header">
-                        <div class="code-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
+                        <div class="code-dots"><span></span><span></span><span></span></div>
                         <span class="code-title">example.hrd</span>
                     </div>
                     <div class="code-body">
-                        <pre><code><span class="comment"># Define a Point class with x and y</span>
-<span class="comment"># auto generate setter and getter methods</span>
-<span class="type">Point</span> := <span class="type">Object</span> deriveWithAccessors: <span class="keyword">#</span>(x y)
+<pre><code><span class="type">Point</span> := <span class="type">Object</span> derivePublic: <span class="keyword">#</span>(x, y)
 
-<span class="comment"># Add a method to the class using selector:put:</span>
-<span class="comment"># and a block representing the code</span>
-<span class="type">Point</span> selector: <span class="keyword">#</span>moveBy:and: put: [:dx :dy |
-    x := x <span class="operator">+</span> dx
+<span class="type">Point</span><span class="operator">>></span>moveBy: dx and: dy [
+    x := x <span class="operator">+</span> dx.
     y := y <span class="operator">+</span> dy
 ]
 
-<span class="comment"># Simpler way to add a method using >> syntactic sugar</span>
-<span class="type">Point</span> <span class="operator">>></span><span class="operator">+</span> aPoint [
-    x := x <span class="operator">+</span> aPoint x
-    y := y <span class="operator">+</span> aPoint y
+<span class="type">Point</span><span class="operator">>></span>printString [
+    <span class="keyword">^</span> <span class="string">"Point("</span> <span class="operator">&</span> x asString <span class="operator">&</span> <span class="string">", "</span> <span class="operator">&</span> y asString <span class="operator">&</span> <span class="string">")"</span>
 ]
 
-<span class="comment"># Create and use a Point, cascades work fine</span>
-p := <span class="type">Point</span> new
-p x: <span class="number">100</span>; y: <span class="number">200</span>
-p moveBy: <span class="number">5</span> and: <span class="number">10</span></code></pre>
+p := <span class="type">Point</span> new.
+p::x := <span class="number">100</span>.
+p::y := <span class="number">200</span>.
+p moveBy: <span class="number">5</span> and: <span class="number">10</span>.
+p printString println</code></pre>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="scroll-indicator">
-            <span>Scroll to explore</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M19 12l-7 7-7-7"/>
-            </svg>
-        </div>
     </section>
 
-    <!-- Features -->
     <section class="features">
         <div class="container">
             <h2 class="section-title">What Makes Harding Special</h2>
-
             <div class="feature-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="M2 17l10 5 10-5"/>
-                            <path d="M2 12l10 5 10-5"/>
-                        </svg>
-                    </div>
-                    <h3>Smalltalk Heritage</h3>
-                    <p>Everything you love about Smalltalk - message passing, blocks, live programming - preserved and modernized.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                        </svg>
-                    </div>
-                    <h3>Native Compilation</h3>
-                    <p>Granite compiler produces standalone native binaries via Nim → C. No runtime dependencies, true native performance.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                    </div>
-                    <h3>File-Based</h3>
-                    <p>No image files. Source lives in .hrd files you can version control, diff, and edit with any editor.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="12" cy="12" r="10"/>
-                            <circle cx="12" cy="12" r="6"/>
-                            <circle cx="12" cy="12" r="2"/>
-                        </svg>
-                    </div>
-                    <h3>Multiple Inheritance</h3>
-                    <p>Multiple inheritance with automatic conflict detection at class definition time.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
-                    </div>
-                    <h3>Green Threads</h3>
-                    <p>Cooperative multitasking with first-class Process objects. Built-in scheduler with Monitor, SharedQueue, and Semaphore synchronization.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                            <line x1="12" y1="9" x2="12" y2="13"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                    </div>
-                    <h3>Smalltalk-Style Exceptions</h3>
-                    <p>Resumable exception handling with on:do:, signal, resume, retry, and pass. Full signal point preservation.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M20 7h-9"/>
-                            <path d="M14 17H5"/>
-                            <circle cx="17" cy="17" r="3"/>
-                            <circle cx="7" cy="7" r="3"/>
-                        </svg>
-                    </div>
-                    <h3>Nim Interop</h3>
-                    <p>Call Nim code directly with good primitive bridging support. Access the entire Nim ecosystem: libraries, packages, and system APIs.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                            <line x1="12" y1="22.08" x2="12" y2="12"/>
-                        </svg>
-                    </div>
-                    <h3>Nim-Harding Package Model</h3>
-                    <p>Bundle Nim primitive implementations and matching .hrd sources in one package. Load package code through load: and keep Harding and Nim APIs versioned together.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                    </div>
-                    <h3>Practical I/O and Process API</h3>
-                    <p>Built-in File, FileStream, and System helpers provide file read/write, current directory, stdio streams (Stdin, Stdout, Stderr), and command-line arguments.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                    </div>
-                    <h3>IDE Tooling</h3>
-                    <p>VSCode extension with full LSP and DAP support. GTK-based Bona IDE currently includes Launcher, Workspace, and Transcript; Browser and Inspector are in progress, with Debugger planned.</p>
-                </div>
+                <div class="feature-card"><h3>Smalltalk Semantics</h3><p>Message sends, blocks, non-local returns, resumable exceptions, and live-editable class definitions remain central to the language.</p></div>
+                <div class="feature-card"><h3>Two Execution Paths</h3><p>Use the interpreter for interactive development and Granite for standalone native binaries.</p></div>
+                <div class="feature-card"><h3>File-Based And Git-Friendly</h3><p>Harding code lives in <code>.hrd</code> files. No image is required for normal development workflows.</p></div>
+                <div class="feature-card"><h3>Reactive Server Rendering</h3><p>Build web apps with the Html DSL, HTMX fragment updates, and <code>RenderCache</code> invalidation driven by tracked state.</p></div>
+                <div class="feature-card"><h3>Improved Ergonomics</h3><p>Use dynamic literals like <code>#(1, 2, 3)</code> and <code>#{...}</code>, good <code>json{...}</code> support, direct member access with <code>::</code>, <code>&amp;</code> concatenation, and optional <code>.</code> at line ends.</p></div>
+                <div class="feature-card"><h3>External Libraries And Packages</h3><p>Install Harding libraries with <code>harding lib</code>, and use a package system that can bundle native Nim code and Harding code together in one versioned unit.</p></div>
+                <div class="feature-card"><h3>Web Server Built In</h3><p>Harding can be built with integrated MummyX, a fast scalable native multithreaded HTTP server written in Nim.</p></div>
+                <div class="feature-card"><h3>GTK4 Integration</h3><p>Harding includes GTK4 bindings so you can write native GTK applications directly in Harding.</p></div>
+                <div class="feature-card"><h3>IDE Tooling</h3><p>Bona builds on the GTK integration and provides a Launcher, Workspace, Transcript, Browser, Inspector work, and an Application Builder workflow. VSCode support includes syntax highlighting, LSP, and DAP.</p></div>
             </div>
         </div>
     </section>
 
-    <!-- Get Started CTA -->
     <section class="quickstart">
         <div class="container">
-            <div class="quickstart-content" style="text-align: center; max-width: 600px; margin: 0 auto;">
-                <h2>Get Started</h2>
-                <p>Ready to try Harding? Check out the <a href="docs.html">documentation</a> to install and run your first program, or explore the full <a href="features.html">feature list</a> to learn more about what makes Harding special.</p>
+            <div class="quickstart-content" style="text-align:center; max-width: 760px; margin: 0 auto;">
+                <h2>What You Can Build</h2>
+                <p>Command-line tools with <code>System</code> and <code>File</code>, native binaries with Granite, JSON APIs, reactive HTMX web apps with MummyX, and installable packages that bundle Harding code and native Nim code together.</p>
                 <div class="hero-cta" style="margin-top: 2rem;">
                     <a href="docs.html" class="btn btn-primary">Install Harding</a>
                     <a href="features.html" class="btn btn-secondary">Explore Features</a>
@@ -252,7 +113,6 @@ p moveBy: <span class="number">5</span> and: <span class="number">10</span></cod
         </div>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-grid">
@@ -270,6 +130,7 @@ p moveBy: <span class="number">5</span> and: <span class="number">10</span></cod
                             <li><a href="https://github.com/gokr/harding">GitHub</a></li>
                             <li><a href="docs.html">Documentation</a></li>
                             <li><a href="features.html">Features</a></li>
+                            <li><a href="libraries.html">Libraries</a></li>
                             <li><a href="why.html">Why Harding?</a></li>
                         </ul>
                     </div>

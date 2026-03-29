@@ -10,352 +10,166 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <a href="index.html" class="logo">
                 <img src="images/harding-simple.png" alt="Harding" class="logo-img" width="60" height="60">
                 <span class="logo-text">Harding Smalltalk</span>
             </a>
-            <button class="nav-toggle" aria-label="Toggle navigation">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
             <ul class="nav-menu">
                 <li><a href="why.html">Why Harding?</a></li>
                 <li><a href="features.html">Features</a></li>
                 <li><a href="docs.html" class="active">Docs</a></li>
+                <li><a href="libraries.html">Libraries</a></li>
                 <li><a href="https://github.com/gokr/harding" class="nav-cta">GitHub</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Page Header -->
     <section class="page-header">
         <div class="container">
             <h1>Documentation</h1>
-            <p class="page-subtitle">Everything you need to get started</p>
+            <p class="page-subtitle">Where to start with the current Harding runtime, web stack, and package workflows</p>
         </div>
     </section>
 
-    <!-- Getting Started -->
     <section class="content-section">
         <div class="container">
             <h2 class="section-title">Getting Started</h2>
-
             <div class="docs-grid">
                 <div class="doc-card">
                     <h3>Installation</h3>
-                    <pre><code>git clone https://github.com/gokr/harding.git
+<pre><code>git clone https://github.com/gokr/harding.git
 cd harding
-nimble harding</code></pre>
-                    <p>Requires <a href="https://nim-lang.org/install.html">Nim 2.2.6+</a></p>
+nimble harding
+
+# Optional install
+nimble install_harding</code></pre>
+                    <p>Requires Nim 2.2.6 or later.</p>
                 </div>
 
                 <div class="doc-card">
                     <h3>Quick Start</h3>
-                    <pre><code>harding              # Interactive REPL
-harding script.hrd   # Run a script
-harding script.hrd -- one two  # Run with runtime args
-harding -e "3 + 4"   # Evaluate expression
-harding -e "System arguments size" -- red blue green  # Eval with args
-harding --ast script.hrd  # Show AST then execute
-harding --loglevel DEBUG script.hrd  # Debug output</code></pre>
-                    <p>Use <code>--loglevel DEBUG</code> for verbose output</p>
+<pre><code>harding
+harding script.hrd
+harding -e "3 + 4"
+harding --ast script.hrd
+harding --loglevel DEBUG script.hrd</code></pre>
+                    <p>Use the interpreter for interactive work and Granite for native builds.</p>
                 </div>
 
                 <div class="doc-card">
                     <h3>Granite Compiler</h3>
-                    <pre><code>granite compile myapp.hrd -o myapp
-granite build myapp.hrd --release
-granite run myapp.hrd</code></pre>
-                    <p>Compile to native binaries with no runtime dependencies</p>
+<pre><code>granite compile myprogram.hrd -o myprogram
+granite build myprogram.hrd --release
+granite run myprogram.hrd</code></pre>
+                    <p>Compile Harding code to standalone native binaries.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Examples -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">Examples</h2>
-
-            <div class="example-grid">
-                <div class="example-item">
-                    <h4>Hello World</h4>
-                    <pre><code>"Hello, World!" println</code></pre>
-                </div>
-
-                <div class="example-item">
-                    <h4>Factorial</h4>
-                    <pre><code># Extend Number with a factorial method
-Number >> factorial [
-    (self <= 1) ifTrue: [^ 1].
-    ^ self * ((self - 1) factorial)
-]
-
-5 factorial println   # 120
-10 factorial println  # 3628800</code></pre>
-                </div>
-
-                <div class="example-item">
-                    <h4>Counter Class</h4>
-                    <pre><code>| c |
-Counter := Object derive: #(count)
-Counter >> initialize [ count := 0 ]
-Counter >> value [ ^count ]
-Counter >> increment [ ^count := count + 1]
-
-c := Counter new
-c initialize
-c increment
-c value println   # 1</code></pre>
-                </div>
-
-                <div class="example-item">
-                    <h4>Collections</h4>
-                    <pre><code>numbers := #(1 2 3 4 5)
-squares := numbers collect: [:n | n * n]
-evens := numbers select: [:n | (n % 2) = 0]
-sum := numbers inject: 0 into: [:a :n | a + n]</code></pre>
-                </div>
-
-                <div class="example-item">
-                    <h4>Exception Handling</h4>
-                    <pre><code>[
-    10 / 0
-] on: DivisionByZero do: [:ex |
-    Transcript showCr: "Cannot divide by zero!".
-    ex resume: 0
-]
-
-result println   # 0</code></pre>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- New in Current Runtime -->
-    <section class="content-section">
-        <div class="container">
-            <h2 class="section-title">New in Current Runtime</h2>
-            <ul>
-                <li><code>System</code> class for process/stdio access (<code>arguments</code>, <code>cwd</code>, <code>stdin</code>, <code>stdout</code>, <code>stderr</code>)</li>
-                <li><code>File</code> convenience API for file reads/writes (<code>readAll:</code>, <code>write:to:</code>, <code>append:to:</code>, <code>exists:</code>)</li>
-                <li><code>FileStream</code> native file primitives for stream-style I/O</li>
-                <li>Nim-Harding package model for bundled Nim primitives + embedded .hrd sources</li>
-            </ul>
-        </div>
-    </section>
-
-    <!-- Reference Docs -->
-    <section class="content-section">
-        <div class="container">
-            <h2 class="section-title">Reference Documentation</h2>
-
+            <h2 class="section-title">Where To Start</h2>
             <div class="ref-grid">
                 <div class="ref-category">
-                    <h3>Language Reference</h3>
+                    <h3>Core Language</h3>
                     <ul>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/MANUAL.md">Language Manual</a> - Complete specification</li>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/QUICKREF.md">Quick Reference</a> - Syntax cheat sheet</li>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md">Implementation</a> - VM internals</li>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md">Nim Package Tutorial</a> - Package Nim primitives with Harding sources</li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/MANUAL.md">Language Manual</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/QUICKREF.md">Quick Reference</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md">Implementation Notes</a></li>
                     </ul>
                 </div>
-
                 <div class="ref-category">
-                    <h3>Development</h3>
+                    <h3>Web And APIs</h3>
                     <ul>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/TOOLS_AND_DEBUGGING.md">Tools & Debugging</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/MUMMYX.md">MummyX Integration</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/REACTIVE_WEB_RENDERING.md">Reactive Web Rendering</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/API_SERVER_TUTORIAL.md">JSON API Server Tutorial</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/BONA_WEB_TODO.md">Bona Todo Workflow</a></li>
+                    </ul>
+                    <p style="margin-top: 1rem;">MummyX is Harding's current web server path: a fast scalable native multithreaded HTTP server, with Harding handlers executed through the interpreter's green-process model.</p>
+                </div>
+                <div class="ref-category">
+                    <h3>Packages And Tooling</h3>
+                    <ul>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md">Nim Package Tutorial</a> - bundle native Nim code and Harding code together</li>
+                        <li><a href="libraries.html">External Libraries</a></li>
+                        <li><a href="https://github.com/gokr/harding/blob/main/docs/TOOLS_AND_DEBUGGING.md">Tools &amp; Debugging</a></li>
                         <li><a href="https://github.com/gokr/harding/blob/main/docs/VSCODE.md">VSCode Extension</a></li>
                         <li><a href="https://github.com/gokr/harding/blob/main/docs/GTK.md">GTK Integration</a></li>
                     </ul>
                 </div>
-
-                <div class="ref-category">
-                    <h3>Project</h3>
-                    <ul>
-                        <li><a href="https://github.com/gokr/harding/blob/main/docs/FUTURE.md">Future Plans</a> - Roadmap</li>
-                        <li><a href="https://github.com/gokr/harding/blob/main/CONTRIBUTING.md">Contributing</a> - Development guide</li>
-                        <li><a href="https://github.com/gokr/harding">GitHub</a> - Source code</li>
-                    </ul>
-                </div>
             </div>
         </div>
     </section>
 
-    <!-- For Smalltalkers -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">For Smalltalk Programmers</h2>
+            <h2 class="section-title">Example Code</h2>
+            <div class="example-grid">
+                <div class="example-item"><h4>Hello World</h4><pre><code>"Hello, World!" println</code></pre></div>
+                <div class="example-item"><h4>Simple Class</h4><pre><code>| c |
+Counter := Object derive: #(count)
+Counter&gt;&gt;initialize [ count := 0 ]
+Counter&gt;&gt;value [ ^ count ]
+Counter&gt;&gt;increment [ ^ count := count + 1 ]
 
-            <div class="diff-table-wrapper">
-                <div class="example-grid" style="margin-bottom: 2rem;">
-                    <div class="example-item">
-                        <h4>What feels familiar</h4>
-                        <ul style="text-align: left; margin-top: 1rem;">
-                            <li>Message syntax: unary <code>obj size</code>, binary <code>3 + 4</code>, keyword <code>dict at: key put: value</code></li>
-                            <li>Cascade messages with <code>;</code></li>
-                            <li>Blocks are proper lexical closures with non-local returns</li>
-                            <li>Everything is an object, everything happens via message sends</li>
-                            <li>Collection messages: <code>do:</code>, <code>select:</code>, <code>collect:</code>, <code>inject:into:</code></li>
-                        </ul>
-                    </div>
-                    <div class="example-item">
-                        <h4>What's different</h4>
-                        <ul style="text-align: left; margin-top: 1rem;">
-                            <li>Optional periods - newlines also separate statements</li>
-                            <li>Hash <code>#</code> for comments (not double quotes)</li>
-                            <li>Double quotes for strings (not single quotes)</li>
-                            <li>Class creation: <code>Point := Object derive: #(x y)</code></li>
-                            <li>File-based, git-friendly source</li>
-                        </ul>
-                    </div>
+c := Counter new.
+c initialize.
+c increment.
+c value println</code></pre></div>
+                <div class="example-item"><h4>Resumable Exception</h4><pre><code>result := [
+    10 // 0
+] on: DivisionByZero do: [:ex |
+    ex resume: 0
+].
+
+result println</code></pre></div>
+                <div class="example-item"><h4>Web Route</h4><pre><code>Harding load: "lib/mummyx/Bootstrap.hrd".
+Server := HttpServer new.
+Router := Router new.
+Router get: "/" do: [:req |
+    req respondHtml: "&lt;h1&gt;Hello&lt;/h1&gt;"
+].
+Server router: Router.
+Server serveForever: 8080.</code></pre></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section">
+        <div class="container">
+            <h2 class="section-title">IDE Support</h2>
+            <div class="docs-grid">
+                <div class="doc-card">
+                    <h3>VSCode</h3>
+                    <p>Syntax highlighting, language-server features, and debugger integration.</p>
                 </div>
-
-                <h3>Key Differences from Smalltalk-80</h3>
-                <table class="comparison-table">
-                    <thead>
-                        <tr>
-                            <th>Feature</th>
-                            <th>Smalltalk</th>
-                            <th>Harding</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Comments</td>
-                            <td><code>"comment"</code></td>
-                            <td><code># comment</code></td>
-                        </tr>
-                        <tr>
-                            <td>Strings</td>
-                            <td><code>'string'</code></td>
-                            <td><code>"string"</code></td>
-                        </tr>
-                        <tr>
-                            <td>Statement separator</td>
-                            <td>Period <code>.</code> only</td>
-                            <td>Period or newline</td>
-                        </tr>
-                        <tr>
-                            <td>Class creation</td>
-                            <td>Class definition</td>
-                            <td><code>Object derive: #(vars)</code></td>
-                        </tr>
-                        <tr>
-                            <td>Persistence</td>
-                            <td>Image-based</td>
-                            <td>File-based, git-friendly</td>
-                        </tr>
-                        <tr>
-                            <td>Execution</td>
-                            <td>VM</td>
-                            <td>VM or Native compilation (Granite)</td>
-                        </tr>
-                        <tr>
-                            <td>Inheritance</td>
-                            <td>Single</td>
-                            <td>Multiple</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div class="example-grid" style="margin-top: 2rem;">
-                    <div class="example-item">
-                        <h4>No Metaclasses</h4>
-                        <pre><code># Instance method
-Person >> greet [ ^ "Hello" ]
-
-# Class method - defined on the class itself
-Person class >> newPerson [ ^ self new ]</code></pre>
-                    </div>
+                <div class="doc-card">
+                    <h3>Bona</h3>
+<pre><code>nimble bona
+./bona</code></pre>
+                    <p>Launcher, Workspace, Transcript, Browser/Inspector work, and the Application Builder workflow.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Bona GTK IDE -->
     <section class="content-section alt">
-        <div class="container">
-            <h2 class="section-title">Bona GTK IDE</h2>
-
-            <div class="doc-card">
-                <h3>Installation</h3>
-                <pre><code>nimble bona    # Build the IDE
-./bona         # Launch</code></pre>
-                <p>Features:</p>
-                <ul style="margin-top: 1rem; margin-left: 1.5rem;">
-                    <li><strong>Launcher</strong> - Start tools and workflows from one place</li>
-                    <li><strong>Workspace</strong> - Code editor with Do It / Print It / Inspect It</li>
-                    <li><strong>Transcript</strong> - Output console</li>
-                </ul>
-                <p style="margin-top: 1rem;">Next up: <strong>System Browser</strong> and <strong>Inspector</strong> (in progress), with a <strong>Debugger</strong> planned.</p>
-
-                <figure class="bona-screenshot">
-                    <img src="images/bona.png" alt="Bona GTK IDE screenshot with Launcher, Workspace, and Transcript">
-                    <figcaption>Current Bona build with Launcher, Workspace, and Transcript. Browser and Inspector are next, with Debugger planned.</figcaption>
-                </figure>
-            </div>
-        </div>
-    </section>
-
-    <!-- VSCode Extension -->
-    <section class="content-section">
-        <div class="container">
-            <h2 class="section-title">VSCode Extension</h2>
-
-            <div class="doc-card">
-                <h3>Installation</h3>
-                <pre><code>nimble vsix    # Build the extension
-code --install-extension harding-lang-*.vsix</code></pre>
-                <p>Features:</p>
-                <ul style="margin-top: 1rem; margin-left: 1.5rem;">
-                    <li><strong>Syntax highlighting</strong> with TextMate grammar</li>
-                    <li><strong>Language Server Protocol (LSP)</strong> - Completions, hover info, go to definition, document/workspace symbols</li>
-                    <li><strong>Debug Adapter Protocol (DAP)</strong> - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions</li>
-                    <li>Comment toggling, bracket matching, code folding</li>
-                </ul>
-            </div>
-        </div>
-    </section>
-
-    <!-- Help -->
-    <section class="content-section">
         <div class="container">
             <h2 class="section-title">Getting Help</h2>
-
             <div class="help-grid">
-                <div class="help-item">
-                    <h4>GitHub Issues</h4>
-                    <p>Bug reports and feature requests</p>
-                    <a href="https://github.com/gokr/harding/issues" class="btn btn-secondary">Open Issues</a>
-                </div>
-
-                <div class="help-item">
-                    <h4>Discord</h4>
-                    <p>Live chat and community support</p>
-                    <a href="https://discord.gg/R8HU28rNVv" class="btn btn-secondary">Join Discord</a>
-                </div>
-
-                <div class="help-item">
-                    <h4>Discussions</h4>
-                    <p>Questions, ideas, and community</p>
-                    <a href="https://github.com/gokr/harding/discussions" class="btn btn-secondary">Join Discussion</a>
-                </div>
-
-                <div class="help-item">
-                    <h4>Contributing</h4>
-                    <p>Development guidelines and setup</p>
-                    <a href="https://github.com/gokr/harding/blob/main/CONTRIBUTING.md" class="btn btn-secondary">Read Guide</a>
-                </div>
+                <div class="help-item"><h4>GitHub Issues</h4><p>Bug reports and feature requests.</p><a href="https://github.com/gokr/harding/issues" class="btn btn-secondary">Open Issues</a></div>
+                <div class="help-item"><h4>Discussions</h4><p>Questions and design discussion.</p><a href="https://github.com/gokr/harding/discussions" class="btn btn-secondary">Join Discussion</a></div>
+                <div class="help-item"><h4>Contributing</h4><p>Development guidelines and setup.</p><a href="https://github.com/gokr/harding/blob/main/CONTRIBUTING.md" class="btn btn-secondary">Read Guide</a></div>
+                <div class="help-item"><h4>GitHub</h4><p>Browse the source, examples, and current docs.</p><a href="https://github.com/gokr/harding" class="btn btn-secondary">View Repository</a></div>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-grid">
@@ -373,6 +187,7 @@ code --install-extension harding-lang-*.vsix</code></pre>
                             <li><a href="https://github.com/gokr/harding">GitHub</a></li>
                             <li><a href="docs.html">Documentation</a></li>
                             <li><a href="features.html">Features</a></li>
+                            <li><a href="libraries.html">Libraries</a></li>
                             <li><a href="why.html">Why Harding?</a></li>
                         </ul>
                     </div>

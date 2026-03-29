@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>External Libraries - Harding Smalltalk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">
+                <img src="images/harding-simple.png" alt="Harding" class="logo-img" width="60" height="60">
+                <span class="logo-text">Harding Smalltalk</span>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="why.html">Why Harding?</a></li>
+                <li><a href="features.html">Features</a></li>
+                <li><a href="docs.html">Docs</a></li>
+                <li><a href="libraries.html" class="active">Libraries</a></li>
+                <li><a href="https://github.com/gokr/harding" class="nav-cta">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="page-header">
+        <div class="container">
+            <h1>External Libraries</h1>
+            <p class="page-subtitle">Installable Harding packages that can bundle native Nim code and Harding source together</p>
+        </div>
+    </section>
+
+    <section class="content-section">
+        <div class="container">
+            <div class="feature-detail">
+                <div class="feature-text">
+                    <h2>How Libraries Work</h2>
+                    <p>Harding can load installable external libraries through <code>harding lib</code>. These packages can bundle Harding source in <code>.hrd</code> files, native Nim code and primitives, and metadata in <code>.harding-lib.json</code>.</p>
+                    <p>This keeps the Harding-facing API and the native implementation in one installable unit.</p>
+                    <p>In practice, a Harding library is just a git repository with a small metadata file. Installing a library clones that repository into the local <code>external/</code> directory. The next Harding build regenerates the external-library wiring so the library is compiled into the VM/runtime binary.</p>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Library Commands</div>
+<pre><code>harding lib list
+harding lib install sqlite
+harding lib install bitbarrel
+harding lib install nimcp
+
+# then rebuild Harding so the library is compiled into the binary
+nimble harding</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title">Current Libraries</h2>
+            <div class="feature-grid">
+                <div class="feature-card"><h3>BitBarrel</h3><p>Persistent storage integration with hash and sorted table abstractions.</p><p><a href="https://github.com/gokr/harding-bitbarrel">harding-bitbarrel</a></p><p><code>harding lib install bitbarrel</code></p></div>
+                <div class="feature-card"><h3>SQLite</h3><p>SQLite database connectivity for embedded local persistence.</p><p><a href="https://github.com/gokr/harding-sqlite">harding-sqlite</a></p><p><code>harding lib install sqlite</code></p></div>
+                <div class="feature-card"><h3>MySQL</h3><p>MySQL database connectivity for external database-backed applications.</p><p><a href="https://github.com/gokr/harding-mysql">harding-mysql</a></p><p><code>harding lib install mysql</code></p></div>
+                <div class="feature-card"><h3>NimCP</h3><p>Model Context Protocol server support through NimCP.</p><p><a href="https://github.com/gokr/harding-nimcp">harding-nimcp</a></p><p><code>harding lib install nimcp</code></p></div>
+                <div class="feature-card"><h3>Curly</h3><p>HTTP client support for talking to external APIs and services.</p><p><a href="https://github.com/gokr/harding-curly">harding-curly</a></p><p><code>harding lib install curly</code></p></div>
+                <div class="feature-card"><h3>OAuth2</h3><p>OAuth2 integration helpers for authorization flows.</p><p><a href="https://github.com/gokr/harding-oauth2">harding-oauth2</a></p><p><code>harding lib install oauth2</code></p></div>
+                <div class="feature-card"><h3>Google OAuth</h3><p>Google-specific OAuth integration on top of OAuth2 flows.</p><p><a href="https://github.com/gokr/harding-googleoauth">harding-googleoauth</a></p><p><code>harding lib install googleoauth</code></p></div>
+                <div class="feature-card"><h3>JWT</h3><p>JSON Web Token support for auth tokens and API security.</p><p><a href="https://github.com/gokr/harding-jwt">harding-jwt</a></p><p><code>harding lib install jwt</code></p></div>
+            </div>
+
+            <h2 class="section-title" style="margin-top:4rem;">Package Layout</h2>
+            <div class="code-block">
+                <div class="code-header">Typical Layout</div>
+<pre><code>external/my-lib/
+|- .harding-lib.json
+|- lib/
+|  `- my-lib/
+|     `- Bootstrap.hrd
+`- src/
+   `- native_impl.nim</code></pre>
+            </div>
+
+            <p style="margin-top: 1.5rem;">Installed libraries simply live under <code>external/</code>, for example <code>external/sqlite/</code>, <code>external/mysql/</code>, or <code>external/bitbarrel/</code>.</p>
+
+            <div class="feature-grid" style="margin-top: 2rem;">
+                <div class="feature-card"><h3>Install</h3><p>Clone the library git repository into <code>external/</code>.</p></div>
+                <div class="feature-card"><h3>Build</h3><p>Regenerate the external-library wiring and compile the library into Harding.</p></div>
+                <div class="feature-card"><h3>Use</h3><p>Load and use the library through its normal Harding bootstrap and API.</p></div>
+            </div>
+
+            <h2 class="section-title" style="margin-top:4rem;">Why This Matters</h2>
+            <p>The external library model lets Harding stay small while still supporting databases, HTTP clients, authentication, MCP tooling, and custom native extensions. It also keeps the Harding and Nim sides versioned together as one installable unit.</p>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="index.html" class="logo">
+                        <img src="images/harding-simple.png" alt="Harding" class="logo-img" width="60" height="60">
+                        <span class="logo-text">Harding Smalltalk</span>
+                    </a>
+                    <p>Smalltalk feeling, modern tooling.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <ul>
+                            <li><a href="https://github.com/gokr/harding">GitHub</a></li>
+                            <li><a href="docs.html">Documentation</a></li>
+                            <li><a href="features.html">Features</a></li>
+                            <li><a href="libraries.html">Libraries</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <ul>
+                            <li><a href="https://discord.gg/R8HU28rNVv">Discord</a></li>
+                            <li><a href="https://github.com/gokr/harding/issues">Issues</a></li>
+                            <li><a href="https://github.com/gokr/harding/discussions">Discussions</a></li>
+                            <li><a href="https://github.com/gokr/harding/blob/main/CONTRIBUTING.md">Contributing</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>Released under the MIT License.</p>
+                <p>A tribute to Dan Ingalls and the Smalltalk community.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

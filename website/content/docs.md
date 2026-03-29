@@ -7,14 +7,13 @@ title: Documentation
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/gokr/harding.git
 cd harding
 
-# Build and put binaries in current directory
+# Build the interpreter into the repo root
 nimble harding
 
-# Or install to ~/.local/bin
+# Or install it to ~/.local/bin
 nimble install_harding
 ```
 
@@ -30,228 +29,172 @@ harding
 # Run a script
 harding script.hrd
 
-# Run with runtime args
-harding script.hrd -- one two
-
 # Evaluate an expression
 harding -e "3 + 4"
 
-# Evaluate with runtime args (read via System arguments)
-harding -e "System arguments size" -- red blue green
-
-# Show AST then execute
+# Show AST and execute
 harding --ast script.hrd
 
-# Debug output
+# Debug logging
 harding --loglevel DEBUG script.hrd
 ```
 
 ### Granite Compiler
 
-Compile to native binaries:
-
 ```bash
-# Compile to standalone binary
 granite compile myprogram.hrd -o myprogram
-
-# Build with optimizations
 granite build myprogram.hrd --release
-
-# Run directly
 granite run myprogram.hrd
 ```
 
-## Learning Harding
+## Where To Start
 
-### New in Current Runtime
+### Core Language
 
-- `System` class for process/stdio access (`arguments`, `cwd`, `stdin`, `stdout`, `stderr`)
-- `File` convenience API for file reads/writes (`readAll:`, `write:to:`, `append:to:`, `exists:`)
-- `FileStream` native file primitives for stream-style I/O
-- Nim-Harding package model for bundled Nim primitives + embedded `.hrd` sources
+- [Language Manual](https://github.com/gokr/harding/blob/main/docs/MANUAL.md)
+- [Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md)
+- [Implementation Notes](https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md)
 
-### For Smalltalk Programmers
+### Web And APIs
 
-Start here if you know Smalltalk:
+- [MummyX Integration](https://github.com/gokr/harding/blob/main/docs/MUMMYX.md)
+- [Reactive Web Rendering](https://github.com/gokr/harding/blob/main/docs/REACTIVE_WEB_RENDERING.md)
+- [JSON API Server Tutorial](https://github.com/gokr/harding/blob/main/docs/API_SERVER_TUTORIAL.md)
+- [Bona Todo Workflow](https://github.com/gokr/harding/blob/main/docs/BONA_WEB_TODO.md)
 
-**What feels familiar:**
-- Message syntax: unary `obj size`, binary `3 + 4`, keyword `dict at: key put: value`
-- Cascade messages with `;`
-- Block syntax and that they are proper lexical closures with non-local returns
-- Everything is an object, everything happens via message sends
-- Collection messages: `do:`, `select:`, `collect:`, `inject:into:`
+MummyX is Harding's current web server path: a fast scalable native multithreaded HTTP server with Harding handlers executed through the interpreter's green-process model.
 
-**What's different:**
-- Optional periods - newlines also separate statements
-- Hash-with-space `# <- a space` for comments (not double quotes)
-- Double quotes for strings (not single quotes)
-- Class creation: `Point := Object derive: #(x, y)`
-- File-based, git-friendly source
+### Packages And External Libraries
 
-Additional resources:
-- **Key Differences** - [see below](#differences-from-smalltalk)
-- [Smalltalk Compatibility Guide](https://github.com/gokr/harding/blob/main/docs/MANUAL.md#smalltalk-compatibility)
-- [Syntax Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md)
+- [Nim Package Tutorial](https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md)
+- [External Libraries](/libraries)
 
-### For Newcomers
+Harding packages can bundle native Nim code and Harding source together, so one installable package can expose both primitives and `.hrd` APIs.
 
-New to Smalltalk? Harding is a great way to learn:
+### Tools And Development
 
-1. Start with the [Language Manual](https://github.com/gokr/harding/blob/main/docs/MANUAL.md)
-2. Try the [Examples](https://github.com/gokr/harding/tree/main/examples/)
-3. Read the [Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md)
+- [Tools & Debugging](https://github.com/gokr/harding/blob/main/docs/TOOLS_AND_DEBUGGING.md)
+- [VSCode Extension](https://github.com/gokr/harding/blob/main/docs/VSCODE.md)
+- [GTK Integration](https://github.com/gokr/harding/blob/main/docs/GTK.md)
 
-### Example Code
+## Example Code
 
-Hello World:
+### Hello World
+
 ```harding
 "Hello, World!" println
 ```
 
-Factorial:
-```harding
-# Extend Number with a factorial method
-Number >> factorial [
-    (self <= 1) ifTrue: [^ 1].
-    ^ self * ((self - 1) factorial)
-]
+### Simple Class
 
-5 factorial println   # 120
-10 factorial println  # 3628800
-```
-
-Counter Class:
 ```harding
 | c |
+
 Counter := Object derive: #(count)
-Counter >> initialize [ count := 0 ]
-Counter >> value [ ^count ]
-Counter >> increment [ ^count := count + 1]
+Counter>>initialize [ count := 0 ]
+Counter>>value [ ^ count ]
+Counter>>increment [ ^ count := count + 1 ]
 
-
-c := Counter new
-c initialize
-c increment
-c value println   # 1
+c := Counter new.
+c initialize.
+c increment.
+c value println
 ```
 
-Exception Handling:
+### Resumable Exception
+
 ```harding
-# Resumable exceptions
 result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    Transcript showCr: "Cannot divide by zero!".
-    ex resume: 0  # Return 0 instead
+    ex resume: 0
 ].
 
-result println   # 0
+result println
 ```
 
-## Reference Documentation
-
-### Language Reference
-
-| Document | Description |
-|----------|-------------|
-| [Language Manual](https://github.com/gokr/harding/blob/main/docs/MANUAL.md) | Complete language specification |
-| [Quick Reference](https://github.com/gokr/harding/blob/main/docs/QUICKREF.md) | Syntax cheat sheet |
-| [Implementation Notes](https://github.com/gokr/harding/blob/main/docs/IMPLEMENTATION.md) | VM internals |
-| [Nim Package Tutorial](https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md) | Package Nim primitives with Harding sources |
-
-### Tools and Development
-
-| Document | Description |
-|----------|-------------|
-| [Tools & Debugging](https://github.com/gokr/harding/blob/main/docs/TOOLS_AND_DEBUGGING.md) | CLI usage, debugging |
-| [VSCode Extension](https://github.com/gokr/harding/blob/main/docs/VSCODE.md) | Editor support |
-| [GTK Integration](https://github.com/gokr/harding/blob/main/docs/GTK.md) | GUI development |
-
-### Project
-
-| Document | Description |
-|----------|-------------|
-| [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md) | Roadmap |
-| [Contributing](https://github.com/gokr/harding/blob/main/CONTRIBUTING.md) | Development guidelines |
-
-## Differences from Smalltalk
-
-### Syntax Changes
-
-| Feature | Smalltalk | Harding |
-|---------|-----------|---------|
-| Comments | `"comment"` | `# comment` |
-| Strings | `'string'` | `"string"` |
-| Statement separator | Period `.` | Period or newline |
-| Class creation | Class definition | `Object derive: #(vars)` |
-
-### Semantic Changes
-
-**No Metaclasses**
-In Harding, classes are objects but there are no metaclasses:
+### Web Route
 
 ```harding
-# Instance method
-Person >> greet [ ^ "Hello" ]
+Harding load: "lib/mummyx/Bootstrap.hrd".
 
-# Class method - defined on the class itself
-Person class >> newPerson [ ^ self new ]
+Server := HttpServer new.
+Router := Router new.
+
+Router get: "/" do: [:req |
+    req respondHtml: "<h1>Hello</h1>"
+].
+
+Server router: Router.
+Server serveForever: 8080.
 ```
 
-**Multiple Inheritance**
-Harding supports multiple inheritance with conflict detection.
-
-**nil as Object**
-`nil` is an instance of `UndefinedObject`:
+### Html + HTMX Fragment
 
 ```harding
-nil class     # UndefinedObject
-nil isNil     # true
+Router get: "/" do: [:req |
+    req respondHtml: (Html render: [:h |
+        h div: [:panel |
+            panel id: "todo-panel".
+            panel button: [:button |
+                button post: "/todos/1/toggle";
+                    target: "#todo-panel";
+                    swap: "outerHTML".
+                button text: "Toggle"
+            ]
+        ]
+    ])
+].
 ```
 
-## VSCode Extension
+## For Smalltalk Programmers
 
-Full IDE support for `.hrd` files:
+What feels familiar:
+
+- unary, binary, and keyword messages
+- cascades with `;`
+- lexical blocks with non-local returns
+- everything is an object
+- collection protocols such as `do:`, `collect:`, `select:`, `inject:into:`
+
+What is different:
+
+- comments use `# ` instead of quoted comments
+- strings use `"..."`
+- periods are optional at line ends
+- class creation uses `derive:` forms
+- source is file-based and git-friendly
+- no metaclasses in the Smalltalk-80 sense
+
+## IDE Support
+
+### VSCode
+
+- syntax highlighting
+- completions / hover / go-to-definition
+- debugger integration
+
+### Bona
 
 ```bash
-nimble vsix    # Build the extension
-code --install-extension harding-lang-*.vsix
+nimble bona
+./bona
 ```
 
-Features:
-- **Syntax highlighting** with TextMate grammar
-- **Language Server Protocol (LSP)** - Completions, hover info, go to definition, document/workspace symbols
-- **Debug Adapter Protocol (DAP)** - Breakpoints, stepping (over/into/out), call stack, variable inspection, watch expressions
-- Comment toggling, bracket matching, code folding
+Current emphasis:
 
-## Bona GTK IDE
+- Launcher
+- Workspace
+- Transcript
+- Browser / Inspector work
+- Application Builder
 
-A graphical IDE written in Harding itself:
+## Project Docs
 
-```bash
-nimble bona    # Build the IDE
-./bona         # Launch
-```
-
-Features:
-- **Launcher** - Start tools and workflows from one place
-- **Workspace** - Code editor with Do It / Print It / Inspect It
-- **Transcript** - Output console
-
-Next up: **System Browser** and **Inspector** (in progress), with a **Debugger** planned.
-
-![Bona GTK IDE screenshot with Launcher, Workspace, and Transcript](images/bona.png)
-
-_Current Bona build with Launcher, Workspace, and Transcript. Browser and Inspector are next, with Debugger planned._
+- [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md)
+- [Contributing](https://github.com/gokr/harding/blob/main/CONTRIBUTING.md)
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/gokr/harding/issues) - Bug reports
-- [GitHub Discussions](https://github.com/gokr/harding/discussions) - Questions and ideas
-
-## Contributing
-
-See [CONTRIBUTING.md](https://github.com/gokr/harding/blob/main/CONTRIBUTING.md) for:
-- Code style guidelines
-- Build instructions
-- Architecture overview
+- [GitHub Issues](https://github.com/gokr/harding/issues)
+- [GitHub Discussions](https://github.com/gokr/harding/discussions)

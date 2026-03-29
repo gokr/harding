@@ -10,36 +10,30 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <a href="index.html" class="logo">
                 <img src="images/harding-simple.png" alt="Harding" class="logo-img" width="60" height="60">
                 <span class="logo-text">Harding Smalltalk</span>
             </a>
-            <button class="nav-toggle" aria-label="Toggle navigation">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
             <ul class="nav-menu">
                 <li><a href="why.html">Why Harding?</a></li>
                 <li><a href="features.html" class="active">Features</a></li>
                 <li><a href="docs.html">Docs</a></li>
+                <li><a href="libraries.html">Libraries</a></li>
                 <li><a href="https://github.com/gokr/harding" class="nav-cta">GitHub</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Page Header -->
     <section class="page-header">
         <div class="container">
             <h1>Features</h1>
-            <p class="page-subtitle">Everything that makes Harding special</p>
+            <p class="page-subtitle">Current language, runtime, web, JSON, and tooling capabilities</p>
         </div>
     </section>
 
-    <!-- Language Features -->
     <section class="content-section">
         <div class="container">
             <h2 class="section-title">Language Features</h2>
@@ -47,25 +41,23 @@
             <div class="feature-detail">
                 <div class="feature-text">
                     <h3>Smalltalk Semantics</h3>
-                    <p>Harding preserves the essence of Smalltalk:</p>
+                    <p>Harding keeps message-passing, lexical blocks, late binding, and non-local returns at the center of the language.</p>
                     <ul>
-                        <li><strong>Everything is an object</strong> - Numbers, strings, blocks, classes</li>
-                        <li><strong>Everything happens via message passing</strong> - No function calls, only messages</li>
-                        <li><strong>Late binding</strong> - Method lookup happens at message send time</li>
-                        <li><strong>Blocks with non-local returns</strong> - True lexical closures with <code>^</code> return</li>
+                        <li>everything is an object</li>
+                        <li>unary, binary, and keyword messages</li>
+                        <li>lexical closures with <code>^</code> non-local returns</li>
+                        <li>resumable exceptions on a stackless VM</li>
                     </ul>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Message Passing</div>
-                        <pre><code>3 + 4                    <span class="comment"># binary message</span>
-obj size                 <span class="comment"># unary message</span>
-dict at: key put: value  <span class="comment"># keyword message</span>
+                        <div class="code-header">Smalltalk Semantics</div>
+<pre><code>3 + 4
+dict at: key put: value
 
-<span class="comment"># Blocks with non-local return</span>
 findPositive := [:arr |
     arr do: [:n |
-        (n > 0) ifTrue: [^ n]
+        (n &gt; 0) ifTrue: [ ^ n ]
     ].
     ^ nil
 ]</code></pre>
@@ -75,770 +67,160 @@ findPositive := [:arr |
 
             <div class="feature-detail reverse">
                 <div class="feature-text">
-                    <h3>Modern Syntax</h3>
-                    <p>Optional periods, hash comments, double-quoted strings:</p>
+                    <h3>Modernized Syntax</h3>
+                    <p>Harding keeps the Smalltalk model but modernizes the surface syntax.</p>
                     <ul>
-                        <li>Newlines separate statements (periods optional)</li>
-                        <li>Hash <code>#</code> for comments</li>
-                        <li>Double quotes for strings</li>
-                        <li>Clean, readable code</li>
+                        <li><code>#</code> comments</li>
+                        <li>double-quoted strings</li>
+                        <li>optional periods at line ends</li>
+                        <li><code>&amp;</code> concatenation</li>
+                        <li>comma-separated collection literals</li>
                     </ul>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Modern Syntax</div>
-                        <pre><code><span class="comment"># This is a comment</span>
-x := 1                  <span class="comment"># No period needed</span>
-y := 2
-z := x + y              <span class="comment"># But periods work too</span>
-
-<span class="string">"Double quotes for strings"</span></code></pre>
+                        <div class="code-header">Current Syntax</div>
+<pre><code># comment
+greeting := "Hello, " &amp; name
+values := #(1, 2, 3)
+payload := json{"ok": true, "count": values size}</code></pre>
                     </div>
                 </div>
             </div>
 
             <div class="feature-detail">
                 <div class="feature-text">
-                    <h3>Class-Based with Multiple Inheritance</h3>
-                    <p>Create classes dynamically with slots (instance variables) and methods:</p>
+                    <h3>Current Class Definition Style</h3>
+                    <p>Harding now emphasizes canonical derive APIs and direct slot access when you want explicit control.</p>
                     <ul>
-                        <li><code>derive:</code> for class creation with slots (instance variables)</li>
-                        <li><code>deriveWithAccessors:</code> for automatic getter/setter generation</li>
-                        <li>Direct instance-variable access in methods</li>
-                        <li>Multiple inheritance with automatic conflict detection</li>
-                        <li>Qualified and unqualified super sends</li>
+                        <li><code>derive:</code>, <code>derivePublic:</code>, and canonical variants</li>
+                        <li><code>::</code> direct slot and binding access</li>
+                        <li>multiple inheritance plus mixins</li>
                     </ul>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Class Definition</div>
-                        <pre><code><span class="comment"># Declare a temporary variable to hold an instance</span>
-<span class="keyword">| p |</span>
+                        <div class="code-header">Current Class Definition</div>
+<pre><code>Point := Object derivePublic: #(x, y)
 
-<span class="comment"># Create a new class with two slots (instance variables)</span>
-<span class="type">Point</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x y)
-
-<span class="comment"># Add methods using >> syntax and direct slot access</span>
-<span class="type">Point</span> <span class="operator">>></span> x: val [ x := val ]
-<span class="type">Point</span> <span class="operator">>></span> y: val [ y := val ]
-
-<span class="comment"># Add multiple methods at a time</span>
-<span class="type">Point</span> extend: [
-    <span class="keyword">self</span> <span class="operator">>></span> moveBy: dx and: dy [
-        x := x <span class="operator">+</span> dx.
-        y := y <span class="operator">+</span> dy
-    ]
-    <span class="keyword">self</span> <span class="operator">>></span> distanceFromOrigin [
-        <span class="keyword">^</span> ((x <span class="operator">*</span> x) <span class="operator">+</span> (y <span class="operator">*</span> y)) sqrt
-    ]
-]
-
-<span class="comment"># Create and use a Point</span>
-p := <span class="type">Point</span> new
-p x: <span class="number">100</span>; y: <span class="number">200</span>
-p distanceFromOrigin println   <span class="comment"># 223.6068...</span></code></pre>
+Point&gt;&gt;moveBy: dx and: dy [
+    x := x + dx.
+    y := y + dy
+]</code></pre>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Multiple Inheritance -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">Multiple Inheritance</h2>
-
+            <h2 class="section-title">Runtime And Concurrency</h2>
             <div class="feature-detail">
                 <div class="feature-text">
-                    <h3>Multi-Parent Classes</h3>
-                    <p>Inherit from multiple parents with conflict detection:</p>
-                    <ul>
-                        <li>Use <code>derive:</code> to create a subclass</li>
-                        <li>Use <code>addSuperclass:</code> to add additional parents</li>
-                        <li>Automatic conflict detection</li>
-                        <li>Flexible mixin patterns</li>
-                    </ul>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Multiple Inheritance</div>
-                        <pre><code><span class="comment"># Inherit from multiple parents</span>
-<span class="type">ColoredPoint</span> := <span class="type">Point</span> derive: <span class="keyword">#</span>(color)
-<span class="type">ColoredPoint</span> addSuperclass: <span class="type">Comparable</span>
-<span class="type">ColoredPoint</span> addSuperclass: <span class="type">Printable</span>
-
-<span class="comment"># ColoredPoint now has methods from:</span>
-<span class="comment"># - Point (distanceFromOrigin, etc)</span>
-<span class="comment"># - Comparable (>, <, =, etc)</span>
-<span class="comment"># - Printable (asString, print, etc)</span></code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail reverse" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Automatic Accessors</h3>
-                    <p>Create classes with auto-generated getters and setters:</p>
-                    <ul>
-                        <li><code>deriveWithAccessors:</code> - Generate getters and setters for all slots (instance variables)</li>
-                        <li>Getter: <code>variableName</code> returns the current value</li>
-                        <li>Setter: <code>variableName:</code> updates the value</li>
-                    </ul>
-
-                    <h3>Selective Accessors</h3>
-                    <p>For complete control over which slots (instance variables) get accessors:</p>
-                    <ul>
-                        <li><code>derive:getters:setters:</code> - Specify which slots get getters/setters</li>
-                        <li>Generate getters for both, setter only for specific slots</li>
-                    </ul>
-
-                    <h3>Conflict Detection</h3>
-                    <p>When multiple parents define the same method, Harding detects conflicts at class definition time. Override conflicting methods in the child class to resolve.</p>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Accessors and Conflict Resolution</div>
-                        <pre><code><span class="comment"># Automatic accessors</span>
-<span class="type">Person</span> := <span class="type">Object</span> deriveWithAccessors: <span class="keyword">#</span>(name age)
-p := <span class="type">Person</span> new
-p name: <span class="string">"Alice"</span>    <span class="comment"># Auto-generated setter</span>
-p age: <span class="number">30</span>
-p name             <span class="comment"># Auto-generated getter</span>
-
-<span class="comment"># Selective accessors</span>
-<span class="type">Account</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(balance owner)
-                       getters: <span class="keyword">#</span>(balance owner)
-                       setters: <span class="keyword">#</span>(balance)
-
-<span class="comment"># Conflict detection</span>
-<span class="type">Parent1</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(a)
-<span class="type">Parent1</span> <span class="operator">>></span> foo [ ^ <span class="string">"foo1"</span> ]
-
-<span class="type">Parent2</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(b)
-<span class="type">Parent2</span> <span class="operator">>></span> foo [ ^ <span class="string">"foo2"</span> ]
-
-<span class="comment"># Override first, then add parents</span>
-<span class="type">Child</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x)
-<span class="type">Child</span> <span class="operator">>></span> foo [ ^ <span class="string">"child"</span> ]
-<span class="type">Child</span> addSuperclass: <span class="type">Parent1</span>
-<span class="type">Child</span> addSuperclass: <span class="type">Parent2</span></code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Mixins</h3>
-                    <p>Mixin is a state-free class designed for behavior composition. Mixins derive from Root (sibling to Object) and avoid the diamond problem since they carry no slots (instance variables):</p>
-
-                    <h4>Built-in Mixins</h4>
-                    <table class="comparison-table" style="margin-top: 1rem;">
-                        <thead>
-                            <tr>
-                                <th>Mixin</th>
-                                <th>Requires</th>
-                                <th>Provides</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><code>Comparable</code></td>
-                                <td><code>compareTo:</code></td>
-                                <td><code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>between:and:</code>, <code>min:</code>, <code>max:</code></td>
-                            </tr>
-                            <tr>
-                                <td><code>Iterable</code></td>
-                                <td><code>do:</code></td>
-                                <td><code>collect:</code>, <code>select:</code>, <code>reject:</code>, <code>detect:</code>, <code>inject:into:</code></td>
-                            </tr>
-                            <tr>
-                                <td><code>Printable</code></td>
-                                <td><code>printOn:</code></td>
-                                <td><code>printString</code>, <code>print</code>, <code>printCr</code></td>
-                            </tr>
-                            <tr>
-                                <td><code>Synchronizable</code></td>
-                                <td>—</td>
-                                <td><code>critical:</code>, <code>acquire</code>, <code>release</code></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Mixins</div>
-                        <pre><code><span class="comment"># Create a mixin</span>
-<span class="type">Comparable</span> := <span class="type">Mixin</span> derive.
-<span class="type">Comparable</span> <span class="operator">>></span> &lt; other [ ^ (self compareTo: other) &lt; 0 ]
-<span class="type">Comparable</span> <span class="operator">>></span> &gt; other [ ^ (self compareTo: other) &gt; 0 ]
-<span class="type">Comparable</span> <span class="operator">>></span> between: min and: max [
-    ^ (self &gt;= min) and: [ self &lt;= max ]
-]
-
-<span class="comment"># Add mixin to any class</span>
-<span class="type">Point</span> := <span class="type">Object</span> derive: <span class="keyword">#</span>(x y)
-<span class="type">Point</span> addSuperclass: <span class="type">Comparable</span>
-<span class="type">Point</span> <span class="operator">>></span> compareTo: other [
-    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
-]
-<span class="comment"># Now Point supports &lt;, &gt;, between:and:, etc.</span></code></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Advanced Features -->
-    <section class="content-section">
-        <div class="container">
-            <h2 class="section-title">Advanced Features</h2>
-
-            <div class="feature-detail">
-                <div class="feature-text">
-                    <h3>Smalltalk-Style Exception Handling</h3>
-                    <p>Harding implements <strong>Smalltalk-style resumable exceptions</strong> with full signal point preservation. Unlike traditional exception handling that unwinds the stack, Harding's exceptions can be resumed, retried, or delegated.</p>
-
-                    <h4>Exception Actions</h4>
-                    <table class="comparison-table" style="margin-top: 1rem;">
-                        <thead>
-                            <tr>
-                                <th>Message</th>
-                                <th>Effect</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><code>ex resume</code></td>
-                                <td>Restore signal point, <code>signal</code> returns nil</td>
-                            </tr>
-                            <tr>
-                                <td><code>ex resume: value</code></td>
-                                <td>Restore signal point, <code>signal</code> returns the given value</td>
-                            </tr>
-                            <tr>
-                                <td><code>ex retry</code></td>
-                                <td>Re-execute the protected block from the beginning</td>
-                            </tr>
-                            <tr>
-                                <td><code>ex pass</code></td>
-                                <td>Delegate to the next outer matching handler</td>
-                            </tr>
-                            <tr>
-                                <td><code>ex return: value</code></td>
-                                <td>Return value from the <code>on:do:</code> expression</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Exception Handling</div>
-                        <pre><code><span class="comment"># Basic exception handling</span>
-result := [
-    riskyOperation value
-] on: Error do: [:ex |
-    Transcript showCr: "Caught: " + ex message.
-    ex resume: 42  <span class="comment"># Resume with a value</span>
-]
-
-<span class="comment"># Resume execution</span>
-result := [
-    10 // 0
-] on: DivisionByZero do: [:ex |
-    ex resume: 0
-]
-
-<span class="comment"># Retry the operation</span>
-[
-    attemptOperation
-] on: RetryableError do: [:ex |
-    fixTheIssue.
-    ex retry
-]
-
-<span class="comment"># Arithmetic exceptions</span>
-result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
-    ex resume: 0  <span class="comment"># Return 0 instead</span>
-]</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Arithmetic Exceptions</h3>
-                    <p>Division by zero signals a <code>DivisionByZero</code> exception that can be caught and resumed:</p>
-                    <ul>
-                        <li><code>//</code> (integer division) - Signals on zero divisor</li>
-                        <li><code>/</code> (float division) - Signals on zero divisor</li>
-                        <li><code>%</code> (modulo) - Signals on zero divisor</li>
-                    </ul>
-                    <p>Handlers can resume with a default value to continue execution.</p>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">DivisionByZero</div>
-                        <pre><code><span class="comment"># Integer division by zero</span>
-result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
-    ex resume: 0
-]
-<span class="comment"># result is 0</span>
-
-<span class="comment"># Float division by zero</span>
-result := [ 10.0 / 0.0 ] on: DivisionByZero do: [:ex |
-    "Cannot divide!" println.
-    ex resume: 42
-]
-<span class="comment"># result is 42</span></code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail reverse" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Primitives</h3>
-                    <p>Direct access to VM-level operations and Nim interop:</p>
-                    <ul>
-                        <li><code>primitiveClone</code> - Shallow copy</li>
-                        <li><code>primitiveAt:</code> - Access element</li>
-                        <li><code>primitiveAt:put:</code> - Set element</li>
-                        <li><code>primitiveIdentity:</code> - Object identity</li>
-                        <li><code>primitiveCCall:with:</code> - Call C libraries</li>
-                    </ul>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Primitive Syntax</div>
-                        <pre><code><span class="comment"># Basic primitive syntax</span>
-<span class="type">Array</span><span class="operator">>></span>at: index <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
-
-<span class="comment"># With validation wrapper</span>
-<span class="type">Array</span><span class="operator">>></span>at: index [
-    (index <span class="operator">&lt;</span> 1 or: [index <span class="operator">&gt;</span> self size]) ifTrue: [
-        self error: <span class="string">"Index out of bounds"</span>
-    ].
-    <span class="keyword">^</span> <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
-]</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail reverse" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Super Sends</h3>
-                    <p>Both unqualified and qualified super sends for method overriding:</p>
-                    <ul>
-                        <li><code>super methodName</code> - Unqualified super</li>
-                        <li><code>super&lt;ParentClass&gt; methodName</code> - Qualified super</li>
-                    </ul>
-                    <p>Qualified super is essential when using multiple inheritance to specify which parent's implementation to call.</p>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Super Sends</div>
-                        <pre><code><span class="comment"># Unqualified super</span>
-<span class="type">ColoredRectangle</span><span class="operator">>></span>area [
-    baseArea := super area.
-    <span class="keyword">^</span> baseArea + colorAdjustment
-]
-
-<span class="comment"># Qualified super (for multiple inheritance)</span>
-<span class="type">C</span><span class="operator">>></span>foo [
-    <span class="keyword">^</span> super<span class="operator">&lt;</span>A<span class="operator">&gt;</span> foo, <span class="string">" from C"</span>
-]
-
-<span class="type">C</span><span class="operator">>></span>bar [
-    <span class="keyword">^</span> super<span class="operator">&lt;</span>B<span class="operator">&gt;</span> bar, <span class="string">" from C"</span>
-]</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Class-Side Methods</h3>
-                    <p>Define methods on the class itself using <code>class>></code> syntax:</p>
-                    <ul>
-                        <li>Analogous to static methods in other languages</li>
-                        <li>Classes are first-class objects</li>
-                        <li>Alternative: use <code>selector:put:</code> on the class</li>
-                    </ul>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Class-Side Methods</div>
-                        <pre><code><span class="comment"># Instance method</span>
-<span class="type">Person</span><span class="operator">>></span>greet [
-    <span class="keyword">^</span> <span class="string">"Hello, I am "</span> + name
-]
-
-<span class="comment"># Class-side method</span>
-<span class="type">Person</span> class<span class="operator">>></span>newNamed: n aged: a [
-    | p |
-    p := self new.
-    p name: n.
-    p age: a.
-    <span class="keyword">^</span> p
-]
-
-<span class="comment"># Usage</span>
-alice := <span class="type">Person</span> newNamed: <span class="string">"Alice"</span> aged: <span class="number">30</span></code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-detail reverse" style="margin-top: 3rem;">
-                <div class="feature-text">
-                    <h3>Dynamic Dispatch & Introspection</h3>
-                    <p>Send messages and inspect objects at runtime:</p>
-                    <ul>
-                        <li><code>perform:</code> - Dynamic message send</li>
-                        <li><code>perform:with:</code> - With one argument</li>
-                        <li><code>perform:with:with:</code> - With two arguments</li>
-                        <li><code>superclassNames</code> - Get inheritance chain</li>
-                        <li><code>class</code>, <code>slotNames</code> - Object inspection</li>
-                    </ul>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Reflection</div>
-                        <pre><code><span class="comment"># Dynamic dispatch</span>
-obj perform: #description
-obj perform: #at: with: <span class="number">5</span>
-obj perform: #at:put: with: <span class="number">5</span> with: <span class="string">'value'</span>
-
-<span class="comment"># Introspection</span>
-<span class="type">Point</span> superclassNames    <span class="comment"># #(Object)</span>
-obj class               <span class="comment"># Get object's class</span>
-obj slotNames           <span class="comment"># List instance variables</span>
-obj respondsTo: #do:    <span class="comment"># Check method existence</span></code></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Runtime Features -->
-    <section class="content-section alt">
-        <div class="container">
-            <h2 class="section-title">Runtime Features</h2>
-
-            <div class="feature-detail">
-                <div class="feature-text">
-                    <h3>System and File I/O</h3>
-                    <p>Harding includes practical process/file utilities in the stdlib:</p>
-                    <ul>
-                        <li><code>System arguments</code> for CLI/runtime arguments</li>
-                        <li><code>System cwd</code>, <code>System stdin</code>, <code>System stdout</code>, <code>System stderr</code></li>
-                        <li><code>File</code> class convenience messages (<code>readAll:</code>, <code>write:to:</code>, <code>append:to:</code>, <code>exists:</code>)</li>
-                        <li><code>FileStream</code> for stream-style open/read/write</li>
-                    </ul>
-                </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">File and System Helpers</div>
-                        <pre><code><span class="comment"># File helpers</span>
-content := <span class="type">File</span> readAll: <span class="string">"README.md"</span>
-<span class="type">File</span> write: content to: <span class="string">"README.copy.md"</span>
-
-<span class="comment"># Process info and stdio</span>
-<span class="type">System</span> stdout writeline: (<span class="string">"args: "</span> , (<span class="type">System</span> arguments size) asString)</code></pre>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-cards runtime-feature-cards">
-                <div class="feature-card-large">
-                    <div class="feature-icon-large">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 6v6l4 2"/>
-                        </svg>
-                    </div>
-                    <h3>Green Threads</h3>
-                    <p>Cooperative multitasking with first-class Process objects:</p>
-                    <pre><code>worker := Processor fork: [
-    1 to: 10 do: [:i |
-        i println
-        Processor yield
-    ]
-]
-
-worker suspend
-worker resume
-worker terminate</code></pre>
-                    <p><strong>Process States:</strong> ready, running, blocked, suspended, terminated</p>
-                    <p><strong>Scheduler:</strong> <code>Processor yield</code>, <code>Scheduler listProcesses</code>, <code>process priority:</code></p>
-                </div>
-
-                <div class="feature-card-large">
-                    <div class="feature-icon-large">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="4" y="4" width="16" height="16" rx="2"/>
-                            <path d="M8 12h8M8 8h8M8 16h5"/>
-                        </svg>
-                    </div>
-                    <h3>Synchronization Primitives</h3>
-                    <p>Coordinate between green processes using built-in primitives:</p>
-                    <pre><code># Monitor - mutual exclusion
-monitor := Monitor new
-monitor critical: [
-    sharedResource := sharedResource + 1
-]
-
-# SharedQueue - producer/consumer
-queue := SharedQueue new
-queue nextPut: "item"     # Producer
-item := queue next        # Consumer (blocks if empty)
-
-# Semaphore - counting/binary locks
-sem := Semaphore forMutualExclusion
-sem wait
-sem signal</code></pre>
-                </div>
-
-                <div class="feature-card-large">
-                    <div class="feature-icon-large">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="M2 17l10 5 10-5"/>
-                            <path d="M2 12l10 5 10-5"/>
-                        </svg>
-                    </div>
                     <h3>Stackless VM</h3>
-                    <p>Each Process runs in its own stackless VM, enabling lightweight processes and a path to true parallelism.</p>
-                </div>
-
-                <div class="feature-card-large">
-                    <div class="feature-icon-large">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="4" y="4" width="16" height="16" rx="2"/>
-                            <path d="M8 9h8M8 12h8M8 15h5"/>
-                        </svg>
-                    </div>
-                    <h3>Live REPL</h3>
-                    <p>Interactive development with immediate feedback:</p>
-                    <pre><code>$ harding
-Harding REPL (:help for commands, :quit to exit)
-harding> 3 + 4
-7
-
-harding> "Hello, World!" println
-Hello, World!
-
-harding> numbers := #(1 2 3 4 5)
-#(1 2 3 4 5)
-
-harding> numbers collect: [:n | n * n]
-#(1 4 9 16 25)</code></pre>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Collections -->
-    <section class="content-section alt">
-        <div class="container">
-            <h2 class="section-title">Collections</h2>
-
-            <div class="feature-detail">
-                <div class="feature-text">
-                    <h3>Rich Collection Library</h3>
-                    <p>Arrays, Tables, and all the classic Smalltalk collection methods:</p>
+                    <p>Harding uses an explicit work queue instead of depending on the native call stack.</p>
                     <ul>
-                        <li><strong>Array</strong> - Ordered collection <code>#(1 2 3)</code></li>
-                        <li><strong>Table</strong> - Dictionary <code>#{"key" -> "value"}</code></li>
-                        <li><strong>Iteration</strong> - <code>do:</code>, <code>collect:</code>, <code>select:</code></li>
-                        <li><strong>Reduction</strong> - <code>inject:into:</code>, <code>detect:</code></li>
+                        <li>green threads</li>
+                        <li>resumable exceptions</li>
+                        <li>explicit scheduling</li>
                     </ul>
                 </div>
-                <div class="feature-code">
-                    <div class="code-block">
-                        <div class="code-header">Collections</div>
-                        <pre><code><span class="comment"># Array literal</span>
-numbers := <span class="keyword">#</span>(<span class="number">1</span> <span class="number">2</span> <span class="number">3</span> <span class="number">4</span> <span class="number">5</span>)
-
-<span class="comment"># Table literal</span>
-scores := <span class="keyword">#{</span><span class="string">"Alice"</span> <span class="operator">-></span> <span class="number">95</span>, <span class="string">"Bob"</span> <span class="operator">-></span> <span class="number">87</span><span class="keyword">}</span>
-
-<span class="comment"># Collection methods</span>
-numbers do: [:n | n println]
-squares := numbers collect: [:n | n * n]
-evens := numbers select: [:n | (n % 2) = 0]
-sum := numbers inject: 0 into: [:acc :n | acc + n]</code></pre>
-                    </div>
+                <div class="feature-text">
+                    <h3>Processes And Synchronization</h3>
+                    <p>Use <code>Process</code>, <code>Processor</code>, <code>Monitor</code>, <code>Semaphore</code>, and <code>SharedQueue</code> for cooperative concurrency.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Interoperability -->
     <section class="content-section">
         <div class="container">
-            <h2 class="section-title">Interoperability</h2>
+            <h2 class="section-title">Web And Reactive Rendering</h2>
 
             <div class="feature-detail">
                 <div class="feature-text">
-                    <h3>Nim Integration</h3>
-                    <p>Call Nim code directly via primitives. Access the entire Nim ecosystem including libraries, packages, and system APIs.</p>
-                    <h4>Native FFI Fields</h4>
-                    <p>Objects can hold references to Nim values:</p>
+                    <h3>MummyX Web Support</h3>
+                    <p>Harding can build reactive server-rendered web apps using MummyX, a fast scalable native multithreaded HTTP server, the Html DSL, and HTMX-style fragment responses.</p>
                     <ul>
-                        <li><code>isNimProxy</code> - True if object wraps a Nim value</li>
-                        <li><code>hardingType</code> - Get the Harding type name</li>
-                        <li><code>nimValue</code> - Access underlying Nim value</li>
+                        <li>MummyX request handling on green workers</li>
+                        <li>Html DSL rendering</li>
+                        <li>HTMX fragment and out-of-band updates</li>
                     </ul>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Nim Interop</div>
-                        <pre><code><span class="comment"># Access Nim functions via primitives</span>
-<span class="type">Array</span><span class="operator">>></span>at: index <span class="operator">&lt;</span>primitive primitiveAt: index<span class="operator">&gt;</span>
-
-<span class="comment"># Objects can wrap Nim values</span>
-obj isNimProxy      <span class="comment"># true if wraps Nim value</span>
-obj hardingType     <span class="comment"># Get Harding type name</span>
-obj nimValue        <span class="comment"># Access Nim value</span>
-
-<span class="comment"># C library access via Nim FFI</span>
-<span class="operator"><</span>primitive primitiveCCall: function with: args<span class="operator">></span></code></pre>
+                        <div class="code-header">Router + HTMX Response</div>
+<pre><code>Router post: "/todos/@id/toggle" do: [:req |
+    repository toggle: (req pathParam: "id").
+    req respondFragment: panel oob: page statsOobHtml
+]</code></pre>
                     </div>
                 </div>
             </div>
 
             <div class="feature-detail" style="margin-top: 3rem;">
                 <div class="feature-text">
-                    <h3>Nim-Harding Package Model</h3>
-                    <p>Harding supports packaging Nim primitives and Harding source files together:</p>
-                    <ul>
-                        <li>Package .hrd files are embedded and loaded through the same load: message</li>
-                        <li>Nim primitive registration is bundled with package install</li>
-                        <li>One package version controls both Nim implementation and Harding API surface</li>
-                    </ul>
-                    <p>For a full walkthrough, see the <a href="https://github.com/gokr/harding/blob/main/docs/NIM_PACKAGE_TUTORIAL.md">Nim Package Tutorial</a>.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Compilation -->
-    <section class="content-section alt">
-        <div class="container">
-            <h2 class="section-title">Compilation</h2>
-
-            <div class="feature-detail">
-                <div class="feature-text">
-                    <h3>Granite Compiler</h3>
-                    <p>Compile Harding code to native binaries via Nim → C:</p>
-                    <ul>
-                        <li><strong>Standalone binaries</strong> - No runtime dependencies</li>
-                        <li><strong>Native performance</strong> - True compiled speed</li>
-                        <li><strong>Full Nim ecosystem</strong> - Access all Nim libraries</li>
-                        <li><strong>Cross-platform</strong> - Leverage Nim's cross-compilation</li>
-                    </ul>
-                    <h4>Usage</h4>
-                    <pre style="background: #1a1f2e; padding: 1rem; border-radius: 8px; margin-top: 1rem;"><code>granite compile program.hrd -o program
-granite build program.hrd --release
-granite run program.hrd</code></pre>
+                    <h3>Html DSL + HTMX</h3>
+                    <p>The HTML side stays just as small and keeps HTMX concepts visible in the markup.</p>
                 </div>
                 <div class="feature-code">
                     <div class="code-block">
-                        <div class="code-header">Compilation Pipeline</div>
-                        <pre><code>Harding source (.hrd)
-       ↓
-   Parser (AST)
-       ↓
-   Granite Compiler
-       ↓
-   Nim source (.nim)
-       ↓
-   C Compiler
-       ↓
-   Machine code
-       ↓
-   Native binary
+                        <div class="code-header">Html DSL Button</div>
+<pre><code>Html render: [:h |
+    h section: [:panel |
+        panel id: "todo-panel".
+        panel button: [:button |
+            button class: "btn";
+                post: "/todos/1/toggle";
+                target: "#todo-panel";
+                swap: "outerHTML".
+            button text: "Mark done"
+        ]
+    ]
+]</code></pre>
+                    </div>
+                </div>
+            </div>
 
-<span class="comment"># Compile to native binary</span>
-$ granite compile app.hrd -o myapp
-
-<span class="comment"># Result: standalone executable</span>
-$ ./myapp</code></pre>
+            <div class="feature-detail reverse">
+                <div class="feature-text">
+                    <h3>Reactive Cache Invalidation</h3>
+                    <p>The active web model uses tracked reads and writes rather than older Html template-hole machinery.</p>
+                    <ul>
+                        <li><code>TrackedValue</code></li>
+                        <li><code>TrackedList</code></li>
+                        <li><code>RenderCache</code></li>
+                        <li><code>RenderEntry</code></li>
+                    </ul>
+                </div>
+                <div class="feature-code">
+                    <div class="code-block">
+                        <div class="code-header">Reactive Rendering Model</div>
+<pre><code>Component render
+  - reads tracked state
+  - registers dependencies
+  - reuses cached HTML if clean
+  - re-renders when tracked writes mark entries dirty</code></pre>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Debugging Tools -->
-    <section class="content-section">
-        <div class="container">
-            <h2 class="section-title">Debugging Tools</h2>
-
-            <div class="feature-cards">
-                <div class="feature-card-large">
-                    <h3>Log Levels</h3>
-                    <p>Control verbosity of execution output:</p>
-                    <pre><code>harding --loglevel DEBUG script.hrd</code></pre>
-                    <p><strong>Levels:</strong> DEBUG, INFO, WARN, ERROR, FATAL</p>
-                    <p>DEBUG shows AST evaluation, message sends, method lookups, and activation stack operations.</p>
-                </div>
-
-                <div class="feature-card-large">
-                    <h3>AST Output</h3>
-                    <p>View the parsed Abstract Syntax Tree:</p>
-                    <pre><code>harding --ast script.hrd</code></pre>
-                    <p>Shows the hierarchical structure of parsed expressions before execution.</p>
-                </div>
-
-                <div class="feature-card-large">
-                    <h3>Process Inspection</h3>
-                    <p>Inspect running processes:</p>
-                    <pre><code>Scheduler listProcesses
-process state      # ready, running, etc.
-process pid        # Unique process ID
-process name       # Process name
-process priority   # Scheduling priority</code></pre>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Current Status -->
     <section class="content-section alt">
         <div class="container">
-            <h2 class="section-title">Current Status: v0.7.0</h2>
-            <div class="feature-cards">
-                <div class="feature-card-large">
-                    <h3>Implemented</h3>
-                    <ul>
-                        <li>Functional interpreter with green threads and synchronization primitives</li>
-                        <li>MIC/PIC method caching for performance</li>
-                        <li>Smalltalk-style resumable exceptions with signal point preservation</li>
-                        <li>GTK IDE (Bona) with Launcher, Workspace, and Transcript</li>
-                        <li>VSCode extension with full LSP and DAP support</li>
-                        <li>Granite compiler for native binary compilation</li>
-                        <li>BitBarrel integration for persistent storage (optional)</li>
-                        <li>Automatic accessor generation (<code>deriveWithAccessors:</code>)</li>
-                        <li>Collections: Array, Table, Set, Interval, SortedCollection</li>
-                        <li>System/File I/O stdlib (<code>System</code>, <code>File</code>, <code>FileStream</code>, stdio globals)</li>
-                        <li>CLI/runtime arg forwarding via <code>System arguments</code> (including <code>harding ... -- args</code>)</li>
-                        <li>Nim-Harding package model for bundled primitives + embedded .hrd sources</li>
-                    </ul>
-                </div>
-                <div class="feature-card-large">
-                    <h3>In Progress</h3>
-                    <ul>
-                        <li>Actor-based shared-nothing concurrency</li>
-                        <li>Enhanced standard library</li>
-                        <li>Bona System Browser and Inspector</li>
-                        <li>Bona Debugger</li>
-                    </ul>
-                </div>
+            <h2 class="section-title">JSON, Packages, And Tooling</h2>
+
+            <div class="feature-grid">
+                <div class="feature-card"><h3>JSON Literals</h3><p>Use <code>json{...}</code> for direct JSON creation and object serialization configuration for API work.</p></div>
+                <div class="feature-card"><h3>External Libraries</h3><p>Install packages with <code>harding lib</code> and ship native Nim code together with matching Harding <code>.hrd</code> sources.</p></div>
+                <div class="feature-card"><h3>Bona IDE</h3><p>Launcher, Workspace, Transcript, Browser/Inspector work, and an Application Builder workflow.</p></div>
+                <div class="feature-card"><h3>Granite</h3><p>Compile Harding code to native binaries through Nim and C toolchains.</p></div>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-grid">
@@ -856,6 +238,7 @@ process priority   # Scheduling priority</code></pre>
                             <li><a href="https://github.com/gokr/harding">GitHub</a></li>
                             <li><a href="docs.html">Documentation</a></li>
                             <li><a href="features.html">Features</a></li>
+                            <li><a href="libraries.html">Libraries</a></li>
                             <li><a href="why.html">Why Harding?</a></li>
                         </ul>
                     </div>
