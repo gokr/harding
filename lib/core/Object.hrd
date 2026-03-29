@@ -305,6 +305,30 @@ Object>>notNil [
   ^ self isNil not
 ]
 
+Object>>ifNil: nilBlock [
+  # Evaluate nilBlock if receiver is nil, otherwise return receiver
+  self isNil ifTrue: [ ^ nilBlock value ].
+  ^ self
+]
+
+Object>>ifNotNil: notNilBlock [
+  # Evaluate notNilBlock with self if receiver is not nil
+  self isNil ifFalse: [ ^ notNilBlock value: self ].
+  ^ nil
+]
+
+Object>>ifNil: nilBlock ifNotNil: notNilBlock [
+  # Evaluate nilBlock if receiver is nil, otherwise evaluate notNilBlock with self
+  self isNil ifTrue: [ ^ nilBlock value ].
+  ^ notNilBlock value: self
+]
+
+Object>>ifNotNil: notNilBlock ifNil: nilBlock [
+  # Evaluate notNilBlock with self if receiver is not nil, otherwise evaluate nilBlock
+  self isNil ifTrue: [ ^ nilBlock value ].
+  ^ notNilBlock value: self
+]
+
 Object>>isKindOf: aClass <primitive primitiveIsKindOf: aClass>
 
 Object>>asString [
