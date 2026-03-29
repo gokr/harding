@@ -4,7 +4,7 @@
 ## Run with: nim c -r src/harding/external/generator.nim
 ## ============================================================================
 
-import std/[strutils, strformat]
+import std/[os, strutils, strformat]
 import discovery
 
 const
@@ -32,11 +32,12 @@ proc generateImports(libs: seq[LibraryInfo]): string =
 
   for lib in libs:
     let flag = getLibraryCompileFlag(lib.name).replace("-d:", "")
-    # Import path: <libName>/src/<libName>/<libName> (e.g., mysql/src/mysql/mysql)
-    # The library package is in external/<libName>/
-    # and the main module is at src/<libName>/<libName>.nim
-    # With -p:external, this resolves correctly
-    let importPath = lib.name & "/src/" & lib.name & "/" & lib.name
+    let hardingModule = getExternalDir() / lib.name / "src" / lib.name / ("harding" & lib.name & ".nim")
+    let mainModule = if fileExists(hardingModule):
+                       "harding" & lib.name
+                     else:
+                       lib.name
+    let importPath = lib.name & "/src/" & lib.name & "/" & mainModule
 
     result.add(&"\nwhen defined({flag}):\n")
     result.add(&"  import {importPath}\n")
