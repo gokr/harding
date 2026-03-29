@@ -10,6 +10,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.
 - External NimCP library packaging for installable MCP server support, including a Harding `NimCPServer` wrapper aimed at Bona-hosted MCP workflows.
+- Corral database design documents covering the library vision (`CORRAL.md`) and a first technical RFC for SQL templates, table gateways, mapping, and schema support.
+- Initial Corral external library package with registry entry, table/connection wrappers, parameterized `query:with:` and `execute:with:` support on SQLite and MySQL connections, first-pass row mapping and table CRUD helpers, and `sql{...}` template support with `$value` / `$(expression)` interpolation.
 - Optional MummyX HTTP server integration documentation, including build tasks for both `harding` and `bona`.
 - A Harding htmx-style web component layer, DaisyUI-backed Todo app example, and Bona workflow notes for live-editable MummyX web experiments.
 - Block-aware cached Html templates and buffer-backed component rendering for reusable static markup with dynamic slots.
@@ -49,6 +51,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `lib/web/Html.hrd` now renders directly for the active todo path instead of routing through the older template-cache segment layer.
 - Web-related bootstraps now use explicit initialization guards instead of `isEmpty`, so setting `__sourceDir` no longer prevents library contents from loading.
 - The todo app now builds HTMX panel responses through `HttpRequest` fragment helpers instead of manually stitching response bodies.
+- The active website content was refreshed to reflect current syntax, web/runtime capabilities, package workflows, and the newer tooling story.
 
 ### Fixed
 - Hardened browser dialogs and class reflection in Bona IDE.
