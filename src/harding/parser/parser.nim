@@ -158,6 +158,7 @@ proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
 proc parseInlineJsonObject(parser: var Parser): Node
 proc parseJsonArray(parser: var Parser): Node
+proc parseSqlTemplateLiteral(parser: var Parser): Node
 
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
 const PseudoVariables* = ["self", "nil", "true", "false", "super"]
@@ -1090,6 +1091,133 @@ proc parseJsonArray(parser: var Parser): Node =
   # Return as an Array node
   return ArrayNode(elements: elements)
 
+proc sqlTokenNeedsLeadingSpace(prevTok: Token, tok: Token): bool =
+  let wordLike = {tkIdent, tkKeyword, tkInt, tkFloat, tkString, tkSymbol}
+  let operatorLike = {tkEq, tkLt, tkGt, tkLtEq, tkGtEq, tkNotEq, tkPlus,
+                      tkMinus, tkStar, tkSlash, tkIntDiv, tkMod, tkPercent,
+                      tkAmpersand, tkPipe}
+
+  if prevTok.kind == tkComma:
+    return true
+
+  if prevTok.kind in operatorLike and tok.kind != tkRParen:
+    return true
+
+  if tok.kind in operatorLike and prevTok.kind != tkLParen:
+    return true
+
+  if (prevTok.kind in wordLike or prevTok.kind == tkRParen) and
+     (tok.kind in wordLike or tok.kind == tkLParen):
+    return true
+
+  false
+
+proc appendSqlTokenText(content: var string; tok: Token; prevTok: Token; hasPrev: bool) =
+  if tok.kind == tkSeparator:
+    if content.len == 0 or content[^1] != ' ':
+      content.add(' ')
+    return
+
+  if hasPrev and sqlTokenNeedsLeadingSpace(prevTok, tok) and
+     content.len > 0 and content[^1] != ' ':
+    content.add(' ')
+
+  case tok.kind
+  of tkString:
+    content.add('"')
+    content.add(tok.value)
+    content.add('"')
+  else:
+    content.add(tok.value)
+
+proc makeStringLiteralNode(text: string): Node =
+  LiteralNode(value: NodeValue(kind: vkString, strVal: text))
+
+proc parseSqlTemplateLiteral(parser: var Parser): Node =
+  ## Parse sql{} literal and compile it into Sql buildTemplate:with:
+  var segments: seq[Node] = @[]
+  var values: seq[Node] = @[]
+  var currentText = ""
+  var braceDepth = 1
+  var prevTok: Token
+  var hasPrev = false
+
+  while true:
+    if parser.pos >= parser.tokens.len:
+      parser.parseError("Unclosed sql{} literal - expected '}'")
+      return nil
+
+    let tok = parser.peek()
+
+    if tok.kind == tkEOF:
+      parser.parseError("Unclosed sql{} literal - expected '}'")
+      return nil
+
+    if braceDepth == 1 and tok.kind == tkSpecial and tok.value == "$":
+      discard parser.next()
+      segments.add(makeStringLiteralNode(currentText))
+      currentText = ""
+      hasPrev = false
+
+      if parser.peek().kind == tkLParen:
+        discard parser.next()
+        while parser.peek().kind == tkSeparator:
+          discard parser.next()
+        let expr = parser.parseExpression(parseMessages = true)
+        while parser.peek().kind == tkSeparator:
+          discard parser.next()
+        if not parser.expect(tkRParen):
+          parser.parseError("Expected ')' after sql interpolation")
+          return nil
+        values.add(expr)
+      elif parser.peek().kind == tkIdent:
+        let identTok = parser.next()
+        values.add(IdentNode(name: identTok.value, localIndex: -1))
+      else:
+        parser.parseError("Expected identifier or parenthesized expression after '$' in sql literal")
+        return nil
+      continue
+
+    if tok.kind == tkSpecial and tok.value == "{":
+      inc braceDepth
+      appendSqlTokenText(currentText, tok, prevTok, hasPrev)
+      discard parser.next()
+      prevTok = tok
+      hasPrev = true
+      continue
+
+    if tok.kind == tkSpecial and tok.value == "}":
+      dec braceDepth
+      discard parser.next()
+      if braceDepth == 0:
+        break
+      appendSqlTokenText(currentText, tok, prevTok, hasPrev)
+      prevTok = tok
+      hasPrev = true
+      continue
+
+    appendSqlTokenText(currentText, tok, prevTok, hasPrev)
+    discard parser.next()
+    prevTok = tok
+    hasPrev = true
+
+  segments.add(makeStringLiteralNode(currentText))
+
+  let segmentArray = ArrayNode(elements: segments, isConstant: false)
+  var valueEntries: seq[tuple[key: Node, value: Node]] = @[]
+  for idx, valueNode in values:
+    valueEntries.add((
+      key: LiteralNode(value: NodeValue(kind: vkInt, intVal: idx)).Node,
+      value: valueNode
+    ))
+  let valueTable = TableNode(entries: valueEntries, isConstant: false)
+
+  return MessageNode(
+    receiver: IdentNode(name: "Sql", localIndex: -1),
+    selector: "buildTemplate:with:",
+    arguments: @[segmentArray.Node, valueTable.Node]
+  )
+
 
 
 # Parse JSON object literal: json{key: value, ...}
@@ -1212,6 +1340,9 @@ proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
   # For Json prefix, parse key-value pairs and build dynamic JSON construction
   if normalizedPrefix == "Json":
     return parser.parseJsonObjectLiteral()
+
+  if normalizedPrefix == "Sql":
+    return parser.parseSqlTemplateLiteral()
   
   # For other prefixes, use original behavior (raw content extraction)
   var content = ""

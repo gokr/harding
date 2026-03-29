@@ -489,6 +489,9 @@ proc nextToken*(lexer: var Lexer): Token =
   of '&':
     discard lexer.next()
     return Token(kind: tkAmpersand, value: "&", line: startLine, col: startCol)
+  of '$':
+    discard lexer.next()
+    return Token(kind: tkSpecial, value: "$", line: startLine, col: startCol)
   of ':':
     # Assignment operator :=, named access ::, or colon for object literals
     discard lexer.next()
