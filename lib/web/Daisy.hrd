@@ -1,49 +1,79 @@
-Daisy := Object derive: #()
+Daisy := Object derivePublic: #(useCDN, theme).
 
-Daisy class>>stylesheetPath [
-  ^ "lib/web/daisyui.css"
+Daisy class>>withCDN [
+  | instance |
+  instance := self basicNew.
+  instance::useCDN := true.
+  instance::theme := "business".
+  ^ instance
 ]
 
-Daisy class>>stylesheet [
-  ^ File readAll: self stylesheetPath
+Daisy class>>local [
+  | instance |
+  instance := self basicNew.
+  instance::useCDN := false.
+  instance::theme := "business".
+  ^ instance
 ]
 
-Daisy class>>shellClass [
-  ^ "daisy-shell"
+Daisy class>>withTheme: aTheme [
+  | instance |
+  instance := self basicNew.
+  instance::useCDN := true.
+  instance::theme := aTheme.
+  ^ instance
 ]
 
-Daisy class>>themeName [
-  ^ "business"
+Daisy>>cdnUrl [
+  ^ "https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css"
 ]
 
-Daisy class>>heroClass [
-  ^ "hero bg-base-200 rounded-box shadow-xl"
+Daisy>>tailwindUrl [
+  ^ "https://cdn.tailwindcss.com"
 ]
 
-Daisy class>>panelClass [
-  ^ "card bg-base-100 shadow-xl"
+Daisy>>stylesheetUrl [
+  self::useCDN ifTrue: [ ^ self cdnUrl ].
+  ^ "/assets/daisyui.css"
 ]
 
-Daisy class>>stackClass [
-  ^ "card-body"
+Daisy>>headContent [
+  | content |
+  content := "<link href='" & self cdnUrl & "' rel='stylesheet' type='text/css' />".
+  content := content & "<script src='" & self tailwindUrl & "'></script>".
+  ^ content
 ]
 
-Daisy class>>inputClass [
-  ^ "input input-bordered"
+Daisy>>registerRoutesOn: router [
+  self::useCDN ifTrue: [ ^ self ].
+  router get: "/assets/daisyui.css" do: [:req |
+    req respondCss: self stylesheetContent
+  ].
+  ^ self
 ]
 
-Daisy class>>primaryButtonClass [
-  ^ "btn btn-primary"
+Daisy>>stylesheetContent [
+  | cssPath |
+  cssPath := "lib/web/daisyui.css".
+  "TODO: Implement File readAll: properly" println.
+  ^ "/* DaisyUI styles would go here */"
 ]
 
-Daisy class>>ghostButtonClass [
-  ^ "btn btn-ghost"
+Daisy>>shellClass [ ^ "daisy-shell" ]
+
+Daisy>>themeAttribute [
+  ^ "data-theme='" & self::theme & "'"
 ]
 
-Daisy class>>badgeClass [
-  ^ "badge badge-outline"
-]
+Daisy>>heroClass [ ^ "hero bg-base-200 rounded-box shadow-xl" ]
+Daisy>>panelClass [ ^ "card bg-base-100 shadow-xl" ]
+Daisy>>stackClass [ ^ "card-body" ]
+Daisy>>inputClass [ ^ "input input-bordered" ]
+Daisy>>primaryButtonClass [ ^ "btn btn-primary" ]
+Daisy>>ghostButtonClass [ ^ "btn btn-ghost" ]
+Daisy>>badgeClass [ ^ "badge badge-outline" ]
+Daisy>>mutedClass [ ^ "text-base-content" ]
 
-Daisy class>>mutedClass [
-  ^ "text-base-content"
-]
+## Convenience class methods
+Daisy class>>shellClass [ ^ "daisy-shell" ]
+Daisy class>>themeName [ ^ "business" ]
