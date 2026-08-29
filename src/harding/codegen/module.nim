@@ -163,6 +163,46 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
     output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{cls.name}_{slotName}, slotSet_{cls.name}_{slotName})\n"))
   return output
 
+proc collectAstNodes(nodes: var Table[pointer, bool], node: Node) =
+  ## Record the identity of every node reachable from `node` (used to match
+  ## registered blocks against the method body they were collected from)
+  if node == nil:
+    return
+  nodes[cast[pointer](node)] = true
+  case node.kind
+  of nkBlock:
+    for stmt in node.BlockNode.body:
+      collectAstNodes(nodes, stmt)
+  of nkMessage:
+    let msg = node.MessageNode
+    collectAstNodes(nodes, msg.receiver)
+    for arg in msg.arguments:
+      collectAstNodes(nodes, arg)
+  of nkAssign:
+    collectAstNodes(nodes, node.AssignNode.expression)
+  of nkReturn:
+    collectAstNodes(nodes, node.ReturnNode.expression)
+  of nkIf:
+    collectAstNodes(nodes, node.IfNode.condition)
+    collectAstNodes(nodes, node.IfNode.thenBranch)
+    collectAstNodes(nodes, node.IfNode.elseBranch)
+  of nkWhile:
+    collectAstNodes(nodes, node.WhileNode.condition)
+    collectAstNodes(nodes, node.WhileNode.body)
+  of nkArray:
+    for elem in node.ArrayNode.elements:
+      collectAstNodes(nodes, elem)
+  of nkCascade:
+    for msg in node.CascadeNode.messages:
+      collectAstNodes(nodes, msg)
+  of nkLiteral:
+    let litVal = node.LiteralNode.value
+    if litVal.kind == vkBlock and litVal.blockVal != nil:
+      for stmt in litVal.blockVal.body:
+        collectAstNodes(nodes, stmt)
+  else:
+    discard
+
 proc isClassDefinition(node: Node): bool =
   ## Check if a node is a class definition (derive: chain)
   let (className, _, _) = extractDeriveChain(node)
@@ -188,7 +228,7 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
-proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]] =
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int]] =
   ## Extract method definitions from AST nodes
   ## Returns (className, selector, params, body) for each method
   result = @[]
@@ -216,9 +256,11 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
             className = msg.receiver.IdentNode.name
           
           if className.len > 0 and selectorName.len > 0:
-            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body))
+            # Stable id per method proc, used for non-local return targeting
+            let methodId = 1000 + result.len
+            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body, methodId))
 
-proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]],
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil): string =
   ## Generate compiled method procs from extracted method definitions
@@ -304,8 +346,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add("  return self\n")
       
       if needsNLRWrapper:
+        # Only consume non-local returns that target this method; let
+        # returns aimed at outer methods continue unwinding.
         output.add("  except NonLocalReturnException as nlr:\n")
-        output.add("    return nlr.value\n")
+        output.add(fmt("    if nlr.targetId == {md.methodId}:\n"))
+        output.add("      return nlr.value\n")
+        output.add("    raise\n")
     
     output.add("\n\n")
     
@@ -512,6 +558,16 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   for md in methodDefs:
     for stmt in md.body:
       collectBlocks(blockReg, stmt)
+  # Stamp method ownership so ^ inside these blocks targets the right method.
+  # Walk the registry once per method, matching block nodes by identity against
+  # the method body's registered nodes.
+  for md in methodDefs:
+    var bodyNodes = initTable[pointer, bool]()
+    for stmt in md.body:
+      collectAstNodes(bodyNodes, stmt)
+    for info in blockReg.blocks.mitems:
+      if info.ownerMethodId == 0 and cast[pointer](info.blockNode) in bodyNodes:
+        info.ownerMethodId = md.methodId
 
   # Generate for each class
   for cls in analysis.classes.values:
@@ -629,8 +685,12 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     # ^ inside a block always escapes to the home method: raise so the
     # compiled method boundary can catch it (unless the block IS the method
     # body itself, in which case a plain return is correct).
+    # Blocks lexically inside compiled methods must use method-context code
+    # (getSlotValue/setSlotValue on self as NodeValue), not top-level access.
+    blockGenCtx.inMethod = blockInfo.ownerMethodId != 0
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            not blockInfo.homeInMethod, blockInfo.envStructName)
+                            not blockInfo.homeInMethod, blockInfo.envStructName,
+                            blockInfo.ownerMethodId)
     if body.len > 0:
       output.add(body)
     else:

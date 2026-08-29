@@ -331,7 +331,7 @@ suite "Stdlib: Library":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkClass)
 
-  test "most recent import wins on conflict":
+  test "import conflict is rejected with error":
     var freshInterp = newInterpreter()
     initGlobals(freshInterp)
     loadStdlib(freshInterp)
@@ -345,9 +345,11 @@ suite "Stdlib: Library":
       Harding import: Lib2.
       Result := SharedKey
     """)
+    # Since 033fc05, conflicting imports are rejected instead of silently
+    # overriding. The second import fails and SharedKey keeps Lib1's value.
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 2)
+    check(result[0][^1].intVal == 1)
 
   test "Library load: captures definitions into library":
     var freshInterp = newInterpreter()

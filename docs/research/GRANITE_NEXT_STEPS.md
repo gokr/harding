@@ -43,12 +43,28 @@ References:
 - `docs/research/COMPILER-PLAN.md`
 - `docs/ROADMAP.md`
 
-### Main Remaining Gaps
+### Main Remaining Gaps (updated 2026-08-29)
 
-1. Captured blocks in expression position still generate invalid Nim.
-2. Compiled non-local returns use a broad exception catch and do not yet target the correct compiled home method precisely.
-3. Compiler parity tests for blocks are still mostly scaffolding and do not run the generated code.
-4. Remaining runtime selector gaps should be driven by example parity failures, not guessed in advance.
+Status update: NLR targeting (Phase 2), a real executed-parity suite, and
+single-path method codegen (Phase 3 cleanup) are done. `derivePublic:` /
+`derive:read:write:` accessor method generation was restored (regression from
+e6ddaef where only `::` metadata was kept). Remaining:
+
+1. Compiled class methods (`Foo class>>make`) are not dispatched by the
+   compiled runtime; the call chain silently yields nil. Needs a
+   class-method dispatch table and `new` wiring.
+2. Compiled non-local returns through `whileTrue:`/inline loops inside
+   blocks share the target-id mechanism, but loop frames are not yet
+   unwind-safe in every shape (driven by parity failures).
+3. Remaining runtime selector gaps should be driven by example parity
+   failures, not guessed in advance.
+
+Fixed in this pass:
+- `^` inside block arguments compiled to plain returns (values lost).
+- Method-body blocks not registered in the shared block registry
+  (duplicate/undefined `harding_block_N`).
+- Inline `do:`/`collect:`/`select:` codegen lost `inMethod` context,
+  emitting top-level slot access inside compiled methods.
 
 ## Recommended Work Order
 

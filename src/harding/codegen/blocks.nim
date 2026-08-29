@@ -96,6 +96,7 @@ type
     captureTypes*: seq[string]          # Types for captured variables (NodeValue)
     hasNonLocalReturn*: bool            # Does block contain ^ (return)?
     homeInMethod*: bool                 # Whether the block home is a method body
+    ownerMethodId*: int                 # Id of the compiled method this block is lexically inside (0 = top-level)
     paramCount*: int                    # Number of block parameters
     envStructName*: string              # Name of environment struct
 
@@ -368,6 +369,7 @@ proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[
     captureTypes: captures.mapIt("NodeValue"),  # All captures are NodeValue
     hasNonLocalReturn: hasNonLocalReturn,
     homeInMethod: homeInMethod,
+    ownerMethodId: 0,
     paramCount: blockNode.parameters.len,
     envStructName: envName
   )
@@ -575,7 +577,8 @@ proc getBlockBody*(node: Node): seq[Node] =
 const inlineControlSelectors = [
   "ifTrue:", "ifFalse:", "ifTrue:ifFalse:",
   "whileTrue:", "whileFalse:",
-  "timesRepeat:", "to:by:do:"
+  "timesRepeat:", "to:by:do:",
+  "do:", "collect:", "select:"
 ]
 
 proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[string] = @[]) =
@@ -599,18 +602,26 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
 
     if isInlineControl:
       # For inline control flow, skip registration of literal block arguments
-      # and the receiver block (for whileTrue:/whileFalse:)
-      # But still recurse into the block bodies to find nested non-inline blocks
+      # and the receiver block (for whileTrue:/whileFalse:) — but only when
+      # the block will actually be inlined (no returns). Blocks containing ^
+      # cannot be inlined and must be registered so their procedures get
+      # generated and referenced consistently.
       if msg.receiver != nil:
-        if msg.receiver.kind == nkBlock:
-          # Receiver block will be inlined (e.g., condition in whileTrue:)
+        if msg.receiver.kind == nkBlock and hasReturnNode(msg.receiver):
+          discard registerBlock(registry, msg.receiver.BlockNode, knownGlobals)
+          for stmt in msg.receiver.BlockNode.body:
+            collectBlocks(registry, stmt, knownGlobals)
+        elif msg.receiver.kind == nkBlock:
           for stmt in msg.receiver.BlockNode.body:
             collectBlocks(registry, stmt, knownGlobals)
         else:
           collectBlocks(registry, msg.receiver, knownGlobals)
       for arg in msg.arguments:
-        if arg.kind == nkBlock:
-          # Argument block will be inlined (e.g., body in ifTrue:)
+        if arg.kind == nkBlock and hasReturnNode(arg):
+          discard registerBlock(registry, arg.BlockNode, knownGlobals)
+          for stmt in arg.BlockNode.body:
+            collectBlocks(registry, stmt, knownGlobals)
+        elif arg.kind == nkBlock:
           for stmt in arg.BlockNode.body:
             collectBlocks(registry, stmt, knownGlobals)
         else:

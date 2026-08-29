@@ -487,6 +487,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var doCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
+          inMethod: ctx.inMethod,
+          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -513,6 +515,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var collectCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
+          inMethod: ctx.inMethod,
+          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -546,6 +550,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         var selectCtx = GenContext(
           cls: ctx.cls,
           inBlock: ctx.inBlock,
+          inMethod: ctx.inMethod,
+          mixed: ctx.mixed,
           locals: ctx.locals & @[elemName],
           parameters: ctx.parameters,
           globals: ctx.globals,
@@ -762,7 +768,6 @@ proc genExpression*(ctx: GenContext, node: Node): string =
         return fmt("setSlotValue(self, \"{varName}\", {exprCode})")
       let idx = ctx.getSlotIndex(varName)
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
-
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
       return fmt"{varName} = {exprCode}"
@@ -990,8 +995,11 @@ proc genStatement*(ctx: GenContext, node: Node): string =
                    else:
                      "NodeValue(kind: vkBool, boolVal: false)"
 
-    if ctx.inBlock and not ctx.inMethod and
+    if ctx.inBlock and
        (hasReturnNode(ifNode.thenBranch) or hasReturnNode(ifNode.elseBranch)):
+      # The if branch contains a block whose ^ performs a non-local return.
+      # The block cannot be inlined; send it as a real block invocation so
+      # its compiled procedure (which raises NonLocalReturnException) runs.
       var runtimeCode = "if isTruthy(" & condCode & "):\n"
       if ifNode.thenBranch != nil:
         runtimeCode.add("  discard sendMessage(currentRuntime[], " & genExpression(ctx, ifNode.thenBranch) & ", \"value\", @[])\n")
@@ -1202,10 +1210,12 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     return ""
 
 proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = @[],
-                   hasNonLocalReturn: bool = false, envStructName: string = ""): string =
+                   hasNonLocalReturn: bool = false, envStructName: string = "",
+                   targetMethodId: int = 0): string =
   ## Generate code for block body (sequence of statements)
   ## captures: list of captured variable names (from BlockProcInfo)
   ## hasNonLocalReturn: if true, ^ generates NonLocalReturnException
+  ## targetMethodId: id of the home compiled method the ^ unwinds to
   var output = ""
 
   # Create new context for block body with its parameters
@@ -1214,6 +1224,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     cls: ctx.cls,
     inBlock: true,
     inMethod: ctx.inMethod,
+    mixed: ctx.mixed,
     locals: @[],
     parameters: @[],
     globals: ctx.globals,
@@ -1247,7 +1258,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                        genExpression(bodyCtx, ret.expression)
                      else:
                        "NodeValue(kind: vkNil)"
-      output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: 0)\n"))
+      output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: {targetMethodId})\n"))
     elif i == blkNode.body.len - 1 and stmt.kind in {nkIf, nkWhile}:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:

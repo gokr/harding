@@ -157,6 +157,8 @@ proc classJsonFieldOrderImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classJsonResetImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
                         writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class
+proc createGetterMethod*(cls: Class, slotName: string): BlockNode
+proc createSetterMethod*(cls: Class, slotName: string): BlockNode
 
 # Slot accessors are implemented in vm.nim to avoid circular import
 
@@ -1246,13 +1248,24 @@ proc extractParentClasses(arr: NodeValue): seq[Class] =
 proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
                         writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class =
   let parents = @[self] & extraParents
-  newClass(
+  result = newClass(
     superclasses = parents,
     slotNames = slotNames,
     name = classNameForDerived(self),
     readableSlotNames = readableSlotNames,
     writableSlotNames = writableSlotNames
   )
+
+  # Generate getter/setter methods for readable/writable slots so message
+  # syntax (`obj slot`, `obj slot: value`) works alongside `::` direct access.
+  for slotName in readableSlotNames:
+    let getter = createGetterMethod(result, slotName)
+    if getter != nil:
+      addMethodToClass(result, slotName, getter, isClassMethod = false)
+  for slotName in writableSlotNames:
+    let setter = createSetterMethod(result, slotName)
+    if setter != nil:
+      addMethodToClass(result, slotName & ":", setter, isClassMethod = false)
 
 proc createGetterMethod*(cls: Class, slotName: string): BlockNode =
   ## Create a getter method for a slot: slotName [ ^slotName ]
