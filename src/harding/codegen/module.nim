@@ -219,7 +219,8 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
             result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body))
 
 proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node]]],
-                         compiledClasses: seq[string], classInfo: Table[string, ClassInfo]): string =
+                         compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
+                         blockReg: BlockRegistry = nil): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -265,6 +266,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     if body.len > 0:
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
       genCtx.inMethod = true
+      if blockReg != nil:
+        genCtx.blockRegistry = blockReg
       
       if clsName in classInfo:
         genCtx.cls = classInfo[clsName]
@@ -274,19 +277,35 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       for paramName in params:
         genCtx.parameters.add(paramName)
       
+      # If any nested block performs a non-local return (^), the method
+      # boundary must catch NonLocalReturnException and return its value.
+      var needsNLRWrapper = false
+      for stmt in body:
+        if hasBlocksWithNonLocalReturn(stmt):
+          needsNLRWrapper = true
+          break
+      if needsNLRWrapper:
+        output.add("  try:\n")
+      
       let bodyLen = body.len
       for i, stmt in body:
         let isLast = (i == bodyLen - 1) and selector != "initialize"
         let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
         if stmtCode.len > 0:
           for line in stmtCode.splitLines():
-            output.add("  ")
-            output.add(line)
+            if needsNLRWrapper:
+              output.add("    " & line)
+            else:
+              output.add("  " & line)
             output.add("\n")
 
       # Smalltalk convention: initialize methods return self unless explicit ^ used
       if selector == "initialize":
         output.add("  return self\n")
+      
+      if needsNLRWrapper:
+        output.add("  except NonLocalReturnException as nlr:\n")
+        output.add("    return nlr.value\n")
     
     output.add("\n\n")
     
@@ -483,6 +502,17 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Extract method definitions from class and compile blocks
   let methodDefs = extractMethodDefs(classDefs)
 
+  # Create the shared block registry early so method bodies and main() both
+  # register blocks into the same registry (unique names, shared procedures).
+  var blockReg = newBlockRegistry()
+
+  # Note: top-level variables are NOT passed as knownGlobals because they are
+  # locals of main() and need to be captured by block procs at module level.
+  # Only true globals (class names) would be excluded from captures.
+  for md in methodDefs:
+    for stmt in md.body:
+      collectBlocks(blockReg, stmt)
+
   # Generate for each class
   for cls in analysis.classes.values:
     output.add(genClassConstants(cls))
@@ -559,36 +589,36 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genBinaryOpMethod("\\"))
   output.add(genBinaryOpMethod("%"))
 
-  # Generate compiled methods from user definitions after primitive operators,
-  # so compiled method bodies can call nt_* helpers without forward declarations.
-  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes))
-
-  # Create a block registry and collect blocks
-  # Note: top-level variables are NOT passed as knownGlobals because they are
-  # locals of main() and need to be captured by block procs at module level.
-  # Only true globals (class names) would be excluded from captures.
-  var blockReg = newBlockRegistry()
+  # Collect blocks from top-level code into the shared registry
   for node in mainBodyNodes:
     collectBlocks(blockReg, node)
 
-  # Generate block procedure definitions (after primitives so they can reference them)
+  # Generate block environment structs and forward declarations BEFORE the
+  # compiled methods so method bodies can reference block procedures.
   output.add("\n")
-  output.add("# Block Procedures\n")
-  output.add("##################\n\n")
-
-  # Generate environment structs for blocks with captures
+  output.add("# Block Environment Structs\n")
+  output.add("#########################\n\n")
   for blockInfo in blockReg.getAllBlocks():
     let structDef = generateEnvStructDef(blockInfo)
     if structDef.len > 0:
       output.add(structDef)
       output.add("\n\n")
 
-  # Generate forward declarations for block procedures first
-  # This allows blocks to reference each other regardless of definition order
+  output.add("# Block Forward Declarations\n")
+  output.add("############################\n\n")
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add("\n")
   output.add("\n")
+
+  # Generate compiled methods from user definitions after primitive operators,
+  # so compiled method bodies can call nt_* helpers without forward declarations.
+  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg))
+
+  # Generate block procedure definitions (after primitives so they can reference them)
+  output.add("\n")
+  output.add("# Block Procedures\n")
+  output.add("##################\n\n")
 
   # Generate block procedure bodies using real code generation
   var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
@@ -596,8 +626,11 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
     output.add(" =\n")
+    # ^ inside a block always escapes to the home method: raise so the
+    # compiled method boundary can catch it (unless the block IS the method
+    # body itself, in which case a plain return is correct).
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
-                            blockInfo.homeInMethod, blockInfo.envStructName)
+                            not blockInfo.homeInMethod, blockInfo.envStructName)
     if body.len > 0:
       output.add(body)
     else:

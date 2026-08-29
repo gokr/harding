@@ -17,7 +17,8 @@ when defined(linux):
   requires "libffi"
 
 # MummyX HTTP server support (compile with -d:mummyx to enable)
-requires "mummy >= 0.4.6"
+# Pinned: mummy >= 0.4.7 removed SSEConnection which external nimcp still uses
+requires "mummy >= 0.4.6 & < 0.4.7"
 
 import os, strutils, sequtils
 

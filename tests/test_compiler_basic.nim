@@ -216,7 +216,7 @@ suite "Compiler: Analyzer":
     let chain = extractDeriveChain(nodes[0])
     check chain[0] == "Point"
     check chain[1] == "Object"
-    check chain[2] == "#(x, y)"
+    check chain[2] == "#(x y)"
 
   test "builds class graph":
     let source = """

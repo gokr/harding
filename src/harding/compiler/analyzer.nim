@@ -21,55 +21,35 @@ proc newAnalysisResult*(): AnalysisResult =
   )
 
 proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeConstraint]] =
-  ## Parse type list from derive: #(name: Type age: Int name2:) or #(name age)
+  ## Parse type list from derive: slot lists. Supported forms:
+  ## #(name age), #(name, age), #(name: Type age: Int), #(name:, Int, age:, Float)
   ## Returns (name, constraint) tuples, constraint = tcNone for untyped
   result = @[]
 
-  var remaining = typeList
-  remaining = remaining.strip()
+  var remaining = typeList.strip()
   if remaining.startsWith("#(") and remaining.endsWith(")"):
     remaining = remaining[2..^2].strip()
 
-  var pos = 0
-  while pos < remaining.len:
-    # Skip whitespace and commas
-    while pos < remaining.len and remaining[pos] in {' ', '\t', ','}:
-      inc pos
-    if pos >= remaining.len or remaining[pos] == ')':
-      break
-
-    # Extract slot name up to colon, whitespace, comma, or end
-    var nameStart = pos
-    while pos < remaining.len and remaining[pos] notin {':', ',', ')', ' ', '\t'}:
-      inc pos
-    let slotName = remaining[nameStart..<pos].strip()
-    
-    if slotName.len == 0:
-      # Skip past any separator and continue
-      while pos < remaining.len and remaining[pos] in {':', ',', ' ', '\t'}:
-        inc pos
+  # Tokenize on whitespace and commas. A token ending in ':' is a slot name
+  # whose (optional) type hint is the following token.
+  var pendingName = ""
+  for rawToken in remaining.split({',', ' ', '\t', '\n'}):
+    let token = rawToken.strip()
+    if token.len == 0:
       continue
 
-    # Check for type hint after colon
-    var constraint = tcNone
-    if pos < remaining.len and remaining[pos] == ':':
-      inc pos  # Skip colon
-      while pos < remaining.len and remaining[pos].isSpaceAscii():
-        inc pos
-      var typeStart = pos
-      var typeEnd = pos
-      while pos < remaining.len and not remaining[pos].isSpaceAscii() and remaining[pos] notin {',', ')'}:
-        inc pos
-        typeEnd = pos
-      let typeHint = if typeStart < typeEnd: remaining[typeStart..<typeEnd].strip() else: ""
-      if typeHint.len > 0:
-        constraint = parseTypeHint(typeHint)
+    if token.endsWith(":"):
+      if pendingName.len > 0:
+        result.add((pendingName, tcNone))
+      pendingName = token[0..^2]
+    elif pendingName.len > 0:
+      result.add((pendingName, parseTypeHint(token)))
+      pendingName = ""
+    else:
+      result.add((token, tcNone))
 
-    result.add((slotName, constraint))
-
-    # Skip past any trailing whitespace and commas to next slot
-    while pos < remaining.len and remaining[pos] in {' ', '\t', ','}:
-      inc pos
+  if pendingName.len > 0:
+    result.add((pendingName, tcNone))
 
   return result
 

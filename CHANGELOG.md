@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- **Non-local return (`^`) from blocks invoked through `do:`/`whileTrue:` no longer crashes the VM** with "Work queue underflow". `invokeBlock` now stops when its own activation receives a return (it can be the lexical home of an inner block), and the VM run loop treats a drained work queue as completion instead of popping from an empty queue.
+- Granite: compiled method bodies now catch `NonLocalReturnException`, so `^ value` inside a block argument (e.g. `arr do: [:n | (n > 0) ifTrue: [^ n]]`) correctly returns from the enclosing compiled method. Previously the `^` was compiled to a plain block return, silently losing the value.
+- Granite: NLR detection (`hasBlocksWithNonLocalReturn`) now recurses into `ifTrue:`/`whileTrue:` branches, so methods containing conditional non-local returns get the exception wrapper.
+- Granite: method-body blocks are now registered in the shared module block registry before compiled-method generation, fixing duplicate/undefined `harding_block_N` identifiers when methods contain blocks.
+- Compiler: `parseTypeList` handles all derive slot list forms (`#(x y)`, `#(x, y)`, `#(x: Int)`, `#(x:, Int)`); analyzer tests updated and passing.
+- Removed stale committed binaries `src/harding/interpreter/evaluator` and `src/harding/interpreter/vm`.
+- `examples/blocks.hrd` now demonstrates non-local return from a method (Smalltalk `^` returns from the enclosing method/doIt, so the return target must be a method).
+
+### Changed
+- `nimble test`-style core suites re-verified after VM fixes (interpreter, exceptions, closures, scheduler, compiler tests all green).
+
 ### Added
 - External Harding library management (`library` command) for installing and managing third-party Harding packages.
 - External BitBarrel library published as `bitbarrel` with registry support and package installation flow.

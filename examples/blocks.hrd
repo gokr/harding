@@ -44,12 +44,14 @@ MultResult := Multiplier value: 5
 "" println
 "=== Returning from Blocks ===" println
 
-findFirstPositive := [ :arr |
-  arr do: [ :n |
-    (n > 0) ifTrue: [ ^ n ]
-  ]
-  ^ nil
-]
+Finder := Object derive: #().
 
-result := findFirstPositive value: #(-5, -3, 7, 2, 8)
-("First positive: " & (result asString)) println
+Finder>>findFirstPositive: arr [
+    arr do: [ :n |
+        (n > 0) ifTrue: [ ^ n ].
+    ].
+    ^ nil
+].
+
+result := (Finder new) findFirstPositive: #(-5, -3, 7, 2, 8).
+("First positive: " & (result asString)) println.

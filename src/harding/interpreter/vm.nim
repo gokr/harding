@@ -1339,12 +1339,20 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
         blockResult = savedHomeActivation.returnValue
         break
+      # Also stop if THIS activation has returned (it may be the lexical home
+      # of an inner block whose ^ targets this block activation)
+      if activation.hasReturned:
+        blockResult = activation.returnValue.unwrap()
+        break
       
       blockResult = interp.evalWithVM(stmt)
       
       # Check again after evalWithVM in case non-local return happened
       if savedHomeActivation != nil and savedHomeActivation.hasReturned and activationIsOnStack(interp, savedHomeActivation):
         blockResult = savedHomeActivation.returnValue
+        break
+      if activation.hasReturned:
+        blockResult = activation.returnValue.unwrap()
         break
 
     # Sync captured variable values from cells back to locals.
@@ -8787,6 +8795,10 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
           interp.workQueue.len > 0 and interp.workQueue[^1].kind != wfPopActivation:
       let staleFrame = interp.popWorkFrame()
       releaseFrame(staleFrame)
+
+    if interp.workQueue.len == 0:
+      # Work queue drained (e.g. by non-local return unwinding); nothing left to run
+      break
 
     let frame = interp.popWorkFrame()
     debug("VM: Processing frame kind=", frame.kind)

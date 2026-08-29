@@ -117,7 +117,7 @@ proc genComparisonFastPath*(op: string): string =
   output.add("    return NodeValue(kind: vkBool, boolVal: a.boolVal " & nimOp & " b.boolVal)\n")
   return output
 
-proc hasBlocksWithNonLocalReturn(node: Node): bool =
+proc hasBlocksWithNonLocalReturn*(node: Node): bool =
   ## Check if an AST node contains blocks with ^ (non-local return)
   if node == nil:
     return false
@@ -143,6 +143,18 @@ proc hasBlocksWithNonLocalReturn(node: Node): bool =
   of nkReturn:
     if node.ReturnNode.expression != nil:
       return hasBlocksWithNonLocalReturn(node.ReturnNode.expression)
+  of nkIf:
+    let ifNode = node.IfNode
+    if ifNode.thenBranch != nil and hasBlocksWithNonLocalReturn(ifNode.thenBranch):
+      return true
+    if ifNode.elseBranch != nil and hasBlocksWithNonLocalReturn(ifNode.elseBranch):
+      return true
+  of nkWhile:
+    let whileNode = node.WhileNode
+    if whileNode.condition != nil and hasBlocksWithNonLocalReturn(whileNode.condition):
+      return true
+    if whileNode.body != nil and hasBlocksWithNonLocalReturn(whileNode.body):
+      return true
   else:
     discard
   return false
