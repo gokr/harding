@@ -27,7 +27,7 @@ template error*(args: varargs[string, `$`]) =
 # All type definitions in a single section to allow forward declarations
 # Note: {.acyclic.} pragmas are used to prevent ORC cycle detection issues
 # when objects form reference cycles (which is common in an interpreter).
-# See CLAUDE.md for details on ORC issues.
+# See AGENTS.md for details on ORC issues.
 type
   # Node kind enum - defined before Node for use as stored field
   NodeKind* = enum

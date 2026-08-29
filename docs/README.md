@@ -44,4 +44,4 @@ When in doubt, prefer the canonical documents listed above.
 
 - Keep user-facing documentation current with implementation changes
 - Add research documents to `research/` subdirectory
-- Follow the style guidelines in [../CLAUDE.md](../CLAUDE.md)
+- Follow the style guidelines in [../AGENTS.md](../AGENTS.md)

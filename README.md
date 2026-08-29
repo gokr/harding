@@ -258,7 +258,7 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Roadmap](docs/ROADMAP.md) - Active priorities and milestones
 - [Performance](docs/PERFORMANCE.md) - Performance workflow and priorities
 - [Future Plans](docs/FUTURE.md) - Long-term roadmap
-- [CLAUDE.md](CLAUDE.md) - Developer guide and repository conventions
+- [AGENTS.md](AGENTS.md) - Developer guide and repository conventions for AI coding agents
 - [GTK Integration](docs/GTK.md) - GUI development
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
 - [GtkSourceView](docs/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting

@@ -1,12 +1,12 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code and similar tools) working in this repository.
 
 ## Project Overview
 
-Harding is a class-based Smalltalk dialect that compiles to Nim. It provides a Smalltalk-like object system, Nim compilation backend, REPL, FFI integration, GTK IDE (Bona), and Granite compiler.
+Harding is a class-based Smalltalk dialect that compiles to Nim. It provides a Smalltalk-like object system, stackless AST interpreter, Nim compilation backend (Granite), REPL, GTK4 IDE (Bona), VSCode extension (LSP/DAP), optional MummyX HTTP server integration, and an external library system (`harding lib`).
 
-**Current Status**: v0.6.0 - Functional interpreter with green threads, MIC/PIC caching, Smalltalk-style resumable exceptions, GTK IDE, VSCode extension, and Granite compiler for native binary compilation.
+**Current Status**: v0.8.0 - Functional interpreter with green threads, MIC/PIC caching, Smalltalk-style resumable exceptions, GTK4 IDE, VSCode extension, Granite compiler for native binary compilation, MummyX web server support, and installable external libraries (BitBarrel, MySQL, SQLite, JWT, etc.). FFI to Nim is still in progress.
 
 ## Build Commands
 
@@ -15,17 +15,31 @@ nimble harding           # Build harding REPL in repo root (debug)
 nimble harding_release   # Build harding REPL in repo root (release)
 nimble bona              # Build bona IDE in repo root (debug)
 nimble bona_release      # Build bona IDE in repo root (release)
-nimble test              # Run all tests
+nimble test              # Run all tests (incl. external library tests)
+nimble testCore          # Run core VM/language tests only
+nimble testStdlib        # Run stdlib tests only
+nimble testOther         # Run compiler/IDE/integration tests only
 nimble clean             # Clean build artifacts and binaries
+nimble discover          # Scan external/ and regenerate external_libs_generated.nim
+nimble harding_lsp       # Build the LSP server
 nimble install_harding   # Install harding binary to ~/.local/bin/
 nimble install_bona      # Install bona binary and desktop integration
+nimble vsix              # Build the VSCode extension package
 ```
 
 **IMPORTANT**: Use `nimble harding` / `nimble bona` to build. These place binaries in the root directory. `nimble build` alone will NOT update root directory binaries.
 
+Granite has no nimble task; build it directly:
+
+```bash
+nim c -p:external -o:granite src/harding/compiler/granite.nim
+```
+
+After installing/removing external libraries (`./harding lib install <name>`), run `nimble discover` and rebuild with `nimble harding` so the generated external library integration picks up the change.
+
 ## Testing
 
-Tests use Nim's unittest framework: `nimble test` runs all tests. Individual tests: `nim c -r tests/test_core.nim`. Test files follow `test_*.nim` pattern covering core interpreter, object model, parser, exceptions, concurrency, stdlib, compiler, and integration. All tests pass with ARC/ORC.
+Tests use Nim's unittest framework, run via testament: `nimble test` runs all tests in `tests/test_*.nim` plus installed external library tests (`<externalLib>/tests/test_*.nim`). Individual tests: `nim c -r tests/test_interpreter_core.nim`. Test files follow `test_*.nim` pattern covering core interpreter, object model, parser, exceptions, concurrency, stdlib, compiler, and integration. All tests pass with ARC/ORC.
 
 ## Logging and Debugging
 
@@ -34,8 +48,8 @@ See `docs/TOOLS_AND_DEBUGGING.md` for full details (VS Code configs, GDB usage, 
 Both `harding` and `granite` support `--loglevel DEBUG|INFO|WARN|ERROR|FATAL` and `--ast` to dump the AST after parsing.
 
 ```bash
-harding --loglevel DEBUG myprogram.harding   # Debug logging
-harding --ast -e "3 + 4"                     # Show AST
+harding --loglevel DEBUG myprogram.hrd    # Debug logging
+harding --ast -e "3 + 4"                  # Show AST
 ```
 
 Use the `debug` macro from `std/logging` in evaluation code:
@@ -43,17 +57,14 @@ Use the `debug` macro from `std/logging` in evaluation code:
 debug("Message send: ", selector)
 ```
 
-### Debug Builds
+### Debug/Profile Builds
 
 ```bash
-# Build with debug symbols for GDB/LLDB
-nim c -d:debug --debugger:native --debuginfo --lineDir:on --stackTrace:on -o:harding_debug src/harding/repl/harding.nim
-
-# Memory debugging
-nim c -d:useMalloc -d:debug --debugger:native -o:harding_memdebug src/harding/repl/harding.nim
-
-# Profiling
-nim c -d:debug -d:nimprof --debugger:native -o:harding_profile src/harding/repl/harding.nim
+nimble harding_debug    # REPL with debugger support (--debugger-port 9877)
+nimble harding_perf     # Release + debuginfo for perf/FlameGraph profiling
+nimble harding_nimprof  # Built-in Nim profiler (writes profile_results.txt)
+nimble profile_nimprof  # Build and run nimprof on benchmark/sieve.hrd
+nimble profile_perf     # Build and run perf on benchmark/sieve.hrd
 ```
 
 ## Nim Coding Guidelines
@@ -96,7 +107,7 @@ registerBlockNode(receiverVal.blockVal)  # Keep alive for ARC
 instance.nimValue = cast[pointer](receiverVal.blockVal)  # Now safe
 ```
 
-Existing registries: `blockNodeRegistry` (types.nim), `processProxies`/`schedulerProxies`/`monitorProxies`/`sharedQueueProxies`/`semaphoreProxies` (scheduler.nim), `globalTableProxies` (vm.nim).
+Existing registries: `blockNodeRegistry` (src/harding/core/types.nim), `processProxies`/`schedulerProxies`/`monitorProxies`/`sharedQueueProxies`/`semaphoreProxies` (src/harding/core/scheduler.nim), `globalTableProxies` (src/harding/interpreter/vm.nim).
 
 **Rule**: When adding new pointer storage to `nimValue`, always register in the appropriate keep-alive registry first. C/FFI pointers (GTK widgets, file handles) don't need registries.
 
@@ -156,19 +167,31 @@ Division by zero catches Nim `DivByZeroDefect` and converts to Harding `Division
 ## Project Structure
 
 ```
-harding/
-├── core/           # Core types and object system
+src/harding/
+├── core/           # Core types, scheduler, processes, tagged values
 ├── parser/         # Lexer and parser
-├── interpreter/    # Evaluation and activation
-├── compiler/       # Nim code generation (Granite)
-├── repl/           # Read-Eval-Print Loop
-├── ffi/            # Foreign Function Interface
-└── docs/           # Documentation
+├── interpreter/    # Stackless VM, activation records, evaluator, frame pools
+├── compiler/       # Granite: Nim code generation
+├── codegen/        # Shared codegen helpers (blocks, expressions, modules, slots)
+├── repl/           # CLI, REPL, script execution
+├── gui/            # Bona GTK4 IDE
+├── lsp/            # Language server for VSCode
+├── debugger/       # Breakpoints, debug protocol (HDP), DAP bridge
+├── packages/       # External library installer (`harding lib`)
+├── external/       # Generated external library integration (auto-generated, do not edit)
+├── runtime/        # Compiled runtime support
+└── web/            # MummyX and MCP bridges
+lib/                # Harding stdlib (.hrd), layered: core, standard, syntax, gui, web, granite, mummyx, reactive, process, mysql, corral
+external/           # Installed external libraries (bitbarrel, mysql, sqlite, jwt, nimcp, ...)
+docs/               # Documentation
     ├── research/   # Historical design docs (may be outdated)
+examples/           # Example .hrd scripts
+tests/              # Nim unittest files (test_*.nim)
 ```
 
-- Source files: `.nim`, test files: `test_*.nim`, Harding source: `.harding`
+- Source files: `.nim`, test files: `test_*.nim`, Harding source: `.hrd`
 - Prefer root-level docs over `docs/research/` for current behavior
+- `src/harding/external/external_libs_generated.nim` is auto-generated by `nimble discover`; do not edit by hand
 
 ### Changelog Maintenance
 
@@ -199,6 +222,7 @@ See `docs/QUICKREF.md` for full syntax reference and `docs/MANUAL.md` for the co
 #mySymbol                          # Symbols
 #(1 2 3)                           # Arrays (0-based indexing)
 #{"name" -> "Alice"}               # Tables
+json{...}                          # Prefix literal syntax for JSON strings
 true false nil                     # Booleans and nil
 42  3.14  0xFF                     # Numbers
 ```
@@ -207,7 +231,7 @@ true false nil                     # Booleans and nil
 
 ```harding
 MyClass := Object derive: #(slot1 slot2)
-Point := Object deriveWithAccessors: #(x y)
+Point := Object derivePublic: #(x y)
 
 MyClass>>methodName: arg1 with: arg2 [
     | localVar |
@@ -247,33 +271,44 @@ Declarative form: arguments must match method parameter names. Inline form: argu
 
 ### Common Methods
 
-`isEmpty` / `isEmpty not`, `notNil`, `class`, `derive:`, `at:` / `at:put:`, `clone`, `perform:` / `perform:with:`
+`isEmpty` / `isEmpty not`, `notNil`, `class`, `derive:`, `derivePublic:`, `at:` / `at:put:`, `clone`, `perform:` / `perform:with:`
 
 ### Defining Primitives (Nim-backed methods)
 
-When creating external libraries with Nim primitives, the .hrd file must use the correct primitive name format:
+The primitive name in the `.hrd` file and the registration key in Nim must match (parameter names are stripped; the colon count must match the method arity). Two conventions are used:
 
-1. **In .hrd files**: Use `<primitive primitive<ClassName><Selector>>` syntax
-   - The selector in the primitive should NOT include parameter names
-   - Example: `MyClass>>connect: host <primitive primitiveMyClassConnect:>`
-
-2. **In Nim code**: Register with the same name (without parameter names)
+1. **Class-prefixed names** (see `external/mysql`, `docs/NIM_PACKAGE_TUTORIAL.md`):
+   ```harding
+   MyClass>>connect: host <primitive primitiveMyClassConnect:>
+   ```
    ```nim
    let method = createCoreMethod("primitiveMyClassConnect:")
    method.setNativeImpl(myConnectImpl)
    cls.methods["primitiveMyClassConnect:"] = method
+   cls.allMethods["primitiveMyClassConnect:"] = method
    ```
 
-3. **Key rules**:
-   - Class methods go in `classMethods` / `allClassMethods` tables
-   - Instance methods go in `methods` / `allMethods` tables  
-   - Use `setNativeImpl()` not direct assignment for native implementation
-   - The primitive selector in .hrd is parsed to extract just the keyword parts (parameter names are stripped)
+2. **Library-prefixed names + `addMethodToClass` helper** (see `external/bitbarrel`):
+   ```harding
+   Barrel>>connect: host <primitive barrelConnect: host>
+   ```
+   ```nim
+   let method = createCoreMethod("connect:")
+   method.setNativeImpl(barrelConnectImpl)
+   method.hasInterpreterParam = true
+   addMethodToClass(barrelClass, "barrelConnect:", method)
+   ```
+
+Key rules:
+- Class methods go in `classMethods` / `allClassMethods` tables
+- Instance methods go in `methods` / `allMethods` tables
+- Use `setNativeImpl()` not direct assignment for native implementation
+- The primitive selector in `.hrd` is parsed to extract just the keyword parts (parameter names are stripped)
 
 ## BitBarrel Integration
 
-BitBarrel is available as an external Harding library. Install it with `./harding lib install bitbarrel`, then rebuild with `nimble harding`.
+BitBarrel is available as an external Harding library. Install it with `./harding lib install bitbarrel`, then rebuild with `nimble harding`. Classes are embedded in the binary and registered automatically at VM startup, so no manual `load:` is needed.
 
-Classes: `Barrel` (connection), `BarrelTable` (hash-based persistent storage), `BarrelSortedTable` (ordered storage with range queries). Load via `load: "lib/bitbarrel/Bootstrap.hrd"`.
+Classes: `Barrel` (connection), `BarrelTable` (hash-based persistent storage), `BarrelSortedTable` (ordered storage with range queries). Sources live under `external/bitbarrel/lib/bitbarrel/`.
 
 External BitBarrel builds are compiled with the generated `-d:harding_bitbarrel` flag.

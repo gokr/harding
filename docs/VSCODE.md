@@ -287,4 +287,4 @@ nimble vsix
 
 - [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Harding debugger documentation
 - [README.md](../README.md) - Project overview
-- `CLAUDE.md` - Development guidelines
+- `AGENTS.md` - Development guidelines
