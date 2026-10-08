@@ -6,7 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
+
 ### Fixed
+- Granite generated imports resolve relative to the selected output directory, including nested build directories.
 - **Non-local return (`^`) from blocks invoked through `do:`/`whileTrue:` no longer crashes the VM** with "Work queue underflow". `invokeBlock` now stops when its own activation receives a return (it can be the lexical home of an inner block), and the VM run loop treats a drained work queue as completion instead of popping from an empty queue.
 - **`derivePublic:` / `derive:read:write:` generate accessor methods again** (`obj slot`, `obj slot: value`), restoring the documented behavior alongside `::` direct access (regression introduced by the v0.8.0 class-model refactor).
 - Compiler: `parseTypeList` handles all derive slot list forms (`#(x y)`, `#(x, y)`, `#(x: Int)`, `#(x:, Int)`); analyzer tests updated and passing.

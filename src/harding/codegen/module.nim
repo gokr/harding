@@ -34,11 +34,13 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
     output.add("import std/[tables, sequtils, os]\n")
   else:
     output.add("import std/[tables, sequtils]\n")
-  output.add("import ../src/harding/core/[types]\n")
-  output.add("import ../src/harding/interpreter/[objects, activation]\n\n")
+  let sourceRoot = parentDir(parentDir(parentDir(currentSourcePath())))
+  let importRoot = relativePath(sourceRoot, absolutePath(ctx.outputDir)).replace('\\', '/')
+  output.add(fmt("import {importRoot}/harding/core/[types]\n"))
+  output.add(fmt("import {importRoot}/harding/interpreter/[objects, activation]\n\n"))
 
   output.add("# Runtime imports\n")
-  output.add("import ../src/harding/runtime/[runtime]\n\n")
+  output.add(fmt("import {importRoot}/harding/runtime/[runtime]\n\n"))
 
   return output
 
