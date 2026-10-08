@@ -13,7 +13,7 @@ Factory class>>answer [ ^ 42 ].
 Factory>>answer [ ^ 9 ].
 Factory class>>plus: n [ ^ self answer + n ].
 Child := Factory derive: #().
-Child class>>answer [ ^ 43 ].
+Child class>>answer [ ^ super answer + 1 ].
 (Factory answer) println.
 (Factory new answer) println.
 (Child answer) println.
@@ -37,6 +37,13 @@ Child := Base derive: #().
 Child class>>answer [ ^ super answer + 2 ].
 (Child answer) println.
 """, "42\n"),
+    ("super_new", """
+Product := Object derive: #(amount).
+Product class>>new [ ^ super new initialize ].
+Product>>initialize [ amount := 17. ^ self ].
+Product>>readAmount [ ^ amount ].
+(Product new readAmount) println.
+""", "17\n"),
     ("overridden_new", """
 Token := Object derive: #().
 Token class>>new [ ^ 99 ].
@@ -99,12 +106,8 @@ def main():
         source_file.write_text(source)
         binary = case_dir / name
         try:
-            # The VM currently resolves super against instance methods even in
-            # class-side methods. Keep the native semantic regression explicit.
-            compiled_only = name == "class_super"
-            interpreted = expected if compiled_only else run(
-                [str(ROOT / "harding"), str(source_file)], options.timeout,
-                case_dir / "interpreted.log")
+            interpreted = run([str(ROOT / "harding"), str(source_file)],
+                              options.timeout, case_dir / "interpreted.log")
             run([str(ROOT / "granite"), "build", str(source_file),
                  f"-d:{case_dir}", f"-o:{binary}"], options.build_timeout,
                 case_dir / "build.log")
@@ -112,8 +115,7 @@ def main():
             if interpreted != expected or compiled != expected:
                 raise RuntimeError(f"expected {expected!r}; interpreter {interpreted!r}; "
                                    f"compiled {compiled!r}")
-            label = "compiled semantic check; VM discrepancy documented" if compiled_only else "parity"
-            print(f"PASS {name} ({label})")
+            print(f"PASS {name} (parity)")
         except RuntimeError as error:
             failures += 1
             print(f"FAIL {name}: {error}")

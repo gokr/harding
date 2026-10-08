@@ -10,6 +10,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 
 ### Fixed
+- Interpreter class-side `super` sends look up class methods and preserve class-side activation context, including `super new initialize`; execution parity covers these paths.
 - Granite extracts and registers class-side methods separately from instance methods; compiled class receivers support inherited lookup, aliases, overridden `new`, factories, and class-side `super` dispatch.
 - Pure compiled method bodies use the compiled runtime for generic sends rather than implicitly entering mixed-mode dispatch.
 - Granite generated imports resolve relative to the selected output directory, including nested build directories.

@@ -12,8 +12,6 @@ python3 scripts/test_granite_parity.py
 ```
 
 The focused parity runner checks both engines against explicit expected output.
-The `class_super` case is explicitly labeled as a compiled-only semantic check
-because the VM currently searches the wrong method side for `super`.
 Each invocation uses a separate directory under `build/parity/`. Build logs and
 engine output are retained. Execution defaults to a 30-second limit; compilation
 defaults to 120 seconds. A timeout, failed build, failed engine, or incorrect
@@ -25,21 +23,17 @@ initial assessment it stalled in `nested blocks with control flow`, after the
 executed compiled case passed. Diagnose that separately; do not describe the
 whole suite as passing until it completes.
 
-## Measured interpreter discrepancies
+## Current coverage and remaining gaps
 
-Two focused cases need separate interpreter regression fixes:
+Seven execution-parity cases pass: class/instance selector isolation, inherited
+class methods and aliases, factories, class-side `super`, `super new initialize`,
+overridden constructors, captured blocks, and non-local returns. The VM now uses
+class-side lookup and preserves class-side activation context for `super` sends.
+The class-model unit suite also passes.
 
-- When `Base` defines both instance-side and class-side `answer`, a class-side
-  `super answer` in a subclass invokes the instance-side method in the VM.
-  Without an instance-side `answer`, that send fails even when a class-side
-  implementation exists.
-- `Product class>>new [ ^ super new initialize ]` fails in the VM with
-  `Method 'new' not found in super class Object`.
-
-Do not adopt these outputs as intended compiler semantics. The focused passing
-cases separate same-selector side isolation from class-side `super` until the VM
-is corrected. Keep recursive/escaped returns and mutable captures as follow-up
-work rather than inferring correctness from the basic block cases.
+Keep recursive/escaped returns and mutable captures as follow-up work rather
+than inferring correctness from the basic block cases. Inherited method ownership
+and `super` inside nested blocks need additional targeted coverage.
 
 Another compiled-runtime gap remains: dynamically dispatched generated slot
 accessor messages are not registered as ordinary compiled methods. Factories

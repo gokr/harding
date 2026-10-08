@@ -7225,8 +7225,11 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
         raise newException(ValueError, "super send in class with no parents")
       targetParent = definingClass.superclasses[0]
 
-    # Look up method in target parent's allMethods
-    let methodBlock = lookupInstanceMethod(targetParent, superNode.selector)
+    let isClassMethod = interp.currentActivation != nil and interp.currentActivation.isClassMethod
+    let methodBlock = if isClassMethod:
+                        types.lookupClassMethod(targetParent, superNode.selector)
+                      else:
+                        lookupInstanceMethod(targetParent, superNode.selector)
     if methodBlock == nil:
       raise newException(ValueError, "Method '" & superNode.selector & "' not found in super class " & targetParent.name)
 
@@ -7236,7 +7239,8 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     for argNode in superNode.arguments:
       arguments.add(interp.evalWithVM(argNode))
 
-    let methodResult = executeMethod(interp, methodBlock, interp.currentReceiver, arguments, targetParent)
+    let methodResult = executeMethod(interp, methodBlock, interp.currentReceiver, arguments,
+                                     targetParent, isClassMethod)
     interp.pushValue(methodResult)
     return true
 
