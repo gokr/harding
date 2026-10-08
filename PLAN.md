@@ -25,8 +25,10 @@ changelog entry, and build/test validation. Update this checklist as work lands.
 
 ## 2. Correct closure semantics
 
-- [ ] Share mutable capture cells instead of copying independent values.
-- [ ] Test sibling and nested blocks observing the same bindings.
+- [x] Share mutable capture cells instead of copying independent values.
+- [x] Test sibling and nested blocks observing the same bindings.
+- [ ] Tighten scope-local capture analysis and cover shadowing, forward-declared
+      temporaries, and captured iteration parameters in every inline loop path.
 - [x] Keep escaped block environments alive safely under ARC/ORC (managed
       environments owned by BlockNode; returned string-capture regression tested).
 

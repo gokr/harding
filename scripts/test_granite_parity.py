@@ -105,6 +105,43 @@ scale := 10.
 blk := [:n | n * scale].
 (blk value: 7) println.
 """, "10\n70\n"),
+    ("shared_capture", """
+count := 0.
+inc := [count := count + 1. count].
+read := [count].
+(inc value) println.
+(read value) println.
+count := 10.
+(read value) println.
+(inc value) println.
+count println.
+""", "1\n1\n10\n11\n11\n"),
+    ("nested_capture", """
+count := 0.
+outer := [ | inner | inner := [count := count + 2. count]. inner value ].
+(outer value) println.
+count println.
+(outer value) println.
+count println.
+""", "2\n2\n4\n4\n"),
+    ("escaped_mutable_capture", """
+Maker := Object derive: #().
+Maker>>counter: start [ | count | count := start. ^ [count := count + 1. count] ].
+m := Maker new.
+a := m counter: 10.
+b := m counter: 100.
+(a value) println.
+(b value) println.
+(a value) println.
+""", "11\n101\n12\n"),
+    ("captured_parameter", """
+make := [:start | [start := start + 1. start]].
+a := make value: 3.
+b := make value: 30.
+(a value) println.
+(b value) println.
+(a value) println.
+""", "4\n31\n5\n"),
     ("escaped_environment", """
 Maker := Object derive: #().
 Maker>>make: text [ | blk | blk := [text & "!"]. ^ blk ].

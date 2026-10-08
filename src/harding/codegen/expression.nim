@@ -20,6 +20,7 @@ type
     cls*: ClassInfo
     inBlock*: bool
     inMethod*: bool              ## Whether we're generating code inside a method body
+    cellNames*: seq[string]       ## Lexical bindings shared with compiled blocks
     locals*: seq[string]          ## Local variable names (temporaries)
     parameters*: seq[string]      ## Parameter names
     globals*: seq[string]         ## Known global variable names
@@ -192,11 +193,31 @@ proc genNodeValueLiteral*(val: NodeValue): string =
   else:
     return "NodeValue(kind: vkNil)"
 
+proc captureCellNames*(registry: BlockRegistry): seq[string] =
+  ## Names requiring cells in scopes that bind them.
+  if registry != nil:
+    for info in registry.blocks:
+      for name in info.captures:
+        if name != "self" and name notin result:
+          result.add(name)
+
+proc bindingTarget(ctx: GenContext, name: string): string =
+  if name in ctx.cellNames:
+    return name & ".value"
+  return name
+
+proc bindingDeclaration(ctx: GenContext, name, value: string): string =
+  if name in ctx.cellNames:
+    return fmt("var {name} = MutableCell(value: {value})")
+  return fmt("var {name} = {value}")
+
 proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
 
   if name == "self":
+    if name in ctx.cellNames:
+      return "self.value"
     if ctx.inMethod:
       return "self"
     else:
@@ -213,11 +234,11 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
 
   # Check if it's a parameter
   if name in ctx.parameters:
-    return name
+    return bindingTarget(ctx, name)
 
   # Check if it's a local variable
   if name in ctx.locals:
-    return name
+    return bindingTarget(ctx, name)
 
   # Check if it's a slot
   if ctx.cls != nil:
@@ -271,7 +292,11 @@ proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): stri
   ## Generate expression-safe block creation for captured blocks.
   var initFields: seq[string] = @[]
   for capture in blockInfo.captures:
-    initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
+    let cell = if ctx.isLocal(capture) and capture in ctx.cellNames:
+                 capture
+               else:
+                 fmt("MutableCell(value: {genSymbolAccess(ctx, capture)})")
+    initFields.add(fmt("{capture}: {cell}"))
 
   let fieldsStr = initFields.join(", ")
   return fmt("(block:\n    createBlockWithEnv({blockInfo.nimName}, {blockInfo.paramCount}, {blockInfo.envStructName}({fieldsStr})))")
@@ -416,7 +441,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           parameters: ctx.parameters,
           globals: ctx.globals,
           blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes
+          varTypes: ctx.varTypes,
+          cellNames: ctx.cellNames,
+          compiledClasses: ctx.compiledClasses,
+          classInfo: ctx.classInfo
         )
         var code = "(block:\n"
         code.add("    for hardingDoIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
@@ -444,7 +472,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           parameters: ctx.parameters,
           globals: ctx.globals,
           blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes
+          varTypes: ctx.varTypes,
+          cellNames: ctx.cellNames,
+          compiledClasses: ctx.compiledClasses,
+          classInfo: ctx.classInfo
         )
         var code = "(block:\n"
         code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
@@ -479,7 +510,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           parameters: ctx.parameters,
           globals: ctx.globals,
           blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes
+          varTypes: ctx.varTypes,
+          cellNames: ctx.cellNames,
+          compiledClasses: ctx.compiledClasses,
+          classInfo: ctx.classInfo
         )
         var code = "(block:\n"
         code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
@@ -689,11 +723,11 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt"{varName} = {exprCode}"
+      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
     # New local variable assignment
     ctx.locals.add(varName)
-    return fmt"var {varName} = {exprCode}"
+    return bindingDeclaration(ctx, varName, exprCode)
 
   of nkReturn:
     let ret = node.ReturnNode
@@ -829,11 +863,11 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt"{varName} = {exprCode}"
+      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
     # New local variable assignment
     ctx.locals.add(varName)
-    return fmt"var {varName} = {exprCode}"
+    return bindingDeclaration(ctx, varName, exprCode)
 
   of nkReturn:
     let ret = node.ReturnNode
@@ -1085,7 +1119,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if slotIdx >= 0:
           return fmt("self.slots[{slotIdx}] = {msgCode}")
       elif ctx.isLocal(receiverName):
-        return fmt("{receiverName} = {msgCode}")
+        return fmt("{bindingTarget(ctx, receiverName)} = {msgCode}")
       elif receiverName in ctx.globals:
         return fmt("discard setGlobal(\"{receiverName}\", {msgCode})")
 
@@ -1126,10 +1160,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     parameters: @[],
     globals: ctx.globals,
     blockRegistry: ctx.blockRegistry,
-    varTypes: ctx.varTypes
+    varTypes: ctx.varTypes,
+    compiledClasses: ctx.compiledClasses,
+    classInfo: ctx.classInfo,
+    cellNames: captureCellNames(ctx.blockRegistry)
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
+    output.add("  " & bindingDeclaration(bodyCtx, param, "hardingArg_" & param) & "\n")
 
   # Extract captured variables from environment struct
   if captures.len > 0:
@@ -1137,9 +1175,14 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
       output.add(fmt("  let envTyped = cast[{envStructName}](env)\n"))
     for capture in captures:
       if envStructName.len > 0:
-        output.add(fmt("  var {capture} = envTyped[].{capture}\n"))
+        if capture == "self":
+          output.add("  let self = envTyped[].self.value\n")
+        else:
+          output.add(fmt("  let {capture} = envTyped[].{capture}\n"))
+          if capture notin bodyCtx.cellNames:
+            bodyCtx.cellNames.add(capture)
       else:
-        output.add(fmt("  var {capture} = NodeValue(kind: vkNil)\n"))
+        output.add("  " & bindingDeclaration(bodyCtx, capture, "NodeValue(kind: vkNil)") & "\n")
       bodyCtx.locals.add(capture)
 
   # Handle empty block body
@@ -1169,9 +1212,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
         output.add(indentBlock(stmtCode))
-        if captures.len > 0 and envStructName.len > 0:
-          for capture in captures:
-            output.add(fmt("  envTyped[].{capture} = {capture}\n"))
+
 
   return output
 
@@ -1253,12 +1294,12 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
 
     # Check if it's a reassignment of an existing variable
     if varName in ctx.locals or varName in ctx.globals:
-      return fmt"{varName} = {exprCode}"
+      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
     # New top-level variable (local to main, also tracked as global for blocks)
     ctx.locals.add(varName)
     ctx.globals.add(varName)
-    return fmt"var {varName} = {exprCode}"
+    return bindingDeclaration(ctx, varName, exprCode)
 
   of nkMessage:
     # Top-level message send - delegate to genStatement for inline control flow
@@ -1311,11 +1352,11 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
     
     # Check if it's a reassignment of an existing variable
     if varName in ctx.locals or varName in ctx.globals:
-      return fmt"{varName} = {exprCode}"
+      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
     # New local variable
     ctx.locals.add(varName)
-    return fmt"var {varName} = {exprCode}"
+    return bindingDeclaration(ctx, varName, exprCode)
 
   of nkMessage:
     return genStatement(ctx, node)

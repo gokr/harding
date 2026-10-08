@@ -10,6 +10,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 
 ### Fixed
+- Granite captured bindings use shared MutableCell references rather than copied values and writeback. Execution parity covers sibling/nested captures, enclosing-scope mutation, independently escaped counters, and captured block parameters; sibling and escaped-counter cases also pass under ORC.
 - Granite closure environments are managed heap objects owned by their BlockNode, replacing stack-local pointers and raw copied allocations. Assignment and expression block creation share the same path; returned string-capturing blocks retain their environments under ARC and ORC.
 - Granite registers generated accessor messages for ordinary dynamic dispatch, respecting selective read/write generation and explicit overrides. Removed slot-message inlining that bypassed overrides and visibility; direct `::` access remains separate. Generated setters return the receiver. Eleven execution-parity cases and compiler registration tests cover these paths.
 - Inherited VM methods retain their declaring class for `super` lookup; block activations preserve lexical class-side context, and Granite captures `self` and defining-class context for block `super` sends. Nine execution-parity cases cover inherited instance/class methods and multi-level constructors.

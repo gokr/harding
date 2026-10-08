@@ -325,11 +325,16 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
 
     for i, paramName in params:
-      output.add(fmt("  let {paramName} = if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil)\n"))
+      let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
+      if paramName in captureCellNames(blockReg):
+        output.add(fmt("  var {paramName} = MutableCell(value: {paramValue})\n"))
+      else:
+        output.add(fmt("  var {paramName} = {paramValue}\n"))
     
     if body.len > 0:
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
       genCtx.inMethod = true
+      genCtx.cellNames = captureCellNames(blockReg)
       if blockReg != nil:
         genCtx.blockRegistry = blockReg
       
@@ -478,6 +483,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     genCtx.globals.add("args")
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
+  genCtx.cellNames = captureCellNames(blockReg)
 
   # Generate code for each top-level statement
   for node in topLevel:

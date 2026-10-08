@@ -367,7 +367,7 @@ proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[
     nimName: nimName,
     blockNode: blockNode,
     captures: captures,
-    captureTypes: captures.mapIt("NodeValue"),  # All captures are NodeValue
+    captureTypes: captures.mapIt("MutableCell"),
     hasNonLocalReturn: hasNonLocalReturn,
     homeInMethod: homeInMethod,
     ownerMethodId: 0,
@@ -418,7 +418,7 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
                       info.blockNode.parameters[i]
                     else:
                       fmt("param{i}")
-    params.add(fmt("{paramName}: NodeValue"))
+    params.add(fmt("hardingArg_{paramName}: NodeValue"))
 
   let paramsStr = params.join(", ")
   result = fmt("proc {info.nimName}*({paramsStr}): NodeValue {{.cdecl.}}")
@@ -435,7 +435,10 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
   if info.captures.len > 0:
     output.add(fmt("  let envTyped = cast[{info.envStructName}](env)\n"))
     for capture in info.captures:
-      output.add(fmt("  let {capture} = envTyped.{capture}\n"))
+      output.add(fmt("  let {capture} = envTyped.{capture}.value\n"))
+
+  for parameter in info.blockNode.parameters:
+    output.add(fmt("  var {parameter} = hardingArg_{parameter}\n"))
 
   # Generate temporaries
   if info.blockNode.temporaries.len > 0:

@@ -25,7 +25,8 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twelve execution-parity cases pass, including escaped closure environments,
+Sixteen execution-parity cases pass, including shared sibling/nested captures,
+mutated block parameters, independent escaped counters, and closure environments,
 inherited method ownership,
 class-side `super` in blocks, multi-level constructor inheritance, dynamic
 accessors, selective read/write accessors, and overridden accessor methods. The VM now uses
@@ -33,9 +34,12 @@ class-side lookup and preserves class-side activation context for `super` sends.
 The class-model unit suite also passes.
 
 Compiled environments are managed heap references owned by their BlockNode.
-Returned closures with string captures pass under ARC and ORC. Mutable captures
-still use copied values with writeback; shared cells and sibling/nested binding
-semantics remain unfinished. Recursive/escaped returns also remain follow-up work.
+Environments retain shared MutableCell references; reads and assignments target
+cell values rather than copying bindings and writing them back. Sibling captures
+and escaped counters pass under ARC and ORC. Capture-name analysis is currently
+conservative across the module: scope precision, shadowing, forward temporaries,
+and captured inline iteration parameters need additional coverage. Recursive and
+escaped non-local returns remain follow-up work.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.
