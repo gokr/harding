@@ -211,6 +211,13 @@ proc bindingDeclaration(ctx: GenContext, name, value: string): string =
     return fmt("var {name} = MutableCell(value: {value})")
   return fmt("var {name} = {value}")
 
+proc genLocalDeclarations*(ctx: GenContext, names: seq[string]): string =
+  ## Declare lexical temporaries before evaluating a scope's body.
+  for name in names:
+    if not ctx.isLocal(name):
+      ctx.locals.add(name)
+      result.add(bindingDeclaration(ctx, name, "NodeValue(kind: vkNil)") & "\n")
+
 proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
@@ -447,7 +454,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           classInfo: ctx.classInfo
         )
         var code = "(block:\n"
-        code.add("    for hardingDoIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        code.add("    for hardingDoIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("      " & bindingDeclaration(doCtx, elemName, "hardingElem") & "\n")
+        code.add(indentBlock(genLocalDeclarations(doCtx, bodyBlock.temporaries), 6))
         for stmt in bodyBlock.body:
           let stmtCode = genStatement(doCtx, stmt)
           code.add(indentBlock(stmtCode, 6))
@@ -479,7 +488,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         )
         var code = "(block:\n"
         code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingCollectIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        code.add("    for hardingCollectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("      " & bindingDeclaration(collectCtx, elemName, "hardingElem") & "\n")
+        code.add(indentBlock(genLocalDeclarations(collectCtx, bodyBlock.temporaries), 6))
         # Generate all statements except the last one
         for i in 0..<bodyBlock.body.len-1:
           let stmtCode = genStatement(collectCtx, bodyBlock.body[i])
@@ -517,7 +528,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         )
         var code = "(block:\n"
         code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingSelectIdx, " & elemName & " in " & receiverCode & ".arrayVal:\n")
+        code.add("    for hardingSelectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("      " & bindingDeclaration(selectCtx, elemName, "hardingElem") & "\n")
+        code.add(indentBlock(genLocalDeclarations(selectCtx, bodyBlock.temporaries), 6))
         # Generate the block body to get the condition value
         var bodyCode = ""
         for stmt in bodyBlock.body:
@@ -533,7 +546,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           let condCode = genExpression(selectCtx, lastStmt)
           code.add(condCode)
           code.add("):\n")
-          code.add("        hardingSelectResult.add(" & elemName & ")\n")
+          code.add("        hardingSelectResult.add(hardingElem)\n")
         code.add("    NodeValue(kind: vkArray, arrayVal: hardingSelectResult))")
         return code
 
@@ -1184,6 +1197,8 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
       else:
         output.add("  " & bindingDeclaration(bodyCtx, capture, "NodeValue(kind: vkNil)") & "\n")
       bodyCtx.locals.add(capture)
+
+  output.add(indentBlock(genLocalDeclarations(bodyCtx, blkNode.temporaries)))
 
   # Handle empty block body
   if blkNode.body.len == 0:

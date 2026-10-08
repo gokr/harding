@@ -124,6 +124,19 @@ count println.
 (outer value) println.
 count println.
 """, "2\n2\n4\n4\n"),
+    ("forward_temporary", """
+Maker := Object derive: #().
+Maker>>make [ | count blk | blk := [count]. count := 42. ^ blk ].
+((Maker new make) value) println.
+outer := [ | count blk | blk := [count]. count := 19. blk value ].
+(outer value) println.
+""", "42\n19\n"),
+    ("iteration_capture", """
+blocks := #(2, 4, 6) collect: [:n | [n]].
+((blocks at: 0) value) println.
+((blocks at: 1) value) println.
+((blocks at: 2) value) println.
+""", "2\n4\n6\n"),
     ("escaped_mutable_capture", """
 Maker := Object derive: #().
 Maker>>counter: start [ | count | count := start. ^ [count := count + 1. count] ].

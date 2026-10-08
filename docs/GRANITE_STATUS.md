@@ -25,7 +25,8 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Sixteen execution-parity cases pass, including shared sibling/nested captures,
+Eighteen execution-parity cases pass, including forward temporary captures and
+escaped closures from collection iteration, including shared sibling/nested captures,
 mutated block parameters, independent escaped counters, and closure environments,
 inherited method ownership,
 class-side `super` in blocks, multi-level constructor inheritance, dynamic
@@ -37,8 +38,10 @@ Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
 cell values rather than copying bindings and writing them back. Sibling captures
 and escaped counters pass under ARC and ORC. Capture-name analysis is currently
-conservative across the module: scope precision, shadowing, forward temporaries,
-and captured inline iteration parameters need additional coverage. Recursive and
+conservative across the module: scope precision, shadowing, and remaining inline
+control-flow parameter paths need additional coverage. Method/block temporaries
+are declared at scope entry; inline collection loops allocate parameter bindings
+on each iteration. Recursive and
 escaped non-local returns remain follow-up work.
 
 Generated accessor messages use ordinary compiled method registration, preserving

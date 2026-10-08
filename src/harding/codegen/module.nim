@@ -248,7 +248,7 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
-proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]] =
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]] =
   ## Extract method definitions from AST nodes
   ## Returns (className, selector, params, body) for each method
   result = @[]
@@ -278,10 +278,10 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
           if className.len > 0 and selectorName.len > 0:
             # Stable id per method proc, used for non-local return targeting
             let methodId = 1000 + result.len
-            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body, methodId,
+            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.temporaries, bodyBlock.body, methodId,
                         msg.selector == "classSelector:put:"))
 
-proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil): string =
   ## Generate compiled method procs from extracted method definitions
@@ -346,6 +346,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       for paramName in params:
         genCtx.parameters.add(paramName)
       
+      output.add(indentBlock(genLocalDeclarations(genCtx, md.temporaries)))
+
       # If any nested block performs a non-local return (^), the method
       # boundary must catch NonLocalReturnException and return its value.
       var needsNLRWrapper = false

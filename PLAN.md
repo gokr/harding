@@ -27,8 +27,12 @@ changelog entry, and build/test validation. Update this checklist as work lands.
 
 - [x] Share mutable capture cells instead of copying independent values.
 - [x] Test sibling and nested blocks observing the same bindings.
-- [ ] Tighten scope-local capture analysis and cover shadowing, forward-declared
-      temporaries, and captured iteration parameters in every inline loop path.
+- [x] Declare method/block temporaries before closure creation; cover captures
+      preceding first assignment.
+- [x] Allocate per-iteration parameter bindings in inline `do:`/`collect:`/`select:`;
+      executed coverage for escaped closures from `collect:`.
+- [ ] Tighten scope-local capture analysis and cover shadowing and captured
+      iteration parameters in remaining inline control-flow paths.
 - [x] Keep escaped block environments alive safely under ARC/ORC (managed
       environments owned by BlockNode; returned string-capture regression tested).
 
