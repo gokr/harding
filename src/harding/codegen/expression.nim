@@ -227,6 +227,9 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
         return fmt("getSlotValue(self, \"{name}\")")
       return fmt("self.slots[{slotIdx}]")
 
+  if name in ctx.compiledClasses and not ctx.mixed:
+    return fmt("compiledClassValue(\"{name}\")")
+
   # Check if it's a known global (class or global variable)
   if name in ctx.globals:
     # Globals are stored in a globals table
@@ -373,9 +376,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if ctx.mixed:
         return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
       else:
-        # Generate native constructor call: newClass_ClassName().toValue()
-        let mangledClass = mangleClass(className)
-        return fmt("new{mangledClass}().toValue()")
+        return fmt("sendMessage(currentRuntime[], compiledClassValue(\"{className}\"), \"new\", @[])")
 
   # Check for inline control flow with literal blocks
   case node.selector
@@ -716,8 +717,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
-    if ctx.mixed or ctx.inMethod:
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed:
       return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
     else:
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
@@ -729,8 +730,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed or ctx.inMethod: "sendMessageHybrid" else: "sendMessage"
-    if ctx.mixed or ctx.inMethod:
+    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
+    if ctx.mixed:
       return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
     else:
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")

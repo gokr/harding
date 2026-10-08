@@ -230,7 +230,7 @@ proc extractClassAndMethodDefs(nodes: seq[Node]): tuple[defs: seq[Node], topLeve
 
   return (defs, topLevel)
 
-proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int]] =
+proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]] =
   ## Extract method definitions from AST nodes
   ## Returns (className, selector, params, body) for each method
   result = @[]
@@ -238,7 +238,7 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
   for node in nodes:
     if node.kind == nkMessage:
       let msg = node.MessageNode
-      if msg.selector == "selector:put:" and msg.arguments.len >= 2:
+      if msg.selector in ["selector:put:", "classSelector:put:"] and msg.arguments.len >= 2:
         var bodyBlock: BlockNode = nil
         if msg.arguments[1].kind == nkBlock:
           bodyBlock = msg.arguments[1].BlockNode
@@ -260,9 +260,10 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
           if className.len > 0 and selectorName.len > 0:
             # Stable id per method proc, used for non-local return targeting
             let methodId = 1000 + result.len
-            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body, methodId))
+            result.add((className, selectorName, bodyBlock.parameters, bodyBlock.body, methodId,
+                        msg.selector == "classSelector:put:"))
 
-proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int]],
+proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil): string =
   ## Generate compiled method procs from extracted method definitions
@@ -300,7 +301,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     
     let mangledClass = mangleClass(clsName)
     let mangledSelector = mangleSelector(selector)
-    let procName = fmt("{mangledClass}_{mangledSelector}")
+    let sidePrefix = if md.isClassMethod: "class_" else: ""
+    let procName = fmt("{mangledClass}_{sidePrefix}{mangledSelector}")
     
     output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
 
@@ -358,7 +360,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add("\n\n")
     
     # Add registration call
-    registrationCode.add(fmt("  registerCompiledMethod(\"{clsName}\", \"{selector}\", {procName})\n"))
+    let registrationProc = if md.isClassMethod: "registerCompiledClassMethod" else: "registerCompiledMethod"
+    registrationCode.add(fmt("  {registrationProc}(\"{clsName}\", \"{selector}\", {procName})\n"))
   
   # Generate slot accessor registrations for all compiled classes
   var slotRegCode = ""
@@ -434,7 +437,11 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   # Initialize runtime
   output.add("  initRuntime()\n")
   output.add("  registerCompiledMethods()\n")
-  output.add("  registerSuperclassHierarchy()\n\n")
+  output.add("  registerSuperclassHierarchy()\n")
+  for className in compiledClasses:
+    let nativeClass = mangleClass(className)
+    output.add(fmt("  registerCompiledClass(\"{className}\", allocate{nativeClass})\n"))
+  output.add("\n")
 
   # If mixed mode, initialize hybrid runtime with source file
   if mixed and sourceFile.len > 0:
@@ -576,6 +583,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(genClassConstants(cls))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
+    let nativeClass = mangleClass(cls.name)
+    output.add(fmt("proc allocate{nativeClass}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("  new{nativeClass}().toValue()\n\n"))
 
   # Generate superclass hierarchy registration
   var superclassCalls = ""

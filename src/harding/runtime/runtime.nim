@@ -71,6 +71,28 @@ proc registerMethod*(runtime: var Runtime, selector: string,
 
 var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
   initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
+type CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
+
+var compiledClassMethods = initTable[string, CompiledProc]()
+var compiledAllocators = initTable[string, CompiledProc]()
+var compiledClasses = initTable[string, Class]()
+
+proc registerCompiledClass*(name: string, allocator: CompiledProc) =
+  ## Register a class receiver and its native allocator.
+  compiledAllocators[name] = allocator
+  if name notin compiledClasses:
+    compiledClasses[name] = newClass(name = name)
+
+proc compiledClassValue*(name: string): NodeValue =
+  ## Return the class-side receiver for a compiled class.
+  if name in compiledClasses:
+    return NodeValue(kind: vkClass, classVal: compiledClasses[name])
+  return NodeValue(kind: vkNil)
+
+proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
+  ## Register a class-side method separately from instance methods.
+  compiledClassMethods[className & ">>" & selector] = fn
+
 var nimProxyClassNames*: Table[pointer, string] = initTable[pointer, string]()
 
 type
@@ -173,6 +195,20 @@ proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
     currentClass = getSuperclassName(currentClass)
   return false
 
+proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
+                                 args: seq[NodeValue]): NodeValue =
+  var currentClass = startClass
+  while currentClass.len > 0:
+    let key = currentClass & ">>" & selector
+    if key in compiledClassMethods:
+      return compiledClassMethods[key](receiver, args)
+    currentClass = getSuperclassName(currentClass)
+  if selector == "new" and receiver.kind == vkClass and receiver.classVal != nil:
+    let name = receiver.classVal.name
+    if name in compiledAllocators:
+      return compiledAllocators[name](receiver, args)
+  return NodeValue(kind: vkNil)
+
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
                        selector: string, args: seq[NodeValue],
                        explicitParent: string = ""): NodeValue =
@@ -184,6 +220,8 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
     startClass = getSuperclassName(definingClassName)
   if startClass.len == 0:
     return NodeValue(kind: vkNil)
+  if receiver.kind == vkClass:
+    return dispatchCompiledClassMethod(receiver, startClass, selector, args)
   return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
 
 proc evalBlock*(runtime: Runtime, blk: BlockNode,
@@ -252,6 +290,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           return fn(args[0], args[1], args[2])
     else:
       discard
+
+  if receiver.kind == vkClass and receiver.classVal != nil:
+    return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
   let receiverClassName = getReceiverClassName(receiver)
   if receiverClassName.len > 0 and hasCompiledMethodInHierarchy(receiverClassName, selector):
