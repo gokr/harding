@@ -328,6 +328,7 @@ type
     selector*: string                     # method selector (name) - set when method is registered
     primitiveSelector*: string            # for declarative primitives: selector of underlying primitive
     localCount*: int                      # total indexed locals: 1(self) + params.len + temps.len
+    compiledEnv*: RootRef                # managed owner of a compiled closure environment
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter

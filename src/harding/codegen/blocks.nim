@@ -397,7 +397,7 @@ proc generateEnvStructDef*(info: BlockProcInfo): string =
   if info.captures.len == 0:
     return ""  # No environment needed
 
-  var output = fmt("type {info.envStructName}* = object")
+  var output = fmt("type {info.envStructName}* = ref object of RootObj")
   for i, capture in info.captures:
     let typ = info.captureTypes[i]
     output.add(fmt("\n  {capture}: {typ}"))
@@ -433,7 +433,7 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
 
   # If we have captures, cast env pointer and extract values
   if info.captures.len > 0:
-    output.add(fmt("  let envTyped = cast[ptr {info.envStructName}](env)\n"))
+    output.add(fmt("  let envTyped = cast[{info.envStructName}](env)\n"))
     for capture in info.captures:
       output.add(fmt("  let {capture} = envTyped.{capture}\n"))
 
@@ -687,13 +687,6 @@ type
     value*: NodeValue
     targetId*: int
 
-# Wrapper to hold environment pointer alongside the block
-type
-  BlockEnvHolder* = object
-    env*: pointer
-
-var blockEnvs*: seq[BlockEnvHolder] = @[]
-
 proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): NodeValue =
   ## Create a block value wrapping a compiled procedure pointer
   ## Note: procPtr is cast to pointer inside this proc to avoid cast issues at call site
@@ -739,15 +732,16 @@ proc getBlockEnvPtr*(blk: BlockNode): pointer =
     return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
   return nil
 
-# Generic helper to create a block with environment in expression context
-# This allocates the environment on the heap (memory leak, but works for now)
 template createBlockWithEnv*[T](procPtr: pointer, paramCount: int, env: T): NodeValue =
-  ## Create a block with an environment allocated on the heap
-  ## Note: This leaks memory - the environment is never freed.
-  ## This is a temporary solution until we refactor block creation.
-  var envCopy = env  # Create a local variable we can take address of
-  let envPtr = alloc(sizeof(T))
-  copyMem(envPtr, addr(envCopy), sizeof(T))
-  createBlock(procPtr, paramCount, envPtr)
+  ## Retain a managed closure environment for the lifetime of its block.
+  block:
+    let ownedEnv = env
+    var blockValue = createBlock(procPtr, paramCount)
+    blockValue.blockVal.compiledEnv = ownedEnv
+    blockValue.blockVal.capturedEnv = initTable[string, MutableCell]()
+    blockValue.blockVal.capturedEnv["__env_ptr__"] = MutableCell(
+      value: NodeValue(kind: vkInt, intVal: cast[int](cast[pointer](ownedEnv))))
+    blockValue.blockVal.capturedEnvInitialized = true
+    blockValue
 
 """

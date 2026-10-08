@@ -105,6 +105,19 @@ scale := 10.
 blk := [:n | n * scale].
 (blk value: 7) println.
 """, "10\n70\n"),
+    ("escaped_environment", """
+Maker := Object derive: #().
+Maker>>make: text [ | blk | blk := [text & "!"]. ^ blk ].
+Maker>>direct: text [ ^ [text & "?"] ].
+m := Maker new.
+a := m make: "first".
+b := m make: "second".
+c := m direct: "third".
+(a value) println.
+(b value) println.
+(c value) println.
+(a value) println.
+""", "first!\nsecond!\nthird?\nfirst!\n"),
     ("non_local_return", """
 Finder := Object derive: #().
 Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].

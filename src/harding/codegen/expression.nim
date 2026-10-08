@@ -813,28 +813,6 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     let varName = assign.variable
     
     
-    # Check if the expression is a block with captures
-    let (isBlockWithCaps, blockInfo) = isBlockWithCaptures(ctx, assign.expression)
-    if isBlockWithCaps:
-      # For blocks with captures, declare the environment first, then create the block
-      var initFields: seq[string] = @[]
-      for capture in blockInfo.captures:
-        initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
-      let fieldsStr = initFields.join(", ")
-      let envStruct = blockInfo.envStructName
-      let envInst = envStruct & "_inst"
-      let nimName = blockInfo.nimName
-      let paramCount = blockInfo.paramCount
-      
-      # Generate: var envInst = EnvStruct(fields); var varName = createBlock(..., addr envInst)
-      var output = "var " & envInst & " = " & envStruct & "(" & fieldsStr & ")\n"
-      if ctx.isLocal(varName):
-        output.add("var " & varName & " = createBlock(cast[pointer](" & nimName & "), " & $paramCount & ", cast[pointer](addr " & envInst & "))")
-      else:
-        ctx.locals.add(varName)
-        output.add("var " & varName & " = createBlock(cast[pointer](" & nimName & "), " & $paramCount & ", cast[pointer](addr " & envInst & "))")
-      return output
-    
     # Infer type from the expression being assigned
     let exprType = ctx.inferTypeFromExpression(assign.expression)
     if exprType.className.len > 0:
@@ -1156,7 +1134,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   # Extract captured variables from environment struct
   if captures.len > 0:
     if envStructName.len > 0:
-      output.add(fmt("  let envTyped = cast[ptr {envStructName}](env)\n"))
+      output.add(fmt("  let envTyped = cast[{envStructName}](env)\n"))
     for capture in captures:
       if envStructName.len > 0:
         output.add(fmt("  var {capture} = envTyped[].{capture}\n"))
@@ -1265,32 +1243,6 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     let assign = node.AssignNode
     let varName = assign.variable
     
-    
-    # Check if the expression is a block with captures
-    let (isBlockWithCaps, blockInfo) = isBlockWithCaptures(ctx, assign.expression)
-    if isBlockWithCaps:
-      # For blocks with captures, declare the environment first, then create the block
-      var initFields: seq[string] = @[]
-      for capture in blockInfo.captures:
-        initFields.add(fmt("{capture}: {genSymbolAccess(ctx, capture)}"))
-      let fieldsStr = initFields.join(", ")
-      let envStruct = blockInfo.envStructName
-      let envInst = envStruct & "_inst"
-      let nimName = blockInfo.nimName
-      let paramCount = blockInfo.paramCount
-      
-      # Generate: var envInst = EnvStruct(fields)
-      var output = "var " & envInst & " = " & envStruct & "(" & fieldsStr & ")\n"
-      
-      # Check if it's a reassignment
-      if varName in ctx.locals or varName in ctx.globals:
-        output.add("var " & varName & " = createBlock(cast[pointer](" & nimName & "), " & $paramCount & ", cast[pointer](addr " & envInst & "))")
-      else:
-        # New variable
-        ctx.locals.add(varName)
-        ctx.globals.add(varName)
-        output.add("var " & varName & " = createBlock(cast[pointer](" & nimName & "), " & $paramCount & ", cast[pointer](addr " & envInst & "))")
-      return output
     
     # Infer type from the expression being assigned
     let exprType = ctx.inferTypeFromExpression(assign.expression)

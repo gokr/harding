@@ -27,7 +27,8 @@ changelog entry, and build/test validation. Update this checklist as work lands.
 
 - [ ] Share mutable capture cells instead of copying independent values.
 - [ ] Test sibling and nested blocks observing the same bindings.
-- [ ] Keep escaped block environments alive safely under ARC/ORC.
+- [x] Keep escaped block environments alive safely under ARC/ORC (managed
+      environments owned by BlockNode; returned string-capture regression tested).
 
 ## 3. Correct non-local returns
 
