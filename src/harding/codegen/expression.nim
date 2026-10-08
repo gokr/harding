@@ -238,84 +238,6 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   # Fallback: treat as symbol
   return fmt("NodeValue(kind: vkSymbol, symVal: \"{name}\")")
 
-proc tryGenerateSlotAccessor*(ctx: GenContext, node: MessageNode, receiverCode: string): string =
-  ## Try to generate direct slot accessor call instead of sendMessage
-  ## Returns empty string if not a slot accessor (fallback to sendMessage)
-  ## 
-  ## NOTE: This optimization only works for native objects created via native constructors.
-  ## Runtime objects created through sendMessage use a different representation.
-  
-  # Get receiver type info
-  var receiverType: VarTypeInfo
-  if node.receiver != nil and node.receiver.kind == nkIdent:
-    let varName = node.receiver.IdentNode.name
-    receiverType = ctx.getVariableType(varName)
-  elif node.receiver != nil and node.receiver.kind == nkPseudoVar:
-    let varName = node.receiver.PseudoVarNode.name
-    if varName == "self":
-      if ctx.cls != nil:
-        receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
-      else:
-        receiverType = ctx.getVariableType("self")
-  elif node.receiver == nil:
-    if ctx.cls != nil:
-      receiverType = VarTypeInfo(name: "self", className: ctx.cls.name, isNativeClass: true)
-  
-  if receiverType.className.len == 0:
-    return ""
-  
-  if ctx.mixed:
-    return ""
-  
-  if not receiverType.isNativeClass:
-    return ""
-  
-  let selector = node.selector
-  let className = receiverType.className
-  
-  # Verify selector is actually a slot name in this class
-  # Handle both getter "name" and setter "name:" patterns
-  if className notin ctx.classInfo:
-    return ""
-  
-  let classDef = ctx.classInfo[className]
-  let checkSelector = if selector.endsWith(":") and node.arguments.len == 1:
-                        selector[0..^2]  # Remove trailing colon for setter
-                      else:
-                        selector
-  let selectorIsSlot = block:
-    var found = false
-    for slot in classDef.getAllSlots():
-      if slot.name == checkSelector:
-        found = true
-        break
-    found
-  
-  if not selectorIsSlot:
-    return ""
-  
-  let classType = mangleClass(className)
-  
-  # Generate code to extract native pointer from NodeValue
-  # receiverCode is a NodeValue, we need to extract instVal.nimValue and cast it
-  let nativeReceiver = fmt("cast[{classType}]({receiverCode}.instVal.nimValue)")
-  
-  # Check for setter pattern: "slotName:" (one arg, ends with colon)
-  if selector.endsWith(":") and node.arguments.len == 1:
-    let slotName = selector[0..^2]  # Remove trailing colon
-    let mangledSlot = mangleSlot(slotName)
-    let argCode = genExpression(ctx, node.arguments[0])
-    return fmt("set{mangledSlot}({nativeReceiver}, {argCode})")
-  
-  # Check for getter pattern: "slotName" (no args, no colon)
-  elif not selector.contains(":") and node.arguments.len == 0:
-    let slotName = selector
-    let mangledSlot = mangleSlot(slotName)
-    return fmt("get{mangledSlot}({nativeReceiver})")
-  
-  # Not a slot accessor
-  return ""
-
 proc tryGenerateNamedAccess*(ctx: GenContext, node: NamedAccessNode, receiverCode: string): string =
   ## Try to generate direct access for named access on known compiled classes.
   let receiverType = ctx.inferTypeFromExpression(node.receiver)
@@ -724,10 +646,6 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    let slotAccessorCode = tryGenerateSlotAccessor(ctx, node, receiverCode)
-    if slotAccessorCode.len > 0:
-      return slotAccessorCode
-    
     # Generic message dispatch via sendMessage
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
     let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"

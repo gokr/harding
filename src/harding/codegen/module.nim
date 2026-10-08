@@ -152,6 +152,16 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = value\n"))
     output.add(fmt("  return value\n\n"))
 
+  for slotName in cls.getterSlots:
+    let mangledSlot = mangleSlot(slotName)
+    output.add(fmt("proc methodGet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("  getSlotValue(self, \"{slotName}\")\n\n"))
+  for slotName in cls.setterSlots:
+    let mangledSlot = mangleSlot(slotName)
+    output.add(fmt("proc methodSet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("  discard setSlotValue(self, \"{slotName}\", args[0])\n"))
+    output.add("  self\n\n")
+
   return output
 
 proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
@@ -163,6 +173,14 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
       continue
     let slotName = mangleSlot(slot.name)
     output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{cls.name}_{slotName}, slotSet_{cls.name}_{slotName})\n"))
+  for slotName in cls.getterSlots:
+    if slotName notin cls.instanceSelectors:
+      let mangledSlot = mangleSlot(slotName)
+      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}\", methodGet_{cls.name}_{mangledSlot})\n"))
+  for slotName in cls.setterSlots:
+    if slotName & ":" notin cls.instanceSelectors:
+      let mangledSlot = mangleSlot(slotName)
+      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}:\", methodSet_{cls.name}_{mangledSlot})\n"))
   return output
 
 proc collectAstNodes(nodes: var Table[pointer, bool], node: Node) =
@@ -529,6 +547,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
         let slotSource = if className in reflectedClasses: reflectedClasses[className] else: astCls
         for slot in slotSource.slots:
           discard mergedCls.addSlot(slot.name, slot.constraint)
+        mergedCls.getterSlots = slotSource.getterSlots
+        mergedCls.setterSlots = slotSource.setterSlots
+        mergedCls.instanceSelectors = astCls.instanceSelectors
         merged.classes[className] = mergedCls
 
       # Second pass: wire parent links using AST class graph names

@@ -137,6 +137,39 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
 
   return (className, parent, typeList)
 
+proc slotNames(node: Node): seq[string] =
+  if node == nil:
+    return @[]
+  if node.kind == nkLiteral and node.LiteralNode.value.kind == vkArray:
+    for value in node.LiteralNode.value.arrayVal:
+      if value.kind == vkSymbol:
+        result.add(value.symVal)
+      elif value.kind == vkString:
+        result.add(value.strVal)
+  elif node.kind == nkArray:
+    for element in node.ArrayNode.elements:
+      if element.kind == nkIdent:
+        result.add(element.IdentNode.name)
+      elif element.kind == nkLiteral:
+        let value = element.LiteralNode.value
+        if value.kind == vkSymbol:
+          result.add(value.symVal)
+        elif value.kind == vkString:
+          result.add(value.strVal)
+
+proc extractAccessorInfo(node: Node, cls: ClassInfo) =
+  let expression = if node.kind == nkAssign: node.AssignNode.expression else: node
+  if expression == nil or expression.kind != nkMessage:
+    return
+  let msg = expression.MessageNode
+  if msg.selector in ["derivePublic", "derivePublic:", "deriveWithAccessors", "deriveWithAccessors:"]:
+    for slot in cls.slots:
+      cls.getterSlots.add(slot.name)
+      cls.setterSlots.add(slot.name)
+  elif msg.selector in ["derive:read:write:", "derive:read:write:superclasses:"] and msg.arguments.len >= 3:
+    cls.getterSlots = slotNames(msg.arguments[1])
+    cls.setterSlots = slotNames(msg.arguments[2])
+
 proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
                       parentClass: ClassInfo): ClassInfo =
   ## Analyze a class definition and create ClassInfo
@@ -152,6 +185,7 @@ proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
     let slots = parseTypeList(typeList)
     for (name, constraint) in slots:
       discard result.addSlot(name, constraint)
+  extractAccessorInfo(node, result)
 
 proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
   ## Build class graph from parsed nodes
@@ -190,6 +224,20 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
           let slots = parseTypeList(typeList)
           for (name, constraint) in slots:
             discard cls.addSlot(name, constraint)
+
+        extractAccessorInfo(node, cls)
+
+  for node in nodes:
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector == "selector:put:" and msg.receiver != nil and msg.receiver.kind == nkIdent and
+         msg.receiver.IdentNode.name in classMap and msg.arguments.len > 0 and
+         msg.arguments[0].kind == nkLiteral:
+        let value = msg.arguments[0].LiteralNode.value
+        if value.kind == vkSymbol:
+          classMap[msg.receiver.IdentNode.name].instanceSelectors.add(value.symVal)
+        elif value.kind == vkString:
+          classMap[msg.receiver.IdentNode.name].instanceSelectors.add(value.strVal)
 
   # Third pass: wire parent links now that all classes exist
   for className, parentName in parentNames.pairs:

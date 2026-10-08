@@ -20,7 +20,7 @@ changelog entry, and build/test validation. Update this checklist as work lands.
 - [x] Preserve defining-class ownership for inherited methods and `super`.
 - [x] Test class-side `super` in nested blocks.
 - [x] Test multi-level constructor inheritance.
-- [ ] Register dynamically dispatched generated accessors as compiled methods,
+- [x] Register dynamically dispatched generated accessors as compiled methods,
       respecting read/write permissions and user-defined overrides.
 
 ## 2. Correct closure semantics

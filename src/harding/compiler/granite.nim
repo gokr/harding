@@ -53,6 +53,19 @@ proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassI
         let classInfo = newClassInfo(cls.name)
         for slotName in cls.allSlotNames:
           discard classInfo.addSlot(slotName, tcObject)
+        for selector, methodBlock in cls.methods:
+          classInfo.instanceSelectors.add(selector)
+          if methodBlock.body.len == 1:
+            let bodyNode = methodBlock.body[0]
+            if bodyNode.kind == nkReturn and bodyNode.ReturnNode.expression != nil and
+               bodyNode.ReturnNode.expression.kind == nkSlotAccess:
+              let slotName = bodyNode.ReturnNode.expression.SlotAccessNode.slotName
+              if selector == slotName:
+                classInfo.getterSlots.add(slotName)
+            elif bodyNode.kind == nkSlotAccess and bodyNode.SlotAccessNode.isAssignment:
+              let slotName = bodyNode.SlotAccessNode.slotName
+              if selector == slotName & ":":
+                classInfo.setterSlots.add(slotName)
         result[cls.name] = classInfo
 
   # Second pass: wire parent links (first superclass for ClassInfo.parent)

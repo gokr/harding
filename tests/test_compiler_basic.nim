@@ -3,11 +3,11 @@
 # Basic compiler tests for Harding
 # Tests parsing, code generation, and round-trip compilation
 
-import std/[unittest, strutils, os, tables]
+import std/[unittest, strutils, tables]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
 import ../src/harding/compiler/[context, types, symbols, analyzer]
-import ../src/harding/codegen/[expression, blocks]
+import ../src/harding/codegen/[expression, blocks, module]
 
 suite "Compiler: Lexer and Parser":
   test "lexes simple integer literal":
@@ -242,23 +242,40 @@ suite "Compiler: Analyzer":
     check slots[2].name == "name"
     check slots[2].constraint == tcNone
 
+suite "Compiler: Accessor Registration":
+  test "selective accessor registration excludes private directions":
+    var p = initParser(lex("Cell := Object derive: #(readOnly, writeOnly, hidden) read: #(readOnly) write: #(writeOnly)"))
+    let analysis = buildClassGraph(p.parseStatements())
+    let cls = analysis.classes["Cell"]
+    check cls.getterSlots == @["readOnly"]
+    check cls.setterSlots == @["writeOnly"]
+    let registration = genSlotAccessorRegistrations(cls)
+    check registration.contains("registerCompiledMethod(\"Cell\", \"readOnly\"")
+    check registration.contains("registerCompiledMethod(\"Cell\", \"writeOnly:\"")
+    check not registration.contains("registerCompiledMethod(\"Cell\", \"hidden\"")
+    check not registration.contains("registerCompiledMethod(\"Cell\", \"readOnly:\"")
+    check not registration.contains("registerCompiledMethod(\"Cell\", \"writeOnly\"")
+
+  test "explicit methods suppress generated registrations":
+    var p = initParser(lex("Cell := Object derivePublic: #(amount). Cell>>amount [ ^ 99 ]. Cell>>amount: n [ ^ n ]"))
+    let analysis = buildClassGraph(p.parseStatements())
+    let registration = genSlotAccessorRegistrations(analysis.classes["Cell"])
+    check not registration.contains("registerCompiledMethod")
+
 suite "Compiler: Codegen - Expression":
   test "generates integer literal":
-    let ctx = newGenContext(nil)
     let node = LiteralNode(value: NodeValue(kind: vkInt, intVal: 42))
     let code = genLiteral(node)
     check code.contains("vkInt")
     check code.contains("42")
 
   test "generates string literal":
-    let ctx = newGenContext(nil)
     let node = LiteralNode(value: NodeValue(kind: vkString, strVal: "hello"))
     let code = genLiteral(node)
     check code.contains("vkString")
     check code.contains("hello")
 
   test "generates nil literal":
-    let ctx = newGenContext(nil)
     let node = LiteralNode(value: NodeValue(kind: vkNil))
     let code = genLiteral(node)
     check code.contains("vkNil")

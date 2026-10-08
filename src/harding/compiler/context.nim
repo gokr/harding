@@ -25,6 +25,9 @@ type
     slots*: seq[SlotDef]       ## Slot definitions
     methods*: seq[MethodType]  ## Method type information
     slotIndex*: Table[string, int]  ## Slot name -> index
+    getterSlots*: seq[string]
+    setterSlots*: seq[string]
+    instanceSelectors*: seq[string]
 
   CompilerContext* = ref object
     outputDir*: string

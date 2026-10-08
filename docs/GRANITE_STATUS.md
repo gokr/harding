@@ -25,20 +25,20 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Nine execution-parity cases pass, including inherited method ownership,
-class-side `super` in blocks, and multi-level constructor inheritance: class/instance selector isolation, inherited
-class methods and aliases, factories, class-side `super`, `super new initialize`,
-overridden constructors, captured blocks, and non-local returns. The VM now uses
+Eleven execution-parity cases pass, including inherited method ownership,
+class-side `super` in blocks, multi-level constructor inheritance, dynamic
+accessors, selective read/write accessors, and overridden accessor methods. The VM now uses
 class-side lookup and preserves class-side activation context for `super` sends.
 The class-model unit suite also passes.
 
 Keep recursive/escaped returns and mutable captures as follow-up work rather
 than inferring correctness from the basic block cases.
 
-Another compiled-runtime gap remains: dynamically dispatched generated slot
-accessor messages are not registered as ordinary compiled methods. Factories
-are covered using explicit instance methods; accessor visibility and registration
-need their own regression coverage before changing dispatch.
+Generated accessor messages use ordinary compiled method registration, preserving
+user overrides and inherited lookup. Generated setters return the receiver.
+Direct named access (`::`) remains distinct from accessor message dispatch.
+Compiler registration tests check that private and disallowed accessor directions
+are not emitted. Missing-message error parity remains a later milestone.
 
 ## Implementation order
 

@@ -43,11 +43,34 @@ Middle class>>answer [ | blk | blk := [super answer + 2]. ^ blk value ].
 Product := Object derivePublic: #(amount).
 Product>>setAmount: n [ amount := n. ^ self ].
 Product>>readAmount [ ^ amount ].
-Product class>>make: n [ | item | item := self new. item setAmount: n. ^ item ].
+Product class>>make: n [ | item | item := self new. item amount: n. ^ item ].
 Special := Product derive: #().
-(Product make: 23) readAmount println.
-(Special make: 31) readAmount println.
+(Product make: 23) amount println.
+(Special make: 31) amount println.
 """, "23\n31\n"),
+    ("accessor_override", """
+Cell := Object derivePublic: #(amount).
+Cell>>amount [ ^ 99 ].
+Cell>>amount: n [ amount := n + 1. ^ amount ].
+c := Cell new.
+(c amount: 4) println.
+(c amount) println.
+(c::amount) println.
+Child := Cell derive: #().
+d := Child new.
+(d amount: 8) println.
+(d amount) println.
+(d::amount) println.
+""", "5\n99\n5\n9\n99\n9\n"),
+    ("selective_accessors", """
+Cell := Object derive: #(readOnly, writeOnly, hidden) read: #(readOnly) write: #(writeOnly).
+Cell>>initialize [ readOnly := 7. hidden := 9. ^ self ].
+Cell>>stored [ ^ writeOnly ].
+c := Cell new initialize.
+(c readOnly) println.
+((c writeOnly: 12) stored) println.
+(c stored) println.
+""", "7\n12\n12\n"),
     ("class_super", """
 Base := Object derive: #().
 Base class>>answer [ ^ 40 ].
