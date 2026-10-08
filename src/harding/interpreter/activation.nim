@@ -25,10 +25,13 @@ proc newActivation*(blk: BlockNode,
   result.returnValue = nilValue()
   result.hasReturned = false
   result.isClassMethod = isClassMethod
+  if blk != nil and not blk.isMethod and blk.homeActivation != nil:
+    result.definingObject = blk.homeActivation.definingObject
+    result.isClassMethod = blk.homeActivation.isClassMethod
   # wasCaptured already false from pool
 
   # Initialize indexed locals if the block has been resolved
-  let selfVal = if isClassMethod and receiver != nil and receiver.class != nil:
+  let selfVal = if result.isClassMethod and receiver != nil and receiver.class != nil:
                   receiver.class.toValue()
                 else:
                   receiver.toValue()

@@ -193,6 +193,7 @@ proc collectIdentRefs(node: Node, refs: var HashSet[string]) =
       collectIdentRefs(slotNode.valueExpr, refs)
 
   of nkSuperSend:
+    refs.incl("self")
     let ss = node.SuperSendNode
     for arg in ss.arguments:
       collectIdentRefs(arg, refs)
@@ -277,7 +278,7 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
   for name in allRefs:
     if name in locals:
       continue
-    if name in pseudoVars:
+    if name in pseudoVars and name != "self":
       continue
     if name in knownGlobals:
       continue

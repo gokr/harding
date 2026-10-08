@@ -1284,6 +1284,22 @@ proc setTableValue*(inst: Instance, key: NodeValue, value: NodeValue) =
   if inst.kind == ikTable:
     inst.entries[key] = value
 
+proc definingMethodClass*(cls: Class, selector: string, methodBlock: BlockNode,
+                          isClassMethod: bool = false): Class =
+  ## Find the declaration owning a resolved method in parent lookup order.
+  if cls == nil or methodBlock == nil:
+    return nil
+  if isClassMethod:
+    if selector in cls.classMethods and cls.classMethods[selector] == methodBlock:
+      return cls
+  elif selector in cls.methods and cls.methods[selector] == methodBlock:
+    return cls
+  for parent in cls.superclasses:
+    let owner = definingMethodClass(parent, selector, methodBlock, isClassMethod)
+    if owner != nil:
+      return owner
+  return nil
+
 proc lookupInstanceMethod*(cls: Class, selector: string): BlockNode =
   ## Look up instance method in class (fast O(1) lookup)
   if selector in cls.allMethods:

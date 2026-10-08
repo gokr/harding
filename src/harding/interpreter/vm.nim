@@ -871,7 +871,7 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
     return MethodResult(
       currentMethod: meth,
       receiver: receiver,
-      definingClass: cls,
+      definingClass: definingMethodClass(cls, selector, meth),
       found: true
     )
 
@@ -886,7 +886,7 @@ proc lookupMethod*(interp: Interpreter, receiver: Instance, selector: string): M
       return MethodResult(
         currentMethod: meth,
         receiver: receiver,
-        definingClass: cls,
+        definingClass: definingMethodClass(cls, selector, meth),
         found: true
       )
 
@@ -902,7 +902,7 @@ proc lookupMethodOnClass*(interp: Interpreter, receiverClass: Class, selector: s
     return MethodResult(
       currentMethod: receiverClass.allMethods[selector],
       receiver: nil,
-      definingClass: receiverClass,
+      definingClass: definingMethodClass(receiverClass, selector, receiverClass.allMethods[selector]),
       found: true
     )
 
@@ -913,7 +913,7 @@ proc lookupMethodOnClass*(interp: Interpreter, receiverClass: Class, selector: s
       return MethodResult(
         currentMethod: receiverClass.allMethods[selector],
         receiver: nil,
-        definingClass: receiverClass,
+        definingClass: definingMethodClass(receiverClass, selector, receiverClass.allMethods[selector]),
         found: true
       )
 
@@ -973,7 +973,7 @@ proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
     return MethodResult(
       currentMethod: cls.allClassMethods[selector],
       receiver: nil,  # Class methods don't have instance receiver
-      definingClass: cls,
+      definingClass: definingMethodClass(cls, selector, cls.allClassMethods[selector], true),
       found: true
     )
   
@@ -987,7 +987,7 @@ proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
       return MethodResult(
         currentMethod: cls.allClassMethods[selector],
         receiver: nil,
-        definingClass: cls,
+        definingClass: definingMethodClass(cls, selector, cls.allClassMethods[selector], true),
         found: true
       )
   
@@ -7240,7 +7240,8 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       arguments.add(interp.evalWithVM(argNode))
 
     let methodResult = executeMethod(interp, methodBlock, interp.currentReceiver, arguments,
-                                     targetParent, isClassMethod)
+                                     definingMethodClass(targetParent, superNode.selector, methodBlock, isClassMethod),
+                                     isClassMethod)
     interp.pushValue(methodResult)
     return true
 

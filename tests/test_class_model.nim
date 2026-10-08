@@ -14,6 +14,27 @@ suite "Class Object Model":
     rootClass.allMethods = initTable[string, BlockNode]()
     rootClass.allClassMethods = initTable[string, BlockNode]()
 
+  test "Resolved methods retain declaration ownership across parents":
+    let first = newClass(name = "First")
+    let second = newClass(name = "Second")
+    let instanceMethod = BlockNode(isMethod: true)
+    let classMethod = BlockNode(isMethod: true)
+    second.methods["answer"] = instanceMethod
+    second.classMethods["answer"] = classMethod
+    let child = newClass(superclasses = @[first, second], name = "Child")
+    check definingMethodClass(child, "answer", instanceMethod) == second
+    check definingMethodClass(child, "answer", classMethod, true) == second
+    check definingMethodClass(child, "missing", instanceMethod) == nil
+
+  test "Block activations retain lexical class-side context":
+    let owner = newClass(name = "Owner")
+    let receiver = newInstance(owner)
+    let home = newActivation(BlockNode(isMethod: true), receiver, nil, owner, true)
+    let blockActivation = newActivation(BlockNode(homeActivation: home), receiver, nil)
+    check blockActivation.definingObject == owner
+    check blockActivation.isClassMethod
+    check blockActivation.locals["self"].kind == vkClass
+
   test "Class creation with basic fields":
     let cls = newClass(name = "TestClass")
     check(cls.name == "TestClass")

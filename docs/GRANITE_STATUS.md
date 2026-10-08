@@ -25,15 +25,15 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Seven execution-parity cases pass: class/instance selector isolation, inherited
+Nine execution-parity cases pass, including inherited method ownership,
+class-side `super` in blocks, and multi-level constructor inheritance: class/instance selector isolation, inherited
 class methods and aliases, factories, class-side `super`, `super new initialize`,
 overridden constructors, captured blocks, and non-local returns. The VM now uses
 class-side lookup and preserves class-side activation context for `super` sends.
 The class-model unit suite also passes.
 
 Keep recursive/escaped returns and mutable captures as follow-up work rather
-than inferring correctness from the basic block cases. Inherited method ownership
-and `super` inside nested blocks need additional targeted coverage.
+than inferring correctness from the basic block cases.
 
 Another compiled-runtime gap remains: dynamically dispatched generated slot
 accessor messages are not registered as ordinary compiled methods. Factories

@@ -21,6 +21,24 @@ Child class>>answer [ ^ super answer + 1 ].
 alias := Child.
 (alias answer) println.
 """, "42\n9\n43\n45\n43\n"),
+    ("inherited_super", """
+Ancestor := Object derive: #().
+Ancestor class>>answer [ ^ 40 ].
+Ancestor>>answer [ ^ 10 ].
+Middle := Ancestor derive: #().
+Middle class>>answer [ ^ super answer + 2 ].
+Middle>>answer [ ^ super answer + 3 ].
+Leaf := Middle derive: #().
+(Leaf answer) println.
+(Leaf new answer) println.
+""", "42\n13\n"),
+    ("block_super", """
+Ancestor := Object derive: #().
+Ancestor class>>answer [ ^ 40 ].
+Middle := Ancestor derive: #().
+Middle class>>answer [ | blk | blk := [super answer + 2]. ^ blk value ].
+(Middle answer) println.
+""", "42\n"),
     ("class_factory", """
 Product := Object derivePublic: #(amount).
 Product>>setAmount: n [ amount := n. ^ self ].
@@ -42,8 +60,11 @@ Product := Object derive: #(amount).
 Product class>>new [ ^ super new initialize ].
 Product>>initialize [ amount := 17. ^ self ].
 Product>>readAmount [ ^ amount ].
+Middle := Product derive: #().
+Leaf := Middle derive: #().
 (Product new readAmount) println.
-""", "17\n"),
+(Leaf new readAmount) println.
+""", "17\n17\n"),
     ("overridden_new", """
 Token := Object derive: #().
 Token class>>new [ ^ 99 ].

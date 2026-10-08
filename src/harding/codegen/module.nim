@@ -700,6 +700,11 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     # Blocks lexically inside compiled methods must use method-context code
     # (getSlotValue/setSlotValue on self as NodeValue), not top-level access.
     blockGenCtx.inMethod = blockInfo.ownerMethodId != 0
+    blockGenCtx.cls = nil
+    for md in methodDefs:
+      if md.methodId == blockInfo.ownerMethodId and md.className in analysis.classes:
+        blockGenCtx.cls = analysis.classes[md.className]
+        break
     let body = genBlockBody(blockGenCtx, blockInfo.blockNode, blockInfo.captures,
                             not blockInfo.homeInMethod, blockInfo.envStructName,
                             blockInfo.ownerMethodId)
