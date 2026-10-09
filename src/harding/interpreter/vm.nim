@@ -1720,7 +1720,40 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   # Search for matching handler from newest to oldest
   for i in countdown(interp.exceptionHandlers.len - 1, 0):
     let handler = interp.exceptionHandlers[i]
-    if isKindOf(self.class, handler.exceptionClass):
+    if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
+      interp.exceptionHandlers[i].consumed = true
+      var notificationClass: Class = nil
+      if interp.globals != nil and "Notification" in interp.globals[]:
+        let notificationValue = interp.globals[]["Notification"]
+        if notificationValue.kind == vkClass:
+          notificationClass = notificationValue.classVal
+      if notificationClass == nil:
+        for library in interp.importedLibraries:
+          if library.kind == ikObject and library.class == libraryClass:
+            let binding = libraryBindingLookup(library.slots[0], "Notification")
+            if binding.found and binding.value.kind == vkClass:
+              notificationClass = binding.value.classVal
+              break
+      let isNotification = notificationClass != nil and isKindOf(self.class, notificationClass)
+      if not isNotification:
+        let diagnosticContext = ExceptionContext(
+          signaler: interp.currentReceiver,
+          signalActivationDepth: interp.activationStack.len,
+          isResumable: false,
+          exceptionInstance: self)
+        registerExceptionContext(diagnosticContext)
+        interp.exceptionHandlers[i].exceptionInstance = self
+        interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
+        interp.exceptionHandlers[i].exceptionContext = diagnosticContext
+        interp.truncateWorkQueue(handler.workQueueDepth)
+        interp.evalStack.setLen(handler.evalStackDepth)
+        interp.restoreActivationStackTo(handler.stackDepth)
+        interp.pushWorkFrame(newExceptionReturnFrame(i))
+        var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
+        applyFrame.blockArgs = @[self.toValue()]
+        interp.pushWorkFrame(applyFrame)
+        return nilValue()
+
       # Mark captured activations so they are not returned to pools while
       # exception context may reference them for resume/debugging.
       if interp.currentActivation != nil:
@@ -1829,6 +1862,8 @@ proc truncateExceptionHandlers(interp: var Interpreter, newLen: int) =
       unregisterExceptionContext(ctx)
   interp.exceptionHandlers.setLen(target)
 
+proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string)
+
 proc resumeFromSignalContext(interp: var Interpreter, handlerIdx: int, resumeValue: NodeValue, resumeExceptionMsg: string): NodeValue =
   ## Common resume flow for Exception>>resume and Exception>>resume:
   let handler = interp.exceptionHandlers[handlerIdx]
@@ -1839,7 +1874,7 @@ proc resumeFromSignalContext(interp: var Interpreter, handlerIdx: int, resumeVal
     return nilValue()
 
   if not ctx.isResumable:
-    writeStderr("resume: this exception is not resumable")
+    interp.signalExceptionByName("Error", "Cannot resume a non-resumable exception")
     return nilValue()
 
   # Pop handler block activation and anything added during handler execution,
@@ -1977,7 +2012,7 @@ proc primitiveExceptionResumeImpl(interp: var Interpreter, self: Instance, args:
   ## Smalltalk-style resumption: execution continues from where signal was called
   let handlerIdx = interp.findHandlerForException(self)
   if handlerIdx < 0:
-    writeStderr("resume called on exception with no active handler")
+    interp.signalExceptionByName("Error", "Exception action requires an active handler")
     return nilValue()
   return resumeFromSignalContext(interp, handlerIdx, nilValue(), "resume")
 
@@ -1987,7 +2022,7 @@ proc primitiveExceptionResumeWithValueImpl(interp: var Interpreter, self: Instan
   let resumeValue = if args.len > 0: args[0] else: nilValue()
   let handlerIdx = interp.findHandlerForException(self)
   if handlerIdx < 0:
-    writeStderr("resume: called on exception with no active handler")
+    interp.signalExceptionByName("Error", "Exception action requires an active handler")
     return nilValue()
   return resumeFromSignalContext(interp, handlerIdx, resumeValue, "resume:")
 
@@ -2030,7 +2065,8 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
   # Search for next matching handler from remaining handlers
   for j in countdown(interp.exceptionHandlers.len - 1, 0):
     let nextHandler = interp.exceptionHandlers[j]
-    if isKindOf(self.class, nextHandler.exceptionClass):
+    if not nextHandler.consumed and isKindOf(self.class, nextHandler.exceptionClass):
+      interp.exceptionHandlers[j].consumed = true
       # Record signal context on next handler
       interp.exceptionHandlers[j].exceptionInstance = self
       interp.exceptionHandlers[j].signalWorkQueueDepth = interp.workQueue.len

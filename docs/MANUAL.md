@@ -1079,9 +1079,10 @@ collection detect: [:each | each > 5]
 synchronous resumable notifications, guaranteed `ensure:` cleanup, and lexical
 block returns as its target contract. Interpreter and Granite must agree. See
 [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) for the accepted design and
-[GRANITE_STATUS.md](GRANITE_STATUS.md) for implementation status. The resumption
-examples below describe the legacy interpreter protocol pending migration; they
-are not the new error contract. In particular, `resume:` on Error will be invalid.
+[GRANITE_STATUS.md](GRANITE_STATUS.md) for implementation status. Errors now
+abandon their protected computation and reject `resume`/`resume:`. Synchronous
+notification dispatch and guaranteed cleanup are still being implemented;
+notification examples below currently describe the legacy interpreter path.
 
 Harding provides exception handling through the `on:do:` mechanism:
 
@@ -1128,29 +1129,44 @@ Division by zero signals a `DivisionByZero` exception:
 ```smalltalk
 # Integer division
 result := [ 10 // 0 ] on: DivisionByZero do: [ :ex |
-    ex resume: 0  # Return 0 instead
+    0  # The handler supplies the on:do: result
 ]
 
 # Float division
 result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex |
     "Cannot divide by zero!" println
-    ex resume: 42
+    42
 ]
 ```
 
-### Resumable Exceptions
+Arithmetic exception examples currently have interpreter coverage; compiled
+arithmetic-error translation still needs execution coverage.
 
-Harding supports Smalltalk-style resumable exceptions. When an exception is signaled, the signal point is preserved so execution can be resumed from the handler:
+### Error Handling and Notifications
+
+Errors abandon the protected computation before executing a handler. The
+handler's ordinary result is the result of `on:do:`; statements after the failed
+operation do not run. An executing handler cannot catch its own failures, which
+are offered to outer matching handlers. `resume` and `resume:` on an error signal
+`Error` with message `Cannot resume a non-resumable exception`.
 
 ```smalltalk
-[ Error signal: "recoverable" ] on: Error do: [ :ex |
-    ex resume          # Resume from signal point, signal returns nil
-]
-
-[ Error signal: "recoverable" ] on: Error do: [ :ex |
-    ex resume: 42      # Resume from signal point, signal returns 42
-]
+result := [Error signal: "stop". "not reached"]
+    on: Error do: [:ex | "fallback"].
+result println.  # fallback
 ```
+
+Notifications retain a resumable protocol pending synchronous-dispatch migration:
+
+```smalltalk
+[Notification signal: "notice". "continued" println]
+    on: Notification do: [:ex | ex resume].
+```
+
+Executed native/interpreter regressions: `error_unwind`, `error_actions`,
+`unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
+Custom exception subclasses, native arithmetic errors, stack-trace/default-action
+parity, mixed mode, and cleanup are not yet covered by this native error slice.
 
 Additional handler methods:
 - `ex retry` - Re-execute the protected block from the beginning
@@ -1218,8 +1234,8 @@ Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 | Feature | Harding | Smalltalk |
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
-| Stack unwinding | Legacy signal point preserved via ExceptionContext | Depends on handler action; resumption retains computation |
-| Resume capability | Yes (`resume`, `resume:`) | Yes |
+| Stack unwinding | Errors abandon protected computation; notifications retain legacy signal state pending migration | Depends on handler action; resumption retains computation |
+| Resume capability | Notifications only; errors reject resume | Supported by resumable exception protocols |
 
 ---
 

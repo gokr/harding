@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- First exception-model migration slice: non-notification VM errors abandon protected work before handler execution; handled error resume/resume: signals Error, and executing handlers do not catch their own failures. Granite supports native built-in error signaling, handler results, return:, pass and retry. Core/website fallback tests replace error resumption with handler results. Notification and cleanup migration remain pending.
 - Accepted exception-model direction recorded in `docs/EXCEPTION_MODEL.md`: non-resumable errors, synchronous resumable notifications, guaranteed cleanup, and lexical block returns, with identical interpreter/Granite semantics. Migration is pending; arbitrary signal-point restoration is no longer a compiler requirement.
 - Reference manual and quick reference clarify verified accessor returns/overrides, lexical shadowing, shared/escaped closure bindings, and declaring-class `super` lookup; link semantic examples to regression cases and distinguish Granite limitations. Counter and non-local-return examples were executed in both engines.
 - Build toolchain requirement updated to Nim 2.2.12; interpreter, Granite, generated programs, and tests use the same installed compiler version.

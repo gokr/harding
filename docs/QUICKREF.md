@@ -5,7 +5,9 @@ Build toolchain: Nim 2.2.12. This reference describes language semantics; see
 The accepted exception-model migration replaces arbitrary error resumption with
 non-resumable errors and synchronous notifications; guaranteed cleanup is required
 in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
-not yet implemented.
+partially implemented: error handlers abandon failed computations and errors
+reject resumption; synchronous notification dispatch and unwind-safe cleanup
+remain pending.
 
 ## Literals
 

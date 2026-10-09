@@ -304,6 +304,9 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
         return fmt("getSlotValue(self, \"{name}\")")
       return fmt("self.slots[{slotIdx}]")
 
+  if not ctx.mixed and name in ["Exception", "Error", "Notification", "DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds"]:
+    return fmt("compiledExceptionClassValue(\"{name}\")")
+
   if name in ctx.compiledClasses and not ctx.mixed:
     return fmt("compiledClassValue(\"{name}\")")
 

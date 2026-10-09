@@ -32,6 +32,17 @@ proc newRuntime*(): Runtime =
     isInitializing: false
   )
 
+type
+  CompiledHardingError* = object of CatchableError
+    value*: NodeValue
+  HandlerReturn = object of CatchableError
+    value: NodeValue
+    exceptionInstance: Instance
+  HandlerRetry = object of CatchableError
+    exceptionInstance: Instance
+
+var activeErrorHandlers {.threadvar.}: seq[Instance]
+
 proc initRuntime*() =
   ## Initialize global runtime
   if currentRuntime == nil:
@@ -246,10 +257,106 @@ proc getBlockEnvPtr*(blk: BlockNode): pointer =
     return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
   return nil
 
+proc compiledExceptionClassValue*(name: string): NodeValue =
+  ## Built-in exception class receiver for pure compiled programs.
+  if name notin compiledClasses:
+    compiledClasses[name] = newClass(slotNames = @["message"], name = name)
+  if name == "Error" or name == "Notification":
+    registerSuperclass(name, "Exception")
+  elif name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds"]:
+    registerSuperclass(name, "Error")
+  return compiledClassValue(name)
+
+proc isCompiledExceptionClass(name: string): bool =
+  var current = name
+  while current.len > 0:
+    if current == "Exception":
+      return true
+    current = getSuperclassName(current)
+  return false
+
+proc compiledErrorValue(name, message: string): NodeValue =
+  let clsValue = compiledExceptionClassValue(name)
+  let instance = newInstance(clsValue.classVal)
+  instance.slots[0] = NodeValue(kind: vkString, strVal: message)
+  return instance.toValue()
+
+proc raiseCompiledError(value: NodeValue): NodeValue =
+  let className = if value.kind == vkInstance and value.instVal != nil and value.instVal.class != nil:
+                    value.instVal.class.name
+                  else:
+                    "Exception"
+  let message = if value.kind == vkInstance and value.instVal != nil and value.instVal.slots.len > 0:
+                  value.instVal.slots[0].toString()
+                else:
+                  "exception"
+  raise (ref CompiledHardingError)(value: value, msg: className & ": " & message)
+
+proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool =
+  if value.kind != vkInstance or value.instVal == nil or value.instVal.class == nil or
+     handlerClass.kind != vkClass or handlerClass.classVal == nil:
+    return false
+  var name = value.instVal.class.name
+  while name.len > 0:
+    if name == handlerClass.classVal.name:
+      return true
+    name = getSuperclassName(name)
+  return false
+
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
+
+  if receiver.kind == vkBlock and selector == "on:do:" and args.len == 2:
+    while true:
+      try:
+        return sendMessage(runtime, receiver, "value", @[])
+      except CompiledHardingError as failure:
+        if not matchesCompiledError(failure.value, args[0]):
+          raise
+        var retryRequested = false
+        activeErrorHandlers.add(failure.value.instVal)
+        try:
+          try:
+            return sendMessage(runtime, args[1], "value:", @[failure.value])
+          except HandlerReturn as action:
+            if action.exceptionInstance != failure.value.instVal:
+              raise
+            return action.value
+          except HandlerRetry as action:
+            if action.exceptionInstance != failure.value.instVal:
+              raise
+            retryRequested = true
+        finally:
+          discard activeErrorHandlers.pop()
+        if not retryRequested:
+          raise
+
+  if receiver.kind == vkClass and receiver.classVal != nil and
+     isCompiledExceptionClass(receiver.classVal.name) and selector == "signal:" and args.len == 1:
+    return raiseCompiledError(compiledErrorValue(receiver.classVal.name, args[0].toString()))
+
+  if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil and
+     isCompiledExceptionClass(receiver.instVal.class.name):
+    case selector
+    of "message":
+      return receiver.instVal.slots[0]
+    of "signal":
+      return raiseCompiledError(receiver)
+    of "resume", "resume:":
+      return raiseCompiledError(compiledErrorValue("Error", "Cannot resume a non-resumable exception"))
+    of "return:", "retry", "pass":
+      if receiver.instVal notin activeErrorHandlers:
+        return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
+      if selector == "return:" and args.len == 1:
+        raise (ref HandlerReturn)(value: args[0], exceptionInstance: receiver.instVal)
+      if selector == "retry":
+        raise (ref HandlerRetry)(exceptionInstance: receiver.instVal)
+      if selector == "pass":
+        return raiseCompiledError(receiver)
+    else:
+      discard
 
   # Block evaluation: value, value:, value:value:, value:value:value:
   if receiver.kind == vkBlock and receiver.blockVal != nil and

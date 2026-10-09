@@ -28,7 +28,8 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twenty-five execution-parity cases and one explicit compiled-error check pass. Coverage includes class-side and inherited
+Twenty-seven successful-output parity cases, two unhandled-error parity checks,
+and one explicit compiled-only inactive-return check pass. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
@@ -52,6 +53,15 @@ returns as local block returns. The accepted [exception model](EXCEPTION_MODEL.m
 removes arbitrary error resumption: integrate inactive-home errors with conventional
 Harding errors and guarantee `ensure:` cleanup. Both engines must migrate together;
 synchronous notifications do not require signal-point restoration.
+
+The first error-model slice abandons VM protected work before handler execution
+and excludes executing handlers from catching their own failures. Both engines
+reject handled error resume/resume:, and native built-in Error/Exception signaling
+supports handler results, return:, pass and retry. Core exception, signal-point,
+compiler and website-example suites pass. Notification behavior remains legacy
+in the VM and unsupported by this native error slice; synchronous migration is
+next. Custom error subclasses, instance construction, arithmetic-error translation,
+native defaultAction/diagnostics and mixed mode remain incomplete.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

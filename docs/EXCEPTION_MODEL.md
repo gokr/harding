@@ -87,8 +87,11 @@ block evaluation after the creating invocation completes.
 
 ## Migration and validation
 
-The interpreter currently supports signal-point restoration even for errors.
-Granite's native exception coverage is incomplete; its BlockCannotReturnError is
+The first migration slice makes VM errors abandon protected work before handler
+execution and reject error resumption. Native compiled error handlers cover
+basic signaling, handler results, return:, pass, retry, handler failures and
+resumption rejection. Notifications still use legacy interpreter restoration;
+synchronous dispatch is pending. Granite's native exception coverage is incomplete; its BlockCannotReturnError is
 not yet integrated into Harding's application exception hierarchy. `ensure:`
 currently only guarantees cleanup on normal completion. These are migration
 items, not exceptions to the target contract.

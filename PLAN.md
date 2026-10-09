@@ -73,11 +73,19 @@ arbitrary error resumption solely in the interpreter.
 
 - [x] Record non-resumable errors, synchronous notifications, guaranteed cleanup,
       lexical block returns, and foreign-boundary constraints as the target model.
-- [ ] Inventory existing resume/retry/pass/return tests, stdlib methods, examples,
-      and debugger hooks; migrate deliberately rather than weakening assertions.
-- [ ] Make VM errors abandon the protected computation before handler execution;
-      handler results/return:, pass, and retry follow the accepted contract.
-- [ ] Reject resume/resume: on non-notification exceptions in both engines.
+- [x] Inventory core exception/signal-point/website tests, stdlib protocols and
+      signal diagnostics. Error-resuming arithmetic/website examples now use
+      handler fallback values; Notification tests remain for the next slice.
+- [ ] Complete migration audit of debugger hooks, external libraries and website
+      content; preserve diagnostic expectations without live error continuations.
+- [x] Make VM errors abandon protected work before handler execution; executing
+      handlers are excluded from catching their own failures. Native basic error
+      signaling, handler results, return:, pass, and retry have parity coverage.
+- [x] Reject resume/resume: on handled errors in both engines; rejection can be
+      caught by an outer handler. Cover missing-handler actions and arbitrary
+      exception subclass/native arithmetic paths in later slices.
+- [ ] Complete compiled exception hierarchy/instance protocol, custom subclasses,
+      arithmetic-error translation, defaultAction and diagnostic parity.
 - [ ] Implement synchronous Notification dispatch/results and outer-handler pass;
       reject notification retry/return: without capturing resumable continuations.
 - [ ] Implement exactly-once `ensure:` cleanup on normal exits, errors, retries,

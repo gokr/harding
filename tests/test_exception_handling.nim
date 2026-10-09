@@ -88,21 +88,44 @@ suite "Exception Handling":
     """)
     check(result[0][^1].strVal == "normal")
 
+  test "error abandons remaining protected statements":
+    let evaluated = interp.evalStatements("""
+      Result := [Error signal: "stop". "incorrect"] on: Error do: [:ex | "caught"]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "caught"
+
+  test "handler failures bypass the executing handler":
+    let evaluated = interp.evalStatements("""
+      Result := [[Error signal: "first"] on: Error do: [:ex | Error signal: "second"]]
+        on: Error do: [:outer | outer message]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "second"
+
+  test "error resumption reports an error to the outer handler":
+    let evaluated = interp.evalStatements("""
+      Result := [[Error signal: "first"] on: Error do: [:ex | ex resume: 42]]
+        on: Error do: [:outer | outer message]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "Cannot resume a non-resumable exception"
+
   test "DivisionByZero catches integer division by zero":
     let result = interp.evalStatements("""
-      Result := [ 10 // 0 ] on: DivisionByZero do: [ :ex | ex resume: 42 ]
+      Result := [ 10 // 0 ] on: DivisionByZero do: [ :ex | 42 ]
     """)
     check(result[0][^1].intVal == 42)
 
   test "DivisionByZero catches float division by zero":
     let result = interp.evalStatements("""
-      Result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex | ex resume: 99 ]
+      Result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex | 99 ]
     """)
     check(result[0][^1].intVal == 99)
 
   test "DivisionByZero catches integer modulo by zero":
     let result = interp.evalStatements("""
-      Result := [ 10 % 0 ] on: DivisionByZero do: [ :ex | ex resume: 7 ]
+      Result := [ 10 % 0 ] on: DivisionByZero do: [ :ex | 7 ]
     """)
     check(result[0][^1].intVal == 7)
 

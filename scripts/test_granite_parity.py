@@ -221,6 +221,33 @@ c := m direct: "third".
 (c value) println.
 (a value) println.
 """, "first!\nsecond!\nthird?\nfirst!\n"),
+    ("error_unwind", """
+result := [Error signal: "stop". "incorrect"] on: Error do: [:ex | ex message].
+result println.
+result := [[Error signal: "first"] on: Error do: [:ex | Error signal: "second"]]
+  on: Error do: [:outer | outer message].
+result println.
+result := [[Error signal: "first"] on: Error do: [:ex | ex resume: 42]]
+  on: Error do: [:outer | outer message].
+result println.
+result := [[Error signal: "first"] on: Error do: [:ex | ex resume]]
+  on: Error do: [:outer | outer message].
+result println.
+""", "stop\nsecond\nCannot resume a non-resumable exception\nCannot resume a non-resumable exception\n"),
+    ("error_actions", """
+result := [[Error signal: "pass"] on: Error do: [:ex | ex pass]]
+  on: Exception do: [:outer | outer message].
+result println.
+result := [Error signal: "return"] on: Error do: [:ex | ex return: 42].
+result println.
+attempts := 0.
+result := [attempts := attempts + 1. (attempts < 2) ifTrue: [Error signal: "retry"]. attempts]
+  on: Error do: [:ex | ex retry].
+result println.
+""", "pass\n42\n2\n"),
+    ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
+    ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
+     {"error": "Error: passed"}),
     ("inactive_return_target", """
 Maker := Object derive: #().
 Maker>>make [ ^ [^ 42] ].
@@ -303,9 +330,10 @@ def main():
         try:
             # The VM currently permits returns to completed homes; this case
             # checks the compiled semantic error explicitly, not engine parity.
+            expected_error = expected.get("error") if isinstance(expected, dict) else None
             interpreted = None if expected is None else run(
                 [str(ROOT / "harding"), str(source_file)], options.timeout,
-                case_dir / "interpreted.log")
+                case_dir / "interpreted.log", expected_error=expected_error)
             run([str(ROOT / "granite"), "build", str(source_file),
                  f"-d:{case_dir}", f"-o:{binary}"], options.build_timeout,
                 case_dir / "build.log")
@@ -313,6 +341,11 @@ def main():
                 run([str(binary)], options.timeout, case_dir / "compiled.log",
                     expected_error="home activation is no longer active")
                 print(f"PASS {name} (compiled error check; VM discrepancy documented)")
+                continue
+            if expected_error is not None:
+                run([str(binary)], options.timeout, case_dir / "compiled.log",
+                    expected_error=expected_error)
+                print(f"PASS {name} (error parity)")
                 continue
             compiled = run([str(binary)], options.timeout, case_dir / "compiled.log")
             if interpreted != expected or compiled != expected:

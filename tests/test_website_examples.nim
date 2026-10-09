@@ -405,11 +405,11 @@ suite "Website Examples - Docs Page Examples":
       Result := [
           Error signal: "test"
       ] on: Error do: [:ex |
-          ex resume: 42
+          42
       ]
     """)
     check(results[1].len == 0)
-    # Exception handling returns the resumed value
+    # The handler's result replaces the failed computation
     check(results[0][^1].kind == vkInt)
     check(results[0][^1].intVal == 42)
 
@@ -561,7 +561,7 @@ suite "Website Examples - Arithmetic Exceptions":
   test "Integer division by zero signals DivisionByZero":
     let results = interp.evalStatements("""
       Result := [ 10 // 0 ] on: DivisionByZero do: [:ex |
-        ex resume: 42
+        42
       ]
     """)
     check(results[1].len == 0)
@@ -570,7 +570,7 @@ suite "Website Examples - Arithmetic Exceptions":
   test "Float division by zero signals DivisionByZero":
     let results = interp.evalStatements("""
       Result := [ 10.0 / 0.0 ] on: DivisionByZero do: [:ex |
-        ex resume: 99
+        99
       ]
     """)
     check(results[1].len == 0)
@@ -579,7 +579,7 @@ suite "Website Examples - Arithmetic Exceptions":
   test "Modulo by zero signals DivisionByZero":
     let results = interp.evalStatements("""
       Result := [ 10 % 0 ] on: DivisionByZero do: [:ex |
-        ex resume: 0
+        0
       ]
     """)
     check(results[1].len == 0)
