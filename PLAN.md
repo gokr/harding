@@ -60,12 +60,11 @@ semantics; any intended language change must be explicit and documented.
 
 ## Nim toolchain alignment
 
-- [ ] Reconcile `harding.nimble`'s exact Nim 2.2.6 requirement with the installed
-      PATH compiler (2.2.12). No version requirement change has been made yet.
-- [ ] Select and document a consistent compiler version for interpreter builds,
-      Granite builds, generated programs, and tests; validate before changing the
-      Nimble requirement. Currently `nimble harding` selects installed 2.2.6,
-      while direct `nim c` and Granite's child builds use PATH's 2.2.12.
+- [x] Pin `harding.nimble` to Nim 2.2.12 and align contributor/build instructions.
+- [x] Validate interpreter, Granite, generated programs, and focused tests under
+      installed Nim 2.2.12. Nimble selects its installed 2.2.12 compiler; direct
+      builds and Granite child builds use PATH's 2.2.12. All 23 parity cases,
+      compiler tests, and class-model tests pass.
 
 ## 3. Correct non-local returns
 

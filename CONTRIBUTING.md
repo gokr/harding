@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Harding! This document provides g
 
 ## Development Environment
 
-1. **Nim**: Ensure you have Nim 2.2.6 or later installed
+1. **Nim**: Ensure you have Nim 2.2.12 installed
 2. **Git**: Clone the repository and create a branch for your changes
 3. **Build Tools**: Nimble for package management and building
 

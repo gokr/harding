@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Build toolchain requirement updated to Nim 2.2.12; interpreter, Granite, generated programs, and tests use the same installed compiler version.
+
 ### Added
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 

@@ -10,7 +10,7 @@ srcDir = "src"
 --path:"external"
 
 # Current Nim version
-requires "nim == 2.2.6"
+requires "nim == 2.2.12"
 
 # FFI dependencies
 when defined(linux):

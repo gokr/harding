@@ -18,7 +18,7 @@ nimble install_harding
 ```
 
 Requirements:
-- Nim 2.2.6 or later
+- Nim 2.2.12
 
 ### Quick Start
 
