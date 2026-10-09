@@ -79,6 +79,15 @@ harding script.hrd -- one two three
 granite run script.hrd --release
 ```
 
+Builds require Nim 2.2.12 (`harding.nimble` pins that version). Use that compiler
+on PATH for direct builds and Granite's generated-program builds as well.
+
+This manual describes Harding's language semantics. Granite's native backend is
+still being brought into parity with the interpreter; compilation does not imply
+support for every language feature. See [GRANITE_STATUS.md](GRANITE_STATUS.md)
+for tested coverage and remaining gaps, including activation-specific non-local
+returns, multiple inheritance, resumable exceptions, processes, and mixed mode.
+
 For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md).
 
 ---
@@ -326,7 +335,16 @@ p age              # Auto-generated getter - returns 30
 
 For each slot `x`, two methods are generated:
 - `x` - Getter method that returns the slot value
-- `x:` - Setter method that takes one argument and assigns it to the slot
+- `x:` - Setter method that assigns its argument to the slot and returns the receiver
+
+Generated accessors are ordinary methods: explicit methods can override them,
+and inherited sends use ordinary method lookup. `obj::x` is separate direct
+access and does not invoke an overridden `x` or `x:` method. Selective `read:` and
+`write:` lists generate only the requested directions.
+
+Executed regressions: `class_factory`, `accessor_override`, and
+`selective_accessors` in `scripts/test_granite_parity.py`; compiler registration
+tests also check that disallowed directions are not generated.
 
 #### `derive:read:write:`
 
@@ -733,6 +751,15 @@ conflicts := Child classConflictSelectors: Parent2
 
 ### Super Sends
 
+`super` keeps the current receiver but starts lookup at a parent of the class
+that declared the executing method, not a parent of the receiver's most-derived
+class. Inherited methods retain that declaring class. Class-side `super` searches
+class methods; instance-side `super` searches instance methods. Blocks preserve
+the enclosing method's lexical lookup context.
+
+Executed regressions: `inherited_super`, `block_super`, and `super_new` in
+`scripts/test_granite_parity.py`.
+
 Harding supports both qualified and unqualified super sends for multiple inheritance:
 
 ```smalltalk
@@ -790,7 +817,7 @@ Define factory methods on the class object:
 Person extendClass: [
   self >> newNamed: n aged: a [
     | person |
-    person := self derive.
+    person := self new.
     person name: n.
     person age: a.
     ^ person
@@ -919,21 +946,37 @@ block := [ value + 1 ]  # Captures 'value'
 block value             # Returns 11
 ```
 
+Parameters and declared temporaries are local to their method or block and shadow
+same-named outer bindings or slots. Declared temporaries initially hold `nil`;
+a closure created before a temporary's first assignment observes later updates.
+
 ### Mutable Shared State
 
-Blocks that capture the same variable share access to it:
+Blocks capture bindings, not snapshots of their values. Sibling and nested blocks
+share mutations to the same lexical binding, including assignments made by the
+enclosing scope. A block may outlive its creating method: its captured bindings
+remain available. Separate method calls create separate bindings.
 
 ```smalltalk
-makeCounter := [ |
-  count := 0.
-  ^[ count := count + 1. ^count ]
+CounterMaker := Object derive: #().
+CounterMaker>>counter: start [
+  | count |
+  count := start.
+  ^ [count := count + 1. count]
 ].
 
-counter := makeCounter value.
-counter value.  # Returns 1
-counter value.  # Returns 2
-counter value.  # Returns 3
+counter := CounterMaker new counter: 0.
+(counter value) println.  # 1
+(counter value) println.  # 2
 ```
+
+The final expression of a block is its ordinary result. Do not use `^` merely to
+return a block result: `^` is a non-local return to the enclosing method.
+
+Executed regressions in `scripts/test_granite_parity.py`: `shared_capture`,
+`nested_capture`, `escaped_mutable_capture`, `captured_parameter`,
+`forward_temporary`, `lexical_shadowing`, and the inline/collection/while scope
+cases.
 
 ### Block Invocation
 
@@ -949,14 +992,24 @@ Blocks are invoked via the `value:` message family:
 Use `^` within a block to return from the enclosing method:
 
 ```smalltalk
-findFirst: [ :arr :predicate |
-  1 to: arr do: [ :i |
-    elem := arr at: i.
-    (predicate value: elem) ifTrue: [ ^elem ]  "Returns from findFirst:"
+Finder := Object derive: #().
+Finder>>first: values [
+  values do: [:each |
+    (each > 0) ifTrue: [^ each]
   ].
-  ^nil
-]
+  ^ nil
+].
+(Finder new first: #(-5, -3, 7, 2)) println.  # 7
 ```
+
+The return target is the particular invocation of the lexically enclosing
+method, not whichever method happens to invoke the block. The ordinary result
+of a block is its final expression. An escaped closure's retained variables do
+not make its completed home method a valid non-local return target.
+
+The `non_local_return` regression executes this shape. Granite still uses static
+method identifiers for targeting; recursive activations and returns after the
+home invocation finishes are an outstanding compiler milestone.
 
 ---
 

@@ -1,5 +1,8 @@
 # Harding Syntax Quick Reference
 
+Build toolchain: Nim 2.2.12. This reference describes language semantics; see
+[GRANITE_STATUS.md](GRANITE_STATUS.md) for native compiler coverage and limitations.
+
 ## Literals
 
 | Type | Example | Description |
@@ -208,7 +211,14 @@ obj
 [ :x :y | | t1 t2 | code ]       # With params and temps
 ```
 
-The `|` separates parameters/temporaries from body.
+The `|` separates parameters/temporaries from body. Parameters and declared
+temporaries shadow outer bindings and slots. Temporaries initially hold `nil`.
+Blocks share captured bindings, including later mutations, and may retain them
+after the creating method returns. The final expression is a block's result;
+`^` instead returns from its lexically enclosing method.
+
+Regression cases: `shared_capture`, `escaped_mutable_capture`,
+`forward_temporary`, and the scope cases in `scripts/test_granite_parity.py`.
 
 ### Invocation
 
@@ -299,13 +309,17 @@ Person extend: [
 ]
 ```
 
+`super` starts lookup at a parent of the method's declaring class while keeping
+the same receiver. Inherited methods and nested blocks retain that lexical
+context. Class-side sends search class methods, not instance methods.
+
 ### Class-side Methods (extendClass:)
 
 ```smalltalk
 Person extendClass: [
   self >> newNamed: n aged: a [
     | person |
-    person := self derive.
+    person := self new.
     person name: n.
     person age: a.
     ^person
@@ -391,6 +405,10 @@ Account := Object derive: #(balance, owner)
                        read: #(balance, owner)
                        write: #(balance)
 ```
+
+Generated setters return the receiver. Accessors are ordinary methods and may
+be overridden; `::` does not invoke those overrides. `read:`/`write:` generate
+only the specified getter/setter directions.
 
 ### Direct Named Access (::)
 

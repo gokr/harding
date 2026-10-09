@@ -47,13 +47,13 @@ semantics; any intended language change must be explicit and documented.
 
 ## Reference manual maintenance (before the next implementation milestone)
 
-- [ ] Update `docs/MANUAL.md` for verified accessor behavior (including setter
+- [x] Update `docs/MANUAL.md` for verified accessor behavior (including setter
       return values), lexical shadowing, shared captures, escaped closures, and
       lexical `super` lookup.
-- [ ] Review `docs/QUICKREF.md` for corresponding corrections.
-- [ ] Distinguish intended language semantics from Granite's tested support and
+- [x] Review `docs/QUICKREF.md` for corresponding corrections.
+- [x] Distinguish intended language semantics from Granite's tested support and
       remaining limitations; link to `docs/GRANITE_STATUS.md`.
-- [ ] Link semantic examples to executable regression cases and add missing
+- [x] Link semantic examples to executable regression cases and add missing
       tests where manual examples expose gaps.
 - [ ] Review the manual and quick reference with every coherent semantic change;
       update them in the same commit when clarification is needed.
