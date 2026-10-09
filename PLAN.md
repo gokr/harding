@@ -2,7 +2,9 @@
 
 Work in branch `granite-completeness`. Prioritize semantic correctness over
 optimization. Each coherent change needs executed regression coverage, a
-changelog entry, and build/test validation. Update this checklist as work lands.
+changelog entry, reference-manual review, and build/test validation. Update this
+checklist as work lands. Compiler fixes must conform to documented Harding
+semantics; any intended language change must be explicit and documented.
 
 ## Baseline
 
@@ -42,6 +44,28 @@ changelog entry, and build/test validation. Update this checklist as work lands.
       additional shadowing cases require it (current tested scopes pass).
 - [x] Keep escaped block environments alive safely under ARC/ORC (managed
       environments owned by BlockNode; returned string-capture regression tested).
+
+## Reference manual maintenance (before the next implementation milestone)
+
+- [ ] Update `docs/MANUAL.md` for verified accessor behavior (including setter
+      return values), lexical shadowing, shared captures, escaped closures, and
+      lexical `super` lookup.
+- [ ] Review `docs/QUICKREF.md` for corresponding corrections.
+- [ ] Distinguish intended language semantics from Granite's tested support and
+      remaining limitations; link to `docs/GRANITE_STATUS.md`.
+- [ ] Link semantic examples to executable regression cases and add missing
+      tests where manual examples expose gaps.
+- [ ] Review the manual and quick reference with every coherent semantic change;
+      update them in the same commit when clarification is needed.
+
+## Nim toolchain alignment
+
+- [ ] Reconcile `harding.nimble`'s exact Nim 2.2.6 requirement with the installed
+      PATH compiler (2.2.12). No version requirement change has been made yet.
+- [ ] Select and document a consistent compiler version for interpreter builds,
+      Granite builds, generated programs, and tests; validate before changing the
+      Nimble requirement. Currently `nimble harding` selects installed 2.2.6,
+      while direct `nim c` and Granite's child builds use PATH's 2.2.12.
 
 ## 3. Correct non-local returns
 
