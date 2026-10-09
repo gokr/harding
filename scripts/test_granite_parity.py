@@ -137,6 +137,26 @@ blocks := #(2, 4, 6) collect: [:n | [n]].
 ((blocks at: 1) value) println.
 ((blocks at: 2) value) println.
 """, "2\n4\n6\n"),
+    ("collection_scopes", """
+count := 99.
+blocks := #(nil, nil).
+#(3, 5) do: [:n | | count | count := n + 1. blocks at: ((n - 3) // 2) put: [count]].
+((blocks at: 0) value) println.
+((blocks at: 1) value) println.
+count println.
+chosen := #(1, 2, 3) select: [:n | | count | count := n + 10. count println. n > 1].
+chosen size println.
+count println.
+""", "4\n6\n99\n11\n12\n13\n2\n99\n"),
+    ("while_scopes", """
+count := 99.
+i := 0.
+[ | allowed | allowed := i < 2. allowed ] whileTrue: [ | count | count := i + 10. count println. i := i + 1 ].
+count println.
+i := 0.
+[ | done | done := i >= 2. done ] whileFalse: [ | count | count := i + 20. count println. i := i + 1 ].
+count println.
+""", "10\n11\n99\n20\n21\n99\n"),
     ("range_capture", """
 blocks := #(nil, nil, nil).
 1 to: 3 by: 1 do: [:n | blocks at: (n - 1) put: [n]].

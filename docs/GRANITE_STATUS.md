@@ -25,18 +25,21 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twenty-one execution-parity cases pass. Coverage includes class-side and inherited
+Twenty-three execution-parity cases pass. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
-shadowing in methods, blocks, inline conditionals, and repetition. Compiler tests
+shadowing in methods, blocks, inline conditionals, repetition, collections, and
+while loops. Compiler tests
 and the previously validated class-model suite also pass.
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
 cell values rather than copying bindings and writing them back. Sibling captures
 and escaped counters pass under ARC and ORC. Capture-name analysis is limited to
-each body but remains name-based rather than binding-identity-based. Additional
-collection/while scope paths need coverage. Method/block temporaries are declared
+each body but remains name-based rather than binding-identity-based. Collection
+and while-loop scope regressions pass. While conditions evaluate all setup
+statements in their lexical scope; select predicates preserve preceding side
+effects. Method/block temporaries are declared
 at scope entry; inline collection loops allocate parameter bindings on each
 iteration. Recursive and escaped non-local returns remain follow-up work.
 

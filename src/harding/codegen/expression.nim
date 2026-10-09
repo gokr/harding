@@ -431,12 +431,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if node.receiver != nil and node.receiver.kind == nkBlock:
         let condBlock = node.receiver.BlockNode
         if condBlock.body.len > 0:
-          condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+          condCode = inlineBlockExpression(ctx, condBlock)
       var code = "(block:\n"
       code.add("    while isTruthy(" & condCode & "):\n")
-      for stmt in bodyBlock.body:
-        let stmtCode = genStatement(ctx, stmt)
-        code.add(indentBlock(stmtCode, 6))
+      code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
       return code
 
@@ -450,12 +448,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if node.receiver != nil and node.receiver.kind == nkBlock:
         let condBlock = node.receiver.BlockNode
         if condBlock.body.len > 0:
-          condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+          condCode = inlineBlockExpression(ctx, condBlock)
       var code = "(block:\n"
       code.add("    while not isTruthy(" & condCode & "):\n")
-      for stmt in bodyBlock.body:
-        let stmtCode = genStatement(ctx, stmt)
-        code.add(indentBlock(stmtCode, 6))
+      code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
       return code
 
@@ -468,20 +464,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
-        var doCtx = GenContext(
-          cls: ctx.cls,
-          inBlock: ctx.inBlock,
-          inMethod: ctx.inMethod,
-          mixed: ctx.mixed,
-          locals: ctx.locals & @[elemName],
-          parameters: ctx.parameters,
-          globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes,
-          cellNames: ctx.cellNames,
-          compiledClasses: ctx.compiledClasses,
-          classInfo: ctx.classInfo
-        )
+        let doCtx = inlineBlockContext(ctx, bodyBlock)
+        doCtx.locals.add(elemName)
         var code = "(block:\n"
         code.add("    for hardingDoIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
         code.add("      " & bindingDeclaration(doCtx, elemName, "hardingElem") & "\n")
@@ -501,20 +485,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
-        var collectCtx = GenContext(
-          cls: ctx.cls,
-          inBlock: ctx.inBlock,
-          inMethod: ctx.inMethod,
-          mixed: ctx.mixed,
-          locals: ctx.locals & @[elemName],
-          parameters: ctx.parameters,
-          globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes,
-          cellNames: ctx.cellNames,
-          compiledClasses: ctx.compiledClasses,
-          classInfo: ctx.classInfo
-        )
+        let collectCtx = inlineBlockContext(ctx, bodyBlock)
+        collectCtx.locals.add(elemName)
         var code = "(block:\n"
         code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
         code.add("    for hardingCollectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
@@ -541,41 +513,21 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if bodyBlock.parameters.len >= 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
-        var selectCtx = GenContext(
-          cls: ctx.cls,
-          inBlock: ctx.inBlock,
-          inMethod: ctx.inMethod,
-          mixed: ctx.mixed,
-          locals: ctx.locals & @[elemName],
-          parameters: ctx.parameters,
-          globals: ctx.globals,
-          blockRegistry: ctx.blockRegistry,
-          varTypes: ctx.varTypes,
-          cellNames: ctx.cellNames,
-          compiledClasses: ctx.compiledClasses,
-          classInfo: ctx.classInfo
-        )
+        let selectCtx = inlineBlockContext(ctx, bodyBlock)
+        selectCtx.locals.add(elemName)
         var code = "(block:\n"
         code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
         code.add("    for hardingSelectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
         code.add("      " & bindingDeclaration(selectCtx, elemName, "hardingElem") & "\n")
         code.add(indentBlock(genLocalDeclarations(selectCtx, bodyBlock.temporaries), 6))
-        # Generate the block body to get the condition value
-        var bodyCode = ""
-        for stmt in bodyBlock.body:
-          let stmtCode = genStatement(selectCtx, stmt)
-          if stmtCode.len > 0:
-            bodyCode.add(stmtCode)
-            bodyCode.add("\n")
-        if bodyCode.len > 0:
-          code.add("      if isTruthy(")
-          # For simple expressions, use the last statement's expression
-          # For now, assume the last statement is the condition
-          let lastStmt = bodyBlock.body[^1]
-          let condCode = genExpression(selectCtx, lastStmt)
-          code.add(condCode)
-          code.add("):\n")
-          code.add("        hardingSelectResult.add(hardingElem)\n")
+        for i in 0..<max(0, bodyBlock.body.len - 1):
+          code.add(indentBlock(genStatement(selectCtx, bodyBlock.body[i]), 6))
+        let condCode = if bodyBlock.body.len > 0:
+                         genExpression(selectCtx, bodyBlock.body[^1])
+                       else:
+                         "nilValue()"
+        code.add("      if isTruthy(" & condCode & "):\n")
+        code.add("        hardingSelectResult.add(hardingElem)\n")
         code.add("    NodeValue(kind: vkArray, arrayVal: hardingSelectResult))")
         return code
 
@@ -950,7 +902,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     let condBlock = asBlockNode(whileNode.condition)
     if condBlock != nil:
       if condBlock.body.len > 0:
-        condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+        condCode = inlineBlockExpression(ctx, condBlock)
       else:
         condCode = if whileNode.isWhileTrue:
                      "NodeValue(kind: vkBool, boolVal: true)"
@@ -975,10 +927,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       if bodyBlock.body.len == 0:
         code.add("  discard\n")
       else:
-        for stmt in bodyBlock.body:
-          let stmtCode = genStatement(ctx, stmt)
-          if stmtCode.len > 0:
-            code.add(indentBlock(stmtCode))
+        code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
     elif whileNode.body != nil:
       let stmtCode = genStatement(ctx, whileNode.body)
       if stmtCode.len > 0:
@@ -1055,17 +1004,14 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           let condBlock = asBlockNode(msg.receiver)
           if condBlock != nil:
             if condBlock.body.len > 0:
-              condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+              condCode = inlineBlockExpression(ctx, condBlock)
             else:
               condCode = "NodeValue(kind: vkBool, boolVal: true)"
           else:
             condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                        else: "NodeValue(kind: vkBool, boolVal: true)"
           var code = "while isTruthy(" & condCode & "):\n"
-          for stmt in bodyBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
+          code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
           return code
 
     of "whileFalse:":
@@ -1078,17 +1024,14 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           let condBlock = asBlockNode(msg.receiver)
           if condBlock != nil:
             if condBlock.body.len > 0:
-              condCode = genExpression(ctx, condBlock.body[condBlock.body.len - 1])
+              condCode = inlineBlockExpression(ctx, condBlock)
             else:
               condCode = "NodeValue(kind: vkBool, boolVal: false)"
           else:
             condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                        else: "NodeValue(kind: vkBool, boolVal: false)"
           var code = "while not isTruthy(" & condCode & "):\n"
-          for stmt in bodyBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
+          code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
           return code
 
     of "ifTrue:":

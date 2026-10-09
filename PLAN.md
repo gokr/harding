@@ -36,8 +36,10 @@ changelog entry, and build/test validation. Update this checklist as work lands.
 - [x] Bind range-loop parameters per iteration in ascending/descending loops.
 - [x] Cover declared-local shadowing in inline conditionals/repetition blocks;
       exclude block temporaries from inherited VM captures.
-- [ ] Test all collection/while loop scope paths and replace name-based analysis
-      with precise lexical binding identities if remaining cases require it.
+- [x] Cover inline `do:`/`collect:`/`select:` and both while selectors with
+      lexical scopes, condition setup, side effects, and escaped loop captures.
+- [ ] Replace name-based analysis with precise lexical binding identities if
+      additional shadowing cases require it (current tested scopes pass).
 - [x] Keep escaped block environments alive safely under ARC/ORC (managed
       environments owned by BlockNode; returned string-capture regression tested).
 
