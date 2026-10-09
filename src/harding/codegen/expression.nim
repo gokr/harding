@@ -19,6 +19,7 @@ type
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
+    returnTarget*: string         ## Expression identifying a block's home activation
     inMethod*: bool              ## Whether we're generating code inside a method body
     cellNames*: seq[string]       ## Lexical bindings shared with compiled blocks
     locals*: seq[string]          ## Local variable names (temporaries)
@@ -229,6 +230,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
   result.inMethod = ctx.inMethod
   result.inBlock = ctx.inBlock
+  result.returnTarget = ctx.returnTarget
   result.blockRegistry = ctx.blockRegistry
   result.varTypes = ctx.varTypes
   result.globals = ctx.globals
@@ -345,6 +347,8 @@ proc tryGenerateNamedAccess*(ctx: GenContext, node: NamedAccessNode, receiverCod
 proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): string =
   ## Generate expression-safe block creation for captured blocks.
   var initFields: seq[string] = @[]
+  if blockInfo.ownerMethodId != 0:
+    initFields.add("home: hardingHome")
   for capture in blockInfo.captures:
     let cell = if ctx.isLocal(capture) and capture in ctx.cellNames:
                  capture
@@ -553,6 +557,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       var loopCtx = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
       loopCtx.inMethod = ctx.inMethod
       loopCtx.inBlock = ctx.inBlock
+      loopCtx.returnTarget = ctx.returnTarget
       loopCtx.locals = ctx.locals
       loopCtx.parameters = ctx.parameters
       loopCtx.globals = ctx.globals
@@ -751,9 +756,10 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
   of nkReturn:
     let ret = node.ReturnNode
-    if ret.expression != nil:
-      return "return " & genExpression(ctx, ret.expression)
-    return "return self.toValue()"
+    let valueCode = if ret.expression != nil: genExpression(ctx, ret.expression) else: "nilValue()"
+    if ctx.inBlock and ctx.returnTarget.len > 0:
+      return fmt("return raiseNonLocalReturn({ctx.returnTarget}, {valueCode})")
+    return "return " & valueCode
 
   of nkArray:
     let arr = node.ArrayNode
@@ -786,7 +792,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
                     else:
                       registerBlock(ctx.blockRegistry, blockNode, ctx.globals, ctx.inMethod)
 
-    if blockInfo.captures.len > 0:
+    if blockInfo.captures.len > 0 or blockInfo.ownerMethodId != 0:
       return genCapturedBlockExpression(blockInfo, ctx)
     else:
       return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
@@ -891,9 +897,10 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
   of nkReturn:
     let ret = node.ReturnNode
-    if ret.expression != nil:
-      return "return " & genExpression(ctx, ret.expression)
-    return "return self.toValue()"
+    let valueCode = if ret.expression != nil: genExpression(ctx, ret.expression) else: "nilValue()"
+    if ctx.inBlock and ctx.returnTarget.len > 0:
+      return fmt("return raiseNonLocalReturn({ctx.returnTarget}, {valueCode})")
+    return "return " & valueCode
 
   of nkWhile:
     let whileNode = node.WhileNode
@@ -1142,7 +1149,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   ## Generate code for block body (sequence of statements)
   ## captures: list of captured variable names (from BlockProcInfo)
   ## hasNonLocalReturn: if true, ^ generates NonLocalReturnException
-  ## targetMethodId: id of the home compiled method the ^ unwinds to
+  ## targetMethodId: lexical owner metadata; nonzero environments carry the invocation target
   var output = ""
 
   # Create new context for block body with its parameters
@@ -1150,6 +1157,8 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   var bodyCtx = GenContext(
     cls: ctx.cls,
     inBlock: true,
+    returnTarget: (if not hasNonLocalReturn: ""
+                   elif targetMethodId != 0: "hardingHome" else: "nil"),
     inMethod: ctx.inMethod,
     mixed: ctx.mixed,
     locals: @[],
@@ -1166,9 +1175,11 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     output.add("  " & bindingDeclaration(bodyCtx, param, "hardingArg_" & param) & "\n")
 
   # Extract captured variables from environment struct
-  if captures.len > 0:
+  if captures.len > 0 or targetMethodId != 0:
     if envStructName.len > 0:
       output.add(fmt("  let envTyped = cast[{envStructName}](env)\n"))
+      if targetMethodId != 0:
+        output.add("  let hardingHome = envTyped.home\n")
     for capture in captures:
       if envStructName.len > 0:
         if capture == "self":
@@ -1196,7 +1207,8 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                        genExpression(bodyCtx, ret.expression)
                      else:
                        "NodeValue(kind: vkNil)"
-      output.add(fmt("  raise (ref NonLocalReturnException)(value: {exprCode}, targetId: {targetMethodId})\n"))
+      let target = if targetMethodId != 0: "hardingHome" else: "nil"
+      output.add(fmt("  return raiseNonLocalReturn({target}, {exprCode})\n"))
     elif i == blkNode.body.len - 1 and stmt.kind in {nkIf, nkWhile}:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:

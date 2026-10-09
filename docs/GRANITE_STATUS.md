@@ -12,6 +12,9 @@ python3 scripts/test_granite_parity.py
 ```
 
 The focused parity runner checks both engines against explicit expected output.
+`inactive_return_target` is labeled separately as a compiled-error check because
+the VM currently permits returns to completed homes. Optional case names select
+focused runs, e.g. `python3 scripts/test_granite_parity.py recursive_return_target`.
 Each invocation uses a separate directory under `build/parity/`. Build logs and
 engine output are retained. Execution defaults to a 30-second limit; compilation
 defaults to 120 seconds. A timeout, failed build, failed engine, or incorrect
@@ -25,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twenty-three execution-parity cases pass. Coverage includes class-side and inherited
+Twenty-five execution-parity cases and one explicit compiled-error check pass. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
@@ -41,7 +44,12 @@ and while-loop scope regressions pass. While conditions evaluate all setup
 statements in their lexical scope; select predicates preserve preceding side
 effects. Method/block temporaries are declared
 at scope entry; inline collection loops allocate parameter bindings on each
-iteration. Recursive and escaped non-local returns remain follow-up work.
+iteration. Compiled blocks retain a unique home-invocation return target;
+recursive callbacks and nested-loop returns pass. Targets become inactive on exit,
+and escaped non-local returns raise native BlockCannotReturnError. The recursive
+callback regression also passes under ORC. The VM still treats completed-home
+returns as local block returns. Harding resumable-error integration and `ensure:`
+cleanup on non-local unwinding remain follow-up work.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

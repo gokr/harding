@@ -355,7 +355,14 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         if hasBlocksWithNonLocalReturn(stmt):
           needsNLRWrapper = true
           break
-      if needsNLRWrapper:
+      var hasHomeBlocks = false
+      if blockReg != nil:
+        for info in blockReg.blocks:
+          if info.ownerMethodId == md.methodId:
+            hasHomeBlocks = true
+            break
+      if hasHomeBlocks:
+        output.add("  let hardingHome = CompiledReturnTarget(active: true)\n")
         output.add("  try:\n")
       
       let bodyLen = body.len
@@ -364,7 +371,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
         if stmtCode.len > 0:
           for line in stmtCode.splitLines():
-            if needsNLRWrapper:
+            if hasHomeBlocks:
               output.add("    " & line)
             else:
               output.add("  " & line)
@@ -372,15 +379,18 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
 
       # Smalltalk convention: initialize methods return self unless explicit ^ used
       if selector == "initialize":
-        output.add("  return self\n")
+        output.add(if hasHomeBlocks: "    return self\n" else: "  return self\n")
       
       if needsNLRWrapper:
         # Only consume non-local returns that target this method; let
         # returns aimed at outer methods continue unwinding.
         output.add("  except NonLocalReturnException as nlr:\n")
-        output.add(fmt("    if nlr.targetId == {md.methodId}:\n"))
+        output.add("    if nlr.target == hardingHome:\n")
         output.add("      return nlr.value\n")
         output.add("    raise\n")
+      if hasHomeBlocks:
+        output.add("  finally:\n")
+        output.add("    hardingHome.active = false\n")
     
     output.add("\n\n")
     

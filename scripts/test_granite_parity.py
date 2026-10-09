@@ -221,6 +221,32 @@ c := m direct: "third".
 (c value) println.
 (a value) println.
 """, "first!\nsecond!\nthird?\nfirst!\n"),
+    ("inactive_return_target", """
+Maker := Object derive: #().
+Maker>>make [ ^ [^ 42] ].
+blk := Maker new make.
+blk value.
+""", None),
+    ("loop_non_local_return", """
+Finder := Object derive: #().
+Finder>>loop [
+  | run |
+  run := [ | i | i := 0. [i < 3] whileTrue: [i := i + 1. (i > 1) ifTrue: [^ i]] ].
+  run value.
+  ^ 99
+].
+(Finder new loop) println.
+""", "2\n"),
+    ("recursive_return_target", """
+Recur := Object derive: #().
+Recur>>walk: depth callback: callback [
+  | own |
+  own := [^ 42].
+  (depth > 0) ifTrue: [self walk: (depth - 1) callback: own] ifFalse: [callback value].
+  ^ 99
+].
+(Recur new walk: 1 callback: nil) println.
+""", "42\n"),
     ("non_local_return", """
 Finder := Object derive: #().
 Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
@@ -229,7 +255,7 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 ]
 
 
-def run(command, timeout, log):
+def run(command, timeout, log, expected_error=None):
     try:
         completed = subprocess.run(command, cwd=ROOT, text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -241,6 +267,10 @@ def run(command, timeout, log):
         log.write_text(output + "\nTIMEOUT\n")
         raise RuntimeError(f"timeout after {timeout}s: {command}") from error
     log.write_text(completed.stdout)
+    if expected_error is not None:
+        if completed.returncode == 0 or expected_error not in completed.stdout:
+            raise RuntimeError(f"expected failing execution containing {expected_error!r}; see {log}")
+        return completed.stdout
     if completed.returncode:
         raise RuntimeError(f"exit {completed.returncode}: {command}; see {log}")
     return completed.stdout
@@ -248,6 +278,7 @@ def run(command, timeout, log):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("cases", nargs="*", help="optional case names")
     parser.add_argument("--timeout", type=int, default=30,
                         help="execution limit per engine, in seconds")
     parser.add_argument("--build-timeout", type=int, default=120)
@@ -258,19 +289,31 @@ def main():
     artifact_root = ROOT / "build" / "parity"
     artifact_root.mkdir(parents=True, exist_ok=True)
     build_dir = Path(tempfile.mkdtemp(prefix="run-", dir=artifact_root))
+    selected = [case for case in CASES if not options.cases or case[0] in options.cases]
+    unknown = set(options.cases) - {case[0] for case in CASES}
+    if unknown:
+        parser.error(f"unknown cases: {sorted(unknown)}")
     failures = 0
-    for name, source, expected in CASES:
+    for name, source, expected in selected:
         case_dir = build_dir / name
         case_dir.mkdir()
         source_file = case_dir / f"{name}.hrd"
         source_file.write_text(source)
         binary = case_dir / name
         try:
-            interpreted = run([str(ROOT / "harding"), str(source_file)],
-                              options.timeout, case_dir / "interpreted.log")
+            # The VM currently permits returns to completed homes; this case
+            # checks the compiled semantic error explicitly, not engine parity.
+            interpreted = None if expected is None else run(
+                [str(ROOT / "harding"), str(source_file)], options.timeout,
+                case_dir / "interpreted.log")
             run([str(ROOT / "granite"), "build", str(source_file),
                  f"-d:{case_dir}", f"-o:{binary}"], options.build_timeout,
                 case_dir / "build.log")
+            if expected is None:
+                run([str(binary)], options.timeout, case_dir / "compiled.log",
+                    expected_error="home activation is no longer active")
+                print(f"PASS {name} (compiled error check; VM discrepancy documented)")
+                continue
             compiled = run([str(binary)], options.timeout, case_dir / "compiled.log")
             if interpreted != expected or compiled != expected:
                 raise RuntimeError(f"expected {expected!r}; interpreter {interpreted!r}; "
@@ -279,7 +322,7 @@ def main():
         except RuntimeError as error:
             failures += 1
             print(f"FAIL {name}: {error}")
-    print(f"{len(CASES) - failures} passed, {failures} failed; artifacts: {build_dir}")
+    print(f"{len(selected) - failures} passed, {failures} failed; artifacts: {build_dir}")
     return bool(failures)
 
 

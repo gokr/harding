@@ -394,10 +394,12 @@ proc dumpBlockRegistry*(reg: BlockRegistry) =
 
 proc generateEnvStructDef*(info: BlockProcInfo): string =
   ## Generate the environment struct definition for a block
-  if info.captures.len == 0:
-    return ""  # No environment needed
+  if info.captures.len == 0 and info.ownerMethodId == 0:
+    return ""
 
   var output = fmt("type {info.envStructName}* = ref object of RootObj")
+  if info.ownerMethodId != 0:
+    output.add("\n  home: CompiledReturnTarget")
   for i, capture in info.captures:
     let typ = info.captureTypes[i]
     output.add(fmt("\n  {capture}: {typ}"))
@@ -409,7 +411,7 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
   var params: seq[string] = @[]
 
   # Add environment pointer if there are captures
-  if info.captures.len > 0:
+  if info.captures.len > 0 or info.ownerMethodId != 0:
     params.add("env: pointer")
 
   # Add block parameters using actual names from the BlockNode
@@ -685,10 +687,17 @@ proc genBlockRuntimeHelpers*(): string =
 
 # Exception type for non-local returns from blocks
 type
+  CompiledReturnTarget* = ref object
+    active*: bool
+  BlockCannotReturnError* = object of CatchableError
   NonLocalReturnException* = object of CatchableError
-    ## Exception for non-local return (^) from blocks
     value*: NodeValue
-    targetId*: int
+    target*: CompiledReturnTarget
+
+proc raiseNonLocalReturn*(target: CompiledReturnTarget, value: NodeValue): NodeValue =
+  if target == nil or not target.active:
+    raise newException(BlockCannotReturnError, "Block cannot return: home activation is no longer active")
+  raise (ref NonLocalReturnException)(value: value, target: target)
 
 proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): NodeValue =
   ## Create a block value wrapping a compiled procedure pointer

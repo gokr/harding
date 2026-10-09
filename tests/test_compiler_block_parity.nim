@@ -8,12 +8,11 @@
 # Everything else verifies codegen invariants directly (kept for fast,
 # focused failure messages).
 
-import std/[unittest, strutils, os, osproc, strformat, tables, tempfiles]
+import std/[unittest, strutils, os, osproc, strformat]
 import ../src/harding/core/types
-import ../src/harding/parser/[lexer, parser]
 import ../src/harding/interpreter/[vm]
 import ../src/harding/compiler/context
-import ../src/harding/codegen/[blocks, expression, module]
+import ../src/harding/codegen/[blocks, expression]
 import ./stdlib_test_support
 
 var sharedInterp: Interpreter
@@ -491,9 +490,9 @@ suite "Compiler: Block Code Generation":
     let blockNode = BlockNode(body: @[ret.Node])
     let methodBody = genBlockBody(ctx, blockNode, @[], true, "")
     let topLevelBody = genBlockBody(ctx, blockNode, @[], false, "")
-    check methodBody.contains("NonLocalReturnException")
+    check methodBody.contains("raiseNonLocalReturn")
     check topLevelBody.contains("return NodeValue(kind: vkInt, intVal: 5)")
-    check not topLevelBody.contains("NonLocalReturnException")
+    check not topLevelBody.contains("raiseNonLocalReturn")
 
 # ============================================================================
 # Suite 8: Compilation Pipeline Status

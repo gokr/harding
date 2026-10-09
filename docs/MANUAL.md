@@ -1007,9 +1007,17 @@ method, not whichever method happens to invoke the block. The ordinary result
 of a block is its final expression. An escaped closure's retained variables do
 not make its completed home method a valid non-local return target.
 
-The `non_local_return` regression executes this shape. Granite still uses static
-method identifiers for targeting; recursive activations and returns after the
-home invocation finishes are an outstanding compiler milestone.
+Granite captures a unique return target for each method invocation. Recursive
+calls do not intercept returns aimed at another invocation of the same method.
+The target becomes inactive when its invocation exits; a later non-local return
+raises a native `BlockCannotReturnError`. This is not yet integrated with
+Harding's resumable exception system.
+
+Executed regressions: `non_local_return`, `recursive_return_target`, and
+`loop_non_local_return` in `scripts/test_granite_parity.py`. The
+`inactive_return_target` case is explicitly a compiled-error check: the VM still
+incorrectly treats a return to a completed home as a local block return. That
+interpreter discrepancy and `ensure:` cleanup during unwinding remain open.
 
 ---
 

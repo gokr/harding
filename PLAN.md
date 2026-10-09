@@ -68,9 +68,14 @@ semantics; any intended language change must be explicit and documented.
 
 ## 3. Correct non-local returns
 
-- [ ] Replace method IDs with unique activation targets.
-- [ ] Test recursion, callbacks, nested loops and escaped-block returns.
-- [ ] Detect returns to inactive home activations.
+- [x] Replace compiled method IDs with unique activation targets captured by
+      block environments; deactivate targets when their invocation exits.
+- [x] Test recursive callbacks and nested-loop returns; explicitly test compiled
+      rejection of escaped-block returns rather than claiming VM parity.
+- [x] Detect inactive compiled home targets with native BlockCannotReturnError.
+- [ ] Correct VM inactive-home returns (currently treated as local returns),
+      update legacy tests using escaped `^` as ordinary block results, and
+      integrate compiler errors with Harding's resumable exception semantics.
 - [ ] Ensure cleanup executes while unwinding.
 
 ## 4. Complete object-model dispatch

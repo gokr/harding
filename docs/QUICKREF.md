@@ -215,7 +215,10 @@ The `|` separates parameters/temporaries from body. Parameters and declared
 temporaries shadow outer bindings and slots. Temporaries initially hold `nil`.
 Blocks share captured bindings, including later mutations, and may retain them
 after the creating method returns. The final expression is a block's result;
-`^` instead returns from its lexically enclosing method.
+`^` instead returns from its lexically enclosing method invocation, even when
+invoked through a recursive callback. It cannot return to a completed home.
+Granite rejects inactive targets with native `BlockCannotReturnError`; the VM's
+inactive-home behavior and resumable-error integration remain gaps (see status).
 
 Regression cases: `shared_capture`, `escaped_mutable_capture`,
 `forward_temporary`, and the scope cases in `scripts/test_granite_parity.py`.

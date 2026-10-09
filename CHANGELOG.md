@@ -14,6 +14,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 
 ### Fixed
+- Granite non-local returns target a unique home invocation retained by block environments, rather than a static method id. Recursive callbacks and nested-loop returns preserve the correct target; targets deactivate on exit and inactive returns raise native BlockCannotReturnError. The runner passes 25 parity cases plus an explicitly labeled compiled-error case; VM inactive-home behavior and resumable exception integration remain open.
 - Granite collection and while blocks preserve lexical locals. While conditions execute their full setup before testing the final value; `select:` executes statements preceding its predicate. Twenty-three execution-parity cases cover these scopes.
 - Inline conditional/repetition blocks use separate lexical scopes in Granite; parsed conditional expressions produce branch values. The VM excludes declared block temporaries from inherited captures, preventing shadowed locals from mutating outer bindings. Twenty-one execution-parity cases pass.
 - Granite local bindings take precedence over slot assignments. Capture-cell analysis is limited to each lexical body, and range-loop block parameters are bound per iteration in ascending/descending loops. Twenty execution-parity cases cover shadowing and escaped range captures.

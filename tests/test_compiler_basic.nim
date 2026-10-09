@@ -302,6 +302,24 @@ suite "Compiler: Codegen - Blocks":
     check "x" notin captures
     check "temp" notin captures
 
+  test "method-owned blocks retain home even without variable captures":
+    let reg = newBlockRegistry()
+    var info = registerBlock(reg, BlockNode(body: @[]))
+    info.ownerMethodId = 1000
+    check generateEnvStructDef(info).contains("home: CompiledReturnTarget")
+    check generateBlockProcSignature(info).contains("env: pointer")
+
+  test "method boundary compares activation identity and invalidates target":
+    var p = initParser(lex("Returner := Object derive: #(). Returner>>run [ | blk | blk := [^ 42]. ^ blk value ]"))
+    let nodes = p.parseStatements()
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "return_target")
+    check code.contains("CompiledReturnTarget(active: true)")
+    check code.contains("if nlr.target == hardingHome:")
+    check code.contains("hardingHome.active = false")
+    check code.contains("raiseNonLocalReturn(hardingHome,")
+    check not code.contains("targetId")
+
   test "registers block":
     let reg = newBlockRegistry()
     let blockNode = BlockNode(parameters: @["x"], body: @[])
