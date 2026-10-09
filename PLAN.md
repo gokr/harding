@@ -31,8 +31,12 @@ changelog entry, and build/test validation. Update this checklist as work lands.
       preceding first assignment.
 - [x] Allocate per-iteration parameter bindings in inline `do:`/`collect:`/`select:`;
       executed coverage for escaped closures from `collect:`.
-- [ ] Tighten scope-local capture analysis and cover shadowing and captured
-      iteration parameters in remaining inline control-flow paths.
+- [x] Limit capture-cell name analysis to each method/block/main body.
+- [x] Cover locals shadowing slots and parameters shadowing outer bindings.
+- [x] Bind range-loop parameters per iteration in ascending/descending loops.
+- [ ] Cover declared-local shadowing in inline conditionals/repetition blocks;
+      test all collection loop paths and replace name-based analysis with precise
+      lexical binding identities if remaining cases require it.
 - [x] Keep escaped block environments alive safely under ARC/ORC (managed
       environments owned by BlockNode; returned string-capture regression tested).
 

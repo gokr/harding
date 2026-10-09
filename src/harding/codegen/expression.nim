@@ -201,6 +201,13 @@ proc captureCellNames*(registry: BlockRegistry): seq[string] =
         if name != "self" and name notin result:
           result.add(name)
 
+proc scopeCaptureCellNames*(body: seq[Node]): seq[string] =
+  ## Analyze only blocks lexically contained in this body.
+  let registry = newBlockRegistry()
+  for node in body:
+    collectBlocks(registry, node)
+  return captureCellNames(registry)
+
 proc bindingTarget(ctx: GenContext, name: string): string =
   if name in ctx.cellNames:
     return name & ".value"
@@ -571,20 +578,38 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       let endVal = genExpression(ctx, node.arguments[0])
       let stepVal = genExpression(ctx, node.arguments[1])
       let bodyBlock = node.arguments[2].BlockNode
+      var loopCtx = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
+      loopCtx.inMethod = ctx.inMethod
+      loopCtx.inBlock = ctx.inBlock
+      loopCtx.locals = ctx.locals
+      loopCtx.parameters = ctx.parameters
+      loopCtx.globals = ctx.globals
+      loopCtx.cellNames = ctx.cellNames
+      loopCtx.blockRegistry = ctx.blockRegistry
+      loopCtx.varTypes = ctx.varTypes
+      for parameter in bodyBlock.parameters:
+        loopCtx.locals.add(parameter)
+      var iterationSetup = ""
+      if bodyBlock.parameters.len > 0:
+        iterationSetup.add(bindingDeclaration(loopCtx, bodyBlock.parameters[0],
+          "NodeValue(kind: vkInt, intVal: current)") & "\n")
+      iterationSetup.add(genLocalDeclarations(loopCtx, bodyBlock.temporaries))
       var code = "(block:\n"
       code.add("    var current = toInt(" & receiverCode & ")\n")
       code.add("    let endNum = toInt(" & endVal & ")\n")
       code.add("    let step = toInt(" & stepVal & ")\n")
       code.add("    if step > 0:\n")
       code.add("      while current <= endNum:\n")
+      code.add(indentBlock(iterationSetup, 8))
       for stmt in bodyBlock.body:
-        let stmtCode = genStatement(ctx, stmt)
+        let stmtCode = genStatement(loopCtx, stmt)
         code.add(indentBlock(stmtCode, 8))
       code.add("        current += step\n")
       code.add("    else:\n")
       code.add("      while current >= endNum:\n")
+      code.add(indentBlock(iterationSetup, 8))
       for stmt in bodyBlock.body:
-        let stmtCode = genStatement(ctx, stmt)
+        let stmtCode = genStatement(loopCtx, stmt)
         code.add(indentBlock(stmtCode, 8))
       code.add("        current += step\n")
       code.add("    nilValue())")
@@ -729,7 +754,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if variable is a slot
-    if ctx.isSlot(varName):
+    if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
         return fmt("setSlotValue(self, \"{varName}\", {exprCode})")
       let idx = ctx.getSlotIndex(varName)
@@ -868,7 +893,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if variable is a slot
-    if ctx.isSlot(varName):
+    if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
         return fmt("discard setSlotValue(self, \"{varName}\", {exprCode})")
       let idx = ctx.getSlotIndex(varName)
@@ -1176,7 +1201,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     varTypes: ctx.varTypes,
     compiledClasses: ctx.compiledClasses,
     classInfo: ctx.classInfo,
-    cellNames: captureCellNames(ctx.blockRegistry)
+    cellNames: scopeCaptureCellNames(blkNode.body)
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
@@ -1354,7 +1379,7 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
     let exprCode = genExpression(ctx, assign.expression)
 
     # Check if it's a slot assignment in method context
-    if ctx.cls != nil and ctx.inMethod:
+    if ctx.cls != nil and ctx.inMethod and not ctx.isLocal(varName):
       let classDef = ctx.classInfo.getOrDefault(ctx.cls.name)
       for slot in classDef.slots:
         if slot.name == varName:

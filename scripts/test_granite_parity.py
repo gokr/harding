@@ -137,6 +137,29 @@ blocks := #(2, 4, 6) collect: [:n | [n]].
 ((blocks at: 1) value) println.
 ((blocks at: 2) value) println.
 """, "2\n4\n6\n"),
+    ("range_capture", """
+blocks := #(nil, nil, nil).
+1 to: 3 by: 1 do: [:n | blocks at: (n - 1) put: [n]].
+((blocks at: 0) value) println.
+((blocks at: 1) value) println.
+((blocks at: 2) value) println.
+3 to: 1 by: -1 do: [:n | blocks at: (n - 1) put: [n + 10]].
+((blocks at: 0) value) println.
+((blocks at: 2) value) println.
+""", "1\n2\n3\n11\n13\n"),
+    ("lexical_shadowing", """
+Cell := Object derivePublic: #(amount).
+Cell>>localValue [ | amount blk | amount := 5. blk := [amount := amount + 1. amount]. ^ blk value ].
+c := Cell new.
+c amount: 99.
+(c localValue) println.
+(c amount) println.
+outer := 7.
+blk := [:outer | outer := outer + 1. [outer]].
+inner := blk value: 20.
+(inner value) println.
+outer println.
+""", "6\n99\n21\n7\n"),
     ("escaped_mutable_capture", """
 Maker := Object derive: #().
 Maker>>counter: start [ | count | count := start. ^ [count := count + 1. count] ].
