@@ -25,26 +25,20 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twenty execution-parity cases pass, including lexical shadowing and ascending/
-descending range captures, including forward temporary captures and
-escaped closures from collection iteration, including shared sibling/nested captures,
-mutated block parameters, independent escaped counters, and closure environments,
-inherited method ownership,
-class-side `super` in blocks, multi-level constructor inheritance, dynamic
-accessors, selective read/write accessors, and overridden accessor methods. The VM now uses
-class-side lookup and preserves class-side activation context for `super` sends.
-The class-model unit suite also passes.
+Twenty-one execution-parity cases pass. Coverage includes class-side and inherited
+method dispatch, factories and constructors, accessor permissions/overrides,
+shared and escaped closures, forward temporaries, range captures, and lexical
+shadowing in methods, blocks, inline conditionals, and repetition. Compiler tests
+and the previously validated class-model suite also pass.
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
 cell values rather than copying bindings and writing them back. Sibling captures
 and escaped counters pass under ARC and ORC. Capture-name analysis is limited to
-each body but remains name-based rather than binding-identity-based. Declared-local
-shadowing in inline conditionals/repetition blocks needs further coverage.
-Method/block temporaries
-are declared at scope entry; inline collection loops allocate parameter bindings
-on each iteration. Recursive and
-escaped non-local returns remain follow-up work.
+each body but remains name-based rather than binding-identity-based. Additional
+collection/while scope paths need coverage. Method/block temporaries are declared
+at scope entry; inline collection loops allocate parameter bindings on each
+iteration. Recursive and escaped non-local returns remain follow-up work.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

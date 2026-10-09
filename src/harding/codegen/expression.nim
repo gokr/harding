@@ -225,6 +225,46 @@ proc genLocalDeclarations*(ctx: GenContext, names: seq[string]): string =
       ctx.locals.add(name)
       result.add(bindingDeclaration(ctx, name, "NodeValue(kind: vkNil)") & "\n")
 
+proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
+  result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
+  result.inMethod = ctx.inMethod
+  result.inBlock = ctx.inBlock
+  result.blockRegistry = ctx.blockRegistry
+  result.varTypes = ctx.varTypes
+  result.globals = ctx.globals
+  result.cellNames = ctx.cellNames
+  for name in ctx.locals:
+    if name notin blk.temporaries and name notin blk.parameters:
+      result.locals.add(name)
+  for name in ctx.parameters:
+    if name notin blk.temporaries and name notin blk.parameters:
+      result.parameters.add(name)
+  for name in scopeCaptureCellNames(blk.body):
+    if name notin result.cellNames:
+      result.cellNames.add(name)
+
+proc inlineBlockStatements(ctx: GenContext, blk: BlockNode): string =
+  let bodyCtx = inlineBlockContext(ctx, blk)
+  result = "block:\n"
+  result.add(indentBlock(genLocalDeclarations(bodyCtx, blk.temporaries)))
+  for statement in blk.body:
+    result.add(indentBlock(genStatement(bodyCtx, statement)))
+  if blk.body.len == 0 and blk.temporaries.len == 0:
+    result.add("  discard\n")
+
+proc inlineBlockExpression(ctx: GenContext, blk: BlockNode): string =
+  let bodyCtx = inlineBlockContext(ctx, blk)
+  result = "(block:\n"
+  result.add(indentBlock(genLocalDeclarations(bodyCtx, blk.temporaries), 4))
+  for i, statement in blk.body:
+    if i == blk.body.high:
+      result.add(indentBlock(genExpression(bodyCtx, statement), 4))
+    else:
+      result.add(indentBlock(genStatement(bodyCtx, statement), 4))
+  if blk.body.len == 0:
+    result.add("    nilValue()\n")
+  result.add(")")
+
 proc genSymbolAccess*(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
@@ -351,19 +391,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       let thenBlock = node.arguments[0].BlockNode
       let elseBlock = node.arguments[1].BlockNode
       var code = "(if isTruthy(" & receiverCode & "):\n"
-      # Generate then block body - last expression is the value
-      for i, stmt in thenBlock.body:
-        if i == thenBlock.body.len - 1:
-          code.add("      " & genExpression(ctx, stmt) & "\n")
-        else:
-          code.add("      " & genStatement(ctx, stmt) & "\n")
+      code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
-      # Generate else block body
-      for i, stmt in elseBlock.body:
-        if i == elseBlock.body.len - 1:
-          code.add("      " & genExpression(ctx, stmt) & "\n")
-        else:
-          code.add("      " & genStatement(ctx, stmt) & "\n")
+      code.add(indentBlock(inlineBlockExpression(ctx, elseBlock), 6))
       code.add("  )")
       return code
 
@@ -373,11 +403,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
        not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
       var code = "(if isTruthy(" & receiverCode & "):\n"
-      for i, stmt in thenBlock.body:
-        if i == thenBlock.body.len - 1:
-          code.add("      " & genExpression(ctx, stmt) & "\n")
-        else:
-          code.add("      " & genStatement(ctx, stmt) & "\n")
+      code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
       code.add("      nilValue()\n")
       code.add("  )")
@@ -389,11 +415,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
        not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
       var code = "(if not isTruthy(" & receiverCode & "):\n"
-      for i, stmt in thenBlock.body:
-        if i == thenBlock.body.len - 1:
-          code.add("      " & genExpression(ctx, stmt) & "\n")
-        else:
-          code.add("      " & genStatement(ctx, stmt) & "\n")
+      code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
       code.add("      nilValue()\n")
       code.add("  )")
@@ -565,9 +587,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       var code = "(block:\n"
       code.add("    let count = toInt(" & receiverCode & ")\n")
       code.add("    for timesRepeatI in 0..<count:\n")
-      for stmt in bodyBlock.body:
-        let stmtCode = genStatement(ctx, stmt)
-        code.add(indentBlock(stmtCode, 6))
+      code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
       return code
 
@@ -741,6 +761,16 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
   of nkMessage:
     return genMessage(ctx, node.MessageNode)
+
+  of nkIf:
+    let conditional = node.IfNode
+    let condition = genExpression(ctx, conditional.condition)
+    let yes = asBlockNode(conditional.thenBranch)
+    let no = asBlockNode(conditional.elseBranch)
+    let yesCode = if yes != nil: inlineBlockExpression(ctx, yes) else: "nilValue()"
+    let noCode = if no != nil: inlineBlockExpression(ctx, no) else: "nilValue()"
+    return "(if isTruthy(" & condition & "):\n" & indentBlock(yesCode, 4) &
+           " else:\n" & indentBlock(noCode, 4) & ")"
 
   of nkAssign:
     let assign = node.AssignNode
@@ -986,10 +1016,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       if thenBlock.body.len == 0:
         code.add("  discard\n")
       else:
-        for stmt in thenBlock.body:
-          let stmtCode = genStatement(ctx, stmt)
-          if stmtCode.len > 0:
-            code.add(indentBlock(stmtCode))
+        code.add(indentBlock(inlineBlockStatements(ctx, thenBlock)))
     elif ifNode.thenBranch != nil:
       let stmtCode = genStatement(ctx, ifNode.thenBranch)
       if stmtCode.len > 0:
@@ -1004,10 +1031,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if elseBlock.body.len == 0:
           code.add("  discard\n")
         else:
-          for stmt in elseBlock.body:
-            let stmtCode = genStatement(ctx, stmt)
-            if stmtCode.len > 0:
-              code.add(indentBlock(stmtCode))
+          code.add(indentBlock(inlineBlockStatements(ctx, elseBlock)))
       else:
         let stmtCode = genStatement(ctx, ifNode.elseBranch)
         if stmtCode.len > 0:
@@ -1077,10 +1101,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           if thenBlock.body.len == 0:
             code.add("  discard\n")
           else:
-            for stmt in thenBlock.body:
-              let stmtCode = genStatement(ctx, stmt)
-              if stmtCode.len > 0:
-                code.add(indentBlock(stmtCode))
+            code.add(indentBlock(inlineBlockStatements(ctx, thenBlock)))
           return code
 
     of "ifFalse:":
@@ -1093,10 +1114,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           if thenBlock.body.len == 0:
             code.add("  discard\n")
           else:
-            for stmt in thenBlock.body:
-              let stmtCode = genStatement(ctx, stmt)
-              if stmtCode.len > 0:
-                code.add(indentBlock(stmtCode))
+            code.add(indentBlock(inlineBlockStatements(ctx, thenBlock)))
           return code
 
     of "ifTrue:ifFalse:":
@@ -1136,10 +1154,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           if bodyBlock.body.len == 0:
             code.add("  discard\n")
           else:
-            for stmt in bodyBlock.body:
-              let stmtCode = genStatement(ctx, stmt)
-              if stmtCode.len > 0:
-                code.add(indentBlock(stmtCode))
+            code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
           return code
 
     else:

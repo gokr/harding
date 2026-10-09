@@ -770,7 +770,7 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
     if currentMethod.capturedEnvInitialized and currentMethod.capturedEnv.len > 0:
       for name, cell in currentMethod.capturedEnv.pairs:
         # Don't inherit if this block has a parameter with the same name
-        if name notin blockNode.parameters:
+        if name notin blockNode.parameters and name notin blockNode.temporaries:
           blockNode.capturedEnv[name] = cell
 
   # Capture variables from the current activation only (where the block is defined)
@@ -779,7 +779,8 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
   if activation != nil:
     # Capture all locals from this activation (except 'self', 'super', and block parameters)
     for name, value in activation.locals:
-      if name != "self" and name != "super" and name notin blockNode.parameters:
+      if name != "self" and name != "super" and name notin blockNode.parameters and
+         name notin blockNode.temporaries:
           # Skip variables already inherited from parent's capturedEnv (step above).
           # The inherited MutableCell is shared with the outer method's capturedVars,
           # so overwriting it would break the shared mutation chain.

@@ -147,6 +147,16 @@ blocks := #(nil, nil, nil).
 ((blocks at: 0) value) println.
 ((blocks at: 2) value) println.
 """, "1\n2\n3\n11\n13\n"),
+    ("inline_shadowing", """
+count := 7.
+true ifTrue: [ | count | count := 20. count println ].
+count println.
+3 timesRepeat: [ | count | count := 1. count println ].
+count println.
+answer := true ifTrue: [ | count | count := 42. count ] ifFalse: [0].
+answer println.
+count println.
+""", "20\n7\n1\n1\n1\n7\n42\n7\n"),
     ("lexical_shadowing", """
 Cell := Object derivePublic: #(amount).
 Cell>>localValue [ | amount blk | amount := 5. blk := [amount := amount + 1. amount]. ^ blk value ].
