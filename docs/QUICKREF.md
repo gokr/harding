@@ -2,6 +2,10 @@
 
 Build toolchain: Nim 2.2.12. This reference describes language semantics; see
 [GRANITE_STATUS.md](GRANITE_STATUS.md) for native compiler coverage and limitations.
+The accepted exception-model migration replaces arbitrary error resumption with
+non-resumable errors and synchronous notifications; guaranteed cleanup is required
+in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
+not yet implemented.
 
 ## Literals
 

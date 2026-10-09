@@ -1,5 +1,11 @@
 # Exception Handling in Harding
 
+> Historical design notes, not current implementation documentation. The later
+> stackless VM added signal-point resumption. The accepted native-oriented language
+> direction now removes arbitrary error resumption; see
+> [EXCEPTION_MODEL.md](../EXCEPTION_MODEL.md) for the target contract and
+> [GRANITE_STATUS.md](../GRANITE_STATUS.md) for migration status.
+
 Harding provides exception handling through the `on:do:` mechanism, which allows blocks of code to be protected with exception handlers.
 
 ## Basic Syntax

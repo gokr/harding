@@ -48,8 +48,10 @@ iteration. Compiled blocks retain a unique home-invocation return target;
 recursive callbacks and nested-loop returns pass. Targets become inactive on exit,
 and escaped non-local returns raise native BlockCannotReturnError. The recursive
 callback regression also passes under ORC. The VM still treats completed-home
-returns as local block returns. Harding resumable-error integration and `ensure:`
-cleanup on non-local unwinding remain follow-up work.
+returns as local block returns. The accepted [exception model](EXCEPTION_MODEL.md)
+removes arbitrary error resumption: integrate inactive-home errors with conventional
+Harding errors and guarantee `ensure:` cleanup. Both engines must migrate together;
+synchronous notifications do not require signal-point restoration.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.
@@ -66,9 +68,9 @@ are not emitted. Missing-message error parity remains a later milestone.
    including recursion and escaped-block lifetime checks.
 4. Object-model parity: multiple inheritance, dynamic sends, missing-message
    errors, and reflection.
-5. Resumable exceptions, processes, and library compilation. Determine which
-   semantics require continuations or state-machine lowering before claiming
-   parity with the stackless VM.
+5. Conventional errors, synchronous notifications, guaranteed cleanup, processes,
+   and library compilation. No arbitrary error resumption is required. Processes
+   may still require continuations or state-machine lowering.
 6. Optimization after semantic coverage: direct calls, specialization, unboxing,
    and dispatch caching.
 

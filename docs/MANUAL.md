@@ -1075,6 +1075,14 @@ collection detect: [:each | each > 5]
 
 ## Exception Handling
 
+**Exception-model migration:** Harding has adopted non-resumable errors,
+synchronous resumable notifications, guaranteed `ensure:` cleanup, and lexical
+block returns as its target contract. Interpreter and Granite must agree. See
+[EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) for the accepted design and
+[GRANITE_STATUS.md](GRANITE_STATUS.md) for implementation status. The resumption
+examples below describe the legacy interpreter protocol pending migration; they
+are not the new error contract. In particular, `resume:` on Error will be invalid.
+
 Harding provides exception handling through the `on:do:` mechanism:
 
 ### Basic Syntax
@@ -1210,7 +1218,7 @@ Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 | Feature | Harding | Smalltalk |
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
-| Stack unwinding | Signal point preserved via ExceptionContext | Immediate |
+| Stack unwinding | Legacy signal point preserved via ExceptionContext | Depends on handler action; resumption retains computation |
 | Resume capability | Yes (`resume`, `resume:`) | Yes |
 
 ---

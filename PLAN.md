@@ -66,6 +66,31 @@ semantics; any intended language change must be explicit and documented.
       builds and Granite child builds use PATH's 2.2.12. All 23 parity cases,
       compiler tests, and class-model tests pass.
 
+## Accepted exception-model change (next implementation priority)
+
+Target contract: `docs/EXCEPTION_MODEL.md`. Both engines must agree; do not retain
+arbitrary error resumption solely in the interpreter.
+
+- [x] Record non-resumable errors, synchronous notifications, guaranteed cleanup,
+      lexical block returns, and foreign-boundary constraints as the target model.
+- [ ] Inventory existing resume/retry/pass/return tests, stdlib methods, examples,
+      and debugger hooks; migrate deliberately rather than weakening assertions.
+- [ ] Make VM errors abandon the protected computation before handler execution;
+      handler results/return:, pass, and retry follow the accepted contract.
+- [ ] Reject resume/resume: on non-notification exceptions in both engines.
+- [ ] Implement synchronous Notification dispatch/results and outer-handler pass;
+      reject notification retry/return: without capturing resumable continuations.
+- [ ] Implement exactly-once `ensure:` cleanup on normal exits, errors, retries,
+      and lexical non-local returns, including nested cleanup and cleanup failures.
+- [ ] Integrate inactive-home returns into non-resumable Harding errors; keep
+      internal non-local-return transfers invisible to application handlers.
+- [ ] Remove obsolete signal-point restoration machinery after migration; retain
+      diagnostic information needed by default actions and debugger hooks.
+- [ ] Add executed interpreter/Granite parity tests for the contract's validation
+      matrix, including invalid operations and unhandled-error exit status.
+- [ ] Update manual, quick reference, stdlib comments and stale research notes to
+      describe implemented semantics; avoid claiming the migration is done early.
+
 ## 3. Correct non-local returns
 
 - [x] Replace compiled method IDs with unique activation targets captured by
@@ -75,7 +100,7 @@ semantics; any intended language change must be explicit and documented.
 - [x] Detect inactive compiled home targets with native BlockCannotReturnError.
 - [ ] Correct VM inactive-home returns (currently treated as local returns),
       update legacy tests using escaped `^` as ordinary block results, and
-      integrate compiler errors with Harding's resumable exception semantics.
+      integrate compiler errors with the accepted non-resumable error contract.
 - [ ] Ensure cleanup executes while unwinding.
 
 ## 4. Complete object-model dispatch
@@ -86,9 +111,12 @@ semantics; any intended language change must be explicit and documented.
 
 ## 5. Exceptions, processes and libraries
 
-- [ ] Verify resumable exceptions using executed tests.
-- [ ] Decide continuation/state-machine lowering for semantics that native
-      stack execution cannot preserve.
+- [ ] Verify conventional errors, synchronous notifications, and cleanup using
+      executed tests (see accepted exception-model change above).
+- [ ] Evaluate continuation/state-machine lowering only where processes require
+      it; arbitrary error resumption is no longer a language requirement.
+- [ ] Catch/translate error and return transfers at C ABI boundaries; validate
+      foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.
 - [ ] Cover mixed-mode execution separately from pure compilation.
 
