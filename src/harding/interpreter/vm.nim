@@ -1676,39 +1676,24 @@ proc isNotificationInstance(interp: Interpreter, value: Instance): bool =
 
 proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string)
 
-proc collectPendingCleanups(interp: var Interpreter, activationDepth: int): seq[CleanupEntry] =
-  ## Remove and return `ensure:` scopes deeper than activationDepth,
-  ## innermost-first. The caller schedules their cleanups as work frames, which
-  ## keeps cleanup execution on the stackless path: a cleanup that signals or
-  ## returns then behaves like any other Harding code.
+proc scheduleUnwindCleanup(interp: var Interpreter, activationDepth: int,
+                           continuation: WorkFrame): bool =
+  ## Run one exited cleanup before continuing a pending transfer. Outer scopes
+  ## remain registered so an error or return from cleanup still unwinds them.
   while interp.cleanupStack.len > 0 and
         interp.cleanupStack[^1].activationDepth > activationDepth:
     let entry = interp.cleanupStack.pop()
-    if entry.running:
-      # This scope's cleanup is what is unwinding; it must not run again.
+    if entry.running or entry.cleanupBlock == nil:
       continue
-    result.add(entry)
-
-proc scheduleCleanups(interp: var Interpreter, entries: seq[CleanupEntry]) =
-  ## Push work frames so the given cleanups (innermost-first) run in order,
-  ## each discarding its result. Call this after any frame that must run last.
-  for idx in countdown(entries.high, 0):
-    if entries[idx].cleanupBlock == nil:
-      continue
+    entry.running = true
+    interp.truncateWorkQueue(entry.workQueueDepth)
+    interp.evalStack.setLen(entry.evalStackDepth)
+    interp.restoreActivationStackTo(entry.activationDepth)
+    interp.pushWorkFrame(continuation)
     interp.pushWorkFrame(newDiscardFrame())
-    interp.pushWorkFrame(newApplyBlockFrame(entries[idx].cleanupBlock, 0))
-
-proc runPendingCleanups(interp: var Interpreter, activationDepth: int) =
-  ## Run every `ensure:` cleanup registered in scopes deeper than activationDepth,
-  ## innermost first. Used when control leaves those scopes by an error or a
-  ## non-local return rather than by normal completion. The intervening scopes
-  ## are already unreachable, so only the registered block is evaluated. A
-  ## cleanup that itself signals propagates that error.
-  let entries = interp.collectPendingCleanups(activationDepth)
-  for entry in entries:
-    if entry.cleanupBlock == nil:
-      continue
-    discard evalBlock(interp, nil, entry.cleanupBlock)
+    interp.pushWorkFrame(newApplyBlockFrame(entry.cleanupBlock, 0))
+    return true
+  return false
 
 proc newBeginCleanupFrame*(entry: CleanupEntry): WorkFrame =
   ## Frame that marks a cleanup scope as running before its body executes, so a
@@ -1716,14 +1701,6 @@ proc newBeginCleanupFrame*(entry: CleanupEntry): WorkFrame =
   result = acquireFrame()
   result.kind = wfBeginCleanup
   result.cleanupEntry = entry
-
-proc newMarkHandlerConsumedFrame*(handlerIndex: int): WorkFrame =
-  ## Frame that marks an exception handler consumed. Scheduled after that
-  ## handler's cleanups but before its body, so a cleanup failure is still
-  ## caught by the handler while a failure in the handler body is not.
-  result = acquireFrame()
-  result.kind = wfMarkHandlerConsumed
-  result.handlerIndex = handlerIndex
 
 proc newEnsureDoneFrame*(entry: CleanupEntry): WorkFrame =
   ## Frame that unregisters a completed `ensure:` scope. The cleanup body's
@@ -1747,7 +1724,9 @@ proc primitiveEnsureImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
   let entry = CleanupEntry(
     cleanupBlock: cleanupBlock,
-    activationDepth: interp.activationStack.len)
+    activationDepth: interp.activationStack.len,
+    workQueueDepth: interp.workQueue.len,
+    evalStackDepth: interp.evalStack.len)
   interp.cleanupStack.add(entry)
 
   # Pushed in reverse: body runs, then cleanup, then the scope is unregistered.
@@ -1830,20 +1809,26 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       if msgValue.kind == vkString:
         message = msgValue.strVal
 
+  if not isNotificationInstance(interp, self):
+    var unwindDepth = -1
+    for handler in reversed(interp.exceptionHandlers):
+      if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
+        unwindDepth = handler.stackDepth
+        break
+    let continuation = acquireFrame()
+    continuation.kind = wfSignalException
+    continuation.exceptionInstance = self
+    if interp.scheduleUnwindCleanup(unwindDepth, continuation):
+      return nilValue()
+    releaseFrame(continuation)
+
   # Search for matching handler from newest to oldest
   for i in countdown(interp.exceptionHandlers.len - 1, 0):
     let handler = interp.exceptionHandlers[i]
     if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
       let isNotification = isNotificationInstance(interp, self)
 
-      var pendingCleanups: seq[CleanupEntry] = @[]
-      if not isNotification:
-        # Take the `ensure:` scopes this error abandons, so their cleanups run
-        # exactly once. They are scheduled below, after the VM has been rewound
-        # to the handler, so cleanup code runs on the normal stackless path.
-        pendingCleanups = interp.collectPendingCleanups(handler.stackDepth)
-      else:
-        interp.exceptionHandlers[i].consumed = true
+      interp.exceptionHandlers[i].consumed = true
 
       # Errors are non-resumable: the failing computation is abandoned up front
       # and the handler's result (or return:) replaces it. Notifications keep the
@@ -1896,11 +1881,6 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
       applyFrame.blockArgs = @[self.toValue()]
       interp.pushWorkFrame(applyFrame)
-      # Run order (innermost first): cleanups, then mark the handler consumed,
-      # then the handler body, then the unwind barrier. Pushed in reverse.
-      interp.scheduleCleanups(pendingCleanups)
-      if not isNotification:
-        interp.pushWorkFrame(newMarkHandlerConsumedFrame(i))
       return nilValue()
   # No handler found - call defaultAction on the exception
   # This allows applications (like Bona) to override defaultAction to open a debugger
@@ -8538,7 +8518,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfReturnValue:
     # Handle return (^ expression) - must unwind work queue to target activation
-    let value = if frame.returnValue.kind != vkNil:
+    let value = if frame.returnTarget != nil or frame.returnValue.kind != vkNil:
                   frame.returnValue
                 else:
                   interp.popValue()
@@ -8569,6 +8549,10 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Normal return from a method - target is the current method itself
         targetActivation = interp.currentActivation
 
+    if frame.returnTarget != nil:
+      targetActivation = frame.returnTarget
+      isNonLocalReturn = targetActivation != interp.currentActivation
+
     debug("wfReturnValue: current selector=",
       if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
         interp.currentActivation.currentMethod.selector
@@ -8587,24 +8571,16 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushValue(returnVal)
       return true
 
-    # Run `ensure:` cleanups for the scopes this return leaves. A local return
-    # exits the current activation; a non-local return exits everything in
-    # between, so cleanups run innermost first before the unwind proceeds.
-    if isNonLocalReturn:
-      var targetDepth = 0
-      var foundTarget = false
-      for idx in 0..<interp.activationStack.len:
-        if interp.activationStack[idx] == targetActivation:
-          targetDepth = idx
-          foundTarget = true
-          break
-      if foundTarget:
-        # Run the cleanups for the scopes this return exits, innermost first,
-        # while those scopes are still live. A cleanup that signals or returns
-        # propagates in place of this return.
-        interp.runPendingCleanups(targetDepth)
-    else:
-      interp.runPendingCleanups(interp.activationStack.len - 1)
+    for idx, activation in interp.activationStack:
+      if activation == targetActivation:
+        let continuation = acquireFrame()
+        continuation.kind = wfReturnValue
+        continuation.returnValue = returnVal
+        continuation.returnTarget = targetActivation
+        if interp.scheduleUnwindCleanup(idx, continuation):
+          return true
+        releaseFrame(continuation)
+        break
 
     # Fast path for ordinary local method returns (legacy executeMethod path).
     # Do not unwind workQueue here, because queued frames may belong to caller
@@ -8924,11 +8900,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       frame.cleanupEntry.running = true
     return true
 
-  of wfMarkHandlerConsumed:
-    if frame.handlerIndex < interp.exceptionHandlers.len:
-      interp.exceptionHandlers[frame.handlerIndex].consumed = true
-    return true
-
   of wfEnsureDone:
     # Normal completion of an `ensure:` scope: unregister it and drop the cleanup
     # block's result, leaving the protected body's result on the stack.
@@ -8954,10 +8925,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     return true
 
   of wfSignalException:
-    # Signal exception - this is handled by primitiveSignalImpl
-    # which schedules the handler block directly
-    # This case should not normally be reached
-    debug("VM: wfSignalException - should be handled by primitiveSignalImpl")
+    discard primitiveSignalImpl(interp, frame.exceptionInstance, @[])
     return true
 
   of wfEvalNode:

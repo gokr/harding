@@ -254,6 +254,45 @@ suite "Ensure Cleanup":
     check(result[1].len == 0)
     check(result[0][^1].strVal == "12")
 
+  test "cleanup runs once per retry attempt":
+    let result = interp.evalStatements("""
+      Attempts := 0.
+      Cleanups := 0.
+      Result := [
+        [ Attempts := Attempts + 1.
+          Attempts < 3 ifTrue: [ Error signal: "again" ].
+          Attempts ]
+          ensure: [ Cleanups := Cleanups + 1 ]
+      ] on: Error do: [ :ex | ex retry ].
+      (Result asString) & ":" & (Attempts asString) & ":" & (Cleanups asString)
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "3:3:3")
+
+  test "cleanup return supersedes normal completion":
+    let result = interp.evalStatements("""
+      Winner := Object derive: #().
+      Winner>>run [ [ "body" ] ensure: [ ^ "cleanup won" ]. ^ "unreachable" ].
+      Result := Winner new run.
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "cleanup won")
+
+  test "cleanup return supersedes a pending error and runs outer cleanup":
+    let evaluated = interp.evalStatements("""
+      Order := "".
+      Winner := Object derive: #().
+      Winner>>run [
+        [[Error signal: "body failed"] ensure: [Order := Order & "1". ^ "cleanup won"]]
+          ensure: [Order := Order & "2"]
+      ].
+      Value := [Winner new run] on: Error do: [:ex | "incorrect"].
+      Value & ":" & Order
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "cleanup won:12"
+
   test "return to a finished home signals BlockCannotReturn":
     let result = interp.evalStatements("""
       Maker := Object derive: #().

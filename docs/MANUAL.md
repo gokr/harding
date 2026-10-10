@@ -1215,8 +1215,15 @@ protects that scope.
 [ riskyOperation ] ensure: [ cleanup ]
 ```
 
-Not yet covered: cleanup on a `retry` attempt, and a cleanup that itself performs
-a non-local return.
+Each retry attempt exits its own cleanup scope before restarting. If cleanup
+signals an error or performs a non-local return, that transfer replaces the
+pending result/error/return; outer cleanup still runs. Uncaught errors also run
+cleanup before terminating. Executed parity cases: `ensure_retry`,
+`ensure_transfer`, `ensure_cleanup_failure`, `ensure_uncaught`, and
+`ensure_uncaught_override` in `scripts/test_granite_parity.py`.
+
+Process boundaries and legacy re-entrant native invocation paths still need
+cleanup coverage.
 
 ### Convenience Methods
 

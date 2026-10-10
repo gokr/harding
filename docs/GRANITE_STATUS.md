@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Thirty-three parity cases pass, including two unhandled-error checks and the
+Thirty-eight parity cases pass, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -71,9 +71,15 @@ defaultAction/diagnostics and mixed mode remain incomplete.
 
 `ensure:` runs cleanup exactly once on normal completion, errors and lexical
 non-local returns, nested innermost-first, in both engines. Cleanup failures are
-caught by the handler protecting the scope. Not yet covered: cleanup on `retry`
-attempts, a cleanup that itself performs a non-local return, and cleanup across
-process boundaries.
+caught by the handler protecting the scope. Retry attempts, cleanup replacing
+pending errors/returns, nested cleanup failures, and cleanup on uncaught exit have
+executed parity coverage. VM unwind continuations keep the cleanup's home active
+and retain outer cleanup registrations until each is exited. The exception/cleanup suite also passes under ARC and ORC. Process boundaries
+and legacy re-entrant native invocation paths remain unverified.
+
+A cleanup-ordering test also exposed compiled methods capturing mutable globals
+as symbols/copies rather than shared bindings. That is tracked separately;
+method-level cleanup ordering tests use direct output to isolate unwind behavior.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

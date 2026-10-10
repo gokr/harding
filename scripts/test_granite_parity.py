@@ -277,6 +277,47 @@ order println.
 result := [ 7 ] ensure: [ 99 ].
 result println.
 """, "body\n1\nbody\n11\n12\n7\n"),
+    ("ensure_retry", """
+attempts := 0.
+cleanups := 0.
+result := [[attempts := attempts + 1. (attempts < 3) ifTrue: [Error signal: "again"]. attempts]
+  ensure: [cleanups := cleanups + 1]] on: Error do: [:ex | ex retry].
+result println.
+attempts println.
+cleanups println.
+""", "3\n3\n3\n"),
+    ("ensure_transfer", """
+Winner := Object derive: #().
+Winner>>run [
+  [[Error signal: "body failed"] ensure: ["inner cleanup" println. ^ "cleanup won"]]
+    ensure: ["outer cleanup" println]
+].
+([Winner new run] on: Error do: [:ex | "incorrect"]) println.
+Winner>>returning [
+  [[^ "body return"] ensure: ["inner cleanup" println. ^ "cleanup return"]]
+    ensure: ["outer cleanup" println]
+].
+(Winner new returning) println.
+""", "inner cleanup\nouter cleanup\ncleanup won\ninner cleanup\nouter cleanup\ncleanup return\n"),
+    ("ensure_cleanup_failure", """
+Order := "".
+result := [[[Error signal: "body error"] ensure: [Order := Order & "1". Error signal: "cleanup error"]]
+  ensure: [Order := Order & "2"]] on: Error do: [:ex | ex message].
+result println.
+Order println.
+""", "cleanup error\n12\n"),
+    ("ensure_uncaught", """
+[[Error signal: "uncaught"] ensure: ["inner cleanup" println]]
+  ensure: ["outer cleanup" println].
+""", {"error": "Error: uncaught", "prefix": "inner cleanup\nouter cleanup\n"}),
+    ("ensure_uncaught_override", """
+Winner := Object derive: #().
+Winner>>run [
+  [[Error signal: "uncaught"] ensure: [^ "cleanup won"]]
+    ensure: ["outer cleanup" println]
+].
+(Winner new run) println.
+""", "outer cleanup\ncleanup won\n"),
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),
@@ -363,8 +404,6 @@ def main():
         source_file.write_text(source)
         binary = case_dir / name
         try:
-            # The VM currently permits returns to completed homes; this case
-            # checks the compiled semantic error explicitly, not engine parity.
             expected_error = expected.get("error") if isinstance(expected, dict) else None
             interpreted = None if expected is None else run(
                 [str(ROOT / "harding"), str(source_file)], options.timeout,
@@ -378,8 +417,11 @@ def main():
                 print(f"PASS {name} (compiled error check; VM discrepancy documented)")
                 continue
             if expected_error is not None:
-                run([str(binary)], options.timeout, case_dir / "compiled.log",
-                    expected_error=expected_error)
+                compiled = run([str(binary)], options.timeout, case_dir / "compiled.log",
+                               expected_error=expected_error)
+                prefix = expected.get("prefix", "")
+                if not interpreted.startswith(prefix) or not compiled.startswith(prefix):
+                    raise RuntimeError(f"expected cleanup prefix {prefix!r}; see engine logs")
                 print(f"PASS {name} (error parity)")
                 continue
             compiled = run([str(binary)], options.timeout, case_dir / "compiled.log")

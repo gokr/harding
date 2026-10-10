@@ -102,7 +102,10 @@ starts so a cleanup that signals cannot run twice. The protecting handler is
 marked consumed only after its cleanups, so a cleanup failure is still caught by
 that handler while a failure in the handler body is not. Both engines pass the
 cleanup tests; the native side runs cleanup through the compiled runtime's
-`ensure:` handling.
+`ensure:` handling. VM unwind continuations now run one cleanup at a time while
+its home remains active, allowing cleanup errors/returns to replace the pending
+transfer without losing outer cleanups. Retry attempts and uncaught exits have
+executed coverage; process boundaries and legacy re-entrant paths remain open.
 
 The first migration slice makes VM errors abandon protected work before handler
 execution and reject error resumption. Native compiled error handlers cover
@@ -119,10 +122,10 @@ to the signal point works through the `evalStatements`/doit path but not when th
 signal runs inside a script block or compiled code, where it yields nil. Native
 `pass` across nested handlers also returns nil instead of the outer handler's
 result. Neither gap is asserted as parity, and the interpreter still retains
-signal-point state for notifications pending a single shared mechanism. Granite's native exception coverage is incomplete; its BlockCannotReturnError is
-not yet integrated into Harding's application exception hierarchy. `ensure:`
-currently only guarantees cleanup on normal completion. These are migration
-items, not exceptions to the target contract.
+signal-point state for notifications pending a single shared mechanism.
+Granite's custom exception subclasses, native arithmetic-error translation,
+default-action/diagnostic parity, and mixed-mode coverage remain incomplete.
+These are migration items, not exceptions to the target contract.
 
 Replace tests/examples that resume errors with conventional fallback handling or
 Notification signaling, according to their intent. Keep explicit negative tests

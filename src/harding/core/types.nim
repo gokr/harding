@@ -193,6 +193,8 @@ type
   CleanupEntry* = ref object
     cleanupBlock*: BlockNode
     activationDepth*: int   # activationStack.len when the scope was entered
+    workQueueDepth*: int
+    evalStackDepth*: int
     running*: bool          # True once this scope's cleanup has started
 
   # Exception thrown when Processor yield is called for immediate context switch
@@ -229,7 +231,6 @@ type
     wfSignalException     # Signal exception and search for handler
     wfExceptionReturn     # Barrier: when handler completes, unwind to on:do: point
     wfEnsureDone          # Cleanup scope completed: unregister and drop the value
-    wfMarkHandlerConsumed # Mark an exception handler as consumed
     wfBeginCleanup        # Mark a cleanup scope as running
 
   # Work frame for explicit stack VM execution
@@ -252,6 +253,7 @@ type
     currentArgIndex*: int
     # For wfReturnValue
     returnValue*: NodeValue
+    returnTarget*: Activation  # Explicit target when continuing a suspended return
     # For wfCascade
     cascadeMessages*: seq[Node]
     cascadeReceiver*: NodeValue

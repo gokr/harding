@@ -108,9 +108,16 @@ arbitrary error resumption solely in the interpreter.
       cleanup that signals cannot run twice, and the handler is marked consumed
       only after its cleanups so such a failure is still caught by it.
       Interpreter: 6 cleanup tests pass; native: `ensure_cleanup` parity passes.
-- [ ] `ensure:` coverage still open: cleanup on `retry` attempts, a cleanup that
-      performs a non-local return, and cleanup across process boundaries.
-- [ ] Integrate inactive-home returns into non-resumable Harding errors; keep
+- [x] Cover cleanup on retry attempts, replacement of pending errors/returns by
+      cleanup returns, nested cleanup failures, and cleanup before uncaught exit.
+      VM unwind continuations run one cleanup at a time with its home still live;
+      no synchronous block evaluation is used on these unwind paths.
+- [ ] Cleanup across process boundaries and legacy re-entrant native invocation
+      paths still needs coverage.
+- [ ] Fix compiled methods' captures of mutable globals: the ordering regression
+      exposed a global captured as a symbol/copy rather than a shared binding.
+      Cleanup ordering parity uses observable output independently of this gap.
+- [x] Integrate inactive-home returns into non-resumable Harding errors; keep
       internal non-local-return transfers invisible to application handlers.
 - [ ] Remove obsolete signal-point restoration machinery after migration; retain
       diagnostic information needed by default actions and debugger hooks.
@@ -136,7 +143,8 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Audit remaining uses of escaped `^` across examples, benchmarks, docs and
       external libraries; run those suites to confirm nothing still depends on
       the previous silent behaviour.
-- [ ] Ensure cleanup executes while unwinding.
+- [x] Ensure cleanup executes while unwinding in tested native and VM paths;
+      process and legacy re-entrant paths remain follow-up coverage.
 
 ## 4. Complete object-model dispatch
 
