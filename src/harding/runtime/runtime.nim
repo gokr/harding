@@ -362,6 +362,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
 
+  if receiver.kind == vkBlock and selector == "ensure:" and args.len == 1:
+    # Run the protected block, then the cleanup exactly once, whether the body
+    # completes, fails, or leaves through a non-local return. The cleanup result
+    # is discarded and the body's result is preserved.
+    try:
+      return sendMessage(runtime, receiver, "value", @[])
+    finally:
+      discard sendMessage(runtime, args[0], "value", @[])
+
   if receiver.kind == vkBlock and selector == "on:do:" and args.len == 2:
     let handlerClass = args[0]
     if handlerClass.kind == vkClass and handlerClass.classVal != nil and

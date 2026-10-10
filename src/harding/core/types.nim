@@ -188,6 +188,13 @@ type
     signalActivationDepth*: int    # AS depth at signal point
     exceptionContext*: ExceptionContext  # Full context for debugging
 
+  # Cleanup scope installed by `ensure:`. Registered so that errors and
+  # non-local returns can run pending cleanups before leaving the scope.
+  CleanupEntry* = ref object
+    cleanupBlock*: BlockNode
+    activationDepth*: int   # activationStack.len when the scope was entered
+    running*: bool          # True once this scope's cleanup has started
+
   # Exception thrown when Processor yield is called for immediate context switch
   YieldException* = object of CatchableError
 
@@ -221,6 +228,9 @@ type
     wfPopHandler          # Pop exception handler from handler stack
     wfSignalException     # Signal exception and search for handler
     wfExceptionReturn     # Barrier: when handler completes, unwind to on:do: point
+    wfEnsureDone          # Cleanup scope completed: unregister and drop the value
+    wfMarkHandlerConsumed # Mark an exception handler as consumed
+    wfBeginCleanup        # Mark a cleanup scope as running
 
   # Work frame for explicit stack VM execution
   WorkFrame* = ref object
@@ -268,6 +278,8 @@ type
     handlerIndex*: int               # Index into exceptionHandlers
     # For wfPushHandler (carry protected block for retry)
     protectedBlockForHandler*: BlockNode
+    # For wfEnsureDone
+    cleanupEntry*: CleanupEntry
 
   SourceEntry* = object
     found*: bool
@@ -294,6 +306,7 @@ type
     traceExecution*: bool
     lastResult*: NodeValue
     exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
+    cleanupStack*: seq[CleanupEntry]  # Active `ensure:` scopes, innermost last
     schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
     hardingHome*: string  # Home directory for loading libraries
     shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch

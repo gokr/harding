@@ -101,8 +101,15 @@ arbitrary error resumption solely in the interpreter.
           notifications and should be simplified once (a) has one code path.
 - [ ] Make notification resume/result a single mechanism shared by doit, scripts
       and compiled output, then assert one parity case covering the resume value.
-- [ ] Implement exactly-once `ensure:` cleanup on normal exits, errors, retries,
-      and lexical non-local returns, including nested cleanup and cleanup failures.
+- [x] Exactly-once `ensure:` cleanup on normal exits, errors, and lexical
+      non-local returns, including nested (innermost-first) cleanup and cleanup
+      failures. Cleanups are scheduled as work frames so they run on the normal
+      stackless path; a scope is marked running before its cleanup body so a
+      cleanup that signals cannot run twice, and the handler is marked consumed
+      only after its cleanups so such a failure is still caught by it.
+      Interpreter: 6 cleanup tests pass; native: `ensure_cleanup` parity passes.
+- [ ] `ensure:` coverage still open: cleanup on `retry` attempts, a cleanup that
+      performs a non-local return, and cleanup across process boundaries.
 - [ ] Integrate inactive-home returns into non-resumable Harding errors; keep
       internal non-local-return transfers invisible to application handlers.
 - [ ] Remove obsolete signal-point restoration machinery after migration; retain

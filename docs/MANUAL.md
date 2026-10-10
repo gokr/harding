@@ -1205,13 +1205,18 @@ For debugging, exception handlers can inspect the signal point:
 
 ### Ensure (Finally)
 
-`ensure:` currently runs cleanup after normal completion of the protected block:
+`ensure:` runs cleanup exactly once when the protected block finishes, whether it
+completes normally, fails, or leaves through a non-local return. Cleanup's result
+is ignored and the body's result is preserved; nested `ensure:` blocks run
+innermost-first, and a failure inside a cleanup is caught by the handler that
+protects that scope.
 
 ```smalltalk
 [ riskyOperation ] ensure: [ cleanup ]
 ```
 
-It does not yet guarantee cleanup after Harding exceptions or non-local returns.
+Not yet covered: cleanup on a `retry` attempt, and a cleanup that itself performs
+a non-local return.
 
 ### Convenience Methods
 

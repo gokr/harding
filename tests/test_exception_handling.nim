@@ -191,3 +191,76 @@ suite "Exception Handling":
       ] on: Error do: [ :ex | "error outer" ]
     """)
     check(result[0][^1].strVal == "error outer")
+
+suite "Ensure Cleanup":
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  teardown:
+    interp.exceptionHandlers.setLen(0)
+    interp.evalStack.setLen(0)
+    interp.workQueue.setLen(0)
+    exceptionContextRegistry.setLen(0)
+    interp.cleanupStack.setLen(0)
+    interp.activationStack.setLen(0)
+    interp.currentActivation = nil
+
+  test "cleanup runs on normal completion and the body result is kept":
+    let result = interp.evalStatements("""
+      Log := "".
+      Result := [ "body" ] ensure: [ Log := Log & "cleanup" ].
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "body")
+
+  test "cleanup runs exactly once on normal completion":
+    let result = interp.evalStatements("""
+      Count := 0.
+      [ "body" ] ensure: [ Count := Count + 1 ].
+      Count
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].intVal == 1)
+
+  test "cleanup runs when the body signals":
+    let result = interp.evalStatements("""
+      Count := 0.
+      Result := [[ Error signal: "boom" ] ensure: [ Count := Count + 1 ]]
+        on: Error do: [ :ex | ex message ].
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "boom")
+
+  test "a cleanup that signals is caught by the protecting handler once":
+    let result = interp.evalStatements("""
+      Count := 0.
+      Result := [[ "body" ] ensure: [ Count := Count + 1. Error signal: "cleanup failed" ]]
+        on: Error do: [ :ex | "caught: " & ex message ].
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "caught: cleanup failed")
+
+  test "nested cleanups run innermost first":
+    let result = interp.evalStatements("""
+      Order := "".
+      [ [ "inner" ] ensure: [ Order := Order & "1" ] ] ensure: [ Order := Order & "2" ].
+      Order
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "12")
+
+  test "cleanup runs on a non-local return and the return wins":
+    let result = interp.evalStatements("""
+      Count := 0.
+      Returns := Object derive: #().
+      Returns>>run [ [ ^ 11 ] ensure: [ Count := Count + 1 ] ].
+      Result := Returns new run.
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].intVal == 11)

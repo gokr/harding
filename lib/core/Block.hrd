@@ -56,9 +56,7 @@ Block>>ifError: errorBlock ifNoError: normalBlock [
   ^ normalBlock value: result
 ]
 
-Block>>ensure: cleanupBlock [
-  | result |
-  result := self value
-  cleanupBlock value
-  ^ result
-]
+Block>>ensure: cleanupBlock <primitive primitiveEnsure: cleanupBlock>
+  # Run this block, then cleanupBlock exactly once. Cleanup runs on normal
+  # completion, when an error leaves the protected block, and when a non-local
+  # return leaves it. Answers this block's result; the cleanup result is ignored.

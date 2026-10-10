@@ -263,6 +263,20 @@ result := [[Error signal: "boom"] on: Error do: [:ex | Error signal: "second"]]
   on: Error do: [:outer | outer message].
 result println.
 """, "Notification does not support retry\nNotification does not support return:\nsecond\n"),
+    ("ensure_cleanup", """
+count := 0.
+result := [ "body" ] ensure: [ count := count + 1 ].
+result println.
+count println.
+result := [[ "body" ] ensure: [ count := count + 10 ]] on: Error do: [:ex | ex message].
+result println.
+count println.
+order := "".
+[ [ "inner" ] ensure: [ order := order & "1" ] ] ensure: [ order := order & "2" ].
+order println.
+result := [ 7 ] ensure: [ 99 ].
+result println.
+""", "body\n1\nbody\n11\n12\n7\n"),
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),

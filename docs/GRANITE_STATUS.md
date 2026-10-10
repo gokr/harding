@@ -67,7 +67,13 @@ without unwinding, allows outer-handler `pass`, and rejects notification
 parity: `resume:` values are not carried back to the signal point in script or
 compiled contexts, and native nested-handler `pass` returns nil. Custom error
 subclasses, instance construction, arithmetic-error translation, native
-defaultAction/diagnostics, exactly-once cleanup and mixed mode remain incomplete.
+defaultAction/diagnostics and mixed mode remain incomplete.
+
+`ensure:` runs cleanup exactly once on normal completion, errors and lexical
+non-local returns, nested innermost-first, in both engines. Cleanup failures are
+caught by the handler protecting the scope. Not yet covered: cleanup on `retry`
+attempts, a cleanup that itself performs a non-local return, and cleanup across
+process boundaries.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

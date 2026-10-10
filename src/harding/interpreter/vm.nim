@@ -1634,6 +1634,7 @@ proc primitiveAsClassSelfDoImpl(interp: var Interpreter, self: Instance, args: s
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
 proc newPopHandlerFrame*(): WorkFrame
 proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
+proc newDiscardFrame*(): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
 proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil, isClassMethod: bool = false): WorkFrame
 proc truncateWorkQueue*(interp: var Interpreter, depth: int)
@@ -1674,6 +1675,87 @@ proc isNotificationInstance(interp: Interpreter, value: Instance): bool =
          isKindOf(value.class, notificationClass)
 
 proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string)
+
+proc collectPendingCleanups(interp: var Interpreter, activationDepth: int): seq[CleanupEntry] =
+  ## Remove and return `ensure:` scopes deeper than activationDepth,
+  ## innermost-first. The caller schedules their cleanups as work frames, which
+  ## keeps cleanup execution on the stackless path: a cleanup that signals or
+  ## returns then behaves like any other Harding code.
+  while interp.cleanupStack.len > 0 and
+        interp.cleanupStack[^1].activationDepth > activationDepth:
+    let entry = interp.cleanupStack.pop()
+    if entry.running:
+      # This scope's cleanup is what is unwinding; it must not run again.
+      continue
+    result.add(entry)
+
+proc scheduleCleanups(interp: var Interpreter, entries: seq[CleanupEntry]) =
+  ## Push work frames so the given cleanups (innermost-first) run in order,
+  ## each discarding its result. Call this after any frame that must run last.
+  for idx in countdown(entries.high, 0):
+    if entries[idx].cleanupBlock == nil:
+      continue
+    interp.pushWorkFrame(newDiscardFrame())
+    interp.pushWorkFrame(newApplyBlockFrame(entries[idx].cleanupBlock, 0))
+
+proc runPendingCleanups(interp: var Interpreter, activationDepth: int) =
+  ## Run every `ensure:` cleanup registered in scopes deeper than activationDepth,
+  ## innermost first. Used when control leaves those scopes by an error or a
+  ## non-local return rather than by normal completion. The intervening scopes
+  ## are already unreachable, so only the registered block is evaluated. A
+  ## cleanup that itself signals propagates that error.
+  let entries = interp.collectPendingCleanups(activationDepth)
+  for entry in entries:
+    if entry.cleanupBlock == nil:
+      continue
+    discard evalBlock(interp, nil, entry.cleanupBlock)
+
+proc newBeginCleanupFrame*(entry: CleanupEntry): WorkFrame =
+  ## Frame that marks a cleanup scope as running before its body executes, so a
+  ## signal from inside the cleanup cannot cause it to be run again.
+  result = acquireFrame()
+  result.kind = wfBeginCleanup
+  result.cleanupEntry = entry
+
+proc newMarkHandlerConsumedFrame*(handlerIndex: int): WorkFrame =
+  ## Frame that marks an exception handler consumed. Scheduled after that
+  ## handler's cleanups but before its body, so a cleanup failure is still
+  ## caught by the handler while a failure in the handler body is not.
+  result = acquireFrame()
+  result.kind = wfMarkHandlerConsumed
+  result.handlerIndex = handlerIndex
+
+proc newEnsureDoneFrame*(entry: CleanupEntry): WorkFrame =
+  ## Frame that unregisters a completed `ensure:` scope. The cleanup body's
+  ## result is discarded so the protected body's result is preserved.
+  result = acquireFrame()
+  result.kind = wfEnsureDone
+  result.cleanupEntry = entry
+
+proc primitiveEnsureImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Block>>ensure: - run the receiver, then run the cleanup block exactly once
+  ## whether the receiver completes normally or control leaves by an error or a
+  ## non-local return. Answers the receiver's result; the cleanup result is
+  ## ignored.
+  if args.len < 1 or args[0].kind != vkBlock:
+    return nilValue()
+  if not (self.kind == ikObject and self.class == blockClass and nimValueIsSet(self.nimValue)):
+    return nilValue()
+
+  let bodyBlock = cast[BlockNode](self.nimValue)
+  let cleanupBlock = args[0].blockVal
+
+  let entry = CleanupEntry(
+    cleanupBlock: cleanupBlock,
+    activationDepth: interp.activationStack.len)
+  interp.cleanupStack.add(entry)
+
+  # Pushed in reverse: body runs, then cleanup, then the scope is unregistered.
+  interp.pushWorkFrame(newEnsureDoneFrame(entry))
+  interp.pushWorkFrame(newApplyBlockFrame(cleanupBlock, 0))
+  interp.pushWorkFrame(newBeginCleanupFrame(entry))
+  interp.pushWorkFrame(newApplyBlockFrame(bodyBlock, 0))
+  return nilValue()
 
 proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Install exception handler and execute protected block using work queue
@@ -1752,8 +1834,16 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   for i in countdown(interp.exceptionHandlers.len - 1, 0):
     let handler = interp.exceptionHandlers[i]
     if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
-      interp.exceptionHandlers[i].consumed = true
       let isNotification = isNotificationInstance(interp, self)
+
+      var pendingCleanups: seq[CleanupEntry] = @[]
+      if not isNotification:
+        # Take the `ensure:` scopes this error abandons, so their cleanups run
+        # exactly once. They are scheduled below, after the VM has been rewound
+        # to the handler, so cleanup code runs on the normal stackless path.
+        pendingCleanups = interp.collectPendingCleanups(handler.stackDepth)
+      else:
+        interp.exceptionHandlers[i].consumed = true
 
       # Errors are non-resumable: the failing computation is abandoned up front
       # and the handler's result (or return:) replaces it. Notifications keep the
@@ -1806,6 +1896,11 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
       applyFrame.blockArgs = @[self.toValue()]
       interp.pushWorkFrame(applyFrame)
+      # Run order (innermost first): cleanups, then mark the handler consumed,
+      # then the handler body, then the unwind barrier. Pushed in reverse.
+      interp.scheduleCleanups(pendingCleanups)
+      if not isNotification:
+        interp.pushWorkFrame(newMarkHandlerConsumedFrame(i))
       return nilValue()
   # No handler found - call defaultAction on the exception
   # This allows applications (like Bona) to override defaultAction to open a debugger
@@ -4254,6 +4349,15 @@ proc initGlobals*(interp: var Interpreter) =
   primitiveOnDoMethod.hasInterpreterParam = true
   blockCls.methods["primitiveOnDo:do:"] = primitiveOnDoMethod
   blockCls.allMethods["primitiveOnDo:do:"] = primitiveOnDoMethod
+
+  # Register Block>>ensure: so cleanup runs exactly once on normal completion,
+  # errors and non-local returns.
+  let primitiveEnsureMethod = createCoreMethod("primitiveEnsure:")
+  primitiveEnsureMethod.setNativeImpl(primitiveEnsureImpl)
+  setNativeValueFromInstanceWithInterp(primitiveEnsureMethod, primitiveEnsureImpl)
+  primitiveEnsureMethod.hasInterpreterParam = true
+  blockCls.methods["primitiveEnsure:"] = primitiveEnsureMethod
+  blockCls.allMethods["primitiveEnsure:"] = primitiveEnsureMethod
 
   # Register Set primitive selectors (used by lib/core/Set.hrd)
   # The Set class itself was created in initCoreClasses (objects.nim)
@@ -8483,6 +8587,23 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       interp.pushValue(returnVal)
       return true
 
+    # Run `ensure:` cleanups for the scopes this return leaves. A local return
+    # exits the current activation; a non-local return exits everything in
+    # between, so cleanups run innermost first before the unwind proceeds.
+    var returnCleanups: seq[CleanupEntry] = @[]
+    if isNonLocalReturn:
+      var targetDepth = 0
+      var foundTarget = false
+      for idx in 0..<interp.activationStack.len:
+        if interp.activationStack[idx] == targetActivation:
+          targetDepth = idx
+          foundTarget = true
+          break
+      if foundTarget:
+        returnCleanups = interp.collectPendingCleanups(targetDepth)
+    else:
+      returnCleanups = interp.collectPendingCleanups(interp.activationStack.len - 1)
+
     # Fast path for ordinary local method returns (legacy executeMethod path).
     # Do not unwind workQueue here, because queued frames may belong to caller
     # expressions (e.g. outer binary sends like `C count < 5`).
@@ -8795,6 +8916,29 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       let popped = interp.exceptionHandlers.pop()
       if popped != nil and popped.exceptionContext != nil:
         unregisterExceptionContext(popped.exceptionContext)
+    return true
+
+  of wfBeginCleanup:
+    if frame.cleanupEntry != nil:
+      frame.cleanupEntry.running = true
+    return true
+
+  of wfMarkHandlerConsumed:
+    if frame.handlerIndex < interp.exceptionHandlers.len:
+      interp.exceptionHandlers[frame.handlerIndex].consumed = true
+    return true
+
+  of wfEnsureDone:
+    # Normal completion of an `ensure:` scope: unregister it and drop the cleanup
+    # block's result, leaving the protected body's result on the stack.
+    let entry = frame.cleanupEntry
+    if entry != nil:
+      for i in countdown(interp.cleanupStack.high, 0):
+        if interp.cleanupStack[i] == entry:
+          interp.cleanupStack.delete(i)
+          break
+    if interp.evalStack.len > 0:
+      discard interp.popValue()
     return true
 
   of wfExceptionReturn:

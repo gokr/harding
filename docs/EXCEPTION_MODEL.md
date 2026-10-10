@@ -87,6 +87,15 @@ block evaluation after the creating invocation completes.
 
 ## Migration and validation
 
+`ensure:` now runs cleanup exactly once on normal completion, on errors and on
+lexical non-local returns, innermost first. Cleanups execute as work frames on
+the normal stackless path, and a scope is marked running before its cleanup body
+starts so a cleanup that signals cannot run twice. The protecting handler is
+marked consumed only after its cleanups, so a cleanup failure is still caught by
+that handler while a failure in the handler body is not. Both engines pass the
+cleanup tests; the native side runs cleanup through the compiled runtime's
+`ensure:` handling.
+
 The first migration slice makes VM errors abandon protected work before handler
 execution and reject error resumption. Native compiled error handlers cover
 basic signaling, handler results, return:, pass, retry, handler failures and
