@@ -151,6 +151,20 @@ suite "Exception Handling":
     check evaluated[1].len == 0
     check evaluated[0][^1].intVal == 42
 
+  test "notification handler re-arms and resume stops the handler":
+    let evaluated = interp.evalStatements("""
+      Count := 0.
+      Result := [
+        A := Notification signal: "first".
+        B := Notification signal: "second".
+        A + B
+      ] on: Notification do: [:ex | Count := Count + 1. ex resume: Count. Count := 99].
+      Result
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].intVal == 3
+    check interp.exceptionHandlers.len == 0
+
   test "notification pass reaches an outer handler":
     let evaluated = interp.evalStatements("""
       Result := [

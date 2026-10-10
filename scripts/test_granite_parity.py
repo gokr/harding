@@ -245,13 +245,41 @@ result := [attempts := attempts + 1. (attempts < 2) ifTrue: [Error signal: "retr
   on: Error do: [:ex | ex retry].
 result println.
 """, "pass\n42\n2\n"),
-    # Only the handler-result path agrees across engines today. Resuming after a
-    # notification (script/compiled contexts) and native pass across nested
-    # handlers are tracked gaps in PLAN.md, so they are not asserted here.
     ("notification_dispatch", """
 result := [Notification signal: "notice"] on: Notification do: [:ex | "handled"].
 result println.
-""", "handled\n"),
+result := [1 + (Notification signal: "value")] on: Notification do: [:ex | ex resume: 41. "incorrect"].
+result println.
+result := [[Notification signal: "pass"] on: Notification do: [:ex | ex pass. "incorrect"]]
+  on: Exception do: [:outer | "outer handled"].
+result println.
+result := [Notification signal: "first". Notification signal: "second". "continued"]
+  on: Notification do: [:ex | ex resume].
+result println.
+""", "handled\n42\nouter handled\ncontinued\n"),
+    ("notification_lifetime", """
+seen := 0.
+cleanups := 0.
+result := [[
+  (Notification signal: "a") println.
+  cleanups println.
+  (Notification signal: "b") println.
+  "body"
+] ensure: [cleanups := cleanups + 1]] on: Notification do: [:ex | seen := seen + 1. ex resume: seen].
+result println.
+seen println.
+cleanups println.
+result := [[Notification signal: "inner"] on: Notification do: [:ex | Notification signal: "from handler"]]
+  on: Notification do: [:outer | "outer result"].
+result println.
+""", "1\n0\n2\nbody\n2\n1\nouter result\n"),
+    ("notification_default", """
+(Notification signal: "unhandled") println.
+([Notification signal: "passed"] on: Notification do: [:ex | ex pass]) println.
+result := [[Notification signal: "inner"] on: Notification do: [:ex | Error signal: "handler failed"]]
+  on: Error do: [:outer | outer message].
+result println.
+""", "Exception: unhandled\nnil\nException: passed\nnil\nhandler failed\n"),
     ("notification_failure", """
 result := [[Notification signal: "notice"] on: Notification do: [:ex | ex retry]]
   on: Error do: [:outer | outer message].

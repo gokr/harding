@@ -7,7 +7,9 @@ non-resumable errors and synchronous notifications; guaranteed cleanup is requir
 in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
 partially implemented: error handlers abandon failed computations and errors
 reject resumption; notification handlers supply the signal's value without
-unwinding and reject retry/return:. `ensure:` cleanup runs exactly once on
+unwinding and reject retry/return:. Notification `resume:` completes the handler
+with a signal result; `pass` delegates to an outer handler. Both are synchronous,
+not continuation restoration. `ensure:` cleanup runs exactly once on
 normal completion, errors and non-local returns, nested innermost-first. Each
 retry attempt runs its cleanup. Cleanup errors/returns replace pending transfers;
 outer cleanup still runs, including before an uncaught-error exit.

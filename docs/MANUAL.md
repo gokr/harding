@@ -1080,9 +1080,10 @@ synchronous resumable notifications, guaranteed `ensure:` cleanup, and lexical
 block returns as its target contract. Interpreter and Granite must agree. See
 [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) for the accepted design and
 [GRANITE_STATUS.md](GRANITE_STATUS.md) for implementation status. Errors now
-abandon their protected computation and reject `resume`/`resume:`. Synchronous
-notification dispatch and guaranteed cleanup are still being implemented;
-notification examples below currently describe the legacy interpreter path.
+abandon their protected computation and reject `resume`/`resume:`. Notifications
+use synchronous handler calls, with matching results in the tested interpreter
+and native paths. Remaining custom-class, foreign/process, and mixed-mode gaps
+are listed in the status document.
 
 Harding provides exception handling through the `on:do:` mechanism:
 
@@ -1166,8 +1167,24 @@ result := [Notification signal: "notice". "reached"] on: Notification do: [:ex |
 result println.  # reached
 ```
 
-Carrying a `resume:` value back to the signal point is not yet portable across
-execution contexts; see [GRANITE_STATUS.md](GRANITE_STATUS.md).
+`ex resume: value` finishes the notification handler immediately and makes
+`signal` answer that value. `ex resume` answers nil. An ordinary handler result
+also becomes the signal result. Installed handlers remain available for later
+signals; currently executing handlers are excluded from nested signal lookup.
+`pass` delegates without abandoning the signaling computation. If no handler
+matches, the built-in default action prints the notification, and signaling
+continues with nil.
+
+```smalltalk
+result := [1 + (Notification signal: "replacement")]
+    on: Notification do: [:ex | ex resume: 41].
+result println.  # 42
+```
+
+Executed parity: `notification_dispatch`, `notification_lifetime`, and
+`notification_default`. Notification-handler-local cleanup on resume/pass,
+custom default-action overrides, process yields, and mixed mode still need
+coverage; see [GRANITE_STATUS.md](GRANITE_STATUS.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
@@ -1252,7 +1269,7 @@ Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 | Feature | Harding | Smalltalk |
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
-| Stack unwinding | Errors abandon protected computation; notifications retain legacy signal state pending migration | Depends on handler action; resumption retains computation |
+| Stack unwinding | Errors abandon protected computation; notifications keep signaling computation active | Depends on handler action; resumption retains computation |
 | Resume capability | Notifications only; errors reject resume | Supported by resumable exception protocols |
 
 ---

@@ -10,7 +10,7 @@
 Exception := Object derive: #(message, stackTrace, signaler)
 # Exception is the non-resumable root of Harding's exception hierarchy.
 # Error handlers abandon protected work; ordinary handler results replace it.
-# Notification retains the legacy resumable path pending synchronous migration.
+# Notification handlers run synchronously; resume: supplies the signal result.
 # See docs/EXCEPTION_MODEL.md for the target contract and remaining migration.
 # Instances carry the message and signal-site diagnostics.
 

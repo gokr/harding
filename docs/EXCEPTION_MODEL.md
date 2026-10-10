@@ -117,12 +117,15 @@ the signaling computation, allows `pass` to delegate outward, and rejects
 `retry`/`return:` with a normal `Error`. The interpreter's 23 exception tests and
 the compiled `notification_dispatch`/`notification_failure` parity cases pass.
 
-Two gaps remain open and are tracked in PLAN.md. Carrying a `resume:` value back
-to the signal point works through the `evalStatements`/doit path but not when the
-signal runs inside a script block or compiled code, where it yields nil. Native
-`pass` across nested handlers also returns nil instead of the outer handler's
-result. Neither gap is asserted as parity, and the interpreter still retains
-signal-point state for notifications pending a single shared mechanism.
+Notification values and nested `pass` now have executed script/native parity.
+The VM leaves signaling work active and schedules handlers above it. Handler
+completion or resume trims only that handler invocation, supplies the signal
+value, and re-arms visited handlers. No work/eval snapshots or native resume
+exception are used. Native handlers use synchronous calls with internal
+resume/pass transfers; executing handlers are excluded from nested lookup.
+Built-in unhandled notification default actions also have parity coverage.
+Handler-local ensure scopes on resume/pass, custom default-action overrides,
+process yields, and mixed mode remain coverage gaps.
 Granite's custom exception subclasses, native arithmetic-error translation,
 default-action/diagnostic parity, and mixed-mode coverage remain incomplete.
 These are migration items, not exceptions to the target contract.

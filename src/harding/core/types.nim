@@ -152,22 +152,20 @@ type
   Activation* = ref ActivationObj
 
   # ============================================================================
-  # Exception Context for Smalltalk-Style Debugging
-  # Preserves full signal point state for debugging and resumption
+  # Exception diagnostics and synchronous notification handler checkpoints
   # ============================================================================
 
   ExceptionContext* = ref object
-    ## Captures complete VM state at exception signal point
-    ## Enables Smalltalk-style debugging with stack preservation
+    ## Signal-site diagnostics and handler-call depths, not resumable snapshots.
     signalActivation*: Activation       # Activation where signal was sent
     handlerActivation*: Activation      # Activation where handler is installed
     signaler*: Instance                 # self at signal point
     signalerContext*: Activation        # First non-Exception sender (for debugging)
-    signalWorkQueue*: seq[WorkFrame]    # Work queue snapshot at signal
-    signalEvalStack*: seq[NodeValue]    # Eval stack snapshot at signal
+    notificationWorkDepth*: int
+    notificationEvalDepth*: int
+    notificationHandlers*: seq[ExceptionHandler]
     signalActivationDepth*: int         # Activation stack depth at signal
     isResumable*: bool                  # Can this exception be resumed?
-    hasBeenResumed*: bool               # Track if already resumed
     outerContext*: ExceptionContext     # For #outer message support
     exceptionInstance*: Instance        # The exception instance
 

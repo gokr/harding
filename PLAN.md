@@ -90,17 +90,17 @@ arbitrary error resumption solely in the interpreter.
       the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
       are rejected with a normal Error. Interpreter: 23 exception tests pass;
       native: `notification_dispatch`/`notification_failure` parity cases pass.
-- [ ] Notification gaps found while implementing this slice:
-      (a) carrying a `resume:` value back to the signal point works through the
-          `evalStatements`/doit path but not when the signal runs inside a script
-          block or compiled code, so `resume:` yields nil there;
-      (b) native `pass` across nested handlers returns nil instead of the outer
-          handler's result;
-      (c) the interpreter still keeps signal-point state for notifications
-          (`isResumable`), which the accepted model permits only for
-          notifications and should be simplified once (a) has one code path.
-- [ ] Make notification resume/result a single mechanism shared by doit, scripts
-      and compiled output, then assert one parity case covering the resume value.
+- [x] Unify notification handler results/resume values across doits, script blocks,
+      and compiled execution. Native nested pass reaches outer handlers, including
+      `Exception`; repeated signals re-arm installed handlers and running handlers
+      are excluded from handling their own nested signals.
+- [x] Remove saved work/eval snapshots and native ResumeException restoration.
+      VM notification handlers run above the still-active signaling work queue;
+      completion checkpoints only delimit the synchronous handler invocation.
+- [x] Cover early resume/pass, repeated signals, nested notifications, no premature
+      protected-body cleanup, handler errors, and built-in unhandled default action.
+- [ ] Cover ensure scopes entered inside notification handlers during resume/pass,
+      arbitrary user defaultAction overrides, process yields and mixed mode.
 - [x] Exactly-once `ensure:` cleanup on normal exits, errors, and lexical
       non-local returns, including nested (innermost-first) cleanup and cleanup
       failures. Cleanups are scheduled as work frames so they run on the normal
@@ -119,8 +119,9 @@ arbitrary error resumption solely in the interpreter.
       Cleanup ordering parity uses observable output independently of this gap.
 - [x] Integrate inactive-home returns into non-resumable Harding errors; keep
       internal non-local-return transfers invisible to application handlers.
-- [ ] Remove obsolete signal-point restoration machinery after migration; retain
-      diagnostic information needed by default actions and debugger hooks.
+- [x] Remove obsolete signal-point snapshot restoration and native resume control
+      machinery; retain signal-site diagnostic metadata. Debugger/external audits
+      remain separate coverage items.
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to

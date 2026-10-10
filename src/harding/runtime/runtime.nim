@@ -53,15 +53,21 @@ type
     ## Raised by a notification handler that delegates to an outer handler.
     notification: NodeValue
 
-  NotificationHandlerEntry = object
+  NotificationResume = object of CatchableError
+    notification: Instance
+    value: NodeValue
+
+  NotificationHandlerEntry = ref object
     exceptionClass: NodeValue
     handlerBlock: NodeValue
+    running: bool
 
 # Notifications dispatch synchronously while the signaling compiled code keeps
 # running: `Notification signal:` calls the innermost active handler itself and
 # answers with its result, so code after the signal continues normally. on:do:
 # registers its class and handler here for the duration of the protected block.
 var activeNotificationHandlers {.threadvar.}: seq[NotificationHandlerEntry]
+var activeNotifications {.threadvar.}: seq[Instance]
 
 proc isNotificationClass(name: string): bool =
   ## True when name is Notification or inherits from it.
@@ -79,21 +85,27 @@ proc matchesNotificationHandler(notification: NodeValue,
 
 proc dispatchCompiledNotification(runtime: Runtime, notification: NodeValue,
                                   handledBy: int): tuple[handled: bool, value: NodeValue] =
-  ## Call the innermost active matching notification handler, skipping entries up
-  ## to and including handledBy (used when a handler passes outward).
-  var index = activeNotificationHandlers.len - 1
-  while index > handledBy:
+  ## Invoke handlers synchronously, excluding every currently running handler.
+  var index = if handledBy < 0: activeNotificationHandlers.high else: handledBy - 1
+  while index >= 0:
     let entry = activeNotificationHandlers[index]
-    if matchesNotificationHandler(notification, entry.exceptionClass):
-      var passed = false
+    if not entry.running and matchesNotificationHandler(notification, entry.exceptionClass):
+      entry.running = true
+      activeNotifications.add(notification.instVal)
       try:
-        return (true, sendMessage(runtime, entry.handlerBlock, "value:", @[notification]))
-      except NotificationPass as outer:
-        if outer.notification.instVal != notification.instVal:
-          raise
-        passed = true
-      if passed:
-        return dispatchCompiledNotification(runtime, notification, index)
+        try:
+          return (true, sendMessage(runtime, entry.handlerBlock, "value:", @[notification]))
+        except NotificationResume as action:
+          if action.notification != notification.instVal:
+            raise
+          return (true, action.value)
+        except NotificationPass as action:
+          if action.notification.instVal != notification.instVal:
+            raise
+          return dispatchCompiledNotification(runtime, notification, index)
+      finally:
+        discard activeNotifications.pop()
+        entry.running = false
     dec index
   return (false, NodeValue(kind: vkNil))
 
@@ -374,16 +386,16 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
   if receiver.kind == vkBlock and selector == "on:do:" and args.len == 2:
     let handlerClass = args[0]
+    let notificationHandler = NotificationHandlerEntry(
+      exceptionClass: handlerClass, handlerBlock: args[1])
+    activeNotificationHandlers.add(notificationHandler)
+    defer:
+      discard activeNotificationHandlers.pop()
     if handlerClass.kind == vkClass and handlerClass.classVal != nil and
        isNotificationClass(handlerClass.classVal.name):
       # Notifications do not unwind: the protected block keeps running and a
       # synchronous handler call supplies the value of the signal expression.
-      activeNotificationHandlers.add(NotificationHandlerEntry(
-        exceptionClass: handlerClass, handlerBlock: args[1]))
-      try:
-        return sendMessage(runtime, receiver, "value", @[])
-      finally:
-        discard activeNotificationHandlers.pop()
+      return sendMessage(runtime, receiver, "value", @[])
     while true:
       try:
         return sendMessage(runtime, receiver, "value", @[])
@@ -392,6 +404,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           raise
         var retryRequested = false
         activeErrorHandlers.add(failure.value.instVal)
+        notificationHandler.running = true
         try:
           try:
             return sendMessage(runtime, args[1], "value:", @[failure.value])
@@ -405,6 +418,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
             retryRequested = true
         finally:
           discard activeErrorHandlers.pop()
+          notificationHandler.running = false
         if not retryRequested:
           raise
 
@@ -416,6 +430,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       let dispatch = dispatchCompiledNotification(runtime, notification, -1)
       if dispatch.handled:
         return dispatch.value
+      discard sendMessage(runtime, notification, "defaultAction", @[])
       return NodeValue(kind: vkNil)
     return raiseCompiledError(notification)
 
@@ -429,13 +444,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         let dispatch = dispatchCompiledNotification(runtime, receiver, -1)
         if dispatch.handled:
           return dispatch.value
+        discard sendMessage(runtime, receiver, "defaultAction", @[])
         return NodeValue(kind: vkNil)
-      of "resume":
-        return NodeValue(kind: vkNil)
-      of "resume:":
-        return if args.len == 1: args[0] else: NodeValue(kind: vkNil)
-      of "pass":
-        raise (ref NotificationPass)(notification: receiver)
+      of "resume", "resume:", "pass":
+        if receiver.instVal notin activeNotifications:
+          return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
+        if selector == "pass":
+          raise (ref NotificationPass)(notification: receiver)
+        let resumed = if selector == "resume:" and args.len == 1: args[0] else: NodeValue(kind: vkNil)
+        raise (ref NotificationResume)(notification: receiver.instVal, value: resumed)
       of "retry", "return:":
         return raiseCompiledError(compiledErrorValue("Error",
           "Notification does not support " & selector))
@@ -443,6 +460,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         discard
 
     case selector
+    of "defaultAction":
+      echo "Exception: " & receiver.instVal.slots[0].toString()
+      return receiver
     of "message":
       return receiver.instVal.slots[0]
     of "signal":

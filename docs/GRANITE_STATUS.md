@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Thirty-eight parity cases pass, including three unhandled-error checks and the
+Forty parity cases pass, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -63,11 +63,14 @@ compiler and website-example suites pass.
 The notification slice additionally makes handlers supply the signal's value
 without unwinding, allows outer-handler `pass`, and rejects notification
 `retry`/`return:`. Both engines pass `notification_dispatch` and
-`notification_failure`. Known gaps, recorded in PLAN.md and not asserted as
-parity: `resume:` values are not carried back to the signal point in script or
-compiled contexts, and native nested-handler `pass` returns nil. Custom error
-subclasses, instance construction, arithmetic-error translation, native
-defaultAction/diagnostics and mixed mode remain incomplete.
+`notification_failure`. Expanded dispatch, lifetime, and default-action cases
+cover resume values, immediate handler completion, repeated signals, nested pass
+to `Exception`, handler failures and no premature protected-body cleanup. VM
+handlers run above active signaling work, without saved work/eval snapshots;
+legacy native resume restoration has been removed. Handler-local cleanup on
+resume/pass, custom default-action overrides, process yields and mixed mode still
+need coverage. Custom error subclasses, instance construction, arithmetic-error
+translation, and general native defaultAction/diagnostic parity remain incomplete.
 
 `ensure:` runs cleanup exactly once on normal completion, errors and lexical
 non-local returns, nested innermost-first, in both engines. Cleanup failures are
