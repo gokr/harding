@@ -58,10 +58,16 @@ The first error-model slice abandons VM protected work before handler execution
 and excludes executing handlers from catching their own failures. Both engines
 reject handled error resume/resume:, and native built-in Error/Exception signaling
 supports handler results, return:, pass and retry. Core exception, signal-point,
-compiler and website-example suites pass. Notification behavior remains legacy
-in the VM and unsupported by this native error slice; synchronous migration is
-next. Custom error subclasses, instance construction, arithmetic-error translation,
-native defaultAction/diagnostics and mixed mode remain incomplete.
+compiler and website-example suites pass.
+
+The notification slice additionally makes handlers supply the signal's value
+without unwinding, allows outer-handler `pass`, and rejects notification
+`retry`/`return:`. Both engines pass `notification_dispatch` and
+`notification_failure`. Known gaps, recorded in PLAN.md and not asserted as
+parity: `resume:` values are not carried back to the signal point in script or
+compiled contexts, and native nested-handler `pass` returns nil. Custom error
+subclasses, instance construction, arithmetic-error translation, native
+defaultAction/diagnostics, exactly-once cleanup and mixed mode remain incomplete.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

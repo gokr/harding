@@ -129,6 +129,59 @@ suite "Exception Handling":
     """)
     check(result[0][^1].intVal == 7)
 
+  test "notification handler result is the signal's result":
+    let evaluated = interp.evalStatements("""
+      Result := [Notification signal: "notice"] on: Notification do: [:ex | "handled"]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "handled"
+
+  test "notification does not unwind the signaling computation":
+    let evaluated = interp.evalStatements("""
+      Result := [Notification signal: "notice". "continued"]
+        on: Notification do: [:ex | ex resume: 7]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "continued"
+
+  test "notification resume supplies the signal value":
+    let evaluated = interp.evalStatements("""
+      Result := [Notification signal: "notice"] on: Notification do: [:ex | ex resume: 42]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].intVal == 42
+
+  test "notification pass reaches an outer handler":
+    let evaluated = interp.evalStatements("""
+      Result := [
+        [Notification signal: "notice"] on: Notification do: [:ex | ex pass]
+      ] on: Notification do: [:outer | "outer handled"]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "outer handled"
+
+  test "notification handler failures propagate as errors":
+    let evaluated = interp.evalStatements("""
+      Result := [[Notification signal: "notice"] on: Notification do: [:ex | Error signal: "failed"]]
+        on: Error do: [:outer | outer message]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "failed"
+
+  test "notification rejects retry and return:":
+    let retried = interp.evalStatements("""
+      Result := [[Notification signal: "notice"] on: Notification do: [:ex | ex retry]]
+        on: Error do: [:outer | outer message]
+    """)
+    check retried[1].len == 0
+    check retried[0][^1].strVal == "Notification does not support retry"
+    let returned = interp.evalStatements("""
+      Result := [[Notification signal: "notice"] on: Notification do: [:ex | ex return: 1]]
+        on: Error do: [:outer | outer message]
+    """)
+    check returned[1].len == 0
+    check returned[0][^1].strVal == "Notification does not support return:"
+
   test "pass skips non-matching outer handler":
     let result = interp.evalStatements("""
       Result := [

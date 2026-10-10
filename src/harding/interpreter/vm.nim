@@ -92,6 +92,16 @@ type
 var currentResumeControl*: ptr ResumeControlFlow = nil
 
 type
+  NotificationActionRejected* = object of CatchableError
+    ## An unsupported notification action (retry/return:). Converted into a
+    ## normal Harding Error at the VM boundary.
+    reason*: string
+
+# The notification being dispatched synchronously, if any. Identifies which
+# exception the resume/pass/retry actions belong to.
+var currentNotification*: Instance = nil
+
+type
   FileStreamKind = enum
     fskClosed, fskFile, fskStdout, fskStderr, fskStdin
 
@@ -1644,6 +1654,27 @@ proc isKindOf(cls: Class, parentClass: Class): bool =
       return true
   return false
 
+proc notificationClassLookup(interp: Interpreter): Class =
+  ## Resolve the Notification class from globals or imported libraries.
+  if interp.globals != nil and "Notification" in interp.globals[]:
+    let classValue = interp.globals[]["Notification"]
+    if classValue.kind == vkClass:
+      return classValue.classVal
+  for library in interp.importedLibraries:
+    if library.kind == ikObject and library.class == libraryClass:
+      let binding = libraryBindingLookup(library.slots[0], "Notification")
+      if binding.found and binding.value.kind == vkClass:
+        return binding.value.classVal
+  return nil
+
+proc isNotificationInstance(interp: Interpreter, value: Instance): bool =
+  ## True when value is a Notification or a subclass of it.
+  let notificationClass = notificationClassLookup(interp)
+  return notificationClass != nil and value != nil and
+         isKindOf(value.class, notificationClass)
+
+proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string)
+
 proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Install exception handler and execute protected block using work queue
   ## Usage: [protectedBlock] on: ExceptionClass do: [:ex | handlerBlock]
@@ -1722,46 +1753,12 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
     let handler = interp.exceptionHandlers[i]
     if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
       interp.exceptionHandlers[i].consumed = true
-      var notificationClass: Class = nil
-      if interp.globals != nil and "Notification" in interp.globals[]:
-        let notificationValue = interp.globals[]["Notification"]
-        if notificationValue.kind == vkClass:
-          notificationClass = notificationValue.classVal
-      if notificationClass == nil:
-        for library in interp.importedLibraries:
-          if library.kind == ikObject and library.class == libraryClass:
-            let binding = libraryBindingLookup(library.slots[0], "Notification")
-            if binding.found and binding.value.kind == vkClass:
-              notificationClass = binding.value.classVal
-              break
-      let isNotification = notificationClass != nil and isKindOf(self.class, notificationClass)
-      if not isNotification:
-        let diagnosticContext = ExceptionContext(
-          signaler: interp.currentReceiver,
-          signalActivationDepth: interp.activationStack.len,
-          isResumable: false,
-          exceptionInstance: self)
-        registerExceptionContext(diagnosticContext)
-        interp.exceptionHandlers[i].exceptionInstance = self
-        interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
-        interp.exceptionHandlers[i].exceptionContext = diagnosticContext
-        interp.truncateWorkQueue(handler.workQueueDepth)
-        interp.evalStack.setLen(handler.evalStackDepth)
-        interp.restoreActivationStackTo(handler.stackDepth)
-        interp.pushWorkFrame(newExceptionReturnFrame(i))
-        var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
-        applyFrame.blockArgs = @[self.toValue()]
-        interp.pushWorkFrame(applyFrame)
-        return nilValue()
+      let isNotification = isNotificationInstance(interp, self)
 
-      # Mark captured activations so they are not returned to pools while
-      # exception context may reference them for resume/debugging.
-      if interp.currentActivation != nil:
-        interp.currentActivation.wasCaptured = true
-      if handler.activation != nil:
-        handler.activation.wasCaptured = true
-
-      # Capture full signal-point context for resume/debugging.
+      # Errors are non-resumable: the failing computation is abandoned up front
+      # and the handler's result (or return:) replaces it. Notifications keep the
+      # signal point so resume can continue the signaling computation; both run
+      # the handler through the work queue.
       let ctx = ExceptionContext(
         signalActivation: interp.currentActivation,
         handlerActivation: handler.activation,
@@ -1770,44 +1767,46 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
         signalWorkQueue: interp.workQueue,
         signalEvalStack: interp.evalStack,
         signalActivationDepth: interp.activationStack.len,
-        isResumable: true,
+        isResumable: isNotification,
         hasBeenResumed: false,
         outerContext: nil,
-        exceptionInstance: self
-      )
+        exceptionInstance: self)
       registerExceptionContext(ctx)
-
-      # Record signal metadata on handler for return:/pass/retry/resume.
       interp.exceptionHandlers[i].exceptionInstance = self
       interp.exceptionHandlers[i].signalWorkQueueDepth = interp.workQueue.len
       interp.exceptionHandlers[i].signalEvalStackDepth = interp.evalStack.len
       interp.exceptionHandlers[i].signalActivationDepth = interp.activationStack.len
       interp.exceptionHandlers[i].exceptionContext = ctx
 
-      # Keep activation stack intact for debugging, but filter work queue so
-      # signal-path unwind frames do not interfere with handler execution.
-      var newWorkQueue: seq[WorkFrame] = @[]
-      for j in 0..<handler.workQueueDepth:
-        let frameKind = interp.workQueue[j].kind
-        if frameKind != wfPopActivation and frameKind != wfReturnValue:
-          newWorkQueue.add(interp.workQueue[j])
-      for j in handler.workQueueDepth..<interp.workQueue.len:
-        newWorkQueue.add(interp.workQueue[j])
-      interp.workQueue = newWorkQueue
-      interp.evalStack.setLen(handler.evalStackDepth)
+      if isNotification:
+        # Keep the signal point so `resume` can continue the signaling
+        # computation. Filter out only signal-path unwind frames above the
+        # handler so they cannot disturb it.
+        if interp.currentActivation != nil:
+          interp.currentActivation.wasCaptured = true
+        if handler.activation != nil:
+          handler.activation.wasCaptured = true
+        var queueForHandler: seq[WorkFrame] = @[]
+        for j in 0..<min(handler.workQueueDepth, interp.workQueue.len):
+          let frameKind = interp.workQueue[j].kind
+          if frameKind != wfPopActivation and frameKind != wfReturnValue:
+            queueForHandler.add(interp.workQueue[j])
+        for j in handler.workQueueDepth..<interp.workQueue.len:
+          queueForHandler.add(interp.workQueue[j])
+        interp.workQueue = queueForHandler
+        interp.evalStack.setLen(handler.evalStackDepth)
+        for j in (handler.stackDepth + 1)..<interp.activationStack.len:
+          interp.activationStack[j].hasReturned = false
+      else:
+        interp.truncateWorkQueue(handler.workQueueDepth)
+        interp.evalStack.setLen(handler.evalStackDepth)
+        interp.restoreActivationStackTo(handler.stackDepth)
 
-      # Clear pending non-local-return markers above the handler activation.
-      for j in (handler.stackDepth + 1)..<interp.activationStack.len:
-        interp.activationStack[j].hasReturned = false
-
-      # Schedule handler evaluation through work queue so Exception>>return:,
-      # pass, retry, and fall-through semantics remain consistent.
       interp.pushWorkFrame(newExceptionReturnFrame(i))
       var applyFrame = newApplyBlockFrame(handler.handlerBlock, 1)
       applyFrame.blockArgs = @[self.toValue()]
       interp.pushWorkFrame(applyFrame)
       return nilValue()
-
   # No handler found - call defaultAction on the exception
   # This allows applications (like Bona) to override defaultAction to open a debugger
   debug("primitiveSignal: no handler found for exception, calling defaultAction")
@@ -1861,8 +1860,6 @@ proc truncateExceptionHandlers(interp: var Interpreter, newLen: int) =
     if ctx != nil:
       unregisterExceptionContext(ctx)
   interp.exceptionHandlers.setLen(target)
-
-proc signalExceptionByName*(interp: var Interpreter, exceptionClassName: string, message: string)
 
 proc resumeFromSignalContext(interp: var Interpreter, handlerIdx: int, resumeValue: NodeValue, resumeExceptionMsg: string): NodeValue =
   ## Common resume flow for Exception>>resume and Exception>>resume:
@@ -2029,6 +2026,8 @@ proc primitiveExceptionResumeWithValueImpl(interp: var Interpreter, self: Instan
 proc primitiveExceptionReturnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>return: value - explicit unwind, providing value to on:do:
   let returnValue = if args.len > 0: args[0] else: nilValue()
+  if isNotificationInstance(interp, self):
+    raise (ref NotificationActionRejected)(reason: "Notification does not support return:")
   let handlerIdx = interp.findHandlerForException(self)
   if handlerIdx < 0:
     writeStderr("return: called on exception with no active handler")
@@ -2094,6 +2093,8 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
 
 proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>retry - re-execute protected block
+  if isNotificationInstance(interp, self):
+    raise (ref NotificationActionRejected)(reason: "Notification does not support retry")
   let handlerIdx = interp.findHandlerForException(self)
   if handlerIdx < 0:
     writeStderr("retry called on exception with no active handler")
@@ -8878,6 +8879,13 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       # Convert Nim DivByZeroDefect to Harding DivisionByZero exception
       signalExceptionByName(interp, "DivisionByZero", e.msg)
       # Continue processing - signalExceptionByName schedules the handler
+      continue
+    except NotificationActionRejected as rejection:
+      # An unsupported notification action is a normal Harding Error.
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      signalExceptionByName(interp, "Error", rejection.reason)
       continue
     except ValueError as e:
       if not frame.skipRelease:

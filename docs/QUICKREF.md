@@ -6,8 +6,8 @@ The accepted exception-model migration replaces arbitrary error resumption with
 non-resumable errors and synchronous notifications; guaranteed cleanup is required
 in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
 partially implemented: error handlers abandon failed computations and errors
-reject resumption; synchronous notification dispatch and unwind-safe cleanup
-remain pending.
+reject resumption; notification handlers supply the signal's value without
+unwinding and reject retry/return:. Unwind-safe cleanup remains pending.
 
 ## Literals
 

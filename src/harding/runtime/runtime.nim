@@ -43,6 +43,60 @@ type
 
 var activeErrorHandlers {.threadvar.}: seq[Instance]
 
+proc getSuperclassName*(className: string): string
+proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
+proc sendMessage*(runtime: Runtime, receiver: NodeValue,
+                  selector: string, args: seq[NodeValue]): NodeValue
+
+type
+  NotificationPass = object of CatchableError
+    ## Raised by a notification handler that delegates to an outer handler.
+    notification: NodeValue
+
+  NotificationHandlerEntry = object
+    exceptionClass: NodeValue
+    handlerBlock: NodeValue
+
+# Notifications dispatch synchronously while the signaling compiled code keeps
+# running: `Notification signal:` calls the innermost active handler itself and
+# answers with its result, so code after the signal continues normally. on:do:
+# registers its class and handler here for the duration of the protected block.
+var activeNotificationHandlers {.threadvar.}: seq[NotificationHandlerEntry]
+
+proc isNotificationClass(name: string): bool =
+  ## True when name is Notification or inherits from it.
+  var current = name
+  while current.len > 0:
+    if current == "Notification":
+      return true
+    current = getSuperclassName(current)
+  return false
+
+proc matchesNotificationHandler(notification: NodeValue,
+                                handlerClass: NodeValue): bool =
+  ## Notifications use the same subclass matching as errors.
+  return matchesCompiledError(notification, handlerClass)
+
+proc dispatchCompiledNotification(runtime: Runtime, notification: NodeValue,
+                                  handledBy: int): tuple[handled: bool, value: NodeValue] =
+  ## Call the innermost active matching notification handler, skipping entries up
+  ## to and including handledBy (used when a handler passes outward).
+  var index = activeNotificationHandlers.len - 1
+  while index > handledBy:
+    let entry = activeNotificationHandlers[index]
+    if matchesNotificationHandler(notification, entry.exceptionClass):
+      var passed = false
+      try:
+        return (true, sendMessage(runtime, entry.handlerBlock, "value:", @[notification]))
+      except NotificationPass as outer:
+        if outer.notification.instVal != notification.instVal:
+          raise
+        passed = true
+      if passed:
+        return dispatchCompiledNotification(runtime, notification, index)
+    dec index
+  return (false, NodeValue(kind: vkNil))
+
 proc initRuntime*() =
   ## Initialize global runtime
   if currentRuntime == nil:
@@ -309,6 +363,17 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   ## This is the slow path fallback for compiled code
 
   if receiver.kind == vkBlock and selector == "on:do:" and args.len == 2:
+    let handlerClass = args[0]
+    if handlerClass.kind == vkClass and handlerClass.classVal != nil and
+       isNotificationClass(handlerClass.classVal.name):
+      # Notifications do not unwind: the protected block keeps running and a
+      # synchronous handler call supplies the value of the signal expression.
+      activeNotificationHandlers.add(NotificationHandlerEntry(
+        exceptionClass: handlerClass, handlerBlock: args[1]))
+      try:
+        return sendMessage(runtime, receiver, "value", @[])
+      finally:
+        discard activeNotificationHandlers.pop()
     while true:
       try:
         return sendMessage(runtime, receiver, "value", @[])
@@ -335,10 +400,38 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
   if receiver.kind == vkClass and receiver.classVal != nil and
      isCompiledExceptionClass(receiver.classVal.name) and selector == "signal:" and args.len == 1:
-    return raiseCompiledError(compiledErrorValue(receiver.classVal.name, args[0].toString()))
+    let notification = compiledErrorValue(receiver.classVal.name, args[0].toString())
+    if isNotificationClass(receiver.classVal.name):
+      # Synchronous: run the innermost handler now and answer with its result.
+      let dispatch = dispatchCompiledNotification(runtime, notification, -1)
+      if dispatch.handled:
+        return dispatch.value
+      return NodeValue(kind: vkNil)
+    return raiseCompiledError(notification)
 
   if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil and
      isCompiledExceptionClass(receiver.instVal.class.name):
+    if isNotificationClass(receiver.instVal.class.name):
+      case selector
+      of "message":
+        return receiver.instVal.slots[0]
+      of "signal":
+        let dispatch = dispatchCompiledNotification(runtime, receiver, -1)
+        if dispatch.handled:
+          return dispatch.value
+        return NodeValue(kind: vkNil)
+      of "resume":
+        return NodeValue(kind: vkNil)
+      of "resume:":
+        return if args.len == 1: args[0] else: NodeValue(kind: vkNil)
+      of "pass":
+        raise (ref NotificationPass)(notification: receiver)
+      of "retry", "return:":
+        return raiseCompiledError(compiledErrorValue("Error",
+          "Notification does not support " & selector))
+      else:
+        discard
+
     case selector
     of "message":
       return receiver.instVal.slots[0]

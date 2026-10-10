@@ -1156,12 +1156,18 @@ result := [Error signal: "stop". "not reached"]
 result println.  # fallback
 ```
 
-Notifications retain a resumable protocol pending synchronous-dispatch migration:
+A handler for a notification supplies the signal's value without abandoning the
+signaling computation, so code after the signal continues. `pass` delegates to an
+outer handler. `retry` and `return:` are not part of the notification protocol and
+signal a normal `Error`.
 
 ```smalltalk
-[Notification signal: "notice". "continued" println]
-    on: Notification do: [:ex | ex resume].
+result := [Notification signal: "notice". "reached"] on: Notification do: [:ex | "handled"].
+result println.  # reached
 ```
+
+Carrying a `resume:` value back to the signal point is not yet portable across
+execution contexts; see [GRANITE_STATUS.md](GRANITE_STATUS.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.

@@ -86,8 +86,21 @@ arbitrary error resumption solely in the interpreter.
       exception subclass/native arithmetic paths in later slices.
 - [ ] Complete compiled exception hierarchy/instance protocol, custom subclasses,
       arithmetic-error translation, defaultAction and diagnostic parity.
-- [ ] Implement synchronous Notification dispatch/results and outer-handler pass;
-      reject notification retry/return: without capturing resumable continuations.
+- [x] Notification handler results are the signal's value; signals do not unwind
+      the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
+      are rejected with a normal Error. Interpreter: 23 exception tests pass;
+      native: `notification_dispatch`/`notification_failure` parity cases pass.
+- [ ] Notification gaps found while implementing this slice:
+      (a) carrying a `resume:` value back to the signal point works through the
+          `evalStatements`/doit path but not when the signal runs inside a script
+          block or compiled code, so `resume:` yields nil there;
+      (b) native `pass` across nested handlers returns nil instead of the outer
+          handler's result;
+      (c) the interpreter still keeps signal-point state for notifications
+          (`isResumable`), which the accepted model permits only for
+          notifications and should be simplified once (a) has one code path.
+- [ ] Make notification resume/result a single mechanism shared by doit, scripts
+      and compiled output, then assert one parity case covering the resume value.
 - [ ] Implement exactly-once `ensure:` cleanup on normal exits, errors, retries,
       and lexical non-local returns, including nested cleanup and cleanup failures.
 - [ ] Integrate inactive-home returns into non-resumable Harding errors; keep

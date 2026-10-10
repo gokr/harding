@@ -245,6 +245,24 @@ result := [attempts := attempts + 1. (attempts < 2) ifTrue: [Error signal: "retr
   on: Error do: [:ex | ex retry].
 result println.
 """, "pass\n42\n2\n"),
+    # Only the handler-result path agrees across engines today. Resuming after a
+    # notification (script/compiled contexts) and native pass across nested
+    # handlers are tracked gaps in PLAN.md, so they are not asserted here.
+    ("notification_dispatch", """
+result := [Notification signal: "notice"] on: Notification do: [:ex | "handled"].
+result println.
+""", "handled\n"),
+    ("notification_failure", """
+result := [[Notification signal: "notice"] on: Notification do: [:ex | ex retry]]
+  on: Error do: [:outer | outer message].
+result println.
+result := [[Notification signal: "notice"] on: Notification do: [:ex | ex return: 1]]
+  on: Error do: [:outer | outer message].
+result println.
+result := [[Error signal: "boom"] on: Error do: [:ex | Error signal: "second"]]
+  on: Error do: [:outer | outer message].
+result println.
+""", "Notification does not support retry\nNotification does not support return:\nsecond\n"),
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),

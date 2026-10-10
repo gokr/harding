@@ -90,8 +90,19 @@ block evaluation after the creating invocation completes.
 The first migration slice makes VM errors abandon protected work before handler
 execution and reject error resumption. Native compiled error handlers cover
 basic signaling, handler results, return:, pass, retry, handler failures and
-resumption rejection. Notifications still use legacy interpreter restoration;
-synchronous dispatch is pending. Granite's native exception coverage is incomplete; its BlockCannotReturnError is
+resumption rejection.
+
+The notification slice makes handlers supply the signal's value without unwinding
+the signaling computation, allows `pass` to delegate outward, and rejects
+`retry`/`return:` with a normal `Error`. The interpreter's 23 exception tests and
+the compiled `notification_dispatch`/`notification_failure` parity cases pass.
+
+Two gaps remain open and are tracked in PLAN.md. Carrying a `resume:` value back
+to the signal point works through the `evalStatements`/doit path but not when the
+signal runs inside a script block or compiled code, where it yields nil. Native
+`pass` across nested handlers also returns nil instead of the outer handler's
+result. Neither gap is asserted as parity, and the interpreter still retains
+signal-point state for notifications pending a single shared mechanism. Granite's native exception coverage is incomplete; its BlockCannotReturnError is
 not yet integrated into Harding's application exception hierarchy. `ensure:`
 currently only guarantees cleanup on normal completion. These are migration
 items, not exceptions to the target contract.
