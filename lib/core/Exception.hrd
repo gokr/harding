@@ -10,8 +10,11 @@
 Exception := Object derive: #(message, stackTrace, signaler)
 # Exception is the non-resumable root of Harding's exception hierarchy.
 # Error handlers abandon protected work; ordinary handler results replace it.
-# Notification handlers run synchronously; resume: supplies the signal result.
-# See docs/EXCEPTION_MODEL.md for the target contract and remaining migration.
+# Handlers answer by returning a value: the handler's result is the result of
+# the `signal` (for notifications) or of `on:do:` (for errors). Harding has no
+# resumption: there is no resume/resume:/return:, because a handler never
+# transfers control back to a saved point.
+# See docs/EXCEPTION_MODEL.md for the contract and remaining migration.
 # Instances carry the message and signal-site diagnostics.
 
 Exception>>signal <primitive primitiveSignal>
@@ -31,22 +34,11 @@ Exception>>signal: messageText [
   ^ self signal
 ]
 
-Exception>>return: value <primitive primitiveExceptionReturn: value>
-  # Return value to the on:do: expression, unwinding the handler
-
 Exception>>pass <primitive primitiveExceptionPass>
   # Delegate to the next outer matching handler
 
 Exception>>retry <primitive primitiveExceptionRetry>
-  # Re-execute the protected block
-
-Exception>>isResumable [ ^ false ]
-
-Exception>>resume <primitive primitiveExceptionResume>
-  # Notification resumption only; other exceptions signal Error
-
-Exception>>resume: value <primitive primitiveExceptionResume: value>
-  # Notification resumption only; other exceptions signal Error
+  # Re-execute the protected block. Not available for a notification.
 
 Exception>>signalContext <primitive primitiveExceptionSignalContext>
   # Return the signal point context for debugging

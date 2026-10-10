@@ -90,16 +90,21 @@ arbitrary error resumption solely in the interpreter.
       the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
       are rejected with a normal Error. Interpreter: 23 exception tests pass;
       native: `notification_dispatch`/`notification_failure` parity cases pass.
-- [x] Unify notification handler results/resume values across doits, script blocks,
-      and compiled execution. Native nested pass reaches outer handlers, including
-      `Exception`; repeated signals re-arm installed handlers and running handlers
-      are excluded from handling their own nested signals.
+- [x] Unify notification handler results across doits, script blocks, and compiled
+      execution. Native nested pass reaches outer handlers, including `Exception`;
+      repeated signals re-arm installed handlers and running handlers are excluded
+      from handling their own nested signals.
+- [x] Remove exception resumption from the language: `resume`, `resume:`,
+      `return:` and `isResumable` are gone, as is the native resume transfer. A
+      handler answers by returning a value, which needs no saved state. This was
+      the last construct requiring continuations, so errors can later lower to
+      return values and nothing on the hot path needs unwinding machinery.
 - [x] Remove saved work/eval snapshots and native ResumeException restoration.
       VM notification handlers run above the still-active signaling work queue;
       completion checkpoints only delimit the synchronous handler invocation.
 - [x] Cover early resume/pass, repeated signals, nested notifications, no premature
       protected-body cleanup, handler errors, and built-in unhandled default action.
-- [ ] Cover ensure scopes entered inside notification handlers during resume/pass,
+- [ ] Cover ensure scopes entered inside notification handlers during `pass`,
       arbitrary user defaultAction overrides, process yields and mixed mode.
 - [x] Exactly-once `ensure:` cleanup on normal exits, errors, and lexical
       non-local returns, including nested (innermost-first) cleanup and cleanup
@@ -122,6 +127,9 @@ arbitrary error resumption solely in the interpreter.
 - [x] Remove obsolete signal-point snapshot restoration and native resume control
       machinery; retain signal-site diagnostic metadata. Debugger/external audits
       remain separate coverage items.
+- [x] Route missing-message errors through `on:do:`: a removed selector such as
+      `resume:` currently aborts with `Message not understood` rather than being
+      catchable by an enclosing handler (see section 4).
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to

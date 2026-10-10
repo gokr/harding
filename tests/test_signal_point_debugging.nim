@@ -1,4 +1,4 @@
-import std/unittest
+import std/[unittest, strformat, strutils]
 import std/os
 import std/osproc
 import std/strutils
@@ -92,35 +92,45 @@ suite "Handler Actions":
       setupTestEnvironment()
     resetInterpreterState(sharedInterp)
 
-  test "resume continues from signal point":
-    ## Exception>>resume causes signal to return nil, execution continues after signal
+  test "notification handling continues after the signal":
+    ## Harding has no resumption: the handler runs synchronously while the
+    ## signaling computation stays active, so code after `signal` still runs.
     let result = sharedInterp.evalStatements("""
       Result := [
         [
           Notification signal: "test".
           42
-        ] on: Notification do: [ :ex | ex resume ]
+        ] on: Notification do: [ :ex | 0 ]
       ] value
     """)
 
-    # After resume, signal returns nil and execution continues to 42
     check(result[0].len > 0)
     check(result[0][^1].intVal == 42)
 
-  test "resume: provides return value":
-    ## Exception>>resume: should return the provided value from signal
+  test "notification handler result is the signal value":
+    ## The handler's ordinary result is what `signal` evaluates to.
     let result = sharedInterp.evalStatements("""
       Result := [
         [
           | val |
           val := Notification signal: "test".
           val
-        ] on: Notification do: [ :ex | ex resume: 42 ]
+        ] on: Notification do: [ :ex | 42 ]
       ] value
     """)
-    
+
     check(result[0].len > 0)
     check(result[0][^1].intVal == 42)
+
+  test "resumption actions are not part of the language":
+    ## resume / resume: / return: were removed: a handler never transfers control
+    ## back to a saved point, so these selectors do not exist.
+    for removed in ["ex resume", "ex resume: 1", "ex return: 1"]:
+      let result = sharedInterp.evalStatements(fmt("""
+        [Notification signal: "test"] on: Notification do: [ :ex | {removed} ]
+      """))
+      check(result[1].len > 0)
+      check("Message not understood" in result[1])
 
   test "retry re-executes protected block":
     ## Exception>>retry causes the protected block to re-execute from the start
@@ -151,19 +161,23 @@ suite "Resumption Semantics":
       setupTestEnvironment()
     resetInterpreterState(sharedInterp)
 
-  test "Error is not resumable":
-    let result = sharedInterp.evalStatements("""
-      Result := Error new isResumable
-    """)
-    check(result[0].len > 0)
-    check(result[0][^1].boolVal == false)
+  test "no resumption protocol exists":
+    # `isResumable`, `resume`, `resume:` and `return:` were removed with the
+    # resumption model, so none of them are implemented.
+    for selector in ["isResumable", "resume", "resume: 1", "return: 1"]:
+      let result = sharedInterp.evalStatements(fmt("Error new {selector}"))
+      check(result[1].len > 0)
+      check("Message not understood" in result[1])
 
-  test "Notification is resumable":
+  test "notification handler result is the signal value":
+    # The capability that `resume:` used to spell is now just the handler's
+    # ordinary result, so no control transfer is needed.
     let result = sharedInterp.evalStatements("""
-      Result := Notification new isResumable
+      Result := [1 + (Notification signal: "notice")]
+        on: Notification do: [ :ex | 41 ]
     """)
     check(result[0].len > 0)
-    check(result[0][^1].boolVal == true)
+    check(result[0][^1].intVal == 42)
 
 suite "Uncaught Exception Handling":
 

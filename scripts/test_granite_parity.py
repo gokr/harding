@@ -227,18 +227,12 @@ result println.
 result := [[Error signal: "first"] on: Error do: [:ex | Error signal: "second"]]
   on: Error do: [:outer | outer message].
 result println.
-result := [[Error signal: "first"] on: Error do: [:ex | ex resume: 42]]
-  on: Error do: [:outer | outer message].
-result println.
-result := [[Error signal: "first"] on: Error do: [:ex | ex resume]]
-  on: Error do: [:outer | outer message].
-result println.
-""", "stop\nsecond\nCannot resume a non-resumable exception\nCannot resume a non-resumable exception\n"),
+""", "stop\nsecond\n"),
     ("error_actions", """
 result := [[Error signal: "pass"] on: Error do: [:ex | ex pass]]
   on: Exception do: [:outer | outer message].
 result println.
-result := [Error signal: "return"] on: Error do: [:ex | ex return: 42].
+result := [Error signal: "value"] on: Error do: [:ex | 42].
 result println.
 attempts := 0.
 result := [attempts := attempts + 1. (attempts < 2) ifTrue: [Error signal: "retry"]. attempts]
@@ -248,13 +242,13 @@ result println.
     ("notification_dispatch", """
 result := [Notification signal: "notice"] on: Notification do: [:ex | "handled"].
 result println.
-result := [1 + (Notification signal: "value")] on: Notification do: [:ex | ex resume: 41. "incorrect"].
+result := [1 + (Notification signal: "value")] on: Notification do: [:ex | 41].
 result println.
 result := [[Notification signal: "pass"] on: Notification do: [:ex | ex pass. "incorrect"]]
   on: Exception do: [:outer | "outer handled"].
 result println.
 result := [Notification signal: "first". Notification signal: "second". "continued"]
-  on: Notification do: [:ex | ex resume].
+  on: Notification do: [:ex | 0].
 result println.
 """, "handled\n42\nouter handled\ncontinued\n"),
     ("notification_lifetime", """
@@ -265,7 +259,7 @@ result := [[
   cleanups println.
   (Notification signal: "b") println.
   "body"
-] ensure: [cleanups := cleanups + 1]] on: Notification do: [:ex | seen := seen + 1. ex resume: seen].
+] ensure: [cleanups := cleanups + 1]] on: Notification do: [:ex | seen := seen + 1. seen].
 result println.
 seen println.
 cleanups println.
@@ -284,13 +278,10 @@ result println.
 result := [[Notification signal: "notice"] on: Notification do: [:ex | ex retry]]
   on: Error do: [:outer | outer message].
 result println.
-result := [[Notification signal: "notice"] on: Notification do: [:ex | ex return: 1]]
-  on: Error do: [:outer | outer message].
-result println.
 result := [[Error signal: "boom"] on: Error do: [:ex | Error signal: "second"]]
   on: Error do: [:outer | outer message].
 result println.
-""", "Notification does not support retry\nNotification does not support return:\nsecond\n"),
+""", "Notification does not support retry\nsecond\n"),
     ("ensure_cleanup", """
 count := 0.
 result := [ "body" ] ensure: [ count := count + 1 ].

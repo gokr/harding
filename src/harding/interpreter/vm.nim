@@ -1824,7 +1824,7 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
         notificationWorkDepth: interp.workQueue.len,
         notificationEvalDepth: interp.evalStack.len,
         signalActivationDepth: interp.activationStack.len,
-        isResumable: isNotification,
+        isNotificationHandler: isNotification,
         outerContext: nil,
         exceptionInstance: self)
       registerExceptionContext(ctx)
@@ -1912,11 +1912,12 @@ proc truncateExceptionHandlers(interp: var Interpreter, newLen: int) =
 
 proc finishNotification(interp: var Interpreter, handlerIdx: int, value: NodeValue): NodeValue =
   ## Complete only the notification handler invocation, retaining protected work.
+  ## The handler's result becomes the signal's result and visited handlers are
+  ## re-armed so they can handle a later signal.
   let handler = interp.exceptionHandlers[handlerIdx]
   let ctx = handler.exceptionContext
-  if ctx == nil or not ctx.isResumable:
-    interp.signalExceptionByName("Error", "Cannot resume a non-resumable exception")
-    return nilValue()
+  if ctx == nil:
+    return value
   interp.truncateWorkQueue(ctx.notificationWorkDepth)
   interp.evalStack.setLen(ctx.notificationEvalDepth)
   interp.restoreActivationStackTo(ctx.signalActivationDepth)
@@ -2004,47 +2005,6 @@ proc primitiveExceptionSignalActivationDepthImpl(interp: var Interpreter, self: 
   let handler = interp.exceptionHandlers[handlerIdx]
   return NodeValue(kind: vkInt, intVal: handler.signalActivationDepth)
 
-proc primitiveExceptionResumeImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Exception>>resume - continue from signal point as if signal returned nil
-  ## Smalltalk-style resumption: execution continues from where signal was called
-  let handlerIdx = interp.findHandlerForException(self)
-  if handlerIdx < 0:
-    interp.signalExceptionByName("Error", "Exception action requires an active handler")
-    return nilValue()
-  return finishNotification(interp, handlerIdx, nilValue())
-
-proc primitiveExceptionResumeWithValueImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Exception>>resume: value - continue from signal point with given value
-  ## Smalltalk-style resumption with custom return value
-  let resumeValue = if args.len > 0: args[0] else: nilValue()
-  let handlerIdx = interp.findHandlerForException(self)
-  if handlerIdx < 0:
-    interp.signalExceptionByName("Error", "Exception action requires an active handler")
-    return nilValue()
-  return finishNotification(interp, handlerIdx, resumeValue)
-
-proc primitiveExceptionReturnImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Exception>>return: value - explicit unwind, providing value to on:do:
-  let returnValue = if args.len > 0: args[0] else: nilValue()
-  if isNotificationInstance(interp, self):
-    raise (ref NotificationActionRejected)(reason: "Notification does not support return:")
-  let handlerIdx = interp.findHandlerForException(self)
-  if handlerIdx < 0:
-    writeStderr("return: called on exception with no active handler")
-    return nilValue()
-  let handler = interp.exceptionHandlers[handlerIdx]
-
-  # Unwind to handler install point
-  interp.truncateWorkQueue(handler.workQueueDepth)
-  interp.evalStack.setLen(handler.evalStackDepth)
-  interp.restoreActivationStackTo(handler.stackDepth)
-
-  # Remove handler and any above it
-  interp.truncateExceptionHandlers(handlerIdx)
-
-  # Push the return value as on:do:'s result
-  return returnValue
-
 proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Exception>>pass - delegate to next outer handler
   let handlerIdx = interp.findHandlerForException(self)
@@ -2052,7 +2012,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
     writeStderr("pass called on exception with no active handler")
     return nilValue()
   let handler = interp.exceptionHandlers[handlerIdx]
-  if handler.exceptionContext != nil and handler.exceptionContext.isResumable:
+  if handler.exceptionContext != nil and handler.exceptionContext.isNotificationHandler:
     let ctx = handler.exceptionContext
     interp.truncateWorkQueue(ctx.notificationWorkDepth)
     interp.evalStack.setLen(ctx.notificationEvalDepth)
@@ -5507,15 +5467,6 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
         propagateToSubclasses(sub, methodName, meth)
     propagateToSubclasses(exceptionCls, "primitiveSignal", primitiveSignalMethod)
 
-    # Register Exception>>return: primitive
-    let returnMethod = createCoreMethod("primitiveExceptionReturn:")
-    returnMethod.setNativeImpl(primitiveExceptionReturnImpl)
-    setNativeValueFromInstanceWithInterp(returnMethod, primitiveExceptionReturnImpl)
-    returnMethod.hasInterpreterParam = true
-    exceptionCls.methods["primitiveExceptionReturn:"] = returnMethod
-    exceptionCls.allMethods["primitiveExceptionReturn:"] = returnMethod
-    propagateToSubclasses(exceptionCls, "primitiveExceptionReturn:", returnMethod)
-
     # Register Exception>>pass primitive
     let passMethod = createCoreMethod("primitiveExceptionPass")
     passMethod.setNativeImpl(primitiveExceptionPassImpl)
@@ -5560,24 +5511,6 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     exceptionCls.methods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
     exceptionCls.allMethods["primitiveExceptionSignalActivationDepth"] = signalDepthMethod
     propagateToSubclasses(exceptionCls, "primitiveExceptionSignalActivationDepth", signalDepthMethod)
-
-    # Register Exception>>resume primitive
-    let resumeMethod = createCoreMethod("primitiveExceptionResume")
-    resumeMethod.setNativeImpl(primitiveExceptionResumeImpl)
-    setNativeValueFromInstanceWithInterp(resumeMethod, primitiveExceptionResumeImpl)
-    resumeMethod.hasInterpreterParam = true
-    exceptionCls.methods["primitiveExceptionResume"] = resumeMethod
-    exceptionCls.allMethods["primitiveExceptionResume"] = resumeMethod
-    propagateToSubclasses(exceptionCls, "primitiveExceptionResume", resumeMethod)
-
-    # Register Exception>>resume: primitive
-    let resumeWithMethod = createCoreMethod("primitiveExceptionResume:")
-    resumeWithMethod.setNativeImpl(primitiveExceptionResumeWithValueImpl)
-    setNativeValueFromInstanceWithInterp(resumeWithMethod, primitiveExceptionResumeWithValueImpl)
-    resumeWithMethod.hasInterpreterParam = true
-    exceptionCls.methods["primitiveExceptionResume:"] = resumeWithMethod
-    exceptionCls.allMethods["primitiveExceptionResume:"] = resumeWithMethod
-    propagateToSubclasses(exceptionCls, "primitiveExceptionResume:", resumeWithMethod)
 
     debug("Registered native Exception>>primitiveSignal method")
   else:
@@ -8869,7 +8802,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     let handlerIdx = frame.handlerIndex
     if handlerIdx < interp.exceptionHandlers.len:
       let handler = interp.exceptionHandlers[handlerIdx]
-      if handler.exceptionContext != nil and handler.exceptionContext.isResumable:
+      if handler.exceptionContext != nil and handler.exceptionContext.isNotificationHandler:
         let handlerResult = interp.popValue()
         interp.pushValue(finishNotification(interp, handlerIdx, handlerResult))
       else:

@@ -35,9 +35,6 @@ proc newRuntime*(): Runtime =
 type
   CompiledHardingError* = object of CatchableError
     value*: NodeValue
-  HandlerReturn = object of CatchableError
-    value: NodeValue
-    exceptionInstance: Instance
   HandlerRetry = object of CatchableError
     exceptionInstance: Instance
 
@@ -52,10 +49,6 @@ type
   NotificationPass = object of CatchableError
     ## Raised by a notification handler that delegates to an outer handler.
     notification: NodeValue
-
-  NotificationResume = object of CatchableError
-    notification: Instance
-    value: NodeValue
 
   NotificationHandlerEntry = ref object
     exceptionClass: NodeValue
@@ -95,10 +88,6 @@ proc dispatchCompiledNotification(runtime: Runtime, notification: NodeValue,
       try:
         try:
           return (true, sendMessage(runtime, entry.handlerBlock, "value:", @[notification]))
-        except NotificationResume as action:
-          if action.notification != notification.instVal:
-            raise
-          return (true, action.value)
         except NotificationPass as action:
           if action.notification.instVal != notification.instVal:
             raise
@@ -408,10 +397,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         try:
           try:
             return sendMessage(runtime, args[1], "value:", @[failure.value])
-          except HandlerReturn as action:
-            if action.exceptionInstance != failure.value.instVal:
-              raise
-            return action.value
           except HandlerRetry as action:
             if action.exceptionInstance != failure.value.instVal:
               raise
@@ -446,14 +431,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           return dispatch.value
         discard sendMessage(runtime, receiver, "defaultAction", @[])
         return NodeValue(kind: vkNil)
-      of "resume", "resume:", "pass":
+      of "pass":
         if receiver.instVal notin activeNotifications:
           return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
-        if selector == "pass":
-          raise (ref NotificationPass)(notification: receiver)
-        let resumed = if selector == "resume:" and args.len == 1: args[0] else: NodeValue(kind: vkNil)
-        raise (ref NotificationResume)(notification: receiver.instVal, value: resumed)
-      of "retry", "return:":
+        raise (ref NotificationPass)(notification: receiver)
+      of "retry":
         return raiseCompiledError(compiledErrorValue("Error",
           "Notification does not support " & selector))
       else:
@@ -467,13 +449,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return receiver.instVal.slots[0]
     of "signal":
       return raiseCompiledError(receiver)
-    of "resume", "resume:":
-      return raiseCompiledError(compiledErrorValue("Error", "Cannot resume a non-resumable exception"))
-    of "return:", "retry", "pass":
+    of "retry", "pass":
       if receiver.instVal notin activeErrorHandlers:
         return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
-      if selector == "return:" and args.len == 1:
-        raise (ref HandlerReturn)(value: args[0], exceptionInstance: receiver.instVal)
       if selector == "retry":
         raise (ref HandlerRetry)(exceptionInstance: receiver.instVal)
       if selector == "pass":

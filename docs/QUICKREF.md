@@ -7,9 +7,9 @@ non-resumable errors and synchronous notifications; guaranteed cleanup is requir
 in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
 partially implemented: error handlers abandon failed computations and errors
 reject resumption; notification handlers supply the signal's value without
-unwinding and reject retry/return:. Notification `resume:` completes the handler
-with a signal result; `pass` delegates to an outer handler. Both are synchronous,
-not continuation restoration. `ensure:` cleanup runs exactly once on
+unwinding and reject retry. **Resumption is not supported**: `resume`,
+`resume:`, `return:` and `isResumable` do not exist — a handler's result is the
+value, and `pass` delegates outward. `ensure:` cleanup runs exactly once on
 normal completion, errors and non-local returns, nested innermost-first. Each
 retry attempt runs its cleanup. Cleanup errors/returns replace pending transfers;
 outer cleanup still runs, including before an uncaught-error exit.
@@ -575,22 +575,24 @@ chmod +x script.hrd  # For shebang: #!/usr/bin/env harding
 
 ```smalltalk
 [riskyOperation] on: Error do: [:ex |
-    Transcript showCr: "Error: " + ex message
+    "The handler's result is the on:do: value"
+    "Error: " & ex message
 ]
 
-# Handler actions
-ex resume          # Resume execution from signal point (signal returns nil)
-ex resume: value   # Resume from signal point (signal returns value)
+# Handler actions (there is no resumption: no resume/resume:/return:)
 ex retry           # Re-execute protected block
 ex pass            # Delegate to next outer handler
-ex return: value   # Return value from on:do: expression
 
-# Resumable notifications (not errors)
-[Notification signal: "info"] on: Notification do: [:ex | ex resume]
+# Notifications: the handler runs synchronously and its result is the
+# signal's value, so code after the signal still runs.
+[Notification signal: "info". "reached"] on: Notification do: [:ex | "handled"]
 
 # Ensure cleanup always runs
 [riskyOperation] ensure: [cleanup]
 ```
+
+**Not supported:** `resume`, `resume:`, `return:`, `isResumable`. Harding has no
+continuations, so a handler cannot transfer control back to a saved point.
 
 ## Primitives
 

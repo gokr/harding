@@ -21,28 +21,35 @@ For `[body] on: Error do: [:ex | handler]`:
 2. Abandon the failing computation up to that protected-block boundary, running
    intervening cleanup before executing the handler.
 3. Invoke the handler with the exception. Its ordinary result becomes the result
-   of `on:do:`. `ex return: value` explicitly supplies that result.
-4. `ex pass` delegates to the next matching outer handler; it does not resume
+   of `on:do:`.
+4. `ex pass` delegates to the next matching outer handler; it does not continue
    the abandoned computation.
 5. `ex retry` starts a fresh invocation of the protected block. Cleanup for the
    failed attempt must already have completed.
 
-`resume` and `resume:` are invalid for errors and other non-notification
-exceptions. They must report a normal Harding error, not silently continue or
-restore the signal point. The executing handler is excluded from handling errors
-raised by its own handler body; enclosing handlers remain eligible.
+Harding has no resumption at all. `resume`, `resume:`, `return:` and
+`isResumable` are **not part of the language** — a handler never transfers control
+back to a saved point. A handler answers by returning a value, which becomes the
+result of `on:do:`; `pass` delegates outward and `retry` re-executes the block.
+The executing handler is excluded from handling errors raised by its own handler
+body; enclosing handlers remain eligible.
+
+This was a deliberate language decision: supporting resumption would require
+capturing continuation state, which conflicts with the native-compilation and
+foreign-integration goals. It also removes the last construct that could not be
+lowered to return values.
 
 An unhandled error invokes the default-action/debugger policy and ends the
-computation unsuccessfully. A returning default action must not silently resume
+computation unsuccessfully. A returning default action must not silently continue
 a failed computation. CLI execution returns a nonzero status.
 
 ## Notifications
 
 `Notification` and its subclasses are synchronous signals, not unwinding errors.
-Matching handlers are called while the signaling computation remains active.
-The handler's ordinary result is the result of `signal`. Notification `resume:`
-supplies that result explicitly; `resume` supplies nil. These operations do not
-restore saved stacks or continuations. They only complete notification handling.
+Matching handlers are called while the signaling computation remains active. The
+handler's ordinary result is the result of `signal`. No control-transfer action
+is needed for this: because the handler runs synchronously and its result is used,
+there is nothing to resume.
 
 `pass` delegates to an outer matching handler while the computation remains
 active. An unhandled notification invokes its default action; if that action
@@ -119,30 +126,30 @@ the compiled `notification_dispatch`/`notification_failure` parity cases pass.
 
 Notification values and nested `pass` now have executed script/native parity.
 The VM leaves signaling work active and schedules handlers above it. Handler
-completion or resume trims only that handler invocation, supplies the signal
-value, and re-arms visited handlers. No work/eval snapshots or native resume
-exception are used. Native handlers use synchronous calls with internal
-resume/pass transfers; executing handlers are excluded from nested lookup.
+completion trims only that handler invocation, supplies the signal value, and
+re-arms visited handlers. No work/eval snapshots, native resume exception, or
+resumption primitives exist. Native handlers use synchronous calls with an
+internal pass transfer; executing handlers are excluded from nested lookup.
 Built-in unhandled notification default actions also have parity coverage.
-Handler-local ensure scopes on resume/pass, custom default-action overrides,
-process yields, and mixed mode remain coverage gaps.
+Handler-local ensure scopes on `pass`, custom default-action overrides, process
+yields, and mixed mode remain coverage gaps.
 Granite's custom exception subclasses, native arithmetic-error translation,
 default-action/diagnostic parity, and mixed-mode coverage remain incomplete.
 These are migration items, not exceptions to the target contract.
 
-Replace tests/examples that resume errors with conventional fallback handling or
-Notification signaling, according to their intent. Keep explicit negative tests
-for error resumption. Replace escaped block `^` used as an ordinary block result
-with a final expression. Do not silently reinterpret `resume:` on an Error as
-notification signaling.
+Replace tests/examples that used resumption with conventional fallback handling
+or Notification signaling, according to their intent. Keep explicit negative
+tests that the removed selectors are unknown. Replace escaped block `^` used as an
+ordinary block result with a final expression.
 
 Required executed parity coverage:
 
-- Handler matching, normal handler results, return:, pass, retry and unhandled
-  errors, including failures raised by handler bodies.
-- Rejection of error resume/resume: and notification retry/return:.
-- Notification results, resume/resume:, pass, default action and handler failures;
-  verify code after signaling runs and cleanup has not run prematurely.
+- Handler matching, normal handler results, pass, retry and unhandled errors,
+  including failures raised by handler bodies.
+- Absence of resumption: resume/resume:/return:/isResumable are unknown selectors.
+- Rejection of notification retry.
+- Notification results, pass, default action and handler failures; verify code
+  after signaling runs and cleanup has not run prematurely.
 - Cleanup order and exactly-once behavior on normal completion, error propagation,
   recursive block returns, retry attempts and errors/returns from cleanup.
 - Inactive-home errors, application handlers not intercepting internal returns,

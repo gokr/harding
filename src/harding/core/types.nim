@@ -165,7 +165,7 @@ type
     notificationEvalDepth*: int
     notificationHandlers*: seq[ExceptionHandler]
     signalActivationDepth*: int         # Activation stack depth at signal
-    isResumable*: bool                  # Can this exception be resumed?
+    isNotificationHandler*: bool         # Handler runs above live signaling work
     outerContext*: ExceptionContext     # For #outer message support
     exceptionInstance*: Instance        # The exception instance
 

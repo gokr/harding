@@ -1,4 +1,4 @@
-import std/[unittest]
+import std/[unittest, strformat, strutils]
 import ../src/harding/core/types
 import ../src/harding/interpreter/[vm]
 
@@ -68,9 +68,11 @@ suite "Exception Handling":
     """)
     check(result[0][^1].strVal == "handled")
 
-  test "return: provides value to on:do:":
+  test "handler result provides the on:do: value":
+    # `return:` was removed: the handler's ordinary result already becomes the
+    # on:do: result, so no explicit transfer is needed.
     let result = interp.evalStatements("""
-      Result := [ Error signal: "test" ] on: Error do: [ :ex | ex return: 42 ]
+      Result := [ Error signal: "test" ] on: Error do: [ :ex | 42 ]
     """)
     check(result[0][^1].intVal == 42)
 
@@ -103,13 +105,15 @@ suite "Exception Handling":
     check evaluated[1].len == 0
     check evaluated[0][^1].strVal == "second"
 
-  test "error resumption reports an error to the outer handler":
+  test "removed resumption actions are unknown selectors":
+    # There is no resumption in Harding, so these selectors are simply gone: the
+    # evaluation fails with Message not understood rather than resuming.
+    # (Message-not-understood is not yet routed through on:do:; see PLAN.md.)
     let evaluated = interp.evalStatements("""
-      Result := [[Error signal: "first"] on: Error do: [:ex | ex resume: 42]]
-        on: Error do: [:outer | outer message]
+      Result := [Error signal: "first"] on: Error do: [:ex | ex resume: 42]
     """)
-    check evaluated[1].len == 0
-    check evaluated[0][^1].strVal == "Cannot resume a non-resumable exception"
+    check evaluated[1].len > 0
+    check("Message not understood" in evaluated[1])
 
   test "DivisionByZero catches integer division by zero":
     let result = interp.evalStatements("""
@@ -139,26 +143,36 @@ suite "Exception Handling":
   test "notification does not unwind the signaling computation":
     let evaluated = interp.evalStatements("""
       Result := [Notification signal: "notice". "continued"]
-        on: Notification do: [:ex | ex resume: 7]
+        on: Notification do: [:ex | 7]
     """)
     check evaluated[1].len == 0
     check evaluated[0][^1].strVal == "continued"
 
-  test "notification resume supplies the signal value":
+  test "notification handler result supplies the signal value":
     let evaluated = interp.evalStatements("""
-      Result := [Notification signal: "notice"] on: Notification do: [:ex | ex resume: 42]
+      Result := [1 + (Notification signal: "notice")] on: Notification do: [:ex | 41]
     """)
     check evaluated[1].len == 0
     check evaluated[0][^1].intVal == 42
 
-  test "notification handler re-arms and resume stops the handler":
+  test "Harding has no exception resumption":
+    # resume/resume:/return: are not part of the language. The handler's result
+    # is the value, so no control-transfer action is needed.
+    for removed in ["ex resume", "ex resume: 1", "ex return: 1"]:
+      let evaluated = interp.evalStatements(fmt("""
+        Result := [Notification signal: "notice"]
+          on: Notification do: [:ex | {removed}]
+      """))
+      check evaluated[1].len > 0
+
+  test "notification handler re-arms for later signals":
     let evaluated = interp.evalStatements("""
       Count := 0.
       Result := [
         A := Notification signal: "first".
         B := Notification signal: "second".
         A + B
-      ] on: Notification do: [:ex | Count := Count + 1. ex resume: Count. Count := 99].
+      ] on: Notification do: [:ex | Count := Count + 1. Count].
       Result
     """)
     check evaluated[1].len == 0
@@ -182,19 +196,13 @@ suite "Exception Handling":
     check evaluated[1].len == 0
     check evaluated[0][^1].strVal == "failed"
 
-  test "notification rejects retry and return:":
+  test "notification rejects retry":
     let retried = interp.evalStatements("""
       Result := [[Notification signal: "notice"] on: Notification do: [:ex | ex retry]]
         on: Error do: [:outer | outer message]
     """)
     check retried[1].len == 0
     check retried[0][^1].strVal == "Notification does not support retry"
-    let returned = interp.evalStatements("""
-      Result := [[Notification signal: "notice"] on: Notification do: [:ex | ex return: 1]]
-        on: Error do: [:outer | outer message]
-    """)
-    check returned[1].len == 0
-    check returned[0][^1].strVal == "Notification does not support return:"
 
   test "pass skips non-matching outer handler":
     let result = interp.evalStatements("""

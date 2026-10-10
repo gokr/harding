@@ -1075,15 +1075,25 @@ collection detect: [:each | each > 5]
 
 ## Exception Handling
 
-**Exception-model migration:** Harding has adopted non-resumable errors,
-synchronous resumable notifications, guaranteed `ensure:` cleanup, and lexical
-block returns as its target contract. Interpreter and Granite must agree. See
-[EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) for the accepted design and
-[GRANITE_STATUS.md](GRANITE_STATUS.md) for implementation status. Errors now
-abandon their protected computation and reject `resume`/`resume:`. Notifications
-use synchronous handler calls, with matching results in the tested interpreter
-and native paths. Remaining custom-class, foreign/process, and mixed-mode gaps
-are listed in the status document.
+**Harding does not support exception resumption.** There is no `resume`,
+`resume:`, `return:`, or `isResumable`. A handler never transfers control back to
+a saved point. Instead:
+
+- a handler's **ordinary result is the value** — the result of `on:do:` for an
+  error, and the value of the `signal` expression for a notification;
+- **`pass`** delegates to the next matching outer handler;
+- **`retry`** re-executes the protected block.
+
+This is deliberate, not a gap: resumption was removed because it requires
+capturing continuation state, which conflicts with native compilation and
+foreign-function integration.
+
+Handlers run **synchronously while the signaling computation is still active**,
+so for a notification, statements after the signal still run. Errors instead
+abandon the protected computation before the handler executes. Both engines
+follow this contract; see [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) and
+[GRANITE_STATUS.md](GRANITE_STATUS.md). Remaining custom-class, foreign/process,
+and mixed-mode gaps are listed in the status document.
 
 Harding provides exception handling through the `on:do:` mechanism:
 
@@ -1148,8 +1158,8 @@ arithmetic-error translation still needs execution coverage.
 Errors abandon the protected computation before executing a handler. The
 handler's ordinary result is the result of `on:do:`; statements after the failed
 operation do not run. An executing handler cannot catch its own failures, which
-are offered to outer matching handlers. `resume` and `resume:` on an error signal
-`Error` with message `Cannot resume a non-resumable exception`.
+are offered to outer matching handlers. Because errors are not resumable, there
+is no way to continue the failed computation.
 
 ```smalltalk
 result := [Error signal: "stop". "not reached"]
@@ -1159,43 +1169,42 @@ result println.  # fallback
 
 A handler for a notification supplies the signal's value without abandoning the
 signaling computation, so code after the signal continues. `pass` delegates to an
-outer handler. `retry` and `return:` are not part of the notification protocol and
-signal a normal `Error`.
+outer handler. `retry` is not part of the notification protocol and signals a
+normal `Error`.
 
 ```smalltalk
 result := [Notification signal: "notice". "reached"] on: Notification do: [:ex | "handled"].
 result println.  # reached
 ```
 
-`ex resume: value` finishes the notification handler immediately and makes
-`signal` answer that value. `ex resume` answers nil. An ordinary handler result
-also becomes the signal result. Installed handlers remain available for later
-signals; currently executing handlers are excluded from nested signal lookup.
-`pass` delegates without abandoning the signaling computation. If no handler
-matches, the built-in default action prints the notification, and signaling
-continues with nil.
+The handler's result becomes the signal's value — this is what `resume:` used to
+spell, and it needs no control transfer. Installed handlers remain available for
+later signals; currently executing handlers are excluded from nested signal
+lookup. If no handler matches, the built-in default action prints the
+notification, and signaling continues with nil.
 
 ```smalltalk
 result := [1 + (Notification signal: "replacement")]
-    on: Notification do: [:ex | ex resume: 41].
+    on: Notification do: [:ex | 41].
 result println.  # 42
 ```
 
 Executed parity: `notification_dispatch`, `notification_lifetime`, and
-`notification_default`. Notification-handler-local cleanup on resume/pass,
-custom default-action overrides, process yields, and mixed mode still need
-coverage; see [GRANITE_STATUS.md](GRANITE_STATUS.md).
+`notification_default`. Notification-handler-local cleanup on `pass`, custom
+default-action overrides, process yields, and mixed mode still need coverage; see
+[GRANITE_STATUS.md](GRANITE_STATUS.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
 Custom exception subclasses, native arithmetic errors, stack-trace/default-action
 parity, mixed mode, and cleanup are not yet covered by this native error slice.
 
-Additional handler methods:
+Handler actions:
 - `ex retry` - Re-execute the protected block from the beginning
-- `ex return: value` - Return value from the `on:do:` expression
 - `ex pass` - Delegate to the next matching outer handler
-- `ex isResumable` - Returns true for resumable exceptions
+
+**Not supported:** `resume`, `resume:`, `return:`, `isResumable`. Harding has no
+exception resumption; see the contract note at the top of this section.
 
 ### Uncaught Exceptions
 
@@ -1262,7 +1271,7 @@ Exception
 
 Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 
-`Notification` is used for resumable signals that represent notifications rather than errors. Handlers can resume from a Notification to continue normal execution.
+`Notification` is used for advisory signals rather than errors. Its handlers run synchronously while the signaling computation stays active, so execution continues after the signal.
 
 ### Differences from Smalltalk
 
@@ -1270,7 +1279,7 @@ Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
 | Stack unwinding | Errors abandon protected computation; notifications keep signaling computation active | Depends on handler action; resumption retains computation |
-| Resume capability | Notifications only; errors reject resume | Supported by resumable exception protocols |
+| Resumption (`resume:`, `return:`) | **Not supported** — no continuations | Supported by resumable exception protocols |
 
 ---
 

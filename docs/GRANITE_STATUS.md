@@ -56,20 +56,20 @@ restoration.
 
 The first error-model slice abandons VM protected work before handler execution
 and excludes executing handlers from catching their own failures. Both engines
-reject handled error resume/resume:, and native built-in Error/Exception signaling
+reject resumption entirely (no resume/resume:/return:), and native built-in Error/Exception signaling
 supports handler results, return:, pass and retry. Core exception, signal-point,
 compiler and website-example suites pass.
 
-The notification slice additionally makes handlers supply the signal's value
-without unwinding, allows outer-handler `pass`, and rejects notification
-`retry`/`return:`. Both engines pass `notification_dispatch` and
-`notification_failure`. Expanded dispatch, lifetime, and default-action cases
-cover resume values, immediate handler completion, repeated signals, nested pass
-to `Exception`, handler failures and no premature protected-body cleanup. VM
-handlers run above active signaling work, without saved work/eval snapshots;
-legacy native resume restoration has been removed. Handler-local cleanup on
-resume/pass, custom default-action overrides, process yields and mixed mode still
-need coverage. Custom error subclasses, instance construction, arithmetic-error
+Handlers supply values by returning them, and Harding has no resumption:
+`resume`, `resume:`, `return:` and `isResumable` were removed, so those selectors
+are unknown. This dropped the last construct that required saved state. Both
+engines pass `notification_dispatch`, `notification_lifetime`,
+`notification_default` and `notification_failure`. Expanded cases cover handler
+results, immediate completion, repeated signals, nested pass to `Exception`,
+handler failures and no premature protected-body cleanup. VM handlers run above
+active signaling work, without saved work/eval snapshots; native resume
+restoration is gone. Handler-local cleanup on `pass`, custom default-action
+overrides, process yields and mixed mode still need coverage. Custom error subclasses, instance construction, arithmetic-error
 translation, and general native defaultAction/diagnostic parity remain incomplete.
 
 `ensure:` runs cleanup exactly once on normal completion, errors and lexical

@@ -107,11 +107,16 @@ c value println
 result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    ex resume: 0
+    "The handler's result becomes the on:do: value"
+    0
 ].
 
 result println
 ```
+
+Harding has no exception resumption: `resume`, `resume:`, `return:` and
+`isResumable` are not part of the language. See the manual for the supported
+handler actions (`pass`, `retry`).
 
 ### Web Route
 

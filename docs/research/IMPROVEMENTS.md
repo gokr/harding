@@ -21,7 +21,7 @@ Every method send on primitives goes through temporary instance creation in `vm.
 
 ### 2a. Exception Handler State Restoration (6x duplication)
 
-In `vm.nim`, activation stack restoration logic is copy-pasted across `primitiveExceptionResumeImpl`, `primitiveExceptionResumeWithValueImpl`, `primitiveExceptionReturnImpl`, `primitiveExceptionRetryImpl`, `primitiveExceptionPassImpl`. ~48 lines of duplication.
+**Obsolete (resolved differently):** this note described duplicated activation-stack restoration across the resume/resume:/return:/retry/pass primitives. Harding removed resumption entirely, so those primitives no longer exist.
 
 **Fix**: Extract `proc restoreVMStateToDepth(interp: var Interpreter, depth: int)`.
 

@@ -127,17 +127,27 @@ This enables:
 result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    ex resume: 0
+    "The handler's result is the on:do: value"
+    0
 ]
 ```
 
-Handlers can `resume`, `resume:`, `retry`, `pass`, or `return:`.
+A handler's result is the value: the result of `on:do:` for an error, and the
+value of the `signal` expression for a notification. `pass` delegates to the next
+matching outer handler and `retry` re-executes the protected block.
+
+**Harding does not support resumption.** There is no `resume`, `resume:`,
+`return:` or `isResumable`: a handler never transfers control back to a saved
+point. This is deliberate, because resumption would require capturing
+continuation state and would conflict with native compilation and foreign
+integration.
 
 ```harding
 result := [
     riskyOperation value
 ] on: Error do: [:ex |
-    ex resume: 42
+    "Fallback supplied by the handler"
+    42
 ]
 ```
 

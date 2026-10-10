@@ -124,7 +124,8 @@ c value println</code></pre></div>
                 <div class="example-item"><h4>Resumable Exception</h4><pre><code>result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    ex resume: 0
+    "The handler's result becomes the on:do: value"
+    0
 ].
 
 result println</code></pre></div>
