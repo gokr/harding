@@ -21,6 +21,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `examples/blocks.hrd` now demonstrates non-local return from a method (Smalltalk `^` returns from the enclosing method/doIt, so the return target must be a method).
 
 ### Changed
+- `Workspace` gained `filePath:` / `filePath` accessors so callers that must not write into the working directory (tests, embedded use) can redirect the workspace file. GUI automation tests now write workspace files into a disposable temp directory instead of the repository root.
 - Builder now loads an application's real `main:` source into its editor, tracks unsaved edits, and persists the edited body back to the owning `.hrd` file through the validated atomic writer; other definitions in that file are preserved. Builder templates use documented double-quoted strings.
 - `tests/test_badminton_buddy.nim` no longer deletes the tracked `badminton-buddy/badminton.db` during setup/teardown.
 - `tests/test_stdlib_io_and_packages.nim` used `&` as boolean conjunction; it now uses `and:`, matching current syntax. `test_load_and_eval` joined the core test group.

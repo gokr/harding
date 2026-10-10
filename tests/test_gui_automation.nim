@@ -524,9 +524,15 @@ suite "GTK automation helpers":
     if not hasGuiDisplay():
       skip()
 
+    createDir("build")
+    let workspaceDir = createTempDir("workspace-outcomes-", "", "build")
+    defer: removeDir(workspaceDir)
+
     let interp = ideInterp()
+    interp[].globals["WorkspaceOutcomesPath"] = toValue(workspaceDir / "workspace-501.hrd")
     let (value, err) = interp[].doit("""
       Work := Workspace openFor: nil id: 501.
+      Work filePath: WorkspaceOutcomesPath.
       Good := Work doIt: "3 + 4".
       Bad := Work doIt: "UnknownThing sendMessage".
       LiteralError := Work doIt: "\"Error: not a failure\"".
@@ -553,6 +559,7 @@ suite "GTK automation helpers":
     check(err.len == 0)
     check(value.kind == vkBool)
     check(value.boolVal)
+    check(fileExists(workspaceDir / "workspace-501.hrd"))
 
   test "Builder loads and persists an application's real source":
     if not hasGuiDisplay():
@@ -630,8 +637,12 @@ BuilderProbeOther := 7.
     if not hasGuiDisplay():
       skip()
 
-    let interp = ideInterp()
+    createDir("build")
+    let refreshDir = createTempDir("workspace-refresh-", "", "build")
+    defer: removeDir(refreshDir)
 
+    let interp = ideInterp()
+    interp[].globals["WorkspaceRefreshPath"] = toValue(refreshDir / "workspace-91.hrd")
     let (result, err) = interp[].doit("""
       TestOwner := Object derive: #(refreshCount, windows).
       TestOwner>>initialize [
@@ -663,6 +674,7 @@ BuilderProbeOther := 7.
       Owner := TestOwner new initialize.
       BrowserWindow := Browser openFor: Owner.
       Work := Workspace openFor: Owner id: 91.
+      Work filePath: WorkspaceRefreshPath.
       Work text: "Harding load: \"lib/web/Bootstrap.hrd\".".
       Work doItSelection.
       GtkWidget flushEvents: 20.

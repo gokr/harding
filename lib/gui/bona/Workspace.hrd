@@ -362,6 +362,17 @@ Workspace>>owner: anOwner [
     owner := anOwner
 ]
 
+Workspace>>filePath: aPath [
+    # Redirect the workspace file; defaults to workspace-<id>.hrd in the current directory.
+    # Callers that should not write into the working directory (tests, embedded use)
+    # set an absolute path here before the window is closed.
+    filePath := aPath
+]
+
+Workspace>>filePath [
+    ^filePath
+]
+
 Workspace>>window [
     ^window
 ]
