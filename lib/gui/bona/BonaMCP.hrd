@@ -85,20 +85,6 @@ BonaMCP>>integerArgAt: aKey in: args default: defaultValue [
     ^ defaultValue
 ]
 
-BonaMCP>>isErrorResult: result [
-    ^ (result isKindOf: String)
-        and: [
-            (result startsWith: "IDE_ERROR:")
-                or: [
-                    (result startsWith: "Error:")
-                        or: [
-                            (result startsWith: "Runtime error:")
-                                or: [ result startsWith: "Parse error:" ]
-                        ]
-                ]
-        ]
-]
-
 BonaMCP>>printableResultFor: anObject [
     anObject isNil ifTrue: [ ^ "nil" ]
     (anObject isClass) ifTrue: [
@@ -155,22 +141,19 @@ BonaMCP>>toolPing: args [
 ]
 
 BonaMCP>>toolEval: args [
-    | code result payload |
+    | code evaluation payload |
     code := self stringArgAt: "code" in: args default: ""
     code isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: code"
     ]
 
-    result := [ Object eval: code ]
-        on: Exception
-        do: [:ex | "IDE_ERROR: " & ex printString ]
-
-    (self isErrorResult: result) ifTrue: [
-        ^ self jsonError: result
+    evaluation := Object evaluate: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self jsonError: (evaluation at: "error")
     ]
 
     payload := Table new
-    payload at: "printString" put: (self printableResultFor: result)
+    payload at: "printString" put: (self printableResultFor: (evaluation at: "value"))
     ^ self jsonOk: payload
 ]
 
@@ -250,7 +233,7 @@ BonaMCP>>toolGetMethodSource: args [
 ]
 
 BonaMCP>>toolLoadFile: args [
-    | path result payload |
+    | path failure payload |
     path := self stringArgAt: "path" in: args default: ""
     path isEmpty ifTrue: [
         ^ self jsonError: "Missing required argument: path"
@@ -260,12 +243,11 @@ BonaMCP>>toolLoadFile: args [
         ^ self jsonError: ("File not found: " & path)
     ]
 
-    result := [ Harding load: path ]
-        on: Exception
-        do: [:ex | "IDE_ERROR: " & ex printString ]
-
-    (self isErrorResult: result) ifTrue: [
-        ^ self jsonError: result
+    failure := [ Harding load: path. nil ]
+        on: LoadError
+        do: [:ex | ex message ].
+    failure notNil ifTrue: [
+        ^ self jsonError: failure
     ]
 
     payload := Table new

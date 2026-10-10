@@ -7,6 +7,7 @@ import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/frame_pool
 import ../interpreter/activation_pool
+import ../interpreter/source_editor
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -342,6 +343,24 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
   # Use the shared root class and root object
   result.rootClass = rootObject.class
   result.currentReceiver = rootObject
+
+proc evaluateIsolated*(interp: Interpreter, source: string): tuple[value: NodeValue, error: string] =
+  ## Evaluate with separate VM stacks, sharing image, source metadata and scheduler ownership.
+  var evaluation = newInterpreterWithShared(interp.globals, interp.rootObject,
+    interp.packageSources, trace = interp.traceExecution, maxStackDepth = interp.maxStackDepth)
+  evaluation.hardingHome = interp.hardingHome
+  evaluation.commandLineArgs = interp.commandLineArgs
+  evaluation.importedLibraries = interp.importedLibraries
+  evaluation.sourceIndex = interp.sourceIndex
+  evaluation.sourceFileKeys = interp.sourceFileKeys
+  evaluation.schedulerContextPtr = interp.schedulerContextPtr
+  evaluation.methodTableDeferRebuild = interp.methodTableDeferRebuild
+  evaluation.suppressUncaughtExit = true
+  result.value = nilValue()
+  let (values, error) = evaluation.evalStatements(source)
+  result.error = error
+  if error.len == 0 and values.len > 0:
+    result.value = values[^1]
 
 # Check stack depth to prevent infinite recursion
 proc checkStackDepth(interp: var Interpreter) =
@@ -3487,35 +3506,28 @@ proc initGlobals*(interp: var Interpreter) =
     if args.len < 1 or args[0].kind != vkString:
       return nilValue()
 
-    let code = args[0].strVal
-    # Evaluate in an isolated interpreter that shares globals/root state.
-    # This avoids clobbering the caller VM's work queue/eval stack when eval:
-    # is invoked during an active callback or expression evaluation.
-    var evalInterp = newInterpreterWithShared(
-      interp.globals,
-      interp.rootObject,
-      interp.packageSources,
-      trace = interp.traceExecution,
-      maxStackDepth = interp.maxStackDepth
-    )
-    evalInterp.hardingHome = interp.hardingHome
-    evalInterp.commandLineArgs = interp.commandLineArgs
-    evalInterp.importedLibraries = interp.importedLibraries
-    evalInterp.methodTableDeferRebuild = interp.methodTableDeferRebuild
-    evalInterp.suppressUncaughtExit = true
+    let evaluated = evaluateIsolated(interp, args[0].strVal)
+    if evaluated.error.len > 0:
+      return evaluated.error.toValue()
+    return evaluated.value
 
-    let (results, err) =
-      try:
-        evalInterp.evalStatements(code)
-      finally:
-        discard
-    if err.len > 0:
-      # Return error as string
-      return err.toValue()
-    if results.len > 0:
-      # Return the last result
-      return results[^1]
-    return nilValue()
+  proc primitiveEvaluateImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    discard self
+    let response = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+    let evaluated = if args.len == 1 and args[0].kind == vkString:
+                      evaluateIsolated(interp, args[0].strVal)
+                    else:
+                      (value: nilValue(), error: "Expected Harding source as a String")
+    setTableValue(response, toValue("ok"), toValue(evaluated.error.len == 0))
+    setTableValue(response, toValue("value"), evaluated.value)
+    setTableValue(response, toValue("error"), toValue(evaluated.error))
+    return response.toValue()
+
+  let evaluateMethod = createCoreMethod("evaluate:")
+  evaluateMethod.setNativeImpl(primitiveEvaluateImpl)
+  setNativeValueFromInstanceWithInterp(evaluateMethod, primitiveEvaluateImpl)
+  objectCls.classMethods["evaluate:"] = evaluateMethod
+  objectCls.allClassMethods["evaluate:"] = evaluateMethod
 
   let evalMethod = createCoreMethod("eval:")
   evalMethod.setNativeImpl(primitiveEvalImpl)
@@ -5990,8 +6002,10 @@ proc globalTableIncludesKeyImpl(interp: var Interpreter, self: Instance, args: s
 
 proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable load: - load and evaluate a Harding file
-  ## Resolves paths from filesystem or embedded package sources
+  ## Resolves paths from filesystem or embedded package sources.
+  ## Every failure signals LoadError instead of returning nil.
   if args.len < 1:
+    signalExceptionByName(interp, "LoadError", "load: requires a file path")
     return nilValue()
 
   # Get the file path from arguments
@@ -6002,40 +6016,43 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     else: ""
 
   if filePath.len == 0:
+    signalExceptionByName(interp, "LoadError", "load: requires a non-empty file path")
     return nilValue()
 
   let (ok, source, displayPath) = resolveLoadInput(interp, filePath)
   if not ok:
-    writeStderr("Error: File not found: " & displayPath)
+    signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
+  var failure = ""
   try:
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & displayPath & ": " & err)
       interp.methodTableDeferRebuild = false
-      return nilValue()
+      failure = "Could not load " & displayPath & ": " & err
+    else:
+      # Rebuild all method tables after batch loading
+      rebuildAllMethodTables()
+      interp.methodTableDeferRebuild = false
 
-    # Rebuild all method tables after batch loading
-    rebuildAllMethodTables()
-    interp.methodTableDeferRebuild = false
-    
-    # Rebind declarative primitives for classes loaded from embedded sources
-    # (external libraries with <primitive ...> syntax need rebinding after class redefinition)
-    when declared(rebindDeclarativePrimitives):
-      rebindDeclarativePrimitives(interp)
-    
-    reindexSourceFile(interp, displayPath)
+      # Rebind declarative primitives for classes loaded from embedded sources
+      # (external libraries with <primitive ...> syntax need rebinding after class redefinition)
+      when declared(rebindDeclarativePrimitives):
+        rebindDeclarativePrimitives(interp)
 
-    debug("Successfully loaded: ", displayPath)
-    return toValue(true)
+      reindexSourceFile(interp, displayPath)
+
+      debug("Successfully loaded: ", displayPath)
+      return toValue(true)
   except Exception as e:
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & displayPath & ": " & e.msg)
-    return nilValue()
+    failure = "Could not read " & displayPath & ": " & e.msg
+
+  signalExceptionByName(interp, "LoadError", failure)
+  return nilValue()
 
 proc globalTableCompileImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable compile: - evaluate a compile block in interpreter mode
@@ -6072,7 +6089,9 @@ proc globalTableDumpVMImpl(interp: var Interpreter, self: Instance, args: seq[No
 
 proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library load: - load and evaluate a file, capturing new globals into this Library's bindings
+  ## Every failure signals LoadError instead of returning nil.
   if args.len < 1:
+    signalExceptionByName(interp, "LoadError", "load: requires a file path")
     return nilValue()
 
   let pathArg = args[0]
@@ -6082,6 +6101,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     else: ""
 
   if filePath.len == 0:
+    signalExceptionByName(interp, "LoadError", "load: requires a non-empty file path")
     return nilValue()
 
   proc librarySourceDir(lib: Instance): string =
@@ -6110,7 +6130,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   if not ok and resolvedRequest != filePath:
     (ok, source, displayPath) = resolveLoadInput(interp, filePath)
   if not ok:
-    writeStderr("Error: File not found: " & displayPath)
+    signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
   # Save original globals and create a copy for capturing new definitions.
@@ -6136,39 +6156,41 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   # Swap globals to temp table so new definitions go there
   interp.globals = tempGlobals
 
+  var failure = ""
   try:
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & displayPath & ": " & err)
       interp.globals = originalGlobals
       interp.methodTableDeferRebuild = false
-      return nilValue()
+      failure = "Could not load " & displayPath & ": " & err
+    else:
+      # Restore original globals
+      interp.globals = originalGlobals
 
-    # Restore original globals
-    interp.globals = originalGlobals
+      # Copy new or changed entries into the Library's bindings table.
+      if bindings != nil:
+        for key, val in tempGlobals[]:
+          if key notin startingGlobals or not identityEqual(val, startingGlobals[key]):
+            setTableValue(bindings, toValue(key), val)
+            debug("Library captured: ", key)
 
-    # Copy new or changed entries into the Library's bindings table.
-    if bindings != nil:
-      for key, val in tempGlobals[]:
-        if key notin startingGlobals or not identityEqual(val, startingGlobals[key]):
-          setTableValue(bindings, toValue(key), val)
-          debug("Library captured: ", key)
+      # Rebuild all method tables after batch loading
+      rebuildAllMethodTables()
+      interp.methodTableDeferRebuild = false
+      reindexSourceFile(interp, displayPath)
 
-    # Rebuild all method tables after batch loading
-    rebuildAllMethodTables()
-    interp.methodTableDeferRebuild = false
-    reindexSourceFile(interp, displayPath)
-
-    debug("Successfully loaded into library: ", displayPath)
-    return toValue(true)
+      debug("Successfully loaded into library: ", displayPath)
+      return toValue(true)
   except Exception as e:
     interp.globals = originalGlobals
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & displayPath & ": " & e.msg)
-    return nilValue()
+    failure = "Could not read " & displayPath & ": " & e.msg
+
+  signalExceptionByName(interp, "LoadError", failure)
+  return nilValue()
 
 proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Harding import: - add a Library to the interpreter's imported libraries list
@@ -6588,6 +6610,23 @@ proc globalTableSourceEntriesForClassImpl(interp: var Interpreter, self: Instanc
 
   return entriesArray.toValue()
 
+proc globalTableEditSourceImpl(interp: var Interpreter, self: Instance,
+                               args: seq[NodeValue]): NodeValue =
+  discard interp
+  discard self
+  let response = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+  if args.len != 5 or args[0].kind != vkString or args[1].kind != vkString or
+      args[2].kind != vkString or args[3].kind != vkString or args[4].kind != vkBool:
+    setTableValue(response, toValue("ok"), toValue(false))
+    setTableValue(response, toValue("error"), toValue("Invalid source edit arguments"))
+    return response.toValue()
+  let edited = rewriteSourceFile(args[0].strVal, args[1].strVal, args[2].strVal,
+                                args[3].strVal, args[4].boolVal)
+  setTableValue(response, toValue("ok"), toValue(edited.error.len == 0))
+  setTableValue(response, toValue("error"), toValue(edited.error))
+  setTableValue(response, toValue("source"), toValue(edited.source))
+  return response.toValue()
+
 proc installLibraryMethods*() =
   ## Install Library methods that need interpreter access
   if libraryClass == nil:
@@ -6731,6 +6770,11 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   methodSourceInfoMethod.setNativeImpl(globalTableMethodSourceInfoImpl)
   methodSourceInfoMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "methodSourceInfoForClass:selector:", methodSourceInfoMethod)
+
+  let editSourceMethod = createCoreMethod("editSourceFile:owner:selector:replacement:delete:")
+  editSourceMethod.setNativeImpl(globalTableEditSourceImpl)
+  editSourceMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "editSourceFile:owner:selector:replacement:delete:", editSourceMethod)
 
   let sourceEntriesForClassMethod = createCoreMethod("sourceEntriesForClass:")
   sourceEntriesForClassMethod.setNativeImpl(globalTableSourceEntriesForClassImpl)

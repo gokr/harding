@@ -39,7 +39,80 @@ After installing/removing external libraries (`./harding lib install <name>`), r
 
 ## Testing
 
-Tests use Nim's unittest framework, run via testament: `nimble test` runs all tests in `tests/test_*.nim` plus installed external library tests (`<externalLib>/tests/test_*.nim`). Individual tests: `nim c -r tests/test_interpreter_core.nim`. Test files follow `test_*.nim` pattern covering core interpreter, object model, parser, exceptions, concurrency, stdlib, compiler, and integration. All tests pass with ARC/ORC.
+Tests use Nim's unittest framework, run via testament: `nimble test` runs all tests in `tests/test_*.nim` plus installed external library tests (`<externalLib>/tests/test_*.nim`). Individual tests: `nim c -r tests/test_interpreter_core.nim`. Test files follow `test_*.nim` pattern covering core interpreter, object model, parser, exceptions, concurrency, stdlib, compiler, and integration. ARC and ORC are supported validation targets; verify actual results rather than assuming the suite is green.
+
+## Bona Production Hardening
+
+The active goal is a reliable Smalltalk environment: Workspace, Browser, Inspector, Transcript, and Builder. See `docs/BONA_ASSESSMENT.md` for reproduced defects and evidence; keep this section current as fixes land.
+
+### Phases and scope
+
+1. Fix confirmed defects, starting with source loss, bootstrap initialization, GTK dialog ABI, MCP startup/ownership, dirty-editor refresh, and shutdown. Add a focused regression with each fix; do not defer safety tests until phase 2.
+2. Exercise every existing tool through deterministic model/integration tests and black-box GTK acceptance tests. Cover save/reload, errors and recovery, dialogs/cancellation, repeated open/close, and preservation of unsaved edits.
+3. Make creating GTK apps in Harding straightforward and make Builder produce a single executable that embeds the application sources and the Harding interpreter, with a defined system dependency contract (GTK4, GtkSourceView 5, VTE for the IDE, MummyX/NimCP for web/MCP builds). The embedded-interpreter target is agreed and is the first packaging mode; Granite compilation remains a separate backend that Builder can select later. A packaged app must run without the source tree and without a separate `harding` binary.
+
+Granite compiler development is separate (including `worktrees/granite-completeness`); do not modify that worktree or expand this effort into compiler parity work without agreement. Preserve unrelated/uncommitted changes, including installed external-library changes.
+
+### Current progress
+
+- Implemented: Granite bootstrap initialization and invalid dependency-array syntax; GTK4 dialog ABI/literal messages/cancellation cleanup; targeted atomic Browser source writes; dirty-editor refresh deferral; bounded Transcript history, close/reopen retention, and class-side `contents` delegation.
+- Language/runtime contracts agreed and implemented: failed loads signal `LoadError` (new `lib/core/LoadError.hrd`) for both `Harding load:` and `Library load:`, and `Object evaluate:` returns a structured `ok`/`value`/`error` table. `Object eval:` keeps its plain-value/error-string behavior for compatibility. `evaluate:` shares globals, source indexing and scheduler ownership with the caller, making it safe for Bona tools and MCP dispatch.
+- Bona tools migrated to the structured contract: Workspace, Inspector, Browser, Builder, Transcript, and BonaMCP no longer classify results by error-message prefixes. Workspace Do It now reports its result to Transcript, matching documented behavior.
+- Verified through gnome-ui-mcp: Workspace opening/text insertion/Print It and Builder New creating `MyApp` after the bootstrap fix. This is not yet a complete acceptance suite.
+- Outstanding: safe source reflection/display/reload, scheduler-bound BonaMCP startup and lifecycle, coordinated shutdown, the embedded-interpreter packaging path, and complete tool acceptance coverage. Builder persistence and source-backed editing are implemented and covered by tests.
+- Focused logs live in `build/bona-hardening/`. Tests include `test_source_editor`, `test_load_and_eval`, Bona models, GUI automation, and interpreter core; do not claim the complete test suite has passed from these alone.
+
+### Interpreter and language discussion gate
+
+Bring interpreter/language defects to the user with a minimal reproduction, expected versus actual behavior, affected workflows, and proposed choices. Do not silently adapt language semantics to work around IDE bugs. Straightforward bootstrap/FFI/UI fixes that preserve semantics can proceed with regressions.
+
+Load failure and structured evaluation were explicitly agreed and are implemented: `LoadError` is signaled instead of printing and returning nil, and `Object evaluate:` returns `{ok, value, error}` while `Object eval:` stays unchanged. New Bona code should use `Object evaluate:`.
+
+Still open for discussion: `Object eval:` scheduler ownership for long-running work was partly addressed by `evaluateIsolated`, but suspension/cancellation of an in-flight evaluation is not implemented; do not claim interruptibility until it is.
+
+`::` on ordinary Bona tool instances produced `Message not understood: at:` in regression setup; use explicit accessors for now and investigate named-access dispatch with a minimal interpreter test before changing its contract. Transcript had an instance `contents` method but no class-side delegation despite BonaMCP calling `Transcript contents`; the delegation is now explicit.
+
+`Library load:` and `Harding load:` signal `LoadError` on missing files, parse errors, and load-time failures; globals and library bindings are left unchanged on failure. Do not reintroduce silent nil returns in load paths.
+
+Source reflection is currently line-based and counts brackets without respecting strings/comments. Do not treat it as a safe general-purpose source rewriter. Targeted writes use `src/harding/interpreter/source_editor.nim` and `Harding editSourceFile:owner:selector:replacement:delete:`; this validates parser-delimited definitions without evaluating proposed code. Browser saves/deletes must preserve unrelated classes, statements, comments, class-side methods, and formatting; validate before writing and use atomic replacement. Do not test destructive editing on repository sources.
+
+### GUI automation: gnome-ui-mcp
+
+A local `gnome-ui` MCP server is registered with Niffler, using `gnome-ui-mcp` 0.5.0 from commit `b11ec2f63ee712a0a78b40a93a7add2b89e96bef`. Its disposable checkout is `build/gnome-ui-mcp/repo`, environment `build/gnome-ui-mcp/venv`. Recreate locally without Docker or global Python changes:
+
+```bash
+uv venv --python /usr/bin/python3 --system-site-packages build/gnome-ui-mcp/venv
+uv pip install --python build/gnome-ui-mcp/venv/bin/python ./build/gnome-ui-mcp/repo
+build/gnome-ui-mcp/venv/bin/gnome-ui-mcp --help
+```
+
+The system Python supplies PyGObject/AT-SPI. The server needs the same GNOME Wayland session environment: `DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, `DISPLAY`, and `XDG_SESSION_TYPE`. Registration enables only accessibility, navigation, window, state, and waiting categories; calls are serial. Discover `mcp-gnome-ui` tools in the harness.
+
+- Launch Bona with `GTK_A11Y=atspi`; keep it alive using the harness background-process facility, not an unowned `&` child of a short tool call.
+- Set `set_boundaries(app_name="bona", allow_global_keys=[])` before interacting. This is name-based, not a sandbox: avoid multiple Bona instances and verify the process/window being tested.
+- Scope discovery to Bona. Use `list_windows`, then a window-scoped snapshot or `find_elements` with role/name. Re-discover after changes; numeric AT-SPI paths and snapshot UIDs are not durable.
+- `activate_element` with action `click` and `set_element_text` work on the tested GTK4 surface without mouse coordinates. Prefer these over input injection or desktop-wide permission/configuration changes.
+- `get_element_text` returned empty text despite nonzero character counts in the initial trial. Cross-check with `Atspi.Text.get_text(accessible, 0, -1)` using system Python; do not report successful UI behavior solely from an action's `success` flag.
+- The initial Print It trial produced editor text `3 + 47` (six characters), not a spaced result; verify selection behavior and record this as a workflow issue, not an arithmetic failure.
+- Test sessions must use disposable working directories or non-colliding workspace IDs: Workspace reads/writes `workspace-<id>.hrd` in the current directory and can delete empty workspace files on save/close. Do not overwrite a developer's existing workspace.
+- Do not operate on unrelated applications, capture the whole desktop unnecessarily, or relax a boundary after a failed call. Shut down only test processes owned by this task.
+- Do not run a suite that writes or deletes tracked repository files without checking afterwards; `test_badminton_buddy` previously deleted `badminton-buddy/badminton.db` (now fixed). Run `git status` after long sweeps and restore accidental deletions.
+
+### Validation and known dependencies
+
+```bash
+nimble bona
+nim c -r --out:build/test_bona_models tests/test_bona_models.nim
+nim c -r --out:build/test_source_editor tests/test_source_editor.nim
+nim c -r --out:build/test_load_and_eval tests/test_load_and_eval.nim
+nim c -r --out:build/test_gui_automation tests/test_gui_automation.nim
+```
+
+Bona needs GTK4, GtkSourceView 5, and **GTK4** VTE (`libvte-2.91-gtk4.so.0`); GTK3 VTE is not compatible. On the assessed Ubuntu host GTK4 VTE was missing. A runtime package was extracted locally under `build/bona-assessment/deps`; use its `usr/lib/x86_64-linux-gnu` in `LIBRARY_PATH` for linking and `LD_LIBRARY_PATH` for running, or explicitly arrange installation. Do not substitute the GTK3 library.
+
+The full `tests/test_*.nim` sweep is not green: `test_badminton_buddy` fails at `BadmintonRepository open:` (SQLite repository path; unrelated to Bona work) and its HTTP tests depend on an external server. Treat those as known, separate issues.
+
+The existing nimble test tasks mask failures with `|| true`; inspect actual test results or use direct `nim c -r` for focused validation. A green task exit alone is not proof of passing tests. Headless tests and direct GTK signal tests do not replace real event-loop/AT-SPI acceptance tests. Validate ARC and ORC when touching proxy lifetime, callbacks, or cross-thread services. Logs and scratch work belong under `build/`, not `/tmp`.
 
 ## Logging and Debugging
 

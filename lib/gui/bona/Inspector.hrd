@@ -362,44 +362,36 @@ Inspector>>evalInContext: codeString [
     wrappedCode := "| self |
 self := Harding at: \"_inspectorSelf\"
 " & codeString
-    ^ [ Object eval: wrappedCode ]
-        on: Exception
-        do: [:ex | "Error: " & ex printString ]
+    ^ Object evaluate: wrappedCode
 ]
 
-Inspector>>isErrorResult: aResult [
-    (aResult isKindOf: String) ifFalse: [ ^ false ]
-    (aResult startsWith: "Error:") ifTrue: [ ^ true ]
-    (aResult startsWith: "IDE_ERROR:") ifTrue: [ ^ true ]
-    (aResult startsWith: "Runtime error:") ifTrue: [ ^ true ]
-    (aResult startsWith: "Parse error:") ifTrue: [ ^ true ]
-    ^ false
+Inspector>>reportEvaluationError: evaluation [
+    window title: (evaluation at: "error").
+    ^ nil
 ]
 
 Inspector>>doItInWorkspace [
-    | code result |
+    | code evaluation |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [ ^ nil ]
-    result := self evalInContext: code
-    (self isErrorResult: result) ifTrue: [
-        window title: result
-    ] ifFalse: [
-        window title: ("Inspector: " & ((model inspectedObject) printString))
+    evaluation := self evalInContext: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
     ]
-    ^ result
+    window title: ("Inspector: " & ((model inspectedObject) printString)).
+    ^ evaluation at: "value"
 ]
 
 Inspector>>printItInWorkspace [
-    | code result resultString cursorPos insertedEnd |
+    | code evaluation result resultString cursorPos insertedEnd |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [ ^ nil ]
-    result := self evalInContext: code
-    (self isErrorResult: result) ifTrue: [
-        window title: result
-        ^ nil
+    evaluation := self evalInContext: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
     ]
 
-    # Convert result to string
+    result := evaluation at: "value"
     resultString := " " & (result printString)
 
     # Insert at selection end
@@ -411,15 +403,14 @@ Inspector>>printItInWorkspace [
 ]
 
 Inspector>>inspectItInWorkspace [
-    | code result |
+    | code evaluation |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [ ^ nil ]
-    result := self evalInContext: code
-    (self isErrorResult: result) ifTrue: [
-        window title: result
-        ^ nil
+    evaluation := self evalInContext: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
     ]
-    result inspect
+    (evaluation at: "value") inspect
 ]
 
 # ============================================================================.

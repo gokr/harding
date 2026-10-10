@@ -2,7 +2,7 @@
 # BuilderModel - Non-GTK state holder for Builder.
 # ============================================================================.
 
-BuilderModel := Object derive: #(catalog, currentApp, appClasses, isRefreshing, outputText)
+BuilderModel := Object derive: #(catalog, currentApp, appClasses, isRefreshing, outputText, originalSource, sourceModified)
 
 BuilderModel>>initialize [
     catalog := Catalog new
@@ -10,11 +10,27 @@ BuilderModel>>initialize [
     appClasses := Array new
     isRefreshing := false
     outputText := ""
+    originalSource := nil
+    sourceModified := false
     ^ self
 ]
 
 BuilderModel>>catalog [ ^ catalog ]
 BuilderModel>>catalog: aCatalog [ catalog := aCatalog. ^ self ]
+
+BuilderModel>>markSourceClean: sourceText [
+    originalSource := sourceText.
+    ^ self
+]
+
+BuilderModel>>markSourceModified [
+    sourceModified := true.
+    ^ self
+]
+
+BuilderModel>>hasUnsavedChanges [
+    ^ sourceModified
+]
 BuilderModel>>currentApp [ ^ currentApp ]
 BuilderModel>>currentApp: anApp [ currentApp := anApp. ^ self ]
 BuilderModel>>appClasses [ ^ appClasses ]

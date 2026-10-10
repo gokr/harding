@@ -152,7 +152,7 @@ proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
 proc parsePrefixLiteral(parser: var Parser; prefix: string): Node
-proc parseStatement(parser: var Parser; parseMessages = true): Node
+proc parseStatement*(parser: var Parser; parseMessages = true): Node
 proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
@@ -1405,7 +1405,7 @@ proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
   )
 
 # Parse statement (expression or assignment)
-proc parseStatement(parser: var Parser; parseMessages = true): Node =
+proc parseStatement*(parser: var Parser; parseMessages = true): Node =
   # Skip separators and periods at the start
   while parser.expect(tkSeparator) or parser.expect(tkPeriod):
     discard

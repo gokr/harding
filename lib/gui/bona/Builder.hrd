@@ -6,7 +6,7 @@
 # using the Granite compiler. All work is captured in Application subclasses.
 # and auto-saved to .hrd files like the Browser.
 
-Builder := Object derive: #(model, owner, window, appList, appEditor, outputView)
+Builder := Object derive: #(model, owner, window, appList, appEditor, outputView, ignoreTextChanges)
 # Builder implements Bona's Granite application builder and starter-template workflow.
 # It discovers Application subclasses, edits main: methods, and triggers Granite builds.
 # Sample app creation, build output, and app selection behavior all flow through this class.
@@ -16,6 +16,7 @@ Builder := Object derive: #(model, owner, window, appList, appEditor, outputView
 
 Builder>>initialize [
   model := BuilderModel new
+  ignoreTextChanges := false
   ^ self
 ]
 
@@ -37,6 +38,10 @@ Builder class>>openFor: anOwner [
 Builder>>owner: anOwner [
   owner := anOwner
 ]
+
+Builder>>model [ ^ model ]
+Builder>>appEditor [ ^ appEditor ]
+Builder>>window [ ^ window ]
 
 Builder>>openInstance [
   | mainBox headerBar contentBox leftPane rightPane paned |
@@ -224,6 +229,7 @@ Builder>>createEditorPane [
   appEditor showLineNumbers: true
   appEditor setTabWidth: 2
   appEditor vexpand: true
+  appEditor buffer changed: [ self markAppSourceModified ]
 
   scroll := GtkScrolledWindow new
   scroll vexpand: true
@@ -355,24 +361,46 @@ Builder>>onAppSelected: index [
 ]
 
 Builder>>loadApp: appClass [
-  | source libraries appName |
+  | source libraries appName info found |
 
   appName := self appDisplayName: appClass
 
   # Update window title
   window title: ("Application Builder - " & appName)
 
-  # Method source extraction is currently placeholder-based
-  # appClass methods returns an Array of selectors, not a method table
-  source := self defaultMainSource
+  source := nil
+  info := self catalog methodSourceInfoForClass: appName selector: "main:".
+  found := info at: "found" ifAbsent: [ false ].
+  found ifTrue: [
+    source := self catalog methodTextFromInfo: info
+  ].
+  source isNil ifTrue: [
+    source := self defaultMainSource
+  ].
 
-  appEditor text: source
+  self setAppEditorSource: source.
 
   # Set library checkboxes
   libraries := self getLibrariesFor: appClass
   self setLibraryCheckboxes: libraries
 
   Transcript showCr: ("Loaded application: " & appName)
+]
+
+Builder>>catalog [
+  ^ model catalog
+]
+
+Builder>>appSourceFilePath: appClass [
+  | info found |
+  info := self catalog methodSourceInfoForClass: (self appDisplayName: appClass) selector: "main:".
+  found := info at: "found" ifAbsent: [ false ].
+  found ifFalse: [ ^ nil ].
+  ^ info at: "file" ifAbsent: [ nil ]
+]
+
+Builder>>hasUnsavedChanges [
+  ^ model hasUnsavedChanges
 ]
 
 Builder>>getLibrariesFor: appClass [
@@ -387,15 +415,10 @@ Builder>>setLibraryCheckboxes: libraries [
 ]
 
 Builder>>defaultMainSource [
-  ^ "main: args [
-  Transcript showCr: 'Hello from Granite!'
-  ^ 0
-]"
+  ^ "main: args [\n  Transcript showCr: \"Hello from Granite!\"\n  ^ 0\n]"
 ]
 
 Builder>>methodSource: method [
-  # This would extract the source code from the method
-  # For now, return a placeholder
   ^ self defaultMainSource
 ]
 
@@ -426,7 +449,7 @@ Builder>>buildCurrentApp [
 ]
 
 Builder>>saveCurrentApp [
-  | source libraries appName |
+  | source libraries appName evaluation persisted |
 
   (model currentApp) isNil ifTrue: [ ^ self ]
 
@@ -439,11 +462,36 @@ Builder>>saveCurrentApp [
   # Compile and install new method
   self compileMethod: source for: (model currentApp)
 
-  # Save libraries preference
-  self saveLibraries: libraries for: (model currentApp)
+  # Persist the editor body to the owning .hrd file when one exists
+  appName := self appDisplayName: (model currentApp).
+  persisted := self persistSource: source for: appName.
+  persisted ifFalse: [
+    self showOutput: ("Saved in image only; no source file found for " & appName)
+  ].
+  model markSourceClean: source.
 
-  appName := self appDisplayName: (model currentApp)
+  # Save libraries preference
+  self saveLibraries: libraries for: (model currentApp).
+
   Transcript showCr: ("Saved " & appName)
+]
+
+Builder>>persistSource: source for: appName [
+  | filePath info found replacement response |
+  info := self catalog methodSourceInfoForClass: appName selector: "main:".
+  found := info at: "found" ifAbsent: [ false ].
+  found ifFalse: [ ^ false ].
+  filePath := info at: "file" ifAbsent: [ nil ].
+  filePath isNil ifTrue: [ ^ false ].
+
+  replacement := appName & ">>" & source.
+  response := Harding editSourceFile: filePath owner: appName selector: "main:"
+      replacement: replacement delete: false.
+  (response at: "ok") ifFalse: [
+    self showOutput: (response at: "error").
+    ^ false
+  ].
+  ^ true
 ]
 
 Builder>>getSelectedLibraries [
@@ -459,7 +507,7 @@ Builder>>saveLibraries: libraries for: appClass [
 ]
 
 Builder>>compileMethod: source for: appClass [
-  | fullSource appName |
+  | fullSource appName evaluation |
 
   appName := self appDisplayName: appClass
 
@@ -472,9 +520,9 @@ Builder>>compileMethod: source for: appClass [
         ifFalse: [ appName & ">>main: args [" & source & "]" ]
     ]
 
-  # Compile and install in interpreter mode
-  [ Object eval: fullSource ] on: Exception do: [:ex |
-    self showOutput: ("Error compiling method: " & ex printString)
+  evaluation := Object evaluate: fullSource.
+  (evaluation at: "ok") ifFalse: [
+    self showOutput: ("Error compiling method: " & (evaluation at: "error"))
   ]
 ]
 
@@ -497,7 +545,7 @@ Builder>>runCurrentApp [
 ]
 
 Builder>>createNewApp [
-  | name appClass source idx found |
+  | name appClass source idx found evaluation |
 
   Transcript showCr: "Builder: creating new application"
   self showOutput: "Creating new application..."
@@ -522,10 +570,12 @@ Builder>>createNewApp [
 "
 
   # Compile and install the class
-  appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating application: " & ex printString)
+  evaluation := Object evaluate: source.
+  (evaluation at: "ok") ifFalse: [
+    self showOutput: ("Error creating application: " & (evaluation at: "error")).
     ^ self
-  ]
+  ].
+  appClass := evaluation at: "value".
 
   (appClass isClass) ifFalse: [
     appClass := Harding at: name ifAbsent: [ nil ]
@@ -578,7 +628,7 @@ Builder>>createTemplateApp: templateName [
 ]
 
 Builder>>createHelloWorldApp [
-  | name source appClass |
+  | name source appClass evaluation |
 
   name := self uniqueAppName: "HelloWorld"
 
@@ -593,10 +643,12 @@ Builder>>createHelloWorldApp [
 ]
 "
 
-  appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " & ex printString)
+  evaluation := Object evaluate: source.
+  (evaluation at: "ok") ifFalse: [
+    self showOutput: ("Error creating template: " & (evaluation at: "error")).
     ^ self
-  ]
+  ].
+  appClass := evaluation at: "value".
 
   (appClass isClass) ifFalse: [
     appClass := Harding at: name ifAbsent: [ nil ]
@@ -618,7 +670,7 @@ Builder>>createHelloWorldApp [
 ]
 
 Builder>>createSimpleGUIApp [
-  | name source appClass |
+  | name source appClass evaluation |
 
   name := self uniqueAppName: "SimpleGUI"
 
@@ -642,10 +694,12 @@ Builder>>createSimpleGUIApp [
 ]
 "
 
-  appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " & ex printString)
+  evaluation := Object evaluate: source.
+  (evaluation at: "ok") ifFalse: [
+    self showOutput: ("Error creating template: " & (evaluation at: "error")).
     ^ self
-  ]
+  ].
+  appClass := evaluation at: "value".
 
   (appClass isClass) ifFalse: [
     appClass := Harding at: name ifAbsent: [ nil ]
@@ -667,7 +721,7 @@ Builder>>createSimpleGUIApp [
 ]
 
 Builder>>createCounterApp [
-  | name source appClass |
+  | name source appClass evaluation |
 
   name := self uniqueAppName: "CounterApp"
 
@@ -700,10 +754,12 @@ Builder>>createCounterApp [
 ]
 "
 
-  appClass := [ Object eval: source ] on: Exception do: [:ex |
-    self showOutput: ("Error creating template: " & ex printString)
+  evaluation := Object evaluate: source.
+  (evaluation at: "ok") ifFalse: [
+    self showOutput: ("Error creating template: " & (evaluation at: "error")).
     ^ self
-  ]
+  ].
+  appClass := evaluation at: "value".
 
   (appClass isClass) ifFalse: [
     appClass := Harding at: name ifAbsent: [ nil ]
@@ -734,6 +790,22 @@ Builder>>showOutput: text [
   buffer := outputView buffer
   buffer append: text
   buffer append: "\n"
+]
+
+Builder>>markAppSourceModified [
+  ignoreTextChanges ifTrue: [
+    ^ self
+  ].
+  model markSourceModified.
+  ^ self
+]
+
+Builder>>setAppEditorSource: source [
+  ignoreTextChanges := true.
+  appEditor text: source.
+  ignoreTextChanges := false.
+  model markSourceClean: source.
+  ^ self
 ]
 
 Builder>>onClose [

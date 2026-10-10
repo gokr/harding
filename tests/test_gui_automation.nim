@@ -1,4 +1,4 @@
-import std/[unittest, os, tables]
+import std/[unittest, os, tables, tempfiles, strutils]
 
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
@@ -7,6 +7,7 @@ import ../src/harding/gui/gtk/bridge
 import ../src/harding/gui/gtk/widget
 import ../src/harding/gui/gtk/popover
 import ../src/harding/gui/gtk/ffi
+import ../src/harding/gui/gtk/alertdialog
 
 var sharedGuiInterp: Interpreter
 var sharedGuiInterpReady = false
@@ -59,6 +60,56 @@ proc arrayElements(value: NodeValue): seq[NodeValue] =
     @[]
 
 suite "GTK automation helpers":
+  when not defined(gtk3):
+    test "alert messages preserve percent conversions literally":
+      if not hasGuiDisplay():
+        skip()
+
+      discard guiInterp()
+      let message = "Progress 100%: %s %n %d"
+      let dialog = newAlertDialog(message)
+      check($gtkAlertDialogGetMessage(dialog) == message)
+      gObjectUnref(dialog)
+
+    test "cancelled confirmation invokes No and retires its callback":
+      if not hasGuiDisplay():
+        skip()
+
+      let interp = guiInterp()
+      let (blockValue, err) = interp[].doit("""
+        DialogCancelled := 0.
+        [ DialogCancelled := DialogCancelled + 1 ]
+      """)
+      check(err.len == 0)
+      require(blockValue.kind == vkBlock)
+
+      for iteration in 0 ..< 3:
+        let dialog = newAlertDialog("Cancel %s safely")
+        var labels: array[3, cstring] = [cstring"Yes", cstring"No", nil]
+        gtkAlertDialogSetButtons(dialog, cast[cstringArray](addr(labels[0])))
+        gtkAlertDialogSetCancelButton(dialog, 1)
+        let cancellable = gCancellableNew()
+        inc asyncDialogIdCounter
+        let dialogId = asyncDialogIdCounter
+        asyncDialogRegistry[dialogId] = AsyncDialogCallback(
+          interp: interp[], noBlock: blockValue.blockVal
+        )
+        gtkAlertDialogChoose(dialog, nil, cancellable,
+          cast[pointer](alertDialogCallback), cast[pointer](dialogId))
+        gCancellableCancel(cancellable)
+        var attempts = 0
+        while dialogId in asyncDialogRegistry and attempts < 1000:
+          discard gMainContextIteration(nil, 0)
+          sleep(1)
+          inc attempts
+        check(dialogId notin asyncDialogRegistry)
+        gObjectUnref(cancellable)
+
+      let (value, verifyErr) = interp[].doit("DialogCancelled")
+      check(verifyErr.len == 0)
+      check(value.kind == vkInt)
+      check(value.intVal == 3)
+
   test "GtkEventController resolves Ctrl+I key":
     if not hasGuiDisplay():
       skip()
@@ -357,6 +408,56 @@ suite "GTK automation helpers":
     check(result.kind == vkInt)
     check(result.intVal == 1)
 
+  test "Browser refresh preserves dirty source and selection":
+    if not hasGuiDisplay():
+      skip()
+
+    let interp = ideInterp()
+    let (value, err) = interp[].doit("""
+      DirtyBrowser := Browser openFor: nil.
+      DirtyBrowser currentClass: "Object".
+      DirtyBrowser currentMethod: "editingProbe".
+      DirtyBrowser updateSourceView: "original source".
+      DirtyBrowser sourceView text: "unsaved draft".
+      DirtyBrowser markSourceModified.
+      DirtyBrowser refresh.
+      Preserved := (DirtyBrowser sourceView text = "unsaved draft") and: [
+        (DirtyBrowser currentClass = "Object") and: [
+          (DirtyBrowser currentMethod = "editingProbe") and: [ DirtyBrowser hasUnsavedChanges ]
+        ]
+      ].
+      DirtyBrowser close.
+      Preserved
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "Transcript retains text across window close and reopen":
+    if not hasGuiDisplay():
+      skip()
+
+    let interp = ideInterp()
+    let (value, err) = interp[].doit("""
+      Transcript clear.
+      Transcript show: "before opening".
+      Transcript open.
+      FirstTranscriptWindow := Transcript current window.
+      Transcript open.
+      SameWindow := FirstTranscriptWindow == Transcript current window.
+      FirstTranscriptWindow close.
+      GtkWidget flushEvents: 10.
+      Transcript show: " after closing".
+      Transcript open.
+      Retained := Transcript current sourceView text = "before opening after closing".
+      Transcript current window close.
+      GtkWidget flushEvents: 10.
+      SameWindow and: [ Retained ]
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
   test "Browser can open and close through owner callback":
     if not hasGuiDisplay():
       skip()
@@ -418,6 +519,90 @@ suite "GTK automation helpers":
     check(err.len == 0)
     check(result.kind == vkString)
     check(result.strVal == "Probe")
+
+  test "Workspace and Transcript report structured evaluation outcomes":
+    if not hasGuiDisplay():
+      skip()
+
+    let interp = ideInterp()
+    let (value, err) = interp[].doit("""
+      Work := Workspace openFor: nil id: 501.
+      Good := Work doIt: "3 + 4".
+      Bad := Work doIt: "UnknownThing sendMessage".
+      LiteralError := Work doIt: "\"Error: not a failure\"".
+      Work text: "6 * 7".
+      Transcript clear.
+      Evaluated := Work doItSelection.
+      TranscriptReported := Transcript contents includesSubString: "42".
+      Work text: "UnknownThing sendMessage".
+      TranscriptFailed := Work doItSelection isNil.
+      Work window close.
+      GtkWidget flushEvents: 10.
+      (Good at: "ok") and: [
+        ((Good at: "value") = 7) and: [
+          ((Bad at: "ok") not) and: [
+            ((Bad at: "error") isEmpty not) and: [
+              ((LiteralError at: "ok") and: [ (LiteralError at: "value") = "Error: not a failure" ]) and: [
+                (Evaluated = 42) and: [ TranscriptReported and: [ TranscriptFailed ] ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "Builder loads and persists an application's real source":
+    if not hasGuiDisplay():
+      skip()
+
+    createDir("build")
+    let directory = createTempDir("builder-source-", "", "build")
+    defer: removeDir(directory)
+    let path = directory / "builderProbe.hrd"
+    let original = """# builder probe file
+BuilderProbeApp := Application derive: #().
+BuilderProbeApp>>main: args [
+  Transcript showCr: "original"
+  ^ 0
+].
+BuilderProbeOther := 7.
+"""
+    writeFile(path, original)
+
+    let interp = ideInterp()
+    interp[].globals["BuilderProbePath"] = toValue(path)
+    let (value, err) = interp[].doit("""
+      Owner := Object derive.
+      Owner>>addWindow: aWindow [ ^ self ].
+      Owner>>removeWindow: aWindow [ ^ self ].
+      Harding load: BuilderProbePath.
+      Built := Builder openFor: Owner new.
+      Built model currentApp: BuilderProbeApp.
+      Built loadApp: BuilderProbeApp.
+      LoadedSource := Built appEditor text.
+      Built appEditor text: "main: args [
+  Transcript showCr: \"edited\"
+  ^ 0
+]".
+      Built markAppSourceModified.
+      Dirty := Built hasUnsavedChanges.
+      Built saveCurrentApp.
+      GtkWidget flushEvents: 5.
+      Built onClose.
+      (LoadedSource includesSubString: "original") and: [ Dirty ]
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
+    let saved = readFile(path)
+    check(saved.contains("edited"))
+    check(not saved.contains("original"))
+    check(saved.contains("BuilderProbeOther := 7."))
+    check(saved.contains("# builder probe file"))
 
   test "Builder openFor returns Builder instance":
     if not hasGuiDisplay():

@@ -63,7 +63,7 @@ suite "Stdlib: IO and package loading":
       HasStdout := Harding includesKey: "Stdout".
       HasStderr := Harding includesKey: "Stderr".
       HasStdin := Harding includesKey: "Stdin".
-      Result := HasStdout & HasStderr & HasStdin
+      Result := HasStdout and: [ HasStderr and: [ HasStdin ] ]
     """)
     check(err.len == 0)
     if err.len == 0:

@@ -10,9 +10,10 @@ GraniteLib := Harding at: "GraniteLibrary" ifAbsent: [
 ]
 GraniteLib at: "__sourceDir" put: "lib/granite"
 
-GraniteLib isEmpty ifTrue: [
+(GraniteLib at: "__initialized" ifAbsent: [ false ]) ifFalse: [
   GraniteLib load: "Application.hrd"
   GraniteLib load: "Granite.hrd"
+  GraniteLib at: "__initialized" put: true
 ]
 
 Harding import: GraniteLib

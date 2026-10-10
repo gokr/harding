@@ -23,6 +23,8 @@ Browser>>catalog [
     ^ model catalog
 ]
 
+Browser>>sourceView [ ^ sourceView ]
+
 Browser>>currentLibrary [ ^ model currentLibrary ]
 Browser>>currentLibrary: aValue [ model currentLibrary: aValue. ^ self ]
 Browser>>currentClass [ ^ model currentClass ]
@@ -722,64 +724,26 @@ Browser>>methodTextFromInfo: info [
     ^ self catalog methodTextFromInfo: info
 ]
 
-Browser>>managedMethodInfosForCurrentClass [
-    | infos i entries info file selector |
-    infos := Array new
-    self currentClass isNil ifTrue: [ ^ infos ]
-    self currentMethodFile isNil ifTrue: [ ^ infos ]
-
-    entries := self catalog sourceEntriesForClass: self currentClass
-    i := 0
-    [ i < entries size ] whileTrue: [
-        info := entries at: i
-        file := info at: "file" ifAbsent: [ nil ]
-        selector := info at: "selector" ifAbsent: [ nil ]
-        ((file = self currentMethodFile) and: [ selector ~= "<classDefinition>" ]) ifTrue: [
-            infos add: info
-        ]
-        i := i + 1
-    ]
-
-    ^ infos
-]
-
 Browser>>rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: overrideSelector methodText: overrideMethodText removeSelector: removeSelector [
-    | infos parts i info selector replaced text |
-    infos := self managedMethodInfosForCurrentClass
-    parts := Array new
-    replaced := false
-
-    classDefText notNil ifTrue: [
-        classDefText trim isEmpty ifFalse: [
-            parts add: classDefText trim
-        ]
-    ]
-
-    i := 0
-    [ i < infos size ] whileTrue: [
-        info := infos at: i
-        selector := (info at: "header" ifAbsent: [ nil ])
-            ifNotNil: [:header | self editableHeaderFromMethodHeader: header]
-
-        selector = removeSelector ifFalse: [
-            selector = overrideSelector
-                ifTrue: [
-                    overrideMethodText notNil ifTrue: [ parts add: overrideMethodText trim ]
-                    replaced := true
-                ]
-                ifFalse: [ parts add: (self methodTextFromInfo: info) trim ]
-        ]
-        i := i + 1
-    ]
-
-    (overrideSelector notNil and: [ overrideMethodText notNil and: [ replaced not ] ]) ifTrue: [
-        parts add: overrideMethodText trim
-    ]
-
-    text := self linesToText: parts
-    File write: text to: self currentMethodFile
-    self reloadCurrentMethodFile
-    ^ text
+    | editOwner selector replacement deleting response |
+    editOwner := self currentMethodOwnerClass.
+    editOwner isNil ifTrue: [ editOwner := self currentClass ].
+    deleting := removeSelector notNil.
+    selector := deleting ifTrue: [ removeSelector ] ifFalse: [ overrideSelector ].
+    replacement := overrideMethodText.
+    selector isNil ifTrue: [
+        selector := "<classDefinition>".
+        editOwner := self currentClass.
+        replacement := classDefText
+    ].
+    deleting ifTrue: [ replacement := "" ].
+    response := Harding editSourceFile: self currentMethodFile
+        owner: editOwner selector: selector replacement: replacement delete: deleting.
+    (response at: "ok") ifFalse: [
+        Transcript showCr: (response at: "error").
+        ^ nil
+    ].
+    ^ response at: "source"
 ]
 
 Browser>>saveCurrentMethod [
@@ -797,7 +761,8 @@ Browser>>saveCurrentMethod [
             Transcript showCr: "Could not refresh class definition location; save aborted"
             ^ self
         ]
-        self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil
+        (self rewriteManagedClassFileWithClassDefinition: classText overridingSelector: nil methodText: nil removeSelector: nil) isNil ifTrue: [ ^ self ].
+        self reloadCurrentMethodFile.
         refreshed := self refreshCurrentMethodLocation
         refreshed ifTrue: [ self updateSourceView: classText ]
         Transcript showCr: ("Saved class definition for " & self currentClass & " to " & self currentMethodFile)
@@ -844,7 +809,7 @@ Browser>>saveCurrentMethod [
         index := index + 1
     ]
 
-    methodText := fullHeader & " [\n" & (self linesToText: bodyLines) & "\n]" & self currentMethodSuffix
+    methodText := fullHeader & " [\n" & (self linesToText: bodyLines) & "\n]"
     classDefText := self sourceView text
     (self currentClass notNil and: [ self currentMethodFile notNil ]) ifTrue: [
         | classInfo |
@@ -854,7 +819,7 @@ Browser>>saveCurrentMethod [
         ]
     ]
 
-    self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: selectorLine methodText: methodText removeSelector: nil
+    (self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: selectorLine methodText: methodText removeSelector: nil) isNil ifTrue: [ ^ self ]
 
     self installMethodInImage: fullHeader bodyLines: bodyLines
     self reloadCurrentMethodFile
@@ -874,30 +839,28 @@ Browser>>saveCurrentMethod [
 ]
 
 Browser>>reloadCurrentMethodFile [
-    | result |
+    | failure |
     self currentMethodFile isNil ifTrue: [ ^ self ]
 
-    result := [ Harding load: self currentMethodFile ]
-        on: Exception
-        do: [:ex | "IDE_ERROR: " & ex printString ]
+    failure := [ Harding load: self currentMethodFile. nil ]
+        on: LoadError
+        do: [:ex | ex message ].
 
-    ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
-        Transcript showCr: ("Failed to reload file: " & result)
+    failure notNil ifTrue: [
+        Transcript showCr: ("Failed to reload file: " & failure)
     ]
 ]
 
 Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
-    | methodText bodyText result selector classObj installed |
+    | methodText bodyText evaluation selector classObj installed |
     bodyText := self linesToText: bodyLines
     methodText := fullHeader & " [\n" & bodyText & "\n]"
     selector := self editableHeaderFromMethodHeader: fullHeader
 
-    result := [ Object eval: methodText ]
-        on: Exception
-        do: [:ex | "IDE_ERROR: " & ex printString ]
+    evaluation := Object evaluate: methodText
 
-    ((result isKindOf: String) and: [ self isErrorResult: result ]) ifTrue: [
-        Transcript showCr: ("Failed to install method in image: " & result)
+    (evaluation at: "ok") ifFalse: [
+        Transcript showCr: ("Failed to install method in image: " & (evaluation at: "error"))
         ^ self
     ]
 
@@ -911,20 +874,6 @@ Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
     installed ifFalse: [
         Transcript showCr: ("Method install verification failed for " & selector)
     ]
-]
-
-Browser>>isErrorResult: result [
-    ^ (result isKindOf: String)
-        and: [
-            (result startsWith: "IDE_ERROR:")
-                or: [
-                    (result startsWith: "Error:")
-                        or: [
-                            (result startsWith: "Runtime error:")
-                                or: [ result startsWith: "Parse error:" ]
-                        ]
-                ]
-        ]
 ]
 
 Browser>>linesToText: lines [
@@ -951,6 +900,10 @@ Browser>>updateSourceView: aString [
 ]
 
 Browser>>refresh [
+    self hasUnsavedChanges ifTrue: [
+        Transcript showCr: "Browser refresh deferred: editor has unsaved changes".
+        ^ self
+    ].
     classPane clear
     categoryPane clear
     methodPane clear
@@ -1086,7 +1039,7 @@ Browser>>deleteCurrentMethod [
             (classInfo at: "found" ifAbsent: [ false ]) ifTrue: [
                 classDefText := classInfo at: "source"
             ]
-            self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: self currentMethod
+            (self rewriteManagedClassFileWithClassDefinition: classDefText overridingSelector: nil methodText: nil removeSelector: self currentMethod) isNil ifTrue: [ ^ self ]
 
             self removeMethodFromClass: self currentMethod
 
