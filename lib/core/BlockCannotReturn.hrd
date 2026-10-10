@@ -1,0 +1,14 @@
+#!/usr/bin/env harding
+#
+# BlockCannotReturn.hrd - BlockCannotReturn class.
+
+BlockCannotReturn := Error derive
+# BlockCannotReturn signals a non-local return whose home invocation has ended.
+# A block's ^ transfers control to the particular invocation of the lexically
+# enclosing method that created the block. Once that invocation has exited, the
+# block may still be evaluated and its captured variables remain usable, but
+# there is no longer an invocation to return from, so ^ reports this error.
+# It specializes Error because the return cannot be honoured at all; unlike a
+# resumable notification, no handler action can supply a meaningful result.
+# Keep this distinct from the internal transfer used while the home invocation is
+# still active: application handlers for Error must not intercept that transfer.

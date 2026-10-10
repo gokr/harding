@@ -8590,7 +8590,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Run `ensure:` cleanups for the scopes this return leaves. A local return
     # exits the current activation; a non-local return exits everything in
     # between, so cleanups run innermost first before the unwind proceeds.
-    var returnCleanups: seq[CleanupEntry] = @[]
     if isNonLocalReturn:
       var targetDepth = 0
       var foundTarget = false
@@ -8600,9 +8599,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           foundTarget = true
           break
       if foundTarget:
-        returnCleanups = interp.collectPendingCleanups(targetDepth)
+        # Run the cleanups for the scopes this return exits, innermost first,
+        # while those scopes are still live. A cleanup that signals or returns
+        # propagates in place of this return.
+        interp.runPendingCleanups(targetDepth)
     else:
-      returnCleanups = interp.collectPendingCleanups(interp.activationStack.len - 1)
+      interp.runPendingCleanups(interp.activationStack.len - 1)
 
     # Fast path for ordinary local method returns (legacy executeMethod path).
     # Do not unwind workQueue here, because queued frames may belong to caller
@@ -8621,13 +8623,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         break
 
     if not targetOnStack:
-      # Target method already returned (escaped block with non-local return).
-      # Treat as local return: set hasReturned on current activation so
-      # wfPopActivation will propagate the value up correctly.
-      if interp.currentActivation != nil:
-        interp.currentActivation.hasReturned = true
-        interp.currentActivation.returnValue = returnVal
-      interp.pushValue(returnVal)
+      # The home invocation has already finished. The block can still be
+      # evaluated and its captured variables remain usable, but there is no
+      # longer an invocation to return from, so report BlockCannotReturn rather
+      # than silently treating this as a local block result.
+      interp.signalExceptionByName("BlockCannotReturn",
+        "Block cannot return: home activation is no longer active")
       return true
 
     # Unwind: pop work frames and activations until we find the target

@@ -12,9 +12,9 @@ python3 scripts/test_granite_parity.py
 ```
 
 The focused parity runner checks both engines against explicit expected output.
-`inactive_return_target` is labeled separately as a compiled-error check because
-the VM currently permits returns to completed homes. Optional case names select
-focused runs, e.g. `python3 scripts/test_granite_parity.py recursive_return_target`.
+Both engines signal `BlockCannotReturn` for a return to a finished home, so
+`inactive_return_target` is ordinary parity. Optional case names select focused
+runs, e.g. `python3 scripts/test_granite_parity.py recursive_return_target`.
 Each invocation uses a separate directory under `build/parity/`. Build logs and
 engine output are retained. Execution defaults to a 30-second limit; compilation
 defaults to 120 seconds. A timeout, failed build, failed engine, or incorrect
@@ -28,8 +28,8 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Twenty-seven successful-output parity cases, two unhandled-error parity checks,
-and one explicit compiled-only inactive-return check pass. Coverage includes class-side and inherited
+Thirty-three parity cases pass, including two unhandled-error checks and the
+inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
@@ -47,12 +47,12 @@ effects. Method/block temporaries are declared
 at scope entry; inline collection loops allocate parameter bindings on each
 iteration. Compiled blocks retain a unique home-invocation return target;
 recursive callbacks and nested-loop returns pass. Targets become inactive on exit,
-and escaped non-local returns raise native BlockCannotReturnError. The recursive
-callback regression also passes under ORC. The VM still treats completed-home
-returns as local block returns. The accepted [exception model](EXCEPTION_MODEL.md)
-removes arbitrary error resumption: integrate inactive-home errors with conventional
-Harding errors and guarantee `ensure:` cleanup. Both engines must migrate together;
-synchronous notifications do not require signal-point restoration.
+and a later return signals `BlockCannotReturn`, which both engines raise as an
+`Error` subclass. The recursive callback regression also passes under ORC. The
+accepted [exception model](EXCEPTION_MODEL.md) removes arbitrary error resumption;
+inactive-home returns, conventional errors and `ensure:` cleanup are integrated
+across both engines, and synchronous notifications do not require signal-point
+restoration.
 
 The first error-model slice abandons VM protected work before handler execution
 and excludes executing handlers from catching their own failures. Both engines

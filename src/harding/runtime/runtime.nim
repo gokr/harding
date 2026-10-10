@@ -317,7 +317,8 @@ proc compiledExceptionClassValue*(name: string): NodeValue =
     compiledClasses[name] = newClass(slotNames = @["message"], name = name)
   if name == "Error" or name == "Notification":
     registerSuperclass(name, "Exception")
-  elif name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds"]:
+  elif name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds",
+                "BlockCannotReturn"]:
     registerSuperclass(name, "Error")
   return compiledClassValue(name)
 
@@ -329,13 +330,13 @@ proc isCompiledExceptionClass(name: string): bool =
     current = getSuperclassName(current)
   return false
 
-proc compiledErrorValue(name, message: string): NodeValue =
+proc compiledErrorValue*(name, message: string): NodeValue =
   let clsValue = compiledExceptionClassValue(name)
   let instance = newInstance(clsValue.classVal)
   instance.slots[0] = NodeValue(kind: vkString, strVal: message)
   return instance.toValue()
 
-proc raiseCompiledError(value: NodeValue): NodeValue =
+proc raiseCompiledError*(value: NodeValue): NodeValue =
   let className = if value.kind == vkInstance and value.instVal != nil and value.instVal.class != nil:
                     value.instVal.class.name
                   else:

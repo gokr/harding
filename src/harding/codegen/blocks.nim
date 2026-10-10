@@ -689,14 +689,16 @@ proc genBlockRuntimeHelpers*(): string =
 type
   CompiledReturnTarget* = ref object
     active*: bool
-  BlockCannotReturnError* = object of CatchableError
   NonLocalReturnException* = object of CatchableError
     value*: NodeValue
     target*: CompiledReturnTarget
 
 proc raiseNonLocalReturn*(target: CompiledReturnTarget, value: NodeValue): NodeValue =
   if target == nil or not target.active:
-    raise newException(BlockCannotReturnError, "Block cannot return: home activation is no longer active")
+    # Surface this as a Harding BlockCannotReturn so application `on: Error do:`
+    # handlers can catch it, matching the interpreter.
+    discard raiseCompiledError(compiledErrorValue("BlockCannotReturn",
+      "Block cannot return: home activation is no longer active"))
   raise (ref NonLocalReturnException)(value: value, target: target)
 
 proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): NodeValue =

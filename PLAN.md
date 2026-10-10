@@ -126,9 +126,16 @@ arbitrary error resumption solely in the interpreter.
 - [x] Test recursive callbacks and nested-loop returns; explicitly test compiled
       rejection of escaped-block returns rather than claiming VM parity.
 - [x] Detect inactive compiled home targets with native BlockCannotReturnError.
-- [ ] Correct VM inactive-home returns (currently treated as local returns),
-      update legacy tests using escaped `^` as ordinary block results, and
-      integrate compiler errors with the accepted non-resumable error contract.
+- [x] Correct VM inactive-home returns: a return whose home invocation has
+      finished now signals `BlockCannotReturn` instead of silently acting as a
+      local block result. Both engines raise the same catchable Error subclass,
+      and `inactive_return_target` is now real parity rather than a compiled-only
+      check. Legacy tests that used escaped `^` as an ordinary block result were
+      migrated to final expressions, and one test that never invoked its block
+      was corrected.
+- [ ] Audit remaining uses of escaped `^` across examples, benchmarks, docs and
+      external libraries; run those suites to confirm nothing still depends on
+      the previous silent behaviour.
 - [ ] Ensure cleanup executes while unwinding.
 
 ## 4. Complete object-model dispatch

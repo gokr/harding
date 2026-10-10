@@ -254,13 +254,37 @@ suite "Ensure Cleanup":
     check(result[1].len == 0)
     check(result[0][^1].strVal == "12")
 
+  test "return to a finished home signals BlockCannotReturn":
+    let result = interp.evalStatements("""
+      Maker := Object derive: #().
+      Maker>>make [ ^ [^ 42] ].
+      blk := Maker new make.
+      Result := [blk value] on: Error do: [ :ex | ex message ].
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal ==
+      "Block cannot return: home activation is no longer active")
+
+  test "a finished home does not stop ordinary closure evaluation":
+    let result = interp.evalStatements("""
+      Maker := Object derive: #().
+      Maker>>make [ | n | n := 0. ^ [n := n + 1. n] ].
+      blk := Maker new make.
+      Result := (blk value asString) & ":" & (blk value asString).
+      Result
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].strVal == "1:2")
+
   test "cleanup runs on a non-local return and the return wins":
     let result = interp.evalStatements("""
       Count := 0.
       Returns := Object derive: #().
       Returns>>run [ [ ^ 11 ] ensure: [ Count := Count + 1 ] ].
       Result := Returns new run.
-      Result
+      (Result asString) & ":" & (Count asString)
     """)
     check(result[1].len == 0)
-    check(result[0][^1].intVal == 11)
+    # Both the returned value and the cleanup side effect must hold.
+    check(result[0][^1].strVal == "11:1")

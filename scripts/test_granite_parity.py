@@ -280,12 +280,15 @@ result println.
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),
+    # Both engines now reject a return to a finished home, so this is ordinary
+    # parity rather than a compiled-only error check.
     ("inactive_return_target", """
 Maker := Object derive: #().
 Maker>>make [ ^ [^ 42] ].
 blk := Maker new make.
-blk value.
-""", None),
+result := [blk value] on: Error do: [:ex | ex message].
+result println.
+""", "Block cannot return: home activation is no longer active\n"),
     ("loop_non_local_return", """
 Finder := Object derive: #().
 Finder>>loop [

@@ -87,6 +87,14 @@ block evaluation after the creating invocation completes.
 
 ## Migration and validation
 
+A non-local return targets the particular invocation of the lexically enclosing
+method that created the block. Once that invocation has finished, the block can
+still be evaluated and its captured variables remain usable, but there is no
+invocation to return from, so `^` signals `BlockCannotReturn`, an `Error`
+subclass. Both engines agree, so this is ordinary parity. Internal return
+transfers while the home invocation is still active remain invisible to
+application handlers.
+
 `ensure:` now runs cleanup exactly once on normal completion, on errors and on
 lexical non-local returns, innermost first. Cleanups execute as work frames on
 the normal stackless path, and a scope is marked running before its cleanup body

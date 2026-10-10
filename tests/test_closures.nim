@@ -20,11 +20,14 @@ suite "Interpreter: Block Evaluation":
     interp = sharedInterp
 
   test "blocks can be stored and evaluated later":
+    # The block is stored in a slot and invoked after the creating scope has
+    # ended. Its result comes from its final expression; ^ would be a return to
+    # an invocation that no longer exists.
     let result = interp.evalStatements("""
-    MyClass := Object derive.
-    MyClass selector: #block put: [ ^42 ].
+    MyClass := Object derivePublic: #(block).
     Obj := MyClass new.
-    Result := Obj block
+    Obj block: [ 42 ].
+    Result := Obj block value
     """)
 
     check(result[1].len == 0)
@@ -50,7 +53,7 @@ suite "Interpreter: Block Evaluation":
         count := 0.
         ^[
           count := count + 1.
-          ^count
+          count
         ]
       ].
 
@@ -79,7 +82,7 @@ suite "Interpreter: Lexical Closures":
       Maker := Object derive.
       Maker >> makeCounter [ | count |
         count := 0.
-        ^[ count := count + 1. ^count ]
+        ^[ count := count + 1. count ]
       ].
 
       Maker2 := Maker new.
@@ -102,9 +105,9 @@ suite "Interpreter: Lexical Closures":
       Maker := Object derive.
       Maker >> makePair [ | value incBlock decBlock getBlock arr |
         value := 10.
-        incBlock := [ value := value + 1. ^value ].
-        decBlock := [ value := value - 1. ^value ].
-        getBlock := [ ^value ].
+        incBlock := [ value := value + 1. value ].
+        decBlock := [ value := value - 1. value ].
+        getBlock := [ value ].
         arr := Array new.
         arr add: getBlock.
         arr add: incBlock.
@@ -130,9 +133,9 @@ suite "Interpreter: Lexical Closures":
   test "closures capture different variables from same scope":
     let result = interp.evalStatements("""
       Maker := Object derive.
-      Maker >> makeSum: x and: y [ ^[ ^x + y ] ].
-      Maker >> makeDiff: x and: y [ ^[ ^x - y ] ].
-      Maker >> makeProduct: x and: y [ ^[ ^x * y ] ].
+      Maker >> makeSum: x and: y [ ^[ x + y ] ].
+      Maker >> makeDiff: x and: y [ ^[ x - y ] ].
+      Maker >> makeProduct: x and: y [ ^[ x * y ] ].
 
       Maker2 := Maker new.
       SumBlock := Maker2 makeSum: 10 and: 20.
@@ -154,8 +157,8 @@ suite "Interpreter: Lexical Closures":
 Maker := Object derive.
 Maker selector: #makeAdder: put: [ :x |
   ^[ :y |
-    ^[ :z |
-      ^x + y + z
+    [ :z |
+      x + y + z
     ]
   ]
 ].
@@ -177,7 +180,7 @@ Add5and10 value: 15
       Factory := Object derive.
       Factory >> create: base [ | multiplier |
         multiplier := base * 2.
-        ^[ :val | ^val * multiplier ]
+        ^[ :val | val * multiplier ]
       ].
 
       Factory2 := Factory new.
