@@ -96,6 +96,18 @@ registry-full.json
 src/harding/external/external_libs_generated.nim
 src/harding/external/generator
 
+# Git worktrees (nested checkouts must never be committed)
+worktrees/
+
+# Build/assessment logs
+*.log
+
+# Conversation and tooling artifacts
+conv-*-backup.json
+conv-*-projection-backup.json
+mend_*.py
+repair_conversation.py
+
 # SQLite databases
 *.db
 badminton-buddy/badminton.db
