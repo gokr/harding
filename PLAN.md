@@ -130,9 +130,17 @@ arbitrary error resumption solely in the interpreter.
 
 ## 6. Optimize after semantic coverage
 
+Measured baseline and methodology: [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md).
+On the trial-division benchmark Granite native is ~89x faster than the release
+interpreter but ~40x slower than C and ~25x slower than Nim, consistent with
+tagged values and dynamic dispatch. Use that benchmark to evaluate the items
+below rather than relying on impressions.
+
 - [ ] Direct calls and specialization.
 - [ ] Unboxing.
 - [ ] Dispatch caching.
+- [ ] Add an object/allocation-heavy benchmark (e.g. `benchmark/towers.hrd`) so
+      optimization work is not guided by an arithmetic loop alone.
 
 ## Validation entry points
 
