@@ -1,4 +1,4 @@
-import std/[unittest]
+import std/[unittest, os, strutils, tempfiles, tables]
 
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
@@ -24,6 +24,110 @@ proc newHeadlessToolInterpreter(): Interpreter =
     loadHeadlessToolFile(result, path)
 
 suite "Bona headless models":
+  test "Browser rewrite preserves shared files and rejects invalid source":
+    var interp = newHeadlessToolInterpreter()
+    loadHeadlessToolFile(interp, "lib/gui/bona/Browser.hrd")
+    loadHeadlessToolFile(interp, "lib/gui/bona/Transcript.hrd")
+    createDir("build")
+    let directory = createTempDir("browser-edit-", "", "build")
+    defer: removeDir(directory)
+    let path = directory / "shared.hrd"
+    let original = """# shared file
+BrowserEditFoo := Object derive: #().
+BrowserEditFoo>>answer [ ^ 1 ]. # keep this
+BrowserEditBar := Object derive: #().
+BrowserEditBar>>answer [ ^ 2 ].
+BrowserEditSentinel := 42.
+"""
+    writeFile(path, original)
+    interp.globals[]["BrowserEditPath"] = toValue(path)
+    let (value, err) = interp.doit("""
+      EditingBrowser := Browser new.
+      EditingBrowser currentClass: "BrowserEditFoo".
+      EditingBrowser currentMethodFile: BrowserEditPath.
+      EditingBrowser rewriteManagedClassFileWithClassDefinition: nil
+        overridingSelector: "answer" methodText: "BrowserEditFoo>>answer [ ^ 3 ]" removeSelector: nil.
+      true
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(readFile(path) == original.replace("^ 1", "^ 3"))
+
+    let (rejected, rejectErr) = interp.doit("""
+      (EditingBrowser rewriteManagedClassFileWithClassDefinition: nil
+        overridingSelector: "answer" methodText: "BrowserEditFoo>>answer [" removeSelector: nil) isNil
+    """)
+    check(rejectErr.len == 0)
+    check(rejected.kind == vkBool)
+    check(rejected.boolVal)
+    check(readFile(path) == original.replace("^ 1", "^ 3"))
+
+    let (_, deleteErr) = interp.doit("""
+      EditingBrowser rewriteManagedClassFileWithClassDefinition: nil
+        overridingSelector: nil methodText: nil removeSelector: "answer"
+    """)
+    check(deleteErr.len == 0)
+    check(readFile(path) == original.replace("BrowserEditFoo>>answer [ ^ 1 ]", ""))
+
+  test "default bootstrap loads Granite classes and preserves identity on reload":
+    var interp = newHeadlessToolInterpreter()
+    let (value, err) = interp.doit("""
+      OriginalApplication := Application.
+      OriginalGranite := Granite.
+      Harding load: "lib/granite/Bootstrap.hrd".
+      Application isClass and: [
+        Granite isClass and: [
+          (Application == OriginalApplication) and: [
+            Granite == OriginalGranite
+          ]
+        ]
+      ]
+    """)
+
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "Granite bootstrap initializes a library containing metadata":
+    var interp = newInterpreter()
+    initGlobals(interp)
+    initProcessorGlobal(interp)
+    loadStdlib(interp)
+    let (value, err) = interp.doit("""
+      (GraniteLibrary at: "__sourceDir") = "lib/granite" and: [
+        (GraniteLibrary at: "__initialized") and: [
+          (GraniteLibrary at: "Application") isClass and: [
+            (GraniteLibrary at: "Granite") isClass
+          ]
+        ]
+      ]
+    """)
+
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "Transcript retains bounded output while its window is closed":
+    var interp = newHeadlessToolInterpreter()
+    loadHeadlessToolFile(interp, "lib/gui/bona/Transcript.hrd")
+    let (value, err) = interp.doit("""
+      Transcript clear.
+      Transcript show: "early".
+      Transcript cr.
+      Transcript showSpace: 42.
+      Transcript tab.
+      SavedTranscript := Transcript contents.
+      Transcript current onDestroy.
+      Retained := Transcript contents = SavedTranscript.
+      Transcript show: ("x" repeat: 70000).
+      Bounded := Transcript contents size = 65536.
+      Transcript clear.
+      Retained and: [ Bounded and: [ Transcript contents isEmpty ] ]
+    """)
+    check(err.len == 0)
+    check(value.kind == vkBool)
+    check(value.boolVal)
+
   test "Catalog lists libraries and resolves Object":
     var interp = newHeadlessToolInterpreter()
     let (result, err) = interp.doit("""

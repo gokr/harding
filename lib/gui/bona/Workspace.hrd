@@ -162,9 +162,24 @@ Workspace>>workspaceId: anId [
 ]
 
 Workspace>>doIt: codeString [
-    ^ [ Object eval: codeString ]
-        on: Exception
-        do: [:ex | "IDE_ERROR: " & ex printString ]
+    # Returns a structured evaluation result: ok, value, error.
+    ^ Object evaluate: codeString
+]
+
+Workspace>>evaluationValue: evaluation [
+    ^ evaluation at: "value"
+]
+
+Workspace>>evaluationError: evaluation [
+    ^ evaluation at: "error"
+]
+
+Workspace>>reportEvaluationError: evaluation [
+    | message |
+    message := self evaluationError: evaluation.
+    self showError: message.
+    self showErrorDialog: message.
+    ^ nil
 ]
 
 Workspace>>notifyCodeChanged [
@@ -174,63 +189,58 @@ Workspace>>notifyCodeChanged [
     ^ self
 ]
 
-Workspace>>isErrorResult: result [
-    ^ (result isKindOf: String)
-        and: [
-            (result startsWith: "IDE_ERROR:")
-                or: [
-                    (result startsWith: "Error:")
-                        or: [
-                            (result startsWith: "Runtime error:")
-                                or: [ result startsWith: "Parse error:" ]
-                        ]
-                ]
-        ]
+Workspace>>displayStringFor: result [
+    (result isClass) ifTrue: [
+        ^ "<class " & result name & ">"
+    ].
+    result isNil ifTrue: [ ^ "nil" ].
+    ^ result printString
+]
+
+Workspace>>printItStringFor: result [
+    ^ " " & (self displayStringFor: result)
 ]
 
 Workspace>>doItSelection [
-    # Do It - evaluate selected text or current line
-    | code result |
+    # Do It - evaluate selected text or current line and report the result
+    | code evaluation result |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [
-        self showError: "No code selected/current line to evaluate"
+        self showError: "No code selected/current line to evaluate".
         ^ nil
     ]
 
-    result := self doIt: code
-    (self isErrorResult: result) ifTrue: [
-        self showError: result
-        self showErrorDialog: result
-        ^ nil
-    ]
+    evaluation := self doIt: code.
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
+    ].
 
-    self clearError
-    self notifyCodeChanged
+    self clearError.
+    self notifyCodeChanged.
+    result := self evaluationValue: evaluation.
+    Transcript showCr: (self displayStringFor: result).
     ^ result
 ]
 
 Workspace>>printItSelection [
     # Print It - evaluate and insert result after selection or at end of current line
     # The inserted text is then selected so it can be easily deleted
-    | code result resultString insertPos insertedEnd |
+    | code evaluation result resultString insertPos insertedEnd |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [
         self showError: "No code selected/current line to evaluate"
         ^ nil
     ]
 
-    result := self doIt: code
-    (self isErrorResult: result) ifTrue: [
-        self showError: result
-        self showErrorDialog: result
-        ^ nil
+    evaluation := self doIt: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
     ]
 
     self clearError
     self notifyCodeChanged
-    resultString := (result isClass)
-        ifTrue: [ "<class " & result name & ">" ]
-        ifFalse: [ result printString ]
+    result := self evaluationValue: evaluation
+    resultString := self printItStringFor: result
 
     # Insert result after selection or at end of current line
     insertPos := sourceView insertTextAtSelectedEnd: resultString
@@ -251,22 +261,21 @@ Workspace>>printItSelection [
 
 Workspace>>inspectItSelection [
     # Inspect It - evaluate and open inspector on result
-    | code result |
+    | code evaluation result |
     code := self evaluationSourceCode
     code isEmpty ifTrue: [
         self showError: "No code selected/current line to evaluate"
         ^ nil
     ]
 
-    result := self doIt: code
-    (self isErrorResult: result) ifTrue: [
-        self showError: result
-        self showErrorDialog: result
-        ^ nil
+    evaluation := self doIt: code
+    (evaluation at: "ok") ifFalse: [
+        ^ self reportEvaluationError: evaluation
     ]
 
     self clearError
     self notifyCodeChanged
+    result := self evaluationValue: evaluation
     result notNil ifTrue: [
         result inspect
         Transcript showCr: ("Inspecting: " & (result printString))
@@ -328,7 +337,7 @@ Workspace>>clearError [
 ]
 
 Workspace>>evalAll [
-    # Evaluate all code in the workspace
+    # Evaluate all code in the workspace; returns a structured evaluation result
     ^self doIt: sourceView text
 ]
 
@@ -351,6 +360,17 @@ Workspace>>sourceView: aSourceView [
 
 Workspace>>owner: anOwner [
     owner := anOwner
+]
+
+Workspace>>filePath: aPath [
+    # Redirect the workspace file; defaults to workspace-<id>.hrd in the current directory.
+    # Callers that should not write into the working directory (tests, embedded use)
+    # set an absolute path here before the window is closed.
+    filePath := aPath
+]
+
+Workspace>>filePath [
+    ^filePath
 ]
 
 Workspace>>window [

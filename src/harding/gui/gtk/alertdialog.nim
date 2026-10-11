@@ -20,6 +20,10 @@ type
 var asyncDialogRegistry*: Table[int, AsyncDialogCallback] = initTable[int, AsyncDialogCallback]()
 var asyncDialogIdCounter*: int = 0
 
+proc newAlertDialog*(message: string): GtkAlertDialog =
+  ## Create a dialog with literal message text, not a printf format.
+  gtkAlertDialogNew("%s".cstring, message.cstring)
+
 ## C callback for async dialog completion
 proc alertDialogCallback*(sourceObject: pointer, result: pointer, userData: pointer) {.cdecl.} =
   ## GTK callback when dialog button is clicked
@@ -34,18 +38,22 @@ proc alertDialogCallback*(sourceObject: pointer, result: pointer, userData: poin
 
   # Get the selected button index
   let dialog = cast[GtkAlertDialog](sourceObject)
-  let buttonIndex = gtkAlertDialogChooseFinish(dialog, result)
+  var dialogError: pointer = nil
+  let buttonIndex = gtkAlertDialogChooseFinish(dialog, result, addr(dialogError))
+  if dialogError != nil:
+    gErrorFree(dialogError)
+  gObjectUnref(dialog)
   
   debug("AlertDialog callback: buttonIndex=", buttonIndex, " dialogId=", dialogId)
 
   # Schedule the appropriate block based on button clicked
-  # For yes/no dialogs: 0 = yes, 1 = no, -1 = cancelled
+  # Treat cancellation as declining a confirmation.
   var blockToRun: BlockNode = nil
 
   if buttonIndex == 0 and callback.yesBlock != nil:
     debug("AlertDialog: running yesBlock")
     blockToRun = callback.yesBlock
-  elif buttonIndex == 1 and callback.noBlock != nil:
+  elif buttonIndex != 0 and callback.noBlock != nil:
     debug("AlertDialog: running noBlock")
     blockToRun = callback.noBlock
   elif callback.blockNode != nil:
@@ -85,7 +93,7 @@ proc alertDialogShowImpl*(interp: var Interpreter, self: Instance, args: seq[Nod
   let responseBlock = args[2].blockVal
 
   # Create dialog
-  let dialog = gtkAlertDialogNew(message.cstring)
+  let dialog = newAlertDialog(message)
   gtkAlertDialogSetModal(dialog, 1)
 
   # Register callback
@@ -123,12 +131,12 @@ proc alertDialogConfirmImpl*(interp: var Interpreter, self: Instance, args: seq[
   let noBlock = args[3].blockVal
 
   # Create dialog with Yes/No buttons
-  let dialog = gtkAlertDialogNew(message.cstring)
+  let dialog = newAlertDialog(message)
   gtkAlertDialogSetModal(dialog, 1)
 
   # Set up buttons (NULL-terminated array required by GTK)
   var labels: array[3, cstring] = [cstring"Yes", cstring"No", nil]
-  gtkAlertDialogSetButtons(dialog, cast[cstringArray](addr(labels[0])), 2.csize_t)
+  gtkAlertDialogSetButtons(dialog, cast[cstringArray](addr(labels[0])))
   gtkAlertDialogSetCancelButton(dialog, 1)  # No is cancel
   gtkAlertDialogSetDefaultButton(dialog, 0)  # Yes is default
 

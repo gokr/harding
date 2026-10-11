@@ -440,13 +440,17 @@ when not defined(gtk3):
 
 # GTK4 AlertDialog (for simple confirmation dialogs)
 when not defined(gtk3):
-  proc gtkAlertDialogNew*(message: cstring): GtkAlertDialog {.cdecl, importc: "gtk_alert_dialog_new".}
+  proc gtkAlertDialogNew*(format: cstring): GtkAlertDialog {.cdecl, varargs, importc: "gtk_alert_dialog_new".}
+  proc gtkAlertDialogGetMessage*(dialog: GtkAlertDialog): cstring {.cdecl, importc: "gtk_alert_dialog_get_message".}
   proc gtkAlertDialogSetModal*(dialog: GtkAlertDialog, modal: cint) {.cdecl, importc: "gtk_alert_dialog_set_modal".}
-  proc gtkAlertDialogSetButtons*(dialog: GtkAlertDialog, labels: cstringArray, nLabels: csize_t) {.cdecl, importc: "gtk_alert_dialog_set_buttons".}
+  proc gtkAlertDialogSetButtons*(dialog: GtkAlertDialog, labels: cstringArray) {.cdecl, importc: "gtk_alert_dialog_set_buttons".}
   proc gtkAlertDialogSetCancelButton*(dialog: GtkAlertDialog, button: cint) {.cdecl, importc: "gtk_alert_dialog_set_cancel_button".}
   proc gtkAlertDialogSetDefaultButton*(dialog: GtkAlertDialog, button: cint) {.cdecl, importc: "gtk_alert_dialog_set_default_button".}
   proc gtkAlertDialogChoose*(dialog: GtkAlertDialog, parent: GtkWindow, cancellable: pointer, callback: pointer, userData: pointer) {.cdecl, importc: "gtk_alert_dialog_choose".}
-  proc gtkAlertDialogChooseFinish*(dialog: GtkAlertDialog, result: pointer): cint {.cdecl, importc: "gtk_alert_dialog_choose_finish".}
+  proc gtkAlertDialogChooseFinish*(dialog: GtkAlertDialog, result: pointer, error: ptr pointer): cint {.cdecl, importc: "gtk_alert_dialog_choose_finish".}
+  proc gErrorFree*(error: pointer) {.cdecl, importc: "g_error_free".}
+  proc gCancellableNew*(): pointer {.cdecl, importc: "g_cancellable_new".}
+  proc gCancellableCancel*(cancellable: pointer) {.cdecl, importc: "g_cancellable_cancel".}
 
 # GtkSeparator (for menu dividers)
 when not defined(gtk3):

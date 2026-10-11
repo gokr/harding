@@ -1,0 +1,9 @@
+#!/usr/bin/env harding
+#
+# LoadError.hrd - LoadError class.
+
+LoadError := Error derive
+# LoadError signals that a file or library source could not be loaded.
+# Failed loads signal LoadError instead of printing and returning nil.
+# Bootstrap and library loading code can catch it to report partial initialization.
+# Keep load-failure semantics here so every load path reports failures consistently.

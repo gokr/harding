@@ -7,6 +7,7 @@ import ../interpreter/objects
 import ../interpreter/activation
 import ../interpreter/frame_pool
 import ../interpreter/activation_pool
+import ../interpreter/source_editor
 
 when defined(granite):
   import ../interpreter/compiler_primitives
@@ -341,6 +342,24 @@ proc newInterpreterWithShared*(globals: ref Table[string, NodeValue],
   # Use the shared root class and root object
   result.rootClass = rootObject.class
   result.currentReceiver = rootObject
+
+proc evaluateIsolated*(interp: Interpreter, source: string): tuple[value: NodeValue, error: string] =
+  ## Evaluate with separate VM stacks, sharing image, source metadata and scheduler ownership.
+  var evaluation = newInterpreterWithShared(interp.globals, interp.rootObject,
+    interp.packageSources, trace = interp.traceExecution, maxStackDepth = interp.maxStackDepth)
+  evaluation.hardingHome = interp.hardingHome
+  evaluation.commandLineArgs = interp.commandLineArgs
+  evaluation.importedLibraries = interp.importedLibraries
+  evaluation.sourceIndex = interp.sourceIndex
+  evaluation.sourceFileKeys = interp.sourceFileKeys
+  evaluation.schedulerContextPtr = interp.schedulerContextPtr
+  evaluation.methodTableDeferRebuild = interp.methodTableDeferRebuild
+  evaluation.suppressUncaughtExit = true
+  result.value = nilValue()
+  let (values, error) = evaluation.evalStatements(source)
+  result.error = error
+  if error.len == 0 and values.len > 0:
+    result.value = values[^1]
 
 # Check stack depth to prevent infinite recursion
 proc checkStackDepth(interp: var Interpreter) =
@@ -1676,7 +1695,7 @@ proc scheduleUnwindCleanup(interp: var Interpreter, activationDepth: int,
       continue
     entry.running = true
     interp.truncateWorkQueue(entry.workQueueDepth)
-    interp.evalStack.setLen(entry.evalStackDepth)
+    interp.evalStack.setLen(min(entry.evalStackDepth, interp.evalStack.len))
     interp.restoreActivationStackTo(entry.activationDepth)
     interp.pushWorkFrame(continuation)
     interp.pushWorkFrame(newDiscardFrame())
@@ -1835,10 +1854,18 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
       interp.exceptionHandlers[i].exceptionContext = ctx
 
       if isNotification:
+        # A notification handler runs above the still-active signaling work, so
+        # nothing is discarded here.
         ctx.notificationHandlers.add(handler)
       else:
+        # Errors abandon the protected computation before the handler runs.
+        # Clamp against what is actually live: a signal can arrive from a nested
+        # call below the depth recorded at handler installation (for example one
+        # raised from doesNotUnderstand:), and setLen would otherwise grow the
+        # eval stack with padding values. truncateWorkQueue and
+        # restoreActivationStackTo only shrink, so they need no clamp.
         interp.truncateWorkQueue(handler.workQueueDepth)
-        interp.evalStack.setLen(handler.evalStackDepth)
+        interp.evalStack.setLen(min(handler.evalStackDepth, interp.evalStack.len))
         interp.restoreActivationStackTo(handler.stackDepth)
 
       interp.pushWorkFrame(newExceptionReturnFrame(i))
@@ -1863,7 +1890,15 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   if interp.suppressUncaughtExit:
     let className = if self != nil and self.class != nil: self.class.name else: "Exception"
     raise newException(EvalError, className & ": " & message)
-  
+
+  # An unhandled dispatch failure is a caller-visible error, not a fatal one:
+  # tooling (REPL, scripts, IDE evaluation) reports message-not-understood as a
+  # diagnostic and keeps running, whereas an uncaught user exception runs
+  # defaultAction and terminates. Handlers installed with on:do: are consulted
+  # before this point, so a caught dispatch failure never reaches here.
+  if self != nil and self.class != nil and self.class.name == "MessageNotUnderstood":
+    raise newException(EvalError, message)
+
   # Store uncaught exception info for potential debugger use
   interp.uncaughtException = self
   interp.uncaughtExceptionMessage = message
@@ -1919,7 +1954,7 @@ proc finishNotification(interp: var Interpreter, handlerIdx: int, value: NodeVal
   if ctx == nil:
     return value
   interp.truncateWorkQueue(ctx.notificationWorkDepth)
-  interp.evalStack.setLen(ctx.notificationEvalDepth)
+  interp.evalStack.setLen(min(ctx.notificationEvalDepth, interp.evalStack.len))
   interp.restoreActivationStackTo(ctx.signalActivationDepth)
   for visited in ctx.notificationHandlers:
     visited.consumed = false
@@ -2015,7 +2050,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
   if handler.exceptionContext != nil and handler.exceptionContext.isNotificationHandler:
     let ctx = handler.exceptionContext
     interp.truncateWorkQueue(ctx.notificationWorkDepth)
-    interp.evalStack.setLen(ctx.notificationEvalDepth)
+    interp.evalStack.setLen(min(ctx.notificationEvalDepth, interp.evalStack.len))
     interp.restoreActivationStackTo(ctx.signalActivationDepth)
     for j in countdown(handlerIdx - 1, 0):
       let outer = interp.exceptionHandlers[j]
@@ -2042,7 +2077,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
 
   # Unwind to handler install point
   interp.truncateWorkQueue(handler.workQueueDepth)
-  interp.evalStack.setLen(handler.evalStackDepth)
+  interp.evalStack.setLen(min(handler.evalStackDepth, interp.evalStack.len))
   interp.restoreActivationStackTo(handler.stackDepth)
 
   # Remove current handler
@@ -2062,7 +2097,7 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
 
       # Unwind to next handler's install point
       interp.truncateWorkQueue(nextHandler.workQueueDepth)
-      interp.evalStack.setLen(nextHandler.evalStackDepth)
+      interp.evalStack.setLen(min(nextHandler.evalStackDepth, interp.evalStack.len))
       interp.restoreActivationStackTo(nextHandler.stackDepth)
 
       # Push barrier + handler block
@@ -2095,7 +2130,7 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
 
   # Unwind to handler install point
   interp.truncateWorkQueue(handler.workQueueDepth)
-  interp.evalStack.setLen(handler.evalStackDepth)
+  interp.evalStack.setLen(min(handler.evalStackDepth, interp.evalStack.len))
   interp.restoreActivationStackTo(handler.stackDepth)
 
   # Remove handler
@@ -2258,10 +2293,14 @@ proc primitiveAllClassMethodsImpl(interp: var Interpreter, self: Instance, args:
   return newArrayInstance(arrayClass, selectors).toValue()
 
 proc primitiveErrorImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Raise an exception with the given message
+  ## Signal a Harding Error with the given message.
+  ## Signals through the exception machinery so on:do: can catch it; a Nim raise
+  ## here would unwind past the Harding handler stack and make error: uncatchable.
+  discard self
   let msg = if args.len > 0: args[0].toString()
             else: "Error"
-  raise newException(EvalError, msg)
+  signalExceptionByName(interp, "Error", msg)
+  return nilValue()
 
 proc primitiveIsKindOfImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if object is an instance of the given class or any superclass
@@ -2353,6 +2392,27 @@ proc primitiveClassConflictSelectorsImpl(interp: var Interpreter, self: Instance
     selectors.add(toValue(sel))
   return newArrayInstance(arrayClass, selectors).toValue()
 
+proc namedAccessKeyFor(inst: Instance, memberName: string): NodeValue =
+  ## Choose the key form for :: on collections and libraries.
+  ## Table literals and library bindings are string-keyed, while :: names are
+  ## written as bare identifiers; prefer a key already present on the receiver
+  ## and fall back to the documented string form rather than a symbol.
+  let symbolKey = NodeValue(kind: vkSymbol, symVal: memberName)
+  let stringKey = toValue(memberName)
+  var entries: Table[NodeValue, NodeValue] = default(Table[NodeValue, NodeValue])
+  if inst.kind == ikTable:
+    entries = inst.entries
+  else:
+    let bindings = getLibraryBindings(inst)
+    if bindings == nil:
+      return symbolKey
+    entries = bindings.entries
+  if symbolKey in entries:
+    return symbolKey
+  if stringKey in entries:
+    return stringKey
+  return stringKey
+
 proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): bool =
   ## Evaluate :: access with slot fast path and at:/at:put: fallback.
   if namedNode.receiver == nil:
@@ -2365,7 +2425,10 @@ proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): b
     return true
 
   let inst = receiverVal.instVal
-  let memberKey = NodeValue(kind: vkSymbol, symVal: namedNode.memberName)
+  var memberKey = NodeValue(kind: vkSymbol, symVal: namedNode.memberName)
+  if inst.kind == ikTable or
+      (inst.kind == ikObject and inst.class != nil and inst.class.name == "Library"):
+    memberKey = namedAccessKeyFor(inst, namedNode.memberName)
 
   if inst.kind == ikObject and inst.class != nil:
     let slotIdx = inst.class.getSlotIndex(namedNode.memberName)
@@ -3512,35 +3575,28 @@ proc initGlobals*(interp: var Interpreter) =
     if args.len < 1 or args[0].kind != vkString:
       return nilValue()
 
-    let code = args[0].strVal
-    # Evaluate in an isolated interpreter that shares globals/root state.
-    # This avoids clobbering the caller VM's work queue/eval stack when eval:
-    # is invoked during an active callback or expression evaluation.
-    var evalInterp = newInterpreterWithShared(
-      interp.globals,
-      interp.rootObject,
-      interp.packageSources,
-      trace = interp.traceExecution,
-      maxStackDepth = interp.maxStackDepth
-    )
-    evalInterp.hardingHome = interp.hardingHome
-    evalInterp.commandLineArgs = interp.commandLineArgs
-    evalInterp.importedLibraries = interp.importedLibraries
-    evalInterp.methodTableDeferRebuild = interp.methodTableDeferRebuild
-    evalInterp.suppressUncaughtExit = true
+    let evaluated = evaluateIsolated(interp, args[0].strVal)
+    if evaluated.error.len > 0:
+      return evaluated.error.toValue()
+    return evaluated.value
 
-    let (results, err) =
-      try:
-        evalInterp.evalStatements(code)
-      finally:
-        discard
-    if err.len > 0:
-      # Return error as string
-      return err.toValue()
-    if results.len > 0:
-      # Return the last result
-      return results[^1]
-    return nilValue()
+  proc primitiveEvaluateImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+    discard self
+    let response = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+    let evaluated = if args.len == 1 and args[0].kind == vkString:
+                      evaluateIsolated(interp, args[0].strVal)
+                    else:
+                      (value: nilValue(), error: "Expected Harding source as a String")
+    setTableValue(response, toValue("ok"), toValue(evaluated.error.len == 0))
+    setTableValue(response, toValue("value"), evaluated.value)
+    setTableValue(response, toValue("error"), toValue(evaluated.error))
+    return response.toValue()
+
+  let evaluateMethod = createCoreMethod("evaluate:")
+  evaluateMethod.setNativeImpl(primitiveEvaluateImpl)
+  setNativeValueFromInstanceWithInterp(evaluateMethod, primitiveEvaluateImpl)
+  objectCls.classMethods["evaluate:"] = evaluateMethod
+  objectCls.allClassMethods["evaluate:"] = evaluateMethod
 
   let evalMethod = createCoreMethod("eval:")
   evalMethod.setNativeImpl(primitiveEvalImpl)
@@ -5997,8 +6053,10 @@ proc globalTableIncludesKeyImpl(interp: var Interpreter, self: Instance, args: s
 
 proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable load: - load and evaluate a Harding file
-  ## Resolves paths from filesystem or embedded package sources
+  ## Resolves paths from filesystem or embedded package sources.
+  ## Every failure signals LoadError instead of returning nil.
   if args.len < 1:
+    signalExceptionByName(interp, "LoadError", "load: requires a file path")
     return nilValue()
 
   # Get the file path from arguments
@@ -6009,40 +6067,43 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     else: ""
 
   if filePath.len == 0:
+    signalExceptionByName(interp, "LoadError", "load: requires a non-empty file path")
     return nilValue()
 
   let (ok, source, displayPath) = resolveLoadInput(interp, filePath)
   if not ok:
-    writeStderr("Error: File not found: " & displayPath)
+    signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
+  var failure = ""
   try:
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & displayPath & ": " & err)
       interp.methodTableDeferRebuild = false
-      return nilValue()
+      failure = "Could not load " & displayPath & ": " & err
+    else:
+      # Rebuild all method tables after batch loading
+      rebuildAllMethodTables()
+      interp.methodTableDeferRebuild = false
 
-    # Rebuild all method tables after batch loading
-    rebuildAllMethodTables()
-    interp.methodTableDeferRebuild = false
-    
-    # Rebind declarative primitives for classes loaded from embedded sources
-    # (external libraries with <primitive ...> syntax need rebinding after class redefinition)
-    when declared(rebindDeclarativePrimitives):
-      rebindDeclarativePrimitives(interp)
-    
-    reindexSourceFile(interp, displayPath)
+      # Rebind declarative primitives for classes loaded from embedded sources
+      # (external libraries with <primitive ...> syntax need rebinding after class redefinition)
+      when declared(rebindDeclarativePrimitives):
+        rebindDeclarativePrimitives(interp)
 
-    debug("Successfully loaded: ", displayPath)
-    return toValue(true)
+      reindexSourceFile(interp, displayPath)
+
+      debug("Successfully loaded: ", displayPath)
+      return toValue(true)
   except Exception as e:
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & displayPath & ": " & e.msg)
-    return nilValue()
+    failure = "Could not read " & displayPath & ": " & e.msg
+
+  signalExceptionByName(interp, "LoadError", failure)
+  return nilValue()
 
 proc globalTableCompileImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## GlobalTable compile: - evaluate a compile block in interpreter mode
@@ -6079,7 +6140,9 @@ proc globalTableDumpVMImpl(interp: var Interpreter, self: Instance, args: seq[No
 
 proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library load: - load and evaluate a file, capturing new globals into this Library's bindings
+  ## Every failure signals LoadError instead of returning nil.
   if args.len < 1:
+    signalExceptionByName(interp, "LoadError", "load: requires a file path")
     return nilValue()
 
   let pathArg = args[0]
@@ -6089,6 +6152,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     else: ""
 
   if filePath.len == 0:
+    signalExceptionByName(interp, "LoadError", "load: requires a non-empty file path")
     return nilValue()
 
   proc librarySourceDir(lib: Instance): string =
@@ -6117,7 +6181,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   if not ok and resolvedRequest != filePath:
     (ok, source, displayPath) = resolveLoadInput(interp, filePath)
   if not ok:
-    writeStderr("Error: File not found: " & displayPath)
+    signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
   # Save original globals and create a copy for capturing new definitions.
@@ -6143,39 +6207,41 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   # Swap globals to temp table so new definitions go there
   interp.globals = tempGlobals
 
+  var failure = ""
   try:
     # Defer method table rebuilds during batch loading
     interp.methodTableDeferRebuild = true
 
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
-      writeStderr("Error loading " & displayPath & ": " & err)
       interp.globals = originalGlobals
       interp.methodTableDeferRebuild = false
-      return nilValue()
+      failure = "Could not load " & displayPath & ": " & err
+    else:
+      # Restore original globals
+      interp.globals = originalGlobals
 
-    # Restore original globals
-    interp.globals = originalGlobals
+      # Copy new or changed entries into the Library's bindings table.
+      if bindings != nil:
+        for key, val in tempGlobals[]:
+          if key notin startingGlobals or not identityEqual(val, startingGlobals[key]):
+            setTableValue(bindings, toValue(key), val)
+            debug("Library captured: ", key)
 
-    # Copy new or changed entries into the Library's bindings table.
-    if bindings != nil:
-      for key, val in tempGlobals[]:
-        if key notin startingGlobals or not identityEqual(val, startingGlobals[key]):
-          setTableValue(bindings, toValue(key), val)
-          debug("Library captured: ", key)
+      # Rebuild all method tables after batch loading
+      rebuildAllMethodTables()
+      interp.methodTableDeferRebuild = false
+      reindexSourceFile(interp, displayPath)
 
-    # Rebuild all method tables after batch loading
-    rebuildAllMethodTables()
-    interp.methodTableDeferRebuild = false
-    reindexSourceFile(interp, displayPath)
-
-    debug("Successfully loaded into library: ", displayPath)
-    return toValue(true)
+      debug("Successfully loaded into library: ", displayPath)
+      return toValue(true)
   except Exception as e:
     interp.globals = originalGlobals
     interp.methodTableDeferRebuild = false
-    writeStderr("Error reading " & displayPath & ": " & e.msg)
-    return nilValue()
+    failure = "Could not read " & displayPath & ": " & e.msg
+
+  signalExceptionByName(interp, "LoadError", failure)
+  return nilValue()
 
 proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Harding import: - add a Library to the interpreter's imported libraries list
@@ -6595,6 +6661,23 @@ proc globalTableSourceEntriesForClassImpl(interp: var Interpreter, self: Instanc
 
   return entriesArray.toValue()
 
+proc globalTableEditSourceImpl(interp: var Interpreter, self: Instance,
+                               args: seq[NodeValue]): NodeValue =
+  discard interp
+  discard self
+  let response = newTableInstance(tableClass, initTable[NodeValue, NodeValue]())
+  if args.len != 5 or args[0].kind != vkString or args[1].kind != vkString or
+      args[2].kind != vkString or args[3].kind != vkString or args[4].kind != vkBool:
+    setTableValue(response, toValue("ok"), toValue(false))
+    setTableValue(response, toValue("error"), toValue("Invalid source edit arguments"))
+    return response.toValue()
+  let edited = rewriteSourceFile(args[0].strVal, args[1].strVal, args[2].strVal,
+                                args[3].strVal, args[4].boolVal)
+  setTableValue(response, toValue("ok"), toValue(edited.error.len == 0))
+  setTableValue(response, toValue("error"), toValue(edited.error))
+  setTableValue(response, toValue("source"), toValue(edited.source))
+  return response.toValue()
+
 proc installLibraryMethods*() =
   ## Install Library methods that need interpreter access
   if libraryClass == nil:
@@ -6738,6 +6821,11 @@ proc installGlobalTableMethods*(globalTableClass: Class) =
   methodSourceInfoMethod.setNativeImpl(globalTableMethodSourceInfoImpl)
   methodSourceInfoMethod.hasInterpreterParam = true
   addMethodToClass(globalTableClass, "methodSourceInfoForClass:selector:", methodSourceInfoMethod)
+
+  let editSourceMethod = createCoreMethod("editSourceFile:owner:selector:replacement:delete:")
+  editSourceMethod.setNativeImpl(globalTableEditSourceImpl)
+  editSourceMethod.hasInterpreterParam = true
+  addMethodToClass(globalTableClass, "editSourceFile:owner:selector:replacement:delete:", editSourceMethod)
 
   let sourceEntriesForClassMethod = createCoreMethod("sourceEntriesForClass:")
   sourceEntriesForClassMethod.setNativeImpl(globalTableSourceEntriesForClassImpl)
@@ -8326,6 +8414,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # In Smalltalk, methods without explicit ^ return self
     # Blocks return the value of the last expression
     debug("VM: wfPopActivation, evalStack.len=", interp.evalStack.len, " isBlock=", $frame.isBlockActivation, " activationStack.len=", interp.activationStack.len)
+
+    # The activation may already be gone: a signal raised while a nested
+    # evaluation was running unwinds activations on the shared stack down to its
+    # handler, so this frame's activation can be popped before it is processed.
+    # Nothing is left to pop; report completion rather than underflowing, the
+    # same way a drained work queue is treated as completion.
+    if interp.activationStack.len == 0:
+      return true
+
     if interp.evalStack.len > 0:
       debug("VM: wfPopActivation top of eval stack: ", interp.evalStack[^1].toString(), " kind=", interp.evalStack[^1].kind)
 
@@ -8367,7 +8464,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         # Methods without explicit ^ return self
         if interp.currentActivation != nil and interp.currentActivation.hasReturned:
           if interp.evalStack.len > frame.savedEvalStackDepth:
-            interp.evalStack.setLen(frame.savedEvalStackDepth)
+            interp.evalStack.setLen(min(frame.savedEvalStackDepth, interp.evalStack.len))
           resultValue = interp.currentActivation.returnValue
           debug("VM: wfPopActivation method result: explicit return value")
         else:
@@ -8915,28 +9012,31 @@ proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue =
   let savedWorkQueue = interp.workQueue
   let savedEvalStack = interp.evalStack
 
-  # Initialize fresh VM state for this evaluation
-  interp.workQueue = newSeqOfCap[WorkFrame](64)
-  interp.workQueue.add(newEvalFrame(node))
-  interp.evalStack = newSeqOfCap[NodeValue](32)
+  # Restore in a finally block: this is a re-entrant entry point, so an error
+  # raised out of the nested evaluation (VM error, uncaught signal, callback
+  # failure) must not leave this evaluation's frames on the shared stacks.
+  # Skipping the restore corrupts the caller's evaluation, which then fails
+  # with an unrelated error such as "index out of bounds".
+  try:
+    # Initialize fresh VM state for this evaluation
+    interp.workQueue = newSeqOfCap[WorkFrame](64)
+    interp.workQueue.add(newEvalFrame(node))
+    interp.evalStack = newSeqOfCap[NodeValue](32)
 
-  # Run the VM
-  let vmResult = interp.runASTInterpreter()
+    # Run the VM
+    let vmResult = interp.runASTInterpreter()
 
-  # Get result before restoring state
-  let resultValue = case vmResult.status
-    of vmCompleted, vmYielded:
-      vmResult.value
-    of vmError:
-      raise newException(ValueError, vmResult.error)
-    of vmRunning:
-      nilValue()
-
-  # Restore previous VM state
-  interp.workQueue = savedWorkQueue
-  interp.evalStack = savedEvalStack
-
-  return resultValue
+    # Get result before restoring state
+    result = case vmResult.status
+      of vmCompleted, vmYielded:
+        vmResult.value
+      of vmError:
+        raise newException(ValueError, vmResult.error)
+      of vmRunning:
+        nilValue()
+  finally:
+    interp.workQueue = savedWorkQueue
+    interp.evalStack = savedEvalStack
 
 proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
   ## Evaluate an expression with a clean activation context.
@@ -8969,6 +9069,23 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
     interp.currentReceiver = savedCurrentReceiver
     raise
 
+proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
+  ## Evaluate a host callback (GTK signal, timer, IDE dispatch) without letting
+  ## an uncaught Harding signal terminate the host process.
+  ##
+  ## A signal that reaches the top level with no handler normally runs the
+  ## exception's defaultAction and quits, which is right for a CLI script but
+  ## fatal for an embedded host: one mistake in a button handler would close the
+  ## IDE. Inside a callback boundary the signal is converted into a catchable
+  ## error instead, and the caller reports it (see invokeGtkCallbackBlock and
+  ## its except handlers).
+  let previousSuppress = interp.suppressUncaughtExit
+  interp.suppressUncaughtExit = true
+  try:
+    result = evalWithVMCleanContext(interp, node)
+  finally:
+    interp.suppressUncaughtExit = previousSuppress
+
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM
   let tokens = lex(source)
@@ -8994,10 +9111,12 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
       lastResult = interp.evalWithVMCleanContext(node)
     interp.lastResult = lastResult
     return (lastResult, "")
+  except EvalError as e:
+    # EvalError is a ValueError subtype, so it must be handled before the plain
+    # ValueError clause below, which re-raises genuine VM value errors.
+    return (nilValue(), "Runtime error: " & e.msg)
   except ValueError:
     raise
-  except EvalError as e:
-    return (nilValue(), "Runtime error: " & e.msg)
   except Exception as e:
     return (nilValue(), "Error: " & e.msg)
 
@@ -9041,10 +9160,10 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   try:
     let methodResult = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
     results.add(methodResult)
-  except ValueError as e:
-    return (@[], "Error: " & e.msg)
   except EvalError as e:
     return (@[], "Runtime error: " & e.msg)
+  except ValueError as e:
+    return (@[], "Error: " & e.msg)
   except Exception as e:
     return (@[], "Error: " & e.msg & "\n" & e.getStackTrace())
   finally:

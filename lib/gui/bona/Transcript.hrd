@@ -4,7 +4,7 @@
 # Now using GtkSourceView for text display (read-only).
 # ============================================================================.
 
-Transcript := Object derive: #(window, box, scrolledWindow, sourceView, owner)
+Transcript := Object derive: #(window, box, scrolledWindow, sourceView, owner, historyText)
 # Transcript implements Bona's log and output viewer for messages emitted by the running image.
 # It provides a read-oriented window for status text, diagnostics, and ad hoc printed output.
 # Tools such as Workspace, Builder, and Browser rely on Transcript for user-visible feedback.
@@ -16,63 +16,55 @@ Transcript>>initialize [
   window := nil
   sourceView := nil
   owner := nil
+  historyText := ""
+  ^ self
+]
+
+Transcript>>appendText: text [
+  historyText := historyText & text.
+  historyText size > 65536 ifTrue: [
+    historyText := historyText from: (historyText size - 65536) to: (historyText size - 1)
+  ].
+  sourceView notNil ifTrue: [
+    sourceView text: historyText.
+    self scrollToBottom
+  ].
   ^ self
 ]
 
 Transcript>>show: anObject [
-  # Append anObject's asString to the transcript
-  sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject asString)
-    self scrollToBottom
-  ]
+  ^ self appendText: anObject asString
 ]
 
 Transcript>>showCr: anObject [
-  # Append anObject's printString followed by a newline
-  sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString)
-    sourceView insertTextAtEnd: "\n"
-    self scrollToBottom
-  ]
+  ^ self appendText: (anObject printString & "\n")
 ]
 
 Transcript>>showSpace: anObject [
-  # Append anObject's printString followed by a space
-  sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: (anObject printString)
-    sourceView insertTextAtEnd: " "
-    self scrollToBottom
-  ]
+  ^ self appendText: (anObject printString & " ")
 ]
 
 Transcript>>cr [
-  # Append a newline (carriage return) to the transcript
-  sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: "\n"
-    self scrollToBottom
-  ]
+  ^ self appendText: "\n"
 ]
 
 Transcript>>tab [
-  # Append a tab character to the transcript
-  sourceView notNil ifTrue: [
-    sourceView insertTextAtEnd: "\t"
-    self scrollToBottom
-  ]
+  ^ self appendText: "\t"
 ]
 
 Transcript>>clear [
+  historyText := "".
   sourceView notNil ifTrue: [
     sourceView text: ""
   ]
 ]
 
 Transcript>>contents [
-  sourceView notNil ifTrue: [
-    ^ sourceView text
-  ]
-  ^ ""
+  ^ historyText
 ]
+
+Transcript>>window [ ^ window ]
+Transcript>>sourceView [ ^ sourceView ]
 
 Transcript>>scrollToBottom [
   # Auto-scroll to show the newest content
@@ -92,6 +84,10 @@ Transcript>>checkSourceView [
 Transcript>>openWindowFor: anOwner [
   | mainBox buttonBox clearButton |
 
+  window notNil ifTrue: [
+    window present.
+    ^ self
+  ].
   window := GtkWindow new
   window title: "Transcript"
   window iconName: "harding"
@@ -115,6 +111,7 @@ Transcript>>openWindowFor: anOwner [
   sourceView vexpand: true
   sourceView hexpand: true
   sourceView editable: false.  # Read-only
+  sourceView text: historyText.
 
   # Create button box with Clear button
   buttonBox := GtkBox horizontal
@@ -156,24 +153,23 @@ Transcript>>installKeyboardShortcuts [
 
 Transcript>>doItSelection [
   # Do It - evaluate selected text
-  | code result shown |
-  code := sourceView selectedText
-  code isEmpty not ifTrue: [
-    result := [ Object eval: code ]
-      on: Exception
-      do: [:ex | "IDE_ERROR: " & ex printString ]
-    (result isKindOf: String)
-      ifTrue: [ shown := result ]
-      ifFalse: [
-        shown := (result isClass)
-          ifTrue: [ "<class " & result name & ">" ]
-          ifFalse: [ result printString ]
-      ]
-    self showCr: shown
-    ^ result
-  ]
-  self showCr: "No code selected/current line to evaluate"
-  ^ nil
+  | code evaluation result shown |
+  code := sourceView selectedText.
+  code isEmpty ifTrue: [
+    self showCr: "No code selected/current line to evaluate".
+    ^ nil
+  ].
+  evaluation := Object evaluate: code.
+  (evaluation at: "ok") ifFalse: [
+    self showCr: (evaluation at: "error").
+    ^ nil
+  ].
+  result := evaluation at: "value".
+  shown := (result isClass)
+    ifTrue: [ "<class " & result name & ">" ]
+    ifFalse: [ result printString ].
+  self showCr: shown.
+  ^ result
 ]
 
 Transcript>>onDestroy [
@@ -220,6 +216,10 @@ Transcript class>>cr [
 
 Transcript class>>tab [
   ^ self current tab
+]
+
+Transcript class>>contents [
+  ^ self current contents
 ]
 
 Transcript class>>clear [

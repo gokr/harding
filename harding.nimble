@@ -169,6 +169,7 @@ tests/test_extend.nim
 tests/test_cascade.nim
 tests/test_float_operations.nim
 tests/test_class_model.nim
+tests/test_load_and_eval.nim
 """
 
 const TestStdlib = """
@@ -181,6 +182,7 @@ tests/test_stdlib_utilities.nim
 tests/test_set_operations.nim
 tests/test_json_literal.nim
 tests/test_json_serialization.nim
+tests/test_named_access_and_slots.nim
 """
 
 const TestOther = """
@@ -189,6 +191,7 @@ tests/test_compiler_block_parity.nim
 tests/test_website_examples.nim
 tests/test_cli_args.nim
 tests/test_bona_models.nim
+tests/test_source_editor.nim
 tests/test_gui_automation.nim
 tests/test_html_canvas.nim
 tests/test_html2_dyn_cache.nim

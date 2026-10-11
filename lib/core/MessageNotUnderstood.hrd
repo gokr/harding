@@ -2,8 +2,10 @@
 #
 # MessageNotUnderstood.hrd - MessageNotUnderstood class
 
-MessageNotUnderstood := Exception derive
+MessageNotUnderstood := Error derive
 # MessageNotUnderstood is raised when normal message lookup cannot resolve a selector.
+# It derives from Error, not Exception, so `on: Error do:` catches a failed send;
+# deriving from Exception made dispatch failures escape an ordinary error handler.
 # Instances capture the missing selector and receiver context needed for debugging dispatch.
 # The VM uses this class when doesNotUnderstand: cannot recover from a failed send.
 # This is one of the most important debugging exceptions in the core library.

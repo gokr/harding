@@ -177,11 +177,9 @@ suite "Badminton Buddy - HTTP Endpoints":
 
   setup:
     stopServer(18080)  # Use different port to avoid conflicts
-    discard execCmdEx("rm -f badminton-buddy/badminton.db")
 
   teardown:
     stopServer(18080)
-    discard execCmdEx("rm -f badminton-buddy/badminton.db")
 
   test "Server starts and responds to home page":
     discard execCmdEx("./harding badminton-buddy/server.hrd > /tmp/badminton-server.log 2>&1 &")
