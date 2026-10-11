@@ -182,6 +182,7 @@ tests/test_stdlib_utilities.nim
 tests/test_set_operations.nim
 tests/test_json_literal.nim
 tests/test_json_serialization.nim
+tests/test_named_access_and_slots.nim
 """
 
 const TestOther = """

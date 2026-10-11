@@ -204,7 +204,9 @@ Object class>>allClassMethods [
 Object>>doesNotUnderstand: selector [
   # Default handler for unrecognized messages with just the selector
   # Subclasses can override to provide custom behavior
-  self error: ("Message not understood: " & (selector asString))
+  # Signals MessageNotUnderstood (a specific Error subclass) so callers and
+  # tooling can distinguish a dispatch failure from a generic error.
+  MessageNotUnderstood signal: ("Message not understood: " & (selector asString))
 ]
 
 Object>>doesNotUnderstand: selector with: arg1 with: arg2 [

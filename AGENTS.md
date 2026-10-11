@@ -60,6 +60,7 @@ Granite compiler development is separate (including `worktrees/granite-completen
 - Bona tools migrated to the structured contract: Workspace, Inspector, Browser, Builder, Transcript, and BonaMCP no longer classify results by error-message prefixes. Workspace Do It now reports its result to Transcript, matching documented behavior.
 - Verified through gnome-ui-mcp: Workspace opening/text insertion/Print It and Builder New creating `MyApp` after the bootstrap fix. This is not yet a complete acceptance suite.
 - Outstanding: safe source reflection/display/reload, scheduler-bound BonaMCP startup and lifecycle, coordinated shutdown, the embedded-interpreter packaging path, and complete tool acceptance coverage. Builder persistence and source-backed editing are implemented and covered by tests.
+- Resolved interpreter defects: dispatch failures (`Message not understood`) are now catchable with `on:do:` and are reported rather than fatal; uncaught user exceptions still exit with the banner. Inherited slot layout (`allSlotNames`) is parent-first again, fixing wrong-slot lookups and swapped JSON fields past the first inheritance level. `::` resolves documented string keys for tables and library bindings. External library bootstraps can no longer terminate the process on a signal.
 - Focused logs live in `build/bona-hardening/`. Tests include `test_source_editor`, `test_load_and_eval`, Bona models, GUI automation, and interpreter core; do not claim the complete test suite has passed from these alone.
 
 ### Interpreter and language discussion gate
@@ -68,9 +69,13 @@ Bring interpreter/language defects to the user with a minimal reproduction, expe
 
 Load failure and structured evaluation were explicitly agreed and are implemented: `LoadError` is signaled instead of printing and returning nil, and `Object evaluate:` returns `{ok, value, error}` while `Object eval:` stays unchanged. New Bona code should use `Object evaluate:`.
 
-Still open for discussion: `Object eval:` scheduler ownership for long-running work was partly addressed by `evaluateIsolated`, but suspension/cancellation of an in-flight evaluation is not implemented; do not claim interruptibility until it is.
+Still open for discussion: evaluation is not cancellable — an in-flight `Object evaluate:` cannot be interrupted.
 
-`::` on ordinary Bona tool instances produced `Message not understood: at:` in regression setup; use explicit accessors for now and investigate named-access dispatch with a minimal interpreter test before changing its contract. Transcript had an instance `contents` method but no class-side delegation despite BonaMCP calling `Transcript contents`; the delegation is now explicit.
+Uncaught behaviour is intentional and covered by tests: a signal that reaches the top level with no handler runs the exception's `defaultAction` and exits (with the `=== Uncaught Exception ===` banner), except `MessageNotUnderstood`, which is reported as an error so tooling can keep running. Keep that distinction when touching `primitiveSignalImpl`.
+
+`::` now resolves documented string keys for tables and library bindings (`table::name`, `myLib::Binding`), and slot reads/writes work for readable/writable slots. Private slots remain inaccessible from outside and that rejection is catchable.
+
+Transcript has an instance `contents` method plus the class-side delegation BonaMCP calls.
 
 `Library load:` and `Harding load:` signal `LoadError` on missing files, parse errors, and load-time failures; globals and library bindings are left unchanged on failure. Do not reintroduce silent nil returns in load paths.
 

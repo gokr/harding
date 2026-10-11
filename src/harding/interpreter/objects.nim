@@ -2389,13 +2389,18 @@ proc rebuildAllTables*(cls: Class) =
   var inheritedOwners = initTable[string, string]()
   var inheritedClassOwners = initTable[string, string]()
   
-  # Also inherit slot names from parents
-  var allSlotNames = cls.slotNames
-  
+  # Also inherit slot names from parents.
+  # Order matters: instance slots are laid out parent-first (see newClass), and
+  # getSlotIndex indexes this list, so rebuilding it own-first would make every
+  # slot lookup past the first level point at the wrong slot.
+  var allSlotNames: seq[string] = @[]
   for parent in cls.superclasses:
     for slotName in parent.allSlotNames:
       if slotName notin allSlotNames:
         allSlotNames.add(slotName)
+  for slotName in cls.slotNames:
+    if slotName notin allSlotNames:
+      allSlotNames.add(slotName)
 
   cls.allSlotNames = allSlotNames
   cls.hasSlots = allSlotNames.len > 0

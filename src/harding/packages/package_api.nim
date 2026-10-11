@@ -87,7 +87,13 @@ proc installPackage*(interp: var Interpreter, spec: HardingPackageSpec): bool =
       return false
 
     if evalStatementsCallback != nil:
+      # A bootstrap must not terminate the host: an uncaught signal here would
+      # otherwise run the exception's defaultAction and quit the process.
+      # Convert uncaught exceptions into an error string instead.
+      let previousSuppress = interp.suppressUncaughtExit
+      interp.suppressUncaughtExit = true
       let (_, err) = evalStatementsCallback(interp, interp.packageSources[][spec.bootstrapPath])
+      interp.suppressUncaughtExit = previousSuppress
       if err.len > 0:
         warn("installPackage: bootstrap evaluation failed for package ", spec.name,
             ": ", err)

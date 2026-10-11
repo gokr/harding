@@ -1771,15 +1771,20 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
 
       # Keep activation stack intact for debugging, but filter work queue so
       # signal-path unwind frames do not interfere with handler execution.
+      # A signal can arrive from a nested call (e.g. doesNotUnderstand:) whose
+      # frames are below the depth recorded when the handler was installed;
+      # clamp to what is actually on the queue instead of indexing past its end.
       var newWorkQueue: seq[WorkFrame] = @[]
-      for j in 0..<handler.workQueueDepth:
+      let queueDepth = min(handler.workQueueDepth, interp.workQueue.len)
+      for j in 0..<queueDepth:
         let frameKind = interp.workQueue[j].kind
         if frameKind != wfPopActivation and frameKind != wfReturnValue:
           newWorkQueue.add(interp.workQueue[j])
-      for j in handler.workQueueDepth..<interp.workQueue.len:
+      for j in queueDepth..<interp.workQueue.len:
         newWorkQueue.add(interp.workQueue[j])
       interp.workQueue = newWorkQueue
-      interp.evalStack.setLen(handler.evalStackDepth)
+      if interp.evalStack.len > handler.evalStackDepth:
+        interp.evalStack.setLen(handler.evalStackDepth)
 
       # Clear pending non-local-return markers above the handler activation.
       for j in (handler.stackDepth + 1)..<interp.activationStack.len:
@@ -1800,7 +1805,15 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   if interp.suppressUncaughtExit:
     let className = if self != nil and self.class != nil: self.class.name else: "Exception"
     raise newException(EvalError, className & ": " & message)
-  
+
+  # An unhandled dispatch failure is a caller-visible error, not a fatal one:
+  # tooling (REPL, scripts, IDE evaluation) reports message-not-understood as a
+  # diagnostic and keeps running, whereas an uncaught user exception runs
+  # defaultAction and terminates. Handlers installed with on:do: are consulted
+  # before this point, so a caught dispatch failure never reaches here.
+  if self != nil and self.class != nil and self.class.name == "MessageNotUnderstood":
+    raise newException(EvalError, message)
+
   # Store uncaught exception info for potential debugger use
   interp.uncaughtException = self
   interp.uncaughtExceptionMessage = message
@@ -2252,10 +2265,14 @@ proc primitiveAllClassMethodsImpl(interp: var Interpreter, self: Instance, args:
   return newArrayInstance(arrayClass, selectors).toValue()
 
 proc primitiveErrorImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Raise an exception with the given message
+  ## Signal a Harding Error with the given message.
+  ## Signals through the exception machinery so on:do: can catch it; a Nim raise
+  ## here would unwind past the Harding handler stack and make error: uncatchable.
+  discard self
   let msg = if args.len > 0: args[0].toString()
             else: "Error"
-  raise newException(EvalError, msg)
+  signalExceptionByName(interp, "Error", msg)
+  return nilValue()
 
 proc primitiveIsKindOfImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Check if object is an instance of the given class or any superclass
@@ -2347,6 +2364,27 @@ proc primitiveClassConflictSelectorsImpl(interp: var Interpreter, self: Instance
     selectors.add(toValue(sel))
   return newArrayInstance(arrayClass, selectors).toValue()
 
+proc namedAccessKeyFor(inst: Instance, memberName: string): NodeValue =
+  ## Choose the key form for :: on collections and libraries.
+  ## Table literals and library bindings are string-keyed, while :: names are
+  ## written as bare identifiers; prefer a key already present on the receiver
+  ## and fall back to the documented string form rather than a symbol.
+  let symbolKey = NodeValue(kind: vkSymbol, symVal: memberName)
+  let stringKey = toValue(memberName)
+  var entries: Table[NodeValue, NodeValue] = default(Table[NodeValue, NodeValue])
+  if inst.kind == ikTable:
+    entries = inst.entries
+  else:
+    let bindings = getLibraryBindings(inst)
+    if bindings == nil:
+      return symbolKey
+    entries = bindings.entries
+  if symbolKey in entries:
+    return symbolKey
+  if stringKey in entries:
+    return stringKey
+  return stringKey
+
 proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): bool =
   ## Evaluate :: access with slot fast path and at:/at:put: fallback.
   if namedNode.receiver == nil:
@@ -2359,7 +2397,10 @@ proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): b
     return true
 
   let inst = receiverVal.instVal
-  let memberKey = NodeValue(kind: vkSymbol, symVal: namedNode.memberName)
+  var memberKey = NodeValue(kind: vkSymbol, symVal: namedNode.memberName)
+  if inst.kind == ikTable or
+      (inst.kind == ikObject and inst.class != nil and inst.class.name == "Library"):
+    memberKey = namedAccessKeyFor(inst, namedNode.memberName)
 
   if inst.kind == ikObject and inst.class != nil:
     let slotIdx = inst.class.getSlotIndex(namedNode.memberName)
@@ -8992,10 +9033,12 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
       lastResult = interp.evalWithVMCleanContext(node)
     interp.lastResult = lastResult
     return (lastResult, "")
+  except EvalError as e:
+    # EvalError is a ValueError subtype, so it must be handled before the plain
+    # ValueError clause below, which re-raises genuine VM value errors.
+    return (nilValue(), "Runtime error: " & e.msg)
   except ValueError:
     raise
-  except EvalError as e:
-    return (nilValue(), "Runtime error: " & e.msg)
   except Exception as e:
     return (nilValue(), "Error: " & e.msg)
 
@@ -9039,10 +9082,10 @@ proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], 
   try:
     let methodResult = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
     results.add(methodResult)
-  except ValueError as e:
-    return (@[], "Error: " & e.msg)
   except EvalError as e:
     return (@[], "Runtime error: " & e.msg)
+  except ValueError as e:
+    return (@[], "Error: " & e.msg)
   except Exception as e:
     return (@[], "Error: " & e.msg & "\n" & e.getStackTrace())
   finally:
