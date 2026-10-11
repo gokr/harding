@@ -115,7 +115,9 @@ nim c -r --out:build/test_gui_automation tests/test_gui_automation.nim
 
 Bona needs GTK4, GtkSourceView 5, and **GTK4** VTE (`libvte-2.91-gtk4.so.0`); GTK3 VTE is not compatible. On the assessed Ubuntu host GTK4 VTE was missing. A runtime package was extracted locally under `build/bona-assessment/deps`; use its `usr/lib/x86_64-linux-gnu` in `LIBRARY_PATH` for linking and `LD_LIBRARY_PATH` for running, or explicitly arrange installation. Do not substitute the GTK3 library.
 
-The full `tests/test_*.nim` sweep is not green: `test_badminton_buddy` fails at `BadmintonRepository open:` (SQLite repository path; unrelated to Bona work) and its HTTP tests depend on an external server. Treat those as known, separate issues.
+The full `tests/test_*.nim` sweep is not green: `test_sync_primitives` passes its basic suites and the multi-process Monitor/Semaphore suites (16 tests) but still livelocks at "SharedQueue bounded queue blocks when full"; it is reproduced in isolation and is a distinct open bug. `test_badminton_buddy` fails at `BadmintonRepository open:` (SQLite repository path; unrelated to Bona work) and its HTTP tests depend on an external server. Treat these as known, separate issues.
+
+Per-test `newInterpreter` + `loadStdlib` is expensive and not just slow: every image registers fresh core classes as subclasses of the shared global `objectClass` without detaching the previous ones, so the class tree grows on each image (~22 subclasses per image) and `loadStdlib` becomes quadratic. Prefer one shared interpreter per test file (see `tests/stdlib_test_support.nim` and `test_precedence.nim`).
 
 The existing nimble test tasks mask failures with `|| true`; inspect actual test results or use direct `nim c -r` for focused validation. A green task exit alone is not proof of passing tests. Headless tests and direct GTK signal tests do not replace real event-loop/AT-SPI acceptance tests. Validate ARC and ORC when touching proxy lifetime, callbacks, or cross-thread services. Logs and scratch work belong under `build/`, not `/tmp`.
 

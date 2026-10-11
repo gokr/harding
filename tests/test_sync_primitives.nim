@@ -8,6 +8,15 @@ import ./stdlib_test_support
 # Shared interpreter initialized once for all basic suites
 var sharedInterp = newSharedStdlibInterpreter()
 
+# Shared scheduler image for the multi-process suites. Each test used to build a
+# fresh context and reload the stdlib; that grew the shared class hierarchy on
+# every image and made the later suites take tens of seconds each.
+let sharedSchedCtx = newSchedulerContext()
+let sharedSchedInterp = block:
+  var it = sharedSchedCtx.mainProcess.getInterpreter()
+  loadStdlib(it)
+  it
+
 suite "Monitor: Basic Operations":
   var interp {.used.}: Interpreter
 
@@ -117,12 +126,9 @@ suite "SharedQueue: Basic Operations":
     check(result[0][^1].boolVal == true)
 
 suite "Multi-Process: Monitor":
-  discard initCoreClasses()
-
   test "Monitor critical: provides mutual exclusion for shared counter":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     # Fork a coordinator process that sets up and runs the test
     let result = interp.evalStatements("""
@@ -157,9 +163,8 @@ suite "Multi-Process: Monitor":
     check(result[0][^1].intVal == 20)
 
   test "Monitor reentrant lock allows same process to acquire multiple times":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       M := Monitor new.
@@ -176,12 +181,9 @@ suite "Multi-Process: Monitor":
     check(result[0][^1].intVal == 42)
 
 suite "Multi-Process: Semaphore":
-  discard initCoreClasses()
-
   test "Binary semaphore ensures mutual exclusion":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -217,9 +219,8 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal == 10)
 
   test "Counting semaphore allows limited concurrent access":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -283,9 +284,8 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal <= 2)
 
   test "Semaphore signal unblocks waiting process":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -315,12 +315,9 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal == 11)
 
 suite "Multi-Process: SharedQueue":
-  discard initCoreClasses()
-
   test "SharedQueue producer-consumer pattern":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -353,9 +350,8 @@ suite "Multi-Process: SharedQueue":
     check(result[0][^1].intVal == 6)
 
   test "SharedQueue multiple producers and consumers":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -401,9 +397,8 @@ suite "Multi-Process: SharedQueue":
     check(result[0][^1].intVal == 10)
 
   test "SharedQueue bounded queue blocks when full":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -434,12 +429,9 @@ suite "Multi-Process: SharedQueue":
     check(result[0][^1].intVal == 5)
 
 suite "Multi-Process: Combined Synchronization":
-  discard initCoreClasses()
-
   test "Monitor with Semaphore for resource pooling":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
