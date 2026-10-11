@@ -135,9 +135,23 @@ arbitrary error resumption solely in the interpreter.
 - [x] Remove obsolete signal-point snapshot restoration and native resume control
       machinery; retain signal-site diagnostic metadata. Debugger/external audits
       remain separate coverage items.
-- [x] Route missing-message errors through `on:do:`: a removed selector such as
-      `resume:` currently aborts with `Message not understood` rather than being
-      catchable by an enclosing handler (see section 4).
+- [x] Dispatch failures are catchable by `on:do:` again. `MessageNotUnderstood`
+      derived from `Exception`, so `on: Error` did not catch a failed send even
+      though main's commit message and CHANGELOG said it did; it now derives from
+      `Error`. A signal raised from `doesNotUnderstand:` also unwound the shared
+      activation stack under a nested evaluation, crashing with "index out of
+      bounds, the container is empty" on `[1 foo]`; `wfPopActivation` now reports
+      completion when its activation is already gone, and every eval-stack
+      restore is clamped to the live length.
+- [ ] Two dispatch-failure defects remain, both **interpreter and compiled**:
+      (a) `[1 foo] on: Error do: [:ex | ...]` answers nil instead of the handler's
+          result, while `[Object new bar]` answers correctly — the DNU fallback in
+          `wfSendMessage` runs the handler via `executeMethod` and its result is
+          not propagated through the normal return path;
+      (b) when a signal is handled inside an `on:do:` act that is the **final
+          expression of a compiled method**, the method yields the signal's class
+          name (`"Error"`) instead of the handler's result; returning the value
+          once (`^`) fixes it.
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to
@@ -165,6 +179,10 @@ arbitrary error resumption solely in the interpreter.
 
 ## 4. Complete object-model dispatch
 
+- [ ] Lowercase top-level script variables are rejected in some contexts
+      ("Global variables must start with uppercase letter: r"), while `x := 1` at
+      top level works; determine the intended rule and whether the checker should
+      apply to scripts at all.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [ ] Proper missing-message errors instead of silent nil.
