@@ -734,23 +734,11 @@ proc initCoreClasses*(): Class =
   # Rebuild Mixin's method tables to inherit Object's class methods
   rebuildAllTables(mixinClass)
 
-  # Create Integer class
-  # Methods are defined in lib/core/Integer.hrd using <primitive> syntax
-  if integerClass == nil:
-    integerClass = newClass(superclasses = @[objectClass], name = "Integer")
-    addGlobal("Integer", NodeValue(kind: vkClass, classVal: integerClass))
-
-  # Create Float class
-  # Methods are defined in lib/core/Float.hrd using <primitive> syntax
-  if floatClass == nil:
-    floatClass = newClass(superclasses = @[objectClass], name = "Float")
-    addGlobal("Float", NodeValue(kind: vkClass, classVal: floatClass))
-
-  # Create String class
-  # Methods are defined in lib/core/String.hrd using <primitive> syntax
-  if stringClass == nil:
-    stringClass = newClass(superclasses = @[objectClass], name = "String")
-    addGlobal("String", NodeValue(kind: vkClass, classVal: stringClass))
+  # Number, Integer, Float and String are created by initGlobals, not here.
+  # Integer and Float must derive from Number (lib/core/Number.hrd defines
+  # max:/min:/isZero/isPositive/isNegative/sign/asString/squared on it).
+  # Creating them here as direct Object subclasses would either lose that
+  # inheritance or add a duplicate class to Object's subclass list.
 
   # Create Array class
   # Methods are defined in lib/core/Array.hrd using <primitive> syntax
