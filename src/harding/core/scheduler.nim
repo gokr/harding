@@ -184,7 +184,12 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
 
-  let activation = interp.currentActivation
+  # The scheduler advances only the fork's outer block. Nested activations and
+  # their continuations belong to the VM and may remain live across blocking.
+  let activation = if interp.activationStack.len > 0:
+                     interp.activationStack[0]
+                   else:
+                     nil
 
   if activation == nil:
     sched.terminateProcess(sched.currentProcess)
@@ -201,44 +206,20 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
     sched.terminateProcess(sched.currentProcess)
     return interp.lastResult
 
-  # Check if we have pending work (resuming from yield)
-  # If work queue has frames, continue from there without advancing PC
-  # Track whether the PC advanced: the blocked-process compensation below must
-  # only undo an increment this slice actually performed, otherwise resuming
-  # from a yield (which does not advance the PC) would drive it negative.
-  var advancedPc = false
-  let wqDepthBeforeStatement = interp.workQueue.len
-  let evalDepthBeforeStatement = interp.evalStack.len
+  # Pending VM frames include the blocked send with its evaluated operands.
+  # Resume those frames instead of restarting the statement or nested block.
   let stmt = if interp.workQueue.len > 0:
-               # Resuming - work queue has pending frames
                nil
              else:
-               # Get next statement and advance PC
                let s = body[activation.pc]
                inc activation.pc
-               advancedPc = true
                s
 
   let (evalResult, status) = interp.evalForProcess(stmt)
   result = evalResult
   interp.lastResult = result
 
-  # Check if process was blocked by a primitive (before status handling)
   let wasBlocked = sched.currentProcess.state == psBlocked
-  if wasBlocked:
-    # The statement will be re-executed when the process is unblocked, so undo
-    # the PC advance and discard the partially built frames and operands.
-    # A blocked primitive (Semaphore wait, SharedQueue next) leaves its
-    # in-flight frames on the work queue; keeping them makes the re-run replay
-    # the blocking primitive from those stale frames, which re-blocks the
-    # process forever. Resuming from a yield is different: there the work queue
-    # is the resume point and must be preserved, so only blocking truncates.
-    if advancedPc:
-      dec activation.pc
-    if interp.workQueue.len > wqDepthBeforeStatement:
-      interp.truncateWorkQueue(wqDepthBeforeStatement)
-    if interp.evalStack.len > evalDepthBeforeStatement:
-      interp.evalStack.setLen(evalDepthBeforeStatement)
 
   # Handle VM status
   case status
@@ -265,8 +246,9 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
   if wasBlocked:
     return nilValue()
 
-  # Check if block finished
-  if activation.pc >= body.len:
+  # A nested block ending is not process completion. Finish only after the
+  # outer block's final statement has drained all its VM continuations.
+  if activation.pc >= body.len and interp.workQueue.len == 0:
     sched.terminateProcess(sched.currentProcess)
 
 proc runOneSlice*(ctx: SchedulerContext): bool =
