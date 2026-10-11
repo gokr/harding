@@ -706,6 +706,33 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     else:
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
+proc blockOwnerLocals*(ctx: GenContext): seq[string] =
+  ## Parameters and locals declared in the enclosing method. These shadow
+  ## same-named slots for nested blocks, so they must be captured as ordinary
+  ## enclosing variables rather than resolved as slot accesses.
+  for name in ctx.parameters:
+    result.add(name)
+  for name in ctx.locals:
+    if name notin result:
+      result.add(name)
+
+proc blockOwnerSlots*(ctx: GenContext): seq[string] =
+  ## Slot names of the class owning the enclosing method. Blocks lexically inside
+  ## a method may read or write these, which requires capturing `self`.
+  if ctx.cls != nil and ctx.inMethod:
+    for slot in ctx.cls.getAllSlots():
+      result.add(slot.name)
+
+proc blockCaptureGlobals*(ctx: GenContext): seq[string] =
+  ## Known globals to pass when registering a nested block. `self` is a
+  ## pseudo-variable that block procedures receive through their captured
+  ## environment, not a global, so it is deliberately excluded here: including it
+  ## in knownGlobals suppresses the capture and leaves the generated block with
+  ## no receiver.
+  for name in ctx.globals:
+    if name != "self":
+      result.add(name)
+
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
 
@@ -753,6 +780,12 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     if ctx.isLocal(varName):
       return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
+    # A Harding global (typically a top-level uppercase variable) assigns the
+    # shared binding so main, methods and blocks all observe the same value.
+    # Declaring a fresh local here would silently shadow it.
+    if varName in ctx.globals:
+      return fmt("setGlobal(\"{varName}\", {exprCode})")
+
     # New local variable assignment
     ctx.locals.add(varName)
     return bindingDeclaration(ctx, varName, exprCode)
@@ -793,7 +826,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let blockInfo = if existingIdx >= 0:
                       ctx.blockRegistry.blocks[existingIdx]
                     else:
-                      registerBlock(ctx.blockRegistry, blockNode, ctx.globals, ctx.inMethod)
+                      registerBlock(ctx.blockRegistry, blockNode, blockCaptureGlobals(ctx), ctx.inMethod,
+                                    blockOwnerSlots(ctx), blockOwnerLocals(ctx))
 
     if blockInfo.captures.len > 0 or blockInfo.ownerMethodId != 0:
       return genCapturedBlockExpression(blockInfo, ctx)
@@ -893,6 +927,11 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
       return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+
+    # A Harding global assigns the shared binding; in statement position the
+    # returned value is discarded.
+    if varName in ctx.globals:
+      return fmt("discard setGlobal(\"{varName}\", {exprCode})")
 
     # New local variable assignment
     ctx.locals.add(varName)
@@ -1267,7 +1306,8 @@ proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blo
   let blockInfo = if existingIdx >= 0:
                     ctx.blockRegistry.blocks[existingIdx]
                   else:
-                    registerBlock(ctx.blockRegistry, blockNode, ctx.globals, ctx.inMethod)
+                    registerBlock(ctx.blockRegistry, blockNode, blockCaptureGlobals(ctx), ctx.inMethod,
+                                  blockOwnerSlots(ctx), blockOwnerLocals(ctx))
   
   if blockInfo.captures.len > 0:
     return (true, blockInfo)
@@ -1305,13 +1345,17 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
     
     let exprCode = genExpression(ctx, assign.expression)
 
-    # Check if it's a reassignment of an existing variable
-    if varName in ctx.locals or varName in ctx.globals:
+    # A top-level uppercase name is a Harding global: assign the shared binding
+    # instead of declaring a local, so methods and blocks observe it too.
+    if varName in ctx.globals:
+      return fmt("discard setGlobal(\"{varName}\", {exprCode})")
+
+    # Reassignment of an existing script-local variable
+    if varName in ctx.locals:
       return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
 
-    # New top-level variable (local to main, also tracked as global for blocks)
+    # New top-level variable: a local of main, visible to blocks nested in main.
     ctx.locals.add(varName)
-    ctx.globals.add(varName)
     return bindingDeclaration(ctx, varName, exprCode)
 
   of nkMessage:
@@ -1363,9 +1407,17 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
           else:
             return "discard " & setterCall
     
-    # Check if it's a reassignment of an existing variable
-    if varName in ctx.locals or varName in ctx.globals:
+    # Reassignment of a declared local
+    if ctx.isLocal(varName):
       return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+
+    # A Harding global assigns the shared binding so other methods and blocks
+    # observe the change instead of a shadowing local.
+    if varName in ctx.globals:
+      let setCall = fmt("setGlobal(\"{varName}\", {exprCode})")
+      if isLast:
+        return "return " & setCall
+      return "discard " & setCall
 
     # New local variable
     ctx.locals.add(varName)

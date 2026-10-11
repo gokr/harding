@@ -1084,9 +1084,14 @@ a saved point. Instead:
 - **`pass`** delegates to the next matching outer handler;
 - **`retry`** re-executes the protected block.
 
-This is deliberate, not a gap: resumption was removed because it requires
-capturing continuation state, which conflicts with native compilation and
-foreign-function integration.
+This is deliberate, not a gap. The primary reason is semantic: `resume:` and
+`return:` are rarely used and obscure which computation continues, whereas a
+handler's result already expresses the same value-passing with no control
+transfer. Removing them also removes the last construct whose lowering requires
+continuation capture, which keeps the native path simple — though note this is a
+simplification we chose to take, not a hard requirement: a compiler with
+continuation support could implement resumption. The language-level decision
+stands on its own.
 
 Handlers run **synchronously while the signaling computation is still active**,
 so for a notification, statements after the signal still run. Errors instead

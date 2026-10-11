@@ -397,15 +397,29 @@ suite "Compiler: Block Capture Analysis":
     check "x" notin captures
     check "temp" notin captures
 
-  test "analyzeCaptures excludes pseudo-variables":
-    let ident = IdentNode(name: "self")
-    let blockNode = BlockNode(
-      parameters: @[],
-      temporaries: @[],
-      body: @[ident.Node]
-    )
-    let captures = analyzeCaptures(blockNode)
-    check "self" notin captures
+  test "analyzeCaptures excludes pseudo-variables but keeps self":
+    # nil/true/false/super are not capturable names...
+    let nilIdent = IdentNode(name: "nil")
+    let nilBlock = BlockNode(parameters: @[], temporaries: @[], body: @[nilIdent.Node])
+    check "nil" notin analyzeCaptures(nilBlock)
+
+    # ...but `self` must be captured: block procedures receive no receiver
+    # parameter, so a block that names `self` reads it from its environment.
+    let selfIdent = IdentNode(name: "self")
+    let selfBlock = BlockNode(parameters: @[], temporaries: @[], body: @[selfIdent.Node])
+    check "self" in analyzeCaptures(selfBlock)
+
+  test "analyzeCaptures captures self for slot access":
+    # A slot read compiles to getSlotValue(self, ...), so naming a slot of the
+    # owner class requires the receiver even though `self` is never spelled.
+    let slot = SlotAccessNode(slotName: "n", slotIndex: 0, isAssignment: false)
+    let one = LiteralNode(value: NodeValue(kind: vkInt, intVal: 1))
+    let sum = MessageNode(receiver: slot.Node, selector: "+", arguments: @[one.Node])
+    let blockNode = BlockNode(parameters: @[], temporaries: @[], body: @[sum.Node])
+    # Either route captures the receiver: the slot access itself, or the owner's
+    # slot list when a slot is named as a plain identifier.
+    check "self" in analyzeCaptures(blockNode, @[], @["n"])
+    check "self" in analyzeCaptures(blockNode, @[], @[])
 
   test "analyzeCaptures handles nested blocks":
     ## The outer block references 'outerVar'

@@ -283,7 +283,8 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
 
 proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
-                         blockReg: BlockRegistry = nil): string =
+                         blockReg: BlockRegistry = nil,
+                         knownGlobals: seq[string] = @[]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -333,6 +334,9 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     
     if body.len > 0:
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
+      for globalName in knownGlobals:
+        if globalName notin genCtx.globals:
+          genCtx.globals.add(globalName)
       genCtx.inMethod = true
       genCtx.cellNames = scopeCaptureCellNames(body)
       if blockReg != nil:
@@ -453,11 +457,23 @@ proc extractHardingBlocks(nodes: seq[Node]): tuple[compileBlock, mainBlock: Bloc
     else:
       result.other.add(node)
 
+proc collectTopLevelGlobals*(nodes: seq[Node]): seq[string] =
+  ## Names assigned at top level whose first letter is uppercase are Harding
+  ## globals (matching the interpreter's uppercase-means-global rule). They are
+  ## emitted as module-level shared bindings rather than locals of main(), so
+  ## methods and blocks observe the same value.
+  for node in nodes:
+    if node != nil and node.kind == nkAssign:
+      let name = node.AssignNode.variable
+      if name.len > 0 and name[0] in {'A'..'Z'} and name notin result:
+        result.add(name)
+
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
                   blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
                   classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
                   mixed: bool = false, sourceFile: string = "",
-                  injectMainArgsVar: bool = false): string =
+                  injectMainArgsVar: bool = false,
+                  knownGlobals: seq[string] = @[]): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -490,6 +506,9 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
+  for globalName in knownGlobals:
+    if globalName notin genCtx.globals:
+      genCtx.globals.add(globalName)
   if injectMainArgsVar:
     genCtx.locals.add("args")
     genCtx.globals.add("args")
@@ -549,6 +568,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   let (classDefs, _) = extractClassAndMethodDefs(defsSourceNodes)
   let (_, executableMainNodes) = extractClassAndMethodDefs(mainBodyNodes)
 
+  # Top-level uppercase names are Harding globals: module-level shared bindings
+  # that main(), methods and blocks all resolve to.
+  let knownGlobals = collectTopLevelGlobals(executableMainNodes)
+
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
   # This avoids pulling unrelated stdlib/internal classes into generated output.
   let analysis = block:
@@ -604,8 +627,18 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # locals of main() and need to be captured by block procs at module level.
   # Only true globals (class names) would be excluded from captures.
   for md in methodDefs:
+    var ownerSlots: seq[string] = @[]
+    if md.className in analysis.classes:
+      for slot in analysis.classes[md.className].getAllSlots():
+        ownerSlots.add(slot.name)
+    # Parameters and temporaries shadow same-named slots for blocks in the body.
+    var ownerLocals: seq[string] = @[]
+    for p in md.params:
+      ownerLocals.add(p)
+    for t in md.temporaries:
+      ownerLocals.add(t)
     for stmt in md.body:
-      collectBlocks(blockReg, stmt)
+      collectBlocks(blockReg, stmt, knownGlobals, ownerSlots, ownerLocals)
   # Stamp method ownership so ^ inside these blocks targets the right method.
   # Walk the registry once per method, matching block nodes by identity against
   # the method body's registered nodes.
@@ -698,7 +731,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Collect blocks from top-level code into the shared registry
   for node in mainBodyNodes:
-    collectBlocks(blockReg, node)
+    collectBlocks(blockReg, node, knownGlobals)
 
   # Generate block environment structs and forward declarations BEFORE the
   # compiled methods so method bodies can reference block procedures.
@@ -720,7 +753,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate compiled methods from user definitions after primitive operators,
   # so compiled method bodies can call nt_* helpers without forward declarations.
-  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg))
+  output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
+                                 knownGlobals))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")
@@ -729,6 +763,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate block procedure bodies using real code generation
   var blockGenCtx = newGenContext(nil, compiledClassNames, analysis.classes, mixed)
+  for globalName in knownGlobals:
+    if globalName notin blockGenCtx.globals:
+      blockGenCtx.globals.add(globalName)
   blockGenCtx.blockRegistry = blockReg  # Share the registry so nested blocks can be found
   for blockInfo in blockReg.getAllBlocks():
     output.add(generateBlockProcSignature(blockInfo))
@@ -755,7 +792,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
-                         analysis.classes, mixed, sourceFile, injectMainArgsVar))
+                         analysis.classes, mixed, sourceFile, injectMainArgsVar,
+                         knownGlobals))
 
   # Module initialization
   output.add("\n")

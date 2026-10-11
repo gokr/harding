@@ -119,9 +119,17 @@ arbitrary error resumption solely in the interpreter.
       no synchronous block evaluation is used on these unwind paths.
 - [ ] Cleanup across process boundaries and legacy re-entrant native invocation
       paths still needs coverage.
-- [ ] Fix compiled methods' captures of mutable globals: the ordering regression
-      exposed a global captured as a symbol/copy rather than a shared binding.
-      Cleanup ordering parity uses observable output independently of this gap.
+- [x] Fix compiled method access to **Harding globals**. Top-level uppercase names
+      are module-level shared bindings (`getGlobal`/`setGlobal`); previously a
+      method assigning one invented a shadow local, and blocks captured a fresh
+      cell initialised to a symbol. Coverage: `global_scope` parity.
+- [x] Fix **receiver capture for blocks inside methods**. A block naming an
+      instance slot compiles to `getSlotValue(self, ...)`, but `self` was dropped
+      from captures, so such a block failed to compile (`undeclared identifier:
+      'self'`) when passed to another method. Now the block captures `self` when
+      it names a slot, and enclosing method parameters/temporaries shadow
+      same-named slots. Coverage: `block_slot_capture` parity plus unit tests.
+      This also corrected a unit test that asserted the earlier, wrong behaviour.
 - [x] Integrate inactive-home returns into non-resumable Harding errors; keep
       internal non-local-return transfers invisible to application handlers.
 - [x] Remove obsolete signal-point snapshot restoration and native resume control
@@ -167,6 +175,30 @@ arbitrary error resumption solely in the interpreter.
       executed tests (see accepted exception-model change above).
 - [ ] Evaluate continuation/state-machine lowering only where processes require
       it; arbitrary error resumption is no longer a language requirement.
+- [ ] Lower errors to **scope-based unwinding** rather than a return-code at every
+      call site. The VM already does this: `primitiveSignalImpl` computes
+      `unwindDepth` from the dynamic handler stack (`-1` when no handler is
+      installed) and `scheduleUnwindCleanup` walks registrations down to the
+      matching handler. Generated code should follow the same policy — a handler
+      installs a region/depth, an error skips directly to it, and only then is a
+      transfer value used. Treating every call as potentially failing would
+      double code size and cost for no benefit given one transfer kind.
+- [ ] Introduce a **dynamic-result (erased) type** for sends whose result type is
+      unknown (`perform:`, polymorphic receivers, library boundaries). Granite's
+      inferred `varTypes` currently has no "unknown type" representation, which is
+      why inference-backed specialization and boxing removal are not yet
+      expressible. This is a prerequisite for unboxing, not a preliminary to it.
+- [ ] Decide the inheritance model. Single inheritance permits inline-cache and
+      layout optimizations that multiple inheritance mostly prevents; multiple
+      inheritance (Harding's mixed-in-parents feature and Bona's Browser) keeps
+      dispatch fully dynamic. Cranelift-class JITs, for example, are explicitly
+      single-inheritance-only for this reason. Our now-removed resumption
+      (`resume:`) was the one construct that would have needed continuation
+      support; with it gone, no error-handling construct requires continuations.
+      Background on continuation mechanisms: Nimony's `.passive` procs (CPS) risk
+      introducing colored functions and suspendability obligations through
+      `ensure:`, so adopting that model for processes is a deliberate trade, not a
+      free win.
 - [ ] Catch/translate error and return transfers at C ABI boundaries; validate
       foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.

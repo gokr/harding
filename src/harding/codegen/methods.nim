@@ -340,7 +340,7 @@ proc nt_negated*(n: NodeValue): NodeValue =
 
 # Global variable support
 
-var globals*: Table[string, NodeValue]
+var globals* = initTable[string, NodeValue]()
 
 proc getGlobal*(name: string): NodeValue =
   ## Get global variable value

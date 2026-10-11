@@ -189,6 +189,9 @@ proc collectIdentRefs(node: Node, refs: var HashSet[string]) =
 
   of nkSlotAccess:
     let slotNode = node.SlotAccessNode
+    # Slot reads and writes both compile to getSlotValue/setSlotValue on the
+    # receiver, so a block touching a slot needs `self` in its environment.
+    refs.incl("self")
     if slotNode.isAssignment and slotNode.valueExpr != nil:
       collectIdentRefs(slotNode.valueExpr, refs)
 
@@ -246,9 +249,19 @@ proc collectAssignedVars*(node: Node, assigned: var HashSet[string]) =
   else:
     discard
 
-proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): seq[string] =
+proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[],
+                      ownerSlotNames: seq[string] = @[],
+                      ownerLocalNames: seq[string] = @[]): seq[string] =
   ## Analyze a block to find free variables that need capture
   ## Returns list of variable names that need to be captured from enclosing scope
+  ##
+  ## ownerSlotNames: slots of the class owning the enclosing method. A slot read
+  ## compiles to `getSlotValue(self, ...)`, so a block that names a slot needs
+  ## `self` captured even though it never spells `self` itself.
+  ##
+  ## ownerLocalNames: parameters and temporaries of the enclosing method. These
+  ## shadow same-named slots, so they must still be captured as ordinary
+  ## enclosing locals rather than treated as slot accesses.
   var allRefs = initHashSet[string]()
 
   # Collect all identifier references from block body
@@ -272,17 +285,29 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[]): se
   for name in assigned:
     if name notin allRefs:
       locals.incl(name)
-
   # Subtract locals, pseudo-variables, and known globals
   var captures: seq[string] = @[]
+  var needsSelf = false
   for name in allRefs:
     if name in locals:
+      continue
+    if name in ownerLocalNames:
+      # A locally declared name in the enclosing method shadows the slot, so it
+      # is an ordinary captured variable, not a receiver access.
+      captures.add(name)
+      continue
+    if name in ownerSlotNames:
+      # A slot read or write goes through the receiver, so the block needs it.
+      needsSelf = true
       continue
     if name in pseudoVars and name != "self":
       continue
     if name in knownGlobals:
       continue
     captures.add(name)
+
+  if needsSelf and "self" notin captures:
+    captures.add("self")
 
   return captures
 
@@ -348,13 +373,15 @@ proc hasReturnNode*(node: Node): bool =
   return false
 
 proc registerBlock*(reg: BlockRegistry, blockNode: BlockNode, knownGlobals: seq[string] = @[],
-                    homeInMethod: bool = false): BlockProcInfo =
+                    homeInMethod: bool = false,
+                    ownerSlotNames: seq[string] = @[],
+                    ownerLocalNames: seq[string] = @[]): BlockProcInfo =
   ## Register a block for compilation and return its metadata
   let nimName = reg.generateBlockName()
   let envName = reg.generateEnvStructName()
 
   # Analyze captures
-  let captures = analyzeCaptures(blockNode, knownGlobals)
+  let captures = analyzeCaptures(blockNode, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   # Check for non-local returns (^) recursively in block body
   var hasNonLocalReturn = false
@@ -587,7 +614,9 @@ const inlineControlSelectors = [
   "do:", "collect:", "select:"
 ]
 
-proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[string] = @[]) =
+proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[string] = @[],
+                    ownerSlotNames: seq[string] = @[],
+                    ownerLocalNames: seq[string] = @[]) =
   ## Recursively collect all blocks from an AST node
   ## This populates the block registry before code generation
   ## Blocks that will be inlined by control flow are NOT registered
@@ -597,10 +626,11 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
   case node.kind
   of nkBlock:
     # Standalone blocks (not part of control flow) get registered
-    discard registerBlock(registry, node.BlockNode, knownGlobals)
+    discard registerBlock(registry, node.BlockNode, knownGlobals, false, ownerSlotNames,
+                   ownerLocalNames)
     # Recursively collect blocks in the body
     for stmt in node.BlockNode.body:
-      collectBlocks(registry, stmt, knownGlobals)
+      collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkMessage:
     let msg = node.MessageNode
@@ -614,66 +644,68 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
       # generated and referenced consistently.
       if msg.receiver != nil:
         if msg.receiver.kind == nkBlock and hasReturnNode(msg.receiver):
-          discard registerBlock(registry, msg.receiver.BlockNode, knownGlobals)
+          discard registerBlock(registry, msg.receiver.BlockNode, knownGlobals, false,
+                         ownerSlotNames, ownerLocalNames)
           for stmt in msg.receiver.BlockNode.body:
-            collectBlocks(registry, stmt, knownGlobals)
+            collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
         elif msg.receiver.kind == nkBlock:
           for stmt in msg.receiver.BlockNode.body:
-            collectBlocks(registry, stmt, knownGlobals)
+            collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
         else:
-          collectBlocks(registry, msg.receiver, knownGlobals)
+          collectBlocks(registry, msg.receiver, knownGlobals, ownerSlotNames, ownerLocalNames)
       for arg in msg.arguments:
         if arg.kind == nkBlock and hasReturnNode(arg):
-          discard registerBlock(registry, arg.BlockNode, knownGlobals)
+          discard registerBlock(registry, arg.BlockNode, knownGlobals, false,
+                         ownerSlotNames, ownerLocalNames)
           for stmt in arg.BlockNode.body:
-            collectBlocks(registry, stmt, knownGlobals)
+            collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
         elif arg.kind == nkBlock:
           for stmt in arg.BlockNode.body:
-            collectBlocks(registry, stmt, knownGlobals)
+            collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
         else:
-          collectBlocks(registry, arg, knownGlobals)
+          collectBlocks(registry, arg, knownGlobals, ownerSlotNames, ownerLocalNames)
     else:
       # Not inline control flow - process normally
       if msg.receiver != nil:
-        collectBlocks(registry, msg.receiver, knownGlobals)
+        collectBlocks(registry, msg.receiver, knownGlobals, ownerSlotNames, ownerLocalNames)
       for arg in msg.arguments:
-        collectBlocks(registry, arg, knownGlobals)
+        collectBlocks(registry, arg, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkAssign:
     let assign = node.AssignNode
-    collectBlocks(registry, assign.expression, knownGlobals)
+    collectBlocks(registry, assign.expression, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkReturn:
     let ret = node.ReturnNode
     if ret.expression != nil:
-      collectBlocks(registry, ret.expression, knownGlobals)
+      collectBlocks(registry, ret.expression, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkArray:
     let arr = node.ArrayNode
     for elem in arr.elements:
-      collectBlocks(registry, elem, knownGlobals)
+      collectBlocks(registry, elem, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkTable:
     let tbl = node.TableNode
     for (key, val) in tbl.entries:
-      collectBlocks(registry, key, knownGlobals)
-      collectBlocks(registry, val, knownGlobals)
+      collectBlocks(registry, key, knownGlobals, ownerSlotNames, ownerLocalNames)
+      collectBlocks(registry, val, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkIf:
     let ifNode = node.IfNode
     if ifNode.condition != nil:
-      collectBlocks(registry, ifNode.condition, knownGlobals)
+      collectBlocks(registry, ifNode.condition, knownGlobals, ownerSlotNames, ownerLocalNames)
     if ifNode.thenBranch != nil:
-      collectBlocks(registry, ifNode.thenBranch, knownGlobals)
+      collectBlocks(registry, ifNode.thenBranch, knownGlobals, ownerSlotNames, ownerLocalNames)
     if ifNode.elseBranch != nil:
-      collectBlocks(registry, ifNode.elseBranch, knownGlobals)
+      collectBlocks(registry, ifNode.elseBranch, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkWhile:
     let whileNode = node.WhileNode
     if whileNode.condition != nil:
-      collectBlocks(registry, whileNode.condition, knownGlobals)
+      collectBlocks(registry, whileNode.condition, knownGlobals, ownerSlotNames, ownerLocalNames)
     if whileNode.body != nil:
-      collectBlocks(registry, whileNode.body, knownGlobals)
+      collectBlocks(registry, whileNode.body, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   else:
     # Other node types don't contain blocks

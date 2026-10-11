@@ -239,6 +239,38 @@ result := [attempts := attempts + 1. (attempts < 2) ifTrue: [Error signal: "retr
   on: Error do: [:ex | ex retry].
 result println.
 """, "pass\n42\n2\n"),
+    # Top-level uppercase names are Harding globals: shared bindings visible to
+    # compiled methods and to blocks inside them, not locals of main().
+    ("global_scope", """
+Order := "before".
+Counter := 0.
+Total := 0.
+C := Object derive: #().
+C>>bump [ Order := Order & "!". Counter := Counter + 1 ].
+C>>read [ ^ Order ].
+C>>addThrice [ 3 timesRepeat: [ Total := Total + 1 ] ].
+C new bump.
+Order println.
+Counter println.
+(C new read) println.
+C new addThrice.
+Total println.
+""", "before!\n1\nbefore!\n3\n"),
+    # A block lexically inside a method that names an instance slot compiles to
+    # getSlotValue(self, ...), so it must capture `self` into its environment.
+    ("block_slot_capture", """
+C := Object derive: #(n).
+C>>n: v [ n := v ].
+C>>apply: blk [ ^ blk value ].
+C>>direct [ ^ [ n + 1 ] value ].
+C>>nested [ ^ self apply: [ n + 2 ] ].
+C>>held [ | b | b := [ n + 3 ]. ^ self apply: b ].
+o := C new.
+o n: 41.
+(o direct) println.
+(o nested) println.
+(o held) println.
+""", "42\n43\n44\n"),
     ("notification_dispatch", """
 result := [Notification signal: "notice"] on: Notification do: [:ex | "handled"].
 result println.
