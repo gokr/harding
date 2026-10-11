@@ -218,18 +218,18 @@ suite "HtmlCanvas repeated rendering":
   test "non-cached canvas builds each time":
     let script = """
       RenderCount := 0.
-      
-      MyTemplate := Html canvas: [:h |
+
+      MyTemplate := [:h |
         RenderCount := RenderCount + 1.
         h div: [ h span: "not cached" ]
       ].
-      
-      First := MyTemplate.
-      Second := MyTemplate.
-      
+
+      First := Html render: MyTemplate.
+      Second := Html render: MyTemplate.
+
       RenderCount
     """
     let (result, err) = interp.evalStatements(script)
     check(err.len == 0)
-    # No caching, so RenderCount should be 2
+    # No caching, so the block runs once per render
     check(result[^1].intVal == 2)

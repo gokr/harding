@@ -106,6 +106,18 @@ suite "Exception Handling":
     """)
     check(result[0][^1].intVal == 7)
 
+  test "resume keeps the enclosing assignment continuation":
+    # The expression value was already correct before this fix; the assignment's
+    # own continuation was discarded, so reading Result back gave nil. Both the
+    # value and the stored variable must be the resumed value.
+    let assigned = interp.evalStatements("""
+      Result := [ 10 // 0 ] on: DivisionByZero do: [ :ex | ex resume: 42 ]
+    """)
+    check(assigned[1].len == 0)
+    let readBack = interp.evalStatements("Result")
+    check(readBack[1].len == 0)
+    check(readBack[0][^1].intVal == 42)
+
   test "pass skips non-matching outer handler":
     let result = interp.evalStatements("""
       Result := [

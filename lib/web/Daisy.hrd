@@ -59,21 +59,15 @@ Daisy>>stylesheetContent [
   ^ "/* DaisyUI styles would go here */"
 ]
 
-Daisy>>shellClass [ ^ "daisy-shell" ]
-
-Daisy>>themeAttribute [
-  ^ "data-theme='" & self::theme & "'"
-]
-
-Daisy>>heroClass [ ^ "hero bg-base-200 rounded-box shadow-xl" ]
-Daisy>>panelClass [ ^ "card bg-base-100 shadow-xl" ]
-Daisy>>stackClass [ ^ "card-body" ]
-Daisy>>inputClass [ ^ "input input-bordered" ]
-Daisy>>primaryButtonClass [ ^ "btn btn-primary" ]
-Daisy>>ghostButtonClass [ ^ "btn btn-ghost" ]
-Daisy>>badgeClass [ ^ "badge badge-outline" ]
-Daisy>>mutedClass [ ^ "text-base-content" ]
-
-## Convenience class methods
+# Class name helpers. Call sites send these to the Daisy class, so the
+# pure-string variants live on the class side.
 Daisy class>>shellClass [ ^ "daisy-shell" ]
+Daisy class>>heroClass [ ^ "hero bg-base-200 rounded-box shadow-xl" ]
+Daisy class>>panelClass [ ^ "card bg-base-100 shadow-xl" ]
+Daisy class>>stackClass [ ^ "card-body" ]
+Daisy class>>inputClass [ ^ "input input-bordered" ]
+Daisy class>>primaryButtonClass [ ^ "btn btn-primary" ]
+Daisy class>>ghostButtonClass [ ^ "btn btn-ghost" ]
+Daisy class>>badgeClass [ ^ "badge badge-outline" ]
+Daisy class>>mutedClass [ ^ "text-base-content" ]
 Daisy class>>themeName [ ^ "business" ]

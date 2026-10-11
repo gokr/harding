@@ -1,6 +1,6 @@
 ## Tests for MCP Bridge
 
-import std/[unittest, json, strutils]
+import std/[unittest, json, strutils, tables]
 import ../src/harding/core/types
 import ../src/harding/interpreter/objects
 import ../src/harding/web/mcp_bridge
@@ -16,7 +16,7 @@ suite "MCP Server Management":
     let serverId = createMcpServer("test-server", "1.0.0")
 
     ## Create a dummy block node
-    var dummyBlock: BlockNode
+    let dummyBlock = BlockNode()
     dummyBlock.parameters = @[]
 
     let success = registerMcpTool(serverId, "test_tool", "A test tool",
@@ -24,7 +24,7 @@ suite "MCP Server Management":
     check success == true
 
   test "Register tool with invalid server":
-    var dummyBlock: BlockNode
+    let dummyBlock = BlockNode()
     let success = registerMcpTool(99999, "test_tool", "A test tool",
       %*{"type": "object"}, dummyBlock)
     check success == false
@@ -49,7 +49,7 @@ suite "JSON-RPC Helpers":
 suite "MCP Protocol":
   setup:
     let serverId = createMcpServer("test-server", "1.0.0")
-    var dummyBlock: BlockNode
+    let dummyBlock = BlockNode()
 
   test "Initialize returns correct protocol version":
     let server = mcpServers[serverId]
@@ -74,7 +74,7 @@ suite "MCP Protocol":
 
   test "Tool call with non-existent tool":
     let server = mcpServers[serverId]
-    let interp: Interpreter  ## Mock interpreter
+    var interp: Interpreter  ## Mock interpreter
     let result = handleMcpToolCall(interp, server, "nonexistent", %*{})
     check result.hasKey("error")
     check result{"error"}{"code"}.getInt() == -32601

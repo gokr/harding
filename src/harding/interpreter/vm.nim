@@ -1901,14 +1901,24 @@ proc resumeFromSignalContext(interp: var Interpreter, handlerIdx: int, resumeVal
     var startIdx = popHandlerIdx + 1
     while startIdx < savedWQ.len and (savedWQ[startIdx].kind == wfPopActivation or savedWQ[startIdx].kind == wfReturnValue):
       startIdx += 1
-    if startIdx < savedWQ.len:
-      interp.workQueue = savedWQ[startIdx..^1]
-      debug("resume: restored work queue from index ", startIdx, " len = ", interp.workQueue.len)
-    else:
-      interp.workQueue = @[]
-      debug("resume: no executable frames after wfPopHandler")
+    # Frames below the handler's install point are the continuations of the
+    # expression containing on:do: (for example the assignment that will receive
+    # the result). Restoring only the frames above wfPopHandler discarded them,
+    # so `x := [ ... ] on:do: [:ex | ex resume: v]` resumed into an empty queue
+    # and the assignment never ran. Keep both the outer continuations and the
+    # frames that remained after the handler framing.
+    let outerFrames = min(handler.workQueueDepth, savedWQ.len)
+    var restored: seq[WorkFrame] = @[]
+    for i in 0..<outerFrames:
+      restored.add(savedWQ[i])
+    for i in startIdx..<savedWQ.len:
+      restored.add(savedWQ[i])
+    interp.workQueue = restored
+    debug("resume: restored work queue len = ", interp.workQueue.len)
   else:
-    interp.workQueue = @[]
+    # No handler framing found: fall back to the outer continuations only.
+    let outerFrames = min(handler.workQueueDepth, savedWQ.len)
+    interp.workQueue = savedWQ[0..<outerFrames]
     debug("resume: no wfPopHandler found at popHandlerIdx=", popHandlerIdx, ", savedWQ.len=", savedWQ.len)
 
   # Restore eval stack from signal point

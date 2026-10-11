@@ -1,8 +1,8 @@
 #!/usr/bin/env nim
 #
-# Tests for block-aware Html template caching
-# Covers static string DSL compatibility, dynamic block content,
-# dynamic attrs, and component context rendering.
+# Tests for the current Html renderer and component-level render caching.
+# Covers direct rendering, dynamic block content, dynamic attrs and escaping,
+# component cache reuse/invalidation, and todo component rendering.
 #
 
 import std/[strutils, unittest]
@@ -32,41 +32,52 @@ proc expectArray(value: NodeValue): seq[NodeValue] =
   check(value.instVal.kind == ikArray)
   value.instVal.elements
 
-suite "Web Html template cache":
-  test "plain Html DSL still returns static strings":
+suite "Web Html rendering":
+  test "plain Html DSL renders static strings":
     var interp = newWebInterp()
-    let (result, err) = interp.doit("Html div: #{#class -> \"badge\"} with: \"Hello\"")
+    let (result, err) = interp.doit("""
+      Html render: [:h |
+        h class: "badge".
+        h div: "Hello"
+      ]
+    """)
     check(err.len == 0)
     check(expectString(result) == "<div class=\"badge\">Hello</div>")
 
-  test "block content becomes a reusable dynamic template":
+  test "block content is re-evaluated on each render":
     var interp = newWebInterp()
     let script = """
       Counter := 0.
-      Template := Html div: #{#class -> "badge"} with: [ Counter := Counter + 1. Counter printString ].
+      Template := [:h |
+        Counter := Counter + 1.
+        h class: "badge".
+        h div: [ h span: Counter printString ]
+      ].
       Outputs := Array new.
-      Outputs add: (Template renderString).
-      Outputs add: (Template renderString).
+      Outputs add: (Html render: Template).
+      Outputs add: (Html render: Template).
       Outputs
     """
     let results = interp.evalStatements(script)
     check(results[1].len == 0)
     let outputs = expectArray(results[0][^1])
-    check(expectString(outputs[0]) == "<div class=\"badge\">1</div>")
-    check(expectString(outputs[1]) == "<div class=\"badge\">2</div>")
+    check(expectString(outputs[0]) == "<div class=\"badge\"><span>1</span></div>")
+    check(expectString(outputs[1]) == "<div class=\"badge\"><span>2</span></div>")
 
-  test "dynamic attrs are escaped and nil attrs are omitted":
+  test "dynamic attributes are escaped and nil attributes are omitted":
     var interp = newWebInterp()
     let script = """
       Counter := 0.
-      Template := Html div: #{
-        #"data-count" -> [ Counter := Counter + 1. Counter printString ]
-        #"data-note" -> [ "A&B<C>" ]
-        #"data-skip" -> [ nil ]
-      } with: "".
+      Template := [:h |
+        Counter := Counter + 1.
+        h attr: #"data-count" value: Counter printString.
+        h attr: #"data-note" value: "A&B<C>".
+        h attr: #"data-skip" value: nil.
+        h div: ""
+      ].
       Outputs := Array new.
-      Outputs add: (Template renderString).
-      Outputs add: (Template renderString).
+      Outputs add: (Html render: Template).
+      Outputs add: (Html render: Template).
       Outputs
     """
     let results = interp.evalStatements(script)
@@ -79,39 +90,33 @@ suite "Web Html template cache":
     check(first.contains("data-note=\"A&amp;B&lt;C&gt;\""))
     check(not first.contains("data-skip="))
 
-  test "cached component templates can use render context":
+  test "nested components render through the shared canvas":
     var interp = newWebInterp()
     let script = """
-      OuterTemplate := nil.
       OuterComponent := Component derivePublic: #().
+      InnerComponent := Component derivePublic: #().
 
-      OuterComponent class>>template [
-        | parts |
-        OuterTemplate isNil ifTrue: [
-          parts := Array new.
-          parts add: "before ".
-          parts add: (Html fragmentWith: [:component | component className]).
-          parts add: " after".
-          OuterTemplate := Html div: #{#class -> "outer"} with: parts
-        ].
-        ^ OuterTemplate
+      InnerComponent>>render [ ^ Html render: [:h | h span: "inner" ] ].
+
+      OuterComponent>>render [
+        ^ Html render: [:h |
+          h class: "outer".
+          h div: [ h renderComponent: InnerComponent new ]
+        ]
       ].
 
-      OuterComponent>>render [ ^ self class template ].
-
-      Parent := OuterComponent basicNew.
-      Parent renderString
+      OuterComponent new renderString
     """
     let results = interp.evalStatements(script)
     check(results[1].len == 0)
-    check(expectString(results[0][^1]) == "<div class=\"outer\">before OuterComponent after</div>")
+    check(expectString(results[0][^1]) == "<div class=\"outer\"><span>inner</span></div>")
 
   test "todo components render without leaking block placeholders":
     var interp = newWebInterp(loadTodo = true)
     let script = """
       Repo := TodoRepository new.
       Repo addTitle: "<done>".
-      (TodoPageComponent repository: Repo) renderString
+      (TodoPageComponent repository: Repo routePrefix: "" panelId: "todo-panel") renderString
     """
     let (result, err) = interp.doit(script)
     check(err.len == 0)
@@ -119,3 +124,27 @@ suite "Web Html template cache":
     check(html.contains("id=\"todo-panel\""))
     check(html.contains("&lt;done&gt;"))
     check(not html.contains("<block>"))
+
+suite "Web component render cache":
+  test "cached component output is reused until tracked state changes":
+    var interp = newWebInterp()
+    let script = """
+      Builds := 0.
+      State := TrackedValue value: 0.
+      StateComponent := Component derivePublic: #().
+      StateComponent>>render [
+        Builds := Builds + 1.
+        ^ Html render: [:h | h div: [ h span: State value printString ] ]
+      ].
+      StateComponent>>renderCacheKey [ ^ "state-component" ].
+
+      First := StateComponent new renderString.
+      Second := StateComponent new renderString.
+      State value: 5.
+      Third := StateComponent new renderString.
+      (First = Second) printString & "|" & (First = Third) printString & "|" & (Builds = 2) printString & "|" & Third
+    """
+    let (result, err) = interp.doit(script)
+    check(err.len == 0)
+    check(result.strVal.startsWith("true|false|true|"))
+    check(result.strVal.contains("<span>5</span>"))
