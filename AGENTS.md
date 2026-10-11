@@ -71,7 +71,7 @@ Load failure and structured evaluation were explicitly agreed and are implemente
 
 Still open for discussion: evaluation is not cancellable — an in-flight `Object evaluate:` cannot be interrupted.
 
-Uncaught behaviour is intentional and covered by tests: a signal that reaches the top level with no handler runs the exception's `defaultAction` and exits (with the `=== Uncaught Exception ===` banner), except `MessageNotUnderstood`, which is reported as an error so tooling can keep running. Keep that distinction when touching `primitiveSignalImpl`.
+Uncaught behaviour is intentional and covered by tests. At the top level of a CLI run, a signal with no handler runs the exception's `defaultAction` and exits with the `=== Uncaught Exception ===` banner — except `MessageNotUnderstood`, which is reported as an error so tooling keeps running. Inside an embedded host, anything reached through a host callback must use `evalCallbackNonFatal` (see `invokeGtkCallbackBlock`): one mistake in a handler must never quit the IDE. Keep both distinctions when touching `primitiveSignalImpl` or the callback boundaries.
 
 `::` now resolves documented string keys for tables and library bindings (`table::name`, `myLib::Binding`), and slot reads/writes work for readable/writable slots. Private slots remain inaccessible from outside and that rejection is catchable.
 

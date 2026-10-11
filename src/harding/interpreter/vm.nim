@@ -8954,28 +8954,31 @@ proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue =
   let savedWorkQueue = interp.workQueue
   let savedEvalStack = interp.evalStack
 
-  # Initialize fresh VM state for this evaluation
-  interp.workQueue = newSeqOfCap[WorkFrame](64)
-  interp.workQueue.add(newEvalFrame(node))
-  interp.evalStack = newSeqOfCap[NodeValue](32)
+  # Restore in a finally block: this is a re-entrant entry point, so an error
+  # raised out of the nested evaluation (VM error, uncaught signal, callback
+  # failure) must not leave this evaluation's frames on the shared stacks.
+  # Skipping the restore corrupts the caller's evaluation, which then fails
+  # with an unrelated error such as "index out of bounds".
+  try:
+    # Initialize fresh VM state for this evaluation
+    interp.workQueue = newSeqOfCap[WorkFrame](64)
+    interp.workQueue.add(newEvalFrame(node))
+    interp.evalStack = newSeqOfCap[NodeValue](32)
 
-  # Run the VM
-  let vmResult = interp.runASTInterpreter()
+    # Run the VM
+    let vmResult = interp.runASTInterpreter()
 
-  # Get result before restoring state
-  let resultValue = case vmResult.status
-    of vmCompleted, vmYielded:
-      vmResult.value
-    of vmError:
-      raise newException(ValueError, vmResult.error)
-    of vmRunning:
-      nilValue()
-
-  # Restore previous VM state
-  interp.workQueue = savedWorkQueue
-  interp.evalStack = savedEvalStack
-
-  return resultValue
+    # Get result before restoring state
+    result = case vmResult.status
+      of vmCompleted, vmYielded:
+        vmResult.value
+      of vmError:
+        raise newException(ValueError, vmResult.error)
+      of vmRunning:
+        nilValue()
+  finally:
+    interp.workQueue = savedWorkQueue
+    interp.evalStack = savedEvalStack
 
 proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
   ## Evaluate an expression with a clean activation context.
@@ -9007,6 +9010,23 @@ proc evalWithVMCleanContext*(interp: var Interpreter, node: Node): NodeValue =
     interp.currentActivation = savedCurrentActivation
     interp.currentReceiver = savedCurrentReceiver
     raise
+
+proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
+  ## Evaluate a host callback (GTK signal, timer, IDE dispatch) without letting
+  ## an uncaught Harding signal terminate the host process.
+  ##
+  ## A signal that reaches the top level with no handler normally runs the
+  ## exception's defaultAction and quits, which is right for a CLI script but
+  ## fatal for an embedded host: one mistake in a button handler would close the
+  ## IDE. Inside a callback boundary the signal is converted into a catchable
+  ## error instead, and the caller reports it (see invokeGtkCallbackBlock and
+  ## its except handlers).
+  let previousSuppress = interp.suppressUncaughtExit
+  interp.suppressUncaughtExit = true
+  try:
+    result = evalWithVMCleanContext(interp, node)
+  finally:
+    interp.suppressUncaughtExit = previousSuppress
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM

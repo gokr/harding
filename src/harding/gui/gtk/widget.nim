@@ -63,10 +63,14 @@ proc newBlockCallbackMessage(blockNode: BlockNode, args: seq[NodeValue]): Messag
   )
 
 proc invokeGtkCallbackBlock*(interp: ptr Interpreter, blockNode: BlockNode, args: seq[NodeValue]) =
+  ## Run one Harding callback block on behalf of GTK.
+  ##
+  ## Uses the non-fatal boundary: an uncaught signal in a signal handler is
+  ## reported by the caller instead of quitting the host application.
   if interp == nil or blockNode == nil:
     return
 
-  discard evalWithVMCleanContext(interp[], newBlockCallbackMessage(blockNode, args))
+  discard evalCallbackNonFatal(interp[], newBlockCallbackMessage(blockNode, args))
 
 proc invokeGtkSignalHandlers*(interp: ptr Interpreter, handlers: seq[SignalHandler], args: seq[NodeValue]) =
   if interp == nil:

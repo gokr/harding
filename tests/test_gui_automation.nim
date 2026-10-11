@@ -520,6 +520,35 @@ suite "GTK automation helpers":
     check(result.kind == vkString)
     check(result.strVal == "Probe")
 
+  test "a failing signal handler does not terminate the host":
+    if not hasGuiDisplay():
+      skip()
+
+    # An uncaught signal inside a GTK callback must not quit the process: in an
+    # embedded host (Bona) that would close the IDE on one mistaken handler.
+    # If the callback boundary regresses, this test binary exits and the suite
+    # fails rather than reporting a caught error.
+    let interp = guiInterp()
+    let (value, err) = interp[].doit("""
+      HandlerErrors := 0.
+      Boom := GtkButton newLabel: "Boom".
+      Boom clicked: [
+        HandlerErrors := HandlerErrors + 1.
+        Error signal: "handler bug"
+      ].
+      Boom emit: "clicked".
+      GtkWidget flushEvents: 10.
+      HandlerErrors
+    """)
+    check(err.len == 0)
+    check(value.kind == vkInt)
+    check(value.intVal == 1)
+
+    let (after, afterErr) = interp[].doit("6 * 7")
+    check(afterErr.len == 0)
+    check(after.kind == vkInt)
+    check(after.intVal == 42)
+
   test "Workspace and Transcript report structured evaluation outcomes":
     if not hasGuiDisplay():
       skip()
