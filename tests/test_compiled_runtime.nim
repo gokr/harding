@@ -143,3 +143,40 @@ suite "Compiled monomorphic send caches":
     registerCompiledMethod("CacheReentrantOuter", "answer", outerAnswer)
     check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3
     check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3
+
+proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  NodeValue(kind: vkString, strVal: args[0].symVal)
+
+suite "Compiled missing messages":
+  test "immediate and class misses carry a catchable Harding error":
+    let rt = newRuntime()
+    for receiver in [NodeValue(kind: vkInt, intVal: 1), NodeValue(kind: vkNil)]:
+      var caught = false
+      try:
+        discard sendMessage(rt, receiver, "absent", @[])
+      except CompiledHardingError as failure:
+        caught = true
+        check failure.value.instVal.class.name == "MessageNotUnderstood"
+        check failure.value.instVal.slots[0].strVal == "Message not understood: absent"
+      check caught
+    registerCompiledClass("MissingClassTest", defaultAllocation)
+    expect CompiledHardingError:
+      discard sendMessage(rt, compiledClassValue("MissingClassTest"), "absent", @[])
+
+  test "custom inherited DNU may recover and may return nil":
+    let rt = newRuntime()
+    let receiver = proxyReceiver("DnuChildTest")
+    registerSuperclass("DnuChildTest", "DnuParentTest")
+    registerCompiledMethod("DnuParentTest", "doesNotUnderstand:", recoveredSelector)
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, receiver, "absent", @[], cache).strVal == "absent"
+    check sendMessageCached(rt, receiver, "another", @[], cache).strVal == "another"
+    proc nilRecovery(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      NodeValue(kind: vkNil)
+    registerCompiledMethod("DnuParentTest", "doesNotUnderstand:", nilRecovery)
+    check sendMessageCached(rt, receiver, "absent", @[], cache).kind == vkNil
+
+  test "super lookup failure raises rather than answering nil":
+    let receiver = proxyReceiver("MissingSuperTest")
+    expect CompiledHardingError:
+      discard sendSuperMessage(receiver, "MissingSuperTest", "absent", @[])

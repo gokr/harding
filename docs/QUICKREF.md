@@ -608,8 +608,16 @@ ex pass            # Delegate to next outer handler
 [riskyOperation] ensure: [cleanup]
 ```
 
-**Not supported:** `resume`, `resume:`, `return:`, `isResumable`. Harding has no
-continuations, so a handler cannot transfer control back to a saved point.
+**Not supported:** `resume`, `resume:`, `return:`, `isResumable`. Exception handlers
+cannot transfer control back to a saved signal point.
+
+Missing selectors invoke `doesNotUnderstand:` or signal `MessageNotUnderstood`,
+a catchable `Error` subclass. A custom DNU can return a recovery value (including
+nil); cleanup still runs before a failed protected scope's handler.
+
+```harding
+[1 missing] on: MessageNotUnderstood do: [:ex | 42]
+```
 
 ## Primitives
 

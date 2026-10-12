@@ -143,15 +143,16 @@ arbitrary error resumption solely in the interpreter.
       bounds, the container is empty" on `[1 foo]`; `wfPopActivation` now reports
       completion when its activation is already gone, and every eval-stack
       restore is clamped to the live length.
-- [ ] Two dispatch-failure defects remain, both **interpreter and compiled**:
-      (a) `[1 foo] on: Error do: [:ex | ...]` answers nil instead of the handler's
-          result, while `[Object new bar]` answers correctly — the DNU fallback in
-          `wfSendMessage` runs the handler via `executeMethod` and its result is
-          not propagated through the normal return path;
-      (b) when a signal is handled inside an `on:do:` act that is the **final
-          expression of a compiled method**, the method yields the signal's class
-          name (`"Error"`) instead of the handler's result; returning the value
-          once (`^`) fixes it.
+- [x] Missing immediate sends preserve handler results: the VM now schedules
+      doesNotUnderstand: as an ordinary send rather than synchronous executeMethod.
+      Instance/class lookup exhaustion signals MessageNotUnderstood; native generic,
+      class and super lookup misses raise the same catchable Error subclass. Custom
+      inherited DNU may recover, including nil results; cleanup precedes handlers
+      and uncaught exit. Executed parity covers these paths.
+- [ ] Correct compiled implicit method returns: the interpreter's verified rule is
+      self without ^, including after an on:do: expression. Explicit ^ returns its
+      expression result. The prior final-expression entry incorrectly assumed
+      implicit last-value returns; do not use that as a language contract.
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to
@@ -189,7 +190,9 @@ arbitrary error resumption solely in the interpreter.
       remains a separate compiler fix.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
-- [ ] Proper missing-message errors instead of silent nil.
+- [x] Generic missing-message errors instead of silent nil, including compiled
+      instance/class/super lookup and custom DNU. Wrong-type primitive fallback,
+      reflection and mixed-mode ambiguity remain separate coverage items.
 - [ ] Reconcile nil-predicate overrides: the interpreter's unconditional isNil/
       notNil fast paths bypass registered user methods, while compiled dispatch
       checks overrides before the fallback. Minimal reproduction: a class with

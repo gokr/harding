@@ -27,6 +27,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 
 ### Fixed
+- Missing sends now preserve handler results through ordinary stackless DNU dispatch. Native generic instance/class/super lookup exhaustion signals catchable MessageNotUnderstood instead of returning nil; inherited custom DNU may recover, including nil results. Regression cases cover missing immediate sends, class recovery, outer handlers, and cleanup before caught/uncaught failures.
 - Generated native instance wrappers strongly retain their native storage instead of leaving only an ARC-invisible raw pointer. Object chains now remain valid without permanently rooting every allocation; queens and towers also execute correctly under ORC.
 - Capture analysis traverses specialized if/while and named-access nodes, and write-only enclosing method temporaries share their binding. Compiled nil predicates preserve ordinary method overrides.
 - Compiled methods now read and write Harding globals. Top-level uppercase names are shared module-level bindings instead of per-method shadow locals, so a method assigning one is seen by later top-level code and by other methods; blocks no longer capture a placeholder symbol. Covered by a `global_scope` parity case.

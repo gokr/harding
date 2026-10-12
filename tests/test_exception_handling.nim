@@ -108,12 +108,36 @@ suite "Exception Handling":
   test "removed resumption actions are unknown selectors":
     # There is no resumption in Harding, so these selectors are simply gone: the
     # evaluation fails with Message not understood rather than resuming.
-    # (Message-not-understood is not yet routed through on:do:; see PLAN.md.)
     let evaluated = interp.evalStatements("""
       Result := [Error signal: "first"] on: Error do: [:ex | ex resume: 42]
     """)
     check evaluated[1].len > 0
     check("Message not understood" in evaluated[1])
+
+  test "missing immediate sends preserve handler results":
+    let evaluated = interp.evalStatements("""
+      [1 missing] on: Error do: [:ex | 42]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].intVal == 42
+    check interp.exceptionHandlers.len == 0
+
+  test "missing sends in handlers reach the outer handler":
+    let evaluated = interp.evalStatements("""
+      [[Error signal: "original"] on: Error do: [:ex | ex resume: 1]]
+        on: MessageNotUnderstood do: [:outer | 77]
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].intVal == 77
+
+  test "custom doesNotUnderstand runs through stackless dispatch":
+    let evaluated = interp.evalStatements("""
+      DispatchRecovery := Object derive: #().
+      DispatchRecovery>>doesNotUnderstand: selector [ ^ 91 ].
+      DispatchRecovery new missing
+    """)
+    check evaluated[1].len == 0
+    check evaluated[0][^1].intVal == 91
 
   test "DivisionByZero catches integer division by zero":
     let result = interp.evalStatements("""

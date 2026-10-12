@@ -43,6 +43,7 @@ var activeErrorHandlers {.threadvar.}: seq[Instance]
 
 proc getSuperclassName*(className: string): string
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
+proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue
 
@@ -268,7 +269,7 @@ proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
     if compiledFn != nil:
       return compiledFn(receiver, args)
     currentClass = getSuperclassName(currentClass)
-  return NodeValue(kind: vkNil)
+  return compiledMissingMessage(receiver, selector)
 
 proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
   ## Check if a compiled method exists on this class or any superclass.
@@ -307,7 +308,7 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
     let name = receiver.classVal.name
     if name in compiledAllocators:
       return compiledAllocators[name](receiver, args)
-  return NodeValue(kind: vkNil)
+  return compiledMissingMessage(receiver, selector)
 
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
                        selector: string, args: seq[NodeValue],
@@ -319,7 +320,7 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
   if startClass.len == 0:
     startClass = getSuperclassName(definingClassName)
   if startClass.len == 0:
-    return NodeValue(kind: vkNil)
+    return compiledMissingMessage(receiver, selector)
   if receiver.kind == vkClass:
     return dispatchCompiledClassMethod(receiver, startClass, selector, args)
   return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
@@ -381,6 +382,19 @@ proc raiseCompiledError*(value: NodeValue): NodeValue =
                 else:
                   "exception"
   raise (ref CompiledHardingError)(value: value, msg: className & ": " & message)
+
+proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue =
+  ## Offer a custom DNU method once, then signal the ordinary Harding error.
+  let selectorValue = NodeValue(kind: vkSymbol, symVal: selector)
+  if selector != "doesNotUnderstand:":
+    if receiver.kind == vkClass and receiver.classVal != nil and
+       hasCompiledClassMethodInHierarchy(receiver.classVal.name, "doesNotUnderstand:"):
+      return dispatchCompiledClassMethod(receiver, receiver.classVal.name,
+                                         "doesNotUnderstand:", @[selectorValue])
+    let className = getReceiverClassName(receiver)
+    if className.len > 0 and hasCompiledMethodInHierarchy(className, "doesNotUnderstand:"):
+      return dispatchCompiledMethodFromClass(receiver, className, "doesNotUnderstand:", @[selectorValue])
+  return raiseCompiledError(compiledErrorValue("MessageNotUnderstood", "Message not understood: " & selector))
 
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool =
   if value.kind != vkInstance or value.instVal == nil or value.instVal.class == nil or
@@ -822,7 +836,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
     if receiverClassName.len > 0:
       return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
-    return NodeValue(kind: vkNil)
+    return compiledMissingMessage(receiver, selector)
 
 proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                         args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
@@ -885,10 +899,15 @@ proc sendMessageHybrid*(receiver: NodeValue, selector: string,
   
   # First, try to use the compiled runtime if available
   if currentRuntime != nil:
-    let dispatchResult = sendMessage(currentRuntime[], receiver, selector, args)
-    # If result is not nil, the compiled version handled it
-    if dispatchResult.kind != vkNil:
-      return dispatchResult
+    try:
+      let dispatchResult = sendMessage(currentRuntime[], receiver, selector, args)
+      # If result is not nil, the compiled version handled it
+      if dispatchResult.kind != vkNil:
+        return dispatchResult
+    except CompiledHardingError as failure:
+      if failure.value.kind != vkInstance or failure.value.instVal == nil or
+         failure.value.instVal.class == nil or failure.value.instVal.class.name != "MessageNotUnderstood":
+        raise
   
   # Fall back to interpreter for uncompiled methods
   initHybridRuntime()

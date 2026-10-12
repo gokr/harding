@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty parity cases cover the current milestones, including three unhandled-error checks and the
+Fifty-two parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -100,7 +100,17 @@ Generated accessor messages use ordinary compiled method registration, preservin
 user overrides and inherited lookup. Generated setters return the receiver.
 Direct named access (`::`) remains distinct from accessor message dispatch.
 Compiler registration tests check that private and disallowed accessor directions
-are not emitted. Missing-message error parity remains a later milestone.
+are not emitted. Generic instance/class/super lookup failures now signal catchable
+MessageNotUnderstood rather than nil. VM DNU executes on the normal work queue,
+preserving handler results; custom inherited instance/class DNU recovery and cleanup
+before handled/uncaught errors have executed coverage. Wrong-type primitive fallback
+and mixed-mode dispatch remain distinct gaps. Implicit compiled method returns
+still need alignment with the interpreter's self-without-^ convention.
+Focused MNU tests, interpreter core, and exception/runtime suites pass (the latter
+also under ORC). The full named-access suite timed out after its first inherited
+layout test while entering JSON serialization coverage; only its four MNU tests
+were independently re-run to completion. No full-repository suite success is
+claimed.
 
 ## Legacy logging salvage
 

@@ -8065,7 +8065,14 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
             return true
           else:
-            raise newException(ValueError, "Method not found: " & frame.selector)
+            let dnu = lookupClassMethod(cls, "doesNotUnderstand:")
+            if dnu.found and frame.selector != "doesNotUnderstand:":
+              interp.pushValue(receiverVal)
+              interp.pushValue(NodeValue(kind: vkSymbol, symVal: frame.selector))
+              interp.pushWorkFrame(newSendMessageFrame("doesNotUnderstand:", 1, isClassMethod = true))
+            else:
+              signalExceptionByName(interp, "MessageNotUnderstood", "Message not understood: " & frame.selector)
+            return true
     of vkBlock:
       # Register BlockNode to keep it alive for ARC
       registerBlockNode(receiverVal.blockVal)
@@ -8206,19 +8213,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         debug("VM: Method not found, trying DNU for ", frame.selector)
         let dnuLookup = lookupMethodOnClass(interp, receiverClass, "doesNotUnderstand:")
         debug("VM: DNU lookup result: found=", $dnuLookup.found, " class=", (if dnuLookup.definingClass != nil: dnuLookup.definingClass.name else: "nil"))
-        if dnuLookup.found:
-          if receiver == nil:
-            receiver = materializeReceiverForSend(receiverVal)
-          if receiver == nil:
-            printStackTrace(interp)
-            raise newException(ValueError, "Cannot materialize receiver for DNU: " & frame.selector)
-          let selectorVal = NodeValue(kind: vkSymbol, symVal: frame.selector)
-          let dnuResult = executeMethod(interp, dnuLookup.currentMethod, receiver, @[selectorVal], dnuLookup.definingClass)
-          interp.pushValue(dnuResult)
+        if dnuLookup.found and frame.selector != "doesNotUnderstand:":
+          interp.pushValue(receiverVal)
+          interp.pushValue(NodeValue(kind: vkSymbol, symVal: frame.selector))
+          interp.pushWorkFrame(newSendMessageFrame("doesNotUnderstand:", 1))
           return true
-        printStackTrace(interp)
-        let receiverClassName = if receiverClass != nil: receiverClass.name else: "<nil>"
-        raise newException(ValueError, "Message not understood: #" & frame.selector & " (receiver class: " & receiverClassName & ")")
+        signalExceptionByName(interp, "MessageNotUnderstood", "Message not understood: " & frame.selector)
+        return true
 
       currentMethod = lookup.currentMethod
       definingClass = lookup.definingClass

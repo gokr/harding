@@ -369,6 +369,8 @@ Winner>>run [
 ].
 (Winner new run) println.
 """, "outer cleanup\ncleanup won\n"),
+    ("unhandled_missing_message", '[1 missing] ensure: ["cleanup" println].',
+     {"error": "Message not understood: missing", "prefix": "cleanup\n"}),
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),
@@ -410,6 +412,27 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("missing_message_results", """
+([1 missing] on: Error do: [:ex | 42]) println.
+([nil missing] on: MessageNotUnderstood do: [:ex | ex message]) println.
+(["text" missing] on: Exception do: [:ex | "string caught"]) println.
+Recover := Object derive: #().
+Recover>>doesNotUnderstand: selector [ ^ "recovered" ].
+Recover class>>doesNotUnderstand: selector [ ^ "class recovered" ].
+RecoverChild := Recover derive: #().
+(Recover new missing) println.
+(RecoverChild new missing: 1) println.
+NilRecover := Object derive: #().
+NilRecover>>doesNotUnderstand: selector [ ^ nil ].
+(NilRecover new missing) isNil ifTrue: ["nil recovery" println].
+(RecoverChild absent) println.
+([RecoverChild new absentDnu] on: Error do: [:ex | "unreachable"]) println.
+MissingClass := Object derive: #().
+([MissingClass absent] on: Error do: [:ex | "class caught"]) println.
+([[1 missing] ensure: ["cleanup" println]] on: Error do: [:ex | "handler"]) println.
+([[Error signal: "first"] on: Error do: [:ex | ex resume: 1]]
+  on: MessageNotUnderstood do: [:outer | "outer caught"]) println.
+""", "42\nMessage not understood: missing\nstring caught\nrecovered\nrecovered\nnil recovery\nclass recovered\nrecovered\nclass caught\ncleanup\nhandler\nouter caught\n"),
     ("cached_polymorphic_send", """
 First := Object derive: #().
 First>>answer [ ^ 1 ].

@@ -1243,10 +1243,27 @@ If no handler matches, Harding runs the exception's default action, prints an un
 
 `pass` follows the same behavior when there is no outer matching handler.
 
-### Resumability Defaults
+### Missing Messages
 
-- `Error` and its subclasses are treated as non-resumable by default.
-- `Notification` is intended for resumable signals.
+A missing selector invokes `doesNotUnderstand:` with the selector symbol. Custom
+instance or class-side implementations may recover by returning a value, including
+nil. Otherwise `MessageNotUnderstood`, an `Error` subclass, is signaled; an
+`on: Error do:` or `on: MessageNotUnderstood do:` handler supplies the result.
+
+```harding
+answer := [1 unknownSelector] on: MessageNotUnderstood do: [:ex | 42].
+answer println.  # 42
+```
+
+Both engines abandon failed protected work and run `ensure:` cleanup before the
+handler or uncaught exit. Executed cases: `missing_message_results` and
+`unhandled_missing_message`. Mixed-mode dispatch and wrong-type primitive calls
+still need separate coverage.
+
+### Notifications Are Synchronous
+
+`Notification` handlers return to the still-active signaling computation. This is
+an ordinary synchronous call, not exception resumption; no resume protocol exists.
 
 ### Signal Point Inspection
 
