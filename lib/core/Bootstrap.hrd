@@ -31,6 +31,7 @@ Harding load: "lib/core/UnhandledError.hrd"
 Harding load: "lib/core/BlockCannotReturn.hrd"
 Harding load: "lib/core/Comparable.hrd"
 Harding load: "lib/core/Iterable.hrd"
+Harding load: "lib/core/Log.hrd"
 Harding load: "lib/core/Printable.hrd"
 
 # Add mixins to collections (after mixin classes are loaded).

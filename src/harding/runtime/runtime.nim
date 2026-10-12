@@ -1,4 +1,5 @@
-import std/[tables, strformat, os, strutils]
+import std/[tables, strformat, os, strutils, logging]
+import ../core/log_support
 import ../core/types
 import ../core/scheduler
 import ../interpreter/vm
@@ -156,6 +157,12 @@ proc compiledClassValue*(name: string): NodeValue =
   if name in compiledClasses:
     return NodeValue(kind: vkClass, classVal: compiledClasses[name])
   return NodeValue(kind: vkNil)
+
+proc compiledLogClassValue*(): NodeValue =
+  ## Class-side receiver for application logging in pure compiled programs.
+  if "Log" notin compiledClasses:
+    compiledClasses["Log"] = newClass(name = "Log")
+  return compiledClassValue("Log")
 
 proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
   ## Register a class-side method separately from instance methods.
@@ -520,6 +527,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       discard
 
   if receiver.kind == vkClass and receiver.classVal != nil:
+    if receiver.classVal.name == "Log" and args.len == 1 and
+       not hasCompiledClassMethodInHierarchy("Log", selector):
+      case selector
+      of "debug:": return writeHardingLog(logging.lvlDebug, args[0])
+      of "info:": return writeHardingLog(logging.lvlInfo, args[0])
+      of "warn:": return writeHardingLog(logging.lvlWarn, args[0])
+      of "error:": return writeHardingLog(logging.lvlError, args[0])
+      of "fatal:": return writeHardingLog(logging.lvlFatal, args[0])
+      else: discard
     return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
   let receiverClassName = getReceiverClassName(receiver)
@@ -531,11 +547,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkBool, boolVal: receiver.kind == vkNil)
   of "notNil":
     return NodeValue(kind: vkBool, boolVal: receiver.kind != vkNil)
-  of "writeLine:", "writeline:", "println":
+  of "writeLine:", "writeline:", "println", "println:":
     if args.len > 0:
       echo args[0].toString()
     return receiver
-  of "write:", "print":
+  of "write:", "print", "print:":
     if args.len > 0:
       stdout.write(args[0].toString())
     return receiver
@@ -820,7 +836,7 @@ proc initHybridRuntime*(sourceFiles: seq[string] = @[]) =
         let source = readFile(srcFile)
         let (_, err) = hybridInterpreter.evalStatements(source)
         if err.len > 0:
-          warn("Failed to load source file ", srcFile, ": ", err)
+          types.warn("Failed to load source file ", srcFile, ": ", err)
 
 proc sendMessageHybrid*(receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =

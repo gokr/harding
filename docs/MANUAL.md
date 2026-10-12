@@ -1073,6 +1073,32 @@ collection detect: [:each | each > 5]
 
 ---
 
+## Application Logging and Stream Output
+
+`Log` provides class-side `debug:`, `info:`, `warn:`, `error:` and `fatal:` sends
+backed by Nim's `std/logging`. Messages use the value's string representation and
+each send answers nil. `fatal:` **only records a message**; it does not exit or
+signal an exception.
+
+```harding
+Log info: "Server started".
+Log warn: "Connection pool nearly full".
+Stdout print: "Hello ".
+Stdout println: "World".
+```
+
+Host logging handlers and their level filters are preserved. When no handler is
+installed, the first Log send installs a ConsoleLogger writing to stderr. The
+interpreter's `--loglevel` filter applies (its default may suppress info/warn).
+Pure compiled programs use the host/default Nim logging filter; compiled CLI
+filter configuration is not yet a Harding API. Application debug/warn calls remain
+available in release builds, unlike internal VM tracing compiled out in release.
+No Bona Transcript logger is installed automatically.
+
+FileStream `print:` and `println:` convert their argument to a string and return
+the stream. `write:`/`writeline:` remain available. Printable's existing Transcript
+routing is unchanged by these aliases.
+
 ## Exception Handling
 
 **Harding does not support exception resumption.** There is no `resume`,

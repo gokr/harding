@@ -20,6 +20,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Build toolchain requirement updated to Nim 2.2.12; interpreter, Granite, generated programs, and tests use the same installed compiler version.
 
 ### Added
+- Salvaged application Log debug:/info:/warn:/error:/fatal: and FileStream print:/println: aliases from the legacy Granite branch. Both engines share host logging handlers and filters; application debug/warn remain available in release builds, fatal logs without exiting, and no automatic Bona Transcript sink is claimed. Legacy audit and deferred salvage decisions are recorded in docs/LEGACY_GRANITE_AUDIT.md.
 - Checked eight-queens search (92 solutions) and linked-object Towers of Hanoi (8191 legal moves), plus `scripts/bench_objects.py` comparing release interpreter, Granite and native Nim with per-trial correctness checks and bounded execution. Baselines are recorded in `docs/GRANITE_BENCHMARKS.md`.
 - Cross-language benchmark harness (`scripts/bench_sieve_languages.py`) and baseline (`docs/GRANITE_BENCHMARKS.md`) comparing the `benchmark/sieve.hrd` workload across C, Nim, Go, Node.js, Squeak Cog, Ruby, Python, Granite native and the Harding interpreter.
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.

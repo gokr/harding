@@ -34,6 +34,16 @@ FileStream>>writeline: string [
   ^ self
 ]
 
+FileStream>>print: anObject [
+  self write: anObject asString.
+  ^ self
+]
+
+FileStream>>println: anObject [
+  self writeline: anObject asString.
+  ^ self
+]
+
 FileStream>>atEnd <primitive primitiveFileAtEnd>
   # Check if at end of file
 

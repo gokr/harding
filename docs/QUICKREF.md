@@ -571,6 +571,23 @@ chmod +x script.hrd  # For shebang: #!/usr/bin/env harding
 - Runtime args after `--` are available as `System arguments`
 - File extension: `.hrd`, `.harding`, or none
 
+## Logging and Output
+
+```harding
+Log info: "Started".
+Log debug: "Details".
+Log warn: "Warning".
+Log error: "Failure".
+Log fatal: "Recorded, not an exception or exit".
+Stdout print: "Hello ".
+Stdout println: "World".
+```
+
+Log sends answer nil and respect host logging filters/handlers. With no handler,
+they install a stderr ConsoleLogger. Debug/warn application calls are available in
+release builds. FileStream print:/println: return the stream. See MANUAL.md for
+interpreter versus pure-compiled filter configuration.
+
 ## Exception Handling
 
 ```smalltalk

@@ -228,6 +228,15 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Compile library-heavy applications without interpreter fallback.
 - [ ] Cover mixed-mode execution separately from pure compilation.
 
+## Legacy work salvage
+
+See [LEGACY_GRANITE_AUDIT.md](docs/LEGACY_GRANITE_AUDIT.md) for original commit
+IDs, saved evidence, and deferred choices. Log and stream aliases are salvaged;
+old resumption lowering and unguarded self/slot optimizations are not restored.
+Collection/reflection implementations remain design material for section 4.
+Printable output routing and the three historical stashes are retained for
+separate review, not silently applied or dropped.
+
 ## 6. Optimize after semantic coverage
 
 Measured baseline and methodology: [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md).

@@ -410,6 +410,16 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("application_logging", """
+Log fatal: "still running".
+alias := Log.
+alias fatal: "alias works".
+Stdout print: "Hello ".
+Stdout println: "World".
+Printer := Object derive: #().
+Printer>>println: value [ ^ "override" ].
+(Printer new println: "unused") println.
+""", "FATAL still running\nFATAL alias works\nHello World\noverride\n"),
     ("numeric_specialization", """
 total := 0.
 i := 0.

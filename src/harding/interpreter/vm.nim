@@ -1,6 +1,7 @@
 import std/[tables, strutils, math, strformat, os, random, algorithm, json, options]
 import ../core/types
 import ../core/process
+import ../core/log_support
 import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
@@ -5385,6 +5386,20 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     interp.globals[]["Stderr"] = makeStandardFileStreamInstance(fileStreamCls, fskStderr, "w").toValue()
     interp.globals[]["Stdin"] = makeStandardFileStreamInstance(fileStreamCls, fskStdin, "r").toValue()
     debug("Created Stdin/Stdout/Stderr instances from FileStream class")
+
+  let logCls = if "Log" in interp.globals[] and interp.globals[]["Log"].kind == vkClass:
+                 interp.globals[]["Log"].classVal
+               else:
+                 findClassInLibraries(interp, "Log")
+  if logCls != nil:
+    for entry in [("primitiveLogDebug:", logDebug), ("primitiveLogInfo:", logInfo),
+                  ("primitiveLogWarn:", logWarn), ("primitiveLogError:", logError),
+                  ("primitiveLogFatal:", logFatal)]:
+      let primitive = createCoreMethod(entry[0])
+      primitive.setNativeImpl(entry[1])
+      primitive.hasInterpreterParam = true
+      logCls.classMethods[entry[0]] = primitive
+      logCls.allClassMethods[entry[0]] = primitive
 
   let systemCls = if "System" in interp.globals[]:
                     let sysVal = interp.globals[]["System"]

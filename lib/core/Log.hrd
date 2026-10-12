@@ -1,0 +1,11 @@
+#!/usr/bin/env harding
+# Application logging through the host's Nim logging handlers and level filter.
+# If none are installed, the first message installs a stderr ConsoleLogger.
+# fatal: records a message; it does not terminate the process or signal Error.
+
+Log := Object derive: #().
+Log class>>debug: message <primitive primitiveLogDebug: message>
+Log class>>info: message <primitive primitiveLogInfo: message>
+Log class>>warn: message <primitive primitiveLogWarn: message>
+Log class>>error: message <primitive primitiveLogError: message>
+Log class>>fatal: message <primitive primitiveLogFatal: message>

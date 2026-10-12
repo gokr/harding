@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Forty-eight parity cases cover the current milestones, including three unhandled-error checks and the
+Forty-nine parity cases cover the current milestones, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -101,6 +101,16 @@ user overrides and inherited lookup. Generated setters return the receiver.
 Direct named access (`::`) remains distinct from accessor message dispatch.
 Compiler registration tests check that private and disallowed accessor directions
 are not emitted. Missing-message error parity remains a later milestone.
+
+## Legacy logging salvage
+
+Application Log messages and FileStream print:/println: aliases are available in
+both engines. Application logging respects host handlers and filters, keeps all
+levels in release builds, and treats fatal as a log level rather than process
+termination. Debug/release/ORC logging tests and an executed alias/output case
+cover this slice. Printable Transcript routing is unchanged. See
+[LEGACY_GRANITE_AUDIT.md](LEGACY_GRANITE_AUDIT.md) for preserved original code,
+deferred collection/reflection ports, and retained historical stashes.
 
 ## Numeric specialization (first slice)
 

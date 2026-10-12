@@ -173,6 +173,7 @@ tests/test_load_and_eval.nim
 """
 
 const TestStdlib = """
+tests/test_log.nim
 tests/test_stdlib_basics.nim
 tests/test_stdlib_strings.nim
 tests/test_stdlib_collections.nim

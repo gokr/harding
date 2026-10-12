@@ -1,0 +1,9 @@
+# Application logging uses the host's handlers and --loglevel filter.
+Log debug: "Processing request".
+Log info: "Server started".
+Log warn: "Connection pool nearly full".
+Log error: "Failed to connect".
+Log fatal: "Unrecoverable state".
+# fatal: logs; it does not signal an exception or exit.
+Stdout print: "Hello ".
+Stdout println: "World".
