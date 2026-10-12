@@ -114,6 +114,16 @@ loop-local declarations, numeric promotions and division/modulo are not unboxed 
 this slice. Sieve still counts 669, including under ORC; its inner divisor remains
 boxed. This is not evidence of broad arithmetic-error or full compiler parity.
 
+## Guarded allocation (first direct-call slice)
+
+Statically named pure compiled class receivers use a native allocator directly
+when a versioned guard proves that no own/inherited class-side `new` exists and
+the registered allocator is unchanged. Class-method, allocator and superclass
+registration invalidate the guard. Overrides, mixed mode, aliases and locally
+shadowed names retain dynamic sends. Constructor/super parity cases and runtime
+invalidation tests cover the fallback. General method devirtualization is not
+implemented by this slice; compiled registration remains single-threaded.
+
 ## Implementation order
 
 1. Bounded, isolated execution parity and output-directory-independent imports.

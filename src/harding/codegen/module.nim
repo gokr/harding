@@ -663,6 +663,15 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     let nativeClass = mangleClass(cls.name)
     output.add(fmt("proc allocate{nativeClass}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
     output.add(fmt("  new{nativeClass}().toValue()\n\n"))
+    output.add(fmt("var allocationVersion_{nativeClass} {{.threadvar.}}: uint64\n"))
+    output.add(fmt("var directAllocation_{nativeClass} {{.threadvar.}}: bool\n"))
+    output.add(fmt("proc guardedNew_{nativeClass}(): NodeValue =\n"))
+    output.add(fmt("  if allocationVersion_{nativeClass} != compiledClassDispatchVersion:\n"))
+    output.add(fmt("    directAllocation_{nativeClass} = canDirectAllocate(\"{cls.name}\", allocate{nativeClass})\n"))
+    output.add(fmt("    allocationVersion_{nativeClass} = compiledClassDispatchVersion\n"))
+    output.add(fmt("  if directAllocation_{nativeClass}:\n"))
+    output.add(fmt("    return new{nativeClass}().toValue()\n"))
+    output.add(fmt("  return sendMessage(currentRuntime[], compiledClassValue(\"{cls.name}\"), \"new\", @[])\n\n"))
 
   # Generate superclass hierarchy registration
   var superclassCalls = ""

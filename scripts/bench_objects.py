@@ -149,7 +149,8 @@ answer println.
         native_binary = work / f"{case}_native"
         baseline_binary = work / f"{case}_baseline"
         for source, binary in [(native_source, native_binary), (baseline, baseline_binary)]:
-            execute([str(ROOT / "granite"), "build", str(source), "--release", "-o:" + str(binary)],
+            execute([str(ROOT / "granite"), "build", str(source), "--release",
+                     "--dir:" + str(work), "-o:" + str(binary)],
                     work, binary.name + "_build.log", args.timeout)
         nim_source = work / f"{case}.nim"
         nim_source.write_text(NIM_SOURCE.lstrip())

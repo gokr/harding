@@ -178,3 +178,19 @@ runs. Raw evidence is `build/a_paired_results.json`. Host load was not isolated.
 The improvement is modest: arithmetic still operates on NodeValue and ordinary
 messages still use dynamic dispatch. It does not establish a Cog performance
 claim or the expected gains from B–D.
+
+## First guarded-allocation slice
+
+Statically named classes now bypass general dispatch for default `new` only while
+a versioned guard proves no own/inherited override and an unchanged allocator.
+Runtime registration changes invalidate the guard; overridden `new` stays dynamic.
+All 48 parity cases pass, including inherited constructors and object benchmarks;
+the repeated object workloads also return 92/8191 under ORC.
+
+Seven alternating trials of retained before/after binaries measured queens at
+182.399/166.725 ms per pass and towers at 43.513/45.865 ms. Variance was large
+(queens process timings ranged ~4.7–8.7 seconds); background host load was not
+controlled. This is **not evidence of a reliable speedup**, and the towers result
+shows that this limited allocation shortcut is not a general dispatch optimization.
+Raw timings are in `build/c_paired_results.json`. Method-call specialization and
+inline caches remain separate follow-up work.

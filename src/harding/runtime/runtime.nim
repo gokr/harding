@@ -142,10 +142,12 @@ type CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
 var compiledClassMethods = initTable[string, CompiledProc]()
 var compiledAllocators = initTable[string, CompiledProc]()
 var compiledClasses = initTable[string, Class]()
+var compiledClassDispatchVersion*: uint64 = 1
 
 proc registerCompiledClass*(name: string, allocator: CompiledProc) =
   ## Register a class receiver and its native allocator.
   compiledAllocators[name] = allocator
+  inc compiledClassDispatchVersion
   if name notin compiledClasses:
     compiledClasses[name] = newClass(name = name)
 
@@ -158,6 +160,7 @@ proc compiledClassValue*(name: string): NodeValue =
 proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
   ## Register a class-side method separately from instance methods.
   compiledClassMethods[className & ">>" & selector] = fn
+  inc compiledClassDispatchVersion
 
 var nimProxyClassNames*: Table[pointer, string] = initTable[pointer, string]()
 
@@ -194,6 +197,7 @@ var superclassNames*: Table[string, string] = initTable[string, string]()
 proc registerSuperclass*(className: string, superclassName: string) =
   ## Register the superclass for a class
   superclassNames[className] = superclassName
+  inc compiledClassDispatchVersion
 
 proc getSuperclassName*(className: string): string =
   ## Get the superclass name for a class
@@ -260,6 +264,22 @@ proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
       return true
     currentClass = getSuperclassName(currentClass)
   return false
+
+proc hasCompiledClassMethodInHierarchy*(className, selector: string): bool =
+  ## Detect a class-side override, including inherited methods.
+  var currentClass = className
+  while currentClass.len > 0:
+    if currentClass & ">>" & selector in compiledClassMethods:
+      return true
+    currentClass = getSuperclassName(currentClass)
+  return false
+
+proc canDirectAllocate*(className: string,
+                        allocator: proc(self: NodeValue, args: seq[NodeValue]): NodeValue): bool =
+  ## Guard the default allocation path against method and allocator replacement.
+  if className notin compiledAllocators or compiledAllocators[className] != allocator:
+    return false
+  return not hasCompiledClassMethodInHierarchy(className, "new")
 
 proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
                                  args: seq[NodeValue]): NodeValue =

@@ -394,12 +394,12 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   # Check for native class instantiation: "ClassName new" where ClassName is compiled
   if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
     let className = node.receiver.IdentNode.name
-    if className in ctx.compiledClasses:
+    if className in ctx.compiledClasses and not ctx.isLocal(className):
       # In mixed mode, use interpreter to create instances (ensures interpreter can call methods)
       if ctx.mixed:
         return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
       else:
-        return fmt("sendMessage(currentRuntime[], compiledClassValue(\"{className}\"), \"new\", @[])")
+        return fmt("guardedNew_{mangleClass(className)}()")
 
   # Check for inline control flow with literal blocks
   case node.selector

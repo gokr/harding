@@ -280,6 +280,25 @@ suite "Compiler: Codegen - Expression":
     let code = genLiteral(node)
     check code.contains("vkNil")
 
+suite "Compiler: Guarded default allocation":
+  test "statically named classes use a guarded native allocation helper":
+    let (nodes, _) = parse("Box := Object derive: #(). Box new.")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "guarded_allocation")
+    check code.contains("discard guardedNew_Class_Box()")
+    check code.contains("canDirectAllocate(\"Box\", allocateClass_Box)")
+    check code.contains("allocationVersion_Class_Box != compiledClassDispatchVersion")
+    check code.contains("return newClass_Box().toValue()")
+    check code.contains("return sendMessage(currentRuntime[], compiledClassValue(\"Box\"), \"new\", @[])")
+
+  test "a locally shadowed class receiver stays on ordinary dispatch":
+    let genCtx = newGenContext(compiledClasses = @["Box"])
+    genCtx.parameters.add("Box")
+    let send = MessageNode(receiver: IdentNode(name: "Box"), selector: "new")
+    let code = genMessage(genCtx, send)
+    check not code.contains("guardedNew_")
+    check code.contains("sendMessage(currentRuntime[], Box")
+
 suite "Compiler: Conservative numeric representations":
   test "monomorphic initialized script locals become native numbers":
     let (nodes, _) = parse("total := 0. i := 0. [i < 10] whileTrue: [total := total + i. i := i + 1]. total println.")

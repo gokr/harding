@@ -265,8 +265,13 @@ below rather than relying on impressions.
 - [ ] Extend B to lexical method/loop bindings and interprocedural types, with
       sound joins and arithmetic-error/overflow tests. No method parameter or slot
       unboxing is claimed by the first slice.
-- [ ] C: emit direct calls only for proven dispatch targets (or guarded targets),
-      preserving overrides, declaring-class super and return/cleanup semantics.
+- [x] C, first slice: statically named class allocation uses a guarded native
+      allocator when no inherited/own class-side new method exists. Allocator,
+      class-method and superclass registrations invalidate the cached guard;
+      fallback retains ordinary dispatch. Mixed mode and locally shadowed class
+      receivers do not use this fast path.
+- [ ] Extend C to method targets with exact receiver proofs or guarded dispatch;
+      preserve overrides, declaring-class super and return/cleanup semantics.
 - [ ] D: cache dynamic send targets with a defined invalidation policy; retain the
       generic dispatch path and differential correctness tests.
 
