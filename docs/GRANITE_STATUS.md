@@ -45,7 +45,10 @@ and while-loop scope regressions pass. While conditions evaluate all setup
 statements in their lexical scope; select predicates preserve preceding side
 effects. Method/block temporaries are declared
 at scope entry; inline collection loops allocate parameter bindings on each
-iteration. Compiled blocks retain a unique home-invocation return target;
+iteration. Specialized if/while blocks lowered inline no longer register closure
+environments or force cells for otherwise uncaptured locals. Nested escaping
+closures and non-local-return branches remain registered; generated-code tests
+cover both paths. Compiled blocks retain a unique home-invocation return target;
 recursive callbacks and nested-loop returns pass. Targets become inactive on exit,
 and a later return signals `BlockCannotReturn`, which both engines raise as an
 `Error` subclass. The recursive callback regression also passes under ORC. The

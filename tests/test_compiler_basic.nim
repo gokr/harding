@@ -313,6 +313,47 @@ suite "Compiler: Codegen - Blocks":
     check "ready" in captures
     check "value" in captures
 
+  test "specialized literal control flow does not allocate capture cells":
+    let value = IdentNode(name: "value")
+    let branch = BlockNode(body: @[Node(value)])
+    let conditional = IfNode(condition: LiteralNode(value: NodeValue(kind: vkBool, boolVal: true)),
+                             thenBranch: branch)
+    let loop = WhileNode(condition: branch, body: BlockNode(body: @[Node(conditional)]))
+    let registry = newBlockRegistry()
+    collectBlocks(registry, loop)
+    check registry.blocks.len == 0
+    check scopeCaptureCellNames(@[Node(loop)]).len == 0
+
+    var p = initParser(lex("Counter := Object derive: #(). Counter>>sum: n [ | total k | total := 0. k := 0. [k < n] whileTrue: [total := total + k. k := k + 1]. ^ total ]."))
+    var ctx = newCompiler()
+    let code = genModule(ctx, p.parseStatements(), "inline_counter")
+    check not code.contains("var total = MutableCell")
+    check not code.contains("var k = MutableCell")
+    check not code.contains("var n = MutableCell")
+    check not code.contains("let hardingHome =")
+
+  test "escaping closures nested in inline branches still share cells":
+    let value = IdentNode(name: "value")
+    let escaping = BlockNode(body: @[Node(value)])
+    let branch = BlockNode(body: @[Node(escaping)])
+    let conditional = IfNode(condition: LiteralNode(value: NodeValue(kind: vkBool, boolVal: true)),
+                             thenBranch: branch)
+    let registry = newBlockRegistry()
+    collectBlocks(registry, conditional)
+    check registry.blocks.len == 1
+    check registry.blocks[0].blockNode == escaping
+    check "value" in scopeCaptureCellNames(@[Node(conditional)])
+
+  test "non-local returning branches retain real block environments":
+    let value = IdentNode(name: "value")
+    let branch = BlockNode(body: @[Node(ReturnNode(expression: value))])
+    let conditional = IfNode(condition: LiteralNode(value: NodeValue(kind: vkBool, boolVal: true)),
+                             thenBranch: branch)
+    let registry = newBlockRegistry()
+    collectBlocks(registry, conditional)
+    check registry.blocks.len == 1
+    check "value" in registry.blocks[0].captures
+
   test "write-only enclosing temporaries share their binding":
     let assignment = AssignNode(variable: "value", expression: LiteralNode(value: nilValue()))
     let captures = analyzeCaptures(BlockNode(body: @[Node(assignment)]), @[], @[], @["value"])

@@ -724,20 +724,23 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
       collectBlocks(registry, val, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkIf:
-    let ifNode = node.IfNode
-    if ifNode.condition != nil:
-      collectBlocks(registry, ifNode.condition, knownGlobals, ownerSlotNames, ownerLocalNames)
-    if ifNode.thenBranch != nil:
-      collectBlocks(registry, ifNode.thenBranch, knownGlobals, ownerSlotNames, ownerLocalNames)
-    if ifNode.elseBranch != nil:
-      collectBlocks(registry, ifNode.elseBranch, knownGlobals, ownerSlotNames, ownerLocalNames)
+    let conditional = node.IfNode
+    collectBlocks(registry, conditional.condition, knownGlobals, ownerSlotNames, ownerLocalNames)
+    for branch in [conditional.thenBranch, conditional.elseBranch]:
+      if branch != nil and branch.kind == nkBlock and not hasReturnNode(branch):
+        for statement in branch.BlockNode.body:
+          collectBlocks(registry, statement, knownGlobals, ownerSlotNames, ownerLocalNames)
+      else:
+        collectBlocks(registry, branch, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   of nkWhile:
-    let whileNode = node.WhileNode
-    if whileNode.condition != nil:
-      collectBlocks(registry, whileNode.condition, knownGlobals, ownerSlotNames, ownerLocalNames)
-    if whileNode.body != nil:
-      collectBlocks(registry, whileNode.body, knownGlobals, ownerSlotNames, ownerLocalNames)
+    let loop = node.WhileNode
+    for part in [loop.condition, loop.body]:
+      if part != nil and part.kind == nkBlock and not hasReturnNode(part):
+        for statement in part.BlockNode.body:
+          collectBlocks(registry, statement, knownGlobals, ownerSlotNames, ownerLocalNames)
+      else:
+        collectBlocks(registry, part, knownGlobals, ownerSlotNames, ownerLocalNames)
 
   else:
     # Other node types don't contain blocks

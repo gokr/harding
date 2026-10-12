@@ -249,8 +249,13 @@ below rather than relying on impressions.
       to enclosing method temporaries share bindings.
 - [ ] Measure Cog on the same queens/towers algorithms before estimating a
       cross-workload performance gap. Sieve numbers alone do not predict it.
-- [ ] A: distinguish genuine escaping captures from literal blocks lowered inline;
-      allocate MutableCell only where shared closure storage is required.
+- [x] A, first slice: specialized if/while blocks lowered inline no longer enter
+      closure registration or capture-cell analysis. Ordinary method parameters
+      and temporaries used only there stay stack values; nested escaping closures
+      and branches with non-local returns retain their environments. Generated-code
+      tests assert no MutableCell/home target for a plain accumulator loop.
+- [ ] Complete capture precision with lexical binding identities, including
+      declarations inside nested scopes; the current analysis remains name-based.
 - [ ] B: introduce conservative value-type joins and numeric representations with
       boxing at dynamic boundaries; preserve arithmetic/error semantics.
 - [ ] C: emit direct calls only for proven dispatch targets (or guarded targets),

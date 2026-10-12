@@ -155,3 +155,26 @@ control-flow nodes, and native storage reclaimed behind raw instance pointers.
 Wrappers now retain their native owner directly, without a permanent keep-alive
 registry. ARC does not collect arbitrary cycles; cyclic object graphs still need
 separate lifetime coverage.
+
+## Optimization A: inline-only locals
+
+Specialized if/while blocks lowered inline no longer register as closures. This
+removes unnecessary cells and home-invocation targets from ordinary accumulator
+methods while retaining environments for nested escaping closures and non-local
+returns. Generated-code tests assert that distinction; 46 parity cases and 29
+block-codegen tests pass.
+
+A paired comparison alternated the retained pre/post-change Granite binaries for
+seven trials, each running 30 passes and checking its result:
+
+| Workload | Before A | After A | Reduction |
+|---|---:|---:|---:|
+| Queens | 134.896 ms | 130.342 ms | ~3.4% |
+| Towers | 41.314 ms | 38.447 ms | ~6.9% |
+
+These are process-time medians divided by 30, without startup subtraction; both
+versions have the same driver and negligible native startup relative to these
+runs. Raw evidence is `build/a_paired_results.json`. Host load was not isolated.
+The improvement is modest: arithmetic still operates on NodeValue and ordinary
+messages still use dynamic dispatch. It does not establish a Cog performance
+claim or the expected gains from B–D.
