@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Forty-six parity cases cover the current milestones, including three unhandled-error checks and the
+Forty-eight parity cases cover the current milestones, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -101,6 +101,18 @@ user overrides and inherited lookup. Generated setters return the receiver.
 Direct named access (`::`) remains distinct from accessor message dispatch.
 Compiler registration tests check that private and disallowed accessor directions
 are not emitted. Missing-message error parity remains a later milestone.
+
+## Numeric specialization (first slice)
+
+Pure compiled scripts may use native integer/float storage for directly initialized
+lowercase locals whose assignments retain one kind and whose reads follow definite
+initialization. Same-kind addition, subtraction, multiplication and comparisons
+emit native expressions. General sends still receive boxed NodeValue arguments.
+Captured bindings, lexical shadowing, real closures, type-changing assignments,
+globals and mixed mode retain the dynamic representation. Method parameters, slots,
+loop-local declarations, numeric promotions and division/modulo are not unboxed by
+this slice. Sieve still counts 669, including under ORC; its inner divisor remains
+boxed. This is not evidence of broad arithmetic-error or full compiler parity.
 
 ## Implementation order
 

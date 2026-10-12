@@ -7,7 +7,7 @@ import std/[unittest, strutils, tables]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
 import ../src/harding/compiler/[context, types, symbols, analyzer]
-import ../src/harding/codegen/[expression, blocks, module]
+import ../src/harding/codegen/[expression, blocks, module, numeric]
 
 suite "Compiler: Lexer and Parser":
   test "lexes simple integer literal":
@@ -279,6 +279,49 @@ suite "Compiler: Codegen - Expression":
     let node = LiteralNode(value: NodeValue(kind: vkNil))
     let code = genLiteral(node)
     check code.contains("vkNil")
+
+suite "Compiler: Conservative numeric representations":
+  test "monomorphic initialized script locals become native numbers":
+    let (nodes, _) = parse("total := 0. i := 0. [i < 10] whileTrue: [total := total + i. i := i + 1]. total println.")
+    let bindings = analyzeNumericBindings(nodes, @[])
+    check bindings.getOrDefault("total") == nrInt
+    check bindings.getOrDefault("i") == nrInt
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "native_numbers")
+    check code.contains("intVal: (total + i)")
+    check not code.contains("nt_plus(total")
+
+  test "type changes and dependencies fall back to dynamic":
+    let (nodes, _) = parse("a := 1. b := 2. a := 1.5. b := b + a.")
+    let bindings = analyzeNumericBindings(nodes, @[])
+    check "a" notin bindings
+    check "b" notin bindings
+
+  test "captured and shadowed variables remain dynamic":
+    let (nodes, _) = parse("x := 1. y := 2. blk := [:y | y + 1].")
+    let bindings = analyzeNumericBindings(nodes, @["x"])
+    check "x" notin bindings
+    check "y" notin bindings
+
+  test "conditional initialization cannot replace nil with zero":
+    let (nodes, _) = parse("x println. x := 1.")
+    check "x" notin analyzeNumericBindings(nodes, @[])
+    let (conditional, _) = parse("false ifTrue: [x := 2]. x println. x := 1.")
+    check "x" notin analyzeNumericBindings(conditional, @[])
+
+  test "real closures and unknown block consumers disable local unboxing":
+    let (nodes, _) = parse("x := 1. callback := [x := 2].")
+    check "x" notin analyzeNumericBindings(nodes, @[])
+    let (unknown, _) = parse("x := 1. Object new use: [x := 2].")
+    check "x" notin analyzeNumericBindings(unknown, @[])
+
+  test "division remains on the existing runtime path":
+    let (nodes, _) = parse("x := 1. x := x // 0.")
+    check "x" notin analyzeNumericBindings(nodes, @[])
+
+  test "literal arithmetic is not folded into compile-time overflow":
+    let (nodes, _) = parse("9223372036854775807 + 1")
+    check numericKind(nodes[0], initTable[string, NumericRepresentation]()) == nrDynamic
 
 suite "Compiler: Codegen - Blocks":
   test "creates block registry":

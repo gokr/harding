@@ -410,6 +410,32 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("numeric_specialization", """
+total := 0.
+i := 0.
+[i < 1000] whileTrue: [total := total + i. i := i + 1].
+total println.
+x := 1.5.
+x := x * 2.0.
+(x = 3.0) ifTrue: ["float" println].
+Identity := Object derive: #().
+Identity>>echo: value [ ^ value ].
+(Identity new echo: total) println.
+""", "499500\nfloat\n499500\n"),
+    ("numeric_dynamic_fallback", """
+changing := 1.
+changing := "dynamic".
+changing println.
+captured := 1.
+callback := [captured := captured + 1].
+callback value.
+captured println.
+GlobalNumber := 7.
+GlobalNumber println.
+shadow := 9.
+[:shadow | (shadow + 1) println] value: 20.
+shadow println.
+""", "dynamic\n2\n7\n21\n9\n"),
     ("write_only_capture", """
 Writer := Object derive: #().
 Writer>>run [ | value setter | value := 1. setter := [value := 42]. setter value. ^ value ].

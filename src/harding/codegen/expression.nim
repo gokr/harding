@@ -3,6 +3,7 @@ import ../core/types
 import ../compiler/context
 import ../compiler/symbols
 import ./blocks
+import ./numeric
 
 # ============================================================================
 # Expression Code Generation
@@ -30,6 +31,7 @@ type
     compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
+    numericBindings*: NumericBindings ## Proven script-local native representations
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -50,6 +52,7 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
     globals: @[],
     blockRegistry: newBlockRegistry(),
     varTypes: initTable[string, VarTypeInfo](),
+    numericBindings: initTable[string, NumericRepresentation](),
     compiledClasses: compiledClasses,
     classInfo: classInfo,
     mixed: mixed
@@ -214,7 +217,15 @@ proc bindingTarget(ctx: GenContext, name: string): string =
     return name & ".value"
   return name
 
+proc bindingAssignmentValue(ctx: GenContext, name, value: string): string =
+  case ctx.numericBindings.getOrDefault(name, nrDynamic)
+  of nrInt: "(" & value & ").intVal"
+  of nrFloat: "(" & value & ").floatVal"
+  else: value
+
 proc bindingDeclaration(ctx: GenContext, name, value: string): string =
+  if name in ctx.numericBindings:
+    return fmt("var {name} = {bindingAssignmentValue(ctx, name, value)}")
   if name in ctx.cellNames:
     return fmt("var {name} = MutableCell(value: {value})")
   return fmt("var {name} = {value}")
@@ -233,6 +244,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.returnTarget = ctx.returnTarget
   result.blockRegistry = ctx.blockRegistry
   result.varTypes = ctx.varTypes
+  result.numericBindings = ctx.numericBindings
   result.globals = ctx.globals
   result.cellNames = ctx.cellNames
   for name in ctx.locals:
@@ -294,7 +306,10 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
 
   # Check if it's a local variable
   if name in ctx.locals:
-    return bindingTarget(ctx, name)
+    case ctx.numericBindings.getOrDefault(name, nrDynamic)
+    of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {name})")
+    of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {name})")
+    else: return bindingTarget(ctx, name)
 
   # Check if it's a slot
   if ctx.cls != nil:
@@ -567,6 +582,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       loopCtx.cellNames = ctx.cellNames
       loopCtx.blockRegistry = ctx.blockRegistry
       loopCtx.varTypes = ctx.varTypes
+      loopCtx.numericBindings = ctx.numericBindings
       for parameter in bodyBlock.parameters:
         loopCtx.locals.add(parameter)
       var iterationSetup = ""
@@ -733,11 +749,41 @@ proc blockCaptureGlobals*(ctx: GenContext): seq[string] =
     if name != "self":
       result.add(name)
 
+proc nativeNumericExpression(ctx: GenContext, node: Node): string =
+  case node.kind
+  of nkLiteral:
+    let value = node.LiteralNode.value
+    if value.kind == vkInt:
+      return $value.intVal
+    return $value.floatVal
+  of nkIdent:
+    return node.IdentNode.name
+  of nkMessage:
+    let message = node.MessageNode
+    let left = nativeNumericExpression(ctx, message.receiver)
+    let right = nativeNumericExpression(ctx, message.arguments[0])
+    let op = case message.selector
+             of "=", "==": "=="
+             of "~=": "!="
+             else: message.selector
+    return fmt("({left} {op} {right})")
+  else:
+    return ""
+
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
 
   if node == nil:
     return "NodeValue(kind: vkNil)"
+
+  let representation = numericKind(node, ctx.numericBindings)
+  if representation != nrDynamic:
+    let native = nativeNumericExpression(ctx, node)
+    case representation
+    of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {native})")
+    of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {native})")
+    of nrBool: return fmt("NodeValue(kind: vkBool, boolVal: {native})")
+    else: discard
 
   case node.kind
   of nkLiteral:
@@ -778,7 +824,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
 
     # A Harding global (typically a top-level uppercase variable) assigns the
     # shared binding so main, methods and blocks all observe the same value.
@@ -926,7 +972,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
 
     # A Harding global assigns the shared binding; in statement position the
     # returned value is discarded.
@@ -1352,7 +1398,7 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
 
     # Reassignment of an existing script-local variable
     if varName in ctx.locals:
-      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
 
     # New top-level variable: a local of main, visible to blocks nested in main.
     ctx.locals.add(varName)
@@ -1409,7 +1455,7 @@ proc genMethodBodyStatement*(ctx: GenContext, node: Node, isLast: bool): string 
     
     # Reassignment of a declared local
     if ctx.isLocal(varName):
-      return fmt("{bindingTarget(ctx, varName)} = {exprCode}")
+      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
 
     # A Harding global assigns the shared binding so other methods and blocks
     # observe the change instead of a shadowing local.

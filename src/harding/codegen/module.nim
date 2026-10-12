@@ -8,6 +8,7 @@ import ../compiler/symbols
 import ./methods
 import ./control
 import ./expression
+import ./numeric
 import ./blocks
 
 # ============================================================================
@@ -517,6 +518,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   if blockReg != nil:
     genCtx.blockRegistry = blockReg
   genCtx.cellNames = scopeCaptureCellNames(topLevel)
+  if not mixed:
+    genCtx.numericBindings = analyzeNumericBindings(topLevel, genCtx.cellNames)
 
   # Generate code for each top-level statement
   for node in topLevel:

@@ -256,8 +256,15 @@ below rather than relying on impressions.
       tests assert no MutableCell/home target for a plain accumulator loop.
 - [ ] Complete capture precision with lexical binding identities, including
       declarations inside nested scopes; the current analysis remains name-based.
-- [ ] B: introduce conservative value-type joins and numeric representations with
-      boxing at dynamic boundaries; preserve arithmetic/error semantics.
+- [x] B, first slice: script-local integer/float bindings initialized directly with
+      numeric literals specialize only when every assignment retains its kind and
+      every read follows definite initialization. Same-kind +, -, *, comparisons
+      emit native operations; ordinary message arguments/results remain NodeValue.
+      Captures, shadowing, real closures, globals, mixed mode and type changes fall
+      back to dynamic. Division/modulo are deliberately unchanged.
+- [ ] Extend B to lexical method/loop bindings and interprocedural types, with
+      sound joins and arithmetic-error/overflow tests. No method parameter or slot
+      unboxing is claimed by the first slice.
 - [ ] C: emit direct calls only for proven dispatch targets (or guarded targets),
       preserving overrides, declaring-class super and return/cleanup semantics.
 - [ ] D: cache dynamic send targets with a defined invalidation policy; retain the
