@@ -183,6 +183,10 @@ arbitrary error resumption solely in the interpreter.
       ("Global variables must start with uppercase letter: r"), while `x := 1` at
       top level works; determine the intended rule and whether the checker should
       apply to scripts at all.
+- [ ] Escape generated Nim identifiers consistently: a Harding method parameter
+      named `object` currently produces invalid Nim (`keyword object`). The cache
+      receiver test uses `item` to isolate dispatch correctness; this syntax gap
+      remains a separate compiler fix.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [ ] Proper missing-message errors instead of silent nil.
@@ -281,8 +285,16 @@ below rather than relying on impressions.
       receivers do not use this fast path.
 - [ ] Extend C to method targets with exact receiver proofs or guarded dispatch;
       preserve overrides, declaring-class super and return/cleanup semantics.
-- [ ] D: cache dynamic send targets with a defined invalidation policy; retain the
-      generic dispatch path and differential correctness tests.
+- [x] D, first slice: pure generic send sites own thread-local positive
+      monomorphic caches for registered instance methods. Receiver class, selector
+      and registration version guard each hit. Method, class-method, allocator and
+      superclass registration invalidate targets; nil is a valid cached result.
+      Builtins, exception protocols, class-side sends and mixed mode retain the
+      generic runtime path. Runtime invalidation tests and alternating receiver
+      parity cover this slice.
+- [ ] Extend D with polymorphic sites and compact class/selector identities after
+      measurements. Concurrent mutation/direct writes to exported runtime tables
+      are not covered by this registration-based invalidation contract.
 
 ## Validation entry points
 

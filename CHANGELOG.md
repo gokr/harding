@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Pure compiled generic sends use positive per-site monomorphic instance-method caches. Hits guard receiver class, selector and registration version; method/superclass/allocator registration invalidates targets. Nil results remain successful sends, while builtin, exception, class-side and mixed-mode paths retain generic dispatch. Concurrent registry mutation is not supported by this slice.
 - Statically named compiled class allocation uses a guarded native allocator. Inherited or own class-side new overrides fall back to ordinary dispatch, and allocator/class-method/superclass registrations invalidate the guard. Mixed-mode and locally shadowed class receivers stay dynamic.
 - Granite specializes proven, directly initialized script-local integer/float bindings and same-kind addition, subtraction, multiplication and comparisons. Values are boxed at ordinary message boundaries. Type changes, captured/shadowed names, real closures, potentially uninitialized reads and mixed-mode scripts remain dynamic; division and modulo keep their existing runtime paths. Method parameter/slot unboxing is not included.
 - Granite excludes literal specialized if/while blocks from closure registration when they are lowered inline. Ordinary parameters and locals used only by these blocks stay stack values rather than MutableCell allocations; nested escaping closures and non-local-return environments remain registered.

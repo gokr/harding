@@ -410,6 +410,22 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("cached_polymorphic_send", """
+First := Object derive: #().
+First>>answer [ ^ 1 ].
+Second := First derive: #().
+Second>>answer [ ^ 2 ].
+Reader := Object derive: #().
+Reader>>read: item [ ^ item answer ].
+reader := Reader new.
+(reader read: First new) println.
+(reader read: Second new) println.
+(reader read: First new) println.
+Empty := Object derive: #().
+Empty>>answer [ ^ nil ].
+(reader read: Empty new) isNil ifTrue: ["nil result" println].
+(reader read: Second new) println.
+""", "1\n2\n1\nnil result\n2\n"),
     ("application_logging", """
 Log fatal: "still running".
 alias := Log.

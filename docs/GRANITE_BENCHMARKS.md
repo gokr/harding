@@ -194,3 +194,31 @@ controlled. This is **not evidence of a reliable speedup**, and the towers resul
 shows that this limited allocation shortcut is not a general dispatch optimization.
 Raw timings are in `build/c_paired_results.json`. Method-call specialization and
 inline caches remain separate follow-up work.
+
+## First monomorphic send-cache slice
+
+Generic pure compiled sends now cache positive registered instance-method targets
+per send site. Receiver class, selector and registration version guard hits;
+registered method/hierarchy changes invalidate them. Builtin/exception/class-side
+paths still use generic dispatch. Nil is a valid method result, not a cache miss.
+Runtime invalidation and evaluation-count tests pass under ARC and ORC; repeated
+queens/towers workloads return 92/8191 under ORC.
+
+An initial implementation walked exception ancestry before checking every cache
+hit; it measured 239.449/78.876 ms for queens/towers. Removing that hierarchy walk
+from ordinary sends (while routing exception action selectors to the original
+runtime) measured 138.780/26.603 ms in a later run. These runs were not isolated,
+so those numbers are diagnostic observations rather than a controlled speedup.
+
+Seven alternating trials comparing pre-cache and revised-cache binaries gave:
+
+| Workload | Before cache | After cache |
+|---|---:|---:|
+| Queens | 224.309 ms | 233.781 ms |
+| Towers | 66.098 ms | 48.522 ms |
+
+Process medians are divided by 30 passes, without startup subtraction. Raw data:
+`build/d_paired_results.json`. Host contention was substantial: queens trials
+ranged ~5.3–13.0 seconds. Towers suggests a gain; queens does not. Do not claim a
+uniform speedup or proximity to Cog from these results. Compact class identities,
+argument-allocation reduction and polymorphic cache design remain follow-up work.

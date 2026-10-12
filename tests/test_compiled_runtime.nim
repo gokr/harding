@@ -52,3 +52,94 @@ suite "Compiled guarded allocation":
     check compiledClassDispatchVersion != previousVersion
     check not canDirectAllocate(name, defaultAllocation)
     check sendMessage(newRuntime(), compiledClassValue(name), "new", @[]).intVal == 2
+
+proc proxyReceiver(name: string): NodeValue =
+  let instance = newInstance(newClass(name = name))
+  instance.isNimProxy = true
+  NodeValue(kind: vkInstance, instVal: instance)
+
+suite "Compiled monomorphic send caches":
+  test "receiver and selector changes never reuse a wrong target":
+    let rt = newRuntime()
+    let first = proxyReceiver("CacheReceiverOne")
+    let second = proxyReceiver("CacheReceiverTwo")
+    registerCompiledMethod("CacheReceiverOne", "answer", defaultAllocation)
+    registerCompiledMethod("CacheReceiverTwo", "answer", replacementAllocation)
+    registerCompiledMethod("CacheReceiverOne", "other", replacementAllocation)
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
+    check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
+    check sendMessageCached(rt, second, "answer", @[], cache).intVal == 2
+    check sendMessageCached(rt, first, "other", @[], cache).intVal == 2
+
+  test "cached nil results are successful sends":
+    let rt = newRuntime()
+    let receiver = proxyReceiver("CacheNilReceiver")
+    proc nilAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      NodeValue(kind: vkNil)
+    registerCompiledMethod("CacheNilReceiver", "answer", nilAnswer)
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, receiver, "answer", @[], cache).kind == vkNil
+    check sendMessageCached(rt, receiver, "answer", @[], cache).kind == vkNil
+
+  test "method replacement and superclass changes invalidate targets":
+    let rt = newRuntime()
+    let receiver = proxyReceiver("CacheChild")
+    registerCompiledMethod("CacheParentOne", "answer", defaultAllocation)
+    registerCompiledMethod("CacheParentTwo", "answer", replacementAllocation)
+    registerSuperclass("CacheChild", "CacheParentOne")
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, receiver, "answer", @[], cache).intVal == 1
+    registerCompiledMethod("CacheParentOne", "answer", replacementAllocation)
+    check sendMessageCached(rt, receiver, "answer", @[], cache).intVal == 2
+    registerSuperclass("CacheChild", "CacheParentTwo")
+    check sendMessageCached(rt, receiver, "answer", @[], cache).intVal == 2
+    registerCompiledMethod("CacheChild", "answer", defaultAllocation)
+    check sendMessageCached(rt, receiver, "answer", @[], cache).intVal == 1
+
+  test "fallback and later method installation remain observable":
+    let rt = newRuntime()
+    let receiver = proxyReceiver("CacheLateMethod")
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, receiver, "notNil", @[], cache).boolVal
+    registerCompiledMethod("CacheLateMethod", "notNil", overriddenNotNil)
+    check not sendMessageCached(rt, receiver, "notNil", @[], cache).boolVal
+    check sendMessageCached(rt, NodeValue(kind: vkNil), "isNil", @[], cache).boolVal
+
+  test "exception selectors retain runtime protocol precedence":
+    let rt = newRuntime()
+    let value = compiledErrorValue("Error", "original")
+    value.instVal.isNimProxy = true
+    registerCompiledMethod("Error", "message", replacementAllocation)
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, value, "message", @[], cache).strVal == "original"
+    check sendMessageCached(rt, value, "message", @[], cache).strVal == "original"
+
+  test "template evaluates receiver and arguments exactly once":
+    let rt = newRuntime()
+    let value = proxyReceiver("CacheEvaluationOnce")
+    var calls = 0
+    proc receiver(): NodeValue =
+      inc calls
+      return value
+    proc arguments(): seq[NodeValue] =
+      inc calls
+      return @[]
+    registerCompiledMethod("CacheEvaluationOnce", "answer", defaultAllocation)
+    check cachedSend(rt, receiver(), "answer", arguments()).intVal == 1
+    check calls == 2
+
+  test "reentrant calls may replace a cache without corrupting the outer target":
+    let rt = newRuntime()
+    let outer = proxyReceiver("CacheReentrantOuter")
+    let inner = proxyReceiver("CacheReentrantInner")
+    var cache: CompiledSendCache
+    proc innerAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      NodeValue(kind: vkInt, intVal: 2)
+    proc outerAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      let answer = sendMessageCached(rt, inner, "answer", @[], cache)
+      NodeValue(kind: vkInt, intVal: answer.intVal + 1)
+    registerCompiledMethod("CacheReentrantInner", "answer", innerAnswer)
+    registerCompiledMethod("CacheReentrantOuter", "answer", outerAnswer)
+    check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3
+    check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3

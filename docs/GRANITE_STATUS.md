@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Forty-nine parity cases cover the current milestones, including three unhandled-error checks and the
+Fifty parity cases cover the current milestones, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -133,6 +133,18 @@ registration invalidate the guard. Overrides, mixed mode, aliases and locally
 shadowed names retain dynamic sends. Constructor/super parity cases and runtime
 invalidation tests cover the fallback. General method devirtualization is not
 implemented by this slice; compiled registration remains single-threaded.
+
+## Monomorphic send caches (first slice)
+
+Pure generic compiled send sites have thread-local positive caches for registered
+instance methods, guarded by receiver class, selector and registration version.
+Changing receiver class replaces the entry; nil results are valid hits. Method,
+class-method, allocator and superclass registration invalidate cached targets.
+Builtin fallback, exception protocols, class-side sends and mixed mode remain on
+generic dispatch. Runtime replacement/hierarchy tests and alternating-class
+execution parity cover these paths. Registry mutation is single-threaded; direct
+writes to exported method tables bypass invalidation and are outside this contract.
+Polymorphic caches and compact class/selector identities remain follow-ups.
 
 ## Implementation order
 

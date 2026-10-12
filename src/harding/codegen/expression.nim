@@ -717,13 +717,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
-    # Generic message dispatch via sendMessage
+    # Mixed-mode dispatch retains its fallback; pure sends use a per-site cache.
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
     if ctx.mixed:
-      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
-    else:
-      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
+    return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc blockOwnerLocals*(ctx: GenContext): seq[string] =
   ## Parameters and locals declared in the enclosing method. These shadow

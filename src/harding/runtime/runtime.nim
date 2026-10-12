@@ -138,7 +138,13 @@ proc registerMethod*(runtime: var Runtime, selector: string,
 
 var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
   initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
-type CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
+type
+  CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
+  CompiledSendCache* = object
+    className: string
+    selector: string
+    version: uint64
+    target: CompiledProc
 
 var compiledClassMethods = initTable[string, CompiledProc]()
 var compiledAllocators = initTable[string, CompiledProc]()
@@ -188,6 +194,7 @@ proc registerCompiledMethod*(className: string, selector: string,
                               fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
   let key = className & ">>" & selector
   compiledMethodProcs[key] = fn
+  inc compiledClassDispatchVersion
 
 proc registerNimProxyClassName*(nimValue: pointer, className: string) =
   ## Register the class name for a Nim proxy object
@@ -816,6 +823,39 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if receiverClassName.len > 0:
       return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
     return NodeValue(kind: vkNil)
+
+proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
+                        args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
+  ## Positive monomorphic cache for registered instance methods only. Builtins,
+  ## class-side sends and exception protocols retain the generic runtime path.
+  if selector in ["message", "signal", "defaultAction", "retry", "pass"]:
+    return sendMessage(runtime, receiver, selector, args)
+  let className = getReceiverClassName(receiver)
+  if className.len > 0:
+    if cache.version == compiledClassDispatchVersion and cache.className == className and
+       cache.selector == selector and cache.target != nil:
+      let target = cache.target
+      return target(receiver, args)
+    var currentClass = className
+    var target: CompiledProc
+    while currentClass.len > 0:
+      target = findCompiledMethod(currentClass, selector)
+      if target != nil:
+        break
+      currentClass = getSuperclassName(currentClass)
+    if target != nil:
+      cache = CompiledSendCache(className: className, selector: selector,
+                                version: compiledClassDispatchVersion, target: target)
+      return target(receiver, args)
+  return sendMessage(runtime, receiver, selector, args)
+
+template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
+                     args: seq[NodeValue]): NodeValue =
+  ## Each expanded send site owns its cache; recursive calls may safely replace
+  ## the entry because the selected target is copied before invocation.
+  block:
+    var siteCache {.global, threadvar.}: CompiledSendCache
+    sendMessageCached(runtime, receiver, selector, args, siteCache)
 
 # Global interpreter instance for mixed mode (initialized on first use)
 var hybridInterpreter*: Interpreter = nil

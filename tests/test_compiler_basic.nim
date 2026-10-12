@@ -299,6 +299,16 @@ suite "Compiler: Guarded default allocation":
     check not code.contains("guardedNew_")
     check code.contains("sendMessage(currentRuntime[], Box")
 
+suite "Compiler: Cached ordinary sends":
+  test "pure generic sends expand a per-site cache":
+    let ctx = newGenContext()
+    ctx.locals.add("receiver")
+    let send = MessageNode(receiver: IdentNode(name: "receiver"), selector: "answer")
+    check genMessage(ctx, send).contains("cachedSend(currentRuntime[], receiver")
+    ctx.mixed = true
+    check genMessage(ctx, send).contains("sendMessageHybrid(receiver")
+    check not genMessage(ctx, send).contains("cachedSend")
+
 suite "Compiler: Conservative numeric representations":
   test "monomorphic initialized script locals become native numbers":
     let (nodes, _) = parse("total := 0. i := 0. [i < 10] whileTrue: [total := total + i. i := i + 1]. total println.")
