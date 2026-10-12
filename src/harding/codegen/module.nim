@@ -97,7 +97,8 @@ proc genClassConstants*(cls: ClassInfo): string =
   # TODO: Remove when native method generation is complete
   output.add(fmt("proc toValue*(self: {clsName}): NodeValue =\n"))
   output.add(fmt("  ## Convert {cls.name} to NodeValue for sendMessage interop\n"))
-  output.add(fmt("  let inst = Instance(kind: ikObject, class: self.classRef, isNimProxy: true, nimValue: cast[pointer](self))\n"))
+  output.add(fmt("  let inst = Instance(kind: ikObject, class: self.classRef, isNimProxy: true, compiledOwner: self)\n"))
+  output.add("  inst.nimValue = cast[pointer](self)\n")
   output.add(fmt("  return NodeValue(kind: vkInstance, instVal: inst)\n"))
   output.add("\n")
   
@@ -325,9 +326,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     
     output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
 
+    let methodCellNames = scopeCaptureCellNames(body, params & md.temporaries)
     for i, paramName in params:
       let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
-      if paramName in scopeCaptureCellNames(body):
+      if paramName in methodCellNames:
         output.add(fmt("  var {paramName} = MutableCell(value: {paramValue})\n"))
       else:
         output.add(fmt("  var {paramName} = {paramValue}\n"))
@@ -338,7 +340,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         if globalName notin genCtx.globals:
           genCtx.globals.add(globalName)
       genCtx.inMethod = true
-      genCtx.cellNames = scopeCaptureCellNames(body)
+      genCtx.cellNames = methodCellNames
       if blockReg != nil:
         genCtx.blockRegistry = blockReg
       
@@ -612,7 +614,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add("# Base Object Type\n")
   output.add("##################\n\n")
   output.add("type\n")
-  output.add("  HardingObject* {.inheritable.} = object\n")
+  output.add("  HardingObject* {.inheritable.} = object of RootObj\n")
   output.add("    className*: string\n")
   output.add("  HardingObjectRef* = ref HardingObject\n\n")
 

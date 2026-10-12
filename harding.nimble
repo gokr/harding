@@ -186,6 +186,7 @@ tests/test_named_access_and_slots.nim
 """
 
 const TestOther = """
+tests/test_compiled_runtime.nim
 tests/test_compiler_basic.nim
 tests/test_compiler_block_parity.nim
 tests/test_website_examples.nim

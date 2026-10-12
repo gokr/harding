@@ -408,6 +408,23 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 """, "7\n"),
 ]
 
+# Keep the measured workloads under executed correctness coverage as well.
+CASES.extend([
+    ("write_only_capture", """
+Writer := Object derive: #().
+Writer>>run [ | value setter | value := 1. setter := [value := 42]. setter value. ^ value ].
+Writer new run println.
+""", "42\n"),
+    ("benchmark_queens", (ROOT / "benchmark/queens.hrd").read_text(), "92\n"),
+    ("benchmark_towers", (ROOT / "benchmark/towers.hrd").read_text(), "8191\n"),
+    ("nil_predicates", """
+nil isNil ifTrue: ["nil" println].
+nil notNil ifFalse: ["not present" println].
+42 isNil ifFalse: ["number" println].
+42 notNil ifTrue: ["present" println].
+""", "nil\nnot present\nnumber\npresent\n"),
+])
+
 
 def run(command, timeout, log, expected_error=None):
     try:

@@ -202,11 +202,11 @@ proc captureCellNames*(registry: BlockRegistry): seq[string] =
         if name != "self" and name notin result:
           result.add(name)
 
-proc scopeCaptureCellNames*(body: seq[Node]): seq[string] =
+proc scopeCaptureCellNames*(body: seq[Node], ownerLocalNames: seq[string] = @[]): seq[string] =
   ## Analyze only blocks lexically contained in this body.
   let registry = newBlockRegistry()
   for node in body:
-    collectBlocks(registry, node)
+    collectBlocks(registry, node, ownerLocalNames = ownerLocalNames)
   return captureCellNames(registry)
 
 proc bindingTarget(ctx: GenContext, name: string): string =
@@ -1210,7 +1210,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     varTypes: ctx.varTypes,
     compiledClasses: ctx.compiledClasses,
     classInfo: ctx.classInfo,
-    cellNames: scopeCaptureCellNames(blkNode.body)
+    cellNames: scopeCaptureCellNames(blkNode.body, blkNode.parameters & blkNode.temporaries)
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)

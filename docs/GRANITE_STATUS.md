@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Forty parity cases pass, including three unhandled-error checks and the
+Forty-six parity cases cover the current milestones, including three unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -57,7 +57,7 @@ restoration.
 The first error-model slice abandons VM protected work before handler execution
 and excludes executing handlers from catching their own failures. Both engines
 reject resumption entirely (no resume/resume:/return:), and native built-in Error/Exception signaling
-supports handler results, return:, pass and retry. Core exception, signal-point,
+supports handler results, pass and retry. Core exception, signal-point,
 compiler and website-example suites pass.
 
 Handlers supply values by returning them, and Harding has no resumption:
@@ -80,9 +80,18 @@ executed parity coverage. VM unwind continuations keep the cleanup's home active
 and retain outer cleanup registrations until each is exited. The exception/cleanup suite also passes under ARC and ORC. Process boundaries
 and legacy re-entrant native invocation paths remain unverified.
 
-A cleanup-ordering test also exposed compiled methods capturing mutable globals
-as symbols/copies rather than shared bindings. That is tracked separately;
-method-level cleanup ordering tests use direct output to isolate unwind behavior.
+Compiled methods use shared global bindings; `global_scope` covers reads and
+writes from methods and nested blocks. Receiver capture for slot accesses has
+executed parity coverage. Capture traversal now includes specialized control-flow
+and named-access nodes; write-only enclosing temporaries retain shared cells.
+
+Verified eight-queens search (92 solutions) and object-based Towers of Hanoi
+(8191 legal moves) now have parity coverage and ARC/ORC native execution evidence.
+Instance wrappers strongly retain native storage through `compiledOwner` before
+storing its raw pointer, avoiding premature collection without permanently rooting
+every allocation. General cyclic-object lifetime coverage remains outstanding.
+See [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md) for measured object-workload
+baselines; no Cog comparison has been measured for these workloads.
 
 Generated accessor messages use ordinary compiled method registration, preserving
 user overrides and inherited lookup. Generated setters return the receiver.

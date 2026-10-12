@@ -85,10 +85,8 @@ optimization phase a starting point.
 
 ## Caveats and limits
 
-- One microbenchmark cannot characterize a language. Object allocation, message
-  sends, closures and exceptions are not exercised here; `benchmark/towers.hrd`
-  and `benchmark/queens.hrd` are candidates for those, but neither is verified in
-  both engines yet.
+- Sieve does not exercise object allocation or ordinary method sends. The object
+  benchmarks below provide separate coverage; these results are not interchangeable.
 - Granite's compiled exception and notification support is incomplete, so this
   benchmark is not evidence of broad compiled-language coverage.
 - Interpreters and VMs include different startup work, which the baseline
@@ -108,3 +106,52 @@ python3 scripts/bench_sieve_languages.py
 
 Language sources and build logs are written under `build/bench_langs/`. The Squeak
 image copy lives under `build/squeak/`.
+
+## Object benchmarks: queens and towers
+
+Run `python3 scripts/bench_objects.py queens towers` after building the release
+interpreter and Granite. The runner generates repeated drivers from the checked-in
+benchmark definitions, compiles matching linked-object Nim implementations, checks
+**every** trial's result, and records raw timings and logs in isolated
+`build/bench_objects/run-*/` directories. Builds and executions have time limits.
+Five trials are timed externally; the median zero-work startup is subtracted from
+the median workload duration, then divided by repetitions. The baseline includes
+class registration and solver creation. Nim uses release ARC; Granite uses the
+project's default ARC. The interpreter binary must be built in release mode.
+
+- **Queens:** exhaustive eight-queens backtracking, checking column and both
+  diagonal conflicts. Each legal placement allocates a linked object. The result
+  must be **92 solutions**, not merely eight occupied rows. This replaces the
+  earlier simplified benchmark; it is not the SOM first-solution workload.
+- **Towers:** move 13 linked disk objects between three peg objects. Every push
+  checks move legality, and the final chain must contain sizes 1 through 13 with
+  the other pegs empty. The result must be **8191 moves**. Each repeated run
+  allocates fresh disks and pegs; moves relink existing disks.
+
+Baseline on the same Linux x86-64 host, Nim 2.2.12 / GCC 13.3.0:
+
+| Workload | Granite native | Release interpreter | Native Nim ARC |
+|---|---:|---:|---:|
+| Queens, all solutions | 185.939 ms | 4252.574 ms | 0.573 ms |
+| Towers, 13 disks | 53.251 ms | 671.091 ms | 0.273 ms |
+
+Repetitions: Granite 30, interpreter 3, Nim 1000. Raw evidence:
+`build/bench_objects/run-c__8y__h/results.json` (disposable; regenerate with the
+runner). Granite is ~23x/~13x faster than the interpreter, but ~325x/~195x slower
+than Nim on these workloads. This measures the current dynamic representation,
+dispatch and allocation costs together, not any single bottleneck. No Cog numbers
+have been measured for these two algorithms; the sieve comparison cannot be
+extrapolated to them. Native correctness also passes under ORC (92 and 8191).
+
+An earlier run measured Granite at 135.331/38.154 ms and the interpreter at
+3405.491/531.414 ms. Background builds and host contention were not controlled,
+and capture correctness was tightened between runs. Treat these as exploratory
+baselines, not evidence of a performance regression or a precise speedup target.
+Re-run before/after optimization on an otherwise idle host.
+
+These workloads exposed three correctness gaps, fixed before taking this baseline:
+missing compiled nil predicates, incomplete capture traversal through specialized
+control-flow nodes, and native storage reclaimed behind raw instance pointers.
+Wrappers now retain their native owner directly, without a permanent keep-alive
+registry. ARC does not collect arbitrary cycles; cyclic object graphs still need
+separate lifetime coverage.

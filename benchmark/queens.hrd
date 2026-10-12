@@ -1,73 +1,47 @@
 #!/usr/bin/env harding
-# N-Queens Benchmark.
-# Ported from SOM benchmark suite (https://github.com/smarr/SOM).
-# .
-# This is a simplified version that validates Harding language features:.
-# - Class definition with derivePublic:.
-# - Array creation and manipulation (at:, at:put:).
-# - While loops (whileTrue:).
-# - Method definition with parameters.
-# - Object instantiation and method calls.
-#
-# The full 8-queens algorithm requires complex constraint checking.
-# that works in full Smalltalk but has issues in the current Harding.
-# interpreter. This version runs successfully and returns true.
+# Count all eight-queens solutions using backtracking (expected: 92).
+# Each legal placement allocates a node linked to earlier rows. This exercises
+# recursion, allocation, slot access, and dynamic sends, not just integer loops.
 
-| Queens solver arr result count i |
+QueenPlacement := Object derivePublic: #(row, column, previous).
+QueenPlacement>>initializeRow: r column: c previous: p [
+  row := r.
+  column := c.
+  previous := p.
+  ^ self
+].
 
-# Define a Queens class.
-Queens := Object derivePublic: #(positions)
-# Queens supports the benchmark suite for runtime performance measurement.
-# This class definition is the canonical Browser-managed source entry.
-# The first line defines the superclass and declared slots.
-# Consecutive comment lines here describe the role of the class.
-# Methods that follow provide the operational behavior for this type.
-# Browser saves should preserve this comment block with the class definition.
-# Direct slot access is preferred inside instance-side methods when available.
-# Additional superclasses should be declared in the class definition if needed.
-# Reflection and source indexing use this section to describe the class.
-# Update this comment when the responsibilities of Queens change.
-
-
-Queens>>initialize [
-  positions := (Array new: 8)
-]
-
-Queens>>solve [
-  | i valid |
-  # Simplified validation: create positions 1-8
-  # In full version, this would check all constraints
-  i := 1
-  valid := 1
-  [ i <= 8 ] whileTrue: [
-    positions at: i put: i
-    i := i + 1
-  ]
-  
-  # Verify we placed 8 positions
-  i := 1
-  count := 0
-  [ i <= 8 ] whileTrue: [
-    (positions at: i) > 0 ifTrue: [
-      count := count + 1
+Queens := Object derive: #().
+Queens>>canPlaceRow: r column: c after: head [
+  | current distance delta valid |
+  current := head.
+  valid := true.
+  [current notNil] whileTrue: [
+    distance := r - current row.
+    delta := c - current column.
+    ((delta = 0) | (delta = distance) | (delta = (0 - distance))) ifTrue: [valid := false].
+    current := current previous
+  ].
+  ^ valid
+].
+Queens>>searchRow: r after: head [
+  | column total placement |
+  total := 0.
+  r = 8 ifTrue: [total := 1] ifFalse: [
+    column := 0.
+    [column < 8] whileTrue: [
+      (self canPlaceRow: r column: column after: head) ifTrue: [
+        placement := QueenPlacement new initializeRow: r column: column previous: head.
+        total := total + (self searchRow: (r + 1) after: placement)
+      ].
+      column := column + 1
     ]
-    i := i + 1
-  ]
-  
-  ^ count = 8
-]
+  ].
+  ^ total
+].
+Queens>>benchmark [ ^ self searchRow: 0 after: nil ].
 
-# Run the benchmark 5000 times for measurable duration.
-n := 5000
-total := 0
-
-[ n > 0 ] whileTrue: [
-  q := Queens new
-  q initialize
-  q solve
-  total := total + 1
-  n := n - 1
-]
-
-# Return total iterations completed.
-total
+# Benchmark driver
+solver := Queens new.
+answer := solver benchmark.
+answer println.

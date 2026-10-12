@@ -302,6 +302,31 @@ suite "Compiler: Codegen - Blocks":
     check "x" notin captures
     check "temp" notin captures
 
+  test "captures references through specialized control flow":
+    let condition = IdentNode(name: "ready")
+    let readValue = IdentNode(name: "value")
+    let access = NamedAccessNode(receiver: readValue, memberName: "field")
+    let branch = BlockNode(body: @[Node(access)])
+    let conditional = IfNode(condition: condition, thenBranch: branch)
+    let loop = WhileNode(condition: condition, body: BlockNode(body: @[Node(conditional)]))
+    let captures = analyzeCaptures(BlockNode(body: @[Node(loop)]))
+    check "ready" in captures
+    check "value" in captures
+
+  test "write-only enclosing temporaries share their binding":
+    let assignment = AssignNode(variable: "value", expression: LiteralNode(value: nilValue()))
+    let captures = analyzeCaptures(BlockNode(body: @[Node(assignment)]), @[], @[], @["value"])
+    check "value" in captures
+    check "value" in scopeCaptureCellNames(@[Node(BlockNode(body: @[Node(assignment)]))], @["value"])
+
+  test "native instance wrappers retain their storage":
+    var p = initParser(lex("Box := Object derivePublic: #(item)."))
+    var ctx = newCompiler()
+    let code = genModule(ctx, p.parseStatements(), "owned_storage")
+    check code.contains("HardingObject* {.inheritable.} = object of RootObj")
+    check code.contains("compiledOwner: self")
+    check code.contains("inst.nimValue = cast[pointer](self)")
+
   test "method-owned blocks retain home even without variable captures":
     let reg = newBlockRegistry()
     var info = registerBlock(reg, BlockNode(body: @[]))

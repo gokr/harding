@@ -143,6 +143,7 @@ type
       strVal*: string                       # Direct storage
     isNimProxy*: bool                       # Instance wraps Nim value
     nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
+    compiledOwner*: RootRef                 # Strong owner of compiled native storage
 
   # Mutable cell for captured variables (shared between closures)
   MutableCell* = ref object

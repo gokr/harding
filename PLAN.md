@@ -186,6 +186,12 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [ ] Proper missing-message errors instead of silent nil.
+- [ ] Reconcile nil-predicate overrides: the interpreter's unconditional isNil/
+      notNil fast paths bypass registered user methods, while compiled dispatch
+      checks overrides before the fallback. Minimal reproduction: a class with
+      `notNil [ ^ false ]` answers true in the interpreter, false natively.
+      Changing interpreter semantics requires discussion; benchmark parity only
+      asserts the ordinary nil predicates, not this discrepancy.
 
 ## 5. Exceptions, processes and libraries
 
@@ -233,8 +239,24 @@ below rather than relying on impressions.
 - [ ] Direct calls and specialization.
 - [ ] Unboxing.
 - [ ] Dispatch caching.
-- [ ] Add an object/allocation-heavy benchmark (e.g. `benchmark/towers.hrd`) so
-      optimization work is not guided by an arithmetic loop alone.
+- [x] Add checked object/allocation benchmarks: full eight-queens backtracking
+      (92 solutions) and linked-object Towers of Hanoi (8191 legal moves).
+      `scripts/bench_objects.py` compares release interpreter, Granite and native
+      Nim with per-trial output checks, timeouts and startup subtraction.
+- [x] Fix correctness defects exposed by those workloads: native instance wrappers
+      retain their storage, nil predicates work without bypassing user overrides,
+      capture traversal handles specialized control flow/named access, and writes
+      to enclosing method temporaries share bindings.
+- [ ] Measure Cog on the same queens/towers algorithms before estimating a
+      cross-workload performance gap. Sieve numbers alone do not predict it.
+- [ ] A: distinguish genuine escaping captures from literal blocks lowered inline;
+      allocate MutableCell only where shared closure storage is required.
+- [ ] B: introduce conservative value-type joins and numeric representations with
+      boxing at dynamic boundaries; preserve arithmetic/error semantics.
+- [ ] C: emit direct calls only for proven dispatch targets (or guarded targets),
+      preserving overrides, declaring-class super and return/cleanup semantics.
+- [ ] D: cache dynamic send targets with a defined invalidation policy; retain the
+      generic dispatch path and differential correctness tests.
 
 ## Validation entry points
 

@@ -17,10 +17,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Build toolchain requirement updated to Nim 2.2.12; interpreter, Granite, generated programs, and tests use the same installed compiler version.
 
 ### Added
+- Checked eight-queens search (92 solutions) and linked-object Towers of Hanoi (8191 legal moves), plus `scripts/bench_objects.py` comparing release interpreter, Granite and native Nim with per-trial correctness checks and bounded execution. Baselines are recorded in `docs/GRANITE_BENCHMARKS.md`.
 - Cross-language benchmark harness (`scripts/bench_sieve_languages.py`) and baseline (`docs/GRANITE_BENCHMARKS.md`) comparing the `benchmark/sieve.hrd` workload across C, Nim, Go, Node.js, Squeak Cog, Ruby, Python, Granite native and the Harding interpreter.
 - Focused Granite execution-parity runner (`python3 scripts/test_granite_parity.py`) with build/execution time limits, isolated workspace build directories, retained logs, and explicit expected output checks.
 
 ### Fixed
+- Generated native instance wrappers strongly retain their native storage instead of leaving only an ARC-invisible raw pointer. Object chains now remain valid without permanently rooting every allocation; queens and towers also execute correctly under ORC.
+- Capture analysis traverses specialized if/while and named-access nodes, and write-only enclosing method temporaries share their binding. Compiled nil predicates preserve ordinary method overrides.
 - Compiled methods now read and write Harding globals. Top-level uppercase names are shared module-level bindings instead of per-method shadow locals, so a method assigning one is seen by later top-level code and by other methods; blocks no longer capture a placeholder symbol. Covered by a `global_scope` parity case.
 - Blocks inside compiled methods that read or write an instance slot now capture the receiver. Such a block previously failed to compile because `self` was dropped from its captures; enclosing method parameters and temporaries correctly shadow same-named slots. Covered by a `block_slot_capture` parity case and unit tests.
 - Notification resume values and nested pass now agree across doits, scripts, and native programs. Installed handlers re-arm for repeated signals; running handlers are excluded from nested lookup. Removed VM signal-point snapshots and native resume restoration. Expanded parity tests cover handler results, early resume/pass, nested signals, handler failures, built-in default actions, and protected-body cleanup timing.

@@ -507,6 +507,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
 
   case selector
+  of "isNil":
+    return NodeValue(kind: vkBool, boolVal: receiver.kind == vkNil)
+  of "notNil":
+    return NodeValue(kind: vkBool, boolVal: receiver.kind != vkNil)
   of "writeLine:", "writeline:", "println":
     if args.len > 0:
       echo args[0].toString()

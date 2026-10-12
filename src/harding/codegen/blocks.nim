@@ -206,6 +206,22 @@ proc collectIdentRefs(node: Node, refs: var HashSet[string]) =
     for arg in primCall.arguments:
       collectIdentRefs(arg, refs)
 
+  of nkIf:
+    let conditional = node.IfNode
+    collectIdentRefs(conditional.condition, refs)
+    collectIdentRefs(conditional.thenBranch, refs)
+    collectIdentRefs(conditional.elseBranch, refs)
+
+  of nkWhile:
+    let loop = node.WhileNode
+    collectIdentRefs(loop.condition, refs)
+    collectIdentRefs(loop.body, refs)
+
+  of nkNamedAccess:
+    let access = node.NamedAccessNode
+    collectIdentRefs(access.receiver, refs)
+    collectIdentRefs(access.valueExpr, refs)
+
   else:
     discard
 
@@ -246,6 +262,19 @@ proc collectAssignedVars*(node: Node, assigned: var HashSet[string]) =
       collectAssignedVars(cascade.receiver, assigned)
     for msg in cascade.messages:
       collectAssignedVars(msg, assigned)
+  of nkIf:
+    let conditional = node.IfNode
+    collectAssignedVars(conditional.condition, assigned)
+    collectAssignedVars(conditional.thenBranch, assigned)
+    collectAssignedVars(conditional.elseBranch, assigned)
+  of nkWhile:
+    let loop = node.WhileNode
+    collectAssignedVars(loop.condition, assigned)
+    collectAssignedVars(loop.body, assigned)
+  of nkNamedAccess:
+    let access = node.NamedAccessNode
+    collectAssignedVars(access.receiver, assigned)
+    collectAssignedVars(access.valueExpr, assigned)
   else:
     discard
 
@@ -283,8 +312,11 @@ proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[],
   # Variables that are assigned but NOT referenced are local (not captures)
   # Variables that are referenced (even if also assigned) need capture
   for name in assigned:
-    if name notin allRefs:
+    if name in ownerLocalNames and name notin locals:
+      allRefs.incl(name)
+    elif name notin allRefs:
       locals.incl(name)
+
   # Subtract locals, pseudo-variables, and known globals
   var captures: seq[string] = @[]
   var needsSelf = false
