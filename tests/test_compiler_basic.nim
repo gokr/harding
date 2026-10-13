@@ -299,6 +299,27 @@ suite "Compiler: Guarded default allocation":
     check not code.contains("guardedNew_")
     check code.contains("sendMessage(currentRuntime[], Box")
 
+suite "Compiler: Method return convention":
+  test "implicit literal and empty methods answer self":
+    let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules>>literal [42]. ReturnRules>>empty [].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "implicit_returns")
+    check code.contains("discard NodeValue(kind: vkInt, intVal: 42)\n  return self")
+    check code.contains("proc Class_ReturnRules_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+
+  test "class-side fallthrough also answers its receiver":
+    let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules class>>empty [].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "class_return")
+    check code.contains("proc Class_ReturnRules_class_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+
+  test "explicit return is not followed by an implicit return":
+    let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules>>explicit [^ 42].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "explicit_return")
+    check code.contains("return NodeValue(kind: vkInt, intVal: 42)")
+    check not code.contains("return NodeValue(kind: vkInt, intVal: 42)\n  return self")
+
 suite "Compiler: Cached ordinary sends":
   test "pure generic sends expand a per-site cache":
     let ctx = newGenContext()

@@ -149,10 +149,16 @@ arbitrary error resumption solely in the interpreter.
       class and super lookup misses raise the same catchable Error subclass. Custom
       inherited DNU may recover, including nil results; cleanup precedes handlers
       and uncaught exit. Executed parity covers these paths.
-- [ ] Correct compiled implicit method returns: the interpreter's verified rule is
-      self without ^, including after an on:do: expression. Explicit ^ returns its
-      expression result. The prior final-expression entry incorrectly assumed
-      implicit last-value returns; do not use that as a language contract.
+- [x] Correct compiled implicit method returns: methods answer self without ^,
+      including literals, empty bodies, assignments, handled errors and cleanup.
+      Explicit ^ supplies a value; blocks keep last-expression results. Removed
+      the duplicate method-statement emitter and use ordinary genStatement.
+      Executed parity: implicit_method_returns.
+- [ ] Preserve interpreter class-side receiver representation on implicit return:
+      `C class>>implicit [42]` returns a class-wrapper instance, so chaining a
+      class-only selector fails or resolves an instance-side selector. Compiled
+      fallthrough returns the class receiver correctly; track separately rather
+      than treating the discrepancy as intended semantics.
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to

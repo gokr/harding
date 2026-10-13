@@ -313,6 +313,12 @@ Point>>moveX: dx y: dy [
 ]
 ```
 
+Methods reaching the end without `^` answer **self**, not their last value.
+Blocks without `^` answer their last expression. Use `^ value` for an explicit
+method result; `^` inside a block returns from its lexical home method.
+Verified instance/native case: `implicit_method_returns`. Implicit class-side
+receiver chaining has a separate interpreter representation gap (see PLAN.md).
+
 ### Method Batching (extend:)
 
 ```smalltalk

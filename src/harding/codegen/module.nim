@@ -372,10 +372,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add("  let hardingHome = CompiledReturnTarget(active: true)\n")
         output.add("  try:\n")
       
-      let bodyLen = body.len
-      for i, stmt in body:
-        let isLast = (i == bodyLen - 1) and selector != "initialize"
-        let stmtCode = genMethodBodyStatement(genCtx, stmt, isLast)
+      for stmt in body:
+        let stmtCode = genStatement(genCtx, stmt)
         if stmtCode.len > 0:
           for line in stmtCode.splitLines():
             if hasHomeBlocks:
@@ -384,8 +382,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
               output.add("  " & line)
             output.add("\n")
 
-      # Smalltalk convention: initialize methods return self unless explicit ^ used
-      if selector == "initialize":
+      # Explicit returns are emitted by genStatement; falling through answers self.
+      if body[^1].kind != nkReturn:
         output.add(if hasHomeBlocks: "    return self\n" else: "  return self\n")
       
       if needsNLRWrapper:
@@ -398,6 +396,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       if hasHomeBlocks:
         output.add("  finally:\n")
         output.add("    hardingHome.active = false\n")
+    else:
+      output.add("  return self\n")
     
     output.add("\n\n")
     

@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty-two parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-three parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -104,8 +104,11 @@ are not emitted. Generic instance/class/super lookup failures now signal catchab
 MessageNotUnderstood rather than nil. VM DNU executes on the normal work queue,
 preserving handler results; custom inherited instance/class DNU recovery and cleanup
 before handled/uncaught errors have executed coverage. Wrong-type primitive fallback
-and mixed-mode dispatch remain distinct gaps. Implicit compiled method returns
-still need alignment with the interpreter's self-without-^ convention.
+and mixed-mode dispatch remain distinct gaps. Compiled methods now answer self
+on fallthrough, with explicit ^ supplying values and blocks keeping last-expression
+results; implicit_method_returns covers empty methods, literals, assignments,
+handled errors and cleanup. Interpreter implicit class-side receiver chaining
+still has a representation gap, separately recorded in PLAN.md.
 Focused MNU tests, interpreter core, and exception/runtime suites pass (the latter
 also under ORC). The full named-access suite timed out after its first inherited
 layout test while entering JSON serialization coverage; only its four MNU tests

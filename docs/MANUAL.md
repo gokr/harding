@@ -797,6 +797,29 @@ Point>>moveX: dx y: dy [
 ]
 ```
 
+### Method and Block Return Values
+
+An instance method that reaches its end without `^` answers its receiver (`self`),
+not the final expression's value. This applies to empty methods, setters, literal
+expressions and methods ending in handled errors or cleanup. `^ expression`
+explicitly supplies the method result. Blocks without `^` instead answer their
+last expression.
+
+```harding
+Counter := Object derivePublic: #(value).
+Counter>>set: item [ value := item ].       # answers the Counter
+Counter>>answer [ ^ value ].              # answers the slot value
+Counter>>ignored [ 42 ].                  # answers the Counter
+[42] value.                              # answers 42
+```
+
+Executed interpreter/native coverage: `implicit_method_returns`. Compiled
+class-side fallthrough also answers its class receiver; the interpreter currently
+boxes an implicit class-side receiver such that subsequent class-side lookup can
+fail (tracked in PLAN.md). Do not infer class-side chaining parity from the
+instance-method case. Lexical `^` inside a block still returns from its home
+method; it is not a local block-return shorthand.
+
 ### Method Batching (extend:)
 
 Define multiple methods in a single block:

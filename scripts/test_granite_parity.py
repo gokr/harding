@@ -412,6 +412,36 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("implicit_method_returns", """
+ReturnSideEffect := 0.
+ReturnRules := Object derivePublic: #(stored).
+ReturnRules>>marker [ ^ "receiver" ].
+ReturnRules>>empty [ ].
+ReturnRules>>literal [ 42 ].
+ReturnRules>>parameter: item [ item ].
+ReturnRules>>local [ | item | item := 9 ].
+ReturnRules>>store: item [ stored := item ].
+ReturnRules>>global [ ReturnSideEffect := 17 ].
+ReturnRules>>handled [ [Error signal: "boom"] on: Error do: [:ex | 42] ].
+ReturnRules>>cleanup [ [7] ensure: ["cleanup" println] ].
+ReturnRules>>choose: flag [ flag ifTrue: [^ 55]. 9 ].
+ReturnRules>>explicit [ ^ [Error signal: "boom"] on: Error do: [:ex | 42] ].
+r := ReturnRules new.
+r empty marker println.
+r literal marker println.
+(r parameter: 3) marker println.
+r local marker println.
+(r store: 8) marker println.
+r stored println.
+r global marker println.
+ReturnSideEffect println.
+r handled marker println.
+r cleanup marker println.
+(r choose: false) marker println.
+(r choose: true) println.
+r explicit println.
+[42] value println.
+""", "receiver\nreceiver\nreceiver\nreceiver\nreceiver\n8\nreceiver\n17\nreceiver\ncleanup\nreceiver\nreceiver\n55\n42\n42\n"),
     ("missing_message_results", """
 ([1 missing] on: Error do: [:ex | 42]) println.
 ([nil missing] on: MessageNotUnderstood do: [:ex | ex message]) println.
