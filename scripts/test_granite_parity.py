@@ -412,6 +412,23 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("case_sensitive_bindings", """
+fooBar := 10.
+foobar := 20.
+fooBar := fooBar + 1.
+foobar := foobar + 2.
+fooBar println.
+foobar println.
+CaseBindings := Object derivePublic: #(slotValue, slotvalue).
+CaseBindings>>combine: fooBar with: foobar [ | readPair | readPair := [fooBar + foobar]. ^ readPair value ].
+k := CaseBindings new.
+k slotValue: 31.
+k slotvalue: 42.
+k slotValue println.
+k slotvalue println.
+(k combine: 3 with: 4) println.
+([:fooBar :foobar | fooBar + foobar] value: 5 value: 6) println.
+""", "11\n22\n31\n42\n7\n11\n"),
     ("reserved_identifiers", """
 Keywords := Object derivePublic: #(object, type, result).
 Keywords>>set: object [ type := object. result := object + 1. ^ result ].

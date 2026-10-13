@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty-six parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-seven parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -145,11 +145,17 @@ deferred collection/reflection ports, and retained historical stashes.
 Nim keywords and backend-owned local/field names are encoded consistently in
 binding declarations, references, assignments, method/block parameters, captures,
 numeric expressions and slot accessors. Original Harding selector and slot strings
-remain unchanged. reserved_identifiers covers keyword/helper-named variables,
-closures, slot messages and direct access. The encoded namespace is itself reserved
-to prevent user spellings colliding with an encoding. Ordinary spelling collisions
-under Nim's style-insensitive rules, and class/module sanitization, remain separate
-follow-up work; this slice does not establish general name-identity parity.
+remain unchanged. Name spelling is part of identity: only all-lowercase alphanumeric
+spellings are emitted verbatim, so `fooBar`, `foo_bar` and `slotValue` no longer
+collapse onto their lowercase forms under Nim's style-insensitive comparison, and
+`mangleSlot` keeps punctuation rather than replacing it. reserved_identifiers covers
+keyword/helper-named variables, closures, slot messages and direct access, and
+case_sensitive_bindings covers case/underscore-distinct bindings, slots and block
+parameters. The encoded namespace is itself reserved to prevent user spellings
+colliding with an encoding. `mangleClass` and `mangleModuleName` still strip case and
+punctuation, and generated proc names embed raw `{cls.name}` interleaved with such
+identifiers, so class/module spelling collisions remain separate follow-up work;
+this slice does not establish general name-identity parity.
 
 ## Numeric specialization (first slice)
 

@@ -214,6 +214,13 @@ suite "Compiler: Symbols":
     check mangleIdentifier("ordinary") == "ordinary"
     check mangleSlot("type") == mangleIdentifier("type")
 
+  test "distinct case and punctuation spellings remain distinct in Nim":
+    proc nimKey(value: string): string = value.replace("_", "").toLowerAscii()
+    check nimKey(mangleIdentifier("fooBar")) != nimKey(mangleIdentifier("foobar"))
+    check nimKey(mangleIdentifier("foo_bar")) != nimKey(mangleIdentifier("foobar"))
+    check nimKey(mangleSlot("slotValue")) != nimKey(mangleSlot("slotvalue"))
+    check mangleSlot("a-b") != mangleSlot("a_b")
+
   test "method and block declarations use the same identifier encoding":
     let ctx = newGenContext()
     ctx.parameters.add("object")
@@ -318,7 +325,7 @@ suite "Compiler: Guarded default allocation":
     let send = MessageNode(receiver: IdentNode(name: "Box"), selector: "new")
     let code = genMessage(genCtx, send)
     check not code.contains("guardedNew_")
-    check code.contains("sendMessage(currentRuntime[], Box")
+    check code.contains("sendMessage(currentRuntime[], " & mangleIdentifier("Box"))
 
 suite "Compiler: Method return convention":
   test "implicit literal and empty methods answer self":

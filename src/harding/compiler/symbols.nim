@@ -68,8 +68,8 @@ proc mangleClass*(name: string): string =
   result = "Class_" & sanitized
 
 proc mangleIdentifier*(name: string): string =
-  ## Keep ordinary names readable; encode Nim keywords and backend-owned names.
-  ## Encoding the complete spelling distinguishes e.g. object from Object.
+  ## Keep safe lowercase names readable; encode case-sensitive spellings and
+  ## backend-owned names. Hex bytes survive Nim's style-insensitive comparison.
   const reserved = ["addr", "and", "as", "asm", "bind", "block", "break", "case",
     "cast", "concept", "const", "continue", "converter", "defer", "discard",
     "distinct", "div", "do", "elif", "else", "end", "enum", "except", "export",
@@ -80,7 +80,11 @@ proc mangleIdentifier*(name: string): string =
     "var", "when", "while", "xor", "yield", "result", "args", "env", "envtyped",
     "home", "current", "count", "startnum", "endnum", "step", "classref", "classname"]
   let normalized = name.replace("_", "").toLowerAscii()
-  if normalized in reserved or normalized.startsWith("harding") or
+  var spellingNeedsEncoding = name.len == 0
+  for ch in name:
+    if ch notin {'a'..'z', '0'..'9'}:
+      spellingNeedsEncoding = true
+  if spellingNeedsEncoding or normalized in reserved or normalized.startsWith("harding") or
      normalized.startsWith("nimvalue"):
     result = "hardingUser"
     for ch in name:
@@ -89,14 +93,8 @@ proc mangleIdentifier*(name: string): string =
     result = name
 
 proc mangleSlot*(name: string): string =
-  ## Convert slot name to valid Nim identifier
-  result = ""
-  for ch in name:
-    if ch in {'a'..'z'} or ch in {'A'..'Z'} or ch in {'0'..'9'} or ch == '_':
-      result.add(ch)
-    else:
-      result.add('_')
-  result = mangleIdentifier(result)
+  ## Preserve original slot spelling rather than collapsing punctuation or case.
+  mangleIdentifier(name)
 
 proc addSymbol*(table: var SymbolTable, info: SymbolInfo) =
   ## Add symbol to table

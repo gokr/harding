@@ -195,9 +195,15 @@ arbitrary error resumption solely in the interpreter.
       fields, numeric expressions and slot accessors share identifier mangling;
       original selector and slot strings are unchanged. reserved_identifiers
       executes keyword/helper-named locals, captured bindings, slots and blocks.
-- [ ] Complete spelling-identity hygiene: ordinary names differing only by Nim
-      style-insensitive spelling (e.g. fooBar/foobar) and sanitized class/module
-      names still need collision analysis; keyword encoding does not prove that.
+- [x] Encode ordinary spelling identity: only all-lowercase alphanumeric names
+      are emitted verbatim, so `fooBar`/`foo_bar`/`slotValue` no longer fold onto
+      their lowercase forms under Nim's style-insensitive comparison. `mangleSlot`
+      keeps punctuation and case instead of stripping them. Coverage:
+      `case_sensitive_bindings` parity and fold-distinctness unit tests.
+- [ ] Class and module names still collapse case and punctuation through
+      `mangleClass`/`mangleModuleName`, so two class spellings can generate one
+      Nim type name and fail to build. Raw `{cls.name}` uses in generated proc
+      names need the same treatment.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [x] Generic missing-message errors instead of silent nil, including compiled
