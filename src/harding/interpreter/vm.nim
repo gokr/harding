@@ -1641,6 +1641,7 @@ proc primitiveAsClassSelfDoImpl(interp: var Interpreter, self: Instance, args: s
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
 proc newPopHandlerFrame*(): WorkFrame
+proc newDiscardFrame*(): WorkFrame
 proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
 proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil, isClassMethod: bool = false): WorkFrame
@@ -1708,6 +1709,11 @@ proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
     var pushFrame = newPushHandlerFrame(exceptionClass, handlerBlock, savedWorkQueueDepth)
     pushFrame.protectedBlockForHandler = blockNode
     interp.pushWorkFrame(pushFrame)
+
+    # Native dispatch pushes the primitive's placeholder result. Remove it
+    # before recording handler/block stack depths; only the protected block
+    # supplies the result of on:do: to the surrounding expression.
+    interp.pushWorkFrame(newDiscardFrame())
 
     # Return - let VM process the work queue
     # The result will be left on the eval stack by the block execution
@@ -2127,6 +2133,7 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
   var pushFrame = newPushHandlerFrame(handler.exceptionClass, handler.handlerBlock, savedWorkQueueDepth)
   pushFrame.protectedBlockForHandler = protectedBlock
   interp.pushWorkFrame(pushFrame)
+  interp.pushWorkFrame(newDiscardFrame())
 
   return nilValue()
 
