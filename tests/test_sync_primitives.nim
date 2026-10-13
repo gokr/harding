@@ -1,12 +1,38 @@
-import std/unittest
+import std/[unittest, tables]
 import ../src/harding/core/types
+import ../src/harding/core/process
 import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
-import ../src/harding/interpreter/objects
 import ./stdlib_test_support
 
 # Shared interpreter initialized once for all basic suites
 var sharedInterp = newSharedStdlibInterpreter()
+
+# Shared scheduler image for the multi-process suites. Each test used to build a
+# fresh context and reload the stdlib; that grew the shared class hierarchy on
+# every image and made the later suites take tens of seconds each.
+let sharedSchedCtx = newSchedulerContext()
+let sharedSchedInterp = block:
+  var it = sharedSchedCtx.mainProcess.getInterpreter()
+  loadStdlib(it)
+  it
+
+proc driveNewProcesses(ctx: SchedulerContext, previousPids: seq[uint64],
+                       maxSlices = 2000): bool =
+  ## Run a bounded number of slices so a continuation regression fails instead of hanging.
+  for step in 0 ..< maxSlices:
+    var complete = true
+    for pid, process in ctx.theScheduler.allProcesses:
+      if process != ctx.mainProcess and pid notin previousPids and process.state != psTerminated:
+        complete = false
+    if complete:
+      return true
+    discard ctx.runOneSlice()
+  return false
+
+proc processIds(ctx: SchedulerContext): seq[uint64] =
+  for pid in ctx.theScheduler.allProcesses.keys:
+    result.add(pid)
 
 suite "Monitor: Basic Operations":
   var interp {.used.}: Interpreter
@@ -117,12 +143,8 @@ suite "SharedQueue: Basic Operations":
     check(result[0][^1].boolVal == true)
 
 suite "Multi-Process: Monitor":
-  discard initCoreClasses()
-
   test "Monitor critical: provides mutual exclusion for shared counter":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     # Fork a coordinator process that sets up and runs the test
     let result = interp.evalStatements("""
@@ -157,9 +179,7 @@ suite "Multi-Process: Monitor":
     check(result[0][^1].intVal == 20)
 
   test "Monitor reentrant lock allows same process to acquire multiple times":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       M := Monitor new.
@@ -176,12 +196,8 @@ suite "Multi-Process: Monitor":
     check(result[0][^1].intVal == 42)
 
 suite "Multi-Process: Semaphore":
-  discard initCoreClasses()
-
   test "Binary semaphore ensures mutual exclusion":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -217,9 +233,7 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal == 10)
 
   test "Counting semaphore allows limited concurrent access":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -283,9 +297,7 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal <= 2)
 
   test "Semaphore signal unblocks waiting process":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -315,12 +327,8 @@ suite "Multi-Process: Semaphore":
     check(result[0][^1].intVal == 11)
 
 suite "Multi-Process: SharedQueue":
-  discard initCoreClasses()
-
   test "SharedQueue producer-consumer pattern":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -353,9 +361,7 @@ suite "Multi-Process: SharedQueue":
     check(result[0][^1].intVal == 6)
 
   test "SharedQueue multiple producers and consumers":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -401,9 +407,9 @@ suite "Multi-Process: SharedQueue":
     check(result[0][^1].intVal == 10)
 
   test "SharedQueue bounded queue blocks when full":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
+    let previousPids = processIds(ctx)
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [
@@ -426,20 +432,136 @@ suite "Multi-Process: SharedQueue":
         [Done >= 2] whileFalse: [Processor yield].
         Result := ItemsAdded.
       ].
-      [Coordinator state = "terminated"] whileFalse: [Scheduler step].
-      Result
     """)
-    check(result[1].len == 0)
-    check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == 5)
+    require(result[1].len == 0)
+    require(driveNewProcesses(ctx, previousPids))
+    let (value, err) = interp.doit("(Result = 5) and: [ (Done = 2) and: [ (Counter = 5) and: [ Q isEmpty ] ] ]")
+    require(err.len == 0)
+    require(value.kind == vkBool)
+    check(value.boolVal)
+
+suite "Blocking continuations":
+  test "nested method resumes an empty queue read without replaying earlier work":
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
+    let previousPids = processIds(ctx)
+    let (_, err) = interp.evalStatements("""
+      ResumeQueue := SharedQueue new: 1.
+      ResumeBefore := 0.
+      ResumeAfter := 0.
+      ResumeDone := 0.
+      ResumeReaderClass := Object derive.
+      ResumeReaderClass>>readOne [
+        | item |
+        ResumeBefore := ResumeBefore + 1.
+        item := ResumeQueue next.
+        ResumeAfter := ResumeAfter + 1.
+        ^ item
+      ].
+      ResumeReader := Processor fork: [
+        ResumeItem := ResumeReaderClass new readOne.
+        ResumeDone := ResumeDone + 1
+      ].
+    """)
+    require(err.len == 0)
+    for step in 0 ..< 12:
+      discard ctx.runOneSlice()
+    var blockedReader: process.Process
+    for pid, p in ctx.theScheduler.allProcesses:
+      if p != ctx.mainProcess and pid notin previousPids:
+        blockedReader = p
+    require(blockedReader != nil)
+    check(blockedReader.state == psBlocked)
+    require(blockedReader.getInterpreter().activationStack.len > 1)
+    require(blockedReader.getInterpreter().workQueue.len > 0)
+    let (_, signalErr) = interp.evalStatements("ResumeQueue nextPut: 41")
+    require(signalErr.len == 0)
+    require(driveNewProcesses(ctx, previousPids))
+    let (value, verifyErr) = interp.doit("""
+      (ResumeItem = 41) and: [
+        (ResumeBefore = 1) and: [ (ResumeAfter = 1) and: [ ResumeDone = 1 ] ]
+      ]
+    """)
+    require(verifyErr.len == 0)
+    require(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "full queue retries only the send and keeps its evaluated argument":
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
+    let previousPids = processIds(ctx)
+    let (_, err) = interp.evalStatements("""
+      RetryQueue := SharedQueue new: 1.
+      RetryQueue nextPut: 10.
+      RetryArgs := 0.
+      RetryDone := 0.
+      RetryWriter := Processor fork: [
+        RetryValue := RetryQueue nextPut: ([ RetryArgs := RetryArgs + 1. 20 ] value).
+        RetryDone := RetryDone + 1
+      ].
+    """)
+    require(err.len == 0)
+    for step in 0 ..< 12:
+      discard ctx.runOneSlice()
+    var blockedWriter: process.Process
+    for pid, p in ctx.theScheduler.allProcesses:
+      if p != ctx.mainProcess and pid notin previousPids:
+        blockedWriter = p
+    require(blockedWriter != nil)
+    check(blockedWriter.state == psBlocked)
+    let (first, firstErr) = interp.doit("RetryQueue next")
+    require(firstErr.len == 0)
+    require(first.kind == vkInt)
+    check(first.intVal == 10)
+    require(driveNewProcesses(ctx, previousPids))
+    let (value, verifyErr) = interp.doit("""
+      (RetryQueue next = 20) and: [
+        (RetryArgs = 1) and: [ (RetryValue = 20) and: [ RetryDone = 1 ] ]
+      ]
+    """)
+    require(verifyErr.len == 0)
+    require(value.kind == vkBool)
+    check(value.boolVal)
+
+  test "a final statement with nested semaphore waits finishes only after all continuations":
+    let ctx = sharedSchedCtx
+    var interp = sharedSchedInterp
+    let previousPids = processIds(ctx)
+    let (_, err) = interp.evalStatements("""
+      FinalSem := Semaphore new.
+      FinalCount := 0.
+      FinalWorker := Processor fork: [
+        [ FinalCount < 3 ] whileTrue: [
+          FinalSem wait.
+          FinalCount := FinalCount + 1
+        ]
+      ].
+    """)
+    require(err.len == 0)
+    var worker: process.Process
+    for pid, p in ctx.theScheduler.allProcesses:
+      if p != ctx.mainProcess and pid notin previousPids:
+        worker = p
+    require(worker != nil)
+    for permit in 1 .. 3:
+      for step in 0 ..< 12:
+        discard ctx.runOneSlice()
+      check(worker.state == psBlocked)
+      let (_, signalErr) = interp.evalStatements("FinalSem signal")
+      require(signalErr.len == 0)
+      for step in 0 ..< 12:
+        discard ctx.runOneSlice()
+      let (count, countErr) = interp.doit("FinalCount")
+      require(countErr.len == 0)
+      require(count.kind == vkInt)
+      check(count.intVal == permit)
+    require(driveNewProcesses(ctx, previousPids))
+    check(worker.state == psTerminated)
+    check(worker.getInterpreter().workQueue.len == 0)
 
 suite "Multi-Process: Combined Synchronization":
-  discard initCoreClasses()
-
   test "Monitor with Semaphore for resource pooling":
-    let ctx = newSchedulerContext()
-    var interp = ctx.mainProcess.getInterpreter()
-    loadStdlib(interp)
+    var interp = sharedSchedInterp
 
     let result = interp.evalStatements("""
       Coordinator := Processor fork: [

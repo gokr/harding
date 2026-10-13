@@ -503,6 +503,7 @@ var
   mixinClass*: Class = nil                      # Mixin class, sibling to Object (slotless, can mix with any type)
   undefinedObjectClass*: Class = nil            # UndefinedObject class, inherits from Object (for nil)
   booleanClass*: Class = nil
+  numberClass*: Class = nil                     # Number class (parent of Integer and Float)
   integerClass*: Class = nil
   floatClass*: Class = nil
   stringClass*: Class = nil
@@ -1022,6 +1023,39 @@ proc isMixin*(cls: Class): bool =
       break
   return false
 
+proc registerSubclass*(parent, child: Class) =
+  ## Add child to parent's subclass list, replacing any previous class of the
+  ## same name.
+  ##
+  ## Redefining a class (a .hrd file re-running `Foo := Object derive ...`)
+  ## creates a new Class object and rebinds the global, but the previous class
+  ## stayed in its parent's subclass list. Those orphans accumulate: every
+  ## reload left Object with more children and made tree walks such as
+  ## rebuildAllTables progressively slower. The live class identity is the
+  ## newest one, so the older entry is dropped here.
+  if parent == nil or child == nil:
+    return
+  var kept: seq[Class] = @[]
+  for existing in parent.subclasses:
+    if existing != child and existing.name != child.name:
+      kept.add(existing)
+  kept.add(child)
+  parent.subclasses = kept
+
+proc renameClass*(cls: Class, name: string) =
+  ## Give a class its binding name and re-register it with its parents.
+  ##
+  ## A derived class is created with a placeholder name ("Object+Derived") and
+  ## only receives its real name when the `.hrd` assignment binds it to a
+  ## global. registerSubclass dedupes by name, so without re-registering here
+  ## the placeholder entry from creation stayed behind and each reload added
+  ## another class of the same name to Object's subclass list.
+  if cls == nil:
+    return
+  cls.name = name
+  for parent in cls.superclasses:
+    registerSubclass(parent, cls)
+
 proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], name: string = "",
                readableSlotNames: seq[string] = @[], writableSlotNames: seq[string] = @[]): Class =
   ## Create a new Class with given superclasses and slot names
@@ -1069,7 +1103,7 @@ proc newClass*(superclasses: seq[Class] = @[], slotNames: seq[string] = @[], nam
 
   # Add to superclasses' subclasses lists and inherit methods
   for parent in superclasses:
-    parent.subclasses.add(result)
+    registerSubclass(parent, result)
     # If parent is dirty, trigger rebuild to get latest methods before inheriting
     # This ensures new subclasses pick up methods added after parent was marked dirty
     if parent.methodsDirty:
@@ -1146,7 +1180,7 @@ proc addSuperclass*(cls: Class, parent: Class) =
 
   # Add parent
   cls.superclasses.add(parent)
-  parent.subclasses.add(cls)
+  registerSubclass(parent, cls)
 
   # Inherit instance methods (unless child overrides)
   for selector, methodBlock in parent.allMethods:

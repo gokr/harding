@@ -740,7 +740,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
         raise newException(EvalError, "Cannot reassign protected global: " & name)
       # If assigning a Class, set its name to the variable name
       if value.kind == vkClass and value.classVal != nil:
-        value.classVal.name = name
+        renameClass(value.classVal, name)
       interp.globals[][name] = value
       debug("Global set (uppercase variable): ", name, " = ", value.toString())
       return
@@ -760,7 +760,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
 
   # If assigning a Class, set its name to the variable name
   if value.kind == vkClass and value.classVal != nil:
-    value.classVal.name = name
+    renameClass(value.classVal, name)
 
   interp.globals[][name] = value
   debug("Global set: ", name, " now globals count: ", interp.globals[].len)
@@ -3610,21 +3610,28 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.allClassMethods["primitiveEval:"] = evalMethod
 
   # Create Number class (derives from Object)
-  # Number is an abstract class; methods are defined in .hrd files
-  let numberCls = newClass(superclasses = @[objectCls], name = "Number")
+  # Number is an abstract class; methods are defined in .hrd files.
+  # Reuse an existing class when initGlobals runs again: creating a second one
+  # would add another subclass to Object and leak the previous class.
+  let numberCls = if numberClass != nil: numberClass
+                  else: newClass(superclasses = @[objectCls], name = "Number")
+  numberClass = numberCls
 
   # Create Integer class (derives from Number)
   # Methods are defined in lib/core/Integer.hrd using <primitive> syntax
-  let intCls = newClass(superclasses = @[numberCls], name = "Integer")
+  let intCls = if integerClass != nil: integerClass
+               else: newClass(superclasses = @[numberCls], name = "Integer")
   integerClass = intCls
 
   # Create Float class (derives from Number)
   # Methods are defined in lib/core/Float.hrd using <primitive> syntax
-  let floatCls = newClass(superclasses = @[numberCls], name = "Float")
+  let floatCls = if floatClass != nil: floatClass
+                 else: newClass(superclasses = @[numberCls], name = "Float")
   floatClass = floatCls
 
   # Create String class (derives from Object)
-  let stringCls = newClass(superclasses = @[objectCls], name = "String")
+  let stringCls = if stringClass != nil: stringClass
+                  else: newClass(superclasses = @[objectCls], name = "String")
   stringClass = stringCls
 
   # Register String primitive methods
@@ -4208,7 +4215,8 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Create Boolean class (derives from Object)
   # Methods are defined in lib/core/Boolean.hrd
-  let booleanCls = newClass(superclasses = @[objectCls], name = "Boolean")
+  let booleanCls = if booleanClass != nil: booleanClass
+                   else: newClass(superclasses = @[objectCls], name = "Boolean")
   booleanClass = booleanCls
 
   # Register Boolean primitive selectors
@@ -4227,16 +4235,19 @@ proc initGlobals*(interp: var Interpreter) =
   booleanCls.allMethods["primitiveIfFalse:"] = ifFalseMethod
 
   # Create True class (singleton class for true value)
-  let trueCls = newClass(superclasses = @[booleanCls], name = "True")
+  let trueCls = if trueClassCache != nil: trueClassCache
+                else: newClass(superclasses = @[booleanCls], name = "True")
   trueClassCache = trueCls
 
   # Create False class (singleton class for false value)
-  let falseCls = newClass(superclasses = @[booleanCls], name = "False")
+  let falseCls = if falseClassCache != nil: falseClassCache
+                 else: newClass(superclasses = @[booleanCls], name = "False")
   falseClassCache = falseCls
 
   # Create Block class (derives from Object)
   # Methods are defined in lib/core/Block.hrd using <primitive> syntax
-  let blockCls = newClass(superclasses = @[objectCls], name = "Block")
+  let blockCls = if blockClass != nil: blockClass
+                 else: newClass(superclasses = @[objectCls], name = "Block")
   blockClass = blockCls
 
   # Register Block primitive selectors (used by lib/core/Block.hrd)
@@ -4412,7 +4423,8 @@ proc initGlobals*(interp: var Interpreter) =
   # ============================================================================
   # Create Random class (derives from Object) - random number generator
   # ============================================================================
-  let randomCls = newClass(superclasses = @[objectCls], name = "Random")
+  let randomCls = if randomClass != nil: randomClass
+                  else: newClass(superclasses = @[objectCls], name = "Random")
   randomClass = randomCls
 
   # Register Random primitive methods
@@ -4443,7 +4455,8 @@ proc initGlobals*(interp: var Interpreter) =
   # ============================================================================
   # Json class for prefix literal support (json{...} syntax)
   # ============================================================================
-  let jsonCls = newClass(superclasses = @[objectCls], name = "Json")
+  let jsonCls = if jsonClass != nil: jsonClass
+                else: newClass(superclasses = @[objectCls], name = "Json")
 
   proc primitiveJsonParseLiteralImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
     ## Parse json{...} literal content and return JSON string
@@ -5130,7 +5143,8 @@ proc initGlobals*(interp: var Interpreter) =
   jsonClass = jsonCls  # Set global variable
 
   # Create UndefinedObject class (derives from Object) - the class of nil
-  let undefinedObjCls = newClass(superclasses = @[objectCls], name = "UndefinedObject")
+  let undefinedObjCls = if undefinedObjectClass != nil: undefinedObjectClass
+                        else: newClass(superclasses = @[objectCls], name = "UndefinedObject")
   undefinedObjectClass = undefinedObjCls  # Set global variable in types module
 
   # Create the singleton nil instance (instance of UndefinedObject)
@@ -5164,7 +5178,9 @@ proc initGlobals*(interp: var Interpreter) =
 
   # Create Class class (metaclass) - derives from Object like all classes
   # This allows isKindOf: Class to work properly
-  let classCls = newClass(superclasses = @[objectCls], name = "Class")
+  let classCls = if classClass != nil: classClass
+                 else: newClass(superclasses = @[objectCls], name = "Class")
+  classClass = classCls
 
   # Ensure all class objects (instances of Class) can use core class-side
   # bootstrap constructors like derive/new, not just Object.

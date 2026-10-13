@@ -227,6 +227,14 @@ suite "Exception Handling":
     """)
     check retried[1].len == 0
     check retried[0][^1].strVal == "Notification does not support retry"
+  test "handler result keeps the enclosing assignment continuation":
+    let assigned = interp.evalStatements("""
+      Result := [ 10 // 0 ] on: DivisionByZero do: [ :ex | 42 ]
+    """)
+    check(assigned[1].len == 0)
+    let readBack = interp.evalStatements("Result")
+    check(readBack[1].len == 0)
+    check(readBack[0][^1].intVal == 42)
 
   test "pass skips non-matching outer handler":
     let result = interp.evalStatements("""

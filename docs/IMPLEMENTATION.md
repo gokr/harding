@@ -619,10 +619,22 @@ When a primitive blocks:
 1. Process state changes to `psBlocked`
 2. Process is added to appropriate waiting queue
 3. `interp.shouldYield` is set to stop execution
-4. Program counter is decremented so statement re-executes when unblocked
-5. When unblocked, process state returns to `psReady` and is added to ready queue
+4. When unblocked, process state returns to `psReady` and is added to ready queue
 
-This ensures proper resumption of blocked operations without losing state.
+The blocked state is retained rather than discarded. The VM requeues the
+blocked send together with its already-evaluated operands, so resumption
+re-executes only that message, not the enclosing statement. `runCurrentProcess`
+advances only the fork's outer activation (`activationStack[0]`), never rewinds
+the program counter, and does not truncate the work queue or eval stack on
+blocking. A process terminates only when the outer block's statements are
+exhausted *and* the work queue is empty, so a nested block or method ending does
+not end the process. The blocked primitive signals its result through the
+requeued frame, so blocking a `Semaphore wait` or a full `SharedQueue nextPut:`
+preserves the loop and method continuations around it.
+
+An explicit `Processor yield` is different from blocking: the process is not in
+`psBlocked`, so it is simply returned to the ready queue with its frames intact
+and resumes from the same point.
 
 ---
 

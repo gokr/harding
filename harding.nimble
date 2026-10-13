@@ -196,8 +196,8 @@ tests/test_bona_models.nim
 tests/test_source_editor.nim
 tests/test_gui_automation.nim
 tests/test_html_canvas.nim
-tests/test_html2_dyn_cache.nim
 tests/test_web_html_template_cache.nim
+tests/test_html_render_cache.nim
 tests/test_signal_point_debugging.nim
 tests/test_bitbarrel.nim
 """

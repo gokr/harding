@@ -17,7 +17,6 @@ Web at: "__sourceDir" put: "lib/web"
   Web load: "Htmx.hrd"
   Web load: "Daisy.hrd"
   Web load: "DaisyComponents.hrd"
-  Web load: "Basecoat.hrd"
 
   Web at: "__initialized" put: true
 ]

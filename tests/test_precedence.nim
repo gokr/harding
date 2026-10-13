@@ -8,15 +8,24 @@
 
 import std/unittest
 import ../src/harding/core/types
+import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
+
+## One interpreter for the whole file. Each suite used to build a fresh image
+## in setup, which reloads the entire stdlib per test; that grows the shared
+## class hierarchy on every image and made later suites take minutes.
+let sharedPrecedenceInterp = block:
+  var it = newInterpreter()
+  initGlobals(it)
+  initProcessorGlobal(it)
+  loadStdlib(it)
+  it
 
 suite "Parser Precedence - Unary Messages":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "unary message binds tighter than binary":
     # "1 + 2 negated" should be "1 + (2 negated)" = "1 + -2" = -1
@@ -58,9 +67,7 @@ suite "Parser Precedence - Binary Operators":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "binary operators left to right":
     # "10 - 5 - 2" should be "(10 - 5) - 2" = 3
@@ -98,10 +105,7 @@ suite "Message Precedence: Unary > Binary > Keyword":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    initSymbolTable()
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "unary has higher precedence than binary":
     let result = interp.evalStatements("""
@@ -177,9 +181,7 @@ suite "Parser Precedence - Assignment":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "assignment after all operations":
     let (result, err) = interp.doit("X := 1 + 2 * 3. X")
@@ -198,9 +200,7 @@ suite "Parser Precedence - Parentheses Override":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "parentheses override precedence":
     let (result, err) = interp.doit("(1 + 2) * 3")
@@ -240,9 +240,7 @@ suite "Parser Precedence - Message Cascades":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "cascade sends multiple messages to same receiver":
     let (result, err) = interp.doit("Arr := #(10, 20, 30). Arr at: 0; at: 1")
@@ -255,9 +253,7 @@ suite "Parser Precedence - Named Access":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "named access accepts quoted symbol with spaces":
     let result = interp.evalStatements("""
@@ -286,9 +282,7 @@ suite "Parser Precedence - Complex Combinations":
   var interp: Interpreter
 
   setup:
-    interp = newInterpreter()
-    initGlobals(interp)
-    loadStdlib(interp)
+    interp = sharedPrecedenceInterp
 
   test "complex expression with all precedence levels":
     let (result, err) = interp.doit("Arr := #(10, 20, 30). X := 0. Arr at: X + 1")

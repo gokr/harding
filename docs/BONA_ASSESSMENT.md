@@ -9,6 +9,7 @@ This assessment combines source review, headless tests, and interaction with a l
 - GTK4 dialog bindings and literal-message handling are corrected, including cancellation cleanup and declining a cancelled confirmation.
 - Browser writes use parser-delimited targeted edits with validation and atomic replacement. Shared-file, class-side, extension-file, Unicode/CRLF, duplicate-definition, and invalid-edit preservation tests were added. Reflection/display and successful image reload still need further work; syntax validation is not a transactional runtime validation.
 - Browser refresh defers while source is dirty. Transcript keeps bounded history while closed, restores it on reopen, and provides class-side `contents` for BonaMCP.
+- The bounded-queue scheduler livelock is repaired: blocking retains the VM continuation and retries the blocked send, not the whole statement. Nested loop/method completion no longer terminates the outer fork prematurely. Tests cap scheduler slices and check both worker completion and queue contents.
 - Focused validation: 12 source-editor tests, 10 Bona model tests, 22 GUI automation tests, and the interpreter core suite pass under ARC. GTK callback/dialog tests also run under ORC. Full-suite and complete black-box tool acceptance remain outstanding.
 - Interpreter contracts for load failure, structured evaluation outcomes, and eval scheduler ownership are flagged for discussion rather than silently changed. Direct `::` access in tool test setup also needs a focused reproduction.
 

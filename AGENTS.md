@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents (Claude Code and similar tools) 
 
 Harding is a class-based Smalltalk dialect that compiles to Nim. It provides a Smalltalk-like object system, stackless AST interpreter, Nim compilation backend (Granite), REPL, GTK4 IDE (Bona), VSCode extension (LSP/DAP), optional MummyX HTTP server integration, and an external library system (`harding lib`).
 
-**Current Status**: v0.8.0 - Functional interpreter with green threads, MIC/PIC caching, Smalltalk-style resumable exceptions, GTK4 IDE, VSCode extension, Granite compiler for native binary compilation, MummyX web server support, and installable external libraries (BitBarrel, MySQL, SQLite, JWT, etc.). FFI to Nim is still in progress.
+**Current Status**: v0.8.0 - Functional interpreter with green threads, MIC/PIC caching, non-resumable errors and synchronous notifications, GTK4 IDE, VSCode extension, Granite compiler for native binary compilation, MummyX web server support, and installable external libraries (BitBarrel, MySQL, SQLite, JWT, etc.). FFI to Nim is still in progress.
 
 ## Build Commands
 
@@ -115,7 +115,21 @@ nim c -r --out:build/test_gui_automation tests/test_gui_automation.nim
 
 Bona needs GTK4, GtkSourceView 5, and **GTK4** VTE (`libvte-2.91-gtk4.so.0`); GTK3 VTE is not compatible. On the assessed Ubuntu host GTK4 VTE was missing. A runtime package was extracted locally under `build/bona-assessment/deps`; use its `usr/lib/x86_64-linux-gnu` in `LIBRARY_PATH` for linking and `LD_LIBRARY_PATH` for running, or explicitly arrange installation. Do not substitute the GTK3 library.
 
-The full `tests/test_*.nim` sweep is not green: `test_badminton_buddy` fails at `BadmintonRepository open:` (SQLite repository path; unrelated to Bona work) and its HTTP tests depend on an external server. Treat those as known, separate issues.
+The bounded-queue livelock is fixed. A blocked consumer previously lost its loop/method continuation and was terminated before incrementing the coordinator's completion counter. `runCurrentProcess` now advances only the outer fork activation (`activationStack[0]`), preserves VM frames and evaluated operands across blocking/yielding, and terminates only when the outer block is complete and the work queue is empty. The VM requeues the blocked native send; do not restart the whole statement, rewind its PC, or truncate its continuations. Regression tests in `test_sync_primitives.nim` drive a bounded number of scheduler slices so failure cannot hang indefinitely. All 21 synchronization tests pass under ARC and ORC, including nested method reads, full-queue writes without repeated argument side effects, and repeated semaphore waits in a fork's final loop statement. This fixes continuation loss, not captured-variable visibility; the consumer had never executed its final completion-counter assignment.
+
+The following validation was reported on main before its merge into granite-completeness; it is historical evidence, not a full-suite claim for the merged tree. Use current focused logs and docs/GRANITE_STATUS.md for this branch (the nimble tasks mask failures with `|| true`):
+
+- `test_sync_primitives` (21), `test_scheduler_complete` (45), `test_interpreter_core` (57), `test_exception_handling` (15), `test_precedence`, `test_primitives`, `test_closures`, `test_class_model`, `test_load_and_eval`, `test_dynamic_features`, `test_literals`, `test_slot_ivars`, `test_extend`, `test_cascade`, `test_float_operations`, `test_nil_conditionals`, `test_tagged`, `test_library_namespace`, `test_cli_args`, `test_source_editor`, `test_bona_models`, `test_signal_point_debugging`, `test_bitbarrel`, `test_sqlite`, `test_mysql`, `test_website_examples` (55), `test_html_canvas` (14), `test_web_html_template_cache` (6), `test_html_render_cache` (4), `test_mcp_bridge` (12), the whole stdlib group and both compiler suites pass, under ARC and (for the scheduler/sync/exception suites) ORC.
+- The three Html suites and the MCP suite were rewritten/fixed against the current API: the removed class-side `Html div: ... with:` form and `Html canvas:`/`render:` caching are gone, so they now exercise `Html render:` plus `Component`/`RenderCache` reuse-and-invalidate (`test_web_html_template_cache`), component nesting, and the real `Table[int, McpServerState]`/`BlockNode` shapes.
+- The website examples were also exercised end to end: `python3 -m http.server` for the static pages, Chrome DevTools MCP to confirm each page and code block renders with no console errors apart from a missing `favicon.ico`, and the runnable blocks executed with `./harding` (and `harding_mummyx` for the MummyX route example, fetched with `curl`). This is what surfaced the resumable-exception assignment bug fixed alongside.
+- `test_badminton_buddy` fails 13 tests at `BadmintonRepository open:` and its HTTP tests; identical before the scheduler and exception fixes, so unrelated. It needs the sqlite proxy type registered when the repository class is loaded (`Harding load:` does not install external-library proxies).
+- `test_gui_automation` (and a GUI `bona` build) cannot link here for want of GTK4 VTE as noted above. `test_mcp_bridge` compiles again.
+
+Main's historical resume-continuation test is migrated to ordinary handler results on granite-completeness. Exception resumption is intentionally unsupported here; do not treat old resume-related gaps as active language requirements.
+
+Class definitions are process-global, not per-interpreter: `objectClass` and the other core classes live in `src/harding/core/types.nim` and are shared by every interpreter in the process. Redefining a class must therefore replace its registration rather than add to it — `registerSubclass` dedupes by name and `renameClass` re-registers after a `.hrd` assignment gives a derived class its real name. Without both, each `loadStdlib` left orphan classes in `Object.subclasses` and `loadStdlib` grew quadratically (measured: 1.6s, then 8.2s by the sixth interpreter, ~14 leaked classes each time). Building a class outside `newClass`/`registerSubclass` will reintroduce the leak.
+
+Per-test `newInterpreter` + `loadStdlib` is still expensive (~2s per interpreter for the stdlib). Prefer one shared interpreter per test file (see `tests/stdlib_test_support.nim` and `test_precedence.nim`), and reuse the core class caches in `initGlobals` rather than creating new classes there.
 
 The existing nimble test tasks mask failures with `|| true`; inspect actual test results or use direct `nim c -r` for focused validation. A green task exit alone is not proof of passing tests. Headless tests and direct GTK signal tests do not replace real event-loop/AT-SPI acceptance tests. Validate ARC and ORC when touching proxy lifetime, callbacks, or cross-thread services. Logs and scratch work belong under `build/`, not `/tmp`.
 
@@ -231,14 +245,9 @@ See `src/harding/interpreter/vm.nim` for implementation and `docs/IMPLEMENTATION
 
 ## Exception Handling
 
-See `docs/research/ExceptionHandling.md` for full details. Harding uses **Smalltalk-style resumable exceptions** on top of the stackless VM.
+See `docs/EXCEPTION_MODEL.md` for the accepted contract; the research document is historical. Errors abandon protected work and execute exactly-once cleanup before their handler. Notifications call handlers synchronously above the live signaling computation.
 
-1. `on:do:` schedules three work frames: `[pushHandler][evalBlock][popHandler]`
-2. Handler installation saves VM depths (stack, work queue, eval stack)
-3. `signal` creates an `ExceptionContext` preserving the signal point, truncates VM state to handler checkpoint
-4. Handler block executes with exception as argument
-
-Handler actions: `resume` (restore signal point, return nil), `resume: value`, `retry` (re-execute protected block), `pass` (delegate to outer handler), `return: value`.
+Handlers supply values through their ordinary result; `pass` delegates outward and `retry` re-executes an error's protected block. Exception `resume`, `resume:`, `return:` and `isResumable` are unsupported and must not be restored during merges. Signal-site metadata remains for diagnostics, not saved continuation restoration. Process suspend/resume is separate scheduling functionality and remains supported.
 
 Division by zero catches Nim `DivByZeroDefect` and converts to Harding `DivisionByZero` via `signalExceptionByName`. Exception classes are looked up in imported libraries, not just globals.
 
@@ -298,7 +307,7 @@ See `docs/QUICKREF.md` for full syntax reference and `docs/MANUAL.md` for the co
 "Strings use double quotes"
 "String with #{interpolation}"
 #mySymbol                          # Symbols
-#(1 2 3)                           # Arrays (0-based indexing)
+#(1, 2, 3)                         # Arrays (0-based indexing; commas required)
 #{"name" -> "Alice"}               # Tables
 json{...}                          # Prefix literal syntax for JSON strings
 true false nil                     # Booleans and nil
