@@ -190,10 +190,14 @@ arbitrary error resumption solely in the interpreter.
       ("Global variables must start with uppercase letter: r"), while `x := 1` at
       top level works; determine the intended rule and whether the checker should
       apply to scripts at all.
-- [ ] Escape generated Nim identifiers consistently: a Harding method parameter
-      named `object` currently produces invalid Nim (`keyword object`). The cache
-      receiver test uses `item` to isolate dispatch correctness; this syntax gap
-      remains a separate compiler fix.
+- [x] Encode generated binding/slot identifiers for Nim keywords and backend-owned
+      names. Definitions, reads, assignments, method/block parameters, capture env
+      fields, numeric expressions and slot accessors share identifier mangling;
+      original selector and slot strings are unchanged. reserved_identifiers
+      executes keyword/helper-named locals, captured bindings, slots and blocks.
+- [ ] Complete spelling-identity hygiene: ordinary names differing only by Nim
+      style-insensitive spelling (e.g. fooBar/foobar) and sanitized class/module
+      names still need collision analysis; keyword encoding does not prove that.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [x] Generic missing-message errors instead of silent nil, including compiled

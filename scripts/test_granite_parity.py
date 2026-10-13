@@ -412,6 +412,28 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("reserved_identifiers", """
+Keywords := Object derivePublic: #(object, type, result).
+Keywords>>set: object [ type := object. result := object + 1. ^ result ].
+Keywords>>capture: object [ | result env args home hardingHome | result := object. env := 2. args := 3. home := 4. hardingHome := 5. ^ [result + env + args + home + hardingHome] ].
+k := Keywords new.
+(k set: 10) println.
+k type println.
+k result println.
+(k capture: 1) value println.
+object := 6.
+object := object + 1.
+object println.
+([:type | type + 2] value: 8) println.
+values := #(1, 2) collect: [:result | result + 3].
+(values at: 1) println.
+k::object := 12.
+k::object println.
+count := 1.
+current := 2.
+[count < 3] whileTrue: [count := count + 1].
+(count + current) println.
+""", "11\n10\n11\n15\n7\n10\n5\n12\n5\n"),
     ("class_return_representation", """
 ClassReturn := Object derive: #().
 ClassReturn>>marker [ ^ "instance" ].

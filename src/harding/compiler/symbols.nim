@@ -67,6 +67,27 @@ proc mangleClass*(name: string): string =
       sanitized.add('_')
   result = "Class_" & sanitized
 
+proc mangleIdentifier*(name: string): string =
+  ## Keep ordinary names readable; encode Nim keywords and backend-owned names.
+  ## Encoding the complete spelling distinguishes e.g. object from Object.
+  const reserved = ["addr", "and", "as", "asm", "bind", "block", "break", "case",
+    "cast", "concept", "const", "continue", "converter", "defer", "discard",
+    "distinct", "div", "do", "elif", "else", "end", "enum", "except", "export",
+    "finally", "for", "from", "func", "if", "import", "in", "include", "interface",
+    "is", "isnot", "iterator", "let", "macro", "method", "mixin", "mod", "nil",
+    "not", "notin", "object", "of", "or", "out", "proc", "ptr", "raise", "ref",
+    "return", "shl", "shr", "static", "template", "try", "tuple", "type", "using",
+    "var", "when", "while", "xor", "yield", "result", "args", "env", "envtyped",
+    "home", "current", "count", "startnum", "endnum", "step", "classref", "classname"]
+  let normalized = name.replace("_", "").toLowerAscii()
+  if normalized in reserved or normalized.startsWith("harding") or
+     normalized.startsWith("nimvalue"):
+    result = "hardingUser"
+    for ch in name:
+      result.add(toHex(ord(ch), 2))
+  else:
+    result = name
+
 proc mangleSlot*(name: string): string =
   ## Convert slot name to valid Nim identifier
   result = ""
@@ -75,6 +96,7 @@ proc mangleSlot*(name: string): string =
       result.add(ch)
     else:
       result.add('_')
+  result = mangleIdentifier(result)
 
 proc addSymbol*(table: var SymbolTable, info: SymbolInfo) =
   ## Add symbol to table

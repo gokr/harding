@@ -1,5 +1,6 @@
 import std/[tables, sequtils, strformat, sets, strutils]
 import ../core/types
+import ../compiler/symbols
 
 # Note: We cannot import expression.nim here due to circular dependency
 # (expression.nim imports blocks.nim)
@@ -50,9 +51,9 @@ proc genBlockExpr*(ctx: GenContext, node: Node): string =
     let ident = node.IdentNode
     # Check if it's a local or parameter
     if ident.name in ctx.parameters:
-      return ident.name
+      return mangleIdentifier(ident.name)
     if ident.name in ctx.locals:
-      return ident.name
+      return mangleIdentifier(ident.name)
     # Otherwise it's a slot or global - use runtime
     return fmt("getSlotValue(self, \"{ident.name}\")")
   
@@ -67,7 +68,8 @@ proc genBlockExpr*(ctx: GenContext, node: Node): string =
   of nkAssign:
     let assign = node.AssignNode
     let expr = genBlockExpr(ctx, assign.expression)
-    return fmt("({assign.variable} = {expr}; {assign.variable})")
+    let identifier = mangleIdentifier(assign.variable)
+    return fmt("({identifier} = {expr}; {identifier})")
   
   else:
     return "NodeValue(kind: vkNil)"
@@ -461,7 +463,7 @@ proc generateEnvStructDef*(info: BlockProcInfo): string =
     output.add("\n  home: CompiledReturnTarget")
   for i, capture in info.captures:
     let typ = info.captureTypes[i]
-    output.add(fmt("\n  {capture}: {typ}"))
+    output.add(fmt("\n  {mangleIdentifier(capture)}: {typ}"))
   return output
 
 proc generateBlockProcSignature*(info: BlockProcInfo): string =
@@ -479,7 +481,7 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
                       info.blockNode.parameters[i]
                     else:
                       fmt("param{i}")
-    params.add(fmt("hardingArg_{paramName}: NodeValue"))
+    params.add(fmt("hardingArg_{mangleIdentifier(paramName)}: NodeValue"))
 
   let paramsStr = params.join(", ")
   result = fmt("proc {info.nimName}*({paramsStr}): NodeValue {{.cdecl.}}")
@@ -496,16 +498,18 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
   if info.captures.len > 0:
     output.add(fmt("  let envTyped = cast[{info.envStructName}](env)\n"))
     for capture in info.captures:
-      output.add(fmt("  let {capture} = envTyped.{capture}.value\n"))
+      let identifier = mangleIdentifier(capture)
+      output.add(fmt("  let {identifier} = envTyped.{identifier}.value\n"))
 
   for parameter in info.blockNode.parameters:
-    output.add(fmt("  var {parameter} = hardingArg_{parameter}\n"))
+    let identifier = mangleIdentifier(parameter)
+    output.add(fmt("  var {identifier} = hardingArg_{identifier}\n"))
 
   # Generate temporaries
   if info.blockNode.temporaries.len > 0:
     output.add("  # Temporaries\n")
     for temp in info.blockNode.temporaries:
-      output.add(fmt("  var {temp} = NodeValue(kind: vkNil)\n"))
+      output.add(fmt("  var {mangleIdentifier(temp)} = NodeValue(kind: vkNil)\n"))
     output.add("\n")
 
   # Get body statements
@@ -545,17 +549,17 @@ proc generateBlockProcBody*(info: BlockProcInfo): string =
         let lit = assign.expression.LiteralNode
         case lit.value.kind
         of vkInt:
-          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
+          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
         of vkFloat:
-          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
+          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
         of vkString:
-          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
+          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
         of vkNil:
-          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)\n"))
+          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)\n"))
         else:
-          output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)\n"))
+          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)\n"))
       else:
-        output.add(fmt("  var {assign.variable} = NodeValue(kind: vkNil)  # assigned via runtime\n"))
+        output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)  # assigned via runtime\n"))
         
     of nkMessage:
       # Generate message send code

@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty-five parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-six parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -139,6 +139,17 @@ termination. Debug/release/ORC logging tests and an executed alias/output case
 cover this slice. Printable Transcript routing is unchanged. See
 [LEGACY_GRANITE_AUDIT.md](LEGACY_GRANITE_AUDIT.md) for preserved original code,
 deferred collection/reflection ports, and retained historical stashes.
+
+## Generated identifier hygiene
+
+Nim keywords and backend-owned local/field names are encoded consistently in
+binding declarations, references, assignments, method/block parameters, captures,
+numeric expressions and slot accessors. Original Harding selector and slot strings
+remain unchanged. reserved_identifiers covers keyword/helper-named variables,
+closures, slot messages and direct access. The encoded namespace is itself reserved
+to prevent user spellings colliding with an encoding. Ordinary spelling collisions
+under Nim's style-insensitive rules, and class/module sanitization, remain separate
+follow-up work; this slice does not establish general name-identity parity.
 
 ## Numeric specialization (first slice)
 

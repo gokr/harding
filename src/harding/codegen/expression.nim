@@ -214,8 +214,8 @@ proc scopeCaptureCellNames*(body: seq[Node], ownerLocalNames: seq[string] = @[])
 
 proc bindingTarget(ctx: GenContext, name: string): string =
   if name in ctx.cellNames:
-    return name & ".value"
-  return name
+    return mangleIdentifier(name) & ".value"
+  return mangleIdentifier(name)
 
 proc bindingAssignmentValue(ctx: GenContext, name, value: string): string =
   case ctx.numericBindings.getOrDefault(name, nrDynamic)
@@ -224,11 +224,12 @@ proc bindingAssignmentValue(ctx: GenContext, name, value: string): string =
   else: value
 
 proc bindingDeclaration(ctx: GenContext, name, value: string): string =
+  let identifier = mangleIdentifier(name)
   if name in ctx.numericBindings:
-    return fmt("var {name} = {bindingAssignmentValue(ctx, name, value)}")
+    return fmt("var {identifier} = {bindingAssignmentValue(ctx, name, value)}")
   if name in ctx.cellNames:
-    return fmt("var {name} = MutableCell(value: {value})")
-  return fmt("var {name} = {value}")
+    return fmt("var {identifier} = MutableCell(value: {value})")
+  return fmt("var {identifier} = {value}")
 
 proc genLocalDeclarations*(ctx: GenContext, names: seq[string]): string =
   ## Declare lexical temporaries before evaluating a scope's body.
@@ -307,8 +308,8 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   # Check if it's a local variable
   if name in ctx.locals:
     case ctx.numericBindings.getOrDefault(name, nrDynamic)
-    of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {name})")
-    of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {name})")
+    of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {mangleIdentifier(name)})")
+    of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {mangleIdentifier(name)})")
     else: return bindingTarget(ctx, name)
 
   # Check if it's a slot
@@ -372,10 +373,10 @@ proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): stri
     initFields.add("home: hardingHome")
   for capture in blockInfo.captures:
     let cell = if ctx.isLocal(capture) and capture in ctx.cellNames:
-                 capture
+                 mangleIdentifier(capture)
                else:
                  fmt("MutableCell(value: {genSymbolAccess(ctx, capture)})")
-    initFields.add(fmt("{capture}: {cell}"))
+    initFields.add(fmt("{mangleIdentifier(capture)}: {cell}"))
 
   let fieldsStr = initFields.join(", ")
   return fmt("(block:\n    createBlockWithEnv({blockInfo.nimName}, {blockInfo.paramCount}, {blockInfo.envStructName}({fieldsStr})))")
@@ -758,7 +759,7 @@ proc nativeNumericExpression(ctx: GenContext, node: Node): string =
       return $value.intVal
     return $value.floatVal
   of nkIdent:
-    return node.IdentNode.name
+    return mangleIdentifier(node.IdentNode.name)
   of nkMessage:
     let message = node.MessageNode
     let left = nativeNumericExpression(ctx, message.receiver)
@@ -1261,7 +1262,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
   )
   for param in blkNode.parameters:
     bodyCtx.parameters.add(param)
-    output.add("  " & bindingDeclaration(bodyCtx, param, "hardingArg_" & param) & "\n")
+    output.add("  " & bindingDeclaration(bodyCtx, param, "hardingArg_" & mangleIdentifier(param)) & "\n")
 
   # Extract captured variables from environment struct
   if captures.len > 0 or targetMethodId != 0:
@@ -1274,7 +1275,8 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
         if capture == "self":
           output.add("  let self = envTyped[].self.value\n")
         else:
-          output.add(fmt("  let {capture} = envTyped[].{capture}\n"))
+          let identifier = mangleIdentifier(capture)
+          output.add(fmt("  let {identifier} = envTyped[].{identifier}\n"))
           if capture notin bodyCtx.cellNames:
             bodyCtx.cellNames.add(capture)
       else:
@@ -1322,7 +1324,7 @@ proc genTemporaries*(tmp: seq[string]): string =
 
   var output = "  # Temporaries\n"
   for t in tmp:
-    output.add(fmt("  var {t} = NodeValue(kind: vkNil)\n"))
+    output.add(fmt("  var {mangleIdentifier(t)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
   return output
 
@@ -1368,7 +1370,7 @@ proc genParameters*(params: seq[string]): string =
 
   var parts: seq[string] = @[]
   for p in params:
-    parts.add(fmt("{p}: NodeValue"))
+    parts.add(fmt("{mangleIdentifier(p)}: NodeValue"))
   return ", " & parts.join(", ")
 
 proc genTopLevelStatement*(ctx: GenContext, node: Node): string =

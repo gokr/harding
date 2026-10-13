@@ -330,10 +330,11 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     let methodCellNames = scopeCaptureCellNames(body, params & md.temporaries)
     for i, paramName in params:
       let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
+      let identifier = mangleIdentifier(paramName)
       if paramName in methodCellNames:
-        output.add(fmt("  var {paramName} = MutableCell(value: {paramValue})\n"))
+        output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
       else:
-        output.add(fmt("  var {paramName} = {paramValue}\n"))
+        output.add(fmt("  var {identifier} = {paramValue}\n"))
     
     if body.len > 0:
       var genCtx = newGenContext(nil, compiledClasses, classInfo)
@@ -505,7 +506,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     output.add("  var hardingArgsElems: seq[NodeValue] = @[]\n")
     output.add("  for arg in commandLineParams():\n")
     output.add("    hardingArgsElems.add(NodeValue(kind: vkString, strVal: arg))\n")
-    output.add("  var args {.used.} = NodeValue(kind: vkArray, arrayVal: hardingArgsElems)\n\n")
+    output.add(fmt("  var {mangleIdentifier(\"args\")} {{.used.}} = NodeValue(kind: vkArray, arrayVal: hardingArgsElems)\n\n"))
 
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)

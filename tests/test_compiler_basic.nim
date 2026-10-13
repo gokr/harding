@@ -203,6 +203,27 @@ suite "Compiler: Symbols":
     check m.startsWith("Class_")
     check m.contains("Point")
 
+  test "encodes Nim keywords and backend names without encoding collisions":
+    check mangleIdentifier("object").startsWith("hardingUser")
+    check mangleIdentifier("object") != mangleIdentifier("Object")
+    check mangleIdentifier("result") != "result"
+    check mangleIdentifier("args") != "args"
+    check mangleIdentifier("envTyped") != "envTyped"
+    check mangleIdentifier("hardingHome") != "hardingHome"
+    check mangleIdentifier(mangleIdentifier("object")) != mangleIdentifier("object")
+    check mangleIdentifier("ordinary") == "ordinary"
+    check mangleSlot("type") == mangleIdentifier("type")
+
+  test "method and block declarations use the same identifier encoding":
+    let ctx = newGenContext()
+    ctx.parameters.add("object")
+    check genSymbolAccess(ctx, "object") == mangleIdentifier("object")
+    let registry = newBlockRegistry()
+    let info = registerBlock(registry, BlockNode(parameters: @["type"],
+      body: @[Node(IdentNode(name: "object"))]))
+    check generateEnvStructDef(info).contains(mangleIdentifier("object") & ": MutableCell")
+    check generateBlockProcSignature(info).contains("hardingArg_" & mangleIdentifier("type"))
+
   test "mangles slot name":
     let m = mangleSlot("x")
     check m == "x"
