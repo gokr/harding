@@ -8,6 +8,14 @@ import ../interpreter/activation_pool
 # Spaghetti stack for non-local returns
 # ============================================================================
 
+proc receiverValue*(activation: Activation): NodeValue =
+  ## Language-level self preserves the class receiver for class-side activations.
+  if activation == nil or activation.receiver == nil:
+    return nilValue()
+  if activation.isClassMethod and activation.receiver.class != nil:
+    return activation.receiver.class.toValue()
+  return activation.receiver.toValue()
+
 proc newActivation*(blk: BlockNode,
                    receiver: Instance,
                    sender: Activation,
@@ -31,10 +39,7 @@ proc newActivation*(blk: BlockNode,
   # wasCaptured already false from pool
 
   # Initialize indexed locals if the block has been resolved
-  let selfVal = if result.isClassMethod and receiver != nil and receiver.class != nil:
-                  receiver.class.toValue()
-                else:
-                  receiver.toValue()
+  let selfVal = result.receiverValue()
 
   if blk != nil and blk.localCount > 0:
     # Use indexed locals for fast access

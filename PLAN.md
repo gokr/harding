@@ -154,11 +154,11 @@ arbitrary error resumption solely in the interpreter.
       Explicit ^ supplies a value; blocks keep last-expression results. Removed
       the duplicate method-statement emitter and use ordinary genStatement.
       Executed parity: implicit_method_returns.
-- [ ] Preserve interpreter class-side receiver representation on implicit return:
-      `C class>>implicit [42]` returns a class-wrapper instance, so chaining a
-      class-only selector fails or resolves an instance-side selector. Compiled
-      fallthrough returns the class receiver correctly; track separately rather
-      than treating the discrepancy as intended semantics.
+- [x] Preserve interpreter class-side receiver representation on implicit return.
+      Activation self initialization and method fallthrough share receiverValue;
+      a class-side receiver remains vkClass rather than an instance wrapper.
+      class_return_representation covers inherited/chained sends, explicit self,
+      empty methods, escaped self blocks, handled errors and cleanup.
 - [ ] Add executed interpreter/Granite parity tests for the contract's validation
       matrix, including invalid operations and unhandled-error exit status.
 - [ ] Update manual, quick reference, stdlib comments and stale research notes to

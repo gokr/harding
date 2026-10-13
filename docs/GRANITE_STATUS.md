@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty-four parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-five parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -107,8 +107,10 @@ before handled/uncaught errors have executed coverage. Wrong-type primitive fall
 and mixed-mode dispatch remain distinct gaps. Compiled methods now answer self
 on fallthrough, with explicit ^ supplying values and blocks keeping last-expression
 results; implicit_method_returns covers empty methods, literals, assignments,
-handled errors and cleanup. Interpreter implicit class-side receiver chaining
-still has a representation gap, separately recorded in PLAN.md.
+handled errors and cleanup. Interpreter implicit class-side returns now preserve
+the actual class receiver; class_return_representation covers same-named instance
+and class selectors, inheritance, empty bodies, explicit self, escaped self blocks,
+handled errors and cleanup.
 Focused MNU tests, interpreter core, and exception/runtime suites pass (the latter
 also under ORC). The full named-access suite timed out after its first inherited
 layout test while entering JSON serialization coverage; only its four MNU tests

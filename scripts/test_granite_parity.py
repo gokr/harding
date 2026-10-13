@@ -412,6 +412,26 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("class_return_representation", """
+ClassReturn := Object derive: #().
+ClassReturn>>marker [ ^ "instance" ].
+ClassReturn class>>marker [ ^ "class" ].
+ClassReturn class>>implicit [ 42 ].
+ClassReturn class>>explicit [ ^ self ].
+ClassReturn class>>empty [ ].
+ClassReturn class>>block [ ^ [self] ].
+ClassReturn class>>handled [ [Error signal: "boom"] on: Error do: [:ex | 7] ].
+ClassReturn class>>cleaned [ [42] ensure: ["cleanup" println] ].
+ClassChild := ClassReturn derive: #().
+ClassChild class>>marker [ ^ "child" ].
+ClassReturn implicit marker println.
+ClassReturn explicit marker println.
+ClassReturn empty marker println.
+ClassChild implicit marker println.
+(ClassChild block value) marker println.
+ClassChild handled marker println.
+ClassChild cleaned marker println.
+""", "class\nclass\nclass\nchild\nchild\nchild\ncleanup\nchild\n"),
     ("handler_pending_operands", """
 (1 + ([2] on: Error do: [:ex | 0])) println.
 (1 + ([Error signal: "boom"] on: Error do: [:ex | 2])) println.

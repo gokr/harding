@@ -8525,7 +8525,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           # Return self (the receiver of the method being popped)
           # Must get this BEFORE popping the activation
           if interp.currentActivation != nil and interp.currentActivation.receiver != nil:
-            resultValue = interp.currentActivation.receiver.toValue().unwrap()
+            resultValue = interp.currentActivation.receiverValue().unwrap()
           else:
             resultValue = nilValue()
           debug("VM: wfPopActivation method result: self")

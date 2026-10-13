@@ -26,6 +26,18 @@ suite "Class Object Model":
     check definingMethodClass(child, "answer", classMethod, true) == second
     check definingMethodClass(child, "missing", instanceMethod) == nil
 
+  test "language receiver values preserve class-side identity":
+    let owner = newClass(name = "ClassReceiverOwner")
+    let wrapper = newInstance(owner)
+    let classActivation = newActivation(BlockNode(isMethod: true), wrapper, nil, owner, true)
+    let classValue = classActivation.receiverValue()
+    check classValue.kind == vkClass
+    check classValue.classVal == owner
+    let instanceActivation = newActivation(BlockNode(isMethod: true), wrapper, nil, owner)
+    let instanceValue = instanceActivation.receiverValue()
+    check instanceValue.kind == vkInstance
+    check instanceValue.instVal == wrapper
+
   test "Block activations retain lexical class-side context":
     let owner = newClass(name = "Owner")
     let receiver = newInstance(owner)

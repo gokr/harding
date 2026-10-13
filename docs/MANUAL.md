@@ -813,12 +813,12 @@ Counter>>ignored [ 42 ].                  # answers the Counter
 [42] value.                              # answers 42
 ```
 
-Executed interpreter/native coverage: `implicit_method_returns`. Compiled
-class-side fallthrough also answers its class receiver; the interpreter currently
-boxes an implicit class-side receiver such that subsequent class-side lookup can
-fail (tracked in PLAN.md). Do not infer class-side chaining parity from the
-instance-method case. Lexical `^` inside a block still returns from its home
-method; it is not a local block-return shorthand.
+Executed interpreter/native coverage: `implicit_method_returns` and
+`class_return_representation`. Class-side fallthrough answers the actual class
+receiver, including inherited sends; subsequent chained sends retain class-side
+lookup instead of accidentally invoking instance methods. Explicit `^ self` and
+blocks returning self preserve that same receiver. Lexical `^` inside a block
+still returns from its home method; it is not a local block-return shorthand.
 
 ### Method Batching (extend:)
 
