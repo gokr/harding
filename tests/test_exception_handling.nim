@@ -236,6 +236,31 @@ suite "Exception Handling":
     check(readBack[1].len == 0)
     check(readBack[0][^1].intVal == 42)
 
+  test "on:do: preserves pending receiver operands":
+    for source in [
+      "1 + ([2] on: Error do: [:ex | 0])",
+      "1 + ([10 // 0] on: DivisionByZero do: [:ex | 2])",
+      "1 + ([Error signal: \"test\"] on: Error do: [:ex | 2])",
+      "#(1, ([2] on: Error do: [:ex | 0])) at: 1"
+    ]:
+      let (value, err) = interp.doit(source)
+      require(err.len == 0)
+      require(value.kind == vkInt)
+      check(value.intVal == (if source.startsWith("#("): 2 else: 3))
+
+  test "retry preserves pending receiver operands":
+    let (value, err) = interp.doit("""
+      Attempts := 0.
+      1 + ([
+        Attempts := Attempts + 1.
+        (Attempts = 1) ifTrue: [ Error signal: "retry" ].
+        2
+      ] on: Error do: [:ex | ex retry])
+    """)
+    require(err.len == 0)
+    require(value.kind == vkInt)
+    check(value.intVal == 3)
+
   test "pass skips non-matching outer handler":
     let result = interp.evalStatements("""
       Result := [

@@ -52,6 +52,12 @@ Daisy>>registerRoutesOn: router [
   ^ self
 ]
 
+Daisy>>shellClass [ ^ self class shellClass ]
+
+Daisy>>themeAttribute [
+  ^ "data-theme='" & self::theme & "'"
+]
+
 Daisy>>stylesheetContent [
   | cssPath |
   cssPath := "lib/web/daisyui.css".

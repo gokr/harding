@@ -412,6 +412,15 @@ Finder>>first: xs [ xs do: [:n | (n > 0) ifTrue: [^ n]]. ^ nil ].
 
 # Keep the measured workloads under executed correctness coverage as well.
 CASES.extend([
+    ("handler_pending_operands", """
+(1 + ([2] on: Error do: [:ex | 0])) println.
+(1 + ([Error signal: "boom"] on: Error do: [:ex | 2])) println.
+([1 + (Notification signal: "notice")] on: Notification do: [:ex | 2]) println.
+(1 + ([1 missing] on: Error do: [:ex | 2])) println.
+attempts := 0.
+(1 + ([attempts := attempts + 1. (attempts = 1) ifTrue: [Error signal: "retry"]. 2]
+  on: Error do: [:ex | ex retry])) println.
+""", "3\n3\n3\n3\n3\n"),
     ("implicit_method_returns", """
 ReturnSideEffect := 0.
 ReturnRules := Object derivePublic: #(stored).

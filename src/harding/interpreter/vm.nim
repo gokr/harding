@@ -1642,8 +1642,8 @@ proc primitiveAsClassSelfDoImpl(interp: var Interpreter, self: Instance, args: s
 # Forward declarations for work frame constructors (defined later in the file)
 proc newPushHandlerFrame*(exceptionClass: Class, handlerBlock: BlockNode, savedWorkQueueDepth: int = 0): WorkFrame
 proc newPopHandlerFrame*(): WorkFrame
-proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
 proc newDiscardFrame*(): WorkFrame
+proc newExceptionReturnFrame*(handlerIndex: int): WorkFrame
 proc newApplyBlockFrame*(blockVal: BlockNode, argCount: int): WorkFrame
 proc newSendMessageFrame*(selector: string, argCount: int, msgNode: MessageNode = nil, isClassMethod: bool = false): WorkFrame
 proc truncateWorkQueue*(interp: var Interpreter, depth: int)
@@ -1792,6 +1792,11 @@ proc primitiveOnDoImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
     pushFrame.protectedBlockForHandler = blockNode
     interp.pushWorkFrame(pushFrame)
 
+    # Native dispatch pushes the primitive's placeholder result. Remove it
+    # before recording handler/block stack depths; only the protected block
+    # supplies the result of on:do: to the surrounding expression.
+    interp.pushWorkFrame(newDiscardFrame())
+
     # Return - let VM process the work queue
     # The result will be left on the eval stack by the block execution
     return nilValue()
@@ -1924,6 +1929,19 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
     writeStderr("Stack trace:\n")
     printStackTrace(interp)
     raise newException(EvalError, className & ": " & message)
+
+proc primitiveSignalSendImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Native dispatch pushes the primitive result after scheduling signaling work.
+  ## Remove that placeholder before the cleanup/handler continuation sees it.
+  var handlerSuppliesResult = not isNotificationInstance(interp, self)
+  if not handlerSuppliesResult:
+    for handler in interp.exceptionHandlers:
+      if not handler.consumed and isKindOf(self.class, handler.exceptionClass):
+        handlerSuppliesResult = true
+        break
+  result = primitiveSignalImpl(interp, self, args)
+  if handlerSuppliesResult:
+    interp.pushWorkFrame(newDiscardFrame())
 
 proc findHandlerForException(interp: var Interpreter, self: Instance): int =
   ## Find handler index for a given exception instance (used by return:, pass, retry)
@@ -2146,6 +2164,7 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
   var pushFrame = newPushHandlerFrame(handler.exceptionClass, handler.handlerBlock, savedWorkQueueDepth)
   pushFrame.protectedBlockForHandler = protectedBlock
   interp.pushWorkFrame(pushFrame)
+  interp.pushWorkFrame(newDiscardFrame())
 
   return nilValue()
 
@@ -5541,8 +5560,8 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
 
   if exceptionCls != nil:
     let primitiveSignalMethod = createCoreMethod("primitiveSignal")
-    primitiveSignalMethod.setNativeImpl(primitiveSignalImpl)
-    setNativeValueFromInstanceWithInterp(primitiveSignalMethod, primitiveSignalImpl)
+    primitiveSignalMethod.setNativeImpl(primitiveSignalSendImpl)
+    setNativeValueFromInstanceWithInterp(primitiveSignalMethod, primitiveSignalSendImpl)
     primitiveSignalMethod.hasInterpreterParam = true
     exceptionCls.methods["primitiveSignal"] = primitiveSignalMethod
     exceptionCls.allMethods["primitiveSignal"] = primitiveSignalMethod

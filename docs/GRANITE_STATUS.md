@@ -28,7 +28,7 @@ whole suite as passing until it completes.
 
 ## Current coverage and remaining gaps
 
-Fifty-three parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-four parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -114,6 +114,19 @@ also under ORC). The full named-access suite timed out after its first inherited
 layout test while entering JSON serialization coverage; only its four MNU tests
 were independently re-run to completion. No full-repository suite success is
 claimed.
+
+## Main synchronization
+
+Merged main's scheduler continuation and class-registration lifetime fixes,
+followed by bf112b0's pending-operand/Daisy/Badminton updates. Exception resume
+restoration was deliberately excluded under the accepted contract; its tests use
+ordinary handler results instead. on:do:/retry remove native placeholder results
+before checkpoints. Native signal sends discard placeholders only when scheduled
+error/handler work supplies a result; unhandled notifications retain their actual
+nil return. `handler_pending_operands` covers normal completion, handled errors,
+notifications, missing messages and retry inside larger expressions. Synchronization,
+web rendering, compiler, core and logging suites have focused validation; this is
+not a full-repository test claim.
 
 ## Legacy logging salvage
 
