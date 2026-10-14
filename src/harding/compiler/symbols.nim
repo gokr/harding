@@ -58,14 +58,37 @@ proc mangleSelector*(selector: string): string =
   result = "nt_" & result
 
 proc mangleClass*(name: string): string =
-  ## Convert class name to valid Nim identifier
-  var sanitized = ""
+  ## Convert a Harding class name to a unique Nim identifier.
+  ##
+  ## Nim compares identifiers style-insensitively (case- and underscore-
+  ## ignoring), so a readable transliteration would collapse spellings such as
+  ## `FooBar`/`Foobar` or `My_Class`/`MyClass` onto one type name. Since class
+  ## names are open Unicode identifiers that may not be valid Nim identifiers at
+  ## all, every byte is hex-encoded. The result is injective, so distinct class
+  ## names never collide. It is intentionally not readable; callers keep the
+  ## original spelling in string tables (superclass/allocator registries).
+  result = "Class_"
   for ch in name:
-    if ch in {'a'..'z'} or ch in {'A'..'Z'} or ch in {'0'..'9'} or ch == '_':
-      sanitized.add(ch)
-    else:
-      sanitized.add('_')
-  result = "Class_" & sanitized
+    result.add(toHex(ord(ch), 2))
+
+proc mangleModuleName*(name: string): string =
+  ## Convert a source/module name to a valid, unique Nim module identifier.
+  ##
+  ## A Nim module name must be a valid identifier and is compared
+  ## style-insensitively, so a raw filename such as `my-prog` is rejected and
+  ## `MyProg`/`myprog` would collide. Names that are already a safe lowercase
+  ## alphanumeric identifier are kept readable; anything else is hex-encoded so
+  ## distinct inputs never share one module name.
+  var safe = name.len > 0
+  for ch in name:
+    if ch notin {'a'..'z', '0'..'9'}:
+      safe = false
+      break
+  if safe and name[0] notin {'0'..'9'}:
+    return name
+  result = "hardingModule"
+  for ch in name:
+    result.add(toHex(ord(ch), 2))
 
 proc mangleIdentifier*(name: string): string =
   ## Keep safe lowercase names readable; encode case-sensitive spellings and

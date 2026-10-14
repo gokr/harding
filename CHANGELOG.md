@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Fixed
+- Class and module names are now encoded injectively. `mangleClass` hex-encodes every byte instead of transliterating, so `FooBar`/`Foobar` and `MyClass`/`My_Class` no longer collapse onto one Nim type under Nim's style-insensitive comparison; a module name that is not a valid identifier (for example a hyphenated filename) is encoded rather than rejected by the Nim compiler. String tables keep the original spellings. Coverage: `class_name_spelling` parity plus fold-distinctness unit tests.
 - Compiled table literals and empty tables use a runtime helper instead of Nim's `{}` syntax, which inferred the wrong key type and failed to build. Native `Array new`/`new:`/`new:withAll:`, `Table new`, `Set new`, `String new`/`new:` and table/array `add:`/`includes:` now work in compiled programs, so `benchmark/storage.hrd` builds and runs natively. Coverage: `native_collections` parity.
 - The interpreter printed booleans as `<instance of True>`/`<instance of False>` while compiled programs printed `true`/`false`, contrary to `True>>printString`/`False>>printString`. Both engines now print `true`/`false`; coverage: `boolean_display` parity.
 

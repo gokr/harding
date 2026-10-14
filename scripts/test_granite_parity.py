@@ -705,6 +705,14 @@ lit := #(1, 2, 3).
 tbl := #{"a" -> 1, "b" -> 2}.
 (tbl at: "b") println.
 """, "2\n1\n3\n2\n9\nv\n2\ntrue\nfalse\n3\n2\n"),
+    ("class_name_spelling", """
+FooBar := Object derive: #().
+FooBar>>tag [ ^ "camel" ].
+Foobar := Object derive: #().
+Foobar>>tag [ ^ "pascal" ].
+FooBar new tag println.
+Foobar new tag println.
+""", "camel\npascal\n"),
 ])
 
 

@@ -15,11 +15,6 @@ import ./blocks
 # Generates complete Nim modules from Harding source
 # ============================================================================
 
-proc mangleModuleName*(name: string): string =
-  ## Convert module name to valid Nim identifier
-  ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
-  return name
-
 proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
                       includeOsImport: bool = false): string =
   ## Generate module header with imports and documentation

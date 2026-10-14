@@ -6,7 +6,8 @@
 import std/[unittest, strutils, tables]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
-import ../src/harding/compiler/[context, types, symbols, analyzer]
+import ../src/harding/compiler/[context, types, analyzer]
+import ../src/harding/compiler/symbols as symbols
 import ../src/harding/codegen/[expression, blocks, module, numeric]
 
 suite "Compiler: Lexer and Parser":
@@ -199,9 +200,12 @@ suite "Compiler: Symbols":
     check m.contains("plus")
 
   test "mangles class name":
-    let m = mangleClass("Point")
+    let m = mangleClass("MyClass")
     check m.startsWith("Class_")
-    check m.contains("Point")
+    check m != mangleClass("Myclass")
+    check m != mangleClass("My_Class")
+    check mangleClass("Point") == mangleClass("Point")
+    check mangleClass("Point") != mangleClass("Point2")
 
   test "encodes Nim keywords and backend names without encoding collisions":
     check mangleIdentifier("object").startsWith("hardingUser")
@@ -234,6 +238,17 @@ suite "Compiler: Symbols":
   test "mangles slot name":
     let m = mangleSlot("x")
     check m == "x"
+
+  test "class and module names are unique under Nim style folding":
+    proc nimKey(value: string): string = value.replace("_", "").toLowerAscii()
+    check nimKey(mangleClass("FooBar")) != nimKey(mangleClass("Foobar"))
+    check nimKey(mangleClass("MyClass")) != nimKey(mangleClass("My_Class"))
+    check mangleClass("Point") == mangleClass("Point")
+    check symbols.mangleModuleName("sieve") == "sieve"
+    check symbols.mangleModuleName("my-prog") != symbols.mangleModuleName("myprog")
+    check symbols.mangleModuleName("my-prog")[0] notin {'0'..'9'}
+    check nimKey(symbols.mangleModuleName("MyProg")) != nimKey(symbols.mangleModuleName("myprog"))
+    check symbols.mangleModuleName("2fast")[0] notin {'0'..'9'}
 
 suite "Compiler: Analyzer":
   test "extracts derive chain from assignment":
@@ -326,10 +341,10 @@ suite "Compiler: Guarded default allocation":
     let (nodes, _) = parse("Box := Object derive: #(). Box new.")
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "guarded_allocation")
-    check code.contains("discard guardedNew_Class_Box()")
-    check code.contains("canDirectAllocate(\"Box\", allocateClass_Box)")
-    check code.contains("allocationVersion_Class_Box != compiledClassDispatchVersion")
-    check code.contains("return compiledNewInstance(\"Box\", allocateClass_Box)")
+    check code.contains("discard guardedNew_" & mangleClass("Box") & "()")
+    check code.contains("canDirectAllocate(\"Box\", allocate" & mangleClass("Box") & ")")
+    check code.contains("allocationVersion_" & mangleClass("Box") & " != compiledClassDispatchVersion")
+    check code.contains("return compiledNewInstance(\"Box\", allocate" & mangleClass("Box") & ")")
     check code.contains("return sendMessage(currentRuntime[], compiledClassValue(\"Box\"), \"new\", @[])")
 
   test "a locally shadowed class receiver stays on ordinary dispatch":
@@ -346,13 +361,13 @@ suite "Compiler: Method return convention":
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "implicit_returns")
     check code.contains("discard NodeValue(kind: vkInt, intVal: 42)\n  return self")
-    check code.contains("proc Class_ReturnRules_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+    check code.contains("proc " & mangleClass("ReturnRules") & "_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
 
   test "class-side fallthrough also answers its receiver":
     let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules class>>empty [].")
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "class_return")
-    check code.contains("proc Class_ReturnRules_class_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+    check code.contains("proc " & mangleClass("ReturnRules") & "_class_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
 
   test "explicit return is not followed by an implicit return":
     let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules>>explicit [^ 42].")
@@ -498,7 +513,7 @@ suite "Compiler: Codegen - Blocks":
     var p = initParser(lex("Box := Object derivePublic: #(item)."))
     var ctx = newCompiler()
     let code = genModule(ctx, p.parseStatements(), "owned_storage")
-    check code.contains("Class_BoxObj* {.inheritable.} = object of HardingObject")
+    check code.contains(mangleClass("Box") & "Obj* {.inheritable.} = object of HardingObject")
     check code.contains("compiledOwner: self")
     check code.contains("inst.nimValue = cast[pointer](self)")
 

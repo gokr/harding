@@ -227,10 +227,11 @@ arbitrary error resumption solely in the interpreter.
       their lowercase forms under Nim's style-insensitive comparison. `mangleSlot`
       keeps punctuation and case instead of stripping them. Coverage:
       `case_sensitive_bindings` parity and fold-distinctness unit tests.
-- [ ] Class and module names still collapse case and punctuation through
-      `mangleClass`/`mangleModuleName`, so two class spellings can generate one
-      Nim type name and fail to build. Raw `{cls.name}` uses in generated proc
-      names need the same treatment.
+- [x] Class and module names no longer collapse case and punctuation.
+      `mangleClass` and `mangleModuleName` hex-encode so distinct spellings
+      (`FooBar`/`Foobar`, `MyClass`/`My_Class`, hyphenated filenames) never share
+      one Nim identifier; string tables keep original class spellings. Coverage:
+      `class_name_spelling` plus unit tests.
 - [x] Native table literals and built-in collection construction: `Table`/
       `Array`/`Set`/`String` literals and `new`/`new:`/`new:withAll:` work in
       compiled code, and `benchmark/storage.hrd` runs natively. Coverage:

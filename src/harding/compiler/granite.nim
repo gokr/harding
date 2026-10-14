@@ -14,14 +14,10 @@ import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
 import ../compiler/types
+import ../compiler/symbols
 import ../core/scheduler
 import ../interpreter/vm
 import ../repl/cli
-
-proc mangleModuleName(name: string): string =
-  ## Convert module name to valid Nim identifier
-  ## Module names starting with digits are invalid in Nim, use -o flag to specify output name
-  return name
 
 proc showErrorContext*(source: string, filename: string, lineNum: int, colNum: int) =
   let lines = source.splitLines()
@@ -300,7 +296,7 @@ proc compileFile(config: Config): bool =
   let moduleName = if config.outputFile.len > 0:
                      changeFileExt(extractFilename(config.outputFile), "")
                    else:
-                     mangleModuleName(changeFileExt(extractFilename(config.inputFile), ""))
+                     symbols.mangleModuleName(changeFileExt(extractFilename(config.inputFile), ""))
 
   # Nim file always goes in build directory
   let outputPath = outputDir / moduleName & ".nim"
@@ -323,7 +319,7 @@ proc computeBinaryName(config: Config): string =
     result = config.outputFile
   else:
     let rawModuleName = changeFileExt(extractFilename(config.inputFile), "")
-    let moduleName = mangleModuleName(rawModuleName)
+    let moduleName = symbols.mangleModuleName(rawModuleName)
     result = outputDir / moduleName
 
 proc buildFile(config: Config): bool =
@@ -335,7 +331,7 @@ proc buildFile(config: Config): bool =
   let moduleName = if config.outputFile.len > 0:
                      changeFileExt(extractFilename(config.outputFile), "")
                    else:
-                     mangleModuleName(changeFileExt(extractFilename(config.inputFile), ""))
+                     symbols.mangleModuleName(changeFileExt(extractFilename(config.inputFile), ""))
   let nimFile = outputDir / moduleName & ".nim"
   let binaryName = computeBinaryName(config)
   let releaseFlag = if config.release: " -d:release" else: ""
