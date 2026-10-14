@@ -149,6 +149,45 @@ suite "Compiled monomorphic send caches":
 proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkString, strVal: args[0].symVal)
 
+suite "Compiled user-class reflection":
+  test "class values and direct parents preserve declaration identity and order":
+    let rt = newRuntime()
+    registerCompiledClass("ReflectionNativeChild", defaultAllocation)
+    registerCompiledClass("ReflectionNativeLeft", defaultAllocation)
+    registerCompiledClass("ReflectionNativeRight", defaultAllocation)
+    registerSuperclass("ReflectionNativeChild", "ReflectionNativeLeft")
+    registerSuperclass("ReflectionNativeChild", "ReflectionNativeRight")
+    let receiver = proxyReceiver("ReflectionNativeChild")
+    let cls = compiledClassValue("ReflectionNativeChild")
+    check sendMessage(rt, receiver, "class", @[]).classVal == cls.classVal
+    check sendMessage(rt, cls, "class", @[]).classVal == cls.classVal
+    check sendMessage(rt, cls, "name", @[]).strVal == "ReflectionNativeChild"
+    check sendMessage(rt, receiver, "className", @[]).strVal == "ReflectionNativeChild"
+    for value in [receiver, cls]:
+      let parents = sendMessage(rt, value, "superclassNames", @[])
+      check parents.arrayVal.len == 2
+      check parents.arrayVal[0].strVal == "ReflectionNativeLeft"
+      check parents.arrayVal[1].strVal == "ReflectionNativeRight"
+    let base = compiledBaseClassValue("Object")
+    check base.kind == vkClass
+    check base.classVal == compiledBaseClassValue("Object").classVal
+    registerSuperclass("ReflectionNativeLeft", "Object")
+    check sendMessage(rt, receiver, "isKindOf:", @[base]).boolVal
+    check sendMessage(rt, receiver, "isKindOf:", @[compiledBaseClassValue("Root")]).boolVal
+    check not sendMessage(rt, receiver, "isKindOf:", @[compiledBaseClassValue("Mixin")]).boolVal
+    check sendMessage(rt, receiver, "isKindOf:",
+                      @[compiledClassValue("ReflectionNativeRight")]).boolVal
+    for target in [toValue("ReflectionNativeRight"), toSymbol("ReflectionNativeRight"), toValue(42)]:
+      check not sendMessage(rt, receiver, "isKindOf:", @[target]).boolVal
+    registerSuperclass("ReflectionNativeRight", "ReflectionNativeAncestor")
+    registerCompiledClass("ReflectionNativeAncestor", defaultAllocation)
+    check sendMessage(rt, receiver, "isKindOf:",
+                      @[compiledClassValue("ReflectionNativeAncestor")]).boolVal
+    registerSuperclass("ReflectionNativeAncestor", "ReflectionNativeChild")
+    registerCompiledClass("ReflectionNativeUnrelated", defaultAllocation)
+    check not sendMessage(rt, receiver, "isKindOf:",
+                          @[compiledClassValue("ReflectionNativeUnrelated")]).boolVal
+
 suite "Compiled identity sends":
   test "generic and cached sends cannot replace identity with an override":
     let rt = newRuntime()

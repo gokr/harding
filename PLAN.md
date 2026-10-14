@@ -260,6 +260,18 @@ arbitrary error resumption solely in the interpreter.
 - [x] Dynamic sends: `perform:`/`with:`/`with:with:` and `respondsTo:` work in
       compiled code for instances and classes. Coverage: `dynamic_send`. Full
       reflection parity is a separate item.
+- [x] User-class reflection: compiled instances expose `class`, `className`,
+      `superclassNames`; class receivers expose `class`, `name`, `className`,
+      `superclassNames`. `isKindOf:` visits every parent, including transitive
+      secondary parents, in both engines and requires a class argument. Coverage:
+      `class_reflection`, runtime tests, interpreter dynamic-feature tests.
+      Immediate/built-in reflection, class-side `isKindOf:` and method-list
+      reflection remain open. Canonical `Root`/`Object`/`Mixin` class values
+      support base-class ancestry targets without accepting symbol/string aliases;
+      other built-in class identities and allocators remain separate work.
+- [ ] Reflection fast-path overrides: VM class-side `name` bypasses user methods,
+      while compiled lookup honors them (`Override class>>name [^ "custom"]`).
+      Instance `class` overrides also need reconciliation with VM's fast path.
 - [x] Generic missing-message errors instead of silent nil, including compiled
       instance/class/super lookup and custom DNU. Wrong-type primitive fallback,
       reflection and mixed-mode ambiguity remain separate coverage items.

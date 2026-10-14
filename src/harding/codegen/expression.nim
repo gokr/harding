@@ -326,6 +326,9 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   if name in ctx.compiledClasses and not ctx.mixed:
     return fmt("compiledClassValue(\"{name}\")")
 
+  if name in ["Root", "Object", "Mixin"] and not ctx.mixed:
+    return fmt("compiledBaseClassValue(\"{name}\")")
+
   if name == "Log" and not ctx.mixed:
     return "compiledLogClassValue()"
 

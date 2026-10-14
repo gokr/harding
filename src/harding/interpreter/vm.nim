@@ -2368,14 +2368,17 @@ proc primitiveIsKindOfImpl(interp: var Interpreter, self: Instance, args: seq[No
   if args.len < 1 or args[0].kind != vkClass:
     return falseValue
   let targetClass = args[0].classVal
-  var currentClass: Class = self.class
-  while currentClass != nil:
+  var pending = @[self.class]
+  var visited: seq[Class] = @[]
+  while pending.len > 0:
+    let currentClass = pending.pop()
+    if currentClass == nil or currentClass in visited:
+      continue
     if currentClass == targetClass:
       return trueValue
-    if currentClass.superclasses.len > 0:
-      currentClass = currentClass.superclasses[0]
-    else:
-      break
+    visited.add(currentClass)
+    for parent in currentClass.superclasses:
+      pending.add(parent)
   falseValue
 
 proc primitiveEqualsImpl(self: Instance, args: seq[NodeValue]): NodeValue =

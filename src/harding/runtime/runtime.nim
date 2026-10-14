@@ -42,6 +42,7 @@ type
 var activeErrorHandlers {.threadvar.}: seq[Instance]
 
 proc getSuperclassName*(className: string): string
+proc registerSuperclass*(className: string, superclassName: string)
 proc ensureCompiledExceptionHierarchy*(): void
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
 proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue
@@ -166,6 +167,16 @@ proc compiledClassValue*(name: string): NodeValue =
   if name in compiledClasses:
     return NodeValue(kind: vkClass, classVal: compiledClasses[name])
   return NodeValue(kind: vkNil)
+
+proc compiledBaseClassValue*(name: string): NodeValue =
+  ## Canonical class receiver for the built-in base hierarchy, without an allocator.
+  if name notin ["Root", "Object", "Mixin"]:
+    return NodeValue(kind: vkNil)
+  if name notin compiledClasses:
+    compiledClasses[name] = newClass(name = name)
+  registerSuperclass("Object", "Root")
+  registerSuperclass("Mixin", "Root")
+  return compiledClassValue(name)
 
 proc compiledLogClassValue*(): NodeValue =
   ## Class-side receiver for application logging in pure compiled programs.
@@ -667,6 +678,19 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       if parentName.len > 0:
         registerSuperclass(receiver.classVal.name, parentName)
       return receiver
+    if args.len == 0:
+      case selector
+      of "class": return receiver
+      of "name", "className":
+        if not hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector):
+          return toValue(receiver.classVal.name)
+      of "superclassNames":
+        if not hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector):
+          var names: seq[NodeValue] = @[]
+          for parent in getSuperclasses(receiver.classVal.name):
+            names.add(toValue(parent))
+          return NodeValue(kind: vkArray, arrayVal: names)
+      else: discard
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):
       case selector
@@ -694,6 +718,29 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
 
   case selector
+  of "class":
+    if args.len == 0 and receiverClassName.len > 0:
+      return compiledClassValue(receiverClassName)
+    return compiledMissingMessage(receiver, selector)
+  of "className":
+    if args.len == 0 and receiverClassName.len > 0:
+      return toValue(receiverClassName)
+    return compiledMissingMessage(receiver, selector)
+  of "superclassNames":
+    if args.len == 0 and receiverClassName.len > 0:
+      var names: seq[NodeValue] = @[]
+      for parent in getSuperclasses(receiverClassName):
+        names.add(toValue(parent))
+      return NodeValue(kind: vkArray, arrayVal: names)
+    return compiledMissingMessage(receiver, selector)
+  of "isKindOf:":
+    if args.len == 1 and args[0].kind == vkClass and args[0].classVal != nil and
+       receiverClassName.len > 0:
+      let targetName = args[0].classVal.name
+      let owner = walkCompiledHierarchy(receiverClassName,
+        proc(name: string): bool = name == targetName)
+      return toValue(owner.len > 0)
+    return toValue(false)
   of "perform:", "perform:with:", "perform:with:with:":
     # Dynamic send: the selector argument (symbol or string) names the method to
     # run on this receiver, with the remaining arguments as its arguments.
@@ -1026,29 +1073,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkBool, boolVal: not receiver.boolVal)
     return NodeValue(kind: vkNil)
   else:
-    # Check for compiled method on Nim proxy objects
-    if selector == "isKindOf:" and args.len > 0:
-      let receiverClass = getReceiverClassName(receiver)
-      if receiverClass.len > 0:
-        var targetClass = ""
-        case args[0].kind
-        of vkClass:
-          if args[0].classVal != nil:
-            targetClass = args[0].classVal.name
-        of vkSymbol:
-          targetClass = args[0].symVal
-        of vkString:
-          targetClass = args[0].strVal
-        else:
-          discard
-
-        var currentClass = receiverClass
-        while currentClass.len > 0:
-          if currentClass == targetClass:
-            return NodeValue(kind: vkBool, boolVal: true)
-          currentClass = getSuperclassName(currentClass)
-        return NodeValue(kind: vkBool, boolVal: false)
-
     if receiverClassName.len > 0:
       return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
     return compiledMissingMessage(receiver, selector)

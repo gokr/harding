@@ -277,6 +277,32 @@ suite "Reflection: class and class name":
     check(results[0][^1].strVal == "MySpecialClass")
 
 
+suite "Reflection: multiple-parent ancestry":
+  test "isKindOf searches secondary and transitive parents":
+    let (values, err) = sharedInterp.evalStatements("""
+      ReflectionLeft := Object derive: #().
+      ReflectionRight := Object derive: #().
+      ReflectionChild := ReflectionLeft derive: #().
+      ReflectionChild addSuperclass: ReflectionRight.
+      ReflectionGrandchild := ReflectionChild derive: #().
+      obj := ReflectionGrandchild new.
+      Result := (obj isKindOf: ReflectionRight)
+    """)
+    check err.len == 0
+    check values.len == 1
+    check values[^1].kind == vkBool
+    check values[^1].boolVal
+    for target in ["ReflectionLeft", "ReflectionChild", "ReflectionGrandchild"]:
+      let (answer, error) = sharedInterp.evalStatements(
+        "ReflectionGrandchild new isKindOf: " & target)
+      check error.len == 0
+      check answer[^1].boolVal
+    for target in ["42", "#ReflectionRight", "\"ReflectionRight\""]:
+      let (answer, error) = sharedInterp.evalStatements(
+        "ReflectionGrandchild new isKindOf: " & target)
+      check error.len == 0
+      check not answer[^1].boolVal
+
 suite "Reflection: allInstanceMethods":
   var interp {.used.}: Interpreter
 

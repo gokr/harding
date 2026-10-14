@@ -841,6 +841,44 @@ Child := Parent derive: #().
 Child>>sameReceiver [ ^ (super<Parent> receiver) == self ].
 Child new sameReceiver println.
 """, "true\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n"),
+    ("class_reflection", """
+Left := Object derive: #().
+Right := Object derive: #().
+Child := Left derive: #().
+Child addSuperclass: Right.
+Grandchild := Child derive: #().
+x := Grandchild new.
+(x isKindOf: Left) println.
+(x isKindOf: Right) println.
+(x isKindOf: Grandchild) println.
+(x isKindOf: Child) println.
+(x isKindOf: 42) println.
+(x isKindOf: #Right) println.
+(x isKindOf: "Right") println.
+(Left new isKindOf: Right) println.
+x class name println.
+x className println.
+(x class == Grandchild) println.
+(Child class == Child) println.
+Child name println.
+Child superclassNames println.
+x superclassNames println.
+Override := Child derive: #().
+Override>>className [ ^ "custom-instance" ].
+Override>>superclassNames [ ^ #("custom-parent") ].
+Override>>isKindOf: target [ ^ false ].
+Override class>>superclassNames [ ^ #("custom-class-parent") ].
+Override new className println.
+Override new superclassNames println.
+(Override new isKindOf: Right) println.
+Override name println.
+Override superclassNames println.
+(x isKindOf: Object) println.
+(x isKindOf: Root) println.
+(x isKindOf: #Object) println.
+(x isKindOf: Mixin) println.
+Object superclassNames println.
+""", "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\n"),
 ])
 
 

@@ -738,6 +738,13 @@ Child addSuperclass: Parent2
 
 To explicitly select which parent's method to use, define an override or use qualified super sends.
 
+`object isKindOf: aClass` tests the object's own class and every superclass
+branch, including indirect secondary parents. The argument must be a class, not
+a string or symbol naming one. `superclassNames` returns direct parent names in
+declaration order. Native user-class reflection has executed coverage in the
+`class_reflection` parity case; this does not establish built-in/immediate or
+method-list reflection parity.
+
 ### Conflict Reflection (v0.8.0+)
 
 Query selector conflicts programmatically:

@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Seventy-two parity cases cover the current milestones, including five unhandled-error
+Seventy-three parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -73,6 +73,17 @@ instance/class/block identity with the VM's immediate-value rules
 generic sends and cached sends share the comparison; wrappers retaining the same
 native owner compare as one object. Collection representation/identity and
 `perform:` override semantics are not covered by this slice.
+
+User-defined compiled instances expose their registered `class`, `className`,
+and direct `superclassNames` in declaration order; class receivers expose
+`class`, `name`, `className`, and `superclassNames`. `isKindOf:` now searches all
+parent branches in both engines, including transitive secondary parents, and
+requires a class argument (`class_reflection`). Canonical `Root`/`Object`/`Mixin`
+class values support base ancestry targets; symbols/strings are not class aliases.
+Other built-in/immediate reflection,
+class-side ancestry tests and method-list reflection remain incomplete. VM's
+class-side `name` and instance-side `class` fast-path override discrepancies are
+tracked in PLAN.md; this coverage does not assert override parity for them.
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
