@@ -9175,7 +9175,13 @@ proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
     interp.suppressUncaughtExit = previousSuppress
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
-  ## Parse and evaluate source code using the stackless VM
+  ## Parse and evaluate source code using the stackless VM.
+  ##
+  ## Top-level code is compiled as the #doIt method on UndefinedObject, matching
+  ## evalStatements and the Smalltalk workspace convention. That gives the code a
+  ## real method activation, so a lowercase top-level assignment creates a local
+  ## (like `x := 1` in a script) instead of being rejected as a global, and `^`
+  ## has a method to return from.
   let tokens = lex(source)
   var parser = initParser(tokens)
   let nodes = parser.parseStatements()
@@ -9192,13 +9198,22 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
     for node in nodes:
       echo printAST(node)
 
-  # Evaluate all nodes using stackless VM with clean context, return last result
+  let doItMethod = BlockNode(
+    parameters: @[],
+    temporaries: @[],
+    body: nodes,
+    isMethod: true,
+    capturedEnv: initTable[string, MutableCell](),
+    capturedEnvInitialized: true,
+    selector: "doIt"
+  )
+  undefinedObjectClass.methods["doIt"] = doItMethod
+  undefinedObjectClass.allMethods["doIt"] = doItMethod
+
   try:
-    var lastResult = nilValue()
-    for node in nodes:
-      lastResult = interp.evalWithVMCleanContext(node)
-    interp.lastResult = lastResult
-    return (lastResult, "")
+    let methodResult = executeMethod(interp, doItMethod, nilInstance, @[], undefinedObjectClass)
+    interp.lastResult = methodResult
+    return (methodResult, "")
   except EvalError as e:
     # EvalError is a ValueError subtype, so it must be handled before the plain
     # ValueError clause below, which re-raises genuine VM value errors.
@@ -9207,6 +9222,9 @@ proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue
     raise
   except Exception as e:
     return (nilValue(), "Error: " & e.msg)
+  finally:
+    undefinedObjectClass.methods.del("doIt")
+    undefinedObjectClass.allMethods.del("doIt")
 
 proc evalStatements*(interp: var Interpreter, source: string): (seq[NodeValue], string) =
   ## Parse and evaluate multiple statements using the stackless VM

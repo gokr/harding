@@ -249,10 +249,11 @@ This eliminates the need to use uppercase global variables (`Counter`, `Total`) 
 
 ### Execution Context
 
-Script blocks execute with `self = nil`, following the Smalltalk workspace convention (like a do-it in a Workspace). This provides consistent behavior between the REPL and script execution.
+Script blocks execute with `self = nil`, following the Smalltalk workspace convention (like a do-it in a Workspace). A file script, the REPL, and `harding -e` all compile their top-level code as the `#doIt` method on `UndefinedObject`, so they share one rule: a lowercase top-level assignment is a local of that do-it, `| x |` temporaries are legal, and `^` returns from it. Only uppercase names are globals.
 
 ```
-# In script.hrd or REPL do-it:
+# In script.hrd, the REPL, or `harding -e`: `self isNil` returns true, and
+# `x := 1. x println` prints 1 without declaring a global.
 self printString  "Returns: 'an UndefinedObject'"
 self isNil         "Returns: true"
 ```

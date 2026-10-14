@@ -213,10 +213,11 @@ arbitrary error resumption solely in the interpreter.
 
 ## 4. Complete object-model dispatch
 
-- [ ] Lowercase top-level script variables are rejected in some contexts
-      ("Global variables must start with uppercase letter: r"), while `x := 1` at
-      top level works; determine the intended rule and whether the checker should
-      apply to scripts at all.
+- [x] Lowercase top-level variables are consistent: file scripts, the REPL and
+      `harding -e` all run top-level code as the `#doIt` method on
+      `UndefinedObject`, so `x := 1` and `| x |` are locals and only uppercase
+      names are globals. Earlier `-e` used a no-activation path and rejected
+      lowercase assignments.
 - [x] Encode generated binding/slot identifiers for Nim keywords and backend-owned
       names. Definitions, reads, assignments, method/block parameters, capture env
       fields, numeric expressions and slot accessors share identifier mangling;
