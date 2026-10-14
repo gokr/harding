@@ -245,7 +245,9 @@ arbitrary error resumption solely in the interpreter.
       declaration order and walks the parent graph depth-first with a cycle guard;
       `addSuperclass:` works at runtime. Coverage: `multiple_inheritance`.
 - [ ] Qualified `super` (naming which parent to start from).
-- [ ] Dynamic sends and reflection.
+- [x] Dynamic sends: `perform:`/`with:`/`with:with:` and `respondsTo:` work in
+      compiled code for instances and classes. Coverage: `dynamic_send`. Full
+      reflection parity is a separate item.
 - [x] Generic missing-message errors instead of silent nil, including compiled
       instance/class/super lookup and custom DNU. Wrong-type primitive fallback,
       reflection and mixed-mode ambiguity remain separate coverage items.

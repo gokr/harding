@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Compiled code supports dynamic sends: `perform:`, `perform:with:`, `perform:with:with:` (selector as symbol or string) and `respondsTo:` on instances and classes. Coverage: `dynamic_send` parity.
 - Compiled dispatch follows multiple inheritance. `registerSuperclass` records every parent in declaration order instead of replacing the first, dispatch and method-existence walks are depth-first over the parent graph with a cycle guard, and `addSuperclass:` works at runtime for class receivers. Coverage: `multiple_inheritance` parity (parent-order lookup, methods from each parent, local override).
 
 ### Fixed

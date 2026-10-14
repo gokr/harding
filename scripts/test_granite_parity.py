@@ -745,6 +745,18 @@ E addSuperclass: B.
 E addSuperclass: A.
 E new tag println.
 """, "A\nonly-A\nonly-B\nD\nB\n"),
+    ("dynamic_send", """
+C := Object derive: #().
+C>>greet [ ^ "hi" ].
+C>>add: a with: b [ ^ a + b ].
+c := C new.
+(c perform: #greet) println.
+(c perform: #add:with: with: 3 with: 4) println.
+(c respondsTo: #greet) println.
+(c respondsTo: #missing) println.
+(c perform: "greet") println.
+(C respondsTo: #new) println.
+""", "hi\n7\ntrue\nfalse\nhi\ntrue\n"),
 ])
 
 

@@ -661,6 +661,17 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       of "error:": return writeHardingLog(logging.lvlError, args[0])
       of "fatal:": return writeHardingLog(logging.lvlFatal, args[0])
       else: discard
+    if selector == "respondsTo:" and args.len >= 1:
+      var querySelector = ""
+      if args[0].kind == vkSymbol:
+        querySelector = args[0].symVal
+      elif args[0].kind == vkString:
+        querySelector = args[0].strVal
+      let found = querySelector.len > 0 and
+        (hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector) or
+         hasCompiledMethodInHierarchy(receiver.classVal.name, querySelector) or
+         (querySelector == "new" and receiver.classVal.name in compiledAllocators))
+      return NodeValue(kind: vkBool, boolVal: found)
     return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
   let receiverClassName = getReceiverClassName(receiver)
@@ -668,6 +679,40 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
 
   case selector
+  of "perform:", "perform:with:", "perform:with:with:":
+    # Dynamic send: the selector argument (symbol or string) names the method to
+    # run on this receiver, with the remaining arguments as its arguments.
+    if args.len < 1:
+      return NodeValue(kind: vkNil)
+    var dynSelector = ""
+    if args[0].kind == vkSymbol:
+      dynSelector = args[0].symVal
+    elif args[0].kind == vkString:
+      dynSelector = args[0].strVal
+    else:
+      return NodeValue(kind: vkNil)
+    var dynArgs: seq[NodeValue] = @[]
+    for i in 1..<args.len:
+      dynArgs.add(args[i])
+    return sendMessage(runtime, receiver, dynSelector, dynArgs)
+
+  of "respondsTo:":
+    if args.len < 1:
+      return NodeValue(kind: vkBool, boolVal: false)
+    var querySelector = ""
+    if args[0].kind == vkSymbol:
+      querySelector = args[0].symVal
+    elif args[0].kind == vkString:
+      querySelector = args[0].strVal
+    if querySelector.len == 0:
+      return NodeValue(kind: vkBool, boolVal: false)
+    let queryName = getReceiverClassName(receiver)
+    if queryName.len > 0 and hasCompiledMethodInHierarchy(queryName, querySelector):
+      return NodeValue(kind: vkBool, boolVal: true)
+    if receiver.kind == vkClass and receiver.classVal != nil:
+      return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
+    return NodeValue(kind: vkBool, boolVal: false)
+
   of "isNil":
     return NodeValue(kind: vkBool, boolVal: receiver.kind == vkNil)
   of "notNil":
