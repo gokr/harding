@@ -241,7 +241,10 @@ arbitrary error resumption solely in the interpreter.
 - [x] Multi-value engine discrepancy: the interpreter now prints booleans as
       `true`/`false` like compiled code and `True>>printString`, instead of
       `<instance of True>`. Coverage: `boolean_display`.
-- [ ] Multiple inheritance and qualified `super`.
+- [x] Multiple inheritance: compiled dispatch registers every parent in
+      declaration order and walks the parent graph depth-first with a cycle guard;
+      `addSuperclass:` works at runtime. Coverage: `multiple_inheritance`.
+- [ ] Qualified `super` (naming which parent to start from).
 - [ ] Dynamic sends and reflection.
 - [x] Generic missing-message errors instead of silent nil, including compiled
       instance/class/super lookup and custom DNU. Wrong-type primitive fallback,

@@ -210,17 +210,58 @@ proc getNimProxyClassName*(nimValue: pointer): string =
   return ""
 
 var superclassNames*: Table[string, string] = initTable[string, string]()
+var superclassLists*: Table[string, seq[string]] = initTable[string, seq[string]]()
 
 proc registerSuperclass*(className: string, superclassName: string) =
-  ## Register the superclass for a class
-  superclassNames[className] = superclassName
-  inc compiledClassDispatchVersion
+  ## Register one superclass in declaration order. A class may have several
+  ## parents (`addSuperclass:`), so this appends rather than replaces; repeated
+  ## registration of the same parent is ignored. Dispatch searches parents in
+  ## this order, matching the interpreter.
+  if superclassName.len == 0:
+    if className notin superclassLists:
+      superclassLists[className] = @[]
+    inc compiledClassDispatchVersion
+    return
+  var parents = superclassLists.getOrDefault(className)
+  if superclassName notin parents:
+    parents.add(superclassName)
+    superclassLists[className] = parents
+    inc compiledClassDispatchVersion
+  superclassNames[className] = parents[0]
 
 proc getSuperclassName*(className: string): string =
-  ## Get the superclass name for a class
+  ## First (primary) superclass of a class, or "".
+  if className in superclassLists and superclassLists[className].len > 0:
+    return superclassLists[className][0]
   if className in superclassNames:
     return superclassNames[className]
   return ""
+
+proc getSuperclasses*(className: string): seq[string] =
+  ## All registered superclasses in declaration order.
+  if className in superclassLists:
+    return superclassLists[className]
+  if className in superclassNames and superclassNames[className].len > 0:
+    return @[superclassNames[className]]
+  return @[]
+
+proc walkCompiledHierarchy*(className: string, visit: proc(name: string): bool): string =
+  ## Depth-first pre-order over the superclass graph, parents in declaration
+  ## order. `visit` returns true to stop; the visited name is returned, or "".
+  ## A `seen` guard keeps a malformed cyclic hierarchy from looping forever.
+  var seen: seq[string] = @[]
+  proc walk(name: string): string =
+    if name.len == 0 or name in seen:
+      return ""
+    seen.add(name)
+    if visit(name):
+      return name
+    for parent in getSuperclasses(name):
+      let found = walk(parent)
+      if found.len > 0:
+        return found
+    return ""
+  return walk(className)
 
 proc ensureCompiledExceptionHierarchy*(): void =
   ## Register the built-in exception chain once. Generated modules reference
@@ -275,32 +316,23 @@ proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeVal
 
 proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
                                       selector: string, args: seq[NodeValue]): NodeValue =
-  ## Dispatch compiled method by walking class -> superclasses chain
-  var currentClass = className
-  while currentClass.len > 0:
-    let compiledFn = findCompiledMethod(currentClass, selector)
-    if compiledFn != nil:
-      return compiledFn(receiver, args)
-    currentClass = getSuperclassName(currentClass)
+  ## Dispatch compiled method by walking class -> superclass graph in declaration
+  ## order, so multiple parents follow the interpreter's lookup order.
+  let owner = walkCompiledHierarchy(className,
+    proc(name: string): bool = findCompiledMethod(name, selector) != nil)
+  if owner.len > 0:
+    return findCompiledMethod(owner, selector)(receiver, args)
   return compiledMissingMessage(receiver, selector)
 
 proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
   ## Check if a compiled method exists on this class or any superclass.
-  var currentClass = className
-  while currentClass.len > 0:
-    if findCompiledMethod(currentClass, selector) != nil:
-      return true
-    currentClass = getSuperclassName(currentClass)
-  return false
+  return walkCompiledHierarchy(className,
+    proc(name: string): bool = findCompiledMethod(name, selector) != nil).len > 0
 
 proc hasCompiledClassMethodInHierarchy*(className, selector: string): bool =
   ## Detect a class-side override, including inherited methods.
-  var currentClass = className
-  while currentClass.len > 0:
-    if currentClass & ">>" & selector in compiledClassMethods:
-      return true
-    currentClass = getSuperclassName(currentClass)
-  return false
+  return walkCompiledHierarchy(className,
+    proc(name: string): bool = name & ">>" & selector in compiledClassMethods).len > 0
 
 proc canDirectAllocate*(className: string,
                         allocator: proc(self: NodeValue, args: seq[NodeValue]): NodeValue): bool =
@@ -320,12 +352,10 @@ proc compiledNewInstance*(className: string, allocator: CompiledProc): NodeValue
 
 proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
                                  args: seq[NodeValue]): NodeValue =
-  var currentClass = startClass
-  while currentClass.len > 0:
-    let key = currentClass & ">>" & selector
-    if key in compiledClassMethods:
-      return compiledClassMethods[key](receiver, args)
-    currentClass = getSuperclassName(currentClass)
+  let owner = walkCompiledHierarchy(startClass,
+    proc(name: string): bool = name & ">>" & selector in compiledClassMethods)
+  if owner.len > 0:
+    return compiledClassMethods[owner & ">>" & selector](receiver, args)
   if selector == "new" and receiver.kind == vkClass and receiver.classVal != nil:
     let name = receiver.classVal.name
     if name in compiledAllocators:
@@ -381,12 +411,7 @@ proc compiledExceptionClassValue*(name: string): NodeValue =
   return compiledClassValue(name)
 
 proc isCompiledExceptionClass(name: string): bool =
-  var current = name
-  while current.len > 0:
-    if current == "Exception":
-      return true
-    current = getSuperclassName(current)
-  return false
+  return walkCompiledHierarchy(name, proc(candidate: string): bool = candidate == "Exception").len > 0
 
 proc compiledExceptionMessage*(value: NodeValue): string =
   ## Message slot of a compiled exception instance, proxy or plain instance.
@@ -615,6 +640,18 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       discard
 
   if receiver.kind == vkClass and receiver.classVal != nil:
+    if selector == "addSuperclass:" and args.len >= 1:
+      # Register another parent at runtime, matching the interpreter. Generated
+      # modules also emit these statically; this path covers ids whose parent is
+      # only known at execution time.
+      var parentName = ""
+      if args[0].kind == vkClass and args[0].classVal != nil:
+        parentName = args[0].classVal.name
+      elif args[0].kind == vkInstance and args[0].instVal != nil and args[0].instVal.class != nil:
+        parentName = args[0].instVal.class.name
+      if parentName.len > 0:
+        registerSuperclass(receiver.classVal.name, parentName)
+      return receiver
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):
       case selector
@@ -968,14 +1005,10 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
        cache.selector == selector and cache.target != nil:
       let target = cache.target
       return target(receiver, args)
-    var currentClass = className
-    var target: CompiledProc
-    while currentClass.len > 0:
-      target = findCompiledMethod(currentClass, selector)
-      if target != nil:
-        break
-      currentClass = getSuperclassName(currentClass)
-    if target != nil:
+    let owner = walkCompiledHierarchy(className,
+      proc(name: string): bool = findCompiledMethod(name, selector) != nil)
+    if owner.len > 0:
+      let target = findCompiledMethod(owner, selector)
       cache = CompiledSendCache(className: className, selector: selector,
                                 version: compiledClassDispatchVersion, target: target)
       return target(receiver, args)

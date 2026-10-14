@@ -723,6 +723,28 @@ nil notNil println.
 42 notNil println.
 42 isNil println.
 """, "false\nfalse\nfalse\ntrue\nfalse\n"),
+    ("multiple_inheritance", """
+A := Object derive: #().
+A>>tag [ ^ "A" ].
+A>>onlyA [ ^ "only-A" ].
+B := Object derive: #().
+B>>tag [ ^ "B" ].
+B>>onlyB [ ^ "only-B" ].
+C := Object derive: #().
+C addSuperclass: A.
+C addSuperclass: B.
+C new tag println.
+C new onlyA println.
+C new onlyB println.
+D := Object derive: #().
+D addSuperclass: A.
+D>>tag [ ^ "D" ].
+D new tag println.
+E := Object derive: #().
+E addSuperclass: B.
+E addSuperclass: A.
+E new tag println.
+""", "A\nonly-A\nonly-B\nD\nB\n"),
 ])
 
 

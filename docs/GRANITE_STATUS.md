@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Sixty-six parity cases cover the current milestones, including five unhandled-error checks and the
+Sixty-seven parity cases cover the current milestones, including five unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -259,6 +259,9 @@ Polymorphic caches and compact class/selector identities remain follow-ups.
 6. Optimization after semantic coverage: direct calls, specialization, unboxing,
    and dispatch caching.
 
-The compiled runtime currently follows one superclass chain. Class-side support
-does not imply multiple-inheritance parity, class-slot support, or general
-reflection parity. Mixed-mode behavior also needs separate execution coverage.
+The compiled runtime registers every superclass in declaration order and walks
+the parent graph depth-first with a cycle guard, so multiple inheritance follows
+the interpreter's lookup order (`multiple_inheritance`); `addSuperclass:` works at
+runtime. Qualified `super` (naming which parent to start from), class-slot
+support, general reflection parity, and mixed-mode execution coverage remain
+open.

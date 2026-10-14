@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Compiled dispatch follows multiple inheritance. `registerSuperclass` records every parent in declaration order instead of replacing the first, dispatch and method-existence walks are depth-first over the parent graph with a cycle guard, and `addSuperclass:` works at runtime for class receivers. Coverage: `multiple_inheritance` parity (parent-order lookup, methods from each parent, local override).
+
 ### Fixed
 - The interpreter's `isNil`/`notNil` fast path now falls through to ordinary dispatch when the receiver's class overrides either predicate, matching compiled behavior and `Object>>isNil`/`notNil`. An object whose class defines `notNil [ ^ false ]` answers false in both engines instead of the interpreter forcing true. Coverage: `nil_override` parity.
 - `harding -e` and REPL do-its now compile their source as the `#doIt` method on `UndefinedObject`, matching file scripts. A lowercase top-level assignment (`x := 1`) and `| x |` temporaries behave the same in a script, the REPL, and `-e`; previously `-e` reused the no-activation expression path and rejected them as "Global variables must start with uppercase letter".
