@@ -246,12 +246,10 @@ arbitrary error resumption solely in the interpreter.
 - [x] Generic missing-message errors instead of silent nil, including compiled
       instance/class/super lookup and custom DNU. Wrong-type primitive fallback,
       reflection and mixed-mode ambiguity remain separate coverage items.
-- [ ] Reconcile nil-predicate overrides: the interpreter's unconditional isNil/
-      notNil fast paths bypass registered user methods, while compiled dispatch
-      checks overrides before the fallback. Minimal reproduction: a class with
-      `notNil [ ^ false ]` answers true in the interpreter, false natively.
-      Changing interpreter semantics requires discussion; benchmark parity only
-      asserts the ordinary nil predicates, not this discrepancy.
+- [x] Reconcile nil-predicate overrides: the interpreter's isNil/notNil fast
+      path now falls through to ordinary dispatch when the receiver's class
+      overrides the predicate, so both engines honor `notNil [ ^ false ]`.
+      Coverage: `nil_override`.
 
 ## 5. Exceptions, processes and libraries
 

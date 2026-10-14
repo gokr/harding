@@ -713,6 +713,16 @@ Foobar>>tag [ ^ "pascal" ].
 FooBar new tag println.
 Foobar new tag println.
 """, "camel\npascal\n"),
+    ("nil_override", """
+C := Object derive: #().
+C>>notNil [ ^ false ].
+c := C new.
+c notNil println.
+c isNil println.
+nil notNil println.
+42 notNil println.
+42 isNil println.
+""", "false\nfalse\nfalse\ntrue\nfalse\n"),
 ])
 
 

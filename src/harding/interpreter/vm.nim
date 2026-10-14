@@ -939,6 +939,18 @@ proc lookupMethodOnClass*(interp: Interpreter, receiverClass: Class, selector: s
 
   return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
+proc hasIsNilOverride(interp: Interpreter, val: NodeValue, selector: string): bool =
+  ## True when the receiver's class overrides the given nil predicate away from
+  ## the built-in Object definition. The fast path may only answer directly when
+  ## the resolved method is Object's own; otherwise ordinary dispatch must run.
+  let cls = classOfValue(val)
+  if cls == nil:
+    return false
+  let resolved = lookupMethodOnClass(interp, cls, selector)
+  if not resolved.found or resolved.definingClass == nil:
+    return false
+  return resolved.definingClass != objectClass
+
 proc materializeReceiverForSend(receiverVal: NodeValue): Instance =
   ## Materialize an Instance receiver only when execution requires it.
   case receiverVal.kind
@@ -7853,12 +7865,17 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       return true
 
     of "isNil":
-      interp.pushValue(NodeValue(kind: vkBool, boolVal: isNilValue(receiverVal)))
-      return true
+      # The built-in answer applies to nil itself; any object whose class defines
+      # its own isNil/notNil (for example the primitive types or a user class)
+      # falls through to ordinary dispatch so an override is honored.
+      if isNilValue(receiverVal) or not hasIsNilOverride(interp, receiverVal, "isNil"):
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: isNilValue(receiverVal)))
+        return true
 
     of "notNil":
-      interp.pushValue(NodeValue(kind: vkBool, boolVal: not isNilValue(receiverVal)))
-      return true
+      if isNilValue(receiverVal) or not hasIsNilOverride(interp, receiverVal, "notNil"):
+        interp.pushValue(NodeValue(kind: vkBool, boolVal: not isNilValue(receiverVal)))
+        return true
 
     of "==":
       if hasSingleArg:

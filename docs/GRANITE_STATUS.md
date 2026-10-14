@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Sixty-five parity cases cover the current milestones, including five unhandled-error checks and the
+Sixty-six parity cases cover the current milestones, including five unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -64,6 +64,8 @@ that differ only by case, underscores or punctuation generate distinct Nim
 identifiers instead of conflicting under Nim's style-insensitive comparison
 (`class_name_spelling`). String registries keep original class spellings.
 Earlier `mangleIdentifier`/`mangleSlot` still cover ordinary bindings and slots.
+The interpreter's `isNil`/`notNil` fast path honors class overrides like compiled
+dispatch (`nil_override`).
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
