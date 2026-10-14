@@ -335,6 +335,21 @@ result := [[Error signal: "boom"] on: Error do: [:ex | Error signal: "second"]]
   on: Error do: [:outer | outer message].
 result println.
 """, "Notification does not support retry\nsecond\n"),
+    ("custom_exception_hierarchy", """
+Problem := Error derivePublic: #(code).
+Problem>>initialize [ code := 7 ].
+Problem>>describe [ ^ self message & ":" & code asString ].
+DeepProblem := Problem derive: #().
+([DeepProblem signal: "bad"] on: Problem do: [:ex | ex describe]) println.
+([DeepProblem signal: "boxed"] on: Error do: [:ex | ex message]) println.
+Instance := DeepProblem new.
+Instance message: "instance".
+([Instance signal] on: Error do: [:caught | caught describe]) println.
+([DeepProblem new describe] on: Error do: [:ex | "incorrect"]) println.
+Advice := Notification derive: #().
+Advice>>defaultAction [ "custom default" println ].
+(Advice signal: "notice") println.
+""", "bad:7\nboxed\ninstance:7\nnil:7\ncustom default\nnil\n"),
     ("handler_transfer_cleanup", """
 Order := "".
 result := [[[Error signal: "body"] on: Error do: [:ex |

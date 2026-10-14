@@ -239,10 +239,23 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
         elif value.kind == vkString:
           classMap[msg.receiver.IdentNode.name].instanceSelectors.add(value.strVal)
 
+  # Built-in exception storage is inherited even without stdlib source in the module.
+  let exceptionBase = newClassInfo("Exception")
+  for name in ["message", "stackTrace", "signaler"]:
+    discard exceptionBase.addSlot(name)
+  var exceptionParents = initTable[string, ClassInfo]()
+  exceptionParents["Exception"] = exceptionBase
+  for name in ["Error", "Notification"]:
+    exceptionParents[name] = newClassInfo(name, exceptionBase)
+  for name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds", "BlockCannotReturn"]:
+    exceptionParents[name] = newClassInfo(name, exceptionParents["Error"])
+
   # Third pass: wire parent links now that all classes exist
   for className, parentName in parentNames.pairs:
     if className in classMap and parentName in classMap:
       classMap[className].parent = classMap[parentName]
+    elif className in classMap and parentName in exceptionParents:
+      classMap[className].parent = exceptionParents[parentName]
 
   result.classes = ctx.classes
 

@@ -134,14 +134,13 @@ re-arms visited handlers. No work/eval snapshots, native resume exception, or
 resumption primitives exist. Native handlers use synchronous calls with an
 internal pass transfer; executing handlers are excluded from nested lookup.
 Built-in unhandled notification default actions also have parity coverage.
-`notification_pass_cleanup` covers handler-local ensure scopes on `pass`,
-including repeated signals and cleanup failures replacing delegation.
-`handler_transfer_cleanup` covers error pass through intervening scopes and
-handler-local cleanup before retry. Custom default-action overrides, process
-yields, and mixed mode remain coverage gaps.
-Granite's custom exception subclasses, native arithmetic-error translation,
-default-action/diagnostic parity, and mixed-mode coverage remain incomplete.
-These are migration items, not exceptions to the target contract.
+`custom_exception_hierarchy` covers a user `Error` subclass with its own slot,
+constructor and methods: `on: Problem`/`on: Error` matching, instance signaling,
+overridden `message`, and a custom `Notification` `defaultAction`. The built-in
+`Exception`/`Error`/`Notification` chain is registered eagerly so a compiled
+subclass resolves to `Exception`. Native arithmetic-error translation,
+defaultAction/diagnostic parity and mixed mode remain incomplete. These are
+migration items, not exceptions to the target contract.
 
 Replace tests/examples that used resumption with conventional fallback handling
 or Notification signaling, according to their intent. Keep explicit negative

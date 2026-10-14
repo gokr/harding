@@ -106,14 +106,16 @@ suite "Compiled monomorphic send caches":
     check not sendMessageCached(rt, receiver, "notNil", @[], cache).boolVal
     check sendMessageCached(rt, NodeValue(kind: vkNil), "isNil", @[], cache).boolVal
 
-  test "exception selectors retain runtime protocol precedence":
+  test "user exception methods override the built-in protocol":
     let rt = newRuntime()
     let value = compiledErrorValue("Error", "original")
     value.instVal.isNimProxy = true
     registerCompiledMethod("Error", "message", replacementAllocation)
     var cache: CompiledSendCache
-    check sendMessageCached(rt, value, "message", @[], cache).strVal == "original"
-    check sendMessageCached(rt, value, "message", @[], cache).strVal == "original"
+    # A user-defined message method wins, as it does in the interpreter.
+    check sendMessageCached(rt, value, "message", @[], cache).intVal == 2
+    # signal/pass/retry still take the built-in protocol path.
+    check sendMessageCached(rt, value, "defaultAction", @[], cache).kind == vkInstance
 
   test "template evaluates receiver and arguments exactly once":
     let rt = newRuntime()

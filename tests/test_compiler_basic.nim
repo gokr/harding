@@ -329,7 +329,7 @@ suite "Compiler: Guarded default allocation":
     check code.contains("discard guardedNew_Class_Box()")
     check code.contains("canDirectAllocate(\"Box\", allocateClass_Box)")
     check code.contains("allocationVersion_Class_Box != compiledClassDispatchVersion")
-    check code.contains("return newClass_Box().toValue()")
+    check code.contains("return compiledNewInstance(\"Box\", allocateClass_Box)")
     check code.contains("return sendMessage(currentRuntime[], compiledClassValue(\"Box\"), \"new\", @[])")
 
   test "a locally shadowed class receiver stays on ordinary dispatch":

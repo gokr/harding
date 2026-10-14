@@ -85,6 +85,8 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("      let objVal = hybridInterpreter.globals[][\"Object\"]\n"))
   output.add(fmt("      if objVal.kind == vkInstance and objVal.instVal != nil:\n"))
   output.add(fmt("        result.classRef = objVal.instVal.class\n"))
+  output.add(fmt("  if result.classRef == nil:\n"))
+  output.add(fmt("    result.classRef = compiledClassValue(\"{cls.name}\").classVal\n"))
   for slot in slots:
     output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
@@ -592,8 +594,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
       # Second pass: wire parent links using AST class graph names
       for className, astCls in astAnalysis.classes.pairs:
-        if astCls.parent != nil and astCls.parent.name in merged.classes:
-          merged.classes[className].parent = merged.classes[astCls.parent.name]
+        if astCls.parent != nil:
+          merged.classes[className].parent = if astCls.parent.name in merged.classes:
+                                              merged.classes[astCls.parent.name]
+                                            else: astCls.parent
 
       merged
 
@@ -654,7 +658,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(fmt("    directAllocation_{nativeClass} = canDirectAllocate(\"{cls.name}\", allocate{nativeClass})\n"))
     output.add(fmt("    allocationVersion_{nativeClass} = compiledClassDispatchVersion\n"))
     output.add(fmt("  if directAllocation_{nativeClass}:\n"))
-    output.add(fmt("    return new{nativeClass}().toValue()\n"))
+    output.add(fmt("    return compiledNewInstance(\"{cls.name}\", allocate{nativeClass})\n"))
     output.add(fmt("  return sendMessage(currentRuntime[], compiledClassValue(\"{cls.name}\"), \"new\", @[])\n\n"))
 
   # Generate superclass hierarchy registration

@@ -93,8 +93,11 @@ before outer dispatch, repeated signals and cleanup failure replacing delegation
 `handler_transfer_cleanup` covers error pass through intervening cleanup scopes
 and handler-local cleanup before retry. The VM continues these transfers through
 work frames. Custom default-action overrides, process yields and mixed mode
-still need coverage. Custom error subclasses, instance construction, arithmetic-error
-translation, and general native defaultAction/diagnostic parity remain incomplete.
+still need coverage. Custom error subclasses, instance construction and
+inherited exception slots are implemented; native arithmetic-error translation,
+defaultAction/diagnostic parity and mixed mode remain incomplete. A user-defined
+`message`/`describe` overrides the built-in protocol, while `signal`, `pass` and
+`retry` keep it. `custom_exception_hierarchy` executes both engines.
 
 `ensure:` runs cleanup exactly once on normal completion, errors and lexical
 non-local returns, nested innermost-first, in both engines. Cleanup failures are

@@ -90,8 +90,13 @@ arbitrary error resumption solely in the interpreter.
 - [x] Reject resume/resume: on handled errors in both engines; rejection can be
       caught by an outer handler. Cover missing-handler actions and arbitrary
       exception subclass/native arithmetic paths in later slices.
-- [ ] Complete compiled exception hierarchy/instance protocol, custom subclasses,
-      arithmetic-error translation, defaultAction and diagnostic parity.
+- [x] Complete compiled exception hierarchy/instance protocol and custom
+      subclasses. User exception classes inherit the built-in slots, `signal:`
+      runs the class's compiled constructor/`initialize`, and user methods
+      override the built-in protocol while signal/pass/retry keep it. Coverage:
+      `custom_exception_hierarchy` parity plus runtime/compiler tests.
+- [ ] Native arithmetic-error translation, defaultAction/diagnostic parity and
+      mixed mode.
 - [x] Notification handler results are the signal's value; signals do not unwind
       the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
       are rejected with a normal Error. Interpreter: 23 exception tests pass;

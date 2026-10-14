@@ -1348,6 +1348,10 @@ Exception
 ```
 
 Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.
+User-defined exception classes derive from `Error` or `Notification` and inherit
+the `message`, `stackTrace` and `signaler` slots. `MyError signal: "text"` runs
+the class's `initialize`; methods you define override the built-in protocol,
+while `signal`/`pass`/`retry` keep it.
 
 `Notification` is used for advisory signals rather than errors. Its handlers run synchronously while the signaling computation stays active, so execution continues after the signal.
 

@@ -42,6 +42,7 @@ type
 var activeErrorHandlers {.threadvar.}: seq[Instance]
 
 proc getSuperclassName*(className: string): string
+proc ensureCompiledExceptionHierarchy*(): void
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
 proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
@@ -103,6 +104,7 @@ proc dispatchCompiledNotification(runtime: Runtime, notification: NodeValue,
 proc initRuntime*() =
   ## Initialize global runtime
   if currentRuntime == nil:
+    ensureCompiledExceptionHierarchy()
     currentRuntime = cast[ptr Runtime](allocShared(sizeof(Runtime)))
     currentRuntime[] = newRuntime()
 
@@ -220,6 +222,17 @@ proc getSuperclassName*(className: string): string =
     return superclassNames[className]
   return ""
 
+proc ensureCompiledExceptionHierarchy*(): void =
+  ## Register the built-in exception chain once. Generated modules reference
+  ## only the class values they name, so `Error -> Exception` may otherwise be
+  ## missing and a user subclass would not match `on: Exception`.
+  registerSuperclass("Exception", "")
+  registerSuperclass("Error", "Exception")
+  registerSuperclass("Notification", "Exception")
+  for name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds",
+               "BlockCannotReturn"]:
+    registerSuperclass(name, "Error")
+
 proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
   ## Look up a compiled method by class name and selector
   let key = className & ">>" & selector
@@ -296,6 +309,15 @@ proc canDirectAllocate*(className: string,
     return false
   return not hasCompiledClassMethodInHierarchy(className, "new")
 
+proc compiledNewInstance*(className: string, allocator: CompiledProc): NodeValue =
+  ## Native `new` for a class with no class-side override: allocate, then run a
+  ## compiled `initialize` when the class hierarchy defines one, matching
+  ## Object class>>new basicNew initialize.
+  let created = allocator(NodeValue(kind: vkNil), @[])
+  if hasCompiledMethodInHierarchy(className, "initialize"):
+    return dispatchCompiledMethodFromClass(created, className, "initialize", @[])
+  return created
+
 proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
                                  args: seq[NodeValue]): NodeValue =
   var currentClass = startClass
@@ -307,7 +329,7 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
   if selector == "new" and receiver.kind == vkClass and receiver.classVal != nil:
     let name = receiver.classVal.name
     if name in compiledAllocators:
-      return compiledAllocators[name](receiver, args)
+      return compiledNewInstance(name, compiledAllocators[name])
   return compiledMissingMessage(receiver, selector)
 
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
@@ -366,7 +388,30 @@ proc isCompiledExceptionClass(name: string): bool =
     current = getSuperclassName(current)
   return false
 
+proc compiledExceptionMessage*(value: NodeValue): string =
+  ## Message slot of a compiled exception instance, proxy or plain instance.
+  if value.kind != vkInstance or value.instVal == nil:
+    return ""
+  if value.instVal.isNimProxy:
+    return getSlotValue(value, "message").toString()
+  if value.instVal.slots.len > 0:
+    return value.instVal.slots[0].toString()
+  return ""
+
+proc compiledSetExceptionMessage*(value: NodeValue, message: string): NodeValue =
+  ## Store the message slot on a compiled exception instance. Returns the
+  ## receiver: setters answer their value, which is not what the caller wants.
+  let stored = NodeValue(kind: vkString, strVal: message)
+  if value.kind == vkInstance and value.instVal != nil and value.instVal.isNimProxy:
+    discard setSlotValue(value, "message", stored)
+  elif value.kind == vkInstance and value.instVal != nil and value.instVal.slots.len > 0:
+    value.instVal.slots[0] = stored
+  return value
+
 proc compiledErrorValue*(name, message: string): NodeValue =
+  if name in compiledAllocators:
+    let receiver = compiledNewInstance(name, compiledAllocators[name])
+    return compiledSetExceptionMessage(receiver, message)
   let clsValue = compiledExceptionClassValue(name)
   let instance = newInstance(clsValue.classVal)
   instance.slots[0] = NodeValue(kind: vkString, strVal: message)
@@ -377,11 +422,7 @@ proc raiseCompiledError*(value: NodeValue): NodeValue =
                     value.instVal.class.name
                   else:
                     "Exception"
-  let message = if value.kind == vkInstance and value.instVal != nil and value.instVal.slots.len > 0:
-                  value.instVal.slots[0].toString()
-                else:
-                  "exception"
-  raise (ref CompiledHardingError)(value: value, msg: className & ": " & message)
+  raise (ref CompiledHardingError)(value: value, msg: className & ": " & compiledExceptionMessage(value))
 
 proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue =
   ## Offer a custom DNU method once, then signal the ordinary Harding error.
@@ -469,10 +510,13 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
   if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil and
      isCompiledExceptionClass(receiver.instVal.class.name):
+    # User-defined exception methods take precedence over the built-in protocol.
+    if hasCompiledMethodInHierarchy(receiver.instVal.class.name, selector):
+      return dispatchCompiledMethodFromClass(receiver, receiver.instVal.class.name, selector, args)
     if isNotificationClass(receiver.instVal.class.name):
       case selector
       of "message":
-        return receiver.instVal.slots[0]
+        return NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver))
       of "signal":
         let dispatch = dispatchCompiledNotification(runtime, receiver, -1)
         if dispatch.handled:
@@ -491,10 +535,17 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
     case selector
     of "defaultAction":
-      echo "Exception: " & receiver.instVal.slots[0].toString()
+      echo "Exception: " & compiledExceptionMessage(receiver)
       return receiver
     of "message":
-      return receiver.instVal.slots[0]
+      return NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver))
+    of "message:":
+      if args.len >= 1:
+        return compiledSetExceptionMessage(receiver, args[0].toString())
+      return receiver
+    of "printString":
+      return NodeValue(kind: vkString,
+        strVal: receiver.instVal.class.name & ": " & compiledExceptionMessage(receiver))
     of "signal":
       return raiseCompiledError(receiver)
     of "retry", "pass":
