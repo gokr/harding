@@ -12,7 +12,9 @@ unwinding and reject retry. **Resumption is not supported**: `resume`,
 value, and `pass` delegates outward. `ensure:` cleanup runs exactly once on
 normal completion, errors and non-local returns, nested innermost-first. Each
 retry attempt runs its cleanup. Cleanup errors/returns replace pending transfers;
-outer cleanup still runs, including before an uncaught-error exit.
+outer cleanup still runs, including before an uncaught-error exit. `pass` exits
+handler-local cleanup scopes before outer dispatch; notification signaling scopes
+remain active. `retry` also cleans handler-local scopes before restarting.
 
 ## Literals
 

@@ -51,9 +51,12 @@ handler's ordinary result is the result of `signal`. No control-transfer action
 is needed for this: because the handler runs synchronously and its result is used,
 there is nothing to resume.
 
-`pass` delegates to an outer matching handler while the computation remains
-active. An unhandled notification invokes its default action; if that action
-returns normally, signaling returns nil. A handler failure propagates as an
+`pass` exits the current handler invocation, running its `ensure:` cleanup
+innermost-first before delegating to an outer matching handler. The signaling
+computation remains active and its cleanup scopes are not exited. A failure or
+non-local return from handler cleanup replaces delegation. An unhandled
+notification invokes its default action; if that action returns normally,
+signaling returns nil. A handler failure propagates as an
 ordinary error. Notification `retry` and `return:` are not supported: they must
 report a normal Harding error rather than initiate a second control protocol.
 
@@ -131,7 +134,10 @@ re-arms visited handlers. No work/eval snapshots, native resume exception, or
 resumption primitives exist. Native handlers use synchronous calls with an
 internal pass transfer; executing handlers are excluded from nested lookup.
 Built-in unhandled notification default actions also have parity coverage.
-Handler-local ensure scopes on `pass`, custom default-action overrides, process
+`notification_pass_cleanup` covers handler-local ensure scopes on `pass`,
+including repeated signals and cleanup failures replacing delegation.
+`handler_transfer_cleanup` covers error pass through intervening scopes and
+handler-local cleanup before retry. Custom default-action overrides, process
 yields, and mixed mode remain coverage gaps.
 Granite's custom exception subclasses, native arithmetic-error translation,
 default-action/diagnostic parity, and mixed-mode coverage remain incomplete.

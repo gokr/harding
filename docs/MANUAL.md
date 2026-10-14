@@ -1033,14 +1033,13 @@ not make its completed home method a valid non-local return target.
 Granite captures a unique return target for each method invocation. Recursive
 calls do not intercept returns aimed at another invocation of the same method.
 The target becomes inactive when its invocation exits; a later non-local return
-raises a native `BlockCannotReturnError`. This is not yet integrated with
-Harding's resumable exception system.
+signals catchable Harding `BlockCannotReturn`, an `Error` subclass, in both
+engines. Ordinary escaped closure evaluation remains valid.
 
-Executed regressions: `non_local_return`, `recursive_return_target`, and
-`loop_non_local_return` in `scripts/test_granite_parity.py`. The
-`inactive_return_target` case is explicitly a compiled-error check: the VM still
-incorrectly treats a return to a completed home as a local block return. That
-interpreter discrepancy and `ensure:` cleanup during unwinding remain open.
+Executed parity: `non_local_return`, `recursive_return_target`,
+`loop_non_local_return`, and `inactive_return_target` in
+`scripts/test_granite_parity.py`. Cleanup runs before the non-local return leaves
+its protected scopes.
 
 ---
 
@@ -1243,15 +1242,20 @@ result := [1 + (Notification signal: "replacement")]
 result println.  # 42
 ```
 
-Executed parity: `notification_dispatch`, `notification_lifetime`, and
-`notification_default`. Notification-handler-local cleanup on `pass`, custom
-default-action overrides, process yields, and mixed mode still need coverage; see
+Executed parity: `notification_dispatch`, `notification_lifetime`,
+`notification_default`, and `notification_pass_cleanup`. Notification `pass`
+exits the current handler's cleanup scopes before calling the outer handler;
+the signaling body's scopes remain active. Error `pass` also cleans intervening
+protected scopes, and `retry` cleans handler-local scopes before restarting.
+A cleanup failure replaces the pending delegation/retry. Custom default-action
+overrides, process yields, and mixed mode still need coverage; see
 [GRANITE_STATUS.md](GRANITE_STATUS.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
 Custom exception subclasses, native arithmetic errors, stack-trace/default-action
-parity, mixed mode, and cleanup are not yet covered by this native error slice.
+parity and mixed mode still need coverage. Handler-local cleanup on transfers
+is covered by `handler_transfer_cleanup`.
 
 Handler actions:
 - `ex retry` - Re-execute the protected block from the beginning
@@ -1334,10 +1338,11 @@ cleanup coverage.
 ```
 Exception
   ├── Error
-  ├── Notification          # Resumable notification (not an error)
-  ├── MessageNotUnderstood
-  ├── SubscriptOutOfBounds
-  └── DivisionByZero
+  │   ├── MessageNotUnderstood
+  │   ├── SubscriptOutOfBounds
+  │   ├── DivisionByZero
+  │   └── BlockCannotReturn
+  └── Notification          # Synchronous advisory signal
 ```
 
 Parent classes catch subclass exceptions: `on: Exception do:` catches `Error`.

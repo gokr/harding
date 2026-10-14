@@ -108,8 +108,12 @@ arbitrary error resumption solely in the interpreter.
       completion checkpoints only delimit the synchronous handler invocation.
 - [x] Cover early resume/pass, repeated signals, nested notifications, no premature
       protected-body cleanup, handler errors, and built-in unhandled default action.
-- [ ] Cover ensure scopes entered inside notification handlers during `pass`,
-      arbitrary user defaultAction overrides, process yields and mixed mode.
+- [x] Cover notification-handler ensure scopes during `pass`: cleanup precedes
+      outer dispatch without exiting signaling scopes; repeated signals and
+      cleanup failures replacing delegation pass in both engines. Error pass
+      also cleans intervening scopes and retry cleans handler-local scopes.
+      Coverage: `notification_pass_cleanup`, `handler_transfer_cleanup`.
+- [ ] Cover arbitrary user defaultAction overrides, process yields and mixed mode.
 - [x] Exactly-once `ensure:` cleanup on normal exits, errors, and lexical
       non-local returns, including nested (innermost-first) cleanup and cleanup
       failures. Cleanups are scheduled as work frames so they run on the normal

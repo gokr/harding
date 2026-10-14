@@ -88,8 +88,12 @@ engines pass `notification_dispatch`, `notification_lifetime`,
 results, immediate completion, repeated signals, nested pass to `Exception`,
 handler failures and no premature protected-body cleanup. VM handlers run above
 active signaling work, without saved work/eval snapshots; native resume
-restoration is gone. Handler-local cleanup on `pass`, custom default-action
-overrides, process yields and mixed mode still need coverage. Custom error subclasses, instance construction, arithmetic-error
+restoration is gone. `notification_pass_cleanup` covers handler-local cleanup
+before outer dispatch, repeated signals and cleanup failure replacing delegation.
+`handler_transfer_cleanup` covers error pass through intervening cleanup scopes
+and handler-local cleanup before retry. The VM continues these transfers through
+work frames. Custom default-action overrides, process yields and mixed mode
+still need coverage. Custom error subclasses, instance construction, arithmetic-error
 translation, and general native defaultAction/diagnostic parity remain incomplete.
 
 `ensure:` runs cleanup exactly once on normal completion, errors and lexical

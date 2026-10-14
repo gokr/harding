@@ -84,6 +84,31 @@ suite "Exception Handling":
     """)
     check(result[0][^1].strVal == "outer caught")
 
+  test "error pass cleans handler and intervening scopes before delegation":
+    let evaluated = interp.evalStatements("""
+      Order := "".
+      Result := [[[Error signal: "body"] on: Error do: [:ex |
+        [ex pass] ensure: [Order := Order & "i"]
+      ]] ensure: [Order := Order & "o"]]
+        on: Error do: [:outer | Order := Order & "h". "outer"].
+      Result & ":" & Order
+    """)
+    require evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "outer:ioh"
+    check interp.cleanupStack.len == 0
+
+  test "retry cleans handler-local scopes before restarting":
+    let evaluated = interp.evalStatements("""
+      Order := "".
+      Attempts := 0.
+      Result := [Attempts := Attempts + 1. (Attempts < 2) ifTrue: [Error signal: "retry"]. "body"]
+        on: Error do: [:ex | [ex retry] ensure: [Order := Order & "c"]].
+      Result & ":" & Order
+    """)
+    require evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "body:c"
+    check interp.cleanupStack.len == 0
+
   test "normal after exception handling":
     let result = interp.evalStatements("""
       Result := [ "normal" ] on: Error do: [ :ex | "caught" ]
@@ -211,6 +236,33 @@ suite "Exception Handling":
     """)
     check evaluated[1].len == 0
     check evaluated[0][^1].strVal == "outer handled"
+
+  test "notification pass cleans handler scopes before outer dispatch":
+    let evaluated = interp.evalStatements("""
+      Order := "".
+      Result := [[Notification signal: "notice". Order := Order & "b". "body"]
+        on: Notification do: [:ex |
+          [[ex pass] ensure: [Order := Order & "i"]] ensure: [Order := Order & "o"]
+        ]] on: Notification do: [:outer | Order := Order & "h". 7].
+      Order
+    """)
+    require evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "iohb"
+    check interp.cleanupStack.len == 0
+    check interp.exceptionHandlers.len == 0
+
+  test "notification pass cleanup failure replaces delegation":
+    let evaluated = interp.evalStatements("""
+      Order := "".
+      Result := [[[Notification signal: "notice"] on: Notification do: [:ex |
+        [ex pass] ensure: [Order := Order & "c". Error signal: "cleanup failed"]
+      ]] on: Notification do: [:outer | Order := Order & "incorrect"]]
+        on: Error do: [:outer | outer message].
+      Result & ":" & Order
+    """)
+    require evaluated[1].len == 0
+    check evaluated[0][^1].strVal == "cleanup failed:c"
+    check interp.cleanupStack.len == 0
 
   test "notification handler failures propagate as errors":
     let evaluated = interp.evalStatements("""

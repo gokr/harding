@@ -299,6 +299,27 @@ result := [[Notification signal: "inner"] on: Notification do: [:ex | Notificati
   on: Notification do: [:outer | "outer result"].
 result println.
 """, "1\n0\n2\nbody\n2\n1\nouter result\n"),
+    ("notification_pass_cleanup", """
+Order := "".
+result := [[
+  (Notification signal: "first") println.
+  (Notification signal: "second") println.
+  Order := Order & "b".
+  "body"
+] on: Notification do: [:ex |
+  [[ex pass. "incorrect"] ensure: [Order := Order & "i"]]
+    ensure: [Order := Order & "o"]
+]] on: Notification do: [:outer | Order := Order & "h". "outer"].
+result println.
+Order println.
+Order := "".
+result := [[[Notification signal: "failed"] on: Notification do: [:ex |
+  [ex pass] ensure: [Order := Order & "c". Error signal: "cleanup failed"]
+]] on: Notification do: [:outer | Order := Order & "incorrect"]]
+  on: Error do: [:outer | outer message].
+result println.
+Order println.
+""", "outer\nouter\nbody\niohiohb\ncleanup failed\nc\n"),
     ("notification_default", """
 (Notification signal: "unhandled") println.
 ([Notification signal: "passed"] on: Notification do: [:ex | ex pass]) println.
@@ -314,6 +335,28 @@ result := [[Error signal: "boom"] on: Error do: [:ex | Error signal: "second"]]
   on: Error do: [:outer | outer message].
 result println.
 """, "Notification does not support retry\nsecond\n"),
+    ("handler_transfer_cleanup", """
+Order := "".
+result := [[[Error signal: "body"] on: Error do: [:ex |
+  [ex pass] ensure: [Order := Order & "i"]
+]] ensure: [Order := Order & "o"]]
+  on: Error do: [:outer | Order := Order & "h". "outer"].
+result println.
+Order println.
+Order := "".
+Attempts := 0.
+result := [Attempts := Attempts + 1. (Attempts < 2) ifTrue: [Error signal: "retry"]. "body"]
+  on: Error do: [:ex | [ex retry] ensure: [Order := Order & "c"]].
+result println.
+Order println.
+Order := "".
+result := [[[Error signal: "body"] on: Error do: [:ex |
+  [ex pass] ensure: [Order := Order & "c". Error signal: "cleanup failed"]
+]] ensure: [Order := Order & "o"]]
+  on: Error do: [:outer | outer message].
+result println.
+Order println.
+""", "outer\nioh\nbody\nc\ncleanup failed\nco\n"),
     ("ensure_cleanup", """
 count := 0.
 result := [ "body" ] ensure: [ count := count + 1 ].

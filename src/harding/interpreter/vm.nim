@@ -2068,6 +2068,13 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
   let handler = interp.exceptionHandlers[handlerIdx]
   if handler.exceptionContext != nil and handler.exceptionContext.isNotificationHandler:
     let ctx = handler.exceptionContext
+    let continuation = acquireFrame()
+    continuation.kind = wfSignalException
+    continuation.selector = "pass"
+    continuation.exceptionInstance = self
+    if interp.scheduleUnwindCleanup(ctx.signalActivationDepth, continuation):
+      return nilValue()
+    releaseFrame(continuation)
     interp.truncateWorkQueue(ctx.notificationWorkDepth)
     interp.evalStack.setLen(min(ctx.notificationEvalDepth, interp.evalStack.len))
     interp.restoreActivationStackTo(ctx.signalActivationDepth)
@@ -2093,6 +2100,20 @@ proc primitiveExceptionPassImpl(interp: var Interpreter, self: Instance, args: s
       interp.pushWorkFrame(actionFrame)
     return nilValue()
 
+
+  var unwindDepth = -1
+  for j in countdown(handlerIdx - 1, 0):
+    let outer = interp.exceptionHandlers[j]
+    if not outer.consumed and isKindOf(self.class, outer.exceptionClass):
+      unwindDepth = outer.stackDepth
+      break
+  let continuation = acquireFrame()
+  continuation.kind = wfSignalException
+  continuation.selector = "pass"
+  continuation.exceptionInstance = self
+  if interp.scheduleUnwindCleanup(unwindDepth, continuation):
+    return nilValue()
+  releaseFrame(continuation)
 
   # Unwind to handler install point
   interp.truncateWorkQueue(handler.workQueueDepth)
@@ -2146,6 +2167,14 @@ proc primitiveExceptionRetryImpl(interp: var Interpreter, self: Instance, args: 
   if protectedBlock == nil:
     writeStderr("retry: no protected block recorded")
     return nilValue()
+
+  let continuation = acquireFrame()
+  continuation.kind = wfSignalException
+  continuation.selector = "retry"
+  continuation.exceptionInstance = self
+  if interp.scheduleUnwindCleanup(handler.stackDepth, continuation):
+    return nilValue()
+  releaseFrame(continuation)
 
   # Unwind to handler install point
   interp.truncateWorkQueue(handler.workQueueDepth)
@@ -8958,7 +8987,11 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     return true
 
   of wfSignalException:
-    if frame.selector == "defaultAction":
+    if frame.selector == "pass":
+      discard primitiveExceptionPassImpl(interp, frame.exceptionInstance, @[])
+    elif frame.selector == "retry":
+      interp.pushValue(primitiveExceptionRetryImpl(interp, frame.exceptionInstance, @[]))
+    elif frame.selector == "defaultAction":
       interp.pushValue(frame.exceptionInstance.toValue())
       interp.pushWorkFrame(newDiscardFrame())
       interp.pushWorkFrame(newSendMessageFrame("defaultAction", 0))

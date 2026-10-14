@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Handler-local `ensure:` scopes now clean up before VM notification/error `pass` and error `retry`; error pass also cleans intervening protected scopes. Pending transfers continue through stackless frames, and cleanup failures replace delegation. Executed parity and ARC/ORC exception regressions cover the paths.
 - Granite-generated modules import shared primitive/operator, block-return, closure and base-object support instead of re-emitting the fixed preamble. Generated loop conversion retains its permissive behavior separately from runtime's strict `toInt`; compiled globals now share the imported support module.
 - Pure compiled generic sends use positive per-site monomorphic instance-method caches. Hits guard receiver class, selector and registration version; method/superclass/allocator registration invalidates targets. Nil results remain successful sends, while builtin, exception, class-side and mixed-mode paths retain generic dispatch. Concurrent registry mutation is not supported by this slice.
 - Statically named compiled class allocation uses a guarded native allocator. Inherited or own class-side new overrides fall back to ordinary dispatch, and allocator/class-method/superclass registrations invalidate the guard. Mixed-mode and locally shadowed class receivers stay dynamic.
