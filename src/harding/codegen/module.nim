@@ -519,18 +519,23 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   if not mixed:
     genCtx.numericBindings = analyzeNumericBindings(topLevel, genCtx.cellNames)
 
-  # Generate code for each top-level statement
+  # Run top-level work under an uncaught-error barrier so a compiled error
+  # follows the Harding default-action/diagnostic path instead of escaping as a
+  # Nim exception.
+  output.add("  try:\n")
   for node in topLevel:
     let stmtCode = genTopLevelStatement(genCtx, node)
     if stmtCode.len > 0:
       # Indent the statement
       for line in stmtCode.splitLines():
-        output.add("  ")
+        output.add("    ")
         output.add(line)
         output.add("\n")
 
   # Return exit code 0
-  output.add("\n  return 0\n")
+  output.add("\n    return 0\n")
+  output.add("  except CompiledHardingError as failure:\n")
+  output.add("    return reportUncaughtError(failure.value)\n")
 
   return output
 
@@ -775,7 +780,7 @@ proc init_{moduleName}*() =
   echo "Module loaded: {moduleName}"
 
 when isMainModule:
-  discard main()
+  quit(main())
 """))
 
   return output

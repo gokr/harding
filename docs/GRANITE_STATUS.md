@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Sixty-one parity cases cover the current milestones, including four unhandled-error checks and the
+Sixty-two parity cases cover the current milestones, including five unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -96,8 +96,11 @@ work frames. Custom default-action overrides, process yields and mixed mode
 still need coverage. Custom error subclasses, instance construction and
 inherited exception slots are implemented; zero divisors signal catchable
 `DivisionByZero` in compiled `//`, `%`, `\` and `/` fast paths
-(`arithmetic_zero_divisor`). Custom defaultAction/diagnostic parity and mixed
-mode remain incomplete. A user-defined
+(`arithmetic_zero_divisor`). An uncaught compiled error runs `defaultAction`
+(user overrides included), reports the uncaught header and message, and exits
+nonzero (`unhandled_custom_default_action`); the entry point propagates the
+status. Diagnostic/stack-trace parity and mixed mode remain incomplete. A
+user-defined
 `message`/`describe` overrides the built-in protocol, while `signal`, `pass` and
 `retry` keep it. `custom_exception_hierarchy` executes both engines.
 

@@ -424,6 +424,22 @@ proc raiseCompiledError*(value: NodeValue): NodeValue =
                     "Exception"
   raise (ref CompiledHardingError)(value: value, msg: className & ": " & compiledExceptionMessage(value))
 
+proc reportUncaughtError*(value: NodeValue): int =
+  ## Default action and diagnostic for an error that reached the top of a
+  ## compiled program: run `defaultAction`, report it, and answer a failing exit
+  ## status, instead of letting a Nim exception escape.
+  let className = if value.kind == vkInstance and value.instVal != nil and value.instVal.class != nil:
+                    value.instVal.class.name
+                  else:
+                    "Exception"
+  stderr.write("=== Uncaught Exception ===\n")
+  stderr.write(className & ": " & compiledExceptionMessage(value) & "\n")
+  try:
+    discard sendMessage(currentRuntime[], value, "defaultAction", @[])
+  except CatchableError:
+    discard
+  return 1
+
 proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue =
   ## Offer a custom DNU method once, then signal the ordinary Harding error.
   let selectorValue = NodeValue(kind: vkSymbol, symVal: selector)

@@ -141,9 +141,11 @@ overridden `message`, and a custom `Notification` `defaultAction`. The built-in
 subclass resolves to `Exception`. Zero divisors signal `DivisionByZero` in both
 engines for integer `//`, `%`, `\` and for `/` in every operand combination;
 the interpreter previously answered nil for some `/` forms. Coverage:
-`arithmetic_zero_divisor`. Custom defaultAction/diagnostic parity and mixed mode
-remain incomplete. These are migration items, not exceptions to the target
-contract.
+`arithmetic_zero_divisor`. A compiled uncaught error runs `defaultAction`
+(including user overrides), reports the uncaught header and message, and exits
+nonzero; coverage: `unhandled_custom_default_action`. Stack-trace/diagnostic
+parity and mixed mode remain incomplete. These are migration items, not
+exceptions to the target contract.
 
 Replace tests/examples that used resumption with conventional fallback handling
 or Notification signaling, according to their intent. Keep explicit negative

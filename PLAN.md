@@ -100,7 +100,10 @@ arbitrary error resumption solely in the interpreter.
       raising an uncatchable Nim defect. The interpreter also signals for `/`
       zero-divisor forms that previously answered nil. Coverage:
       `arithmetic_zero_divisor`.
-- [ ] Custom defaultAction/diagnostic parity and mixed mode.
+- [x] Custom defaultAction/exit parity: compiled uncaught errors run
+      `defaultAction` (including user overrides), report the uncaught header and
+      message, and exit nonzero. Coverage: `unhandled_custom_default_action`.
+- [ ] Diagnostic/stack-trace parity and mixed mode.
 - [x] Notification handler results are the signal's value; signals do not unwind
       the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
       are rejected with a normal Error. Interpreter: 23 exception tests pass;

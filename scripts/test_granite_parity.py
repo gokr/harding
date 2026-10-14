@@ -444,6 +444,12 @@ Winner>>run [
     ("unhandled_error", 'Error signal: "uncaught".', {"error": "Error: uncaught"}),
     ("unhandled_pass", '[Error signal: "passed"] on: Error do: [:ex | ex pass].',
      {"error": "Error: passed"}),
+    ("unhandled_custom_default_action", """
+MyError := Error derive: #().
+MyError>>defaultAction [ "custom error default" println ].
+MyError signal: "unhandled".
+"not reached" println.
+""", {"error": "MyError: unhandled", "contains": "custom error default"}),
     # Both engines now reject a return to a finished home, so this is ordinary
     # parity rather than a compiled-only error check.
     ("inactive_return_target", """
@@ -733,6 +739,9 @@ def main():
                 prefix = expected.get("prefix", "")
                 if not interpreted.startswith(prefix) or not compiled.startswith(prefix):
                     raise RuntimeError(f"expected cleanup prefix {prefix!r}; see engine logs")
+                contains = expected.get("contains", "")
+                if contains and (contains not in interpreted or contains not in compiled):
+                    raise RuntimeError(f"expected output containing {contains!r}; see engine logs")
                 print(f"PASS {name} (error parity)")
                 continue
             compiled = run([str(binary)], options.timeout, case_dir / "compiled.log")
