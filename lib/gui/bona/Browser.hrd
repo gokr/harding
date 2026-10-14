@@ -438,17 +438,17 @@ Browser>>showNewLibraryDialog [
         name := inputField text trim
         name isEmpty ifTrue: [
             self showErrorDialog: "Library name cannot be empty."
-            ^ self
+        ] ifFalse: [
+            lib := Library named: name
+            lib isNil ifTrue: [
+                lib := Library new
+                lib name: name
+            ]
+            dialog close
+            self populateLibraries
+            libraryPane selectItem: name
+            self selectLibrary: name
         ]
-        lib := Library named: name
-        lib isNil ifTrue: [
-            lib := Library new
-            lib name: name
-        ]
-        dialog close
-        self populateLibraries
-        libraryPane selectItem: name
-        self selectLibrary: name
     ]
 
     cancelButton clicked: [ dialog close ]
@@ -1355,11 +1355,10 @@ Browser>>showAddMixinDialog: aClassName [
     addButton clicked: [
         selectedMixin isNil ifTrue: [
             Transcript showCr: "Select a mixin first"
-            ^ self
+        ] ifFalse: [
+            dialog close
+            self addMixinToClass: aClassName mixinName: selectedMixin
         ]
-        
-        dialog close
-        self addMixinToClass: aClassName mixinName: selectedMixin
     ]
     
     cancelButton clicked: [

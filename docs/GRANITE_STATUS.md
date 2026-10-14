@@ -21,10 +21,10 @@ defaults to 120 seconds. A timeout, failed build, failed engine, or incorrect
 output fails the runner. Missing binaries fail rather than skip tests.
 
 The older `tests/test_compiler_block_parity.nim` suite is not a comprehensive
-compiled parity suite: most of its cases evaluate only the interpreter. During
-initial assessment it stalled in `nested blocks with control flow`, after the
-executed compiled case passed. Diagnose that separately; do not describe the
-whole suite as passing until it completes.
+compiled parity suite: most of its cases evaluate only the interpreter. The
+current bounded run completes, including the nested-control-flow case that
+stalled in the initial assessment. This establishes suite completion, not broad
+native execution coverage.
 
 ## Shared generated support
 
@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Fifty-seven parity cases cover the current milestones, including four unhandled-error checks and the
+Fifty-nine parity cases cover the current milestones, including four unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
@@ -137,6 +137,16 @@ also under ORC). The full named-access suite timed out after its first inherited
 layout test while entering JSON serialization coverage; only its four MNU tests
 were independently re-run to completion. No full-repository suite success is
 claimed.
+
+## Migration audit
+
+The deferred-return audit found and fixed two Browser dialog callbacks that
+attempted ^ after their home method finished. Headless tests invoke the actual
+callbacks after dialog creation, checking invalid and valid inputs under ARC/ORC.
+Seven selected examples/benchmarks execute with matching output; storage's native
+run fails on unsupported Array new:, not an escaped return. Five source files
+fail parsing, and this checkout has no installed external .hrd sources. The audit
+is partial; see [GRANITE_AUDIT.md](GRANITE_AUDIT.md) for evidence and limits.
 
 ## Main synchronization
 

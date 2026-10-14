@@ -1034,7 +1034,9 @@ Granite captures a unique return target for each method invocation. Recursive
 calls do not intercept returns aimed at another invocation of the same method.
 The target becomes inactive when its invocation exits; a later non-local return
 signals catchable Harding `BlockCannotReturn`, an `Error` subclass, in both
-engines. Ordinary escaped closure evaluation remains valid.
+engines. Ordinary escaped closure evaluation remains valid. Deferred GUI or
+process callbacks must use final expressions/conditional branches rather than
+`^` to exit their own callback; their creating method may already have finished.
 
 Executed parity: `non_local_return`, `recursive_return_target`,
 `loop_non_local_return`, and `inactive_return_target` in

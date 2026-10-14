@@ -17,7 +17,9 @@ semantics; any intended language change must be explicit and documented.
 - [x] Class-side method extraction, registration, receivers, aliases and factories.
 - [x] Class-side `super` lookup in the interpreter.
 - [x] Seven executed parity cases and class-model unit tests passing.
-- [ ] Diagnose the older block-parity suite's nested-control-flow hang.
+- [x] Recheck the older block-parity suite's nested-control-flow hang. The current
+      bounded run completes, including whileTrue/repetition/nested control flow;
+      most cases remain interpreter-only rather than native execution coverage.
 - [ ] Expand parity coverage continually; do not equate interpreter-only tests
       with compiled execution coverage.
 
@@ -186,9 +188,14 @@ arbitrary error resumption solely in the interpreter.
       check. Legacy tests that used escaped `^` as an ordinary block result were
       migrated to final expressions, and one test that never invoked its block
       was corrected.
-- [ ] Audit remaining uses of escaped `^` across examples, benchmarks, docs and
-      external libraries; run those suites to confirm nothing still depends on
-      the previous silent behaviour.
+- [x] Audit deferred GUI callback returns: two Browser dialog callbacks used ^
+      after their creating method finished. Validation now branches without a
+      non-local return. Headless callbacks test empty/valid inputs under ARC/ORC.
+- [ ] Complete escaped-^ migration audit: 136 .hrd files parse in the current
+      checkout, five fail parsing and installed external .hrd sources are absent.
+      Seven selected examples/benchmarks have execution parity; storage fails
+      natively on unsupported Array new:. Markdown/dynamic callback registration
+      and foreign/process paths remain unverified. See docs/GRANITE_AUDIT.md.
 - [x] Ensure cleanup executes while unwinding in tested native and VM paths;
       process and legacy re-entrant paths remain follow-up coverage.
 
