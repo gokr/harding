@@ -280,7 +280,9 @@ arbitrary error resumption solely in the interpreter.
       Background on continuation mechanisms: Nimony's `.passive` procs (CPS) risk
       introducing colored functions and suspendability obligations through
       `ensure:`, so adopting that model for processes is a deliberate trade, not a
-      free win.
+      free win. `scripts/probe_nimony.py` runs isolated `.passive`/defer/closure
+      probes against a locally unpacked toolchain and records compatibility; it
+      does not replace the pinned Nim toolchain and downloads nothing.
 - [ ] Catch/translate error and return transfers at C ABI boundaries; validate
       foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.
