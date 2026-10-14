@@ -14,7 +14,7 @@ This plan has two linked outcomes:
 Harding already has the main primitives needed for this work:
 
 - MummyX HTTP server integration documented in `docs/MUMMYX.md`
-- a small API example in `examples/mummyx_hello.hrd`
+- a small API example in `examples/web/mummyx_hello.hrd`
 - larger real-world API-style handlers in `badminton-buddy/BadmintonApp.hrd`
 - BitBarrel persistence documented in `docs/MANUAL.md`
 - fast JSON serialization for Harding values and ordinary objects via `Json stringify:`
@@ -40,7 +40,7 @@ The tutorial should show how to build a small CRUD JSON API server, not an htmx 
 
 Add a complete example, likely:
 
-- `examples/api_todos.hrd`
+- `examples/web/api_todos.hrd`
 
 This should be the code used by the tutorial.
 
@@ -146,7 +146,7 @@ The tutorial should emphasize:
 Recommended structure for the example app:
 
 ```text
-examples/api_todos.hrd
+examples/web/api_todos.hrd
 lib/api/ApiRouter.hrd            # later, if this becomes reusable
 lib/api/OpenApiBuilder.hrd       # later, if this becomes reusable
 ```
@@ -321,7 +321,7 @@ This keeps the system predictable.
 
 ### Phase 1: Tutorial and Example
 
-1. Write `examples/api_todos.hrd`
+1. Write `examples/web/api_todos.hrd`
 2. Write `docs/API_SERVER_TUTORIAL.md`
 3. Keep OpenAPI static or hand-built for the first draft if needed
 
@@ -378,7 +378,7 @@ That gives Harding users immediate value even before full OpenAPI automation lan
 
 The best initial sequence is:
 
-1. build `examples/api_todos.hrd`
+1. build `examples/web/api_todos.hrd`
 2. write `docs/API_SERVER_TUTORIAL.md`
 3. hand-write or partially generate `GET /openapi.json`
 4. extract the repeated pieces into a reusable API/OpenAPI layer afterward

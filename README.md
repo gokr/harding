@@ -125,7 +125,7 @@ Build with MummyX support when you want Harding-side HTTP routing:
 
 ```bash
 nimble harding_mummyx
-./harding examples/mummyx_hello.hrd
+./harding examples/web/mummyx_hello.hrd
 ```
 
 This optional integration is also available in Bona builds:
@@ -266,13 +266,13 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 ## Examples
 
 ```bash
-harding examples/hello.hrd
-harding examples/classes.hrd
-harding examples/blocks.hrd
-harding examples/process_demo.hrd
-harding examples/inheritance.hrd
-harding examples/collections.hrd
-harding examples/control_flow.hrd
+harding examples/language/hello.hrd
+harding examples/language/classes.hrd
+harding examples/language/blocks.hrd
+harding examples/concurrency/process_demo.hrd
+harding examples/language/inheritance.hrd
+harding examples/language/collections.hrd
+harding examples/language/control_flow.hrd
 
 # Launch the GTK IDE
 bona

@@ -1,0 +1,9 @@
+=== Defining Methods ===
+
+=== Calling Methods ===
+3 + 4 = 7
+20 - 5 = 15
+5! = 120
+
+=== Method Definition with >> ===
+Greeting: Hello, World!

@@ -42,9 +42,15 @@ arbitrary dynamic registration, aliasing or escape analysis. Embedded Markdown
 examples are not parsed by it. There are no installed external `.hrd` sources in
 this checkout, so no external-library completeness claim is possible.
 
-Five files failed parsing and were not audited through their AST:
+The original scan had five parse failures (historical evidence below). The
+current source/example audit is [GRANITE_EXAMPLE_AUDIT.md](GRANITE_EXAMPLE_AUDIT.md):
+Echo/arith/permute sources were repaired, and loop_10000 is valid in its actual
+script-block context. Person_new remains historical proposal syntax, excluded
+from the current runnable inventory.
 
-- `examples/harding-echo/src/harding_echo/lib/echo/Echo.hrd`: declarative primitive
+Five files failed parsing in the original scan and were not audited through their AST:
+
+- `examples/integrations/harding-echo/src/harding_echo/lib/echo/Echo.hrd`: declarative primitive
   argument names do not match the method parameters.
 - `benchmark/loop_10000.hrd` and `benchmark/permute.hrd`: top-level temporary bars.
 - `benchmark/arith_simple.hrd`: expected closing parenthesis.
@@ -57,7 +63,8 @@ The scanner and logs are retained in `build/audit_returns.nim`,
 
 Bounded interpreter/build/native runs have matching successful output for:
 
-- `examples/blocks.hrd`, `fibonacci.hrd`, `methods.hrd`, `harding_main.hrd`.
+- `examples/language/blocks.hrd`, `fibonacci.hrd`, `methods.hrd`, and
+  `examples/compiler/harding_main.hrd`.
 - `benchmark/sieve.hrd`, `queens.hrd`, `towers.hrd`.
 
 `benchmark/storage.hrd` now builds and runs natively after built-in collection

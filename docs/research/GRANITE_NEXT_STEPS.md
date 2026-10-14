@@ -29,8 +29,8 @@ This plan replaces the older external Granite notes with a repo-local status and
 
 ### Already Confirmed
 
-- `examples/inheritance.hrd` works in Granite.
-- `examples/harding_main.hrd` works in Granite.
+- `examples/language/inheritance.hrd` works in Granite.
+- `examples/compiler/harding_main.hrd` works in Granite.
 - `super` dispatch is present in generated code and runtime fallback.
 - Compiled method registration with arguments is active.
 - Collection and boolean runtime support has been expanded in compiled mode.

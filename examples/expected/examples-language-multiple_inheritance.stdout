@@ -1,0 +1,9 @@
+=== Multiple Inheritance ===
+
+=== Testing inherited methods ===
+Name: Buddy
+Owner: Alice
+Breed: Golden Retriever
+
+Speak: Woof!
+Greet: Hello, Alice!

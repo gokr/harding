@@ -1,0 +1,9 @@
+=== MyApp (Pattern 2: Granite) ===
+
+Hello, World!
+
+Usage: ./myapp <name> [args...]
+
+Example: ./myapp Alice Bob Charlie
+
+=== Application Complete ===

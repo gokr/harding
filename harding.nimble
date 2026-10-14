@@ -269,6 +269,24 @@ task testOtherRelease, "Run compiler, IDE, and integration tests in release mode
   ## Run other tests compiled in release mode for faster execution
   runTestGroup("other", TestOther, true)
 
+proc runExampleHosts() =
+  exec "mkdir -p build"
+  exec "nim c -p:src -p:external -p:examples/integrations/harding-echo/src -o:build/example-echo-tests examples/integrations/harding-echo/tests/test_echo.nim"
+  exec "timeout 60 build/example-echo-tests"
+  exec "nim c -p:src -p:external -o:build/example-template-tests examples/templates/Pattern1-Interpreter/tests/test_myapp.nim"
+  exec "timeout 60 build/example-template-tests"
+
+task testExamples, "Check example stdout and interpreter/Granite parity (build engines first)":
+  exec "python3 -m unittest discover -s tests -p test_example_audit.py"
+  runExampleHosts()
+  exec "python3 scripts/audit_examples.py"
+
+task testExampleHosts, "Run Nim-hosted Echo and interpreter-template examples":
+  runExampleHosts()
+
+task testExamplesStrict, "Require every ungated example to pass both engines":
+  exec "python3 scripts/audit_examples.py --strict"
+
 task harding, "Build harding REPL (debug) in repo root":
   # Build REPL in debug mode, output to repo root, with external libraries
   ensureExternalLibsFile()

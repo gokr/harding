@@ -178,6 +178,15 @@ layout test while entering JSON serialization coverage; only its four MNU tests
 were independently re-run to completion. No full-repository suite success is
 claimed.
 
+## Example regression suite
+
+Current source examples are grouped by purpose and inventoried in
+`examples/manifest.json`; `nimble testExamples` checks successful execution and
+exact reviewed stdout/stderr in both engines. Known compiler failures are explicit
+and are not successes; strict mode rejects them too. Service/host-gated inputs are
+syntax-only. See [GRANITE_EXAMPLE_AUDIT.md](GRANITE_EXAMPLE_AUDIT.md) for scope,
+source repairs, native gaps and website/Markdown follow-up work.
+
 ## Migration audit
 
 The deferred-return audit found and fixed two Browser dialog callbacks that

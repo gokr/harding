@@ -10,15 +10,14 @@ d := 100 / 5
 result := a + b + c + d
 
 # Print results using proper message send syntax.
-("10 + 20 = " , (a printString)) println
-("30 - 10 = " , (b printString)) println
-("5 * 6 = " , (c asString)) println
-("100 / 5 = " , (d asString)) println
-("Total = " , (result asString)) println
+("10 + 20 = " & a printString) println
+("30 - 10 = " & b printString) println
+("5 * 6 = " & c asString) println
+("100 / 5 = " & d asString) println
+("Total = " & result asString) println
 
-# Verify result.
-(result = 100) ifTrue: [
-  "Arith: PASS" println
-]
+# / produces a Float, so the accumulated result is a Float too.
+(result = 100.0) ifFalse: [ Error signal: "Unexpected arithmetic result" ].
+"Arith: PASS" println
 
 result

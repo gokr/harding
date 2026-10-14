@@ -1,0 +1,22 @@
+=== Arrays ===
+Array size: 3
+First element: 10
+Last element: 30
+
+=== Array Literals ===
+Array literal: #(1 2 3 4 5)
+
+=== Array Iteration ===
+Elements: 12345
+
+=== Array Methods ===
+Squared: #(1 4 9 16 25)
+Evens: #(2 4)
+Sum: 15
+
+=== Tables (Dictionaries) ===
+Name: Alice
+Age: 30
+
+=== Table Keys ===
+Keys: #(city age name)

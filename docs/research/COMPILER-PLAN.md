@@ -26,11 +26,11 @@ Granite now compiles and runs inheritance and fibonacci examples with compiled m
 
 Validated with `./granite run`:
 
-- `examples/inheritance.hrd` ✅
-- `examples/fibonacci.hrd` ✅
-- `examples/harding_main.hrd` ✅
-- `examples/control_flow.hrd` ✅
-- `examples/collections.hrd` ✅
+- `examples/language/inheritance.hrd` ✅
+- `examples/language/fibonacci.hrd` ✅
+- `examples/compiler/harding_main.hrd` ✅
+- `examples/language/control_flow.hrd` ✅
+- `examples/language/collections.hrd` ✅
 
 ## Remaining Work
 

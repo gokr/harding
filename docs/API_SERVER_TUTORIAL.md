@@ -7,7 +7,7 @@ This tutorial walks through a plain JSON API server in Harding using:
 - `Json parse:` and `Json stringify:` for request/response handling
 - an OpenAPI endpoint at `/openapi.json`
 
-The full example lives in `examples/api_todos.hrd`.
+The full example lives in `examples/web/api_todos.hrd`.
 
 ## What You Will Build
 
@@ -45,7 +45,7 @@ Once Harding is rebuilt with BitBarrel enabled, the library is installed into th
 ## Running the Example
 
 ```bash
-./harding examples/api_todos.hrd
+./harding examples/web/api_todos.hrd
 ```
 
 You should then have a server on `http://127.0.0.1:8080`.
@@ -344,7 +344,7 @@ If you want to turn this into a reusable API framework, the next steps are:
 
 ## Related Files
 
-- `examples/api_todos.hrd`
+- `examples/web/api_todos.hrd`
 - `docs/MUMMYX.md`
 - `docs/MANUAL.md`
 - `docs/plans/OPENAPI_AND_API_SERVER_PLAN.md`

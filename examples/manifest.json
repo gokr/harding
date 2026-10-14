@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "benchmark-arith_simple",
+      "path": "benchmark/arith_simple.hrd",
+      "stdout": "examples/expected/benchmark-arith_simple.stdout"
+    },
+    {
+      "id": "benchmark-loop_10000",
+      "path": "benchmark/loop_10000.hrd",
+      "known_failure": {
+        "stage": "build",
+        "contains": "Unexpected token: '|'",
+        "reason": "Granite parses top-level bars without a script block"
+      },
+      "stdout": "examples/expected/benchmark-loop_10000.stdout"
+    },
+    {
+      "id": "benchmark-permute",
+      "path": "benchmark/permute.hrd",
+      "stdout": "examples/expected/benchmark-permute.stdout"
+    },
+    {
+      "id": "benchmark-queens",
+      "path": "benchmark/queens.hrd",
+      "stdout": "examples/expected/benchmark-queens.stdout"
+    },
+    {
+      "id": "benchmark-sieve",
+      "path": "benchmark/sieve.hrd",
+      "stdout": "examples/expected/benchmark-sieve.stdout"
+    },
+    {
+      "id": "benchmark-simple_loop",
+      "path": "benchmark/simple_loop.hrd",
+      "stdout": "examples/expected/benchmark-simple_loop.stdout"
+    },
+    {
+      "id": "benchmark-storage",
+      "path": "benchmark/storage.hrd",
+      "stdout": "examples/expected/benchmark-storage.stdout"
+    },
+    {
+      "id": "benchmark-towers",
+      "path": "benchmark/towers.hrd",
+      "stdout": "examples/expected/benchmark-towers.stdout"
+    },
+    {
+      "id": "examples-compiler-benchmark_blocks",
+      "path": "examples/compiler/benchmark_blocks.hrd",
+      "stdout": "examples/expected/examples-compiler-benchmark_blocks.stdout"
+    },
+    {
+      "id": "examples-compiler-compiled_blocks",
+      "path": "examples/compiler/compiled_blocks.hrd",
+      "stdout": "examples/expected/examples-compiler-compiled_blocks.stdout"
+    },
+    {
+      "id": "examples-compiler-compiler_examples",
+      "path": "examples/compiler/compiler_examples.hrd",
+      "stdout": "examples/expected/examples-compiler-compiler_examples.stdout"
+    },
+    {
+      "id": "examples-compiler-harding_main",
+      "path": "examples/compiler/harding_main.hrd",
+      "stdout": "examples/expected/examples-compiler-harding_main.stdout"
+    },
+    {
+      "id": "examples-concurrency-process_demo",
+      "path": "examples/concurrency/process_demo.hrd",
+      "known_failure": {
+        "stage": "native",
+        "contains": "Message not understood: fork:",
+        "reason": "Native scheduler/process support"
+      },
+      "stdout": "examples/expected/examples-concurrency-process_demo.stdout"
+    },
+    {
+      "id": "examples-integrations-bitbarrel_demo",
+      "path": "examples/integrations/bitbarrel_demo.hrd",
+      "gate": "External BitBarrel service and persistent writes"
+    },
+    {
+      "id": "examples-integrations-harding-echo-src-harding_echo-lib-echo-Bootstrap",
+      "path": "examples/integrations/harding-echo/src/harding_echo/lib/echo/Bootstrap.hrd",
+      "gate": "Host-loaded Echo bootstrap; tested by the example Nim package suite",
+      "mode": "library"
+    },
+    {
+      "id": "examples-integrations-harding-echo-src-harding_echo-lib-echo-Echo",
+      "path": "examples/integrations/harding-echo/src/harding_echo/lib/echo/Echo.hrd",
+      "gate": "Nim primitive registration; tested by the example Nim package suite",
+      "mode": "library"
+    },
+    {
+      "id": "examples-language-arithmetic",
+      "path": "examples/language/arithmetic.hrd",
+      "stdout": "examples/expected/examples-language-arithmetic.stdout"
+    },
+    {
+      "id": "examples-language-blocks",
+      "path": "examples/language/blocks.hrd",
+      "stdout": "examples/expected/examples-language-blocks.stdout"
+    },
+    {
+      "id": "examples-language-classes",
+      "path": "examples/language/classes.hrd",
+      "stdout": "examples/expected/examples-language-classes.stdout"
+    },
+    {
+      "id": "examples-language-collections",
+      "path": "examples/language/collections.hrd",
+      "stdout": "examples/expected/examples-language-collections.stdout"
+    },
+    {
+      "id": "examples-language-control_flow",
+      "path": "examples/language/control_flow.hrd",
+      "stdout": "examples/expected/examples-language-control_flow.stdout"
+    },
+    {
+      "id": "examples-language-fibonacci",
+      "path": "examples/language/fibonacci.hrd",
+      "stdout": "examples/expected/examples-language-fibonacci.stdout"
+    },
+    {
+      "id": "examples-language-hello",
+      "path": "examples/language/hello.hrd",
+      "stdout": "examples/expected/examples-language-hello.stdout"
+    },
+    {
+      "id": "examples-language-inheritance",
+      "path": "examples/language/inheritance.hrd",
+      "stdout": "examples/expected/examples-language-inheritance.stdout"
+    },
+    {
+      "id": "examples-language-methods",
+      "path": "examples/language/methods.hrd",
+      "stdout": "examples/expected/examples-language-methods.stdout"
+    },
+    {
+      "id": "examples-language-multiple_inheritance",
+      "path": "examples/language/multiple_inheritance.hrd",
+      "stdout": "examples/expected/examples-language-multiple_inheritance.stdout"
+    },
+    {
+      "id": "examples-language-objects",
+      "path": "examples/language/objects.hrd",
+      "stdout": "examples/expected/examples-language-objects.stdout"
+    },
+    {
+      "id": "examples-language-simple_test",
+      "path": "examples/language/simple_test.hrd",
+      "stdout": "examples/expected/examples-language-simple_test.stdout"
+    },
+    {
+      "id": "examples-language-stdlib",
+      "path": "examples/language/stdlib.hrd",
+      "stdout": "examples/expected/examples-language-stdlib.stdout"
+    },
+    {
+      "id": "examples-language-variables",
+      "path": "examples/language/variables.hrd",
+      "stdout": "examples/expected/examples-language-variables.stdout"
+    },
+    {
+      "id": "examples-stdlib-logging",
+      "path": "examples/stdlib/logging.hrd",
+      "known_failure": {
+        "stage": "parity",
+        "contains": "Processing request",
+        "reason": "Native default logging filter differs from interpreter"
+      },
+      "stdout": "examples/expected/examples-stdlib-logging.stdout"
+    },
+    {
+      "id": "examples-templates-Pattern1-Interpreter-lib-myapp-main",
+      "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
+      "known_failure": {
+        "stage": "native",
+        "contains": "Message not understood: arguments",
+        "reason": "System arguments unsupported natively"
+      },
+      "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-lib-myapp-main.stdout"
+    },
+    {
+      "id": "examples-templates-Pattern2-Granite-src-main",
+      "path": "examples/templates/Pattern2-Granite/src/main.hrd",
+      "known_failure": {
+        "stage": "native",
+        "contains": "Message not understood: arguments",
+        "reason": "System arguments unsupported natively"
+      },
+      "stdout": "examples/expected/examples-templates-Pattern2-Granite-src-main.stdout"
+    },
+    {
+      "id": "examples-web-api_todos",
+      "path": "examples/web/api_todos.hrd",
+      "gate": "MummyX and BitBarrel; starts a server and writes persistent data"
+    },
+    {
+      "id": "examples-web-api_todos_json",
+      "path": "examples/web/api_todos_json.hrd",
+      "gate": "MummyX and BitBarrel; starts a server and writes persistent data"
+    },
+    {
+      "id": "examples-web-mummyx_hello",
+      "path": "examples/web/mummyx_hello.hrd",
+      "gate": "MummyX build; starts a long-running HTTP server"
+    },
+    {
+      "id": "examples-web-web_todo_bona",
+      "path": "examples/web/web_todo_bona.hrd",
+      "gate": "Bona/MummyX host; starts an HTTP server"
+    },
+    {
+      "id": "examples-web-web_todo_compare",
+      "path": "examples/web/web_todo_compare.hrd",
+      "gate": "MummyX build; starts a long-running HTTP server"
+    },
+    {
+      "id": "examples-web-web_todo_standalone",
+      "path": "examples/web/web_todo_standalone.hrd",
+      "gate": "MummyX build; starts a long-running HTTP server"
+    },
+    {
+      "id": "examples-templates-Pattern1-Interpreter-lib-myapp-main-args",
+      "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
+      "known_failure": {
+        "stage": "native",
+        "contains": "Message not understood: arguments",
+        "reason": "System arguments unsupported natively"
+      },
+      "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-lib-myapp-main-args.stdout",
+      "args": [
+        "add",
+        "5",
+        "3"
+      ]
+    },
+    {
+      "id": "examples-templates-Pattern2-Granite-src-main-args",
+      "path": "examples/templates/Pattern2-Granite/src/main.hrd",
+      "known_failure": {
+        "stage": "native",
+        "contains": "Message not understood: arguments",
+        "reason": "System arguments unsupported natively"
+      },
+      "stdout": "examples/expected/examples-templates-Pattern2-Granite-src-main-args.stdout",
+      "args": [
+        "Alice",
+        "Bob"
+      ]
+    }
+  ]
+}

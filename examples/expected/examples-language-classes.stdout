@@ -1,0 +1,13 @@
+=== Class with Instance Variables ===
+Person class created
+
+=== Creating Instances ===
+Person 1: Alice, 30
+Person 2: Bob, 25
+
+=== Independent Instances ===
+After creation, person1 age: 30
+Changing person2 does not affect person1
+
+=== Chained Class Creation ===
+Point: (10, 20)

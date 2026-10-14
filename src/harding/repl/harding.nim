@@ -26,10 +26,10 @@ const
 
 let Examples = @[
   "harding                              # Start REPL interactively",
-  "harding examples/demo.hrd            # Run a script file",
+  "harding examples/language/hello.hrd            # Run a script file",
   "harding app.hrd -- one two           # Run script with args",
   "harding -e \"3 + 4\"                  # Evaluate expression (prints: 7)",
-  "harding --ast examples/test.hrd      # Show AST then execute",
+  "harding --ast examples/language/classes.hrd      # Show AST then execute",
   "harding --loglevel DEBUG script.hrd  # Run with debug logging",
   "harding --home /opt/harding          # Use custom home directory",
   "harding --bootstrap custom.hrd       # Use custom bootstrap file"

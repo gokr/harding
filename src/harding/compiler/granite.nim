@@ -158,9 +158,9 @@ proc showUsage() =
   echo "  HARDING_HOME          Default home directory for loading libraries"
   echo ""
   echo "Examples:"
-  echo "  granite compile examples/demo.hrd -o demo.nim"
-  echo "  granite build examples/demo.hrd -d build/"
-  echo "  granite run examples/demo.hrd --release"
+  echo "  granite compile examples/language/hello.hrd -o demo.nim"
+  echo "  granite build examples/language/hello.hrd -d build/"
+  echo "  granite run examples/language/hello.hrd --release"
   echo "  granite compile myprog.hrd --ast --loglevel DEBUG"
   echo ""
 

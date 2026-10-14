@@ -66,6 +66,8 @@ src/harding/parser/*
 tests/*
 !tests/*.nim
 !tests/*.hrd
+!tests/*.py
+__pycache__/
 examples/test_*
 
 # Root-level temporary test binaries

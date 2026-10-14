@@ -1,0 +1,49 @@
+#!/usr/bin/env harding
+#
+# Conditionals and loops.
+#
+
+"=== If-Then-Else ===" println
+
+x := 10
+
+(x > 5)
+  ifTrue: [ "x is greater than 5" println ]
+  ifFalse: [ "x is not greater than 5" println ]
+
+(x = 10)
+  ifTrue: [ "x equals 10" println ]
+
+"" println
+"=== While Loops ===" println
+
+count := 0
+[ count < 5 ] whileTrue: [
+  ("Count: " & count asString) println
+  count := count + 1
+]
+
+"" println
+"=== Times Repeat ===" println
+
+3 timesRepeat: [ "Hello!" println ]
+
+"" println
+"=== To-Do Loop ===" println
+
+1 to: 5 do: [ :i |
+  ("Number: " & i asString) println
+]
+
+"" println
+"=== Boolean Logic ===" println
+
+trueValue := true
+falseValue := false
+
+("true and: [false] = " & (trueValue and: [ false ]) asString) println
+("true or: [false] = " & (trueValue or: [ false ]) asString) println
+# & concatenates string representations; it is not Boolean conjunction.
+("true & false (concatenation) = " & (trueValue & falseValue) asString) println
+("true | false = " & (trueValue | falseValue) asString) println
+("true not = " & (trueValue not) asString) println

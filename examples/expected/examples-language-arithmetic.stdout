@@ -1,0 +1,21 @@
+=== Basic Arithmetic ===
+3 + 4 = 7
+10 - 3 = 7
+5 * 6 = 30
+20 / 4 = 5.0
+17 // 5 = 3
+17 \ 5 = 2
+
+=== Comparisons ===
+10 > 5: true
+3 < 7: true
+5 = 5: true
+5 == 5: true
+5 ~= 6: true
+
+=== Number Methods ===
+10 abs = 10
+-5 abs = 5
+4 even = true
+5 odd = true
+5 negated = -5

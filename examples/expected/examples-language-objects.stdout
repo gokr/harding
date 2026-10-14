@@ -1,0 +1,11 @@
+=== Creating a Class with Slots ===
+Person class created with direct slot access
+
+=== Creating Instances ===
+Person 1: Alice, age: 30
+Person 2: Bob, age: 25
+
+=== Reading Properties ===
+person1 name: Alice
+person1 age as string: 30
+person2 name: Bob

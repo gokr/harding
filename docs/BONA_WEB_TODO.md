@@ -11,7 +11,7 @@ nimble bona_mummyx
 
 ## Start The Todo App In A Workspace
 
-Open a Workspace and evaluate the contents of `examples/web_todo_bona.hrd`:
+Open a Workspace and evaluate the contents of `examples/web/web_todo_bona.hrd`:
 
 ```smalltalk
 Harding load: "lib/mummyx/Bootstrap.hrd".

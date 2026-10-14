@@ -1,0 +1,24 @@
+=== Basic Single Inheritance ===
+
+=== Creating Instances ===
+Animal speak: Generic Animal makes a sound
+Animal describe: Animal: Generic Animal
+
+Dog speak: Buddy barks
+Dog describe: Animal: Buddy (Breed: Labrador)
+
+=== Checking Inheritance ===
+Dog is kind of Animal: true
+Dog is kind of Object: true
+Animal is kind of Dog: false
+
+=== Inheritance Chain ===
+
+Cat name: Whiskers
+Cat color: orange
+Cat speaks: Meow!
+Cat describes: Animal: Whiskers (Color: orange)
+
+=== Method Lookup ===
+Methods are found by searching up the inheritance chain.
+Use 'super' to call the parent class implementation.

@@ -422,12 +422,12 @@ proc myPrimitive(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.} =
 
 ## Examples
 
-See the `examples/harding-app-template/` directory for complete working templates:
+See the `examples/templates/` directory for complete working templates:
 
 - **Pattern1-Interpreter/**: Full interpreter-based example
 - **Pattern2-Granite/**: Full Granite compilation example
 
-Also see `examples/harding-echo/` for a complete package example.
+Also see `examples/integrations/harding-echo/` for a complete package example.
 
 ---
 

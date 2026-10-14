@@ -31,9 +31,9 @@ Tested with `./granite run` on the current `main` worktree.
 ## Useful Commands
 
 ```bash
-./granite run examples/inheritance.hrd
-./granite run examples/fibonacci.hrd
-./granite run examples/harding_main.hrd
-./granite run examples/control_flow.hrd
-./granite run examples/collections.hrd
+./granite run examples/language/inheritance.hrd
+./granite run examples/language/fibonacci.hrd
+./granite run examples/compiler/harding_main.hrd
+./granite run examples/language/control_flow.hrd
+./granite run examples/language/collections.hrd
 ```

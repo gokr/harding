@@ -137,7 +137,7 @@ sequenceDiagram
 
 ## Example
 
-See `examples/mummyx_hello.hrd`.
+See `examples/web/mummyx_hello.hrd`.
 
 For the live-editable Bona Todo workflow, see `docs/BONA_WEB_TODO.md`.
 
@@ -152,7 +152,7 @@ It includes:
 Run it with:
 
 ```bash
-./harding examples/mummyx_hello.hrd
+./harding examples/web/mummyx_hello.hrd
 ```
 
 ## Quick Verification

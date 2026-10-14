@@ -1,0 +1,12 @@
+=== Variable Assignment ===
+x = 42
+y = Hello
+
+=== Variable Reassignment ===
+Counter: 0
+Counter after increment: 1
+Counter after increments: 2
+
+=== Multiple Variables ===
+Sum: 60
+Product: 6000

@@ -4,9 +4,7 @@
 # Generates all permutations of 7 elements and counts them.
 # Expected result: 8660 (includes intermediate states).
 
-| Permute count array |
-
-Permute := Object derivePublic: #(elements count)
+Permute := Object derivePublic: #(elements, count)
 # Permute supports the benchmark suite for runtime performance measurement.
 # This class definition is the canonical Browser-managed source entry.
 # The first line defines the superclass and declared slots.
@@ -27,14 +25,14 @@ Permute>>initialize [
   # Initialize with values 1-7
   i := 1
   [ i <= 7 ] whileTrue: [
-    elements at: i put: i
+    elements at: (i - 1) put: i
     i := i + 1
   ]
 ]
 
 Permute>>permute: n [
   # Generate permutations of first n elements
-  | i temp |
+  | i |
   n = 1 ifTrue: [
     # Base case: found a permutation
     count := (count + 1)
@@ -59,17 +57,16 @@ Permute>>permute: n [
 ]
 
 Permute>>swap: i with: j [
-  # Swap elements at positions i and j
+  # The algorithm uses positions 1-n; Array indices are 0-based.
   | temp |
-  temp := elements at: i
-  elements at: i put: (elements at: j)
-  elements at: j put: temp
+  temp := elements at: (i - 1)
+  elements at: (i - 1) put: (elements at: (j - 1))
+  elements at: (j - 1) put: temp
 ]
 
 # Run the benchmark.
 perm := Permute new
-perm initialize
 perm permute: 7
 
-# Return the count.
-perm::count
+(perm::count = 8660) ifFalse: [ perm error: "Unexpected permutation count" ].
+perm::count println

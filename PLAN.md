@@ -23,6 +23,26 @@ semantics; any intended language change must be explicit and documented.
 - [ ] Expand parity coverage continually; do not equate interpreter-only tests
       with compiled execution coverage.
 
+## Example-driven completion priority
+
+- [x] Organize examples into language, compiler, stdlib, concurrency, web,
+      integrations and templates; retain algorithm workloads in benchmark/.
+- [x] Inventory every current `.hrd` example/benchmark in examples/manifest.json.
+      Bounded runner requires successful execution, exact stdout snapshots and
+      interpreter/native parity; known compiler gaps are stage/message-checked,
+      never counted as passes. New/unlisted files fail inventory validation.
+- [x] Repair stale concat syntax, permutation syntax/indices and count assertion,
+      Echo primitive/bootstrap registration, and template argument iteration and
+      callback arity. Host package/template tests exercise nonempty argument paths.
+- [ ] Eliminate manifest compiler gaps: top-level temporary bars, System arguments
+      (both templates, with/without args), default logging filter, native processes.
+- [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
+      missing-message error natively). Arithmetic example checks Float result
+      against Float; decide and document numeric equality independently.
+- [ ] Add bounded service/GUI-host smoke tests for the syntax-gated examples.
+- [ ] Extract runnable website/Markdown snippets into the same coverage stream;
+      generated website/dist is not a second authoritative source.
+
 ## 1. Finish class-side and accessor semantics
 
 - [x] Preserve defining-class ownership for inherited methods and `super`.

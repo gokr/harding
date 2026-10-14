@@ -1,0 +1,7 @@
+=== Example 1: Simple Block ===
+3 + 4 = 7
+=== Example 2: Block with Capture ===
+5 * 10 = 50
+=== Example 3: Nested Blocks ===
+addFive value: 3 = 8
+=== All examples completed! ===

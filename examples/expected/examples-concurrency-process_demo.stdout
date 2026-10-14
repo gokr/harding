@@ -1,0 +1,47 @@
+=== Harding Process API Demo ===
+
+1. Creating shared counter...
+2. Forking worker processes...
+
+3. Process info:
+   Process 1 - PID: 2, Name: Process-2, State: ready
+   Process 2 - PID: 3, Name: Process-3, State: ready
+
+4. Demonstrating suspend/resume...
+   After suspend - Process 1 state: suspended
+   After resume - Process 1 state: ready
+
+5. Running processes...
+Worker 1 starting
+Worker 2 starting
+  Worker 1 increment #1
+  Worker 1 increment #2
+  Worker 2 increment #1
+  Worker 1 increment #3
+  Worker 1 increment #4
+  Worker 2 increment #2
+  Worker 1 increment #5
+  Worker 2 increment #3
+  Worker 1 increment #1
+  Worker 1 increment #2
+  Worker 2 increment #4
+  Worker 1 increment #3
+  Worker 1 increment #4
+  Worker 2 increment #5
+  Worker 1 increment #5
+  Worker 2 increment #6
+Worker 1 done
+  Worker 2 increment #7
+  Worker 2 increment #8
+  Worker 2 increment #9
+  Worker 2 increment #10
+Worker 2 done
+   Steps executed: 28
+
+6. Final process states:
+   Process 1 state: terminated
+   Process 2 state: terminated
+   Final counter: 20
+
+=== Demo Complete ===
+   Processes now execute in the REPL using Scheduler runToCompletion:

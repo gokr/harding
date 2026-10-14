@@ -1,0 +1,7 @@
+Welcome to MyApp!
+Received 0 arguments:
+
+Usage: ./myapp <operation> <a> <b>
+Operations: add, sub, mul, div
+
+Example: ./myapp add 5 3

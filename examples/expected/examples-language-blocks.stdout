@@ -1,0 +1,13 @@
+=== Simple Blocks ===
+Block value: 3
+Double 5: 10
+Sum 3 + 4: 7
+
+=== Blocks with Temporaries ===
+Compute with 5: 35
+
+=== Closures Capturing Variables ===
+5 + 5 + 10 = 20
+
+=== Returning from Blocks ===
+First positive: 7
