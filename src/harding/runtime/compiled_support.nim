@@ -409,14 +409,22 @@ proc nt_slash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
+    if b.intVal == 0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer division by zero"))
     return NodeValue(kind: vkFloat, floatVal: float(a.intVal) / float(b.intVal))
   # Fast path: both operands are floats
   if a.kind == vkFloat and b.kind == vkFloat:
+    if b.floatVal == 0.0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Float division by zero"))
     return NodeValue(kind: vkFloat, floatVal: a.floatVal / b.floatVal)
   # Mixed int/float - promote to float
   if a.kind == vkInt and b.kind == vkFloat:
+    if b.floatVal == 0.0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Float division by zero"))
     return NodeValue(kind: vkFloat, floatVal: float(a.intVal) / b.floatVal)
   if a.kind == vkFloat and b.kind == vkInt:
+    if b.intVal == 0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Float division by zero"))
     return NodeValue(kind: vkFloat, floatVal: a.floatVal / float(b.intVal))
 
   # Slow path: dynamic dispatch
@@ -592,6 +600,8 @@ proc nt_slashslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
+    if b.intVal == 0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer division by zero"))
     return NodeValue(kind: vkInt, intVal: a.intVal div b.intVal)
 
   # Slow path: dynamic dispatch
@@ -605,6 +615,8 @@ proc nt_backslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
+    if b.intVal == 0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer modulo by zero"))
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch
@@ -618,6 +630,8 @@ proc nt_percent*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
+    if b.intVal == 0:
+      return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer modulo by zero"))
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch

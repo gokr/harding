@@ -138,9 +138,12 @@ Built-in unhandled notification default actions also have parity coverage.
 constructor and methods: `on: Problem`/`on: Error` matching, instance signaling,
 overridden `message`, and a custom `Notification` `defaultAction`. The built-in
 `Exception`/`Error`/`Notification` chain is registered eagerly so a compiled
-subclass resolves to `Exception`. Native arithmetic-error translation,
-defaultAction/diagnostic parity and mixed mode remain incomplete. These are
-migration items, not exceptions to the target contract.
+subclass resolves to `Exception`. Zero divisors signal `DivisionByZero` in both
+engines for integer `//`, `%`, `\` and for `/` in every operand combination;
+the interpreter previously answered nil for some `/` forms. Coverage:
+`arithmetic_zero_divisor`. Custom defaultAction/diagnostic parity and mixed mode
+remain incomplete. These are migration items, not exceptions to the target
+contract.
 
 Replace tests/examples that used resumption with conventional fallback handling
 or Notification signaling, according to their intent. Keep explicit negative

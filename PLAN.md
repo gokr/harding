@@ -95,8 +95,12 @@ arbitrary error resumption solely in the interpreter.
       runs the class's compiled constructor/`initialize`, and user methods
       override the built-in protocol while signal/pass/retry keep it. Coverage:
       `custom_exception_hierarchy` parity plus runtime/compiler tests.
-- [ ] Native arithmetic-error translation, defaultAction/diagnostic parity and
-      mixed mode.
+- [x] Native arithmetic-error translation: zero divisors signal
+      `DivisionByZero` in compiled `//`/`%`/`\\`/`/` fast paths instead of
+      raising an uncatchable Nim defect. The interpreter also signals for `/`
+      zero-divisor forms that previously answered nil. Coverage:
+      `arithmetic_zero_divisor`.
+- [ ] Custom defaultAction/diagnostic parity and mixed mode.
 - [x] Notification handler results are the signal's value; signals do not unwind
       the signaling computation; `pass` reaches outer handlers; `retry`/`return:`
       are rejected with a normal Error. Interpreter: 23 exception tests pass;

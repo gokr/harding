@@ -3436,7 +3436,11 @@ proc initGlobals*(interp: var Interpreter) =
     let (rhsOk, rhsFloat) = args[0].tryGetFloat()
     if lhsOk and rhsOk:
       if rhsFloat == 0.0:
-        return nilValue()
+        let (lhsIntOk, _) = self.tryGetInt()
+        let (rhsIntOk, _) = args[0].tryGetInt()
+        let message = if lhsIntOk and rhsIntOk: "Integer division by zero"
+                      else: "Float division by zero"
+        raise newException(DivByZeroDefect, message)
       return toValue(lhsFloat / rhsFloat)
     return nilValue()
 

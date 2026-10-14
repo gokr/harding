@@ -1205,8 +1205,10 @@ result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex |
 ]
 ```
 
-Arithmetic exception examples currently have interpreter coverage; compiled
-arithmetic-error translation still needs execution coverage.
+All zero divisors signal `DivisionByZero`: integer `//`, `%` and `\`, and `/`
+for integer/integer, integer/float, float/integer and float/float operands. Both
+engines agree, including the exact `Integer division by zero` / `Float division by
+zero` messages; executed parity: `arithmetic_zero_divisor`.
 
 ### Error Handling and Notifications
 

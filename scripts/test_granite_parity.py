@@ -350,6 +350,18 @@ Advice := Notification derive: #().
 Advice>>defaultAction [ "custom default" println ].
 (Advice signal: "notice") println.
 """, "bad:7\nboxed\ninstance:7\nnil:7\ncustom default\nnil\n"),
+    ("arithmetic_zero_divisor", r"""
+([1 // 0] on: DivisionByZero do: [:ex | ex message]) println.
+([1 % 0] on: DivisionByZero do: [:ex | ex message]) println.
+([1 \\ 0] on: DivisionByZero do: [:ex | ex message]) println.
+([1 / 0] on: DivisionByZero do: [:ex | ex message]) println.
+([1 / 0.0] on: DivisionByZero do: [:ex | ex message]) println.
+([1.0 / 0] on: DivisionByZero do: [:ex | ex message]) println.
+([1.0 / 0.0] on: DivisionByZero do: [:ex | ex message]) println.
+([1 / 0] on: Exception do: [:ex | "outer catch"]) println.
+([7 // 2] on: DivisionByZero do: [:ex | "incorrect"]) println.
+([2 / 4] on: DivisionByZero do: [:ex | "incorrect"]) println.
+""", "Integer division by zero\nInteger modulo by zero\nInteger modulo by zero\nInteger division by zero\nFloat division by zero\nFloat division by zero\nFloat division by zero\nouter catch\n3\n0.5\n"),
     ("handler_transfer_cleanup", """
 Order := "".
 result := [[[Error signal: "body"] on: Error do: [:ex |

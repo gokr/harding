@@ -849,11 +849,15 @@ proc starImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
       return toValue(self.intVal.float * floatVal)
 
 proc slashImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Division with automatic promotion to float
-  # Division always returns float
+  ## Division with automatic promotion to float; a zero divisor signals
+  ## DivisionByZero instead of answering nil, matching the documented contract.
   let (floatOk, floatVal) = args[0].tryGetFloat()
   if floatOk:
-    if floatVal == 0.0: return nilValue()
+    if floatVal == 0.0:
+      let (intOk, _) = args[0].tryGetInt()
+      let message = if self.kind == ikInt and intOk: "Integer division by zero"
+                    else: "Float division by zero"
+      raise newException(DivByZeroDefect, message)
     if self.kind == ikFloat:
       return toValue(self.floatVal / floatVal)
     elif self.kind == ikInt:
