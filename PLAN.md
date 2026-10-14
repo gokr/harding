@@ -10,6 +10,10 @@ semantics; any intended language change must be explicit and documented.
 
 - [x] Bounded execution-parity runner with isolated workspace build artifacts.
 - [x] Nested output-directory imports.
+- [x] Extract the fixed generated preamble into `runtime/compiled_support.nim`:
+      primitive/operator helpers, managed blocks, return transfers and native base
+      storage are shared imports, not emitted per program. Codegen and ARC/ORC
+      support tests cover the boundary; generated hello shrinks 679 → 51 lines.
 - [x] Class-side method extraction, registration, receivers, aliases and factories.
 - [x] Class-side `super` lookup in the interpreter.
 - [x] Seven executed parity cases and class-model unit tests passing.

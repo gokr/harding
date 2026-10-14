@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Granite-generated modules import shared primitive/operator, block-return, closure and base-object support instead of re-emitting the fixed preamble. Generated loop conversion retains its permissive behavior separately from runtime's strict `toInt`; compiled globals now share the imported support module.
 - Pure compiled generic sends use positive per-site monomorphic instance-method caches. Hits guard receiver class, selector and registration version; method/superclass/allocator registration invalidates targets. Nil results remain successful sends, while builtin, exception, class-side and mixed-mode paths retain generic dispatch. Concurrent registry mutation is not supported by this slice.
 - Statically named compiled class allocation uses a guarded native allocator. Inherited or own class-side new overrides fall back to ordinary dispatch, and allocator/class-method/superclass registrations invalidate the guard. Mixed-mode and locally shadowed class receivers stay dynamic.
 - Granite specializes proven, directly initialized script-local integer/float bindings and same-kind addition, subtraction, multiplication and comparisons. Values are boxed at ordinary message boundaries. Type changes, captured/shadowed names, real closures, potentially uninitialized reads and mixed-mode scripts remain dynamic; division and modulo keep their existing runtime paths. Method parameter/slot unboxing is not included.

@@ -563,7 +563,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       var code = "(block:\n"
-      code.add("    let count = toInt(" & receiverCode & ")\n")
+      code.add("    let count = compiledLoopInt(" & receiverCode & ")\n")
       code.add("    for timesRepeatI in 0..<count:\n")
       code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
@@ -595,9 +595,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           "NodeValue(kind: vkInt, intVal: current)") & "\n")
       iterationSetup.add(genLocalDeclarations(loopCtx, bodyBlock.temporaries))
       var code = "(block:\n"
-      code.add("    var current = toInt(" & receiverCode & ")\n")
-      code.add("    let endNum = toInt(" & endVal & ")\n")
-      code.add("    let step = toInt(" & stepVal & ")\n")
+      code.add("    var current = compiledLoopInt(" & receiverCode & ")\n")
+      code.add("    let endNum = compiledLoopInt(" & endVal & ")\n")
+      code.add("    let step = compiledLoopInt(" & stepVal & ")\n")
       code.add("    if step > 0:\n")
       code.add("      while current <= endNum:\n")
       code.add(indentBlock(iterationSetup, 8))
@@ -1190,7 +1190,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if bodyBlock != nil:
           let countCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                           else: "NodeValue(kind: vkInt, intVal: 0)"
-          var code = "for timesRepeatI in 0..<toInt(" & countCode & "):\n"
+          var code = "for timesRepeatI in 0..<compiledLoopInt(" & countCode & "):\n"
           if bodyBlock.body.len == 0:
             code.add("  discard\n")
           else:

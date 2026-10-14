@@ -6,7 +6,6 @@ import ../compiler/context
 import ../compiler/analyzer
 import ../compiler/symbols
 import ./methods
-import ./control
 import ./expression
 import ./numeric
 import ./blocks
@@ -37,11 +36,7 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
     output.add("import std/[tables, sequtils]\n")
   let sourceRoot = parentDir(parentDir(parentDir(currentSourcePath())))
   let importRoot = relativePath(sourceRoot, absolutePath(ctx.outputDir)).replace('\\', '/')
-  output.add(fmt("import {importRoot}/harding/core/[types]\n"))
-  output.add(fmt("import {importRoot}/harding/interpreter/[objects, activation]\n\n"))
-
-  output.add("# Runtime imports\n")
-  output.add(fmt("import {importRoot}/harding/runtime/[runtime]\n\n"))
+  output.add(fmt("import {importRoot}/harding/runtime/compiled_support\n\n"))
 
   return output
 
@@ -548,10 +543,6 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   var output = ""
 
   output.add(genModuleHeader(ctx, moduleName, includeOsImport = injectMainArgsVar))
-  output.add(genRuntimeHelperMethods())
-  output.add("\n")
-  output.add(genBlockRuntimeHelpers())
-  output.add("\n")
 
   # Extract Harding compile: and main: blocks first
   let hardingBlocks = nodes.extractHardingBlocks()
@@ -613,14 +604,6 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:
     compiledClassNames.add(cls.name)
-
-  # Generate base HardingObject type first
-  output.add("# Base Object Type\n")
-  output.add("##################\n\n")
-  output.add("type\n")
-  output.add("  HardingObject* {.inheritable.} = object of RootObj\n")
-  output.add("    className*: string\n")
-  output.add("  HardingObjectRef* = ref HardingObject\n\n")
 
   # Extract method definitions from class and compile blocks
   let methodDefs = extractMethodDefs(classDefs)
@@ -708,41 +691,6 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("\n")
   else:
     output.add("proc registerSuperclassHierarchy*() = discard 0\n\n")
-
-  # Generate control flow methods (must come before block procedures that may use them)
-  output.add("\n")
-  output.add("# Control Flow Methods\n")
-  output.add("######################\n\n")
-
-  output.add(genWhileTrueMethod())
-  output.add(genWhileFalseMethod())
-  output.add(genIfTrueIfFalseMethod())
-  output.add(genTimesRepeatMethod())
-
-  # Generate binary operators (must come before block procedures that may use them)
-  output.add("\n")
-  output.add("# Binary Operators\n")
-  output.add("#################\n\n")
-
-  for op in ["+", "-", "*", "/"]:
-    output.add(genBinaryOpMethod(op))
-
-  # Generate comparison operators
-  output.add("\n")
-  output.add("# Comparison Operators\n")
-  output.add("#####################\n\n")
-
-  for op in ["<", "<=", ">", ">=", "=", "==", "~="]:
-    output.add(genComparisonMethod(op))
-
-  # Generate integer division and modulo operators
-  output.add("\n")
-  output.add("# Integer Division and Modulo\n")
-  output.add("#############################\n\n")
-
-  output.add(genBinaryOpMethod("//"))
-  output.add(genBinaryOpMethod("\\"))
-  output.add(genBinaryOpMethod("%"))
 
   # Collect blocks from top-level code into the shared registry
   for node in mainBodyNodes:

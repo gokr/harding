@@ -308,6 +308,19 @@ suite "Compiler: Codegen - Expression":
     let code = genLiteral(node)
     check code.contains("vkNil")
 
+suite "Compiler: Shared runtime support":
+  test "generated modules import helpers instead of defining them":
+    let (nodes, _) = parse("1 + 2.")
+    var ctx = newCompiler("build/nested/output", "shared_support")
+    let code = genModule(ctx, nodes, "shared_support")
+    check code.contains("harding/runtime/compiled_support")
+    check not code.contains("proc nt_plus*")
+    check not code.contains("proc createBlock*")
+    check not code.contains("CompiledReturnTarget* =")
+    check not code.contains("HardingObject* ")
+    check not code.contains("var globals*")
+    check code.countLines < 70
+
 suite "Compiler: Guarded default allocation":
   test "statically named classes use a guarded native allocation helper":
     let (nodes, _) = parse("Box := Object derive: #(). Box new.")
@@ -485,7 +498,7 @@ suite "Compiler: Codegen - Blocks":
     var p = initParser(lex("Box := Object derivePublic: #(item)."))
     var ctx = newCompiler()
     let code = genModule(ctx, p.parseStatements(), "owned_storage")
-    check code.contains("HardingObject* {.inheritable.} = object of RootObj")
+    check code.contains("Class_BoxObj* {.inheritable.} = object of HardingObject")
     check code.contains("compiledOwner: self")
     check code.contains("inst.nimValue = cast[pointer](self)")
 

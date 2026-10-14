@@ -26,6 +26,23 @@ initial assessment it stalled in `nested blocks with control flow`, after the
 executed compiled case passed. Diagnose that separately; do not describe the
 whole suite as passing until it completes.
 
+## Shared generated support
+
+Generated programs import `runtime/compiled_support.nim` for primitive/operator
+helpers, closure creation, non-local-return targets and native base storage.
+Class/method/block bodies and registrations remain generated. Compiled globals
+are shared through this module; loop conversion keeps its former permissive
+behavior as `compiledLoopInt`, distinct from the runtime's strict `toInt`.
+Manual/quick-reference semantics are unchanged by this extraction.
+
+A hello program shrinks from 679 to 51 generated lines. Three isolated-cache
+Nim 2.2.12 debug build trials measured median cold builds of ~5.56 s before and
+~5.22 s after, and warm builds of ~3.01 s before and ~2.83 s after. These trials
+ran alongside validation and are noisy, not a speedup guarantee. Importing a
+module still requires Nim to analyze the runtime; the earlier estimate of
+sub-second builds was not established. No binary-size/startup improvement is
+claimed. Logs and samples: `build/preamble-measurement/results.json`.
+
 ## Current coverage and remaining gaps
 
 Fifty-seven parity cases cover the current milestones, including four unhandled-error checks and the
