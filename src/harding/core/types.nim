@@ -714,6 +714,12 @@ proc formatValue(val: NodeValue, quoteStrings: bool): string =
       "<instance nil>"
     elif val.instVal == nilInstance or val.instVal.class == undefinedObjectClass:
       "nil"
+    elif val.instVal.class.name == "True":
+      # Booleans keep their True/False class but display as the value, matching
+      # True>>printString / False>>printString and compiled execution.
+      "true"
+    elif val.instVal.class.name == "False":
+      "false"
     else:
       case val.instVal.kind
       of ikInt: $(val.instVal.intVal)

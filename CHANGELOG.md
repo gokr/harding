@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- Compiled table literals and empty tables use a runtime helper instead of Nim's `{}` syntax, which inferred the wrong key type and failed to build. Native `Array new`/`new:`/`new:withAll:`, `Table new`, `Set new`, `String new`/`new:` and table/array `add:`/`includes:` now work in compiled programs, so `benchmark/storage.hrd` builds and runs natively. Coverage: `native_collections` parity.
+- The interpreter printed booleans as `<instance of True>`/`<instance of False>` while compiled programs printed `true`/`false`, contrary to `True>>printString`/`False>>printString`. Both engines now print `true`/`false`; coverage: `boolean_display` parity.
+
 ### Changed
 - Compiled programs run `defaultAction` for an uncaught error and exit with a nonzero status, reporting `=== Uncaught Exception ===` and `<Class>: <message>` on stderr, instead of letting a Nim exception escape `main`. A user-defined `defaultAction` runs. The generated entry point now propagates `main`'s status via `quit`. Coverage: `unhandled_custom_default_action` plus the existing uncaught-error cases.
 - Zero divisors now signal catchable Harding `DivisionByZero` in compiled code for `//`, `%`, `\` and `/` (all operand combinations), instead of raising an uncatchable Nim `DivByZeroDefect`. The interpreter's `/` fast path also signals for these forms, which previously answered nil. Messages match between engines; coverage: `arithmetic_zero_divisor` parity.

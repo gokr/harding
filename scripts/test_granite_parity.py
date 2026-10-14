@@ -672,6 +672,39 @@ nil notNil ifFalse: ["not present" println].
 42 isNil ifFalse: ["number" println].
 42 notNil ifTrue: ["present" println].
 """, "nil\nnot present\nnumber\npresent\n"),
+    ("boolean_display", """
+true println.
+false println.
+(1 < 2) println.
+(1 = 2) println.
+true printString println.
+""", "true\nfalse\ntrue\nfalse\ntrue\n"),
+    ("native_collections", """
+a := Array new.
+a add: 1.
+a add: 2.
+a size println.
+(a at: 0) println.
+b := Array new: 3.
+b size println.
+c := Array new: 2 withAll: 9.
+c size println.
+(c at: 1) println.
+t := Table new.
+t at: "k" put: "v".
+(t at: "k") println.
+s := Set new.
+s add: 5.
+s add: 5.
+s add: 7.
+s size println.
+(s includes: 5) println.
+(s includes: 9) println.
+lit := #(1, 2, 3).
+(lit at: 2) println.
+tbl := #{"a" -> 1, "b" -> 2}.
+(tbl at: "b") println.
+""", "2\n1\n3\n2\n9\nv\n2\ntrue\nfalse\n3\n2\n"),
 ])
 
 

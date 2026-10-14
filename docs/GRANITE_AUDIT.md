@@ -60,12 +60,11 @@ Bounded interpreter/build/native runs have matching successful output for:
 - `examples/blocks.hrd`, `fibonacci.hrd`, `methods.hrd`, `harding_main.hrd`.
 - `benchmark/sieve.hrd`, `queens.hrd`, `towers.hrd`.
 
-`benchmark/storage.hrd` interprets successfully and compiles, but native execution
-fails with `MessageNotUnderstood: new:` at Array allocation. This is an unsupported
-collection-construction path, not evidence of a return-semantics discrepancy.
-Matching empty output for benchmarks is only a smoke check; the focused queens
-and towers parity cases additionally assert 92 solutions and 8191 legal moves.
-Logs and exit statuses: `build/return-audit-execution/results.json`.
+`benchmark/storage.hrd` now builds and runs natively after built-in collection
+construction and table literals were implemented, so it is no longer an audit
+exception. Matching empty output for benchmarks is only a smoke check; the
+focused queens and towers parity cases additionally assert 92 solutions and 8191
+legal moves. Logs and exit statuses: `build/return-audit-execution/results.json`.
 
 The bounded closure and compiler-block suites complete, including the previously
 stalled nested-control-flow case. Signal-point diagnostics tests pass with three

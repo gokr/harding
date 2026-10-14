@@ -192,8 +192,8 @@ proc genNodeValueLiteral*(val: NodeValue): string =
   of vkTable:
     var entries: seq[string] = @[]
     for key, v in val.tableVal.pairs:
-      entries.add(fmt("{genNodeValueLiteral(key)}: {genNodeValueLiteral(v)}"))
-    return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
+      entries.add(fmt("({genNodeValueLiteral(key)}, {genNodeValueLiteral(v)})"))
+    return fmt("nt_tableFrom([{entries.join(\", \")}])")
   else:
     return "NodeValue(kind: vkNil)"
 
@@ -864,8 +864,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     for (key, val) in tbl.entries:
       let keyCode = genExpression(ctx, key)
       let valCode = genExpression(ctx, val)
-      entries.add(fmt("{keyCode}: {valCode}"))
-    return fmt("NodeValue(kind: vkTable, tableVal: {{{entries.join(\", \")}}})")
+      entries.add(fmt("({keyCode}, {valCode})"))
+    return fmt("nt_tableFrom([{entries.join(\", \")}])")
 
   of nkBlock:
     ## Look up or register the block for compilation and return creation code

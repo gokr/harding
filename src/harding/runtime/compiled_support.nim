@@ -308,6 +308,18 @@ proc nt_whileFalse_k*(self: NodeValue, condition: BlockNode, body: BlockNode = n
 
   return self
 
+proc nt_tableFrom*(entries: openArray[(NodeValue, NodeValue)]): NodeValue =
+  ## Build a table value from literal key/value pairs. Nim's `{}` literal infers
+  ## the wrong native key type, so generated modules call this instead.
+  var built = initTable[NodeValue, NodeValue]()
+  for (key, value) in entries:
+    built[key] = value
+  return NodeValue(kind: vkTable, tableVal: built)
+
+proc nt_emptyTable*(): NodeValue =
+  ## Empty table value with the correct key type.
+  return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+
 proc nt_ifTrue_kifFalse_k*(self: NodeValue, trueBlock: BlockNode, falseBlock: BlockNode): NodeValue {.cdecl, exportc.} =
   ## ifTrue:ifFalse: conditional
   ## Evaluates appropriate block based on boolean value

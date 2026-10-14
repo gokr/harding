@@ -675,6 +675,40 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         return NodeValue(kind: vkArray, arrayVal: @[])
       of "Table":
         return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+      of "Set":
+        return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+      of "String":
+        return NodeValue(kind: vkString, strVal: "")
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "new:":
+    if receiver.kind == vkSymbol and args.len > 0:
+      let size = if args[0].kind == vkInt: args[0].intVal else: -1
+      let isInt = args[0].kind == vkInt
+      case receiver.symVal
+      of "Array":
+        if isInt and size >= 0:
+          var elements = newSeq[NodeValue](size)
+          for i in 0..<size:
+            elements[i] = NodeValue(kind: vkNil)
+          return NodeValue(kind: vkArray, arrayVal: elements)
+      of "String":
+        if isInt and size >= 0:
+          return NodeValue(kind: vkString, strVal: "")
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "new:withAll:":
+    if receiver.kind == vkSymbol and args.len >= 2 and args[0].kind == vkInt and args[0].intVal >= 0:
+      case receiver.symVal
+      of "Array":
+        var elements = newSeq[NodeValue](args[0].intVal)
+        for i in 0..<args[0].intVal:
+          elements[i] = args[1]
+        return NodeValue(kind: vkArray, arrayVal: elements)
       else:
         discard
     return NodeValue(kind: vkNil)
@@ -684,6 +718,23 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var arr = receiver.arrayVal
       arr.add(args[0])
       return NodeValue(kind: vkArray, arrayVal: arr)
+    if receiver.kind == vkTable and args.len > 0:
+      # Tables back compiled Set values: the element is both key and value, so
+      # repeated adds are naturally deduplicated.
+      var tbl = receiver.tableVal
+      tbl[args[0]] = args[0]
+      return NodeValue(kind: vkTable, tableVal: tbl)
+    return NodeValue(kind: vkNil)
+
+  of "includes:":
+    if args.len > 0:
+      if receiver.kind == vkArray:
+        for element in receiver.arrayVal:
+          if element == args[0]:
+            return NodeValue(kind: vkBool, boolVal: true)
+        return NodeValue(kind: vkBool, boolVal: false)
+      if receiver.kind == vkTable:
+        return NodeValue(kind: vkBool, boolVal: receiver.tableVal.hasKey(args[0]))
     return NodeValue(kind: vkNil)
 
   of "at:":

@@ -43,7 +43,7 @@ proc genBlockExpr*(ctx: GenContext, node: Node): string =
     of vkArray:
       return "NodeValue(kind: vkArray, arrayVal: @[])"
     of vkTable:
-      return "NodeValue(kind: vkTable, tableVal: initTable[string, NodeValue]())"
+      return "nt_emptyTable()"
     else:
       return "NodeValue(kind: vkNil)"
   

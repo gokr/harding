@@ -45,13 +45,19 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Sixty-two parity cases cover the current milestones, including five unhandled-error checks and the
+Sixty-four parity cases cover the current milestones, including five unhandled-error checks and the
 inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
 while loops. Compiler tests
 and the previously validated class-model suite also pass.
+
+Compiled programs construct built-in collections: `Array`/`Table`/`Set`/`String`
+`new`/`new:`/`new:withAll:`, table literals, and array/table `add:`/`includes:`
+run natively (`native_collections`), so `benchmark/storage.hrd` executes natively.
+The interpreter prints booleans as `true`/`false`, matching compiled output and
+`True>>printString` (`boolean_display`).
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target

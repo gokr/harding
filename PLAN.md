@@ -231,6 +231,14 @@ arbitrary error resumption solely in the interpreter.
       `mangleClass`/`mangleModuleName`, so two class spellings can generate one
       Nim type name and fail to build. Raw `{cls.name}` uses in generated proc
       names need the same treatment.
+- [x] Native table literals and built-in collection construction: `Table`/
+      `Array`/`Set`/`String` literals and `new`/`new:`/`new:withAll:` work in
+      compiled code, and `benchmark/storage.hrd` runs natively. Coverage:
+      `native_collections`. Remaining collection protocols and reflection are
+      separate items.
+- [x] Multi-value engine discrepancy: the interpreter now prints booleans as
+      `true`/`false` like compiled code and `True>>printString`, instead of
+      `<instance of True>`. Coverage: `boolean_display`.
 - [ ] Multiple inheritance and qualified `super`.
 - [ ] Dynamic sends and reflection.
 - [x] Generic missing-message errors instead of silent nil, including compiled
