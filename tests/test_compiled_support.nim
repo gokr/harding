@@ -42,6 +42,23 @@ suite "Compiled shared support":
     check sendMessage(rt, captured, "value", @[]).intVal == 1
     check sendMessage(rt, captured, "value", @[]).intVal == 2
 
+  test "identity helpers work without a current runtime":
+    let cls = newClass(name = "SupportIdentityTest")
+    let first = NodeValue(kind: vkInstance, instVal: newInstance(cls))
+    let second = NodeValue(kind: vkInstance, instVal: newInstance(cls))
+    check nt_eqeq(first, first).boolVal
+    check not nt_eqeq(first, second).boolVal
+    check nt_tildeeq(first, second).boolVal
+    check not nt_tildeeq(first, first).boolVal
+    let blk = createBlock0(answer, 0)
+    check nt_eqeq(blk, blk).boolVal
+    check not nt_eqeq(blk, createBlock0(answer, 0)).boolVal
+    check nt_eqeq(NodeValue(kind: vkNil), NodeValue(kind: vkNil)).boolVal
+    check not nt_eqeq(NodeValue(kind: vkInt, intVal: 1),
+                     NodeValue(kind: vkFloat, floatVal: 1.0)).boolVal
+    check nt_eqeq(NodeValue(kind: vkSymbol, symVal: "tag"),
+                 NodeValue(kind: vkSymbol, symVal: "tag")).boolVal
+
   test "return transfer preserves activation identity":
     let home = CompiledReturnTarget(active: true)
     try:

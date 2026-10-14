@@ -251,9 +251,12 @@ arbitrary error resumption solely in the interpreter.
       `qualified_super`, `invalid_qualified_super`, `indirect_qualified_super`.
       Invalid qualifiers remain evaluation errors rather than catchable Harding
       signals; engine diagnostic formatting differs.
-- [ ] Object identity sends: `(super<Parent> receiver) == self` fails natively
-      with `MessageNotUnderstood: ==` while the interpreter answers true. Cover
-      instance/class/immediate identity without conflating it with value equality.
+- [x] Object identity sends: native `==`/`~=` operator helpers, generic and cached
+      sends share VM-compatible identity comparisons for objects/classes/blocks
+      and immediate values. Wrappers sharing retained native storage have one
+      identity; `=` still dispatches value equality. Coverage: `object_identity`
+      plus ARC/ORC runtime/support tests. Collection identity/layout and dynamic
+      `perform:` override semantics remain separate coverage items.
 - [x] Dynamic sends: `perform:`/`with:`/`with:with:` and `respondsTo:` work in
       compiled code for instances and classes. Coverage: `dynamic_send`. Full
       reflection parity is a separate item.

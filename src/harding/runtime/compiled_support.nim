@@ -558,47 +558,12 @@ proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
 
 proc nt_eqeq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
-  ## Comparison operator: ==
-  ## Provides fast-path type specialization with dynamic fallback
-  ##
-
-  # Fast path: integer comparison
-  if a.kind == vkInt and b.kind == vkInt:
-    return NodeValue(kind: vkBool, boolVal: a.intVal == b.intVal)
-  # Fast path: float comparison
-  if a.kind == vkFloat and b.kind == vkFloat:
-    return NodeValue(kind: vkBool, boolVal: a.floatVal == b.floatVal)
-  # Fast path: string comparison
-  if a.kind == vkString and b.kind == vkString:
-    return NodeValue(kind: vkBool, boolVal: a.strVal == b.strVal)
-  # Fast path: bool comparison
-  if a.kind == vkBool and b.kind == vkBool:
-    return NodeValue(kind: vkBool, boolVal: a.boolVal == b.boolVal)
-
-  # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "==", @[b])
-
+  ## Identity comparison, separate from user-defined value equality.
+  NodeValue(kind: vkBool, boolVal: compiledIdentityEqual(a, b))
 
 proc nt_tildeeq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
-  ## Comparison operator: ~=
-  ## Provides fast-path type specialization with dynamic fallback
-  ##
-
-  # Fast path: integer comparison
-  if a.kind == vkInt and b.kind == vkInt:
-    return NodeValue(kind: vkBool, boolVal: a.intVal != b.intVal)
-  # Fast path: float comparison
-  if a.kind == vkFloat and b.kind == vkFloat:
-    return NodeValue(kind: vkBool, boolVal: a.floatVal != b.floatVal)
-  # Fast path: string comparison
-  if a.kind == vkString and b.kind == vkString:
-    return NodeValue(kind: vkBool, boolVal: a.strVal != b.strVal)
-  # Fast path: bool comparison
-  if a.kind == vkBool and b.kind == vkBool:
-    return NodeValue(kind: vkBool, boolVal: a.boolVal != b.boolVal)
-
-  # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "~=", @[b])
+  ## Complement of the VM's identity comparison.
+  NodeValue(kind: vkBool, boolVal: not compiledIdentityEqual(a, b))
 
 
 # Integer Division and Modulo

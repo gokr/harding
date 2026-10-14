@@ -808,6 +808,39 @@ Child := Parent derive: #().
 Child class>>answer [ ^ super<Ancestor> answer ].
 Child answer println.
 """, {"error": "Parent class 'Ancestor' not found in inheritance chain"}),
+    ("object_identity", """
+Box := Object derive: #().
+Box>>= other [ ^ true ].
+Box>>== other [ ^ false ].
+Box>>~= other [ ^ false ].
+first := Box new.
+second := Box new.
+alias := first.
+(first == alias) println.
+(first == second) println.
+(first ~= second) println.
+(first ~= alias) println.
+(first = second) println.
+(Box == Box) println.
+(Box == first) println.
+(1 == 1) println.
+(1 == 1.0) println.
+(true == true) println.
+(nil == nil) println.
+(#tag == #tag) println.
+(#tag == #other) println.
+("same" == "same") println.
+blk := [42].
+otherBlock := [42].
+(blk == blk) println.
+(blk == otherBlock) println.
+(blk ~= otherBlock) println.
+Parent := Object derive: #().
+Parent>>receiver [ ^ self ].
+Child := Parent derive: #().
+Child>>sameReceiver [ ^ (super<Parent> receiver) == self ].
+Child new sameReceiver println.
+""", "true\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n"),
 ])
 
 

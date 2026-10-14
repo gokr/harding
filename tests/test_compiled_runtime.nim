@@ -149,6 +149,37 @@ suite "Compiled monomorphic send caches":
 proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkString, strVal: args[0].symVal)
 
+suite "Compiled identity sends":
+  test "generic and cached sends cannot replace identity with an override":
+    let rt = newRuntime()
+    let first = proxyReceiver("IdentityReceiverTest")
+    let second = proxyReceiver("IdentityReceiverTest")
+    registerCompiledMethod("IdentityReceiverTest", "==", overriddenNotNil)
+    registerCompiledMethod("IdentityReceiverTest", "~=", overriddenNotNil)
+    var cache: CompiledSendCache
+    check sendMessage(rt, first, "==", @[first]).boolVal
+    check not sendMessage(rt, first, "==", @[second]).boolVal
+    check sendMessageCached(rt, first, "==", @[first], cache).boolVal
+    check sendMessageCached(rt, first, "~=", @[second], cache).boolVal
+    check not sendMessageCached(rt, first, "~=", @[first], cache).boolVal
+    registerCompiledClass("IdentityReceiverTest", defaultAllocation)
+    let cls = compiledClassValue("IdentityReceiverTest")
+    check sendMessage(rt, cls, "==", @[cls]).boolVal
+    check not sendMessage(rt, cls, "==", @[first]).boolVal
+
+  test "wrappers for retained compiled storage share identity":
+    let owner = RootRef()
+    let first = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+      compiledOwner: owner, isNimProxy: true))
+    let second = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+      compiledOwner: owner, isNimProxy: true))
+    let other = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+      compiledOwner: RootRef(), isNimProxy: true))
+    check first.instVal != second.instVal
+    check compiledIdentityEqual(first, second)
+    check not compiledIdentityEqual(first, other)
+    check sendMessage(newRuntime(), first, "==", @[second]).boolVal
+
 suite "Compiled qualified super sends":
   test "qualifiers select a direct parent and preserve receiver and arguments":
     let receiver = proxyReceiver("QualifiedSuperDescendant")

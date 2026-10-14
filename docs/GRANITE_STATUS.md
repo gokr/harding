@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Seventy-one parity cases cover the current milestones, including five unhandled-error
+Seventy-two parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -67,7 +67,12 @@ identifiers instead of conflicting under Nim's style-insensitive comparison
 Earlier `mangleIdentifier`/`mangleSlot` still cover ordinary bindings and slots.
 The interpreter's `isNil`/`notNil` fast path honors class overrides like compiled
 dispatch (`nil_override`). Compiled `perform:`/`with:`/`with:with:` and
-`respondsTo:` support dynamic sends (`dynamic_send`).
+`respondsTo:` support dynamic sends (`dynamic_send`). Native `==`/`~=` compare
+instance/class/block identity with the VM's immediate-value rules
+(`object_identity`), independently of value equality (`=`). Operator helpers,
+generic sends and cached sends share the comparison; wrappers retaining the same
+native owner compare as one object. Collection representation/identity and
+`perform:` override semantics are not covered by this slice.
 
 Compiled environments are managed heap references owned by their BlockNode.
 Environments retain shared MutableCell references; reads and assignments target
@@ -269,5 +274,5 @@ class for instance/class-side and inherited methods, including lexical blocks
 (`qualified_super`). Unrelated and indirect-ancestor qualifiers fail in both
 engines (`invalid_qualified_super`, `indirect_qualified_super`), but remain
 evaluation errors with different diagnostic formatting. Class-slot support,
-object identity sends, general reflection parity, and mixed-mode execution
+collection identity/layout, general reflection parity, and mixed-mode execution
 coverage remain open.

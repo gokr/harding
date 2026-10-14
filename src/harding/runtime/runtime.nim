@@ -491,10 +491,23 @@ proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool =
     name = getSuperclassName(name)
   return false
 
+proc compiledIdentityEqual*(a, b: NodeValue): bool =
+  ## Match VM identity comparisons, using the retained native owner for compiled
+  ## instances whose storage may be exposed through multiple Instance wrappers.
+  if a.kind == vkInstance and b.kind == vkInstance and
+     a.instVal != nil and b.instVal != nil and
+     a.instVal.compiledOwner != nil and b.instVal.compiledOwner != nil:
+    return a.instVal.compiledOwner == b.instVal.compiledOwner
+  return identityEqual(a, b)
+
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
+
+  if selector in ["==", "~="] and args.len == 1:
+    let same = compiledIdentityEqual(receiver, args[0])
+    return NodeValue(kind: vkBool, boolVal: if selector == "==": same else: not same)
 
   if receiver.kind == vkBlock and selector == "ensure:" and args.len == 1:
     # Run the protected block, then the cleanup exactly once, whether the body
@@ -1044,7 +1057,7 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                         args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
   ## Positive monomorphic cache for registered instance methods only. Builtins,
   ## class-side sends and exception protocols retain the generic runtime path.
-  if selector in ["message", "signal", "defaultAction", "retry", "pass"]:
+  if selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
     return sendMessage(runtime, receiver, selector, args)
   let className = getReceiverClassName(receiver)
   if className.len > 0:
