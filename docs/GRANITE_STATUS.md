@@ -45,8 +45,9 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Sixty-eight parity cases cover the current milestones, including five unhandled-error checks and the
-inactive-return case, which is now ordinary parity. Coverage includes class-side and inherited
+Seventy-one parity cases cover the current milestones, including five unhandled-error
+checks, two invalid-super-qualifier checks, and the inactive-return case, which is
+now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
 shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
@@ -263,6 +264,10 @@ Polymorphic caches and compact class/selector identities remain follow-ups.
 The compiled runtime registers every superclass in declaration order and walks
 the parent graph depth-first with a cycle guard, so multiple inheritance follows
 the interpreter's lookup order (`multiple_inheritance`); `addSuperclass:` works at
-runtime. Qualified `super` (naming which parent to start from), class-slot
-support, general reflection parity, and mixed-mode execution coverage remain
-open.
+runtime. Qualified `super<Parent>` selects a direct parent of the declaring
+class for instance/class-side and inherited methods, including lexical blocks
+(`qualified_super`). Unrelated and indirect-ancestor qualifiers fail in both
+engines (`invalid_qualified_super`, `indirect_qualified_super`), but remain
+evaluation errors with different diagnostic formatting. Class-slot support,
+object identity sends, general reflection parity, and mixed-mode execution
+coverage remain open.

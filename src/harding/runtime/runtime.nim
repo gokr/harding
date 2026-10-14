@@ -365,11 +365,13 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
                        selector: string, args: seq[NodeValue],
                        explicitParent: string = ""): NodeValue =
-  ## Send message starting lookup from superclass of defining class
-  ## Used for compiled nkSuperSend expressions
-  discard args
+  ## Keep the receiver and start lookup at a direct parent of the declaring class.
+  ## An explicit qualifier must name one of that class's direct parents.
   var startClass = explicitParent
-  if startClass.len == 0:
+  if startClass.len > 0:
+    if startClass notin getSuperclasses(definingClassName):
+      raise newException(ValueError, "Parent class '" & startClass & "' not found in inheritance chain")
+  else:
     startClass = getSuperclassName(definingClassName)
   if startClass.len == 0:
     return compiledMissingMessage(receiver, selector)

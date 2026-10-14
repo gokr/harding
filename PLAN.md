@@ -244,7 +244,16 @@ arbitrary error resumption solely in the interpreter.
 - [x] Multiple inheritance: compiled dispatch registers every parent in
       declaration order and walks the parent graph depth-first with a cycle guard;
       `addSuperclass:` works at runtime. Coverage: `multiple_inheritance`.
-- [ ] Qualified `super` (naming which parent to start from).
+- [x] Qualified `super`: instance/class-side and inherited methods and their
+      blocks select a direct parent of the declaring class, retaining the receiver
+      and arguments. Native runtime rejects unrelated classes and indirect
+      ancestors as qualifiers, matching VM validation. Coverage:
+      `qualified_super`, `invalid_qualified_super`, `indirect_qualified_super`.
+      Invalid qualifiers remain evaluation errors rather than catchable Harding
+      signals; engine diagnostic formatting differs.
+- [ ] Object identity sends: `(super<Parent> receiver) == self` fails natively
+      with `MessageNotUnderstood: ==` while the interpreter answers true. Cover
+      instance/class/immediate identity without conflating it with value equality.
 - [x] Dynamic sends: `perform:`/`with:`/`with:with:` and `respondsTo:` work in
       compiled code for instances and classes. Coverage: `dynamic_send`. Full
       reflection parity is a separate item.

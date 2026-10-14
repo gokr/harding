@@ -149,6 +149,60 @@ suite "Compiled monomorphic send caches":
 proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkString, strVal: args[0].symVal)
 
+suite "Compiled qualified super sends":
+  test "qualifiers select a direct parent and preserve receiver and arguments":
+    let receiver = proxyReceiver("QualifiedSuperDescendant")
+    registerSuperclass("QualifiedSuperDescendant", "QualifiedSuperChild")
+    registerSuperclass("QualifiedSuperChild", "QualifiedSuperFirst")
+    registerSuperclass("QualifiedSuperChild", "QualifiedSuperSecond")
+    registerCompiledMethod("QualifiedSuperFirst", "answer", defaultAllocation)
+    registerCompiledMethod("QualifiedSuperSecond", "answer", replacementAllocation)
+    check sendSuperMessage(receiver, "QualifiedSuperChild", "answer", @[]).intVal == 1
+    check sendSuperMessage(receiver, "QualifiedSuperChild", "answer", @[],
+                           "QualifiedSuperSecond").intVal == 2
+    proc echoReceiver(self: NodeValue, args: seq[NodeValue]): NodeValue = self
+    proc echoArgument(self: NodeValue, args: seq[NodeValue]): NodeValue = args[0]
+    registerCompiledMethod("QualifiedSuperSecond", "receiver", echoReceiver)
+    registerCompiledMethod("QualifiedSuperSecond", "argument:", echoArgument)
+    check sendSuperMessage(receiver, "QualifiedSuperChild", "receiver", @[],
+                           "QualifiedSuperSecond").instVal == receiver.instVal
+    check sendSuperMessage(receiver, "QualifiedSuperChild", "argument:",
+                           @[nilValue()], "QualifiedSuperSecond").kind == vkNil
+    registerCompiledClass("QualifiedSuperDescendant", defaultAllocation)
+    registerCompiledClassMethod("QualifiedSuperFirst", "answer", defaultAllocation)
+    registerCompiledClassMethod("QualifiedSuperSecond", "answer", replacementAllocation)
+    let classReceiver = compiledClassValue("QualifiedSuperDescendant")
+    check sendSuperMessage(classReceiver, "QualifiedSuperChild", "answer", @[],
+                           "QualifiedSuperSecond").intVal == 2
+    registerCompiledClassMethod("QualifiedSuperSecond", "receiver", echoReceiver)
+    check sendSuperMessage(classReceiver, "QualifiedSuperChild", "receiver", @[],
+                           "QualifiedSuperSecond").classVal == classReceiver.classVal
+    registerSuperclass("QualifiedSuperSecond", "QualifiedSuperAncestor")
+    registerCompiledMethod("QualifiedSuperAncestor", "inheritedAnswer", replacementAllocation)
+    registerCompiledClassMethod("QualifiedSuperAncestor", "inheritedAnswer", replacementAllocation)
+    check sendSuperMessage(receiver, "QualifiedSuperChild", "inheritedAnswer", @[],
+                           "QualifiedSuperSecond").intVal == 2
+    check sendSuperMessage(classReceiver, "QualifiedSuperChild", "inheritedAnswer", @[],
+                           "QualifiedSuperSecond").intVal == 2
+
+  test "unrelated classes and indirect ancestors are not valid qualifiers":
+    registerSuperclass("QualifiedSuperGuardChild", "QualifiedSuperGuardParent")
+    registerSuperclass("QualifiedSuperGuardParent", "QualifiedSuperGuardAncestor")
+    registerCompiledMethod("QualifiedSuperUnrelated", "answer", replacementAllocation)
+    let receiver = proxyReceiver("QualifiedSuperGuardChild")
+    for qualifier in ["QualifiedSuperUnrelated", "QualifiedSuperGuardAncestor", "UnknownSuperParent"]:
+      var caught = false
+      try:
+        discard sendSuperMessage(receiver, "QualifiedSuperGuardChild", "answer", @[], qualifier)
+      except ValueError as failure:
+        caught = true
+        check failure.msg == "Parent class '" & qualifier & "' not found in inheritance chain"
+      check caught
+    registerCompiledClass("QualifiedSuperGuardChild", defaultAllocation)
+    expect ValueError:
+      discard sendSuperMessage(compiledClassValue("QualifiedSuperGuardChild"),
+                               "QualifiedSuperGuardChild", "answer", @[], "QualifiedSuperUnrelated")
+
 suite "Compiled missing messages":
   test "immediate and class misses carry a catchable Harding error":
     let rt = newRuntime()

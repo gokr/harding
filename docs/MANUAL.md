@@ -758,7 +758,13 @@ class. Inherited methods retain that declaring class. Class-side `super` searche
 class methods; instance-side `super` searches instance methods. Blocks preserve
 the enclosing method's lexical lookup context.
 
-Executed regressions: `inherited_super`, `block_super`, and `super_new` in
+The qualifier in `super<Parent>` must name a direct parent of the class that
+_declared_ the method, not an unrelated class or an indirect ancestor. Lookup
+then searches that parent's inherited methods. Invalid qualifiers are evaluation
+errors, not catchable Harding exception signals.
+
+Executed regressions: `inherited_super`, `block_super`, `super_new`,
+`qualified_super`, `invalid_qualified_super`, and `indirect_qualified_super` in
 `scripts/test_granite_parity.py`.
 
 Harding supports both qualified and unqualified super sends for multiple inheritance:

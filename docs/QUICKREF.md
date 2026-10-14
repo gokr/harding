@@ -660,6 +660,10 @@ Object>>method [...]
 
 ### Method Selection (for parents)
 
+`super<Parent>` selects a direct parent of the method's declaring class. It keeps
+the receiver and searches that parent's inherited methods; unrelated classes and
+indirect ancestors are invalid qualifiers.
+
 ```smalltalk
 # Unqualified super (uses first parent)
 Employee>>calculatePay [

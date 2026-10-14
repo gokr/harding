@@ -757,6 +757,57 @@ c := C new.
 (c perform: "greet") println.
 (C respondsTo: #new) println.
 """, "hi\n7\ntrue\nfalse\nhi\ntrue\n"),
+    ("qualified_super", """
+First := Object derive: #().
+First>>tag [ ^ "first" ].
+First class>>tag [ ^ "first-class" ].
+Second := Object derive: #().
+Second>>tag [ ^ "second" ].
+Second>>plus: n [ ^ n + 2 ].
+Second>>receiver [ ^ self ].
+Second class>>tag [ ^ "second-class" ].
+Second class>>receiver [ ^ self ].
+Child := First derive: #().
+Child addSuperclass: Second.
+Child>>tag [ ^ (super tag) & "/" & (super<Second> tag) ].
+Child>>plus: n [ ^ super<Second> plus: n ].
+Child>>viaBlock [ ^ [super<Second> tag] value ].
+Child>>receiverTag [ ^ (super<Second> receiver) tag ].
+Child class>>tag [ ^ (super tag) & "/" & (super<Second> tag) ].
+Child class>>viaBlock [ ^ [super<Second> tag] value ].
+Child class>>receiverTag [ ^ (super<Second> receiver) tag ].
+Descendant := Child derive: #().
+Child new tag println.
+(Child new plus: 40) println.
+Child new viaBlock println.
+Child new receiverTag println.
+Child tag println.
+Child viaBlock println.
+Child receiverTag println.
+Descendant new tag println.
+(Descendant new plus: 40) println.
+Descendant new viaBlock println.
+Descendant new receiverTag println.
+Descendant tag println.
+Descendant viaBlock println.
+Descendant receiverTag println.
+""", "first/second\n42\nsecond\nfirst/second\nfirst-class/second-class\nsecond-class\nfirst-class/second-class\nfirst/second\n42\nsecond\nfirst/second\nfirst-class/second-class\nsecond-class\nfirst-class/second-class\n"),
+    ("invalid_qualified_super", """
+Parent := Object derive: #().
+Other := Object derive: #().
+Other>>answer [ ^ "wrong" ].
+Child := Parent derive: #().
+Child>>answer [ ^ super<Other> answer ].
+Child new answer println.
+""", {"error": "Parent class 'Other' not found in inheritance chain"}),
+    ("indirect_qualified_super", """
+Ancestor := Object derive: #().
+Ancestor>>answer [ ^ "wrong" ].
+Parent := Ancestor derive: #().
+Child := Parent derive: #().
+Child class>>answer [ ^ super<Ancestor> answer ].
+Child answer println.
+""", {"error": "Parent class 'Ancestor' not found in inheritance chain"}),
 ])
 
 
