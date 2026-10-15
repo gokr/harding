@@ -207,11 +207,6 @@
     {
       "id": "examples-templates-Pattern1-Interpreter-lib-myapp-main-args",
       "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
-      "known_failure": {
-        "stage": "native",
-        "contains": "Message not understood: asNumber",
-        "reason": "Calculator numeric conversion fallback (System arguments now works)"
-      },
       "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-lib-myapp-main-args.stdout",
       "args": [
         "add",
@@ -243,6 +238,31 @@
         "--flag",
         "a\"b",
         "λ"
+      ]
+    },
+    {
+      "id": "examples-stdlib-numeric_conversion",
+      "path": "examples/stdlib/numeric_conversion.hrd",
+      "stdout": "examples/expected/examples-stdlib-numeric_conversion.stdout"
+    },
+    {
+      "id": "examples-templates-Pattern1-Interpreter-float-args",
+      "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
+      "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-float-args.stdout",
+      "args": [
+        "add",
+        "1.5",
+        "2.5"
+      ]
+    },
+    {
+      "id": "examples-templates-Pattern1-Interpreter-unknown-op",
+      "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
+      "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-unknown-op.stdout",
+      "args": [
+        "unknown",
+        "5",
+        "3"
       ]
     }
   ]

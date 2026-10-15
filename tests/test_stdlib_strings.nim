@@ -6,6 +6,7 @@
 import std/unittest
 import ../src/harding/core/types
 import ../src/harding/interpreter/vm
+import ../src/harding/interpreter/objects
 import ./stdlib_test_support
 
 # Shared interpreter initialized once for all suites
@@ -180,6 +181,29 @@ suite "Stdlib: Strings - Advanced":
     check(result[1].len == 0)
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 42)
+
+  test "numeric conversion selects integer or float and returns nil on failure":
+    for expression in ["\"3.5\" asNumber", "\"3.5\" asFloat", "\"3.5\" clone asFloat"]:
+      let (values, err) = interp.evalStatements(expression)
+      check err.len == 0
+      require values.len > 0
+      check values[^1].kind == vkFloat
+      check values[^1].floatVal == 3.5
+    for expression in ["\"bad\" asInteger", "\"bad\" asFloat", "\"bad\" asNumber",
+                       "\"3.5\" asInteger", "\"12tail\" asNumber", "\"bad\" clone asInteger"]:
+      let (values, err) = interp.evalStatements(expression)
+      check err.len == 0
+      require values.len > 0
+      check isNilValue(values[^1])
+
+  test "Instance primitive entry points share numeric conversion behavior":
+    let valid = newStringInstance(stringClass, "3.5")
+    let invalid = newStringInstance(stringClass, "bad")
+    check isNilValue(instStringAsIntegerImpl(valid, @[]))
+    check instStringAsFloatImpl(valid, @[]).floatVal == 3.5
+    check isNilValue(instStringAsIntegerImpl(invalid, @[]))
+    check isNilValue(instStringAsFloatImpl(invalid, @[]))
+    check instStringAsIntegerImpl(newStringInstance(stringClass, "42"), @[]).intVal == 42
 
   test "asSymbol converts string to symbol":
     let result = interp.evalStatements("""

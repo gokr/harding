@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Seventy-six parity cases cover the current milestones, including five unhandled-error
+Seventy-seven parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -58,15 +58,17 @@ File-level temporary bars and `Harding main:` temporaries are retained by native
 codegen, initialized to nil before closure creation (`script_temporaries`,
 `main_temporaries`). CLI, file-codegen and compiler-primitive entry points use the
 script parser without shifting source token lines. The example suite now has
-32 exact parity passes, 2 known compiler-failure cases and 9 syntax-only gates.
+36 exact parity passes, 1 known compiler-failure case and 9 syntax-only gates.
 Native `System arguments` returns user argument strings (including empty,
 spaced, option-like and Unicode values) without the executable name; aliases
 and registered class-side overrides work. `withIndexDo:` passes element and
 zero-based index and answers the Array, with callback cleanup/return parity.
-Three formerly failing template cases now pass; the calculator's argument case
-reaches the separate `asNumber` gap. Numeric string conversion remains incomplete
-in both engines; the VM incorrectly returns 0 for invalid/noninteger input and
-its `asFloat` primitive is missing.
+All template argument cases now pass, including integer/float calculator inputs
+and unknown-operation fallback. Shared whole-string conversion returns nil on
+failure; `asNumber` prefers Integer then Float, and VM `asFloat` is registered.
+Native `ifNil:`/`ifNotNil:` and combined nil callbacks select the proper branch,
+pass the receiver to the non-nil callback, and preserve cleanup/non-local returns.
+Collection mutation and numeric value-equality coverage remain separate gaps.
 Logging stream/filter parity is covered too: lazy native sinks use Harding's
 threshold, CLI logging uses stderr,
 and existing host handlers/global filters are preserved. The logging manifest

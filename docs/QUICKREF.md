@@ -147,6 +147,19 @@ selector := #"""
 
 Triple-quoted symbol strings use the same raw, indentation-aware rules as triple-quoted strings.
 
+### Numeric String Conversion
+
+```harding
+"42" asInteger             # 42
+"3.5" asFloat              # 3.5
+"1e2" asNumber             # 100.0 (Integer first, then Float)
+"bad" asNumber             # nil, not zero
+```
+
+Conversions consume the whole string (no surrounding whitespace); invalid input
+answers nil. Integer overflow answers nil; `asNumber` may then parse a Float.
+Use `ifNil: [fallback]` or `ifNotNil: [:number | ...]` to handle the result.
+
 ## Assignment
 
 ```smalltalk

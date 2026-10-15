@@ -913,6 +913,24 @@ IndexReturn new find println.
 ([ [items withIndexDo: [:element :index | Error signal: element]]
     ensure: ["error cleanup" println]] on: Error do: [:ex | ex message]) println.
 """, "0:a\n1:b\n2\n0\nreturn cleanup\n20\nerror cleanup\na\n"),
+    ("nil_conversion_callbacks", """
+(7 ifNil: [99]) println.
+(nil ifNotNil: [:value | "unreachable"]) println.
+(nil ifNil: ["absent"] ifNotNil: [:value | value]) println.
+(7 ifNotNil: [:value | value + 1] ifNil: [99]) println.
+PretendNil := Object derive: #().
+PretendNil>>isNil [ ^ true ].
+(PretendNil new ifNil: ["override nil"]) println.
+ConvertReturn := Object derive: #().
+ConvertReturn>>answer [
+  ["5" asNumber ifNotNil: [:value | ^ value + 1] ifNil: [0]]
+    ensure: ["return cleanup" println].
+  ^ 99
+].
+ConvertReturn new answer println.
+([["bad" asNumber ifNil: [Error signal: "invalid"]]
+  ensure: ["error cleanup" println]] on: Error do: [:ex | ex message]) println.
+""", "7\nnil\nabsent\n8\noverride nil\nreturn cleanup\n6\nerror cleanup\ninvalid\n"),
 ])
 
 

@@ -1,5 +1,6 @@
 import std/[tables, strutils, sequtils, math, hashes, options]
 import ../core/types
+import ../core/string_conversion
 
 # ============================================================================
 # Platform-Specific Helpers
@@ -133,6 +134,7 @@ proc instStringLowercaseImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringTrimImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringSplitImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringAsIntegerImpl*(self: Instance, args: seq[NodeValue]): NodeValue
+proc instStringAsFloatImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringAsSymbolImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringRepeatImpl*(self: Instance, args: seq[NodeValue]): NodeValue
 proc instStringLessThanImpl*(self: Instance, args: seq[NodeValue]): NodeValue
@@ -1924,14 +1926,16 @@ proc instStringSplitImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return NodeValue(kind: vkInstance, instVal: newArrayInstance(arrayClass, @[]))
 
 proc instStringAsIntegerImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Convert string to integer
-  if self.kind == ikString:
-    try:
-      let val = parseInt(self.strVal)
-      return toValue(val)
-    except:
-      discard
-  return toValue(0)
+  ## Parse a complete integer string, answering nil on failure.
+  if self != nil and self.kind == ikString:
+    return stringAsInteger(self.strVal)
+  return nilValue()
+
+proc instStringAsFloatImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Parse a complete float string, answering nil on failure.
+  if self != nil and self.kind == ikString:
+    return stringAsFloat(self.strVal)
+  return nilValue()
 
 proc instStringAsSymbolImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Convert string to symbol

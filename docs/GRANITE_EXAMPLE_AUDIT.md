@@ -2,9 +2,9 @@
 
 ## Scope
 
-`examples/manifest.json` covers all 40 `.hrd` sources under `examples/` and
+`examples/manifest.json` covers all 41 `.hrd` sources under `examples/` and
 `benchmark/`, with nonempty-argument template and argument-preservation variants
-(43 cases).
+(46 cases).
 Examples are grouped into language, compiler, stdlib, concurrency, web,
 integrations and templates. Algorithm/performance workloads remain in benchmark/.
 The runner fails if a source is added without a manifest case or a manifest path
@@ -32,10 +32,10 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **32 exact parity passes**, **2 known
-compiler-failure cases**, and **9 syntax-only dependency/host gates**. All 34
+`nimble testExamples` completed with **36 exact parity passes**, **1 known
+compiler-failure case**, and **9 syntax-only dependency/host gates**. All 37
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-wqtvy4bi/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-edntwdoi/results.json`.
 Runner unit tests (11 checks), Echo host tests/demo, interpreter-template host
 tests, and both engine builds pass. The valid top-level-bars example now passes
 unchanged rather than carrying a known-failure marker; known gaps are not successes.
@@ -55,10 +55,13 @@ Remaining native gaps:
 
 - `examples/concurrency/process_demo.hrd`: interpreter finishes with counter 20;
   native `Processor fork:` is not implemented.
-- The interpreter-pattern calculator with arguments reaches unsupported native
-  `asNumber`. Both no-argument templates and the Granite template with arguments
-  now pass; `System arguments` is implemented. Numeric parsing is a separate gap:
-  VM `"3.5" asNumber` incorrectly returns zero and `asFloat` lacks its primitive.
+
+The calculator now passes with integer and float arguments and with an unknown
+operation. Shared numeric conversion answers nil on whole-string parse failure,
+registers `asFloat` in the VM, and enables Integer-then-Float `asNumber` fallback.
+Native nil callbacks receive the proper arguments and preserve cleanup and
+lexical non-local returns. `examples/stdlib/numeric_conversion.hrd` checks valid
+conversions, invalid input, and nil fallback results.
 
 `examples/stdlib/arguments.hrd` checks canonical/aliased System receivers, repeated
 calls, indexed iteration, empty arguments, embedded spaces/quotes, option-like

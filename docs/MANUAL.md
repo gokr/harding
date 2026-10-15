@@ -135,6 +135,31 @@ json{"x": 10}       # JSON literal (returns JSON string)
 """            # Multiline symbol string
 ```
 
+### Numeric string conversion
+
+`String>>asInteger` parses the complete string as a native-range signed Integer;
+invalid input and integer overflow answer `nil`, not zero. `asFloat` parses a
+complete Float string, including exponent notation. `asNumber` first tries
+Integer, then Float. Failed conversion answers `nil` in both engines; it does not
+signal an exception. Leading/trailing whitespace and trailing junk are rejected
+(use `trim` explicitly). Float parsing uses the host floating-point parser,
+including its NaN/infinity spellings and range behavior.
+
+```harding
+"42" asNumber             # Integer 42
+"3.5" asNumber            # Float 3.5
+"1e2" asNumber            # Float 100.0
+"bad" asNumber            # nil
+"3.5" asInteger           # nil
+```
+
+Nil callbacks support conversion fallback: `ifNil:` receives a zero-argument
+block; `ifNotNil:` passes the receiver to a one-argument block. The combined
+`ifNil:ifNotNil:` and `ifNotNil:ifNil:` forms run only the selected block and
+answer its value. Native callbacks preserve error cleanup and lexical non-local
+returns. Coverage: `examples/stdlib/numeric_conversion.hrd` and
+`nil_conversion_callbacks` in the semantic parity suite.
+
 ### Triple-Quoted Strings
 
 Harding supports triple-quoted string literals using `"""..."""`.

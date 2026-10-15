@@ -19,6 +19,14 @@ suite "Compiled runtime nil predicates":
     let number = NodeValue(kind: vkInt, intVal: 42)
     check not sendMessage(rt, number, "isNil", @[]).boolVal
     check sendMessage(rt, number, "notNil", @[]).boolVal
+    let wrappedNil = NodeValue(kind: vkInstance, instVal: newInstance(newClass(name = "WrappedNilTest")))
+    let previousNil = nilInstance
+    nilInstance = wrappedNil.instVal
+    try:
+      check sendMessage(rt, wrappedNil, "isNil", @[]).boolVal
+      check not sendMessage(rt, wrappedNil, "notNil", @[]).boolVal
+    finally:
+      nilInstance = previousNil
 
   test "registered methods take precedence over builtin fallback":
     let rt = newRuntime()
@@ -28,6 +36,22 @@ suite "Compiled runtime nil predicates":
     let receiver = NodeValue(kind: vkInstance, instVal: instance)
     registerCompiledMethod(cls.name, "notNil", overriddenNotNil)
     check not sendMessage(rt, receiver, "notNil", @[]).boolVal
+
+suite "Compiled numeric string conversion":
+  test "parsing preserves kinds and failures do not become zero":
+    let rt = newRuntime()
+    check sendMessage(rt, toValue("42"), "asInteger", @[]).intVal == 42
+    check sendMessage(rt, toValue("42"), "asNumber", @[]).kind == vkInt
+    check sendMessage(rt, toValue("3.5"), "asFloat", @[]).floatVal == 3.5
+    check sendMessage(rt, toValue("3.5"), "asNumber", @[]).kind == vkFloat
+    for selector in ["asInteger", "asFloat", "asNumber"]:
+      check isNilValue(sendMessage(rt, toValue("bad"), selector, @[]))
+      check isNilValue(sendMessage(rt, toValue("12tail"), selector, @[]))
+    let cls = newClass(name = "NumericConversionOverride")
+    let receiver = newInstance(cls)
+    receiver.isNimProxy = true
+    registerCompiledMethod(cls.name, "asNumber", replacementAllocation)
+    check sendMessage(rt, NodeValue(kind: vkInstance, instVal: receiver), "asNumber", @[]).intVal == 2
 
 suite "Compiled System arguments":
   test "canonical System returns a snapshot of user arguments":

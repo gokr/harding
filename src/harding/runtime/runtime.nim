@@ -1,5 +1,6 @@
 import std/[tables, strformat, os, strutils, logging]
 import ../core/log_support
+import ../core/string_conversion
 import ../core/types
 import ../core/scheduler
 import ../interpreter/vm
@@ -791,10 +792,18 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
     return NodeValue(kind: vkBool, boolVal: false)
 
+  of "asInteger", "asFloat", "asNumber":
+    if receiver.kind == vkString and args.len == 0:
+      case selector
+      of "asInteger": return stringAsInteger(receiver.strVal)
+      of "asFloat": return stringAsFloat(receiver.strVal)
+      else: return stringAsNumber(receiver.strVal)
+    return compiledMissingMessage(receiver, selector)
+
   of "isNil":
-    return NodeValue(kind: vkBool, boolVal: receiver.kind == vkNil)
+    return toValue(isNilValue(receiver))
   of "notNil":
-    return NodeValue(kind: vkBool, boolVal: receiver.kind != vkNil)
+    return toValue(not isNilValue(receiver))
   of "writeLine:", "writeline:", "println", "println:":
     if args.len > 0:
       echo args[0].toString()
@@ -1047,6 +1056,29 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
       return receiver
     return NodeValue(kind: vkNil)
+
+  of "ifNil:", "ifNotNil:", "ifNil:ifNotNil:", "ifNotNil:ifNil:":
+    let arity = if selector in ["ifNil:", "ifNotNil:"]: 1 else: 2
+    if args.len != arity:
+      return compiledMissingMessage(receiver, selector)
+    let absent = isTruthy(sendMessage(runtime, receiver, "isNil", @[]))
+    case selector
+    of "ifNil:":
+      if absent:
+        return sendMessage(runtime, args[0], "value", @[])
+      return receiver
+    of "ifNotNil:":
+      if absent:
+        return NodeValue(kind: vkNil)
+      return sendMessage(runtime, args[0], "value:", @[receiver])
+    of "ifNil:ifNotNil:":
+      if absent:
+        return sendMessage(runtime, args[0], "value", @[])
+      return sendMessage(runtime, args[1], "value:", @[receiver])
+    else:
+      if absent:
+        return sendMessage(runtime, args[1], "value", @[])
+      return sendMessage(runtime, args[0], "value:", @[receiver])
 
   of "ifTrue:":
     if args.len > 0 and isTruthy(receiver):

@@ -54,13 +54,13 @@ String>>split: delimiter <primitive primitiveSplit: delimiter>
   # Split string by delimiter, return array
 
 String>>asInteger <primitive primitiveAsInteger>
-  # Parse as integer
+  # Parse a complete integer; invalid or out-of-range input answers nil.
 
 String>>asFloat <primitive primitiveAsFloat>
-  # Parse as float
+  # Parse a complete float; invalid input answers nil.
 
 String>>asNumber [
-  # Parse as number (integer or float)
+  # Prefer integer, then float; invalid input answers nil.
   ^ self asInteger ifNil: [ self asFloat ]
 ]
 

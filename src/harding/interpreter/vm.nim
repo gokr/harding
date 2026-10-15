@@ -2,6 +2,7 @@ import std/[tables, strutils, math, strformat, os, random, algorithm, json, opti
 import ../core/types
 import ../core/process
 import ../core/log_support
+import ../core/string_conversion
 import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
@@ -3145,10 +3146,21 @@ proc initGlobals*(interp: var Interpreter) =
     else:
       discard
 
-    try:
-      return toValue(parseInt(source))
-    except ValueError:
-      return toValue(0)
+    return stringAsInteger(source)
+
+  proc primitiveStringAsFloatValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
+    discard argsUnused
+    case self.kind
+    of vkString:
+      return stringAsFloat(self.strVal)
+    of vkSymbol:
+      return stringAsFloat(self.symVal)
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikString:
+        return stringAsFloat(self.instVal.strVal)
+    else:
+      discard
+    return nilValue()
 
   proc tryExtractString(val: NodeValue, outStr: var string): bool =
     case val.kind
@@ -3789,6 +3801,12 @@ proc initGlobals*(interp: var Interpreter) =
   stringAsIntegerMethod.setNativeValueImpl(primitiveStringAsIntegerValueImpl)
   stringCls.methods["primitiveAsInteger"] = stringAsIntegerMethod
   stringCls.allMethods["primitiveAsInteger"] = stringAsIntegerMethod
+
+  let stringAsFloatMethod = createCoreMethod("primitiveAsFloat")
+  stringAsFloatMethod.setNativeImpl(instStringAsFloatImpl)
+  stringAsFloatMethod.setNativeValueImpl(primitiveStringAsFloatValueImpl)
+  stringCls.methods["primitiveAsFloat"] = stringAsFloatMethod
+  stringCls.allMethods["primitiveAsFloat"] = stringAsFloatMethod
 
   let stringAsSymbolMethod = createCoreMethod("primitiveAsSymbol")
   stringAsSymbolMethod.setNativeImpl(instStringAsSymbolImpl)

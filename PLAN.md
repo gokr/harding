@@ -44,13 +44,13 @@ semantics; any intended language change must be explicit and documented.
       without the executable name. Empty strings, spaces, Unicode and option-like
       values have exact example coverage. `Array>>withIndexDo:` passes element
       and zero-based index, answers the receiver, and supports compiled callbacks.
-- [ ] Eliminate remaining manifest compiler gaps: calculator `asNumber` path
-      and native processes. Three template cases pass; the calculator with args
-      now reaches numeric conversion rather than failing at argument delivery.
-- [ ] Numeric-string conversion: VM `"3.5" asNumber` and `"bad" asNumber`
-      incorrectly answer 0 because asInteger answers 0 on parse failure;
-      `asFloat` sends an unregistered primitive. Native conversion is absent.
-      Implement a documented shared failure contract rather than mirroring 0.
+- [x] Calculator numeric-string conversion: shared whole-string Integer/Float
+      parsing answers nil on failure; `asNumber` tries Integer then Float. VM
+      instance/value primitive paths and native sends share it; asFloat is
+      registered. Native nil callbacks pass receiver to the selected one-argument
+      branch and preserve returns/errors/cleanup. Integer/float calculator inputs
+      and unknown-operation fallback have exact example snapshots.
+- [ ] Eliminate remaining manifest compiler gap: native processes.
 - [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
       missing-message error natively). Arithmetic example checks Float result
       against Float; decide and document numeric equality independently.

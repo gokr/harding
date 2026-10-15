@@ -1,0 +1,15 @@
+#!/usr/bin/env harding
+"42" asInteger println.
+"3.5" asInteger println.
+"3.5" asFloat println.
+"42" asNumber println.
+"-2.5" asNumber println.
+"1e2" asNumber println.
+"bad" asNumber println.
+"12tail" asNumber println.
+"" asInteger println.
+" 42" asNumber println.
+("bad" asNumber ifNil: ["invalid"]) println.
+("3.5" asNumber ifNotNil: [:number | number + 0.5]) println.
+("bad" asNumber ifNotNil: [:number | number] ifNil: ["fallback"]) println.
+("5" asNumber ifNil: [0] ifNotNil: [:number | number + 1]) println.
