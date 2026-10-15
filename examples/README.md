@@ -6,7 +6,7 @@ Examples are grouped by purpose, with no numbered filename prefixes:
 |---|---|
 | `language/` | Language basics, objects, inheritance, blocks, collections |
 | `compiler/` | Granite entry points, closures and block benchmarks |
-| `stdlib/` | Library-oriented demonstrations such as logging |
+| `stdlib/` | Logging and process argument handling |
 | `concurrency/` | Interpreter green-thread/scheduler examples |
 | `web/` | HTTP servers, JSON APIs and Bona web applications |
 | `integrations/` | BitBarrel and the host-loaded `harding-echo` package |
@@ -42,7 +42,10 @@ nimble testExamplesStrict
 Unlisted new files and stale paths fail validation. The runner checks syntax in
 script/library context, successful interpreter execution, checked-in stdout,
 native build, successful native execution, and exact stdout/stderr parity.
-Template cases include both empty and nonempty command-line arguments.
+Template cases include both empty and nonempty command-line arguments. The
+argument demonstration also checks spaces, empty strings, quotes, Unicode and
+option-like values; native binaries receive arguments directly (interpreter
+arguments follow `--`).
 
 Known compiler failures are explicit, matched by stage and diagnostic, and reported
 as `known-compiler-failure`, **not passes**. New failures, timeouts, changed expected

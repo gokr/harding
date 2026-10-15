@@ -178,6 +178,19 @@ proc compiledBaseClassValue*(name: string): NodeValue =
   registerSuperclass("Mixin", "Root")
   return compiledClassValue(name)
 
+proc compiledSystemClassValue*(): NodeValue =
+  ## Canonical System receiver for native process-level services.
+  if "System" notin compiledClasses:
+    compiledClasses["System"] = newClass(name = "System")
+  return compiledClassValue("System")
+
+proc compiledSystemArguments*(): NodeValue =
+  ## Snapshot user arguments, excluding the executable name, as Harding strings.
+  var elements: seq[NodeValue] = @[]
+  for argument in commandLineParams():
+    elements.add(toValue(argument))
+  return NodeValue(kind: vkArray, arrayVal: elements)
+
 proc compiledLogClassValue*(): NodeValue =
   ## Class-side receiver for application logging in pure compiled programs.
   if "Log" notin compiledClasses:
@@ -691,6 +704,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
             names.add(toValue(parent))
           return NodeValue(kind: vkArray, arrayVal: names)
       else: discard
+    if receiver.classVal.name == "System" and selector == "arguments" and args.len == 0 and
+       not hasCompiledClassMethodInHierarchy("System", selector):
+      return compiledSystemArguments()
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):
       case selector
@@ -994,6 +1010,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if args.len >= 2 and receiver.kind == vkInt and args[0].kind == vkInt and args[1].kind == vkInt:
       return NodeValue(kind: vkBool, boolVal: receiver.intVal >= args[0].intVal and receiver.intVal <= args[1].intVal)
     return NodeValue(kind: vkNil)
+
+  of "withIndexDo:":
+    if receiver.kind == vkArray and args.len == 1:
+      let size = receiver.arrayVal.len
+      for index in 0..<size:
+        discard sendMessage(runtime, args[0], "value:value:",
+                            @[receiver.arrayVal[index], toValue(index)])
+      return receiver
+    return compiledMissingMessage(receiver, selector)
 
   of "do:":
     if receiver.kind == vkArray and args.len > 0:

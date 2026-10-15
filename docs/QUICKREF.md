@@ -577,7 +577,9 @@ chmod +x script.hrd  # For shebang: #!/usr/bin/env harding
 - Auto-wrapped in `[ ... ]` before parsing
 - Temporary variables: `| var1 var2 |` at file level
 - Executed with `self = nil` (Smalltalk workspace style)
-- Runtime args after `--` are available as `System arguments`
+- Interpreter args after `--` are available as `System arguments`
+- Native binaries take args directly; `System arguments` excludes the executable
+- `args withIndexDo: [:argument :index | ...]` supplies a zero-based index
 - File extension: `.hrd`, `.harding`, or none
 
 ## Logging and Output

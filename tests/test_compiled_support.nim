@@ -12,6 +12,14 @@ proc increment(env: pointer): NodeValue {.cdecl.} =
   captured.counter.value.intVal += 1
   captured.counter.value
 
+var indexedElements: seq[NodeValue]
+var indexedIndices: seq[int]
+
+proc recordIndexed(element, index: NodeValue): NodeValue {.cdecl.} =
+  indexedElements.add(element)
+  indexedIndices.add(index.intVal)
+  nilValue()
+
 suite "Compiled shared support":
   test "base storage is retainable by instance wrappers":
     let owner = HardingObjectRef(className: "OwnedTest")
@@ -41,6 +49,21 @@ suite "Compiled shared support":
       createBlockWithEnv(cast[pointer](increment), 0, env)
     check sendMessage(rt, captured, "value", @[]).intVal == 1
     check sendMessage(rt, captured, "value", @[]).intVal == 2
+
+  test "indexed iteration passes element and zero-based index and answers receiver":
+    indexedElements = @[]
+    indexedIndices = @[]
+    let callback = createBlock2(recordIndexed, 2)
+    let array = NodeValue(kind: vkArray, arrayVal: @[toValue("first"), toValue("second")])
+    check sendMessage(newRuntime(), array, "withIndexDo:", @[callback]) == array
+    check indexedElements == array.arrayVal
+    check indexedIndices == @[0, 1]
+    indexedElements = @[]
+    indexedIndices = @[]
+    discard sendMessage(newRuntime(), NodeValue(kind: vkArray, arrayVal: @[]),
+                        "withIndexDo:", @[callback])
+    check indexedElements.len == 0
+    check indexedIndices.len == 0
 
   test "identity helpers work without a current runtime":
     let cls = newClass(name = "SupportIdentityTest")

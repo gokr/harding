@@ -2,8 +2,9 @@
 
 ## Scope
 
-`examples/manifest.json` covers all 39 `.hrd` sources under `examples/` and
-`benchmark/`, with two additional nonempty-argument template cases (41 cases).
+`examples/manifest.json` covers all 40 `.hrd` sources under `examples/` and
+`benchmark/`, with nonempty-argument template and argument-preservation variants
+(43 cases).
 Examples are grouped into language, compiler, stdlib, concurrency, web,
 integrations and templates. Algorithm/performance workloads remain in benchmark/.
 The runner fails if a source is added without a manifest case or a manifest path
@@ -31,10 +32,10 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **27 exact parity passes**, **5 known
-compiler-failure cases**, and **9 syntax-only dependency/host gates**. All 32
+`nimble testExamples` completed with **32 exact parity passes**, **2 known
+compiler-failure cases**, and **9 syntax-only dependency/host gates**. All 34
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-0tovqn4a/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-wqtvy4bi/results.json`.
 Runner unit tests (11 checks), Echo host tests/demo, interpreter-template host
 tests, and both engine builds pass. The valid top-level-bars example now passes
 unchanged rather than carrying a known-failure marker; known gaps are not successes.
@@ -54,8 +55,16 @@ Remaining native gaps:
 
 - `examples/concurrency/process_demo.hrd`: interpreter finishes with counter 20;
   native `Processor fork:` is not implemented.
-- Both templates in `examples/templates/`, with and without arguments:
-  native `System arguments` is not implemented (four cases).
+- The interpreter-pattern calculator with arguments reaches unsupported native
+  `asNumber`. Both no-argument templates and the Granite template with arguments
+  now pass; `System arguments` is implemented. Numeric parsing is a separate gap:
+  VM `"3.5" asNumber` incorrectly returns zero and `asFloat` lacks its primitive.
+
+`examples/stdlib/arguments.hrd` checks canonical/aliased System receivers, repeated
+calls, indexed iteration, empty arguments, embedded spaces/quotes, option-like
+strings and Unicode. Snapshots preserve stdout/stderr exactly. Native `withIndexDo:`
+passes element and zero-based index and answers its receiver; semantic parity
+also checks callback non-local returns, errors and cleanup.
 
 Nine sources are syntax-only gates: six web applications/servers, BitBarrel, and
 the two host-loaded Echo library sources. They require a build variant, host,

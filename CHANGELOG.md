@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Native `System arguments` returns a fresh Array of user argument strings (without the executable name), through a canonical class receiver or alias. Native `withIndexDo:` passes element and zero-based index to compiled callbacks and answers the Array. Template and argument examples cover empty lists, empty strings, spaces, Unicode and option-like strings; the calculator's remaining numeric-conversion gap is tracked separately.
 - Manifest-driven example regression suite (`nimble testExamples`, `testExamplesStrict`): every current example/benchmark source is inventoried; successful interpreter/native execution must match reviewed stdout/stderr. Explicit compiler gaps and dependency gates are reported separately, never as passes. Logs and isolated binaries stay under build/.
 - Compiled code supports dynamic sends: `perform:`, `perform:with:`, `perform:with:with:` (selector as symbol or string) and `respondsTo:` on instances and classes. Coverage: `dynamic_send` parity.
 - Compiled dispatch follows multiple inheritance. `registerSuperclass` records every parent in declaration order instead of replacing the first, dispatch and method-existence walks are depth-first over the parent graph with a cycle guard, and `addSuperclass:` works at runtime for class receivers. Coverage: `multiple_inheritance` parity (parent-order lookup, methods from each parent, local override).

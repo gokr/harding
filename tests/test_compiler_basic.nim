@@ -323,6 +323,13 @@ suite "Compiler: Codegen - Expression":
     let code = genLiteral(node)
     check code.contains("vkNil")
 
+suite "Compiler: System receiver":
+  test "System is canonical unless shadowed by a lexical binding":
+    let ctx = newGenContext()
+    check genSymbolAccess(ctx, "System") == "compiledSystemClassValue()"
+    ctx.locals.add("System")
+    check genSymbolAccess(ctx, "System") == mangleIdentifier("System")
+
 suite "Compiler: Script temporaries":
   test "script parsing preserves temporary names and source lines":
     var syntax = initParser(lex("# header\n| counter spare |\ncounter := 3. spare println."))

@@ -1,0 +1,9 @@
+#!/usr/bin/env harding
+# User arguments exclude the executable/script name and preserve each string.
+alias := System.
+args := alias arguments.
+("Argument count: " & args size asString) println.
+args withIndexDo: [:argument :index |
+  (index asString & " (" & argument size asString & "): " & argument) println.
+].
+("Repeated count: " & System arguments size asString) println.

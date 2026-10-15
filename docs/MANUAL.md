@@ -262,6 +262,27 @@ self printString  "Returns: 'an UndefinedObject'"
 self isNil         "Returns: true"
 ```
 
+### Command-line arguments
+
+`System arguments` returns an Array of user argument strings, excluding the
+executable or script filename. The interpreter receives them after its `--`
+separator; a compiled binary receives its arguments directly. Empty arguments,
+spaces and option-like strings are preserved. Repeated calls return fresh
+snapshots. Native code supports a `System` alias and registered class-side
+`arguments` overrides.
+
+```sh
+./harding examples/stdlib/arguments.hrd -- "hello world" "" --flag
+./granite build examples/stdlib/arguments.hrd -d:build/args -o:build/args/demo
+./build/args/demo "hello world" "" --flag
+```
+
+`args withIndexDo: [:argument :index | ...]` supplies the element and a zero-based
+index and answers the receiver. Native indexed iteration supports compiled
+callbacks. Mutation during iteration and broader collection aliasing remain
+outside this coverage. `granite run` argument forwarding remains separate CLI
+work; execute the built binary to pass application arguments.
+
 ### Shebang Support
 
 Scripts can be made executable with a shebang line:

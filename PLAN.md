@@ -40,8 +40,17 @@ semantics; any intended language change must be explicit and documented.
 - [x] Default logging filter and streams: lazy sinks use Harding's configured
       threshold; interpreter CLI and native default logging both write stderr.
       Exact stdout/stderr example parity no longer waives logging.
-- [ ] Eliminate remaining manifest compiler gaps: System arguments (both
-      templates, with/without args) and native processes.
+- [x] Native `System arguments`: canonical class/aliases return process arguments
+      without the executable name. Empty strings, spaces, Unicode and option-like
+      values have exact example coverage. `Array>>withIndexDo:` passes element
+      and zero-based index, answers the receiver, and supports compiled callbacks.
+- [ ] Eliminate remaining manifest compiler gaps: calculator `asNumber` path
+      and native processes. Three template cases pass; the calculator with args
+      now reaches numeric conversion rather than failing at argument delivery.
+- [ ] Numeric-string conversion: VM `"3.5" asNumber` and `"bad" asNumber`
+      incorrectly answer 0 because asInteger answers 0 on parse failure;
+      `asFloat` sends an unregistered primitive. Native conversion is absent.
+      Implement a documented shared failure contract rather than mirroring 0.
 - [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
       missing-message error natively). Arithmetic example checks Float result
       against Float; decide and document numeric equality independently.

@@ -899,6 +899,20 @@ Harding main: [
   read value println.
 ].
 """, "42\n"),
+    ("indexed_iteration", """
+items := #("a", "b").
+(items withIndexDo: [:element :index | (index asString & ":" & element) println]) size println.
+(#() withIndexDo: [:element :index | "unreachable" println]) size println.
+IndexReturn := Object derive: #().
+IndexReturn>>find [
+  [#(10, 20) withIndexDo: [:element :index | index = 1 ifTrue: [^ element]]]
+    ensure: ["return cleanup" println].
+  ^ nil
+].
+IndexReturn new find println.
+([ [items withIndexDo: [:element :index | Error signal: element]]
+    ensure: ["error cleanup" println]] on: Error do: [:ex | ex message]) println.
+""", "0:a\n1:b\n2\n0\nreturn cleanup\n20\nerror cleanup\na\n"),
 ])
 
 

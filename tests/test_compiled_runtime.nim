@@ -1,4 +1,4 @@
-import std/unittest
+import std/[unittest, os]
 import ../src/harding/core/types
 import ../src/harding/runtime/runtime
 
@@ -28,6 +28,23 @@ suite "Compiled runtime nil predicates":
     let receiver = NodeValue(kind: vkInstance, instVal: instance)
     registerCompiledMethod(cls.name, "notNil", overriddenNotNil)
     check not sendMessage(rt, receiver, "notNil", @[]).boolVal
+
+suite "Compiled System arguments":
+  test "canonical System returns a snapshot of user arguments":
+    let rt = newRuntime()
+    let receiver = compiledSystemClassValue()
+    check receiver.kind == vkClass
+    check receiver.classVal == compiledSystemClassValue().classVal
+    let values = sendMessage(rt, receiver, "arguments", @[])
+    check values.kind == vkArray
+    check values.arrayVal.len == commandLineParams().len
+    for index, argument in commandLineParams():
+      check values.arrayVal[index].kind == vkString
+      check values.arrayVal[index].strVal == argument
+    let again = sendMessage(rt, receiver, "arguments", @[])
+    check again == values
+    registerCompiledClassMethod("System", "arguments", replacementAllocation)
+    check sendMessage(rt, receiver, "arguments", @[]).intVal == 2
 
 suite "Compiled guarded allocation":
   test "default allocator guard is invalidated by replacement":

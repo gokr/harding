@@ -167,21 +167,11 @@
     {
       "id": "examples-templates-Pattern1-Interpreter-lib-myapp-main",
       "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
-      "known_failure": {
-        "stage": "native",
-        "contains": "Message not understood: arguments",
-        "reason": "System arguments unsupported natively"
-      },
       "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-lib-myapp-main.stdout"
     },
     {
       "id": "examples-templates-Pattern2-Granite-src-main",
       "path": "examples/templates/Pattern2-Granite/src/main.hrd",
-      "known_failure": {
-        "stage": "native",
-        "contains": "Message not understood: arguments",
-        "reason": "System arguments unsupported natively"
-      },
       "stdout": "examples/expected/examples-templates-Pattern2-Granite-src-main.stdout"
     },
     {
@@ -219,8 +209,8 @@
       "path": "examples/templates/Pattern1-Interpreter/lib/myapp/main.hrd",
       "known_failure": {
         "stage": "native",
-        "contains": "Message not understood: arguments",
-        "reason": "System arguments unsupported natively"
+        "contains": "Message not understood: asNumber",
+        "reason": "Calculator numeric conversion fallback (System arguments now works)"
       },
       "stdout": "examples/expected/examples-templates-Pattern1-Interpreter-lib-myapp-main-args.stdout",
       "args": [
@@ -232,15 +222,27 @@
     {
       "id": "examples-templates-Pattern2-Granite-src-main-args",
       "path": "examples/templates/Pattern2-Granite/src/main.hrd",
-      "known_failure": {
-        "stage": "native",
-        "contains": "Message not understood: arguments",
-        "reason": "System arguments unsupported natively"
-      },
       "stdout": "examples/expected/examples-templates-Pattern2-Granite-src-main-args.stdout",
       "args": [
         "Alice",
         "Bob"
+      ]
+    },
+    {
+      "id": "examples-stdlib-arguments",
+      "path": "examples/stdlib/arguments.hrd",
+      "stdout": "examples/expected/examples-stdlib-arguments.stdout"
+    },
+    {
+      "id": "examples-stdlib-arguments-special",
+      "path": "examples/stdlib/arguments.hrd",
+      "stdout": "examples/expected/examples-stdlib-arguments-special.stdout",
+      "args": [
+        "hello world",
+        "",
+        "--flag",
+        "a\"b",
+        "λ"
       ]
     }
   ]
