@@ -20,7 +20,33 @@ proc recordIndexed(element, index: NodeValue): NodeValue {.cdecl.} =
   indexedIndices.add(index.intVal)
   nilValue()
 
+proc helperOverride(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  toValue("override")
+
+proc nilHelperOverride(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  nilValue()
+
 suite "Compiled shared support":
+  test "builtin helpers honor dynamic instance methods and replacement":
+    let cls = newClass(name = "DynamicHelperOverrides")
+    let instance = newInstance(cls)
+    instance.isNimProxy = true
+    let receiver = NodeValue(kind: vkInstance, instVal: instance)
+    for selector in ["size", "last", "keys", "abs", "even", "odd", "negated", "asString", "&"]:
+      registerCompiledMethod(cls.name, selector, helperOverride)
+    check nt_size(receiver).strVal == "override"
+    check nt_last(receiver).strVal == "override"
+    check nt_table_keys(receiver).strVal == "override"
+    check nt_table_size(receiver).strVal == "override"
+    check nt_abs(receiver).strVal == "override"
+    check nt_even(receiver).strVal == "override"
+    check nt_odd(receiver).strVal == "override"
+    check nt_negated(receiver).strVal == "override"
+    check nt_asString(receiver).strVal == "override"
+    check nt_comma(receiver, toValue("suffix")).strVal == "override"
+    registerCompiledMethod(cls.name, "last", nilHelperOverride)
+    check isNilValue(nt_last(receiver))
+
   test "base storage is retainable by instance wrappers":
     let owner = HardingObjectRef(className: "OwnedTest")
     let wrapper = Instance(kind: ikObject, compiledOwner: owner)

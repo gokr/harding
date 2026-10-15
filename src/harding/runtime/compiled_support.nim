@@ -60,10 +60,14 @@ proc nt_print*(value: NodeValue): NodeValue =
 
 proc nt_asString*(value: NodeValue): NodeValue =
   ## Convert value to string
+  if value.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, value, "asString", @[])
   return NodeValue(kind: vkString, strVal: value.toString())
 
 proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
   ## String concatenation
+  if a.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, a, "&", @[b])
   let aStr = a.toString()
   let bStr = b.toString()
   return NodeValue(kind: vkString, strVal: aStr & bStr)
@@ -105,6 +109,8 @@ proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeV
 
 proc nt_size*(value: NodeValue): NodeValue =
   ## Collection or string size
+  if value.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, value, "size", @[])
   if value.kind == vkArray:
     return NodeValue(kind: vkInt, intVal: value.arrayVal.len)
   if value.kind == vkTable:
@@ -115,6 +121,8 @@ proc nt_size*(value: NodeValue): NodeValue =
 
 proc nt_last*(arr: NodeValue): NodeValue =
   ## Array last element
+  if arr.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, arr, "last", @[])
   if arr.kind == vkArray and arr.arrayVal.len > 0:
     return arr.arrayVal[^1]
   return NodeValue(kind: vkNil)
@@ -138,6 +146,8 @@ proc nt_table_atput*(tbl: NodeValue, key: NodeValue, value: NodeValue): NodeValu
 
 proc nt_table_keys*(tbl: NodeValue): NodeValue =
   ## Table keys
+  if tbl.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, tbl, "keys", @[])
   if tbl.kind == vkTable:
     var keys: seq[NodeValue] = @[]
     for key in tbl.tableVal.keys:
@@ -147,6 +157,8 @@ proc nt_table_keys*(tbl: NodeValue): NodeValue =
 
 proc nt_table_size*(tbl: NodeValue): NodeValue =
   ## Table size
+  if tbl.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, tbl, "size", @[])
   if tbl.kind == vkTable:
     return NodeValue(kind: vkInt, intVal: tbl.tableVal.len)
   return NodeValue(kind: vkNil)
@@ -155,6 +167,8 @@ proc nt_table_size*(tbl: NodeValue): NodeValue =
 
 proc nt_abs*(n: NodeValue): NodeValue =
   ## Absolute value
+  if n.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, n, "abs", @[])
   if n.kind == vkInt:
     return NodeValue(kind: vkInt, intVal: abs(n.intVal))
   if n.kind == vkFloat:
@@ -163,18 +177,24 @@ proc nt_abs*(n: NodeValue): NodeValue =
 
 proc nt_even*(n: NodeValue): NodeValue =
   ## Is even
+  if n.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, n, "even", @[])
   if n.kind == vkInt:
     return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 == 0)
   return NodeValue(kind: vkNil)
 
 proc nt_odd*(n: NodeValue): NodeValue =
   ## Is odd
+  if n.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, n, "odd", @[])
   if n.kind == vkInt:
     return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 != 0)
   return NodeValue(kind: vkNil)
 
 proc nt_negated*(n: NodeValue): NodeValue =
   ## Negated value
+  if n.kind in {vkInstance, vkClass}:
+    return sendMessage(nil, n, "negated", @[])
   if n.kind == vkInt:
     return NodeValue(kind: vkInt, intVal: -n.intVal)
   if n.kind == vkFloat:

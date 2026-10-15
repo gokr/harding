@@ -931,6 +931,37 @@ ConvertReturn new answer println.
 ([["bad" asNumber ifNil: [Error signal: "invalid"]]
   ensure: ["error cleanup" println]] on: Error do: [:ex | ex message]) println.
 """, "7\nnil\nabsent\n8\noverride nil\nreturn cleanup\n6\nerror cleanup\ninvalid\n"),
+    ("accessor_selector_shadowing", """
+Shadow := Object derivePublic: #(last, size, abs).
+s := Shadow new.
+s::last := "L".
+s::size := 7.
+s::abs := "AB".
+s last println.
+s size println.
+s abs println.
+Both := Object derivePublic: #(first, last).
+b := Both new.
+b::first := "Ada".
+b::last := "Lovelace".
+(b first & " " & b last) println.
+Plain := Object derive: #().
+Plain>>last [ ^ "own last" ].
+Plain>>abs [ ^ "own abs" ].
+(Plain new last) println.
+(Plain new abs) println.
+numbers := #(3, 1, 2).
+numbers size println.
+numbers last println.
+(-4) abs println.
+Holder := Object derive: #(item).
+Holder>>item: value [ item := value ].
+Holder>>probe [ ^ item last ].
+h := Holder new.
+h item: Plain new.
+h probe println.
+([:value | value last] value: Plain new) println.
+""", "L\n7\nAB\nAda Lovelace\nown last\nown abs\n3\n2\n4\nown last\nown last\n"),
 ])
 
 
