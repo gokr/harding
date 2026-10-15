@@ -60,6 +60,37 @@ suite "Application logging":
     check capture.messages == @["lvlError:visible"]
     check logging.getHandlers().len == count
 
+  test "lazy default sink uses Harding's configured threshold":
+    let savedHandlers = logging.getHandlers()
+    let savedLevel = globalLogLevel
+    for handler in savedHandlers:
+      logging.removeHandler(handler)
+    try:
+      for level in [logging.lvlError, logging.lvlWarn]:
+        globalLogLevel = level
+        discard writeHardingLog(logging.lvlDebug, toValue("hidden"))
+        let handlers = logging.getHandlers()
+        check handlers.len == 1
+        check handlers[0].levelThreshold == level
+        check logging.getLogFilter() == logging.lvlAll
+        logging.removeHandler(handlers[0])
+    finally:
+      for handler in logging.getHandlers():
+        logging.removeHandler(handler)
+      for handler in savedHandlers:
+        logging.addHandler(handler)
+      globalLogLevel = savedLevel
+
+  test "existing host threshold is not replaced by Harding's default":
+    let previousLevel = globalLogLevel
+    globalLogLevel = logging.lvlFatal
+    try:
+      discard writeHardingLog(logging.lvlInfo, toValue("application-message"))
+      check capture.levelThreshold == logging.lvlAll
+      check capture.messages == @["lvlInfo:application-message"]
+    finally:
+      globalLogLevel = previousLevel
+
   test "stream aliases return their receiver":
     let (values, error) = interp.evalStatements("(Stdout print: \"\") == Stdout")
     check error.len == 0

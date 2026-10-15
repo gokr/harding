@@ -31,10 +31,10 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **26 exact parity passes**, **6 known
+`nimble testExamples` completed with **27 exact parity passes**, **5 known
 compiler-failure cases**, and **9 syntax-only dependency/host gates**. All 32
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-jd2iwp5v/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-0tovqn4a/results.json`.
 Runner unit tests (11 checks), Echo host tests/demo, interpreter-template host
 tests, and both engine builds pass. The valid top-level-bars example now passes
 unchanged rather than carrying a known-failure marker; known gaps are not successes.
@@ -45,10 +45,15 @@ unchanged rather than carrying a known-failure marker; known gaps are not succes
 scope and preserves top-level temporaries, nil initialization and closure capture.
 Its obsolete manifest failure marker has been removed.
 
+The logging example also passes unchanged: lazy native sinks use Harding's
+configured threshold (ERROR by default), and interpreter CLI logging uses stderr
+as documented. The snapshot separates `Hello World` on stdout from ERROR/FATAL
+records on stderr; no stream-merging normalization is used.
+
+Remaining native gaps:
+
 - `examples/concurrency/process_demo.hrd`: interpreter finishes with counter 20;
   native `Processor fork:` is not implemented.
-- `examples/stdlib/logging.hrd`: native default logging threshold emits more
-  levels than the interpreter. Output comparison exposes the discrepancy.
 - Both templates in `examples/templates/`, with and without arguments:
   native `System arguments` is not implemented (four cases).
 

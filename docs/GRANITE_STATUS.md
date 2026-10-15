@@ -58,7 +58,11 @@ File-level temporary bars and `Harding main:` temporaries are retained by native
 codegen, initialized to nil before closure creation (`script_temporaries`,
 `main_temporaries`). CLI, file-codegen and compiler-primitive entry points use the
 script parser without shifting source token lines. The example suite now has
-26 exact parity passes, 6 known compiler-failure cases and 9 syntax-only gates.
+27 exact parity passes, 5 known compiler-failure cases and 9 syntax-only gates.
+Logging stream/filter parity is covered too: lazy native sinks use Harding's
+threshold, CLI logging uses stderr,
+and existing host handlers/global filters are preserved. The logging manifest
+failure marker has been removed.
 The full semantic runner passes with a 60-second execution bound; a concurrent
 30-second run timed out only on interpreted queens, which passed in isolation.
 

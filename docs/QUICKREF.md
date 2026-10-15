@@ -593,7 +593,8 @@ Stdout println: "World".
 ```
 
 Log sends answer nil and respect host logging filters/handlers. With no handler,
-they install a stderr ConsoleLogger. Debug/warn application calls are available in
+they install a stderr ConsoleLogger at Harding's threshold (ERROR by default).
+Interpreter CLI logging also uses stderr. Debug/warn application calls are available in
 release builds. FileStream print:/println: return the stream. See MANUAL.md for
 interpreter versus pure-compiled filter configuration.
 

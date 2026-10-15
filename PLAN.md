@@ -37,8 +37,11 @@ semantics; any intended language change must be explicit and documented.
 - [x] Top-level temporary bars: CLI/file-codegen/compiler-primitive entry points
       preserve script temporaries, nil initialization and shared closure bindings;
       `Harding main:` retains its temporaries too. `loop_10000.hrd` now passes.
+- [x] Default logging filter and streams: lazy sinks use Harding's configured
+      threshold; interpreter CLI and native default logging both write stderr.
+      Exact stdout/stderr example parity no longer waives logging.
 - [ ] Eliminate remaining manifest compiler gaps: System arguments (both
-      templates, with/without args), default logging filter, native processes.
+      templates, with/without args) and native processes.
 - [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
       missing-message error natively). Arithmetic example checks Float result
       against Float; decide and document numeric equality independently.

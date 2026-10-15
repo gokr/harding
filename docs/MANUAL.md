@@ -1130,9 +1130,10 @@ Stdout println: "World".
 ```
 
 Host logging handlers and their level filters are preserved. When no handler is
-installed, the first Log send installs a ConsoleLogger writing to stderr. The
-interpreter's `--loglevel` filter applies (its default may suppress info/warn).
-Pure compiled programs use the host/default Nim logging filter; compiled CLI
+installed, the first Log send installs a ConsoleLogger writing to stderr with
+Harding's configured threshold (ERROR by default), in both engines. Interpreter
+CLI logging also writes to stderr and honors `--loglevel`. Existing host handlers
+and the Nim global filter are not replaced by the lazy default sink. Compiled CLI
 filter configuration is not yet a Harding API. Application debug/warn calls remain
 available in release builds, unlike internal VM tracing compiled out in release.
 No Bona Transcript logger is installed automatically.

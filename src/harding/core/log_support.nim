@@ -5,7 +5,8 @@ proc writeHardingLog*(level: logging.Level, value: NodeValue): NodeValue =
   ## Application logging keeps all levels available in release builds. Existing
   ## host handlers and their filters take precedence over a default stderr sink.
   if logging.getHandlers().len == 0:
-    logging.addHandler(logging.newConsoleLogger(useStderr = true))
+    logging.addHandler(logging.newConsoleLogger(levelThreshold = globalLogLevel,
+                                                useStderr = true))
   logging.log(level, value.toString())
   return NodeValue(kind: vkNil)
 

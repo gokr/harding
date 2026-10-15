@@ -161,12 +161,8 @@
     {
       "id": "examples-stdlib-logging",
       "path": "examples/stdlib/logging.hrd",
-      "known_failure": {
-        "stage": "parity",
-        "contains": "Processing request",
-        "reason": "Native default logging filter differs from interpreter"
-      },
-      "stdout": "examples/expected/examples-stdlib-logging.stdout"
+      "stdout": "examples/expected/examples-stdlib-logging.stdout",
+      "stderr": "ERROR Failed to connect\nFATAL Unrecoverable state\n"
     },
     {
       "id": "examples-templates-Pattern1-Interpreter-lib-myapp-main",

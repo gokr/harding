@@ -192,7 +192,7 @@ proc showUsage*(appName: string, appDesc: string, examples: seq[string] = @[],
 
 proc setupLogging*(logLevel: Level) =
   ## Configure logging with specified level
-  var consoleLogger = newConsoleLogger()
+  var consoleLogger = newConsoleLogger(useStderr = true)
   consoleLogger.levelThreshold = logLevel
   addHandler(consoleLogger)
 
