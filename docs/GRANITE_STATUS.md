@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Seventy-three parity cases cover the current milestones, including five unhandled-error
+Seventy-five parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -53,6 +53,14 @@ shared and escaped closures, forward temporaries, range captures, and lexical
 shadowing in methods, blocks, inline conditionals, repetition, collections, and
 while loops. Compiler tests
 and the previously validated class-model suite also pass.
+
+File-level temporary bars and `Harding main:` temporaries are retained by native
+codegen, initialized to nil before closure creation (`script_temporaries`,
+`main_temporaries`). CLI, file-codegen and compiler-primitive entry points use the
+script parser without shifting source token lines. The example suite now has
+26 exact parity passes, 6 known compiler-failure cases and 9 syntax-only gates.
+The full semantic runner passes with a 60-second execution bound; a concurrent
+30-second run timed out only on interpreted queens, which passed in isolation.
 
 Compiled programs construct built-in collections: `Array`/`Table`/`Set`/`String`
 `new`/`new:`/`new:withAll:`, table literals, and array/table `add:`/`includes:`

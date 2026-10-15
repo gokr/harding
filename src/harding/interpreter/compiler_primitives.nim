@@ -2,14 +2,12 @@
 ## Exposes compilation functionality as Harding primitives
 
 when defined(granite):
-  import std/[os, strutils, strformat, tables, sets, hashes]
+  import std/[os, strutils, strformat, tables, sets]
   import ../core/types
   import ../parser/parser
   import ../parser/lexer
   import ../codegen/module
   import ../compiler/context
-  import ../compiler/symbols
-  import ../interpreter/vm
 
   # Global reference to current interpreter (set during primitive calls)
   var currentInterpreter*: Interpreter = nil
@@ -31,7 +29,8 @@ when defined(granite):
       let tokens = lex(source)
       var parser = initParser(tokens)
       parser.lastLine = 1
-      let nodes = parser.parseStatements()
+      let script = parser.parseScript()
+      let nodes = if script != nil: script.body else: @[]
 
       if parser.hasError:
         result.errors.add(parser.errorMsg)
@@ -43,7 +42,7 @@ when defined(granite):
                          "generated"
 
       var ctx = newCompiler("./build", moduleName)
-      result.nimCode = genModule(ctx, nodes, moduleName)
+      result.nimCode = genModule(ctx, nodes, moduleName, scriptTemporaries = script.temporaries)
 
     except CatchableError as e:
       result.errors.add("Compilation error: " & e.msg)

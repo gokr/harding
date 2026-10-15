@@ -253,7 +253,8 @@ proc compileFile(config: Config): bool =
 
   var parser = initParser(tokens)
   parser.lastLine = 1
-  let nodes = parser.parseStatements()
+  let script = parser.parseScript()
+  let nodes = if script != nil: script.body else: @[]
 
   if parser.hasError:
     echo "Parse error: ", parser.errorMsg
@@ -303,7 +304,8 @@ proc compileFile(config: Config): bool =
 
   var ctx = newCompiler(outputDir, moduleName)
   let reflectedClasses = extractClassInfoFromInterpreter(interp)
-  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses)
+  let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
+                          scriptTemporaries = script.temporaries)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

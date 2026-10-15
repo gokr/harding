@@ -9,11 +9,6 @@
     {
       "id": "benchmark-loop_10000",
       "path": "benchmark/loop_10000.hrd",
-      "known_failure": {
-        "stage": "build",
-        "contains": "Unexpected token: '|'",
-        "reason": "Granite parses top-level bars without a script block"
-      },
       "stdout": "examples/expected/benchmark-loop_10000.stdout"
     },
     {

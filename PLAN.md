@@ -34,8 +34,11 @@ semantics; any intended language change must be explicit and documented.
 - [x] Repair stale concat syntax, permutation syntax/indices and count assertion,
       Echo primitive/bootstrap registration, and template argument iteration and
       callback arity. Host package/template tests exercise nonempty argument paths.
-- [ ] Eliminate manifest compiler gaps: top-level temporary bars, System arguments
-      (both templates, with/without args), default logging filter, native processes.
+- [x] Top-level temporary bars: CLI/file-codegen/compiler-primitive entry points
+      preserve script temporaries, nil initialization and shared closure bindings;
+      `Harding main:` retains its temporaries too. `loop_10000.hrd` now passes.
+- [ ] Eliminate remaining manifest compiler gaps: System arguments (both
+      templates, with/without args), default logging filter, native processes.
 - [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
       missing-message error natively). Arithmetic example checks Float result
       against Float; decide and document numeric equality independently.

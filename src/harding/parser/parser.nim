@@ -1798,6 +1798,20 @@ proc parseStatements*(parser: var Parser): seq[Node] =
 
   debug("parseStatements: done, parsed ", result.len, " statements in ", loopCount, " loops")
 
+proc parseScript*(parser: var Parser): BlockNode =
+  ## Parse file-level temporaries in a script scope without shifting source lines.
+  ## Ordinary source keeps the statement parser's behavior and iteration limit.
+  var first = parser.pos
+  while first < parser.tokens.len and parser.tokens[first].kind == tkSeparator:
+    inc first
+  if first < parser.tokens.len and parser.tokens[first].kind == tkPipe:
+    let eof = parser.tokens[^1]
+    parser.tokens.insert(Token(kind: tkLBracket, value: "[", line: 1, col: 1), parser.pos)
+    parser.tokens.insert(Token(kind: tkRBracket, value: "]", line: eof.line, col: eof.col),
+                         parser.tokens.high)
+    return parser.parseBlock()
+  result = BlockNode(body: parser.parseStatements())
+
 # Convenience function to parse full input
 proc parse*(input: string): (seq[Node], Parser) =
   ## Parse entire input string and return AST

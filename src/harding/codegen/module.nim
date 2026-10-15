@@ -469,7 +469,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
                   classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
                   mixed: bool = false, sourceFile: string = "",
                   injectMainArgsVar: bool = false,
-                  knownGlobals: seq[string] = @[]): string =
+                  knownGlobals: seq[string] = @[],
+                  temporaries: seq[string] = @[]): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -512,12 +513,13 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     genCtx.blockRegistry = blockReg
   genCtx.cellNames = scopeCaptureCellNames(topLevel)
   if not mixed:
-    genCtx.numericBindings = analyzeNumericBindings(topLevel, genCtx.cellNames)
+    genCtx.numericBindings = analyzeNumericBindings(topLevel, genCtx.cellNames & temporaries)
 
   # Run top-level work under an uncaught-error barrier so a compiled error
   # follows the Harding default-action/diagnostic path instead of escaping as a
   # Nim exception.
   output.add("  try:\n")
+  output.add(indentBlock(genLocalDeclarations(genCtx, temporaries), 4))
   for node in topLevel:
     let stmtCode = genTopLevelStatement(genCtx, node)
     if stmtCode.len > 0:
@@ -537,7 +539,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 moduleName: string, mixed: bool = false, sourceFile: string = "",
                 reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
-                injectMainArgsVar: bool = false): string =
+                injectMainArgsVar: bool = false,
+                scriptTemporaries: seq[string] = @[]): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
@@ -569,7 +572,13 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Top-level uppercase names are Harding globals: module-level shared bindings
   # that main(), methods and blocks all resolve to.
-  let knownGlobals = collectTopLevelGlobals(executableMainNodes)
+  let mainTemporaries = if hardingBlocks.mainBlock != nil:
+                          hardingBlocks.mainBlock.temporaries
+                        else: scriptTemporaries
+  var knownGlobals: seq[string] = @[]
+  for name in collectTopLevelGlobals(executableMainNodes):
+    if name notin mainTemporaries:
+      knownGlobals.add(name)
 
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
   # This avoids pulling unrelated stdlib/internal classes into generated output.
@@ -698,7 +707,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Collect blocks from top-level code into the shared registry
   for node in mainBodyNodes:
-    collectBlocks(blockReg, node, knownGlobals)
+    collectBlocks(blockReg, node, knownGlobals, ownerLocalNames = mainTemporaries)
 
   # Generate block environment structs and forward declarations BEFORE the
   # compiled methods so method bodies can reference block procedures.
@@ -760,7 +769,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
                          analysis.classes, mixed, sourceFile, injectMainArgsVar,
-                         knownGlobals))
+                         knownGlobals, mainTemporaries))
 
   # Module initialization
   output.add("\n")
@@ -785,7 +794,8 @@ proc compileFile*(inputPath: string, outputDir = "./build"): string =
   let source = readFile(inputPath)
   let tokens = lex(source)
   var parser = initParser(tokens)
-  let nodes = parser.parseStatements()
+  let script = parser.parseScript()
+  let nodes = if script != nil: script.body else: @[]
 
   if parser.hasError:
     echo "Parse error: " & parser.errorMsg
@@ -794,7 +804,7 @@ proc compileFile*(inputPath: string, outputDir = "./build"): string =
   let moduleName = inputPath.extractFilename().changeFileExt("")
 
   var ctx = newCompiler(outputDir, moduleName)
-  let nimCode = genModule(ctx, nodes, moduleName)
+  let nimCode = genModule(ctx, nodes, moduleName, scriptTemporaries = script.temporaries)
 
   let outputPath = outputDir / moduleName & ".nim"
   createDir(outputDir)

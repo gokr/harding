@@ -246,6 +246,10 @@ total  "Returns 15"
 ```
 
 This eliminates the need to use uppercase global variables (`Counter`, `Total`) for simple scripts.
+Granite accepts file-level temporary declarations too: each binding starts as nil
+at script entry, and closures share the binding even when created before its
+first assignment. `Harding main: [ | counter | ... ]` retains the main block's
+temporary declarations. Source error locations retain the original file lines.
 
 ### Execution Context
 

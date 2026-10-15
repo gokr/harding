@@ -31,18 +31,20 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **25 exact parity passes**, **7 known
+`nimble testExamples` completed with **26 exact parity passes**, **6 known
 compiler-failure cases**, and **9 syntax-only dependency/host gates**. All 32
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-si7j28rm/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-jd2iwp5v/results.json`.
 Runner unit tests (11 checks), Echo host tests/demo, interpreter-template host
-tests, and both engine builds pass. A strict-mode run of the valid top-level-bars
-example returns nonzero as required; known compiler gaps are not successes.
+tests, and both engine builds pass. The valid top-level-bars example now passes
+unchanged rather than carrying a known-failure marker; known gaps are not successes.
 
 ## Current gaps
 
-- `benchmark/loop_10000.hrd`: valid script temporary bars; Granite's unwrapped
-  top-level parser rejects them. Keep the valid example to exercise the gap.
+`benchmark/loop_10000.hrd` now passes unchanged: Granite parses script
+scope and preserves top-level temporaries, nil initialization and closure capture.
+Its obsolete manifest failure marker has been removed.
+
 - `examples/concurrency/process_demo.hrd`: interpreter finishes with counter 20;
   native `Processor fork:` is not implemented.
 - `examples/stdlib/logging.hrd`: native default logging threshold emits more

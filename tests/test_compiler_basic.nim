@@ -323,6 +323,38 @@ suite "Compiler: Codegen - Expression":
     let code = genLiteral(node)
     check code.contains("vkNil")
 
+suite "Compiler: Script temporaries":
+  test "script parsing preserves temporary names and source lines":
+    var syntax = initParser(lex("# header\n| counter spare |\ncounter := 3. spare println."))
+    let script = syntax.parseScript()
+    check not syntax.hasError
+    check script.temporaries == @["counter", "spare"]
+    check script.body.len == 2
+    var counterLine = 0
+    for token in syntax.tokens:
+      if token.kind == tkAssign:
+        counterLine = token.line
+        break
+    check counterLine == 3
+    var ctx = newCompiler()
+    let code = genModule(ctx, script.body, "script_temps", scriptTemporaries = script.temporaries)
+    check code.contains("var counter = NodeValue(kind: vkNil)")
+    check code.contains("var spare = NodeValue(kind: vkNil)")
+    check not code.contains("var counter = 3")
+
+  test "main block declares temporaries before closure creation":
+    let (nodes, _) = parse("Harding main: [ | total read | read := [total]. total := 42. read value println. ].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "main_temps")
+    check code.contains("var total = MutableCell(value: NodeValue(kind: vkNil))")
+    check code.contains("var " & mangleIdentifier("read") & " = NodeValue(kind: vkNil)")
+
+  test "malformed script declarations report original source lines":
+    var syntax = initParser(lex("# header\n| counter\ncounter := 3."))
+    discard syntax.parseScript()
+    check syntax.hasError
+    check syntax.errorMsg.contains("line 3")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

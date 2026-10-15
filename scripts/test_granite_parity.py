@@ -879,6 +879,26 @@ Override superclassNames println.
 (x isKindOf: Mixin) println.
 Object superclassNames println.
 """, "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\n"),
+    ("script_temporaries", """
+# File-level locals start as nil and survive closure creation before assignment.
+| count spare read bump |
+spare println.
+read := [count].
+bump := [count := count + 1].
+count := 0.
+3 timesRepeat: [bump value].
+read value println.
+([:count | count + 10] value: 5) println.
+count println.
+""", "nil\n3\n15\n3\n"),
+    ("main_temporaries", """
+Harding main: [
+  | total read |
+  read := [total].
+  total := 42.
+  read value println.
+].
+""", "42\n"),
 ])
 
 
