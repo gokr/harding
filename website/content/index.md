@@ -36,7 +36,7 @@ p printString println
 ## Features
 
 ### Smalltalk Semantics
-Message sends, blocks, non-local returns, resumable exceptions, and live-editable class definitions remain central to the language.
+Message sends, blocks, non-local returns, unwinding errors, synchronous notifications, and live-editable class definitions remain central to the language.
 
 ### Two Execution Paths
 Use the interpreter for interactive development and Granite for standalone native binaries.

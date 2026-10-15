@@ -264,6 +264,42 @@
         "5",
         "3"
       ]
+    },
+    {
+      "id": "website-hello",
+      "path": "website/content/docs.md",
+      "snippet": "Hello World",
+      "stdout": "examples/expected/website-hello.stdout"
+    },
+    {
+      "id": "website-counter",
+      "path": "website/content/docs.md",
+      "snippet": "Simple Class",
+      "stdout": "examples/expected/website-counter.stdout"
+    },
+    {
+      "id": "website-error",
+      "path": "website/content/docs.md",
+      "snippet": "Error Handling",
+      "stdout": "examples/expected/website-error.stdout"
+    },
+    {
+      "id": "website-route",
+      "path": "website/content/docs.md",
+      "snippet": "Web Route",
+      "gate": "MummyX build and long-running HTTP server"
+    },
+    {
+      "id": "website-fragment",
+      "path": "website/content/docs.md",
+      "snippet": "Html + HTMX Fragment",
+      "gate": "Context fragment requires initialized Router/Html host"
+    },
+    {
+      "id": "website-point",
+      "path": "website/content/index.md",
+      "snippet": "Hero Code Example",
+      "stdout": "examples/expected/website-point.stdout"
     }
   ]
 }

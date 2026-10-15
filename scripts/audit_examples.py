@@ -3,7 +3,8 @@
 
 Known compiler failures remain visible and must match their recorded stage and
 message. --strict fails on those too. Servers/libraries are syntax-only gates;
-Markdown snippets and historical research proposals are not executable cases.
+Selected website Markdown fences are extracted directly; historical proposals
+and context-dependent documentation fragments are not standalone applications.
 """
 import argparse
 import collections
@@ -14,6 +15,7 @@ import signal
 import subprocess
 import tempfile
 from typing import Any
+from website_examples import snippets
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "examples" / "manifest.json"
@@ -27,7 +29,12 @@ def inventory(root=ROOT):
 
 def load_cases(root=ROOT):
     cases = json.loads((root / "examples" / "manifest.json").read_text())["cases"]
-    paths = [case["path"] for case in cases]
+    paths = [case["path"] for case in cases if "snippet" not in case]
+    website = snippets(root)
+    covered = {(case["path"], case["snippet"]) for case in cases if "snippet" in case}
+    if covered != set(website):
+        raise ValueError(f"Website snippet coverage: unlisted={sorted(set(website) - covered)}, "
+                         f"stale={sorted(covered - set(website))}")
     missing = set(inventory(root)) - set(paths)
     stale = set(paths) - set(inventory(root))
     if missing or stale:
@@ -79,6 +86,12 @@ def contents(result):
 def execute(case, directory, syntax_binary, options):
     path = case["path"]
     record: dict[str, Any] = {"id": case["id"], "path": path}
+    if "snippet" in case:
+        extracted = directory / "snippet.hrd"
+        extracted.write_text(snippets(ROOT)[(path, case["snippet"])])
+        path = str(extracted)
+        record["snippet"] = case["snippet"]
+        record["extracted"] = str(extracted.relative_to(ROOT))
     syntax = run([str(syntax_binary), case.get("mode", "script"), path],
                  options.timeout, directory / "syntax.log")
     record["syntax"] = syntax

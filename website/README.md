@@ -4,13 +4,26 @@ This directory contains the static website for Harding Smalltalk.
 
 ## Testing Code Examples
 
-All code examples in the website are tested in `tests/test_website_examples.nim`.
-The tests verify that the examples shown in the documentation work correctly.
+The Harding fences in `content/docs.md` and `content/index.md` are extracted
+directly into the manifest regression runner (no duplicated source fixtures):
 
-Before committing changes to website content:
-1. Run tests: `nimble test`
-2. If example changed, update the corresponding test
-3. Verify in REPL or with `harding script.hrd`
+```sh
+# From the repository root, with both engines built:
+python3 scripts/audit_examples.py website-hello website-counter website-error website-point
+nimble testExamples
+```
+
+The four self-contained snippets require successful interpreter/native execution
+and exact checked-in stdout. Web-route and Html-fragment fences are syntax-only
+host/context gates, not execution successes. Adding/removing/renaming a Harding
+fence on these two pages requires a manifest update. Logs retain the extracted
+source under build/example-audit/.
+
+`tests/test_website_examples.nim` separately checks selected interpreter examples;
+it does not prove every website fence or native application works. The features
+page, other Markdown snippets and generated dist HTML are not covered by direct
+extraction yet. Review stdout snapshots explicitly when changing example output.
+Do not regenerate snapshots merely to accept an engine bug.
 
 ## Structure
 

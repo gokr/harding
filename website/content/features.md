@@ -117,17 +117,17 @@ Harding runs on a stackless VM with an explicit work queue instead of relying on
 This enables:
 
 - green threads
-- resumable exceptions
+- unwinding errors and synchronous notifications
 - explicit control-flow scheduling
 - safer long-running evaluation paths
 
-### Smalltalk-Style Resumable Exceptions
+### Errors And Synchronous Notifications
 
 ```harding
 result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    "The handler's result is the on:do: value"
+    # The handler's result is the on:do: value.
     0
 ]
 ```
@@ -146,7 +146,7 @@ integration.
 result := [
     riskyOperation value
 ] on: Error do: [:ex |
-    "Fallback supplied by the handler"
+    # Fallback supplied by the handler.
     42
 ]
 ```

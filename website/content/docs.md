@@ -101,13 +101,13 @@ c increment.
 c value println
 ```
 
-### Resumable Exception
+### Error Handling
 
 ```harding
 result := [
     10 // 0
 ] on: DivisionByZero do: [:ex |
-    "The handler's result becomes the on:do: value"
+    # The handler's result becomes the on:do: value.
     0
 ].
 

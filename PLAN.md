@@ -55,8 +55,12 @@ semantics; any intended language change must be explicit and documented.
       missing-message error natively). Arithmetic example checks Float result
       against Float; decide and document numeric equality independently.
 - [ ] Add bounded service/GUI-host smoke tests for the syntax-gated examples.
-- [ ] Extract runnable website/Markdown snippets into the same coverage stream;
-      generated website/dist is not a second authoritative source.
+- [x] Extract all six Harding fences from website docs/index Markdown into the
+      manifest runner: four stdout-checked interpreter/native cases, two syntax-only
+      host/context gates. No copied snippet source; unlisted/malformed fences fail.
+      Remove obsolete resumable-error headings from source website pages.
+- [ ] Extend extraction to features-page and other Markdown snippets with explicit
+      contexts; generated website/dist is not a second authoritative source.
 
 ## 1. Finish class-side and accessor semantics
 

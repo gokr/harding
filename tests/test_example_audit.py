@@ -7,8 +7,10 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("example_audit", ROOT / "scripts/audit_examples.py")
 assert spec is not None and spec.loader is not None
 audit = importlib.util.module_from_spec(spec)
@@ -25,7 +27,7 @@ class ExampleAuditTests(unittest.TestCase):
         self.directory.mkdir()
         self.expected = self.root / "expected.stdout"
         self.expected.write_bytes(b"correct\n")
-        self.case = {"id": "sample", "path": "examples/sample.hrd", "stdout": "expected.stdout"}
+        self.case: dict[str, Any] = {"id": "sample", "path": "examples/sample.hrd", "stdout": "expected.stdout"}
         self.options = argparse.Namespace(timeout=1, build_timeout=1, interpreter_only=False)
 
     def execute(self, responses):
@@ -80,6 +82,42 @@ class ExampleAuditTests(unittest.TestCase):
         (self.root / "examples/manifest.json").write_text(json.dumps({"cases": []}))
         with self.assertRaisesRegex(ValueError, "unlisted"):
             audit.load_cases(self.root)
+
+    def test_website_fences_are_extracted_without_copies(self):
+        page = self.root / "website/content/docs.md"
+        page.parent.mkdir(parents=True)
+        page.write_text('### Demo\n```harding\n"hello" println\n```\n')
+        self.assertEqual(audit.snippets(self.root)[("website/content/docs.md", "Demo")],
+                         '"hello" println\n')
+        page.write_text('### Demo\n```harding\n42 println\n```\n')
+        self.assertEqual(audit.snippets(self.root)[("website/content/docs.md", "Demo")], '42 println\n')
+
+    def test_snippet_execution_uses_extracted_source(self):
+        page = self.root / "website/content/docs.md"
+        page.parent.mkdir(parents=True)
+        page.write_text('### Demo\n```harding\n42 println\n```\n')
+        self.case.update(path="website/content/docs.md", snippet="Demo", gate="host context")
+        self.assertEqual(self.execute([(0, b"", b"")]), "gated")
+        self.assertEqual((self.directory / "snippet.hrd").read_text(), '42 println\n')
+
+    def test_unlisted_website_fence_fails_coverage(self):
+        (self.root / "examples").mkdir()
+        (self.root / "examples/manifest.json").write_text(json.dumps({"cases": []}))
+        page = self.root / "website/content/docs.md"
+        page.parent.mkdir(parents=True)
+        page.write_text('### Demo\n```harding\n42\n```\n')
+        with self.assertRaisesRegex(ValueError, "Website snippet coverage"):
+            audit.load_cases(self.root)
+
+    def test_unclosed_and_duplicate_website_fences_fail(self):
+        page = self.root / "website/content/docs.md"
+        page.parent.mkdir(parents=True)
+        page.write_text('### Demo\n```harding\n42\n')
+        with self.assertRaisesRegex(ValueError, "Unclosed"):
+            audit.snippets(self.root)
+        page.write_text('### Demo\n```harding\n42\n```\n```harding\n43\n```\n')
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            audit.snippets(self.root)
 
     def test_process_timeout_is_reported(self):
         log = ROOT / "build" / Path(self.temporary.name).name / "timeout.log"
