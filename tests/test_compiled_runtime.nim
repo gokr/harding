@@ -1,6 +1,7 @@
 import std/[unittest, os]
 import ../src/harding/core/types
 import ../src/harding/runtime/runtime
+import ../src/harding/runtime/compiled_support
 
 proc overriddenNotNil(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkBool, boolVal: false)
@@ -52,6 +53,37 @@ suite "Compiled numeric string conversion":
     receiver.isNimProxy = true
     registerCompiledMethod(cls.name, "asNumber", replacementAllocation)
     check sendMessage(rt, NodeValue(kind: vkInstance, instVal: receiver), "asNumber", @[]).intVal == 2
+
+suite "Compiled JSON literals":
+  test "dynamic literals keep literal spacing and nested compaction":
+    let rt = newRuntime()
+    let table = nt_tableFrom([(toValue("status"), toValue("ok")),
+                              (toValue("count"), NodeValue(kind: vkInt, intVal: 42))])
+    let jsonClass = compiledJsonClassValue()
+    check sendMessage(rt, jsonClass, "buildDynamic:", @[table]).strVal ==
+      "{\"status\": \"ok\", \"count\": 42}"
+    let nested = nt_tableFrom([(toValue("outer"), table)])
+    check sendMessage(rt, jsonClass, "buildDynamic:", @[nested]).strVal ==
+      "{\"outer\": {\"status\":\"ok\",\"count\":42}}"
+    check sendMessage(rt, jsonClass, "stringify:", @[table]).strVal ==
+      "{\"status\":\"ok\",\"count\":42}"
+
+  test "scalar, escape, array and cycle handling":
+    let rt = newRuntime()
+    let jsonClass = compiledJsonClassValue()
+    check sendMessage(rt, jsonClass, "buildDynamic:",
+      @[NodeValue(kind: vkArray, arrayVal: @[NodeValue(kind: vkBool, boolVal: true),
+                                             nilValue(),
+                                             toValue("a\nb")])]).strVal ==
+      "[true, null, \"a\\nb\"]"
+    let cyclicInstance = Instance(kind: ikArray, class: newClass(name = "JsonCycle"))
+    let cyclic = NodeValue(kind: vkInstance, instVal: cyclicInstance)
+    cyclicInstance.elements = @[cyclic]
+    expect ValueError:
+      discard compiledJsonStringify(cyclic)
+    cyclicInstance.elements = @[toValue("recovered")]
+    check compiledJsonStringify(cyclic).strVal == "[\"recovered\"]"
+    cyclicInstance.elements = @[]
 
 suite "Compiled System arguments":
   test "canonical System returns a snapshot of user arguments":

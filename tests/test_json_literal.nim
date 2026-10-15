@@ -6,7 +6,7 @@
 import std/[unittest, strutils, json]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
-import ../src/harding/interpreter/[vm, objects]
+import ../src/harding/interpreter/vm
 
 suite "Json Literal Syntax":
   test "parses json{} literal with empty object":
@@ -93,6 +93,15 @@ suite "Json Class":
     check results[^1].kind == vkString
     check results[^1].strVal.contains("\"a\"")
     check results[^1].strVal.contains("\"b\"")
+
+  test "json{} renders nil as the JSON null literal in both writers":
+    for (source, expected) in [("json{\"n\": nil}", "{\"n\": null}"),
+                               ("Json stringify: nil", "null"),
+                               ("json{\"a\": #(1, nil)}", "{\"a\": [1,null]}")]:
+      let (results, err) = interp.evalStatements(source)
+      check err.len == 0
+      require results.len > 0
+      check results[^1].strVal == expected
 
   test "json{} literal produces valid JSON":
     let (results, err) = interp.evalStatements("""

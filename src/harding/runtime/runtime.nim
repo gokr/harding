@@ -1,4 +1,4 @@
-import std/[tables, strformat, os, strutils, logging]
+import std/[tables, strformat, os, strutils, logging, json]
 import ../core/log_support
 import ../core/string_conversion
 import ../core/types
@@ -197,6 +197,188 @@ proc compiledLogClassValue*(): NodeValue =
   if "Log" notin compiledClasses:
     compiledClasses["Log"] = newClass(name = "Log")
   return compiledClassValue("Log")
+
+proc compiledJsonClassValue*(): NodeValue =
+  ## Class-side receiver for JSON literal construction.
+  if "Json" notin compiledClasses:
+    compiledClasses["Json"] = newClass(name = "Json")
+  return compiledClassValue("Json")
+
+proc compiledJsonEscape(buf: var string, value: string) =
+  ## Mirror the interpreter's JSON string escaping.
+  buf.add '"'
+  for c in value:
+    case c
+    of '"': buf.add("\\\"")
+    of '\\': buf.add("\\\\")
+    of '\b': buf.add("\\b")
+    of '\f': buf.add("\\f")
+    of '\n': buf.add("\\n")
+    of '\r': buf.add("\\r")
+    of '\t': buf.add("\\t")
+    of '\0'..'\7', '\11', '\14'..'\31', '\127':
+      buf.add("\\u00")
+      buf.add(toHex(ord(c), 2).toLowerAscii())
+    else:
+      buf.add(c)
+  buf.add '"'
+
+proc enterJsonInstance(visited: var seq[Instance], instance: Instance): bool =
+  if instance in visited:
+    return false
+  visited.add(instance)
+  return true
+
+proc leaveJsonInstance(visited: var seq[Instance]) =
+  discard visited.pop()
+
+proc compiledJsonKey(buf: var string, key: NodeValue) =
+  ## Table keys follow the interpreter's scalar spelling.
+  case key.kind
+  of vkString:
+    compiledJsonEscape(buf, key.strVal)
+  of vkSymbol:
+    compiledJsonEscape(buf, key.symVal)
+  of vkInt:
+    compiledJsonEscape(buf, $key.intVal)
+  of vkFloat:
+    compiledJsonEscape(buf, $(%key.floatVal))
+  of vkBool:
+    compiledJsonEscape(buf, if key.boolVal: "true" else: "false")
+  of vkNil:
+    compiledJsonEscape(buf, "null")
+  of vkClass:
+    compiledJsonEscape(buf, key.classVal.name)
+  of vkInstance:
+    case key.instVal.kind
+    of ikString: compiledJsonEscape(buf, key.instVal.strVal)
+    of ikInt: compiledJsonEscape(buf, $key.instVal.intVal)
+    of ikFloat: compiledJsonEscape(buf, $(%key.instVal.floatVal))
+    else: raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
+  else:
+    raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
+
+proc compiledJsonValue(buf: var string, value: NodeValue, visited: var seq[Instance])
+
+proc compiledJsonTable(buf: var string, entries: Table[NodeValue, NodeValue], visited: var seq[Instance]) =
+  ## Nested tables are compact, matching the interpreter's writer.
+  buf.add '{'
+  var first = true
+  for key, entryValue in entries.pairs:
+    if not first:
+      buf.add ','
+    first = false
+    compiledJsonKey(buf, key)
+    buf.add ':'
+    compiledJsonValue(buf, entryValue, visited)
+  buf.add '}'
+
+proc compiledJsonArray(buf: var string, elements: seq[NodeValue], visited: var seq[Instance]) =
+  buf.add '['
+  for index, element in elements:
+    if index > 0:
+      buf.add ','
+    compiledJsonValue(buf, element, visited)
+  buf.add ']'
+
+proc compiledJsonValue(buf: var string, value: NodeValue, visited: var seq[Instance]) =
+  # nil (vkNil or the UndefinedObject instance) has a dedicated JSON literal.
+  if isNilValue(value):
+    buf.add("null")
+    return
+  case value.kind
+  of vkInt:
+    buf.add($value.intVal)
+  of vkFloat:
+    buf.add($(%value.floatVal))
+  of vkString:
+    compiledJsonEscape(buf, value.strVal)
+  of vkBool:
+    buf.add(if value.boolVal: "true" else: "false")
+  of vkNil:
+    buf.add("null")
+  of vkArray:
+    compiledJsonArray(buf, value.arrayVal, visited)
+  of vkTable:
+    compiledJsonTable(buf, value.tableVal, visited)
+  of vkSymbol:
+    compiledJsonEscape(buf, value.symVal)
+  of vkClass:
+    compiledJsonEscape(buf, value.classVal.name)
+  of vkInstance:
+    case value.instVal.kind
+    of ikInt: buf.add($value.instVal.intVal)
+    of ikFloat: buf.add($(%value.instVal.floatVal))
+    of ikString: compiledJsonEscape(buf, value.instVal.strVal)
+    of ikArray:
+      if not enterJsonInstance(visited, value.instVal):
+        raise newException(ValueError, "JSON serialization cycle detected")
+      compiledJsonArray(buf, value.instVal.elements, visited)
+      leaveJsonInstance(visited)
+    of ikTable:
+      if not enterJsonInstance(visited, value.instVal):
+        raise newException(ValueError, "JSON serialization cycle detected")
+      compiledJsonTable(buf, value.instVal.entries, visited)
+      leaveJsonInstance(visited)
+    of ikObject:
+      raise newException(ValueError, "Native JSON object serialization is not implemented")
+  else:
+    compiledJsonEscape(buf, value.toString())
+
+proc compiledJsonDynamicTable(entries: Table[NodeValue, NodeValue], visited: var seq[Instance]): NodeValue =
+  ## `json{...}` literal entries use ", " and ": ", matching the interpreter.
+  var buf = newStringOfCap(64)
+  buf.add '{'
+  var first = true
+  for key, entryValue in entries.pairs:
+    if not first:
+      buf.add ", "
+    first = false
+    let keyText = if key.kind == vkString: key.strVal else: key.toString()
+    compiledJsonEscape(buf, keyText)
+    buf.add ": "
+    compiledJsonValue(buf, entryValue, visited)
+  buf.add '}'
+  return NodeValue(kind: vkString, strVal: buf)
+
+proc compiledJsonBuildDynamic*(value: NodeValue): NodeValue =
+  ## Evaluate a `json{...}` literal. Nested values stay compact.
+  var visited: seq[Instance]
+  if value.kind == vkTable:
+    return compiledJsonDynamicTable(value.tableVal, visited)
+  if value.kind == vkArray:
+    var arrayBuf = newStringOfCap(64)
+    arrayBuf.add '['
+    for index, element in value.arrayVal:
+      if index > 0:
+        arrayBuf.add ", "
+      compiledJsonValue(arrayBuf, element, visited)
+    arrayBuf.add ']'
+    return NodeValue(kind: vkString, strVal: arrayBuf)
+  if value.kind == vkInstance:
+    case value.instVal.kind
+    of ikTable: return compiledJsonDynamicTable(value.instVal.entries, visited)
+    of ikArray:
+      var arrayBuf = newStringOfCap(64)
+      if not enterJsonInstance(visited, value.instVal):
+        raise newException(ValueError, "JSON serialization cycle detected")
+      arrayBuf.add '['
+      for index, element in value.instVal.elements:
+        if index > 0:
+          arrayBuf.add ", "
+        compiledJsonValue(arrayBuf, element, visited)
+      arrayBuf.add ']'
+      leaveJsonInstance(visited)
+      return NodeValue(kind: vkString, strVal: arrayBuf)
+    else: discard
+  return NodeValue(kind: vkString, strVal: "{}")
+
+proc compiledJsonStringify*(value: NodeValue): NodeValue =
+  ## `Json stringify:` for scalars and collections; object protocols are separate.
+  var visited: seq[Instance]
+  var buf = newStringOfCap(64)
+  compiledJsonValue(buf, value, visited)
+  return NodeValue(kind: vkString, strVal: buf)
 
 proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
   ## Register a class-side method separately from instance methods.
@@ -708,6 +890,12 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if receiver.classVal.name == "System" and selector == "arguments" and args.len == 0 and
        not hasCompiledClassMethodInHierarchy("System", selector):
       return compiledSystemArguments()
+    if receiver.classVal.name == "Json" and args.len == 1 and
+       not hasCompiledClassMethodInHierarchy("Json", selector):
+      case selector
+      of "buildDynamic:": return compiledJsonBuildDynamic(args[0])
+      of "stringify:": return compiledJsonStringify(args[0])
+      else: discard
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):
       case selector

@@ -5066,6 +5066,10 @@ proc initGlobals*(interp: var Interpreter) =
 
   proc writeJsonValue(interp: var Interpreter, buf: var string, val: NodeValue,
                       state: var JsonWriteState) =
+    # nil is the UndefinedObject instance; JSON has a dedicated null literal.
+    if isNilValue(val):
+      buf.add("null")
+      return
     case val.kind
     of vkInt:
       buf.add($val.intVal)

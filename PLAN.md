@@ -59,8 +59,20 @@ semantics; any intended language change must be explicit and documented.
       manifest runner: four stdout-checked interpreter/native cases, two syntax-only
       host/context gates. No copied snippet source; unlisted/malformed fences fail.
       Remove obsolete resumable-error headings from source website pages.
-- [ ] Extend extraction to features-page and other Markdown snippets with explicit
-      contexts; generated website/dist is not a second authoritative source.
+- [x] Extract the 24 features-page fences too: nine runnable exact-output cases,
+      fifteen syntax-only host/context gates. Repair missing demo setup, array
+      grouping, and escaping without replacing correct dynamic JSON with static
+      text; unsafe case ids and duplicate extraction keys fail validation.
+- [ ] Extend extraction to other Markdown snippets with explicit contexts;
+      generated website/dist is not a second authoritative source.
+- [x] Native Json buildDynamic:/stringify: support scalars and collections,
+      nested values and escaping with interpreter formatting. Both engines write
+      nil as JSON null; native per-write cycle state is local and recoverable.
+- [ ] Native ordinary-object JSON serialization (slots, representation hooks,
+      class JSON specs and plan caching) remains unsupported and raises explicitly.
+- [x] Native builtin helpers defer to object/class dispatch, including dynamic
+      receivers and nil-valued overrides, instead of shadowing accessors named
+      last/size/abs/etc. Primitive collection/numeric fast paths remain intact.
 
 ## 1. Finish class-side and accessor semantics
 

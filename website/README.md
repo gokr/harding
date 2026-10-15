@@ -4,7 +4,7 @@ This directory contains the static website for Harding Smalltalk.
 
 ## Testing Code Examples
 
-The Harding fences in `content/docs.md` and `content/index.md` are extracted
+The Harding fences in `content/docs.md`, `content/index.md` and `content/features.md` are extracted
 directly into the manifest regression runner (no duplicated source fixtures):
 
 ```sh
@@ -13,16 +13,16 @@ python3 scripts/audit_examples.py website-hello website-counter website-error we
 nimble testExamples
 ```
 
-The four self-contained snippets require successful interpreter/native execution
-and exact checked-in stdout. Web-route and Html-fragment fences are syntax-only
-host/context gates, not execution successes. Adding/removing/renaming a Harding
-fence on these two pages requires a manifest update. Logs retain the extracted
-source under build/example-audit/.
+The 13 runnable snippets require successful interpreter/native execution and
+exact checked-in stdout. The 17 host/context fragments (web, scheduler, file I/O,
+primitive declarations and partial setup) are syntax-only gates, not execution
+successes. Adding/removing/renaming a Harding fence on these pages requires a
+manifest update. Multiple fences under a heading receive numbered labels.
+Logs retain the extracted source under build/example-audit/.
 
 `tests/test_website_examples.nim` separately checks selected interpreter examples;
-it does not prove every website fence or native application works. The features
-page, other Markdown snippets and generated dist HTML are not covered by direct
-extraction yet. Review stdout snapshots explicitly when changing example output.
+it does not prove every website fence or native application works. Other
+Markdown snippets and generated dist HTML are not covered by direct extraction yet. Review stdout snapshots explicitly when changing example output.
 Do not regenerate snapshots merely to accept an engine bug.
 
 ## Structure

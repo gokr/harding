@@ -68,9 +68,9 @@ When changing an example intentionally, review its stdout file in `expected/` an
 update it explicitly; the runner never rewrites snapshots. Empty-output benchmarks
 are smoke checks only. The permutation, queens and towers outputs additionally
 check their expected counts. See [the audit report](../docs/GRANITE_EXAMPLE_AUDIT.md)
-for limits and remaining compiler gaps. Website docs/index Harding fences are
-extracted directly by the same runner (four runnable, two syntax-only gates).
-Features-page/other Markdown fences remain separate follow-up work;
+for limits and remaining compiler gaps. Website docs/index/features Harding fences
+are extracted directly by the same runner (13 runnable, 17 syntax-only gates).
+Other Markdown fences remain separate follow-up work;
 `tests/test_website_examples.nim` is interpreter-only.
 
 ## Host-loaded examples

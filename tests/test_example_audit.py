@@ -116,8 +116,22 @@ class ExampleAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unclosed"):
             audit.snippets(self.root)
         page.write_text('### Demo\n```harding\n42\n```\n```harding\n43\n```\n')
+        found = audit.snippets(self.root)
+        self.assertEqual(found[("website/content/docs.md", "Demo")], '42\n')
+        self.assertEqual(found[("website/content/docs.md", "Demo [2]")], '43\n')
+        page.write_text('### Demo\n```harding\n42\n```\n```harding\n43\n```\n### Demo [2]\n```harding\n44\n```\n')
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             audit.snippets(self.root)
+
+    def test_case_id_cannot_create_nested_or_parent_artifact_paths(self):
+        (self.root / "examples").mkdir()
+        source = self.root / "examples/sample.hrd"
+        source.write_text('42 println')
+        for unsafe in ["../escape", "nested/path", "", "a b"]:
+            case = dict(self.case, id=unsafe, gate="test")
+            (self.root / "examples/manifest.json").write_text(json.dumps({"cases": [case]}))
+            with self.assertRaisesRegex(ValueError, "Unsafe example case id"):
+                audit.load_cases(self.root)
 
     def test_process_timeout_is_reported(self):
         log = ROOT / "build" / Path(self.temporary.name).name / "timeout.log"

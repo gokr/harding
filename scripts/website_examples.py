@@ -1,9 +1,7 @@
 """Extract Harding fences from authoritative website Markdown, not generated HTML."""
 from pathlib import Path
 
-# Start with the getting-started page and landing-page example. Features and
-# tutorial fragments require their own fixtures/host dependencies in a later slice.
-PAGES = ("website/content/docs.md", "website/content/index.md")
+PAGES = ("website/content/docs.md", "website/content/index.md", "website/content/features.md")
 
 
 def snippets(root: Path):
@@ -13,20 +11,24 @@ def snippets(root: Path):
         if not path.is_file():
             continue
         heading = ""
+        fence_counts = {}
         source = None
         key = None
         for line in path.read_text().splitlines(keepends=True):
             stripped = line.strip()
             if source is not None:
                 if stripped == "```":
-                    if key in found:
-                        raise ValueError(f"Duplicate Harding fence: {key}")
                     found[key] = "".join(source)
                     source = None
                 else:
                     source.append(line)
             elif stripped == "```harding":
-                key = (page, heading)
+                count = fence_counts.get(heading, 0) + 1
+                fence_counts[heading] = count
+                label = heading if count == 1 else f"{heading} [{count}]"
+                key = (page, label)
+                if key in found:
+                    raise ValueError(f"Duplicate Harding fence key: {key}")
                 source = []
             elif stripped.startswith("#"):
                 heading = stripped.lstrip("#").strip()

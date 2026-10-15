@@ -300,6 +300,150 @@
       "path": "website/content/index.md",
       "snippet": "Hero Code Example",
       "stdout": "examples/expected/website-point.stdout"
+    },
+    {
+      "id": "website-features-semantics",
+      "path": "website/content/features.md",
+      "snippet": "Smalltalk Semantics",
+      "stdout": "examples/expected/website-features-semantics.stdout"
+    },
+    {
+      "id": "website-features-syntax",
+      "path": "website/content/features.md",
+      "snippet": "Modernized Syntax",
+      "stdout": "examples/expected/website-features-syntax.stdout"
+    },
+    {
+      "id": "website-features-dynamic-collection-literals",
+      "path": "website/content/features.md",
+      "snippet": "Dynamic Collection Literals",
+      "gate": "Context fragment requires user with primarySkill/secondarySkill/name methods"
+    },
+    {
+      "id": "website-features-class",
+      "path": "website/content/features.md",
+      "snippet": "Current Class Definition Style",
+      "stdout": "examples/expected/website-features-class.stdout"
+    },
+    {
+      "id": "website-features-mixins",
+      "path": "website/content/features.md",
+      "snippet": "Multiple Inheritance And Mixins",
+      "stdout": "examples/expected/website-features-mixins.stdout"
+    },
+    {
+      "id": "website-features-direct-slot---binding-access",
+      "path": "website/content/features.md",
+      "snippet": "Direct Slot / Binding Access",
+      "gate": "Context fragment requires person/config and loaded WebTodo library"
+    },
+    {
+      "id": "website-features-conflict",
+      "path": "website/content/features.md",
+      "snippet": "Conflict Handling In Multiple Inheritance",
+      "stdout": "examples/expected/website-features-conflict.stdout"
+    },
+    {
+      "id": "website-features-error",
+      "path": "website/content/features.md",
+      "snippet": "Errors And Synchronous Notifications",
+      "stdout": "examples/expected/website-features-error.stdout"
+    },
+    {
+      "id": "website-features-fallback",
+      "path": "website/content/features.md",
+      "snippet": "Errors And Synchronous Notifications [2]",
+      "stdout": "examples/expected/website-features-fallback.stdout"
+    },
+    {
+      "id": "website-features-green-threads-and-synchronization",
+      "path": "website/content/features.md",
+      "snippet": "Green Threads And Synchronization",
+      "gate": "Interpreter scheduler/synchronization demonstration; native processes not supported"
+    },
+    {
+      "id": "website-features-system-and-file-i-o",
+      "path": "website/content/features.md",
+      "snippet": "System And File I/O",
+      "gate": "Writes README.copy.md; needs isolated filesystem fixture and native File support"
+    },
+    {
+      "id": "website-features-mummyx-http-support",
+      "path": "website/content/features.md",
+      "snippet": "MummyX HTTP Support",
+      "gate": "MummyX build and long-running server"
+    },
+    {
+      "id": "website-features-mummyx-http-support-2",
+      "path": "website/content/features.md",
+      "snippet": "MummyX HTTP Support [2]",
+      "gate": "Context fragment requires initialized Router and Html library"
+    },
+    {
+      "id": "website-features-mummyx-http-support-3",
+      "path": "website/content/features.md",
+      "snippet": "MummyX HTTP Support [3]",
+      "gate": "Context fragment requires Router, repository, panel and page"
+    },
+    {
+      "id": "website-features-mummyx-http-support-4",
+      "path": "website/content/features.md",
+      "snippet": "MummyX HTTP Support [4]",
+      "gate": "Html library host context"
+    },
+    {
+      "id": "website-features-html-dsl",
+      "path": "website/content/features.md",
+      "snippet": "Html DSL",
+      "gate": "Html library host context"
+    },
+    {
+      "id": "website-features-html-dsl-2",
+      "path": "website/content/features.md",
+      "snippet": "Html DSL [2]",
+      "gate": "Html library host context"
+    },
+    {
+      "id": "website-features-htmx-friendly-responses",
+      "path": "website/content/features.md",
+      "snippet": "HTMX-Friendly Responses",
+      "gate": "Request/panel/page context fragment"
+    },
+    {
+      "id": "website-features-htmx-friendly-responses-2",
+      "path": "website/content/features.md",
+      "snippet": "HTMX-Friendly Responses [2]",
+      "gate": "Html builder context fragment (h)"
+    },
+    {
+      "id": "website-features-reflection-and-dynamic-dispatch",
+      "path": "website/content/features.md",
+      "snippet": "Reflection And Dynamic Dispatch",
+      "gate": "Context fragment requires obj/dynamic methods and Point; full native reflection incomplete"
+    },
+    {
+      "id": "website-features-super-sends-and-class-side-methods",
+      "path": "website/content/features.md",
+      "snippet": "Super Sends And Class-Side Methods",
+      "gate": "Context fragment requires Person and ColoredRectangle superclass/slots"
+    },
+    {
+      "id": "website-features-primitives-and-nim-interop",
+      "path": "website/content/features.md",
+      "snippet": "Primitives And Nim Interop",
+      "gate": "Host-installed Array/String primitive declarations, not a standalone program"
+    },
+    {
+      "id": "website-features-json",
+      "path": "website/content/features.md",
+      "snippet": "`json{...}` Literals",
+      "stdout": "examples/expected/website-features-json.stdout"
+    },
+    {
+      "id": "website-features-collections",
+      "path": "website/content/features.md",
+      "snippet": "Collections",
+      "stdout": "examples/expected/website-features-collections.stdout"
     }
   ]
 }

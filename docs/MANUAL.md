@@ -2097,7 +2097,17 @@ Harding currently provides three JSON entry points:
 - `Json parse:` to parse JSON text into Harding values
 - `Json stringify:` to convert Harding values into compact JSON text
 
-The `Json` class is available by default.
+The `Json` class is available by default. Granite supports `json{...}` literal
+construction and `Json stringify:` for scalars and collections, with the same
+spacing and escaping as the interpreter. Nil serializes as JSON `null`, including
+inside collections. Nested `json{...}` returns a String and is therefore quoted;
+use nested object/array syntax to embed structure instead of JSON text. Table-key
+order is unspecified, not insertion order.
+
+Native `Json parse:`, ordinary-object serialization, `jsonRepresentation` hooks
+and class JSON configuration are not yet implemented. Unsupported ordinary
+objects raise explicitly rather than silently serializing to empty objects.
+The object/configuration examples below describe interpreter behavior.
 
 ### JSON Literals
 

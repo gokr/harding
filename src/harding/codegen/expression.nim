@@ -335,6 +335,9 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
   if name == "Log" and not ctx.mixed:
     return "compiledLogClassValue()"
 
+  if name == "Json" and not ctx.mixed:
+    return "compiledJsonClassValue()"
+
   # Check if it's a known global (class or global variable)
   if name in ctx.globals:
     # Globals are stored in a globals table

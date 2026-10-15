@@ -10,6 +10,7 @@ import argparse
 import collections
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -43,6 +44,8 @@ def load_cases(root=ROOT):
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate example case ids")
     for case in cases:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", case["id"]):
+            raise ValueError(f"Unsafe example case id: {case['id']}")
         if case.get("gate"):
             continue
         if not (root / case["stdout"]).is_file():

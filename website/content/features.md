@@ -14,15 +14,19 @@ Harding keeps the core Smalltalk model:
 - method lookup stays late-bound
 
 ```harding
-3 + 4
-dict at: key put: value
+(3 + 4) println.
+dict := Table new.
+dict at: "answer" put: 42.
+(dict at: "answer") println.
 
-findPositive := [:arr |
+Finder := Object derive: #().
+Finder>>findPositive: arr [
     arr do: [:n |
         (n > 0) ifTrue: [ ^ n ]
     ].
     ^ nil
-]
+].
+(Finder new findPositive: #(-3, 0, 7, 2)) println.
 ```
 
 ### Modernized Syntax
@@ -35,18 +39,23 @@ findPositive := [:arr |
 
 ```harding
 # comment
-greeting := "Hello, " & name
-values := #(1, 2, 3)
-payload := json{"ok": true, "count": values size}
+name := "Ada".
+greeting := "Hello, " & name.
+values := #(1, 2, 3).
+payload := json{"ok": true, "count": values size}.
+greeting println.
+values size println.
 ```
 
 ### Dynamic Collection Literals
 
 Array, Table, and JSON literals now fit better into normal expression flow.
+JSON prefix literals build their string natively when compiled; a message send
+inside an array literal needs grouping parentheses.
 
 ```harding
-skills := #(user primarySkill, user secondarySkill, "reserve")
-profile := #{"name" -> user name, "active" -> true}
+skills := #((user primarySkill), (user secondarySkill), "reserve")
+profile := #{"name" -> (user name), "active" -> true}
 payload := json{"skills": skills, "count": skills size}
 ```
 
@@ -64,7 +73,12 @@ Point>>moveBy: dx and: dy [
 
 Point>>distanceSquared [
     ^ (x * x) + (y * y)
-]
+].
+p := Point new.
+p::x := 3.
+p::y := 4.
+p moveBy: 1 and: 2.
+p distanceSquared println.
 ```
 
 ### Multiple Inheritance And Mixins
@@ -72,13 +86,12 @@ Point>>distanceSquared [
 Harding supports multiple inheritance plus mixin-style behavior sharing.
 
 ```harding
-Comparable := Mixin derive.
-Comparable>>between: min and: max [
-    ^ (self >= min) and: [ self <= max ]
-]
+Describable := Mixin derive: #().
+Describable>>label [ ^ "point behavior" ].
 
 Point := Object derive: #(x, y).
-Point addSuperclass: Comparable.
+Point addSuperclass: Describable.
+Point new label println.
 ```
 
 ### Direct Slot / Binding Access
@@ -106,6 +119,7 @@ Child := Object derive: #(x)
 Child>>foo [ ^ "child" ]
 Child addSuperclass: Parent1.
 Child addSuperclass: Parent2.
+Child new foo println.
 ```
 
 ## Runtime Features
@@ -129,7 +143,8 @@ result := [
 ] on: DivisionByZero do: [:ex |
     # The handler's result is the on:do: value.
     0
-]
+].
+result println.
 ```
 
 A handler's result is the value: the result of `on:do:` for an error, and the
@@ -143,12 +158,14 @@ continuation state and would conflict with native compilation and foreign
 integration.
 
 ```harding
+riskyOperation := [Error signal: "unavailable"].
 result := [
     riskyOperation value
 ] on: Error do: [:ex |
     # Fallback supplied by the handler.
     42
-]
+].
+result println.
 ```
 
 ### Green Threads And Synchronization
@@ -172,6 +189,7 @@ worker := Processor fork: [
 worker suspend.
 worker resume.
 
+shared := 0.
 monitor := Monitor new.
 monitor critical: [ shared := shared + 1 ]
 
@@ -361,7 +379,7 @@ This is also the basis for the package model where native Nim code and Harding s
 ### `json{...}` Literals
 
 ```harding
-json{"status": "ok", "count": 42}
+json{"status": "ok", "count": 42} println
 ```
 
 ### Object Serialization
@@ -389,7 +407,10 @@ scores := #{"Alice" -> 95, "Bob" -> 87}.
 numbers do: [:n | n println].
 squares := numbers collect: [:n | n * n].
 evens := numbers select: [:n | (n % 2) = 0].
-sum := numbers inject: 0 into: [:acc :n | acc + n]
+sum := numbers inject: 0 into: [:acc :n | acc + n].
+squares println.
+evens println.
+sum println.
 ```
 
 ## Live REPL

@@ -931,6 +931,21 @@ ConvertReturn new answer println.
 ([["bad" asNumber ifNil: [Error signal: "invalid"]]
   ensure: ["error cleanup" println]] on: Error do: [:ex | ex message]) println.
 """, "7\nnil\nabsent\n8\noverride nil\nreturn cleanup\n6\nerror cleanup\ninvalid\n"),
+    ("json_literals", """
+(json{"status": "ok", "count": 42}) println.
+(json{"nested": json{"a": 1}}) println.
+(json{"list": #(1, 2, 3)}) println.
+(json{}) println.
+Spaces := Object derivePublic: #(first, last).
+s := Spaces new.
+s::first := "Ada".
+s::last := "Lovelace".
+(json{"name": (s first & " " & s last)}) println.
+(json{"escaped": "a\\nb"}) println.
+json{"status": "ok", "count": 42} println.
+(json{"nil": nil}) println.
+(json{"list": #(1, nil, 3)}) println.
+""", "{\"status\": \"ok\", \"count\": 42}\n{\"nested\": \"{\\\"a\\\": 1}\"}\n{\"list\": [1,2,3]}\n{}\n{\"name\": \"Ada Lovelace\"}\n{\"escaped\": \"a\\nb\"}\n{\"status\": \"ok\", \"count\": 42}\n{\"nil\": null}\n{\"list\": [1,null,3]}\n"),
     ("accessor_selector_shadowing", """
 Shadow := Object derivePublic: #(last, size, abs).
 s := Shadow new.
