@@ -222,3 +222,35 @@ Process medians are divided by 30 passes, without startup subtraction. Raw data:
 ranged ~5.3–13.0 seconds. Towers suggests a gain; queens does not. Do not claim a
 uniform speedup or proximity to Cog from these results. Compact class identities,
 argument-allocation reduction and polymorphic cache design remain follow-up work.
+
+## Numeric method-local unboxing
+
+`python3 scripts/bench_numeric_methods.py --before <retained-granite> --after ./granite`
+builds checked release binaries for three numeric-method loops. Each process makes
+21 method calls with one million iterations per call. One warm-up and seven
+alternating before/after trials check exact stdout and empty stderr. These are
+whole-process medians, without startup subtraction, not per-iteration timings.
+Builds are outside timing; no other agent test/build runs overlapped this timing
+phase, but unrelated host/VM load was not controlled.
+
+Before: compiler from `b89551c`. After: conservative unboxing of declared method
+temporaries initialized directly to one numeric kind, with boxed parameters,
+slots, captures, shadowing, type changes and division unchanged.
+
+| Workload | Before | After | Before / after |
+|---|---:|---:|---:|
+| Integer accumulator, local bound | 0.977386 s | 0.189259 s | ~5.16x |
+| Float accumulator, local bound | 0.978228 s | 0.185437 s | ~5.28x |
+| Integer accumulator, dynamic bound parameter | 0.894023 s | 0.400281 s | ~2.23x |
+
+Raw seven-trial measurements, generated sources, binaries and build logs:
+`build/numeric-method-bench/run-ofpi3vcy/results.json` (disposable; regenerate).
+Integer runs print `499999500000`, Float runs `500000.0`. The dynamic-bound case
+keeps the comparison boxed because its parameter is not proven numeric.
+
+These loops demonstrate a gain for regular numeric methods, not broad application
+performance, interprocedural specialization, loop-parameter unboxing or proximity
+to Cog. The generated loop still has expression boxing/unboxing at some
+boundaries; this slice changes local storage and same-kind expressions, not the
+calling convention. Further work should measure additional workloads and check
+initialization, captures, error/overflow behavior and dynamic fallback first.

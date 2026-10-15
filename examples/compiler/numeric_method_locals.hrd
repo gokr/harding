@@ -1,0 +1,73 @@
+Numeric := Object derive: #(slot).
+Numeric>>sum: limit [
+  | total k |
+  total := 0. k := 0.
+  [k < limit] whileTrue: [total := total + k. k := k + 1].
+  ^ total
+].
+Numeric>>floatSum [
+  | total k |
+  total := 0.0. k := 0.
+  [k < 10] whileTrue: [total := total + 0.5. k := k + 1].
+  ^ total
+].
+Numeric>>earlyRead [
+  | k |
+  k println.
+  k := 3.
+  ^ k
+].
+Numeric>>changeKind [
+  | k |
+  k := 1.
+  k := 2.5.
+  ^ k
+].
+Numeric>>captured [
+  | k callback |
+  k := 0.
+  callback := [k := k + 1].
+  callback value. callback value.
+  ^ k
+].
+Numeric>>shadow [
+  | k |
+  k := 5.
+  #(1, 2) do: [:k | k println].
+  ^ k
+].
+Numeric>>localSlot [
+  | slot |
+  slot := 2.
+  slot := slot + 1.
+  ^ slot
+].
+Numeric>>slotDependency [
+  | k |
+  slot := 1.
+  k := 0.
+  k := k + slot.
+  ^ k
+].
+Numeric>>division [
+  | k |
+  k := 1.
+  ^ [k := k // 0] on: DivisionByZero do: [:ex | "caught"]
+].
+Numeric class>>classSum [
+  | k |
+  k := 2.
+  k := k + 3.
+  ^ k
+].
+n := Numeric new.
+(n sum: 100) println.
+n floatSum println.
+n earlyRead println.
+n changeKind println.
+n captured println.
+n shadow println.
+n localSlot println.
+n slotDependency println.
+n division println.
+Numeric classSum println.

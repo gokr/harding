@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Eighty parity cases cover the current milestones, including five unhandled-error
+Eighty-one parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -58,7 +58,7 @@ File-level temporary bars and `Harding main:` temporaries are retained by native
 codegen, initialized to nil before closure creation (`script_temporaries`,
 `main_temporaries`). CLI, file-codegen and compiler-primitive entry points use the
 script parser without shifting source token lines. The example suite now has
-50 exact parity passes, 1 known compiler-failure case and 26 syntax-only gates
+51 exact parity passes, 1 known compiler-failure case and 26 syntax-only gates
 (including 17 website host/context fragments).
 Native `System arguments` returns user argument strings (including empty,
 spaced, option-like and Unicode values) without the executable name; aliases
@@ -89,15 +89,16 @@ Shared native helpers dispatch object/class receivers before builtin fallback,
 so dynamically typed receivers and generated accessors named `last`, `size` or
 `abs` are not shadowed (`accessor_selector_shadowing`). Nil-valued overrides and
 method replacement are covered under ARC/ORC; primitive fast paths are retained.
+Declared numeric method temporaries with proven one-kind initialization unbox to
+native storage (`numeric_method_locals`); measured gains and limits are in
+[GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md). Mixed mode stays boxed.
 Collection mutation and numeric value-equality coverage remain separate gaps.
 Logging stream/filter parity is covered too: lazy native sinks use Harding's
 threshold, CLI logging uses stderr,
 and existing host handlers/global filters are preserved. The logging manifest
 failure marker has been removed.
-The full 79-case semantic baseline passed with a 60-second execution bound;
-adding `json_parsing` passed its focused run together with `json_literals`,
-`accessor_selector_shadowing` and `dynamic_send`. The full 80-case suite has not
-been rerun for the parsing slice. An earlier concurrent 30-second run timed out
+The full 81-case semantic suite passes with a 60-second execution bound
+(`run-toovwg8r`). An earlier concurrent 30-second run timed out
 only on interpreted queens, which passed in isolation.
 
 Compiled programs construct built-in collections: `Array`/`Table`/`Set`/`String`
@@ -291,17 +292,27 @@ punctuation, and generated proc names embed raw `{cls.name}` interleaved with su
 identifiers, so class/module spelling collisions remain separate follow-up work;
 this slice does not establish general name-identity parity.
 
-## Numeric specialization (first slice)
+## Numeric specialization
 
-Pure compiled scripts may use native integer/float storage for directly initialized
-lowercase locals whose assignments retain one kind and whose reads follow definite
-initialization. Same-kind addition, subtraction, multiplication and comparisons
+Pure compiled scripts and explicitly declared method temporaries may use native
+integer/float storage for directly initialized lowercase locals whose assignments
+retain one kind and whose reads follow definite initialization. Method candidates
+are restricted to declared temporaries before dependency analysis, so slots and
+parameters cannot be mistaken for native lexical variables. Native temporary
+storage initializes to zero only when no read can observe that pre-assignment
+state; otherwise the temporary stays a nil-initialized NodeValue. Same-kind
+addition, subtraction, multiplication and comparisons
 emit native expressions. General sends still receive boxed NodeValue arguments.
 Captured bindings, lexical shadowing, real closures, type-changing assignments,
 globals and mixed mode retain the dynamic representation. Method parameters, slots,
 loop-local declarations, numeric promotions and division/modulo are not unboxed by
 this slice. Sieve still counts 669, including under ORC; its inner divisor remains
-boxed. This is not evidence of broad arithmetic-error or full compiler parity.
+boxed. `numeric_method_locals` checks integer/float methods, class-side locals,
+early nil reads, type changes, captured cells, shadowing, slot dependencies and
+zero-divisor fallback. Paired release benchmarks measured ~5.16x/~5.28x for
+Integer/Float method loops and ~2.23x with a dynamic bound parameter; see
+[GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md) for scope and raw evidence.
+This is not evidence of broad arithmetic-error or full compiler parity.
 
 ## Guarded allocation (first direct-call slice)
 

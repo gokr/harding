@@ -426,6 +426,43 @@ suite "Compiler: Cached ordinary sends":
     check not genMessage(ctx, send).contains("cachedSend")
 
 suite "Compiler: Conservative numeric representations":
+  test "method temporaries unbox while arguments and slots remain dynamic":
+    let (nodes, _) = parse("Counter := Object derive: #(slot). Counter>>sum: limit [ | total k | total := 0. k := 0. [k < limit] whileTrue: [total := total + k. k := k + 1]. ^ total ].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "numeric_method")
+    check code.contains("var total = 0")
+    check code.contains("var k = 0")
+    check code.contains("intVal: (total + k)")
+    check code.contains("var limit = (if args.len > 0: args[0]")
+    check not code.contains("var total = NodeValue")
+
+  test "mixed-mode methods retain boxed temporaries":
+    let (nodes, _) = parse("Counter := Object derive: #(). Counter>>probe [ | k | k := 0. k := k + 1. ^ k ].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "numeric_mixed", mixed = true)
+    check code.contains("var k = NodeValue(kind: vkNil)")
+    check not code.contains("intVal: (k + 1)")
+
+  test "method temporary reads before initialization preserve nil":
+    let (nodes, _) = parse("Counter := Object derive: #(). Counter>>probe [ | count | count println. count := 1. ^ count ].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "numeric_early_read")
+    check code.contains("var " & mangleIdentifier("count") & " = NodeValue(kind: vkNil)")
+
+  test "slot dependencies cannot be mistaken for native lexical variables":
+    let (nodes, _) = parse("slot := 1. k := 0. k := k + slot.")
+    let bindings = analyzeNumericBindings(nodes, @[], @["k"])
+    check "slot" notin bindings
+    check "k" notin bindings
+
+  test "method captures, type changes and lexical slot names remain dynamic":
+    let (nodes, _) = parse("Counter := Object derive: #(amount). Counter>>probe [ | count | count := 0. callback := [count := count + 1]. amount := 3. ^ callback ].")
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "numeric_capture")
+    check code.contains("var " & mangleIdentifier("count") & " = MutableCell")
+    check not code.contains("var amount = 0")
+
+
   test "monomorphic initialized script locals become native numbers":
     let (nodes, _) = parse("total := 0. i := 0. [i < 10] whileTrue: [total := total + i. i := i + 1]. total println.")
     let bindings = analyzeNumericBindings(nodes, @[])

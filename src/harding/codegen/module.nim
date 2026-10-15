@@ -278,7 +278,7 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
 proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil,
-                         knownGlobals: seq[string] = @[]): string =
+                         knownGlobals: seq[string] = @[], mixed: bool = false): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -345,7 +345,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       genCtx.setVariableType("self", clsName, true)
       for paramName in params:
         genCtx.parameters.add(paramName)
-      
+
+      if not mixed and md.temporaries.len > 0:
+        genCtx.numericBindings = analyzeNumericBindings(body, methodCellNames & params,
+                                                       md.temporaries)
       output.add(indentBlock(genLocalDeclarations(genCtx, md.temporaries)))
 
       # If any nested block performs a non-local return (^), the method
@@ -730,7 +733,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate compiled methods from user definitions after primitive operators,
   # so compiled method bodies can call nt_* helpers without forward declarations.
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
-                                 knownGlobals))
+                                 knownGlobals, mixed))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")

@@ -387,6 +387,14 @@ separate review, not silently applied or dropped.
 
 ## 6. Optimize after semantic coverage
 
+Near-term order: primitive class-side dynamic dispatch, measured numeric-local
+unboxing, collection semantics, then native processes. Numeric optimization may
+proceed independently of the recorded primitive-class dispatch gap. Before
+choosing a native-process lowering, extend the isolated Nimony passive-proc probe
+to nested calls, captured state, cleanup, errors, lexical non-local returns and
+foreign callbacks; passing a suspend/resume smoke test alone is not sufficient.
+Nimony is an evaluation target, not a replacement for the pinned Nim toolchain.
+
 Measured baseline and methodology: [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md).
 On the trial-division benchmark Granite native is ~89x faster than the release
 interpreter but ~40x slower than C and ~25x slower than Nim, consistent with
@@ -419,9 +427,14 @@ below rather than relying on impressions.
       emit native operations; ordinary message arguments/results remain NodeValue.
       Captures, shadowing, real closures, globals, mixed mode and type changes fall
       back to dynamic. Division/modulo are deliberately unchanged.
-- [ ] Extend B to lexical method/loop bindings and interprocedural types, with
-      sound joins and arithmetic-error/overflow tests. No method parameter or slot
-      unboxing is claimed by the first slice.
+- [x] B, method-local slice: explicitly declared method temporaries initialized
+      directly to numeric literals use native storage only when every read follows
+      initialization and every assignment retains one kind. Slot/argument names
+      are excluded before dependency analysis. Captures, shadowing, real closures,
+      type changes and division fall back to dynamic. Parameters/slots remain boxed.
+- [ ] Extend B to loop-local declarations/parameters and interprocedural types,
+      with sound joins and arithmetic-error/overflow tests. No parameter or slot
+      unboxing is claimed by the method-local slice.
 - [x] C, first slice: statically named class allocation uses a guarded native
       allocator when no inherited/own class-side new method exists. Allocator,
       class-method and superclass registrations invalidate the cached guard;

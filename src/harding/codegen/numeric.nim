@@ -38,16 +38,19 @@ proc numericKind*(node: Node, bindings: NumericBindings): NumericRepresentation 
     discard
   return nrDynamic
 
-proc analyzeNumericBindings*(body: seq[Node], captured: seq[string]): NumericBindings =
-  ## Specialize only directly initialized script locals. Every assignment must
+proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
+                             localNames: seq[string] = @[]): NumericBindings =
+  ## Find directly initialized lexical numeric candidates. Every assignment must
   ## retain its numeric kind and every read must follow definite initialization.
   ## Any lexical shadowing excludes the name throughout this conservative pass.
+  ## A nonempty localNames list restricts candidates before dependency analysis.
   var candidates = initTable[string, NumericRepresentation]()
   for node in body:
     if node != nil and node.kind == nkAssign:
       let assignment = node.AssignNode
       let name = assignment.variable
-      if name.len > 0 and name[0] in {'a'..'z'} and name notin captured and name notin candidates:
+      if name.len > 0 and name[0] in {'a'..'z'} and name notin captured and
+         name notin candidates and (localNames.len == 0 or name in localNames):
         let kind = numericKind(assignment.expression, initTable[string, NumericRepresentation]())
         if kind in {nrInt, nrFloat}:
           candidates[name] = kind

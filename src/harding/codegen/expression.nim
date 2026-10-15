@@ -31,7 +31,7 @@ type
     compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
-    numericBindings*: NumericBindings ## Proven script-local native representations
+    numericBindings*: NumericBindings ## Proven lexical native representations
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -236,7 +236,13 @@ proc genLocalDeclarations*(ctx: GenContext, names: seq[string]): string =
   for name in names:
     if not ctx.isLocal(name):
       ctx.locals.add(name)
-      result.add(bindingDeclaration(ctx, name, "NodeValue(kind: vkNil)") & "\n")
+      case ctx.numericBindings.getOrDefault(name, nrDynamic)
+      of nrInt:
+        result.add(fmt("var {mangleIdentifier(name)} = 0\n"))
+      of nrFloat:
+        result.add(fmt("var {mangleIdentifier(name)} = 0.0\n"))
+      else:
+        result.add(bindingDeclaration(ctx, name, "NodeValue(kind: vkNil)") & "\n")
 
 proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)

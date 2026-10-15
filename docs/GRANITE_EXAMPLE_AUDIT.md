@@ -2,11 +2,11 @@
 
 ## Scope
 
-`examples/manifest.json` covers all 42 `.hrd` sources under `examples/` and
+`examples/manifest.json` covers all 43 `.hrd` sources under `examples/` and
 `benchmark/`, with nonempty-argument template and argument-preservation variants
-(47 source cases). All 30 Harding fences on `website/content/docs.md`,
+(48 source cases). All 30 Harding fences on `website/content/docs.md`,
 `website/content/index.md` and `website/content/features.md` are also inventoried
-(77 cases total). The Markdown itself is extracted at run time, so tests cannot
+(78 cases total). The Markdown itself is extracted at run time, so tests cannot
 drift onto copied snippets; duplicate fence headings are disambiguated (label
 suffix), malformed or unlisted fences fail, and unsafe case ids are rejected.
 Examples are grouped into language, compiler, stdlib, concurrency, web,
@@ -36,10 +36,10 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **50 exact parity passes**, **1 known
-compiler-failure case**, and **26 syntax-only dependency/host/context gates**. All 51
+`nimble testExamples` completed with **51 exact parity passes**, **1 known
+compiler-failure case**, and **26 syntax-only dependency/host/context gates**. All 52
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-e_e_40ub/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-y__8g2ie/results.json`.
 Runner unit tests (16 checks), Echo host tests/demo, interpreter-template host
 tests, and both engine builds pass. The valid top-level-bars example now passes
 unchanged rather than carrying a known-failure marker; known gaps are not successes.

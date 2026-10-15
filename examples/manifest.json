@@ -449,6 +449,11 @@
       "id": "examples-stdlib-json_parse",
       "path": "examples/stdlib/json_parse.hrd",
       "stdout": "examples/expected/examples-stdlib-json_parse.stdout"
+    },
+    {
+      "id": "examples-compiler-numeric_method_locals",
+      "path": "examples/compiler/numeric_method_locals.hrd",
+      "stdout": "examples/expected/examples-compiler-numeric_method_locals.stdout"
     }
   ]
 }

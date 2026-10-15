@@ -985,6 +985,11 @@ CASES.append(("json_parsing",
               (ROOT / "examples/expected/examples-stdlib-json_parse.stdout").read_text()))
 
 
+CASES.append(("numeric_method_locals",
+              (ROOT / "examples/compiler/numeric_method_locals.hrd").read_text(),
+              (ROOT / "examples/expected/examples-compiler-numeric_method_locals.stdout").read_text()))
+
+
 def run(command, timeout, log, expected_error=None):
     try:
         completed = subprocess.run(command, cwd=ROOT, text=True,
