@@ -2,11 +2,11 @@
 
 ## Scope
 
-`examples/manifest.json` covers all 41 `.hrd` sources under `examples/` and
+`examples/manifest.json` covers all 42 `.hrd` sources under `examples/` and
 `benchmark/`, with nonempty-argument template and argument-preservation variants
-(46 source cases). All 30 Harding fences on `website/content/docs.md`,
+(47 source cases). All 30 Harding fences on `website/content/docs.md`,
 `website/content/index.md` and `website/content/features.md` are also inventoried
-(76 cases total). The Markdown itself is extracted at run time, so tests cannot
+(77 cases total). The Markdown itself is extracted at run time, so tests cannot
 drift onto copied snippets; duplicate fence headings are disambiguated (label
 suffix), malformed or unlisted fences fail, and unsafe case ids are rejected.
 Examples are grouped into language, compiler, stdlib, concurrency, web,
@@ -36,10 +36,10 @@ unit tests for these distinctions and timeout handling.
 
 ## Executed baseline
 
-`nimble testExamples` completed with **49 exact parity passes**, **1 known
-compiler-failure case**, and **26 syntax-only dependency/host/context gates**. All 50
+`nimble testExamples` completed with **50 exact parity passes**, **1 known
+compiler-failure case**, and **26 syntax-only dependency/host/context gates**. All 51
 ungated cases execute successfully in the interpreter and match their stdout and
-stderr snapshots. Logs: `build/example-audit/run-swrcv93o/results.json`.
+stderr snapshots. Logs: `build/example-audit/run-e_e_40ub/results.json`.
 Runner unit tests (16 checks), Echo host tests/demo, interpreter-template host
 tests, and both engine builds pass. The valid top-level-bars example now passes
 unchanged rather than carrying a known-failure marker; known gaps are not successes.
@@ -54,6 +54,12 @@ The logging example also passes unchanged: lazy native sinks use Harding's
 configured threshold (ERROR by default), and interpreter CLI logging uses stderr
 as documented. The snapshot separates `Hello World` on stdout from ERROR/FATAL
 records on stderr; no stream-merging normalization is used.
+
+`examples/stdlib/json_parse.hrd` now parses nested values natively and
+round-trips them through `Json stringify:`. It checks invalid/trailing text,
+Unicode and escapes, numeric/Boolean/null values, empty containers and aliased
+class receivers. Primitive class-side `perform:with:` remains a separate
+recorded gap in both engines (the direct/aliased parse sends work).
 
 Remaining native gaps:
 

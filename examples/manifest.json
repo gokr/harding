@@ -444,6 +444,11 @@
       "path": "website/content/features.md",
       "snippet": "Collections",
       "stdout": "examples/expected/website-features-collections.stdout"
+    },
+    {
+      "id": "examples-stdlib-json_parse",
+      "path": "examples/stdlib/json_parse.hrd",
+      "stdout": "examples/expected/examples-stdlib-json_parse.stdout"
     }
   ]
 }

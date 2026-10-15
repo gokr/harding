@@ -68,6 +68,14 @@ semantics; any intended language change must be explicit and documented.
 - [x] Native Json buildDynamic:/stringify: support scalars and collections,
       nested values and escaping with interpreter formatting. Both engines write
       nil as JSON null; native per-write cycle state is local and recoverable.
+- [x] Native Json parse: creates nested scalar/collection values, returns nil on
+      invalid input, supports aliased receivers and registered overrides, and
+      round-trips through stringify:. Exact-output json_parse example and ARC/ORC
+      runtime tests cover numeric kinds, Unicode/escapes, empty containers and null.
+- [ ] Primitive class-side perform:with: is incomplete: `Json perform: #parse:
+      with: "42"` returns nil in the VM and signals MNU natively, unlike direct
+      and aliased sends. Fix dynamic primitive-class dispatch separately; do not
+      count nil as intended parse behavior.
 - [ ] Native ordinary-object JSON serialization (slots, representation hooks,
       class JSON specs and plan caching) remains unsupported and raises explicitly.
 - [x] Native builtin helpers defer to object/class dispatch, including dynamic

@@ -204,6 +204,39 @@ proc compiledJsonClassValue*(): NodeValue =
     compiledClasses["Json"] = newClass(name = "Json")
   return compiledClassValue("Json")
 
+proc compiledJsonParse*(value: NodeValue): NodeValue =
+  ## Parse JSON text into native Harding scalars and collections; failures answer nil.
+  if value.kind != vkString:
+    return nilValue()
+
+  proc toHarding(node: JsonNode): NodeValue =
+    case node.kind
+    of JObject:
+      var entries = initTable[NodeValue, NodeValue]()
+      for key, entry in node.pairs:
+        entries[toValue(key)] = toHarding(entry)
+      result = NodeValue(kind: vkTable, tableVal: entries)
+    of JArray:
+      var elements: seq[NodeValue]
+      for element in node.items:
+        elements.add(toHarding(element))
+      result = NodeValue(kind: vkArray, arrayVal: elements)
+    of JString:
+      result = toValue(node.getStr())
+    of JInt:
+      result = toValue(node.getInt())
+    of JFloat:
+      result = toValue(node.getFloat())
+    of JBool:
+      result = toValue(node.getBool())
+    of JNull:
+      result = nilValue()
+
+  try:
+    result = toHarding(parseJson(value.strVal))
+  except CatchableError:
+    result = nilValue()
+
 proc compiledJsonEscape(buf: var string, value: string) =
   ## Mirror the interpreter's JSON string escaping.
   buf.add '"'
@@ -895,6 +928,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       case selector
       of "buildDynamic:": return compiledJsonBuildDynamic(args[0])
       of "stringify:": return compiledJsonStringify(args[0])
+      of "parse:": return compiledJsonParse(args[0])
       else: discard
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):

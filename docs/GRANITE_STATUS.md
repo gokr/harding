@@ -45,7 +45,7 @@ claimed. Logs and samples: `build/preamble-measurement/results.json`.
 
 ## Current coverage and remaining gaps
 
-Seventy-nine parity cases cover the current milestones, including five unhandled-error
+Eighty parity cases cover the current milestones, including five unhandled-error
 checks, two invalid-super-qualifier checks, and the inactive-return case, which is
 now ordinary parity. Coverage includes class-side and inherited
 method dispatch, factories and constructors, accessor permissions/overrides,
@@ -58,7 +58,7 @@ File-level temporary bars and `Harding main:` temporaries are retained by native
 codegen, initialized to nil before closure creation (`script_temporaries`,
 `main_temporaries`). CLI, file-codegen and compiler-primitive entry points use the
 script parser without shifting source token lines. The example suite now has
-49 exact parity passes, 1 known compiler-failure case and 26 syntax-only gates
+50 exact parity passes, 1 known compiler-failure case and 26 syntax-only gates
 (including 17 website host/context fragments).
 Native `System arguments` returns user argument strings (including empty,
 spaced, option-like and Unicode values) without the executable name; aliases
@@ -72,7 +72,15 @@ pass the receiver to the non-nil callback, and preserve cleanup/non-local return
 Native `json{...}` literals build JSON strings without an interpreter: literal-level
 entries use `", "`/`": "` with compact nested values, matching the interpreter, and
 arrays, scalars, escaping and cycle detection are covered. `Json stringify:`
-supports scalars and collections. Ordinary object JSON serialization (including
+supports scalars and collections. Native `Json parse:` creates nested scalar,
+Array and Table values; invalid input and JSON null answer nil. Direct/aliased
+receivers and registered overrides are covered, with exact-output parsing and
+round-trip evidence from `examples/stdlib/json_parse.hrd`. Dynamic
+`Json perform: #parse: with: "42"` returns nil in the VM and signals MNU natively;
+primitive class-side dynamic dispatch remains a separate gap, not intended
+parse behavior.
+Collection identity, mutation aliasing and reflection remain separate work.
+Ordinary object JSON serialization (including
 slot layouts, representation hooks and class JSON specs) remains unimplemented
 natively and raises explicitly instead of silently writing an empty object.
 Per-write cycle state is local; failed writes do not poison later writes. Both
@@ -86,8 +94,11 @@ Logging stream/filter parity is covered too: lazy native sinks use Harding's
 threshold, CLI logging uses stderr,
 and existing host handlers/global filters are preserved. The logging manifest
 failure marker has been removed.
-The full semantic runner passes with a 60-second execution bound; a concurrent
-30-second run timed out only on interpreted queens, which passed in isolation.
+The full 79-case semantic baseline passed with a 60-second execution bound;
+adding `json_parsing` passed its focused run together with `json_literals`,
+`accessor_selector_shadowing` and `dynamic_send`. The full 80-case suite has not
+been rerun for the parsing slice. An earlier concurrent 30-second run timed out
+only on interpreted queens, which passed in isolation.
 
 Compiled programs construct built-in collections: `Array`/`Table`/`Set`/`String`
 `new`/`new:`/`new:withAll:`, table literals, and array/table `add:`/`includes:`

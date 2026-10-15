@@ -980,6 +980,11 @@ h probe println.
 ])
 
 
+CASES.append(("json_parsing",
+              (ROOT / "examples/stdlib/json_parse.hrd").read_text(),
+              (ROOT / "examples/expected/examples-stdlib-json_parse.stdout").read_text()))
+
+
 def run(command, timeout, log, expected_error=None):
     try:
         completed = subprocess.run(command, cwd=ROOT, text=True,

@@ -1,0 +1,28 @@
+# Parse nested JSON text, inspect values and round-trip it.
+text := """{"items":[1,2.5,true,false,null,{"label":"café"}]}""".
+data := Json parse: text.
+items := data at: "items".
+items size println.
+(items at: 0) println.
+(items at: 1) println.
+(items at: 2) println.
+(items at: 3) println.
+(items at: 4) isNil println.
+((items at: 5) at: "label") println.
+(Json stringify: data) println.
+(Json parse: "broken") isNil println.
+(Json parse: "{} trailing") isNil println.
+(Json parse: "null") isNil println.
+(Json parse: 42) isNil println.
+(Json stringify: (Json parse: "[]")) println.
+(Json stringify: (Json parse: "{}")) println.
+alias := Json.
+(alias parse: "42") println.
+(Json parse: "1.25") println.
+(Json parse: "false") println.
+escaped := """
+  "line\n\u263a"
+""".
+(Json stringify: (Json parse: escaped)) println.
+# Repeated calls produce independent values.
+(Json stringify: (Json parse: text)) println.

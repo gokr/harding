@@ -85,6 +85,40 @@ suite "Compiled JSON literals":
     check compiledJsonStringify(cyclic).strVal == "[\"recovered\"]"
     cyclicInstance.elements = @[]
 
+suite "Compiled JSON parsing":
+  test "nested data, Unicode, null and numeric kinds":
+    let rt = newRuntime()
+    let cls = compiledJsonClassValue()
+    let value = sendMessage(rt, cls, "parse:", @[toValue("{\"items\":[1,2.5,true,false,null,{\"label\":\"caf\\u00e9\"}]}")])
+    require value.kind == vkTable
+    let array = sendMessage(rt, value, "at:", @[toValue("items")])
+    require array.kind == vkArray
+    require array.arrayVal.len == 6
+    check array.arrayVal[0].kind == vkInt
+    check array.arrayVal[0].intVal == 1
+    check array.arrayVal[1].kind == vkFloat
+    check array.arrayVal[1].floatVal == 2.5
+    check array.arrayVal[2].boolVal
+    check not array.arrayVal[3].boolVal
+    check isNilValue(array.arrayVal[4])
+    check sendMessage(rt, array.arrayVal[5], "at:", @[toValue("label")]).strVal == "café"
+    check compiledJsonStringify(value).strVal == "{\"items\":[1,2.5,true,false,null,{\"label\":\"café\"}]}"
+
+  test "invalid input and JSON null answer nil without poisoning later calls":
+    for text in ["", "broken", "{", "[1", "{} trailing", "null"]:
+      check isNilValue(compiledJsonParse(toValue(text)))
+    check isNilValue(compiledJsonParse(toValue(42)))
+    check compiledJsonParse(toValue("42")).intVal == 42
+    check compiledJsonParse(toValue("-1.5e2")).floatVal == -150.0
+    check compiledJsonStringify(compiledJsonParse(toValue("[]"))).strVal == "[]"
+    check compiledJsonStringify(compiledJsonParse(toValue("{}"))).strVal == "{}"
+    check compiledJsonParse(toValue("\"line\\n\\u263a\"")).strVal == "line\n☺"
+
+  test "registered class-side parsing overrides the builtin":
+    let cls = compiledJsonClassValue()
+    registerCompiledClassMethod("Json", "parse:", replacementAllocation)
+    check sendMessage(newRuntime(), cls, "parse:", @[toValue("42")]).intVal == 2
+
 suite "Compiled System arguments":
   test "canonical System returns a snapshot of user arguments":
     let rt = newRuntime()

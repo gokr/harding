@@ -2104,9 +2104,17 @@ inside collections. Nested `json{...}` returns a String and is therefore quoted;
 use nested object/array syntax to embed structure instead of JSON text. Table-key
 order is unspecified, not insertion order.
 
-Native `Json parse:`, ordinary-object serialization, `jsonRepresentation` hooks
-and class JSON configuration are not yet implemented. Unsupported ordinary
-objects raise explicitly rather than silently serializing to empty objects.
+`Json parse:` also works natively, producing Integer, Float, String, Boolean,
+nil, Array and Table values, including nested structures. Invalid text or a
+non-String argument answers nil (as does JSON `null`); parsing consumes the whole
+input. Both engines use the same host JSON parser and its accepted syntax.
+Native collections use the compiled value representation; interpreter collections
+are heap instances. Collection identity, mutation aliasing and reflection across
+those representations remain separate compatibility work.
+
+Native ordinary-object serialization, `jsonRepresentation` hooks and class JSON
+configuration are not yet implemented. Unsupported ordinary objects raise
+explicitly rather than silently serializing to empty objects.
 The object/configuration examples below describe interpreter behavior.
 
 ### JSON Literals
