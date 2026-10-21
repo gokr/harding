@@ -76,9 +76,10 @@ supports scalars and collections. Native `Json parse:` creates nested scalar,
 Array and Table values; invalid input and JSON null answer nil. Direct/aliased
 receivers and registered overrides are covered, with exact-output parsing and
 round-trip evidence from `examples/stdlib/json_parse.hrd`. Dynamic
-`Json perform: #parse: with: "42"` returns nil in the VM and signals MNU natively;
-primitive class-side dynamic dispatch remains a separate gap, not intended
-parse behavior.
+`Json perform: #parse: with: "42"` now conveys an ordinary send and answers
+`42` in both engines, as do class-side, inherited class-side, allocator and
+`doesNotUnderstand:` targets; a missing selector signals `MessageNotUnderstood`.
+Coverage: `dynamic_send_targets` parity plus interpreter tests.
 Collection identity, mutation aliasing and reflection remain separate work.
 Ordinary object JSON serialization (including
 slot layouts, representation hooks and class JSON specs) remains unimplemented

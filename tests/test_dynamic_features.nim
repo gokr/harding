@@ -64,15 +64,63 @@ suite "Dynamic Message Sending (perform:)":
     check(result[0][^1].kind == vkString)
     check(result[0][^1].strVal == "B")
 
-  test "perform: returns nil on non-existent selector (KNOWN BEHAVIOR)":
+  test "perform: signals MessageNotUnderstood on non-existent selector":
     let result = interp.evalStatements("""
       MyClass := Object derive.
       Obj := MyClass new.
-      Result := Obj perform: #nonExistentMethod
+      Result := [Obj perform: #nonExistentMethod] on: Error do: [:e | e message]
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkInstance)
-    check(result[0][^1].toString() == "nil")
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "Message not understood: nonExistentMethod")
+
+  test "perform: conveys a nil-returning method as nil, not as a miss":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass>>nothing [ ^ nil ].
+      Obj := MyClass new.
+      Result := (Obj perform: #nothing) isNil
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkBool)
+    check(result[0][^1].boolVal)
+
+  test "perform: reaches class-side methods":
+    let result = interp.evalStatements("""
+      MyClass := Object derive.
+      MyClass class>>tag [ ^ "class-tag" ].
+      Result := MyClass perform: #tag
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "class-tag")
+
+  test "perform: reaches inherited class-side methods":
+    let result = interp.evalStatements("""
+      Parent := Object derive.
+      Parent class>>tag [ ^ "parent-tag" ].
+      Child := Parent derive.
+      Result := Child perform: #tag
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "parent-tag")
+
+  test "perform: reaches builtin class-side methods":
+    let result = interp.evalStatements("""
+      Result := Json perform: #parse: with: "42"
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].toString() == "42")
+
+  test "perform: reaches the default allocator":
+    let result = interp.evalStatements("""
+      AllocTarget := Object derive.
+      Result := (AllocTarget perform: #new) class name
+    """)
+    check(result[1].len == 0)
+    check(result[0][^1].kind == vkString)
+    check(result[0][^1].strVal == "AllocTarget")
 
   test "perform: inherits from parent class":
     let result = interp.evalStatements("""

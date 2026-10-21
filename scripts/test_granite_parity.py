@@ -757,6 +757,21 @@ c := C new.
 (c perform: "greet") println.
 (C respondsTo: #new) println.
 """, "hi\n7\ntrue\nfalse\nhi\ntrue\n"),
+    ("dynamic_send_targets", """
+C := Object derive: #().
+C>>greet [ ^ "hi" ].
+C>>nothing [ ^ nil ].
+C class>>tag [ ^ "class-tag" ].
+D := C derive: #().
+c := C new.
+(c perform: #greet) println.
+(c perform: #nothing) isNil println.
+(C perform: #tag) println.
+(D perform: #tag) println.
+(Json perform: #parse: with: "42") println.
+((C perform: #new) class name) println.
+[ c perform: #nope ] on: Error do: [:e | e message print ].
+""", "hi\ntrue\nclass-tag\nclass-tag\n42\nC\nMessage not understood: nope"),
     ("qualified_super", """
 First := Object derive: #().
 First>>tag [ ^ "first" ].

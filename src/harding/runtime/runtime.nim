@@ -574,6 +574,14 @@ proc hasCompiledClassMethodInHierarchy*(className, selector: string): bool =
   return walkCompiledHierarchy(className,
     proc(name: string): bool = name & ">>" & selector in compiledClassMethods).len > 0
 
+proc implementsPerform(receiver: NodeValue, receiverClassName, selector: string): bool =
+  ## True when a compiled user method implements this `perform:` selector for the
+  ## receiver, in which case the builtin table must not convey the send itself.
+  if receiver.kind == vkClass and receiver.classVal != nil:
+    return hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector)
+  return receiverClassName.len > 0 and
+         hasCompiledMethodInHierarchy(receiverClassName, selector)
+
 proc canDirectAllocate*(className: string,
                         allocator: proc(self: NodeValue, args: seq[NodeValue]): NodeValue): bool =
   ## Guard the default allocation path against method and allocator replacement.
@@ -894,6 +902,22 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     else:
       discard
 
+  # A dynamic send reads its selector from an argument, so the builtin table
+  # cannot run it: the `perform:` builtins sit after the class-side and compiled
+  # method paths, which meant class-side, builtin, allocator and DNU sends never
+  # ran and every miss silently answered nil. Convey the real send instead, so
+  # `obj perform: sel` matches the direct send, including signalling on a miss.
+  # A user method that implements `perform:` itself keeps ordinary dispatch.
+  if selector.len >= 8 and selector[0] == 'p' and
+     selector in ["perform:", "perform:with:", "perform:with:with:"] and
+     args.len >= 1 and not implementsPerform(receiver, getReceiverClassName(receiver), selector):
+    var conveyedSelector = ""
+    case args[0].kind
+    of vkSymbol: conveyedSelector = args[0].symVal
+    of vkString: conveyedSelector = args[0].strVal
+    else: discard
+    return sendMessage(runtime, receiver, conveyedSelector, args[1..^1])
+
   if receiver.kind == vkClass and receiver.classVal != nil:
     if selector == "addSuperclass:" and args.len >= 1:
       # Register another parent at runtime, matching the interpreter. Generated
@@ -980,22 +1004,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         proc(name: string): bool = name == targetName)
       return toValue(owner.len > 0)
     return toValue(false)
-  of "perform:", "perform:with:", "perform:with:with:":
-    # Dynamic send: the selector argument (symbol or string) names the method to
-    # run on this receiver, with the remaining arguments as its arguments.
-    if args.len < 1:
-      return NodeValue(kind: vkNil)
-    var dynSelector = ""
-    if args[0].kind == vkSymbol:
-      dynSelector = args[0].symVal
-    elif args[0].kind == vkString:
-      dynSelector = args[0].strVal
-    else:
-      return NodeValue(kind: vkNil)
-    var dynArgs: seq[NodeValue] = @[]
-    for i in 1..<args.len:
-      dynArgs.add(args[i])
-    return sendMessage(runtime, receiver, dynSelector, dynArgs)
 
   of "respondsTo:":
     if args.len < 1:

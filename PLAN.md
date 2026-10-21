@@ -72,10 +72,20 @@ semantics; any intended language change must be explicit and documented.
       invalid input, supports aliased receivers and registered overrides, and
       round-trips through stringify:. Exact-output json_parse example and ARC/ORC
       runtime tests cover numeric kinds, Unicode/escapes, empty containers and null.
-- [ ] Primitive class-side perform:with: is incomplete: `Json perform: #parse:
-      with: "42"` returns nil in the VM and signals MNU natively, unlike direct
-      and aliased sends. Fix dynamic primitive-class dispatch separately; do not
-      count nil as intended parse behavior.
+- [x] `perform:` conveys a real send in both engines. It previously ran as a
+      native method that re-implemented dispatch, so it could not reach class-side
+      methods, builtins, allocators or `doesNotUnderstand:`, and every miss
+      answered nil. The VM now rewrites the send frame into the conveyed selector
+      (only when the receiver's ordinary dispatch resolves `perform:` to
+      Object's own definition, so overrides keep normal dispatch) and the native
+      runtime conveys before the class-side/builtin tables. A missing selector now
+      signals catchable `MessageNotUnderstood` in both engines, which keeps a miss
+      distinguishable from a method that returns nil. Coverage:
+      `dynamic_send_targets` parity plus six interpreter tests.
+- [ ] `perform:` with a non-symbol/non-string selector (for example
+      `obj perform: 42`) still answers nil in both engines rather than signalling;
+      decide whether that should become an argument error. This is the remaining
+      silent nil on the dynamic-send path.
 - [ ] Native ordinary-object JSON serialization (slots, representation hooks,
       class JSON specs and plan caching) remains unsupported and raises explicitly.
 - [x] Native builtin helpers defer to object/class dispatch, including dynamic
@@ -387,9 +397,8 @@ separate review, not silently applied or dropped.
 
 ## 6. Optimize after semantic coverage
 
-Near-term order: primitive class-side dynamic dispatch, measured numeric-local
-unboxing, collection semantics, then native processes. Numeric optimization may
-proceed independently of the recorded primitive-class dispatch gap. Before
+Near-term order: measured numeric-local unboxing, collection semantics, then
+native processes. Numeric optimization may proceed independently. Before
 choosing a native-process lowering, extend the isolated Nimony passive-proc probe
 to nested calls, captured state, cleanup, errors, lexical non-local returns and
 foreign callbacks; passing a suspend/resume smoke test alone is not sufficient.

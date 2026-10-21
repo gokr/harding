@@ -989,6 +989,18 @@ obj perform: #clone                    # Same as: obj clone
 obj perform: #at:put: with: #x with: 5  # Same as: obj at: #x put: 5
 ```
 
+`perform:` is an ordinary send with the selector supplied at run time, so it
+reaches exactly what the direct send reaches: instance and inherited methods,
+class-side methods, primitives, allocators and `doesNotUnderstand:`. Because the
+selector is resolved like any other send, a selector with no matching method
+signals `MessageNotUnderstood` rather than answering nil, which keeps "no such
+method" distinguishable from a method that legitimately returns nil.
+
+```smalltalk
+obj perform: #missingName      # signals MessageNotUnderstood
+obj perform: #nothing          # answers nil if nothing returns nil
+```
+
 ---
 
 ## Blocks and Closures

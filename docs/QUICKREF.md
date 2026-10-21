@@ -662,7 +662,12 @@ Array>>at: index [
 ```smalltalk
 obj perform: #clone                     # Same as: obj clone
 obj perform: #at:put: with: #x with: 5  # Same as: obj at: #x put: 5
+obj perform: #missing                   # signals MessageNotUnderstood
 ```
+
+`perform:` reaches anything a direct send reaches, including class-side methods
+and primitives. A miss signals `MessageNotUnderstood`; a method that returns nil
+still answers nil.
 
 ## Special Forms
 

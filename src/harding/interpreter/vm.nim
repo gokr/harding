@@ -1026,6 +1026,32 @@ proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
   
   return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
+proc implementsObjectPerform(interp: Interpreter, receiverVal: NodeValue,
+                             selector: string): bool =
+  ## True when the receiver's ordinary dispatch resolves a `perform:` family
+  ## selector to Object's own definition, so the VM may convey a real send.
+  ## A receiver that overrides or lacks it keeps ordinary dispatch.
+  let receiverClass = classOfValue(receiverVal)
+  if receiverClass == nil:
+    if objectClass == nil:
+      return false
+    let fallback = lookupMethodOnClass(interp, objectClass, selector)
+    return fallback.found and fallback.definingClass == objectClass
+  if receiverVal.kind == vkClass:
+    let classLookup = lookupClassMethod(receiverClass, selector)
+    if classLookup.found:
+      return classLookup.definingClass == objectClass
+    # A class receiver also answers from the instance side of Class and Object.
+    for wrapper in [classClass, objectClass]:
+      if wrapper == nil:
+        continue
+      let wrapperLookup = lookupMethodOnClass(interp, wrapper, selector)
+      if wrapperLookup.found:
+        return wrapperLookup.definingClass == objectClass
+    return false
+  let receiverLookup = lookupMethodOnClass(interp, receiverClass, selector)
+  return receiverLookup.found and receiverLookup.definingClass == objectClass
+
 # Execute a method using the stackless VM
 proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
                   receiver: Instance, arguments: seq[NodeValue],
@@ -7625,6 +7651,32 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # in the selector symbol form; normalize to plain selector text.
     if frame.selector.len > 0 and frame.selector[0] == '#':
       frame.selector = frame.selector[1..^1]
+
+    # A dynamic send reads its selector from an argument, so no native method can
+    # perform it: a native implementation would run a second VM loop and reach
+    # neither class-side, primitive nor doesNotUnderstand: dispatch. Rewrite the
+    # frame into the conveyed send instead, so `obj perform: sel` behaves exactly
+    # like the direct send, including signalling on a missing selector.
+    if frame.selector.len >= 8 and frame.selector[0] == 'p' and
+       frame.selector in ["perform:", "perform:with:", "perform:with:with:"] and
+       implementsObjectPerform(interp, receiverVal, frame.selector):
+      let performArgs = if hasSingleArg: @[singleArg] else: args
+      var conveyedSelector = ""
+      if performArgs.len >= 1:
+        case performArgs[0].kind
+        of vkSymbol: conveyedSelector = performArgs[0].symVal
+        of vkString: conveyedSelector = performArgs[0].strVal
+        else: discard
+      if conveyedSelector.len == 0:
+        interp.pushValue(nilValue())
+        return true
+      let conveyedArgs = performArgs[1..^1]
+      interp.pushValue(receiverVal)
+      for arg in conveyedArgs:
+        interp.pushValue(arg)
+      interp.pushWorkFrame(newSendMessageFrame(conveyedSelector, conveyedArgs.len,
+                                               isClassMethod = receiverVal.kind == vkClass))
+      return true
 
     # Handle block invocation
     if receiverVal.kind == vkBlock:
