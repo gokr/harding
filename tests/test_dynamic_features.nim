@@ -324,6 +324,35 @@ suite "Reflection: class and class name":
     check(results[0][^1].kind == vkString)
     check(results[0][^1].strVal == "MySpecialClass")
 
+  test "class-side name override wins over the built-in answer":
+    let results = interp.evalStatements("""
+      NameOverride := Object derive: #().
+      NameOverride class>>name [ ^ "custom-name" ].
+      Result := NameOverride name
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkString)
+    check(results[0][^1].strVal == "custom-name")
+
+  test "instance class override wins over the built-in answer":
+    let results = interp.evalStatements("""
+      ClassOverride := Object derive: #().
+      ClassOverride>>class [ ^ "not-the-class" ].
+      Result := ClassOverride new class
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkString)
+    check(results[0][^1].strVal == "not-the-class")
+
+  test "reflection fast paths still answer without an override":
+    let results = interp.evalStatements("""
+      PlainReflect := Object derive: #().
+      Result := (PlainReflect name) & "/" & ((PlainReflect new class) name)
+    """)
+    check(results[1].len == 0)
+    check(results[0][^1].kind == vkString)
+    check(results[0][^1].strVal == "PlainReflect/PlainReflect")
+
 
 suite "Reflection: multiple-parent ancestry":
   test "isKindOf searches secondary and transitive parents":

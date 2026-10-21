@@ -893,7 +893,13 @@ Override superclassNames println.
 (x isKindOf: #Object) println.
 (x isKindOf: Mixin) println.
 Object superclassNames println.
-""", "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\n"),
+NameOverride := Child derive: #().
+NameOverride class>>name [ ^ "custom-name" ].
+NameOverride name println.
+InstOverride := Child derive: #().
+InstOverride>>class [ ^ "not-the-class" ].
+InstOverride new class println.
+""", "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\ncustom-name\nnot-the-class\n"),
     ("script_temporaries", """
 # File-level locals start as nil and survive closure creation before assignment.
 | count spare read bump |

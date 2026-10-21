@@ -1026,11 +1026,11 @@ proc lookupClassMethod*(cls: Class, selector: string): MethodResult =
   
   return MethodResult(currentMethod: nil, receiver: nil, definingClass: nil, found: false)
 
-proc implementsObjectPerform(interp: Interpreter, receiverVal: NodeValue,
-                             selector: string): bool =
-  ## True when the receiver's ordinary dispatch resolves a `perform:` family
-  ## selector to Object's own definition, so the VM may convey a real send.
-  ## A receiver that overrides or lacks it keeps ordinary dispatch.
+proc resolvesToObjectDefinition(interp: Interpreter, receiverVal: NodeValue,
+                                selector: string): bool =
+  ## True when the receiver's ordinary dispatch resolves the selector to Object's
+  ## own definition. Built-in fast paths may answer directly only in that case; a
+  ## receiver whose class overrides the selector must keep ordinary dispatch.
   let receiverClass = classOfValue(receiverVal)
   if receiverClass == nil:
     if objectClass == nil:
@@ -7659,7 +7659,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # like the direct send, including signalling on a missing selector.
     if frame.selector.len >= 8 and frame.selector[0] == 'p' and
        frame.selector in ["perform:", "perform:with:", "perform:with:with:"] and
-       implementsObjectPerform(interp, receiverVal, frame.selector):
+       resolvesToObjectDefinition(interp, receiverVal, frame.selector):
       let performArgs = if hasSingleArg: @[singleArg] else: args
       var conveyedSelector = ""
       if performArgs.len >= 1:
@@ -7908,7 +7908,9 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           discard
 
     of "name":
-      if args.len == 0 and receiverVal.kind == vkClass and receiverVal.classVal != nil:
+      # A class-side name override must win, matching compiled dispatch.
+      if args.len == 0 and receiverVal.kind == vkClass and receiverVal.classVal != nil and
+         resolvesToObjectDefinition(interp, receiverVal, "name"):
         interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.classVal.name))
         return true
 
@@ -7928,18 +7930,23 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           return true
 
     of "class":
-      if receiverVal.kind == vkClass:
-        # For classes, return the class itself (matches original primitiveClassImpl behavior)
-        interp.pushValue(receiverVal)
-      elif receiverVal.kind == vkBool and trueClassCache != nil and falseClassCache != nil:
-        interp.pushValue(NodeValue(kind: vkClass, classVal: if receiverVal.boolVal: trueClassCache else: falseClassCache))
+      # An instance-side class override must win, matching compiled dispatch.
+      if receiverVal.kind != vkClass and
+         not resolvesToObjectDefinition(interp, receiverVal, "class"):
+        discard  # Overridden: fall through to ordinary dispatch.
       else:
-        let receiverClass = classOfValue(receiverVal)
-        if receiverClass != nil:
-          interp.pushValue(NodeValue(kind: vkClass, classVal: receiverClass))
+        if receiverVal.kind == vkClass:
+          # For classes, return the class itself (matches original primitiveClassImpl behavior)
+          interp.pushValue(receiverVal)
+        elif receiverVal.kind == vkBool and trueClassCache != nil and falseClassCache != nil:
+          interp.pushValue(NodeValue(kind: vkClass, classVal: if receiverVal.boolVal: trueClassCache else: falseClassCache))
         else:
-          interp.pushValue(nilValue())
-      return true
+          let receiverClass = classOfValue(receiverVal)
+          if receiverClass != nil:
+            interp.pushValue(NodeValue(kind: vkClass, classVal: receiverClass))
+          else:
+            interp.pushValue(nilValue())
+        return true
 
     of "isNil":
       # The built-in answer applies to nil itself; any object whose class defines

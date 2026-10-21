@@ -338,9 +338,14 @@ arbitrary error resumption solely in the interpreter.
       reflection remain open. Canonical `Root`/`Object`/`Mixin` class values
       support base-class ancestry targets without accepting symbol/string aliases;
       other built-in class identities and allocators remain separate work.
-- [ ] Reflection fast-path overrides: VM class-side `name` bypasses user methods,
-      while compiled lookup honors them (`Override class>>name [^ "custom"]`).
-      Instance `class` overrides also need reconciliation with VM's fast path.
+- [x] Reflection fast-path overrides: the VM's class-side `name` and instance
+      `class` fast paths answered directly and bypassed user methods, while
+      compiled dispatch honored them (`Override class>>name [^ "custom"]`). Both
+      fast paths now answer only when the receiver's ordinary dispatch resolves
+      the selector to Object's own definition, sharing one helper with the
+      `perform:` guard, so an override keeps ordinary dispatch. Coverage:
+      `class_reflection` parity plus interpreter tests, including a
+      no-override case proving the fast paths still answer.
 - [x] Generic missing-message errors instead of silent nil, including compiled
       instance/class/super lookup and custom DNU. Wrong-type primitive fallback,
       reflection and mixed-mode ambiguity remain separate coverage items.
