@@ -20,6 +20,86 @@ Capture := Object derive: #().
 Capture>>run [| flag | flag := false. [[Error signal: "x"] ensure: [flag := true]] on: Error do: [:error | nil]. ^ flag].
 Capture new run println.
 """, "true\n7\n10\n3\ntrue\n"),
+    ("set_query_protocol", """
+s := Set new.
+s add: 1. s add: 2. s add: 2.
+s size println.
+(s includes: 2) println.
+predicate := [:x | x > 1].
+(s select: predicate) size println.
+(s reject: predicate) size println.
+(s anySatisfy: predicate) println.
+(s inject: 0 into: [:sum :x | sum + x]) println.
+(s isKindOf: Set) println.
+""", "2\ntrue\n1\n1\ntrue\n3\ntrue\n"),
+    ("table_query_protocol", """
+t := #{"a" -> 1, "b" -> 2}.
+predicate := [:key :value | value > 1].
+mapper := [:key :value | value * 2].
+(t collect: mapper) size println.
+(t select: predicate) size println.
+(t reject: predicate) size println.
+(t detect: predicate) println.
+(t inject: 0 into: [:sum :key :value | sum + value]) println.
+(t anySatisfy: predicate) println.
+(t allSatisfy: predicate) println.
+(t noneSatisfy: predicate) println.
+(t select: [:key :value | value > 1]) size println.
+(t collect: [:key :value | value + 1]) size println.
+""", "2\n1\n1\n2\n3\ntrue\nfalse\nfalse\n1\n2\n"),
+    ("object_json_specs", """
+JsonParent := Object derivePublic: #(name).
+JsonChild := JsonParent derivePublic: #(count, secret, absent, empty).
+p := JsonChild new.
+p name: "Ada". p count: 3. p secret: "hidden". p empty: "".
+(Json stringify: p) println.
+JsonParent jsonRename: #{"name" -> "label"}.
+JsonChild jsonExclude: #(secret).
+JsonChild jsonOmitNil: #(absent).
+JsonChild jsonOmitEmpty: #(empty).
+JsonChild jsonFieldOrder: #(count, name).
+(Json stringify: p) println.
+JsonChild jsonFormat: #{"count" -> "string"}.
+(Json stringify: p) println.
+JsonChild jsonOnly: #(name).
+(Json stringify: p) println.
+JsonChild jsonReset.
+(Json stringify: p) println.
+JsonHook := Object derive: #().
+JsonHook>>jsonRepresentation [ ^ #(1, 2) ].
+(Json stringify: JsonHook new) println.
+""", '{"name":"Ada","count":3,"secret":"hidden","absent":null,"empty":""}\n{"count":3,"label":"Ada"}\n{"count":"3","label":"Ada"}\n{"label":"Ada"}\n{"label":"Ada","count":3,"secret":"hidden","absent":null,"empty":""}\n[1,2]\n'),
+    ("collection_aliasing", """
+a := Array new.
+b := a.
+a add: 7.
+b size println.
+t := Table new.
+u := t.
+t at: "x" put: 9.
+(u at: "x") println.
+(a == b) println.
+c := a clone.
+c add: 8.
+a size println.
+c size println.
+nested := #(1, 2).
+alias := nested.
+nested at: 0 put: 42.
+(alias at: 0) println.
+jsonArray := Json parse: "[1,2]".
+jsonAlias := jsonArray.
+jsonArray add: 3.
+jsonAlias size println.
+(a = b) println.
+(a = c) println.
+(a isKindOf: Array) println.
+(a class name) println.
+(t includes: 9) println.
+(t includesKey: "x") println.
+(a at: 0 put: 11) println.
+(a do: [:x | x]) size println.
+""", "1\n9\ntrue\n1\n2\n42\n3\ntrue\nfalse\ntrue\nArray\ntrue\ntrue\n11\n1\n"),
     ("array_query_protocol", """
 a := #(1, 2, 3).
 (a reject: [:x | x = 2]) println.

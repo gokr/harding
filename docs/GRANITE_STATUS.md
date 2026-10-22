@@ -2,6 +2,20 @@
 
 Work branch: `granite-completeness`.
 
+## Collection/JSON follow-up
+
+The current follow-up fixes write-only captures and uses shared Instance storage
+for native Array/Table values, preserving aliases and shallow clones. Array,
+Table and Set query regressions and ordinary-object JSON slot/hook/spec
+serialization now execute natively. The expanded baseline recorded 89 passing
+semantic cases; later targeted regressions cover Table literal callbacks, Set
+queries and mutation return values. Runtime tests pass under ARC/ORC.
+See [implementation contract](GRANITE_COLLECTIONS_AND_JSON.md) and
+[Smalltalk-80 collection audit](COLLECTION_PROTOCOL_AUDIT.md). The historical
+coverage/gaps below predate this follow-up: native object JSON is no longer
+entirely unsupported, but native JSON plan caching and full collection-protocol
+coverage remain open.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:

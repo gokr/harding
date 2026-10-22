@@ -37,7 +37,10 @@ not by simply matching class names.
 `array_query_protocol` checks Array reject:, detect:/ifNone:, inject:into:,
 any/all/none predicates, short-circuit callback counts, empty inputs, emptiness
 checks, and collect: with a separately bound callback. These pass in both engines.
-This is an Array slice, not proof that Table/Set or derived collections work.
+Additional table_query_protocol and set_query_protocol cases cover their callback
+arity, result counts, predicates and folds. collection_aliasing covers aliases,
+cloning, literal/JSON mutation, equality and builtin class reflection. Derived
+collections and the full selector surface are not established by these cases.
 
 Mutation aliasing, structural versus identity equality, species preservation,
 builtin reflection, invalid indices/keys, iteration during mutation, inherited
@@ -58,11 +61,34 @@ t at: "x" put: 9.
 (u at: "x") println.
 ```
 
-Interpreter: `1`, `9`. Native: `0`, `nil`. Runtime mutations copy value storage,
-and codegen writes the result back only to the named receiver. Shared collection
-storage must cover constructors, literals, JSON parsing, helpers and inline loops;
-fixing one mutation selector alone cannot preserve aliases. This is an existing
-reference-semantics defect, not a proposed language change.
+Original native result: `0`, `nil`, versus interpreter `1`, `9`. Shared Instance
+storage now preserves aliases for constructors, literals, JSON parsing and helper
+results; collection_aliasing passes. This repairs existing reference semantics.
+
+## Gap matrix (source-level audit)
+
+| Protocol family | Harding coverage | Missing or different |
+|---|---|---|
+| Enumeration | do:, collect:, select:, reject:, detect:/ifNone:, inject:into: | Generic superclass protocol is Iterable, not Collection |
+| Membership/counting | includes:, size, isEmpty; Iterable count: | occurrencesOf: not established; generic remove:ifAbsent: and removeAll: absent |
+| Bulk adding | Array addAll: | General Collection addAll: and species rules not established |
+| Conversion | Set asArray, Array asSortedCollection:/asSortedCollection | asBag/asOrderedCollection and general asSet conversion absent |
+| Sequence access | at:/put:, first, last, indexOf:, copyFrom:to: | findFirst:/findLast:, reverseDo:, replaceFrom:to:with:startingAt: absent |
+| Ordered mutation | Growable Array add:, removeFirst/removeLast/removeAt: | addFirst:, add:before:/after: and dedicated OrderedCollection absent |
+| Sets | Set membership and union/intersection/difference | IdentitySet absent; hash/equality compatibility needs explicit tests |
+| Bags | No dedicated class | Multiplicity and occurrence protocol absent |
+| Dictionaries | Table keyed access, absent callbacks, values, associations, keysAndValuesDo: | Association objects and IdentityDictionary absent; callbacks use key/value rather than Smalltalk Dictionary value-only enumeration |
+| Sorted collections | Comparator, insertion, transformations, copy | Complete species and comparator-preservation conformance unverified |
+| Intervals | Bounds/step, traversal, reversed and queries | Complete sequence protocol and immutable-operation failures unverified |
+| Equality | Current Array/Table equality is identity | Smalltalk sequence value equality/hash is not adopted silently |
+| Search failure | detect: answers nil; indexOf: answers nil | Smalltalk's default error and not-found index conventions differ |
+| Strings/streams | Existing String and FileStream protocols | Full Character/Stream hierarchy compatibility is outside this collection slice |
+
+Conclusion: Harding covers the commonly used higher-order operations but **does
+not implement the whole Smalltalk-80 collection protocol**. Closing the matrix
+requires agreed class/hierarchy, equality/hash, indexing and failure contracts,
+then selector-by-selector runtime and Granite regressions. Adding missing methods
+without those contracts would give superficial rather than behavioral coverage.
 
 ## Smalltalk-80 comparison checklist
 

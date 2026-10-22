@@ -12,6 +12,30 @@ proc defaultAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
 proc replacementAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkInt, intVal: 2)
 
+suite "Compiled reference collections":
+  test "aliases share storage and clones copy only the container":
+    let rt = newRuntime()
+    let child = compiledArray(@[toValue(1)])
+    let array = compiledArray(@[child])
+    let alias = array
+    discard sendMessage(rt, array, "add:", @[toValue(2)])
+    check nt_size(alias).intVal == 2
+    let cloned = sendMessage(rt, array, "clone", @[])
+    discard sendMessage(rt, cloned, "add:", @[toValue(3)])
+    check nt_size(array).intVal == 2
+    check nt_size(cloned).intVal == 3
+    check compiledIdentityEqual(nt_at_k(cloned, toValue(0)), child)
+    check not compiledIdentityEqual(cloned, array)
+
+  test "cycles fail without poisoning later JSON writes":
+    let array = compiledArray(@[])
+    discard sendMessage(newRuntime(), array, "add:", @[array])
+    expect ValueError:
+      discard compiledJsonStringify(array)
+    array.instVal.elements = @[toValue(7)]
+    check compiledJsonStringify(array).strVal == "[7]"
+    array.instVal.elements = @[]
+
 suite "Compiled runtime nil predicates":
   test "nil and immediate values":
     let rt = newRuntime()
@@ -90,18 +114,19 @@ suite "Compiled JSON parsing":
     let rt = newRuntime()
     let cls = compiledJsonClassValue()
     let value = sendMessage(rt, cls, "parse:", @[toValue("{\"items\":[1,2.5,true,false,null,{\"label\":\"caf\\u00e9\"}]}")])
-    require value.kind == vkTable
+    require value.kind == vkInstance
+    require value.instVal.kind == ikTable
     let array = sendMessage(rt, value, "at:", @[toValue("items")])
-    require array.kind == vkArray
-    require array.arrayVal.len == 6
-    check array.arrayVal[0].kind == vkInt
-    check array.arrayVal[0].intVal == 1
-    check array.arrayVal[1].kind == vkFloat
-    check array.arrayVal[1].floatVal == 2.5
-    check array.arrayVal[2].boolVal
-    check not array.arrayVal[3].boolVal
-    check isNilValue(array.arrayVal[4])
-    check sendMessage(rt, array.arrayVal[5], "at:", @[toValue("label")]).strVal == "café"
+    let elements = compiledArrayElements(array)
+    require elements.len == 6
+    check elements[0].kind == vkInt
+    check elements[0].intVal == 1
+    check elements[1].kind == vkFloat
+    check elements[1].floatVal == 2.5
+    check elements[2].boolVal
+    check not elements[3].boolVal
+    check isNilValue(elements[4])
+    check sendMessage(rt, elements[5], "at:", @[toValue("label")]).strVal == "café"
     check compiledJsonStringify(value).strVal == "{\"items\":[1,2.5,true,false,null,{\"label\":\"café\"}]}"
 
   test "invalid input and JSON null answer nil without poisoning later calls":
@@ -126,13 +151,13 @@ suite "Compiled System arguments":
     check receiver.kind == vkClass
     check receiver.classVal == compiledSystemClassValue().classVal
     let values = sendMessage(rt, receiver, "arguments", @[])
-    check values.kind == vkArray
-    check values.arrayVal.len == commandLineParams().len
+    let elements = compiledArrayElements(values)
+    check elements.len == commandLineParams().len
     for index, argument in commandLineParams():
-      check values.arrayVal[index].kind == vkString
-      check values.arrayVal[index].strVal == argument
+      check elements[index].kind == vkString
+      check elements[index].strVal == argument
     let again = sendMessage(rt, receiver, "arguments", @[])
-    check again == values
+    check compiledArrayElements(again) == elements
     registerCompiledClassMethod("System", "arguments", replacementAllocation)
     check sendMessage(rt, receiver, "arguments", @[]).intVal == 2
 
@@ -272,9 +297,10 @@ suite "Compiled user-class reflection":
     check sendMessage(rt, receiver, "className", @[]).strVal == "ReflectionNativeChild"
     for value in [receiver, cls]:
       let parents = sendMessage(rt, value, "superclassNames", @[])
-      check parents.arrayVal.len == 2
-      check parents.arrayVal[0].strVal == "ReflectionNativeLeft"
-      check parents.arrayVal[1].strVal == "ReflectionNativeRight"
+      let elements = compiledArrayElements(parents)
+      check elements.len == 2
+      check elements[0].strVal == "ReflectionNativeLeft"
+      check elements[1].strVal == "ReflectionNativeRight"
     let base = compiledBaseClassValue("Object")
     check base.kind == vkClass
     check base.classVal == compiledBaseClassValue("Object").classVal

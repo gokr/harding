@@ -116,9 +116,13 @@ semantics; any intended language change must be explicit and documented.
 - [x] Share mutable capture cells instead of copying independent values.
 - [x] Capture write-only script locals and nested block declarations; focused
       cleanup/setter/shadowing parity and compiler tests pass under ARC/ORC.
-- [ ] Complete native collection protocol parity after the Array query slice:
-      mutation aliasing, equality, reflection, Table/Set and derived collections.
-- [ ] Finish native ordinary-object JSON serialization with slots, hooks and specs.
+- [x] Native collection reference-storage slice: mutation aliasing, shallow clones,
+      identity equality, builtin reflection and Array/Table/Set query callbacks.
+- [ ] Complete derived-collection, bulk/removal, override and mutation-during-loop
+      coverage; Smalltalk-80 gaps are inventoried in COLLECTION_PROTOCOL_AUDIT.md.
+- [x] Native ordinary-object JSON serialization with slots, hooks and class specs.
+- [ ] Cache native JSON plans with explicit hierarchy/config invalidation after
+      measuring the per-write plan construction path.
 - [x] Test sibling and nested blocks observing the same bindings.
 - [x] Declare method/block temporaries before closure creation; cover captures
       preceding first assignment.

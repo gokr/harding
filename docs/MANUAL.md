@@ -169,6 +169,19 @@ Coverage: `numeric_equality` parity case and the mixed Integer/Float tests in
 `tests/test_float_operations.nim`. `Table` keys follow the same rule, so `100`
 and `100.0` are distinct keys.
 
+### Mutable collection references in native programs
+
+Granite Array and Table assignments retain shared mutable storage, as in the
+interpreter. Passing a collection through an argument, slot or closure does not
+copy it. `clone` creates an independent shallow container; contained objects
+remain shared. Array/Table equality follows the current identity contract.
+Native JSON parsing also returns reference-backed collections.
+
+Native object JSON serialization supports inherited slots, `jsonRepresentation`
+and class-side JSON specifications. See [native collections and JSON](GRANITE_COLLECTIONS_AND_JSON.md)
+for supported paths and validation limits, and [collection protocol audit](COLLECTION_PROTOCOL_AUDIT.md)
+for differences from Smalltalk-80.
+
 ### Numeric string conversion
 
 `String>>asInteger` parses the complete string as a native-range signed Integer;

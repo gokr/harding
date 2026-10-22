@@ -50,12 +50,18 @@ proc stringArg*(args: seq[NodeValue], index: int): string =
 
 proc nt_println*(value: NodeValue): NodeValue =
   ## Print value with newline
-  echo value.toString()
+  echo (if value.kind == vkInstance and value.instVal != nil and
+           value.instVal.kind in {ikArray, ikTable}:
+          sendMessage(currentRuntime[], value, "printString", @[]).strVal
+        else: value.toString())
   return value
 
 proc nt_print*(value: NodeValue): NodeValue =
   ## Print value without newline
-  stdout.write(value.toString())
+  stdout.write(if value.kind == vkInstance and value.instVal != nil and
+                  value.instVal.kind in {ikArray, ikTable}:
+                 sendMessage(currentRuntime[], value, "printString", @[]).strVal
+               else: value.toString())
   return value
 
 proc nt_asString*(value: NodeValue): NodeValue =
@@ -77,6 +83,8 @@ proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
 proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
   ## Collection access: receiver at: key
   ## Works for both Arrays (0-based indexing) and Tables
+  if receiver.kind == vkInstance:
+    return sendMessage(nil, receiver, "at:", @[key])
   if receiver.kind == vkArray and key.kind == vkInt:
     let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
@@ -89,6 +97,8 @@ proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
 proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
   ## Collection assignment: receiver at: key put: value
   ## Works for both Arrays (0-based indexing) and Tables
+  if receiver.kind == vkInstance:
+    return sendMessage(nil, receiver, "at:put:", @[key, value])
   if receiver.kind == vkArray and key.kind == vkInt:
     let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
@@ -131,6 +141,8 @@ proc nt_last*(arr: NodeValue): NodeValue =
 
 proc nt_table_at*(tbl: NodeValue, key: NodeValue): NodeValue =
   ## Table access: table at: key
+  if tbl.kind == vkInstance:
+    return sendMessage(nil, tbl, "at:", @[key])
   if tbl.kind == vkTable:
     if tbl.tableVal.hasKey(key):
       return tbl.tableVal[key]
@@ -138,6 +150,8 @@ proc nt_table_at*(tbl: NodeValue, key: NodeValue): NodeValue =
 
 proc nt_table_atput*(tbl: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
   ## Table assignment: table at: key put: value
+  if tbl.kind == vkInstance:
+    return sendMessage(nil, tbl, "at:put:", @[key, value])
   if tbl.kind == vkTable:
     var newTbl = tbl
     newTbl.tableVal[key] = value
@@ -152,7 +166,7 @@ proc nt_table_keys*(tbl: NodeValue): NodeValue =
     var keys: seq[NodeValue] = @[]
     for key in tbl.tableVal.keys:
       keys.add(key)
-    return NodeValue(kind: vkArray, arrayVal: keys)
+    return compiledArray(keys)
   return NodeValue(kind: vkNil)
 
 proc nt_table_size*(tbl: NodeValue): NodeValue =
@@ -334,11 +348,11 @@ proc nt_tableFrom*(entries: openArray[(NodeValue, NodeValue)]): NodeValue =
   var built = initTable[NodeValue, NodeValue]()
   for (key, value) in entries:
     built[key] = value
-  return NodeValue(kind: vkTable, tableVal: built)
+  return compiledTable(built)
 
 proc nt_emptyTable*(): NodeValue =
   ## Empty table value with the correct key type.
-  return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+  return compiledTable(initTable[NodeValue, NodeValue]())
 
 proc nt_ifTrue_kifFalse_k*(self: NodeValue, trueBlock: BlockNode, falseBlock: BlockNode): NodeValue {.cdecl, exportc.} =
   ## ifTrue:ifFalse: conditional

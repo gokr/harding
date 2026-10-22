@@ -1,4 +1,5 @@
-import std/[tables, strformat, os, strutils, logging, json]
+import std/[tables, strformat, os, strutils, logging, json, options]
+import ../interpreter/objects
 import ../core/log_support
 import ../core/string_conversion
 import ../core/types
@@ -185,12 +186,34 @@ proc compiledSystemClassValue*(): NodeValue =
     compiledClasses["System"] = newClass(name = "System")
   return compiledClassValue("System")
 
+proc compiledArray*(elements: seq[NodeValue]): NodeValue =
+  ## Retain mutable Array storage across assignments and message boundaries.
+  if "Array" notin compiledClasses:
+    compiledClasses["Array"] = newClass(name = "Array")
+  NodeValue(kind: vkInstance, instVal: Instance(kind: ikArray,
+    class: compiledClasses["Array"], elements: elements))
+
+proc compiledTable*(entries: Table[NodeValue, NodeValue]): NodeValue =
+  ## Retain mutable Table storage across assignments and message boundaries.
+  if "Table" notin compiledClasses:
+    compiledClasses["Table"] = newClass(name = "Table")
+  NodeValue(kind: vkInstance, instVal: Instance(kind: ikTable,
+    class: compiledClasses["Table"], entries: entries))
+
+proc compiledArrayElements*(value: NodeValue): seq[NodeValue] =
+  ## Read elements without copying the Harding collection identity.
+  if value.kind == vkInstance and value.instVal != nil and value.instVal.kind == ikArray:
+    return value.instVal.elements
+  if value.kind == vkArray:
+    return value.arrayVal
+  raise newException(ValueError, "Expected Array")
+
 proc compiledSystemArguments*(): NodeValue =
   ## Snapshot user arguments, excluding the executable name, as Harding strings.
   var elements: seq[NodeValue] = @[]
   for argument in commandLineParams():
     elements.add(toValue(argument))
-  return NodeValue(kind: vkArray, arrayVal: elements)
+  return compiledArray(elements)
 
 proc compiledLogClassValue*(): NodeValue =
   ## Class-side receiver for application logging in pure compiled programs.
@@ -215,12 +238,12 @@ proc compiledJsonParse*(value: NodeValue): NodeValue =
       var entries = initTable[NodeValue, NodeValue]()
       for key, entry in node.pairs:
         entries[toValue(key)] = toHarding(entry)
-      result = NodeValue(kind: vkTable, tableVal: entries)
+      result = compiledTable(entries)
     of JArray:
       var elements: seq[NodeValue]
       for element in node.items:
         elements.add(toHarding(element))
-      result = NodeValue(kind: vkArray, arrayVal: elements)
+      result = compiledArray(elements)
     of JString:
       result = toValue(node.getStr())
     of JInt:
@@ -291,6 +314,51 @@ proc compiledJsonKey(buf: var string, key: NodeValue) =
   else:
     raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
 
+var compiledSlotNames = initTable[string, seq[string]]()
+
+proc registerCompiledSlotNames*(name: string, slots: seq[string]) =
+  ## Preserve parser-defined parent-first layout independently of accessor permissions.
+  compiledSlotNames[name] = slots
+  if name notin compiledClasses:
+    compiledClasses[name] = newClass(name = name)
+  compiledClasses[name].allSlotNames = slots
+
+proc getSlotValue*(self: NodeValue, slotName: string): NodeValue
+proc getReceiverClassName*(receiver: NodeValue): string
+proc hasCompiledMethodInHierarchy*(className, selector: string): bool
+proc getSuperclasses*(className: string): seq[string]
+
+proc effectiveCompiledJsonSpec(name: string, target: JsonSpec) =
+  for parent in getSuperclasses(name):
+    effectiveCompiledJsonSpec(parent, target)
+  if name notin compiledClasses or compiledClasses[name].jsonSpec == nil:
+    return
+  let spec = compiledClasses[name].jsonSpec
+  for entry in spec.excludedSlots:
+    if entry notin target.excludedSlots: target.excludedSlots.add(entry)
+  for entry in spec.omitNilSlots:
+    if entry notin target.omitNilSlots: target.omitNilSlots.add(entry)
+  for entry in spec.omitEmptySlots:
+    if entry notin target.omitEmptySlots: target.omitEmptySlots.add(entry)
+  if spec.includedOnly.isSome: target.includedOnly = spec.includedOnly
+  for key, value in spec.renamedSlots: target.renamedSlots[key] = value
+  for key, value in spec.slotFormats: target.slotFormats[key] = value
+  if spec.fieldOrder.len > 0: target.fieldOrder = spec.fieldOrder
+
+proc compiledJsonEmpty(value: NodeValue): bool =
+  case value.kind
+  of vkString: value.strVal.len == 0
+  of vkArray: value.arrayVal.len == 0
+  of vkTable: value.tableVal.len == 0
+  of vkInstance:
+    if value.instVal == nil: return false
+    case value.instVal.kind
+    of ikArray: value.instVal.elements.len == 0
+    of ikTable: value.instVal.entries.len == 0
+    of ikString: value.instVal.strVal.len == 0
+    else: false
+  else: false
+
 proc compiledJsonValue(buf: var string, value: NodeValue, visited: var seq[Instance])
 
 proc compiledJsonTable(buf: var string, entries: Table[NodeValue, NodeValue], visited: var seq[Instance]) =
@@ -354,7 +422,52 @@ proc compiledJsonValue(buf: var string, value: NodeValue, visited: var seq[Insta
       compiledJsonTable(buf, value.instVal.entries, visited)
       leaveJsonInstance(visited)
     of ikObject:
-      raise newException(ValueError, "Native JSON object serialization is not implemented")
+      # Compare retained native identity as wrappers can differ for one owner.
+      for prior in visited:
+        if prior == value.instVal or (prior.compiledOwner != nil and
+           prior.compiledOwner == value.instVal.compiledOwner):
+          raise newException(ValueError, "JSON serialization cycle detected")
+      visited.add(value.instVal)
+      let name = getReceiverClassName(value)
+      if hasCompiledMethodInHierarchy(name, "jsonRepresentation"):
+        compiledJsonValue(buf, sendMessage(currentRuntime[], value,
+                          "jsonRepresentation", @[]), visited)
+      else:
+        let spec = JsonSpec(renamedSlots: initTable[string, string](),
+                            slotFormats: initTable[string, JsonFormatKind]())
+        effectiveCompiledJsonSpec(name, spec)
+        var names: seq[string]
+        let slots = compiledSlotNames.getOrDefault(name)
+        for field in spec.fieldOrder:
+          if field in slots and field notin names: names.add(field)
+        for field in slots:
+          if field notin names: names.add(field)
+        buf.add '{'
+        var first = true
+        for field in names:
+          if field in spec.excludedSlots or
+             (spec.includedOnly.isSome and field notin spec.includedOnly.get):
+            continue
+          let entry = getSlotValue(value, field)
+          if field in spec.omitNilSlots and isNilValue(entry): continue
+          if field in spec.omitEmptySlots and compiledJsonEmpty(entry): continue
+          if not first: buf.add ','
+          first = false
+          compiledJsonEscape(buf, spec.renamedSlots.getOrDefault(field, field))
+          buf.add ':'
+          case spec.slotFormats.getOrDefault(field, jfkNone)
+          of jfkNone: compiledJsonValue(buf, entry, visited)
+          of jfkRawJson:
+            if entry.kind == vkString: buf.add entry.strVal
+            else: compiledJsonEscape(buf, entry.toString())
+          of jfkClassName:
+            if entry.kind == vkClass: compiledJsonEscape(buf, entry.classVal.name)
+            elif entry.kind == vkInstance and entry.instVal.class != nil:
+              compiledJsonEscape(buf, entry.instVal.class.name)
+            else: compiledJsonEscape(buf, entry.toString())
+          of jfkString, jfkSymbolName: compiledJsonEscape(buf, entry.toString())
+        buf.add '}'
+      leaveJsonInstance(visited)
   else:
     compiledJsonEscape(buf, value.toString())
 
@@ -753,6 +866,124 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
 
+  if receiver.kind == vkInstance and receiver.instVal != nil and
+     receiver.instVal.kind in {ikArray, ikTable}:
+    let storage = receiver.instVal
+    case selector
+    of "add:":
+      if args.len == 1:
+        if storage.kind == ikArray:
+          storage.elements.add(args[0])
+        else:
+          storage.entries[args[0]] = args[0]
+        return receiver
+    of "at:put:":
+      if args.len == 2:
+        if storage.kind == ikTable:
+          storage.entries[args[0]] = args[1]
+          return args[1]
+        if args[0].kind == vkInt:
+          let index = args[0].intVal
+          if index >= 0 and index < storage.elements.len:
+            storage.elements[index] = args[1]
+            return args[1]
+          return args[1]
+    of "class": return toValue(storage.class)
+    of "className": return toValue(storage.class.name)
+    of "isKindOf:":
+      if args.len == 1:
+        let target = if args[0].kind == vkClass: args[0].classVal.name
+                     elif args[0].kind == vkSymbol: args[0].symVal else: ""
+        return toValue(target in [storage.class.name, "Object", "Root"])
+    of "=":
+      if args.len == 1: return toValue(compiledIdentityEqual(receiver, args[0]))
+    of "asArray":
+      if storage.kind == ikArray: return receiver
+      var elements: seq[NodeValue]
+      for value in storage.entries.values: elements.add(value)
+      return compiledArray(elements)
+    of "includes:":
+      if storage.kind == ikTable and storage.class.name == "Table" and args.len == 1:
+        for value in storage.entries.values:
+          if isTruthy(sendMessage(runtime, value, "=", @[args[0]])):
+            return toValue(true)
+        return toValue(false)
+    of "includesKey:":
+      if storage.kind == ikTable and args.len == 1:
+        return toValue(storage.entries.hasKey(args[0]))
+    of "do:", "keysAndValuesDo:", "collect:", "select:", "reject:",
+       "detect:", "detect:ifNone:", "inject:into:", "anySatisfy:",
+       "allSatisfy:", "noneSatisfy:":
+      if storage.kind == ikTable and storage.class.name == "Table":
+        var collected: seq[NodeValue]
+        var selected = initTable[NodeValue, NodeValue]()
+        var accumulator = if selector == "inject:into:" and args.len == 2: args[0] else: nilValue()
+        let callback = if selector == "inject:into:" and args.len == 2: args[1]
+                       elif args.len > 0: args[0] else: nilValue()
+        for key, value in storage.entries:
+          let answer = if selector == "inject:into:":
+                         sendMessage(runtime, callback, "value:value:value:", @[accumulator, key, value])
+                       else:
+                         sendMessage(runtime, callback, "value:value:", @[key, value])
+          case selector
+          of "do:", "keysAndValuesDo:": discard
+          of "collect:": collected.add(answer)
+          of "inject:into:": accumulator = answer
+          of "select:":
+            if isTruthy(answer): selected[key] = value
+          of "reject:":
+            if not isTruthy(answer): selected[key] = value
+          of "detect:", "detect:ifNone:":
+            if isTruthy(answer): return value
+          of "anySatisfy:":
+            if isTruthy(answer): return toValue(true)
+          of "allSatisfy:", "noneSatisfy:":
+            if isTruthy(answer) == (selector == "noneSatisfy:"):
+              return toValue(false)
+          else: discard
+        case selector
+        of "do:", "keysAndValuesDo:": return receiver
+        of "collect:": return compiledArray(collected)
+        of "select:", "reject:": return compiledTable(selected)
+        of "inject:into:": return accumulator
+        of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
+        of "detect:": return nilValue()
+        of "anySatisfy:": return toValue(false)
+        else: return toValue(true)
+    of "clone", "copy":
+      if storage.kind == ikArray:
+        return compiledArray(storage.elements)
+      return compiledTable(storage.entries)
+    of "==", "~=":
+      if args.len == 1:
+        let same = compiledIdentityEqual(receiver, args[0])
+        return toValue(if selector == "==": same else: not same)
+    else: discard
+    if storage.kind == ikTable and storage.class.name == "Set" and
+       selector in ["do:", "collect:", "select:", "reject:", "detect:",
+                    "detect:ifNone:", "inject:into:", "anySatisfy:",
+                    "allSatisfy:", "noneSatisfy:"]:
+      var elements: seq[NodeValue]
+      for value in storage.entries.values: elements.add(value)
+      let answer = sendMessage(runtime, compiledArray(elements), selector, args)
+      if selector == "do:": return receiver
+      if selector in ["collect:", "select:", "reject:"]:
+        var entries = initTable[NodeValue, NodeValue]()
+        for value in compiledArrayElements(answer): entries[value] = value
+        let collected = compiledTable(entries)
+        collected.instVal.class = storage.class
+        return collected
+      return answer
+    # Read-only operations use an ephemeral value view, never a mutable owner.
+    let view = if storage.kind == ikArray:
+                 NodeValue(kind: vkArray, arrayVal: storage.elements)
+               else:
+                 NodeValue(kind: vkTable, tableVal: storage.entries)
+    let answer = sendMessage(runtime, view, selector, args)
+    if selector in ["do:", "withIndexDo:"]:
+      return receiver
+    return answer
+
   if selector in ["==", "~="] and args.len == 1:
     let same = compiledIdentityEqual(receiver, args[0])
     return NodeValue(kind: vkBool, boolVal: if selector == "==": same else: not same)
@@ -919,6 +1150,20 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return sendMessage(runtime, receiver, conveyedSelector, args[1..^1])
 
   if receiver.kind == vkClass and receiver.classVal != nil:
+    if selector in ["jsonExclude:", "jsonOnly:", "jsonRename:", "jsonOmitNil:",
+                    "jsonOmitEmpty:", "jsonFormat:", "jsonFieldOrder:", "jsonReset", "jsonSpec"] and
+       not hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector):
+      let cls = receiver.classVal
+      case selector
+      of "jsonExclude:": return classJsonExcludeImpl(cls, args)
+      of "jsonOnly:": return classJsonOnlyImpl(cls, args)
+      of "jsonRename:": return classJsonRenameImpl(cls, args)
+      of "jsonOmitNil:": return classJsonOmitNilImpl(cls, args)
+      of "jsonOmitEmpty:": return classJsonOmitEmptyImpl(cls, args)
+      of "jsonFormat:": return classJsonFormatImpl(cls, args)
+      of "jsonFieldOrder:": return classJsonFieldOrderImpl(cls, args)
+      of "jsonReset": return classJsonResetImpl(cls, args)
+      else: return classJsonSpecImpl(cls, args)
     if selector == "addSuperclass:" and args.len >= 1:
       # Register another parent at runtime, matching the interpreter. Generated
       # modules also emit these statically; this path covers ids whose parent is
@@ -942,7 +1187,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           var names: seq[NodeValue] = @[]
           for parent in getSuperclasses(receiver.classVal.name):
             names.add(toValue(parent))
-          return NodeValue(kind: vkArray, arrayVal: names)
+          return compiledArray(names)
       else: discard
     if receiver.classVal.name == "System" and selector == "arguments" and args.len == 0 and
        not hasCompiledClassMethodInHierarchy("System", selector):
@@ -1020,7 +1265,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var names: seq[NodeValue] = @[]
       for parent in getSuperclasses(receiverClassName):
         names.add(toValue(parent))
-      return NodeValue(kind: vkArray, arrayVal: names)
+      return compiledArray(names)
     return compiledMissingMessage(receiver, selector)
   of "isKindOf:":
     if args.len == 1 and args[0].kind == vkClass and args[0].classVal != nil and
@@ -1097,11 +1342,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if receiver.kind == vkSymbol:
       case receiver.symVal
       of "Array":
-        return NodeValue(kind: vkArray, arrayVal: @[])
+        return compiledArray(@[])
       of "Table":
-        return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+        return compiledTable(initTable[NodeValue, NodeValue]())
       of "Set":
-        return NodeValue(kind: vkTable, tableVal: initTable[NodeValue, NodeValue]())
+        let value = compiledTable(initTable[NodeValue, NodeValue]())
+        if "Set" notin compiledClasses:
+          compiledClasses["Set"] = newClass(name = "Set")
+        value.instVal.class = compiledClasses["Set"]
+        return value
       of "String":
         return NodeValue(kind: vkString, strVal: "")
       else:
@@ -1118,7 +1367,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           var elements = newSeq[NodeValue](size)
           for i in 0..<size:
             elements[i] = NodeValue(kind: vkNil)
-          return NodeValue(kind: vkArray, arrayVal: elements)
+          return compiledArray(elements)
       of "String":
         if isInt and size >= 0:
           return NodeValue(kind: vkString, strVal: "")
@@ -1133,7 +1382,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         var elements = newSeq[NodeValue](args[0].intVal)
         for i in 0..<args[0].intVal:
           elements[i] = args[1]
-        return NodeValue(kind: vkArray, arrayVal: elements)
+        return compiledArray(elements)
       else:
         discard
     return NodeValue(kind: vkNil)
@@ -1142,13 +1391,13 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if receiver.kind == vkArray and args.len > 0:
       var arr = receiver.arrayVal
       arr.add(args[0])
-      return NodeValue(kind: vkArray, arrayVal: arr)
+      return compiledArray(arr)
     if receiver.kind == vkTable and args.len > 0:
       # Tables back compiled Set values: the element is both key and value, so
       # repeated adds are naturally deduplicated.
       var tbl = receiver.tableVal
       tbl[args[0]] = args[0]
-      return NodeValue(kind: vkTable, tableVal: tbl)
+      return compiledTable(tbl)
     return NodeValue(kind: vkNil)
 
   of "includes:":
@@ -1183,11 +1432,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
             arr[idx] = args[1]
           elif idx == arr.len:
             arr.add(args[1])
-          return NodeValue(kind: vkArray, arrayVal: arr)
+          return compiledArray(arr)
       elif receiver.kind == vkTable:
         var tbl = receiver.tableVal
         tbl[args[0]] = args[1]
-        return NodeValue(kind: vkTable, tableVal: tbl)
+        return compiledTable(tbl)
     return receiver
 
   of "size":
@@ -1214,7 +1463,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var keys: seq[NodeValue] = @[]
       for k in receiver.tableVal.keys:
         keys.add(k)
-      return NodeValue(kind: vkArray, arrayVal: keys)
+      return compiledArray(keys)
     return NodeValue(kind: vkNil)
 
   of "uppercase":
@@ -1252,7 +1501,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var parts: seq[NodeValue] = @[]
       for part in receiver.strVal.split(args[0].strVal):
         parts.add(NodeValue(kind: vkString, strVal: part))
-      return NodeValue(kind: vkArray, arrayVal: parts)
+      return compiledArray(parts)
     return NodeValue(kind: vkNil)
 
   of "max:":
@@ -1329,7 +1578,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       else: discard
     case selector
     of "collect:", "select:", "reject:":
-      return NodeValue(kind: vkArray, arrayVal: elements)
+      return compiledArray(elements)
     of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
     of "detect:": return nilValue()
     of "anySatisfy:": return toValue(false)

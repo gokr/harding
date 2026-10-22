@@ -188,7 +188,7 @@ proc genNodeValueLiteral*(val: NodeValue): string =
     var elems: seq[string] = @[]
     for elem in val.arrayVal:
       elems.add(genNodeValueLiteral(elem))
-    return fmt("NodeValue(kind: vkArray, arrayVal: @[{elems.join(\", \")}])")
+    return fmt("compiledArray(@[{elems.join(\", \")}])")
   of vkTable:
     var entries: seq[string] = @[]
     for key, v in val.tableVal.pairs:
@@ -503,19 +503,20 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len >= 1:
+      if bodyBlock.parameters.len == 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
         let doCtx = inlineBlockContext(ctx, bodyBlock)
         doCtx.locals.add(elemName)
         var code = "(block:\n"
-        code.add("    for hardingDoIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("    let hardingDoReceiver = " & receiverCode & "\n")
+        code.add("    for hardingDoIdx, hardingElem in compiledArrayElements(hardingDoReceiver):\n")
         code.add("      " & bindingDeclaration(doCtx, elemName, "hardingElem") & "\n")
         code.add(indentBlock(genLocalDeclarations(doCtx, bodyBlock.temporaries), 6))
         for stmt in bodyBlock.body:
           let stmtCode = genStatement(doCtx, stmt)
           code.add(indentBlock(stmtCode, 6))
-        code.add("    nilValue())")
+        code.add("    hardingDoReceiver)")
         return code
 
   of "collect:":
@@ -524,14 +525,14 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len >= 1:
+      if bodyBlock.parameters.len == 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
         let collectCtx = inlineBlockContext(ctx, bodyBlock)
         collectCtx.locals.add(elemName)
         var code = "(block:\n"
         code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingCollectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("    for hardingCollectIdx, hardingElem in " & "compiledArrayElements(" & receiverCode & "):\n")
         code.add("      " & bindingDeclaration(collectCtx, elemName, "hardingElem") & "\n")
         code.add(indentBlock(genLocalDeclarations(collectCtx, bodyBlock.temporaries), 6))
         # Generate all statements except the last one
@@ -543,7 +544,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
           let lastStmt = bodyBlock.body[^1]
           let valueCode = genExpression(collectCtx, lastStmt)
           code.add("      hardingCollectResult.add(" & valueCode & ")\n")
-        code.add("    NodeValue(kind: vkArray, arrayVal: hardingCollectResult))")
+        code.add("    compiledArray(hardingCollectResult))")
         return code
 
   of "select:":
@@ -552,14 +553,14 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len >= 1:
+      if bodyBlock.parameters.len == 1:
         let elemName = bodyBlock.parameters[0]
         # Create a new context with the loop variable as a local
         let selectCtx = inlineBlockContext(ctx, bodyBlock)
         selectCtx.locals.add(elemName)
         var code = "(block:\n"
         code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingSelectIdx, hardingElem in " & receiverCode & ".arrayVal:\n")
+        code.add("    for hardingSelectIdx, hardingElem in " & "compiledArrayElements(" & receiverCode & "):\n")
         code.add("      " & bindingDeclaration(selectCtx, elemName, "hardingElem") & "\n")
         code.add(indentBlock(genLocalDeclarations(selectCtx, bodyBlock.temporaries), 6))
         for i in 0..<max(0, bodyBlock.body.len - 1):
@@ -570,7 +571,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
                          "nilValue()"
         code.add("      if isTruthy(" & condCode & "):\n")
         code.add("        hardingSelectResult.add(hardingElem)\n")
-        code.add("    NodeValue(kind: vkArray, arrayVal: hardingSelectResult))")
+        code.add("    compiledArray(hardingSelectResult))")
         return code
 
   of "timesRepeat:":
@@ -868,7 +869,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       return genNodeValueLiteral(arr.cachedValue)
     # Standard code generation
     let elems = arr.elements.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("NodeValue(kind: vkArray, arrayVal: @[{elems}])")
+    return fmt("compiledArray(@[{elems}])")
 
   of nkTable:
     let tbl = node.TableNode
@@ -1218,7 +1219,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # Messages that mutate collection variables should write the updated value back
     # to the receiver variable when used as a statement.
-    if msg.receiver != nil and msg.receiver.kind == nkIdent and msg.selector in ["add:", "at:put:"]:
+    if msg.receiver != nil and msg.receiver.kind == nkIdent and msg.selector == "add:":
       let receiverName = msg.receiver.IdentNode.name
       let msgCode = genMessage(ctx, msg)
       if ctx.isSlot(receiverName):

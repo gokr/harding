@@ -681,7 +681,10 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
 
   of nkMessage:
     let msg = node.MessageNode
-    let isInlineControl = msg.selector in inlineControlSelectors
+    let isInlineControl = msg.selector in inlineControlSelectors and
+      (msg.selector notin ["do:", "collect:", "select:"] or
+       (msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock and
+        msg.arguments[0].BlockNode.parameters.len == 1))
 
     if isInlineControl:
       # For inline control flow, skip registration of literal block arguments

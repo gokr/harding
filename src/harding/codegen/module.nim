@@ -1,4 +1,4 @@
-import std/[strutils, tables, os, strformat]
+import std/[strutils, tables, os, strformat, sequtils]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
@@ -162,6 +162,8 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   ## Generate registerSlotAccessor calls for a class
   let slots = cls.getAllSlots()
   var output = ""
+  let names = slots.mapIt("\"" & it.name & "\"").join(", ")
+  output.add(fmt("  registerCompiledSlotNames(\"{cls.name}\", @[{names}])\n"))
   for slot in slots:
     if slot.isInherited:
       continue
