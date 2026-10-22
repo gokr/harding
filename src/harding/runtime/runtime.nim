@@ -981,6 +981,32 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
 
   case selector
+  of "=":
+    if args.len == 1:
+      let other = args[0]
+      if receiver.kind != other.kind:
+        return toValue(false)
+      case receiver.kind
+      of vkInt: return toValue(receiver.intVal == other.intVal)
+      of vkFloat: return toValue(receiver.floatVal == other.floatVal)
+      of vkString: return toValue(receiver.strVal == other.strVal)
+      of vkSymbol: return toValue(receiver.symVal == other.symVal)
+      of vkBool: return toValue(receiver.boolVal == other.boolVal)
+      else: return toValue(compiledIdentityEqual(receiver, other))
+  of "<>":
+    if args.len == 1:
+      let other = args[0]
+      if receiver.kind in {vkInt, vkFloat} and other.kind in {vkInt, vkFloat}:
+        if receiver.kind != other.kind:
+          return toValue(true)
+        if receiver.kind == vkInt:
+          return toValue(receiver.intVal != other.intVal)
+        return toValue(receiver.floatVal != other.floatVal)
+      if receiver.kind == vkString and other.kind == vkString:
+        return toValue(receiver.strVal != other.strVal)
+      if receiver.kind == vkSymbol and other.kind == vkSymbol:
+        return toValue(receiver.symVal != other.symVal)
+    return compiledMissingMessage(receiver, selector)
   of "class":
     if args.len == 0 and receiverClassName.len > 0:
       return compiledClassValue(receiverClassName)

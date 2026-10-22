@@ -186,9 +186,10 @@ x * y                            # Multiply
 a / b                            # Divide
 x > y                            # Greater than
 x < y                            # Less than
-x = y                            # Equality comparison
+x = y                            # Equality comparison (strict: 1 = 1.0 is false)
 x == y                           # Identity comparison
 x ~= y                           # Inequality
+x <> y                           # Not equal (Integer/Float/String/Symbol)
 x <= y                           # Less than or equal
 x >= y                           # Greater than or equal
 a // b                           # Integer division

@@ -485,6 +485,14 @@ proc nt_lt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal < b.boolVal)
 
+  # Mixed Integer/Float ordering compares as Float, matching the VM. Equality is
+  # deliberately strict instead; see nt_eq.
+  if (a.kind == vkInt or a.kind == vkFloat) and
+     (b.kind == vkInt or b.kind == vkFloat) and a.kind != b.kind:
+    let af = if a.kind == vkInt: float(a.intVal) else: a.floatVal
+    let bf = if b.kind == vkInt: float(b.intVal) else: b.floatVal
+    return NodeValue(kind: vkBool, boolVal: af < bf)
+
   # Slow path: dynamic dispatch
   return sendMessage(currentRuntime[], a, "<", @[b])
 
@@ -506,6 +514,14 @@ proc nt_lteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   # Fast path: bool comparison
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal <= b.boolVal)
+
+  # Mixed Integer/Float ordering compares as Float, matching the VM. Equality is
+  # deliberately strict instead; see nt_eq.
+  if (a.kind == vkInt or a.kind == vkFloat) and
+     (b.kind == vkInt or b.kind == vkFloat) and a.kind != b.kind:
+    let af = if a.kind == vkInt: float(a.intVal) else: a.floatVal
+    let bf = if b.kind == vkInt: float(b.intVal) else: b.floatVal
+    return NodeValue(kind: vkBool, boolVal: af <= bf)
 
   # Slow path: dynamic dispatch
   return sendMessage(currentRuntime[], a, "<=", @[b])
@@ -529,6 +545,14 @@ proc nt_gt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal > b.boolVal)
 
+  # Mixed Integer/Float ordering compares as Float, matching the VM. Equality is
+  # deliberately strict instead; see nt_eq.
+  if (a.kind == vkInt or a.kind == vkFloat) and
+     (b.kind == vkInt or b.kind == vkFloat) and a.kind != b.kind:
+    let af = if a.kind == vkInt: float(a.intVal) else: a.floatVal
+    let bf = if b.kind == vkInt: float(b.intVal) else: b.floatVal
+    return NodeValue(kind: vkBool, boolVal: af > bf)
+
   # Slow path: dynamic dispatch
   return sendMessage(currentRuntime[], a, ">", @[b])
 
@@ -551,14 +575,24 @@ proc nt_gteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal >= b.boolVal)
 
+  # Mixed Integer/Float ordering compares as Float, matching the VM. Equality is
+  # deliberately strict instead; see nt_eq.
+  if (a.kind == vkInt or a.kind == vkFloat) and
+     (b.kind == vkInt or b.kind == vkFloat) and a.kind != b.kind:
+    let af = if a.kind == vkInt: float(a.intVal) else: a.floatVal
+    let bf = if b.kind == vkInt: float(b.intVal) else: b.floatVal
+    return NodeValue(kind: vkBool, boolVal: af >= bf)
+
   # Slow path: dynamic dispatch
   return sendMessage(currentRuntime[], a, ">=", @[b])
 
 
 proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   ## Comparison operator: =
-  ## Provides fast-path type specialization with dynamic fallback
   ##
+  ## Matches the VM: same-kind scalars compare by value, distinct kinds answer
+  ## false, and composites/objects fall back to identity via dynamic dispatch.
+  ## Integer and Float are deliberately distinct kinds; there is no numeric tower.
 
   # Fast path: integer comparison
   if a.kind == vkInt and b.kind == vkInt:
@@ -572,9 +606,28 @@ proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   # Fast path: bool comparison
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal == b.boolVal)
-
-  # Slow path: dynamic dispatch
   return sendMessage(currentRuntime[], a, "=", @[b])
+
+
+proc nt_ltgt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
+  ## Comparison operator: <>
+  ##
+  ## Integer, Float and Symbol define it in the core library, so a scalar pair
+  ## answers as their built-ins do; anything else keeps ordinary dispatch.
+  if a.kind in {vkInt, vkFloat} and b.kind in {vkInt, vkFloat}:
+    if a.kind != b.kind:
+      return NodeValue(kind: vkBool, boolVal: true)
+    if a.kind == vkInt:
+      return NodeValue(kind: vkBool, boolVal: a.intVal != b.intVal)
+    return NodeValue(kind: vkBool, boolVal: a.floatVal != b.floatVal)
+  if a.kind == vkSymbol and b.kind == vkSymbol:
+    return NodeValue(kind: vkBool, boolVal: a.symVal != b.symVal)
+  if a.kind == vkString and b.kind == vkString:
+    return NodeValue(kind: vkBool, boolVal: a.strVal != b.strVal)
+
+  # Anything else (instances, nil, arrays) keeps dispatch, which is what the VM
+  # does: `<>` is defined only for Integer, Float, String and Symbol.
+  return sendMessage(currentRuntime[], a, "<>", @[b])
 
 
 proc nt_eqeq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =

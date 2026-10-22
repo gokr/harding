@@ -51,9 +51,20 @@ semantics; any intended language change must be explicit and documented.
       branch and preserve returns/errors/cleanup. Integer/float calculator inputs
       and unknown-operation fallback have exact example snapshots.
 - [ ] Eliminate remaining manifest compiler gap: native processes.
-- [ ] Mixed Integer/Float equality still differs (`100.0 = 100` false in VM,
-      missing-message error natively). Arithmetic example checks Float result
-      against Float; decide and document numeric equality independently.
+- [x] Numeric equality is strict by decision, not by accident. Harding has no
+      numeric tower (that keeps it Nim-compilation friendly), so Integer and Float
+      are distinct classes and `=` answers false across them; `~=` therefore
+      answers true. Ordering comparisons (`<`, `<=`, `>`, `>=`) do compare mixed
+      Integer/Float operands as Float. This is implemented identically in both
+      engines: the compiled runtime previously had no builtin `=` for nil,
+      cross-kind or non-scalar pairs and no `<>` at all, so `100.0 = 100`,
+      `nil = nil`, `"ab" = 100`, `x = x` on user instances and every `<>` signalled
+      MessageNotUnderstood natively. Coverage: `numeric_equality` parity (21
+      cases) plus interpreter tests. Nothing depends on the old behaviour; the
+      arithmetic example checks a Float result against a Float.
+- [ ] Collection value equality/size reflection in compiled code stays separate:
+      `#(1,2) = #(1,2)` and `(a isKindOf: Array)` answer in the VM but signal
+      natively. Not numeric equality; tracked with collection semantics.
 - [ ] Add bounded service/GUI-host smoke tests for the syntax-gated examples.
 - [x] Extract all six Harding fences from website docs/index Markdown into the
       manifest runner: four stdout-checked interpreter/native cases, two syntax-only

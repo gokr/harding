@@ -197,3 +197,43 @@ suite "Float: Mixed Integer-Float":
     # check(err.len == 0)
     # check(result.kind == vkBool)
     # check(result.boolVal == false)
+
+
+suite "Numeric equality is strict, ordering coerces":
+  ## Harding has no numeric tower: Integer and Float are distinct classes, so `=`
+  ## answers false across them rather than converting. Ordering comparisons do
+  ## compare as Float, which is what the interpreter and compiled code both do.
+
+  var interp {.used.}: Interpreter
+
+  setup:
+    interp = sharedInterp
+
+  test "same-kind equality compares by value":
+    let (values, err) = interp.evalStatements("""
+      Result := (100 = 100) & "/" & (100.0 = 100.0) asString & "/" & ("ab" = "ab") asString
+    """)
+    check(err.len == 0)
+    check(values[^1].strVal == "true/true/true")
+
+  test "Integer never equals Float":
+    let (values, err) = interp.evalStatements("""
+      Result := (100.0 = 100) asString & "/" & (100 = 100.0) asString
+    """)
+    check(err.len == 0)
+    check(values[^1].strVal == "false/false")
+
+  test "mixed-kind ordering compares as Float":
+    let (values, err) = interp.evalStatements("""
+      Result := (100 < 100.0) asString & "/" & (100 <= 100.0) asString & "/" &
+                (100 > 100.0) asString & "/" & (100 >= 100.0) asString
+    """)
+    check(err.len == 0)
+    check(values[^1].strVal == "false/true/false/true")
+
+  test "nil equals only nil":
+    let (values, err) = interp.evalStatements("""
+      Result := (nil = nil) asString & "/" & (nil = 100) asString
+    """)
+    check(err.len == 0)
+    check(values[^1].strVal == "true/false")
