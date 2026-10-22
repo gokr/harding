@@ -633,6 +633,48 @@ Printer := Object derive: #().
 Printer>>println: value [ ^ "override" ].
 (Printer new println: "unused") println.
 """, "FATAL still running\nFATAL alias works\nHello World\noverride\n"),
+    ("numeric_equality", """
+("int=int " & (100 = 100) asString) println.
+("float=float " & (100.0 = 100.0) asString) println.
+("float=int " & (100.0 = 100) asString) println.
+("int=float " & (100 = 100.0) asString) println.
+("str=str " & ("ab" = "ab") asString) println.
+("str=int " & ("ab" = 100) asString) println.
+("nil=nil " & (nil = nil) asString) println.
+("nil=int " & (nil = 100) asString) println.
+("int<>int " & (100 <> 100) asString) println.
+("int<>101 " & (100 <> 101) asString) println.
+("int<>float " & (100 <> 100.0) asString) println.
+("str<>str " & ("ab" <> "cd") asString) println.
+("int<float " & (100 < 100.0) asString) println.
+("int<=float " & (100 <= 100.0) asString) println.
+("int>float " & (100 > 100.0) asString) println.
+("int>=float " & (100 >= 100.0) asString) println.
+EqOverride := Object derive: #().
+EqOverride>>= other [ ^ "custom-eq" ].
+("override= " & ((EqOverride new) = (EqOverride new)) asString) println.
+Inst := Object derive: #().
+A := Inst new.
+B := Inst new.
+("inst=a " & (A = A) asString) println.
+("inst=b " & (A = B) asString) println.
+("inst<> " & ([A <> A] on: Error do: [:e | "signals"]) asString) println.
+("nil<> " & ([nil <> nil] on: Error do: [:e | "signals"]) asString) println.
+""", "int=int true\nfloat=float true\nfloat=int false\nint=float false\nstr=str true\nstr=int false\nnil=nil true\nnil=int false\nint<>int false\nint<>101 true\nint<>float true\nstr<>str true\nint<float false\nint<=float true\nint>float false\nint>=float true\noverride= custom-eq\ninst=a true\ninst=b false\ninst<> signals\nnil<> signals\n"),
+    ("equality_dynamic_dispatch", """
+EqCustom := Object derive: #().
+EqCustom>>= other [ ^ "custom" ].
+a := EqCustom new.
+(a = 1) println.
+(a = nil) println.
+(a perform: "=" with: 1) println.
+(100 perform: "=" with: 100.0) println.
+(nil perform: "=" with: nil) println.
+(100 perform: "<>" with: 100.0) println.
+("ab" perform: "<>" with: "cd") println.
+(#one = #one) println.
+(#one = #two) println.
+""", "custom\ncustom\ncustom\nfalse\ntrue\ntrue\ntrue\ntrue\nfalse\n"),
     ("numeric_specialization", """
 total := 0.
 i := 0.

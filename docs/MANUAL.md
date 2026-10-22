@@ -135,6 +135,40 @@ json{"x": 10}       # JSON literal (returns JSON string)
 """            # Multiline symbol string
 ```
 
+### Numeric equality and ordering
+
+`Integer` and `Float` are distinct subclasses of `Number`. Equality does not
+implicitly convert between these numeric kinds. The following rules apply in
+both engines:
+
+- Built-in scalar `=` compares values within a kind. `100 = 100.0` is false and
+`100.0 = 100` is false. `nil` equals only `nil`. User-defined `=` methods retain
+ordinary dispatch for object receivers.
+- `~=` is the negation of identity (`==`), not of user-defined value equality
+(`=`). `100.0 ~= 100` is true.
+- `<>` is defined for Integer, Float, String and Symbol. Any other receiver keeps
+ordinary dispatch, which for objects means `MessageNotUnderstood`.
+- Ordering comparisons (`<`, `<=`, `>`, `>=`) do compare a mixed Integer/Float
+pair as Float. `100 <= 100.0` is true.
+
+So equality is strict while ordering coerces: `100 <= 100.0` is true, but
+`100 = 100.0` is false. Comparing an Integer against a Float is a likely source of
+surprise; convert explicitly with `asFloat` when you want cross-kind equality.
+
+```harding
+100 = 100              # true
+100.0 = 100.0          # true
+100 = 100.0            # false - Integer is not Float
+100 <= 100.0           # true  - ordering compares as Float
+100 asFloat = 100.0    # true  - convert explicitly
+nil = nil              # true
+nil = 100              # false
+```
+
+Coverage: `numeric_equality` parity case and the mixed Integer/Float tests in
+`tests/test_float_operations.nim`. `Table` keys follow the same rule, so `100`
+and `100.0` are distinct keys.
+
 ### Numeric string conversion
 
 `String>>asInteger` parses the complete string as a native-range signed Integer;

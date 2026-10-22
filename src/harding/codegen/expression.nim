@@ -638,7 +638,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})")
     return receiverCode
 
-  of "<", "<=", ">", ">=", "=", "==", "~=":
+  of "<", "<=", ">", ">=", "=", "==", "~=", "<>":
     # Comparison operators
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
