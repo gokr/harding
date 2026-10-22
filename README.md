@@ -27,16 +27,27 @@ p distanceFromOrigin println  # Prints: 5.0
 
 ### Prerequisites
 
-Install libraries gtk4 gtksourceview5
+The Harding CLI does not require GTK. Bona requires GTK4, GtkSourceView 5, and GTK4 VTE.
 
-#### linux:
+#### Linux (Debian/Ubuntu)
+
+To build Bona on Ubuntu 24.04 (package names may differ on other distributions):
+
 ```bash
-apt-get install gtk4 gtksourceview5 libvte-2.91-gtk4-dev
+sudo apt-get update
+sudo apt-get install pkg-config libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev
 ```
 
-#### macos
+To run an already-built Bona binary, install the runtime libraries:
+
 ```bash
-brew install gtk4 gtksourceview5 pkg-config
+sudo apt-get install libgtk-4-1 libgtksourceview-5-0 libvte-2.91-gtk4-0
+```
+
+#### macOS
+
+```bash
+brew install gtk4 gtksourceview5 vte3 pkg-config
 ```
 
 ### Download and build Harding
@@ -98,7 +109,14 @@ bona                       # Start IDE with Launcher
 - **System Browser** - Browse classes by library (Core, Collections, GUI, IDE)
 - **Inspector** - Examine object slots and values
 
-On Linux, the embedded terminal requires the VTE development/runtime packages for your GTK version. Bona's default GTK4 build uses `libvte-2.91-gtk4-dev`.
+On Linux, Bona's default GTK4 build requires `libvte-2.91-gtk4.so.0` at startup, even if you do not open the Terminal tool. If startup reports that this shared library is missing, install the Debian/Ubuntu runtime package:
+
+```bash
+sudo apt-get install libvte-2.91-gtk4-0
+```
+
+The `libvte-2.91-gtk4-dev` package is for building. GTK3 VTE (`libvte-2.91-0` / `libvte-2.91-dev`) is not a substitute for the GTK4 library.
+
 The terminal supports a right-click context menu plus shortcuts such as `Ctrl+Shift+C`, `Ctrl+Shift+V`, `Ctrl+Shift+N`, and `Ctrl+Shift+O` for copy, paste, new terminal, and a new OpenCode terminal.
 
 ### Script Execution

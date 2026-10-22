@@ -1,0 +1,109 @@
+# Deterministic portfolio stress report. No network, clocks or random inputs.
+# Optional argument: scenario count (default 200).
+
+Position := Object derive: #(units, price).
+Position class>>units: count price: cents [
+  ^ self new configureUnits: count price: cents
+].
+Position>>configureUnits: count price: cents [
+  units := count. price := cents.
+  ^ self
+].
+Position>>valueAt: shock [ ^ units * price ].
+Position>>kind [ ^ "cash" ].
+
+EquityPosition := Position derive: #().
+EquityPosition>>valueAt: shock [
+  ^ (super valueAt: shock) * (100 + shock) // 100
+].
+EquityPosition>>kind [ ^ "equity" ].
+
+BondPosition := Position derive: #().
+BondPosition>>valueAt: shock [
+  ^ (super valueAt: shock) * (100 - (shock // 2)) // 100
+].
+BondPosition>>kind [ ^ "bond" ].
+
+StressBook := Object derive: #(positions, cleaned).
+StressBook>>markCleaned [ cleaned := true ].
+StressBook>>wasCleaned [ ^ cleaned ].
+StressBook class>>fromJson: text [
+  ^ self new configure: (Json parse: text)
+].
+StressBook>>configure: rows [
+  positions := rows collect: [:row |
+    | positionClass |
+    positionClass := Position.
+    ((row at: "kind") = "equity") ifTrue: [positionClass := EquityPosition].
+    ((row at: "kind") = "bond") ifTrue: [positionClass := BondPosition].
+    positionClass units: (row at: "units") price: (row at: "price")
+  ].
+  ^ self
+].
+StressBook>>valueAt: shock [
+  | total |
+  total := 0.
+  positions do: [:position | total := total + (position valueAt: shock)].
+  ^ total
+].
+StressBook>>firstEquity [
+  positions do: [:position |
+    (position isKindOf: EquityPosition) ifTrue: [^ position]
+  ].
+  ^ nil
+].
+StressBook>>counter [
+  | count |
+  count := 0.
+  ^ [count := count + 1. count]
+].
+StressBook>>stress: scenarios [
+  | checksum worst value shock index summary |
+  checksum := 0. worst := self valueAt: 0. index := 0.
+  [index < scenarios] whileTrue: [
+    shock := index - ((index // 21) * 21) - 10.
+    value := self valueAt: shock.
+    checksum := checksum + value.
+    (value < worst) ifTrue: [worst := value].
+    index := index + 1
+  ].
+  summary := Array new.
+  summary add: checksum. summary add: worst.
+  ^ summary
+].
+
+book := StressBook fromJson: """[
+  {"kind":"equity","units":120,"price":1250},
+  {"kind":"equity","units":80,"price":2500},
+  {"kind":"bond","units":200,"price":1000},
+  {"kind":"cash","units":1,"price":50000}
+]""".
+scenarios := 200.
+(System arguments size = 0) ifFalse: [
+  scenarios := (System arguments at: 0) asInteger
+].
+(scenarios isNil or: [scenarios < 0]) ifTrue: [Error signal: "Expected a nonnegative scenario count"].
+
+# Escaped closure retains its mutable counter after the method returns.
+nextReport := book counter.
+reportNumber := nextReport value.
+reportNumber := nextReport value.
+
+# Conveyed class/instance sends and inherited factory construction.
+equity := book firstEquity.
+(equity perform: #kind) println.
+(equity isKindOf: Position) println.
+
+# Cleanup happens even when a catchable error abandons the protected body.
+recovered := [
+  [Error signal: "demonstration rejection"] ensure: [book markCleaned]
+] on: Error do: [:error | error message].
+recovered println.
+book wasCleaned println.
+
+summary := book stress: scenarios.
+report := Array new.
+report add: reportNumber. report add: scenarios.
+report add: (book valueAt: 0).
+report add: (summary at: 0). report add: (summary at: 1).
+(Json stringify: report) println.

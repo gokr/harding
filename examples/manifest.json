@@ -454,6 +454,11 @@
       "id": "examples-compiler-numeric_method_locals",
       "path": "examples/compiler/numeric_method_locals.hrd",
       "stdout": "examples/expected/examples-compiler-numeric_method_locals.stdout"
+    },
+    {
+      "id": "examples-compiler-portfolio_stress",
+      "path": "examples/compiler/portfolio_stress.hrd",
+      "stdout": "examples/expected/examples-compiler-portfolio_stress.stdout"
     }
   ]
 }

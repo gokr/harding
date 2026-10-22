@@ -28,6 +28,13 @@ From the repository root:
 ./build/blocks/demo
 ```
 
+## Advanced Granite showcase
+
+[`compiler/portfolio_stress.hrd`](compiler/portfolio_stress.hrd) combines JSON,
+polymorphic positions, inherited factories, `super`, dynamic sends, escaped
+closures and exception cleanup in a deterministic portfolio stress report.
+See [build instructions and measured release comparison](../docs/GRANITE_PORTFOLIO_EXAMPLE.md).
+
 ## Regression suite
 
 ```sh
