@@ -70,12 +70,12 @@ results; collection_aliasing passes. This repairs existing reference semantics.
 | Protocol family | Harding coverage | Missing or different |
 |---|---|---|
 | Enumeration | do:, collect:, select:, reject:, detect:/ifNone:, inject:into: | Generic superclass protocol is Iterable, not Collection |
-| Membership/counting | includes:, size, isEmpty; Iterable count: | occurrencesOf: not established; generic remove:ifAbsent: and removeAll: absent |
-| Bulk adding | Array addAll: | General Collection addAll: and species rules not established |
+| Membership/counting | includes:, size, isEmpty, occurrencesOf:, includesAll: | remove:ifAbsent: absent; Array has no removal-by-value |
+| Bulk adding | addAll: on Iterable/Array, native for Array/Table/Set | addAll: species edge cases beyond Array/Table/Set unverified |
 | Conversion | Set asArray, Array asSortedCollection:/asSortedCollection | asBag/asOrderedCollection and general asSet conversion absent |
-| Sequence access | at:/put:, first, last, indexOf:, copyFrom:to: | findFirst:/findLast:, reverseDo:, replaceFrom:to:with:startingAt: absent |
+| Sequence access | at:/put:, first, last, indexOf:, copyFrom:to:, findFirst:, findLast:, reverseDo: | replaceFrom:to:with:startingAt: absent |
 | Ordered mutation | Growable Array add:, removeFirst/removeLast/removeAt: | addFirst:, add:before:/after: and dedicated OrderedCollection absent |
-| Sets | Set membership and union/intersection/difference | IdentitySet absent; hash/equality compatibility needs explicit tests |
+| Sets | Set membership, remove:, union:/intersection:/difference:, asArray, Iterable protocol natively | IdentitySet absent; hash/equality compatibility needs explicit tests |
 | Bags | No dedicated class | Multiplicity and occurrence protocol absent |
 | Dictionaries | Table keyed access, absent callbacks, values, associations, keysAndValuesDo: | Association objects and IdentityDictionary absent; callbacks use key/value rather than Smalltalk Dictionary value-only enumeration |
 | Sorted collections | Comparator, insertion, transformations, copy | Complete species and comparator-preservation conformance unverified |
@@ -83,6 +83,16 @@ results; collection_aliasing passes. This repairs existing reference semantics.
 | Equality | Current Array/Table equality is identity | Smalltalk sequence value equality/hash is not adopted silently |
 | Search failure | detect: answers nil; indexOf: answers nil | Smalltalk's default error and not-found index conventions differ |
 | Strings/streams | Existing String and FileStream protocols | Full Character/Stream hierarchy compatibility is outside this collection slice |
+
+Coverage added in this slice: Iterable addAll:/includesAll:/occurrencesOf:/isEmpty/
+notEmpty (with Array addAll: answering its argument), Array findFirst:/findLast:/
+reverseDo:, native Array removeAt:/removeFirst/removeLast, Table values/associations/
+at:/removeKey:, and native Set remove:/union:/intersection:/difference:/asArray plus
+the element-callback Iterable protocol. Native bulk_sequence_protocol and
+set_algebra_protocol regressions pass in both engines. SortedCollection remains an
+interpreter-only stdlib class: pure compiled programs do not load `.hrd` stdlib
+sources, so `SortedCollection new` is unavailable natively. That is a compilation
+scope limitation, not a missing selector.
 
 Conclusion: Harding covers the commonly used higher-order operations but **does
 not implement the whole Smalltalk-80 collection protocol**. Closing the matrix

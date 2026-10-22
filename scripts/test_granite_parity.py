@@ -20,8 +20,49 @@ Capture := Object derive: #().
 Capture>>run [| flag | flag := false. [[Error signal: "x"] ensure: [flag := true]] on: Error do: [:error | nil]. ^ flag].
 Capture new run println.
 """, "true\n7\n10\n3\ntrue\n"),
-    ("set_query_protocol", """
+    ("set_algebra_protocol", """
 s := Set new.
+s add: 1. s add: 2.
+o := Set new.
+o add: 2. o add: 3.
+(s union: o) size println.
+(s intersection: o) asArray println.
+(s difference: o) asArray println.
+s remove: 1.
+s size println.
+""", "3\n#(2)\n#(1)\n1\n"),
+    ("bulk_sequence_protocol", """
+a := #(1, 2, 2, 3).
+(a occurrencesOf: 2) println.
+(a occurrencesOf: 9) println.
+(a findFirst: [:x | x > 1]) println.
+(a findLast: [:x | x > 1]) println.
+(a findFirst: [:x | x > 9]) println.
+b := Array new.
+(b addAll: #(7, 8)) println.
+b println.
+(a includesAll: #(1, 3)) println.
+(a includesAll: #(1, 9)) println.
+r := Array new.
+a reverseDo: [:x | r add: x].
+r println.
+(a removeAt: 1) println.
+a println.
+(a removeLast) println.
+a println.
+t := Table new.
+t at: "k" put: 5. t at: "j" put: 6.
+t removeKey: "k".
+t size println.
+(t values) size println.
+(t associations) size println.
+s := Set new.
+s add: 1. (s addAll: #(4, 5)) println.
+s size println.
+(s includesAll: #(1, 4)) println.
+(s occurrencesOf: 1) println.
+""", "2\n0\n1\n3\nnil\n#(7 8)\n#(7 8)\ntrue\nfalse\n#(3 2 2 1)\n2\n#(1 2 3)\n3\n#(1 2)\n1\n1\n1\n#(4 5)\n3\ntrue\n1\n"),
+    ("set_query_protocol", """s := Set new.
 s add: 1. s add: 2. s add: 2.
 s size println.
 (s includes: 2) println.

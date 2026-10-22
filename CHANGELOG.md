@@ -18,6 +18,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Compiled code supports dynamic sends: `perform:`, `perform:with:`, `perform:with:with:` (selector as symbol or string) and `respondsTo:` on instances and classes. Coverage: `dynamic_send` parity.
 - Compiled dispatch follows multiple inheritance. `registerSuperclass` records every parent in declaration order instead of replacing the first, dispatch and method-existence walks are depth-first over the parent graph with a cycle guard, and `addSuperclass:` works at runtime for class receivers. Coverage: `multiple_inheritance` parity (parent-order lookup, methods from each parent, local override).
 
+### Added
+- Collection bulk/sequence protocol: Iterable addAll:/includesAll:/occurrencesOf:/isEmpty/notEmpty with Array addAll: answering its argument; Array findFirst:/findLast:/reverseDo:; native Array removeAt:/removeFirst/removeLast, Table values/associations/at:/removeKey: and Set remove:/union:/intersection:/difference:/asArray. Native inline do:/collect:/select: lowering is now restricted to literal Array receivers so Table/Set species and callback arity keep ordinary dispatch.
+
 ### Fixed
 - Granite mutable collections retain shared Array/Table instances across constructors, literals, JSON parsing and helper results. Aliases observe mutation; clones have independent shallow storage. Table queries retain key/value callback arity and species, Set queries retain element callbacks, builtin collection reflection works, and Array `do:`/`at:put:` preserve their documented results.
 - Native object JSON serialization supports inherited slots, representation hooks and class JSON configuration (exclusion, selection, rename, omission, formats, field order and reset), with per-write cycle detection. Effective native field plans are rebuilt per write; caching remains an optimization follow-up.

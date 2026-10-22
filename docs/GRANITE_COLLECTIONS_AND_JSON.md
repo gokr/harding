@@ -49,11 +49,27 @@ Formats support string, rawJson, symbolName and className. Native serialization
 currently rebuilds its effective field selection per write rather than caching
 plans; this keeps configuration changes visible and is a performance follow-up.
 
+## Bulk and sequence protocol
+
+Array and Iterable provide addAll: (answering its argument), includesAll:,
+occurrencesOf:, isEmpty/notEmpty, findFirst:/findLast: and reverseDo:. Native owner
+storage adds removeAt:/removeFirst/removeLast for Array, values/associations/at:/
+removeKey: for Table, and remove:/union:/intersection:/difference:/asArray for Set.
+Set query results retain Set species. Inline do:/collect:/select: lowering is now
+restricted to literal Array receivers, so Table and Set keep ordinary dispatch and
+therefore correct callback arity and result species.
+
+Array removal-by-value, generic remove:ifAbsent:, replaceFrom:to:with:startingAt:,
+Bag/OrderedCollection/IdentitySet and SortedCollection compilation are not covered.
+
 ## Validation
 
 The expanded semantic runner recorded 89 passing cases after the shared-storage
 and object-JSON changes (`build/capture-fix/final-full-parity.log`). Later targeted
 runs cover Table literal callbacks and assigned-value returns. Runtime tests pass
 under ARC and ORC and compiler tests pass. Logs remain under build/capture-fix.
-The 89-case result is not evidence of complete Smalltalk-80 conformance, a full
-external-library test run, or full mixed-mode coverage.
+The later bulk/sequence and Set-algebra additions brought the same suite to 92
+passing cases, 0 failures (`build/audit-probe/verify-parity.log`). Runtime tests
+pass under ARC and ORC; compiler tests pass. Neither result is evidence of
+complete Smalltalk-80 conformance, a full external-library test run, or full
+mixed-mode coverage.

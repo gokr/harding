@@ -165,10 +165,44 @@ Array>>removeLast [
 ]
 
 Array>>addAll: aCollection [
-    # Append all elements from another collection
-    aCollection isNil ifTrue: [ ^ self ]
+    # Append all elements from another collection; answers the argument
+    aCollection isNil ifTrue: [ ^ aCollection ]
     aCollection do: [:each |
         self add: each
+    ]
+    ^ aCollection
+]
+
+Array>>findFirst: block [
+    # 0-based index of the first element satisfying block, or nil
+    | i size |
+    i := 0
+    size := self size
+    [ i < size ] whileTrue: [
+        (block value: (self at: i)) ifTrue: [ ^ i ]
+        i := i + 1
+    ]
+    ^ nil
+]
+
+Array>>findLast: block [
+    # 0-based index of the last element satisfying block, or nil
+    | i |
+    i := self size - 1
+    [ i >= 0 ] whileTrue: [
+        (block value: (self at: i)) ifTrue: [ ^ i ]
+        i := i - 1
+    ]
+    ^ nil
+]
+
+Array>>reverseDo: block [
+    # Iterate from the last element to the first
+    | i |
+    i := self size - 1
+    [ i >= 0 ] whileTrue: [
+        block value: (self at: i)
+        i := i - 1
     ]
     ^ self
 ]

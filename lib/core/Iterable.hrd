@@ -97,3 +97,32 @@ Iterable>>count: block [
   ]
   ^ count
 ]
+
+Iterable>>addAll: aCollection [
+  # Add every element of another collection; answers the argument.
+  aCollection isNil ifTrue: [ ^ aCollection ]
+  aCollection do: [ :each | self add: each ]
+  ^ aCollection
+]
+
+Iterable>>includesAll: aCollection [
+  # True when every element of the argument is present in the receiver.
+  aCollection isNil ifTrue: [ ^ true ]
+  aCollection do: [ :each |
+    (self includes: each) ifFalse: [ ^ false ]
+  ]
+  ^ true
+]
+
+Iterable>>occurrencesOf: anObject [
+  # Number of elements equal to the argument.
+  ^ self count: [ :each | each = anObject ]
+]
+
+Iterable>>isEmpty [
+  ^ self size = 0
+]
+
+Iterable>>notEmpty [
+  ^ self size > 0
+]

@@ -684,7 +684,8 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
     let isInlineControl = msg.selector in inlineControlSelectors and
       (msg.selector notin ["do:", "collect:", "select:"] or
        (msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock and
-        msg.arguments[0].BlockNode.parameters.len == 1))
+        msg.arguments[0].BlockNode.parameters.len == 1 and
+        msg.receiver != nil and msg.receiver.kind == nkArray))
 
     if isInlineControl:
       # For inline control flow, skip registration of literal block arguments

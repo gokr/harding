@@ -208,6 +208,32 @@ proc compiledArrayElements*(value: NodeValue): seq[NodeValue] =
     return value.arrayVal
   raise newException(ValueError, "Expected Array")
 
+proc compiledSequence*(value: NodeValue): seq[NodeValue] =
+  ## Elements of a reference-backed Array or Table-as-Set, or a raw Array view.
+  ## Table elements are its values: Set stores each element as key and value.
+  if value.kind == vkInstance and value.instVal != nil:
+    case value.instVal.kind
+    of ikArray: return value.instVal.elements
+    of ikTable:
+      if value.instVal.class != nil and value.instVal.class.name == "Set":
+        for entry in value.instVal.entries.values: result.add(entry)
+        return result
+    else: discard
+    raise newException(ValueError, "Expected a sequence collection")
+  if value.kind == vkArray: return value.arrayVal
+  raise newException(ValueError, "Expected a sequence collection")
+
+proc compiledSameSpecies*(source: NodeValue, elements: seq[NodeValue]): NodeValue =
+  ## Rebuild a collection of the source's species from copied elements.
+  if source.kind == vkInstance and source.instVal != nil and
+     source.instVal.kind == ikTable:
+    var entries = initTable[NodeValue, NodeValue]()
+    for element in elements: entries[element] = element
+    result = compiledTable(entries)
+    result.instVal.class = source.instVal.class
+    return
+  compiledArray(elements)
+
 proc compiledSystemArguments*(): NodeValue =
   ## Snapshot user arguments, excluding the executable name, as Harding strings.
   var elements: seq[NodeValue] = @[]
@@ -902,6 +928,108 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var elements: seq[NodeValue]
       for value in storage.entries.values: elements.add(value)
       return compiledArray(elements)
+    of "addAll:":
+      if args.len == 1:
+        for element in compiledSequence(args[0]):
+          if storage.kind == ikArray: storage.elements.add(element)
+          else: storage.entries[element] = element
+        return args[0]
+    of "occurrencesOf:":
+      if args.len == 1:
+        var total = 0
+        for value in compiledSequence(receiver):
+          if isTruthy(sendMessage(runtime, value, "=", @[args[0]])): inc total
+        return toValue(total)
+    of "findFirst:", "findLast:":
+      if args.len == 1 and storage.kind == ikArray:
+        let count = storage.elements.len
+        for offset in 0..<count:
+          let index = if selector == "findFirst:": offset else: count - 1 - offset
+          if isTruthy(sendMessage(runtime, args[0], "value:", @[storage.elements[index]])):
+            return toValue(index)
+        return nilValue()
+    of "reverseDo:":
+      if args.len == 1 and storage.kind == ikArray:
+        for index in countdown(storage.elements.len - 1, 0):
+          discard sendMessage(runtime, args[0], "value:", @[storage.elements[index]])
+        return receiver
+    of "includesAll:":
+      if args.len == 1:
+        for wanted in compiledSequence(args[0]):
+          var found = false
+          for value in compiledSequence(receiver):
+            if isTruthy(sendMessage(runtime, value, "=", @[wanted])):
+              found = true
+              break
+          if not found: return toValue(false)
+        return toValue(true)
+    of "removeAt:":
+      if storage.kind == ikArray and args.len == 1 and args[0].kind == vkInt:
+        let index = args[0].intVal
+        if index >= 0 and index < storage.elements.len:
+          let removed = storage.elements[index]
+          storage.elements.delete(index)
+          return removed
+        return nilValue()
+    of "removeLast", "removeFirst":
+      if storage.kind == ikArray and storage.elements.len > 0:
+        let index = if selector == "removeLast": storage.elements.len - 1 else: 0
+        let removed = storage.elements[index]
+        storage.elements.delete(index)
+        return removed
+      return nilValue()
+    of "remove:":
+      if args.len == 1 and storage.class.name == "Set":
+        if storage.entries.hasKey(args[0]): storage.entries.del(args[0])
+        return receiver
+      return nilValue()
+    of "union:", "intersection:", "difference:":
+      if args.len == 1 and storage.class.name == "Set":
+        var entries = initTable[NodeValue, NodeValue]()
+        let other = compiledSequence(args[0])
+        case selector
+        of "union:":
+          for key, value in storage.entries: entries[key] = value
+          for value in other: entries[value] = value
+        of "intersection:":
+          for value in other:
+            if storage.entries.hasKey(value): entries[value] = value
+        else:
+          for key, value in storage.entries: entries[key] = value
+          for value in other: entries.del(value)
+        result = compiledTable(entries)
+        result.instVal.class = storage.class
+        return
+      return nilValue()
+    of "removeKey:":
+      if storage.kind == ikTable and storage.class.name == "Table" and args.len == 1:
+        if storage.entries.hasKey(args[0]):
+          storage.entries.del(args[0])
+        return receiver
+    of "values":
+      if storage.kind == ikTable and storage.class.name == "Table":
+        var elements: seq[NodeValue]
+        for value in storage.entries.values: elements.add(value)
+        return compiledArray(elements)
+    of "keys":
+      if storage.kind == ikTable and storage.class.name == "Table":
+        var elements: seq[NodeValue]
+        for key in storage.entries.keys: elements.add(key)
+        return compiledArray(elements)
+    of "associations":
+      if storage.kind == ikTable and storage.class.name == "Table":
+        var pairs: seq[NodeValue]
+        for key, value in storage.entries:
+          pairs.add(compiledArray(@[key, value]))
+        return compiledArray(pairs)
+    of "at:":
+      if args.len == 1:
+        if storage.kind == ikArray and args[0].kind == vkInt:
+          let index = args[0].intVal
+          if index >= 0 and index < storage.elements.len: return storage.elements[index]
+        elif storage.kind == ikTable and storage.entries.hasKey(args[0]):
+          return storage.entries[args[0]]
+        return nilValue()
     of "includes:":
       if storage.kind == ikTable and storage.class.name == "Table" and args.len == 1:
         for value in storage.entries.values:

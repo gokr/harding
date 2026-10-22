@@ -498,9 +498,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return code
 
   of "do:":
-    # Inline do: for Arrays when block is literal
-    # Compiles to: for i, elem in arr.arrayVal: block(elem)
+    # Inline do: only for a literal Array receiver; other receivers keep
+    # ordinary dispatch so Table/Set species and callback arity stay correct.
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       node.receiver != nil and node.receiver.kind == nkArray and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len == 1:
@@ -520,9 +521,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         return code
 
   of "collect:":
-    # Inline collect: for Arrays when block is literal
-    # Compiles to: result = @[]; for elem in arr: result.add(block(elem)); return result
+    # Inline collect: only for a literal Array receiver; other receivers keep
+    # ordinary dispatch so result species stays correct.
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       node.receiver != nil and node.receiver.kind == nkArray and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len == 1:
@@ -548,9 +550,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         return code
 
   of "select:":
-    # Inline select: for Arrays when block is literal
-    # Compiles to: result = @[]; for elem in arr: if block(elem): result.add(elem); return result
+    # Inline select: only for a literal Array receiver; other receivers keep
+    # ordinary dispatch so result species stays correct.
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
+       node.receiver != nil and node.receiver.kind == nkArray and
        not hasReturnNode(node.arguments[0]):
       let bodyBlock = node.arguments[0].BlockNode
       if bodyBlock.parameters.len == 1:
