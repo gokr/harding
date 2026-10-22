@@ -709,8 +709,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add("proc registerSuperclassHierarchy*() = discard 0\n\n")
 
   # Collect blocks from top-level code into the shared registry
+  let mainLocals = scopeLocalNames(executableMainNodes, mainTemporaries)
   for node in mainBodyNodes:
-    collectBlocks(blockReg, node, knownGlobals, ownerLocalNames = mainTemporaries)
+    collectBlocks(blockReg, node, knownGlobals, ownerLocalNames = mainLocals)
 
   # Generate block environment structs and forward declarations BEFORE the
   # compiled methods so method bodies can reference block procedures.

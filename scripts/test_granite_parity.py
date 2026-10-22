@@ -7,6 +7,39 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("write_only_cleanup_capture", """
+cleaned := false.
+[[Error signal: "x"] ensure: [cleaned := true]] on: Error do: [:error | nil].
+cleaned println.
+outer := [| local setter | local := 1. setter := [local := 7]. setter value. local].
+outer value println.
+value := 3.
+[| value | value := 9. [value := 10] value. value println] value.
+value println.
+Capture := Object derive: #().
+Capture>>run [| flag | flag := false. [[Error signal: "x"] ensure: [flag := true]] on: Error do: [:error | nil]. ^ flag].
+Capture new run println.
+""", "true\n7\n10\n3\ntrue\n"),
+    ("array_query_protocol", """
+a := #(1, 2, 3).
+(a reject: [:x | x = 2]) println.
+(a detect: [:x | x > 1]) println.
+(a detect: [:x | x > 9] ifNone: [42]) println.
+(a inject: 0 into: [:sum :x | sum + x]) println.
+(a anySatisfy: [:x | x = 2]) println.
+(a allSatisfy: [:x | x > 0]) println.
+(a noneSatisfy: [:x | x < 0]) println.
+a isEmpty println.
+#() isEmpty println.
+(#() allSatisfy: [:x | false]) println.
+(#() anySatisfy: [:x | true]) println.
+(#() noneSatisfy: [:x | true]) println.
+seen := 0.
+(a anySatisfy: [:x | seen := seen + 1. x = 2]) println.
+seen println.
+mapper := [:x | x * 2].
+(a collect: mapper) println.
+""", "#(1 3)\n2\n42\n6\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n2\n#(2 4 6)\n"),
     ("class_methods", """
 Factory := Object derive: #().
 Factory class>>answer [ ^ 42 ].

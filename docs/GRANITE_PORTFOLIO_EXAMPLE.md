@@ -62,7 +62,7 @@ compiler speedup claim. Every measured invocation requires the expected exit
 status, empty stderr and independently calculated exact stdout. Raw samples:
 `build/portfolio-stress/timings-phb6avxn/results.json`.
 
-## Open parity defect found during construction
+## Cleanup capture regression found during construction
 
 Top-level captured assignment in an error cleanup does not propagate in Granite:
 
@@ -72,9 +72,9 @@ cleaned := false.
 cleaned println.
 ```
 
-Expected/interpreter: `true`; actual native: `false`. This affects scripts that
-observe cleanup through captured local state. The showcase instead records
-cleanup on the book object; this does not repair or redefine local capture
-semantics. A follow-up should diagnose codegen capture sharing across exception
-helpers and add executed parity coverage, rather than changing the language.
-Reproduction source and build logs are under `build/portfolio-stress/`.
+The original native build answered `false` instead of the interpreter's `true`.
+Capture analysis now recognizes direct script assignments as enclosing bindings,
+and `write_only_cleanup_capture` checks cleanup setters, nested block locals,
+method locals and shadowing in both engines. The showcase retains its object-held
+cleanup state. This fixes binding sharing without changing language semantics.
+The original reproduction and build logs are under `build/portfolio-stress/`.

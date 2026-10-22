@@ -1292,6 +1292,49 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return receiver
     return NodeValue(kind: vkNil)
 
+  of "isEmpty", "notEmpty":
+    var size = -1
+    case receiver.kind
+    of vkArray: size = receiver.arrayVal.len
+    of vkTable: size = receiver.tableVal.len
+    of vkString: size = receiver.strVal.len
+    else: discard
+    if size >= 0:
+      return toValue(if selector == "isEmpty": size == 0 else: size > 0)
+    return compiledMissingMessage(receiver, selector)
+
+  of "collect:", "select:", "reject:", "detect:", "detect:ifNone:",
+     "anySatisfy:", "allSatisfy:", "noneSatisfy:":
+    let arity = if selector == "detect:ifNone:": 2 else: 1
+    if receiver.kind != vkArray or args.len != arity:
+      return compiledMissingMessage(receiver, selector)
+    var elements: seq[NodeValue]
+    for item in receiver.arrayVal:
+      let answer = sendMessage(runtime, args[0], "value:", @[item])
+      let matched = if selector == "collect:": false else: isTruthy(answer)
+      case selector
+      of "collect:": elements.add(answer)
+      of "select:":
+        if matched: elements.add(item)
+      of "reject:":
+        if not matched: elements.add(item)
+      of "detect:", "detect:ifNone:":
+        if matched: return item
+      of "anySatisfy:":
+        if matched: return toValue(true)
+      of "allSatisfy:":
+        if not matched: return toValue(false)
+      of "noneSatisfy:":
+        if matched: return toValue(false)
+      else: discard
+    case selector
+    of "collect:", "select:", "reject:":
+      return NodeValue(kind: vkArray, arrayVal: elements)
+    of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
+    of "detect:": return nilValue()
+    of "anySatisfy:": return toValue(false)
+    else: return toValue(true)
+
   of "inject:into:":
     if receiver.kind == vkArray and args.len >= 2:
       var acc = args[0]

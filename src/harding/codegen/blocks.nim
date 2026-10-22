@@ -280,6 +280,15 @@ proc collectAssignedVars*(node: Node, assigned: var HashSet[string]) =
   else:
     discard
 
+proc scopeLocalNames*(body: seq[Node], declared: seq[string] = @[]): seq[string] =
+  ## Names introduced by declarations or direct assignments in this scope.
+  result = declared
+  for node in body:
+    if node != nil and node.kind == nkAssign:
+      let name = node.AssignNode.variable
+      if name.len > 0 and name[0] in {'a'..'z'} and name notin result:
+        result.add(name)
+
 proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[],
                       ownerSlotNames: seq[string] = @[],
                       ownerLocalNames: seq[string] = @[]): seq[string] =
@@ -665,8 +674,10 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
     discard registerBlock(registry, node.BlockNode, knownGlobals, false, ownerSlotNames,
                    ownerLocalNames)
     # Recursively collect blocks in the body
+    let nestedLocals = scopeLocalNames(node.BlockNode.body,
+      ownerLocalNames & node.BlockNode.parameters & node.BlockNode.temporaries)
     for stmt in node.BlockNode.body:
-      collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, ownerLocalNames)
+      collectBlocks(registry, stmt, knownGlobals, ownerSlotNames, nestedLocals)
 
   of nkMessage:
     let msg = node.MessageNode

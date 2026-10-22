@@ -208,8 +208,9 @@ proc captureCellNames*(registry: BlockRegistry): seq[string] =
 proc scopeCaptureCellNames*(body: seq[Node], ownerLocalNames: seq[string] = @[]): seq[string] =
   ## Analyze only blocks lexically contained in this body.
   let registry = newBlockRegistry()
+  let locals = scopeLocalNames(body, ownerLocalNames)
   for node in body:
-    collectBlocks(registry, node, ownerLocalNames = ownerLocalNames)
+    collectBlocks(registry, node, ownerLocalNames = locals)
   return captureCellNames(registry)
 
 proc bindingTarget(ctx: GenContext, name: string): string =
