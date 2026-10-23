@@ -588,6 +588,47 @@ proc registerCompiledMethod*(className: string, selector: string,
 # shim per method (instead of one generic adapter) keeps the identity static and
 # mirrors how generated modules already emit per-class slot accessor procs.
 
+type BoundCompiledClass = object
+  interpreter: Interpreter
+  methods: Table[string, BlockNode]
+
+var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
+
+proc boundInterpretedSend(receiver: NodeValue, selector: string,
+                          args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  if boundCompiledClasses.len == 0 or receiver.kind != vkInstance or receiver.instVal == nil:
+    return
+  let cls = receiver.instVal.class
+  if cls == nil:
+    return
+  # Find the host through the live hierarchy, not the compiled name registry.
+  var visited: seq[Class]
+  proc findBinding(current: Class): Class =
+    if current == nil or current in visited: return nil
+    visited.add(current)
+    if current in boundCompiledClasses: return current
+    for parent in current.superclasses:
+      let found = findBinding(parent)
+      if found != nil: return found
+  let owner = findBinding(cls)
+  if owner == nil:
+    return
+  let binding = boundCompiledClasses[owner]
+  let resolved = lookupInstanceMethod(cls, selector)
+  # A bound shim remains native. Any replacement (including a subclass override)
+  # must go through the VM, even after a compiled cache has warmed.
+  if cls == owner and selector in binding.methods and
+     binding.methods[selector] == resolved:
+    return
+  var interp = binding.interpreter
+  var arguments: seq[Node]
+  for argument in args:
+    arguments.add(LiteralNode(value: argument))
+  let message = MessageNode(receiver: LiteralNode(value: receiver),
+                            selector: selector, arguments: arguments)
+  result.value = evalCallbackNonFatal(interp, message)
+  result.handled = true
+
 proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: string,
                              shim: pointer): bool =
   ## Bind `shim` as the native implementation for className>>selector.
@@ -613,13 +654,21 @@ proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: strin
   boundMethod.primitiveSelector = selector
   boundMethod.nativeImpl = shim
   boundMethod.hasInterpreterParam = true
+  var binding = boundCompiledClasses.getOrDefault(cls)
+  binding.interpreter = interp
+  binding.methods[selector] = boundMethod
+  boundCompiledClasses[cls] = binding
+  inc compiledClassDispatchVersion
   return true
 
-proc bindCompiledMethodsToInterpreter*(interp: var Interpreter, shims: pointer) =
-  ## Compatibility hook for generated modules that batch-register shims.
-  ## Individual methods are bound with bindCompiledMethodShim.
-  discard interp
-  discard shims
+proc unbindCompiledMethodsFrom*(interp: Interpreter) =
+  ## Release host registrations before disposing the embedded interpreter.
+  var classes: seq[Class]
+  for cls, binding in boundCompiledClasses:
+    if binding.interpreter == interp: classes.add(cls)
+  for cls in classes:
+    boundCompiledClasses.del(cls)
+  if classes.len > 0: inc compiledClassDispatchVersion
 
 proc registerNimProxyClassName*(nimValue: pointer, className: string) =
   ## Register the class name for a Nim proxy object
@@ -740,6 +789,10 @@ proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
                                       selector: string, args: seq[NodeValue]): NodeValue =
   ## Dispatch compiled method by walking class -> superclass graph in declaration
   ## order, so multiple parents follow the interpreter's lookup order.
+  if className == getReceiverClassName(receiver):
+    let interpreted = boundInterpretedSend(receiver, selector, args)
+    if interpreted.handled:
+      return interpreted.value
   let owner = walkCompiledHierarchy(className,
     proc(name: string): bool = findCompiledMethod(name, selector) != nil)
   if owner.len > 0:
@@ -934,6 +987,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
+
+  if selector notin ["==", "~="]:
+    let interpreted = boundInterpretedSend(receiver, selector, args)
+    if interpreted.handled: return interpreted.value
 
   if receiver.kind == vkInstance and receiver.instVal != nil and
      receiver.instVal.kind in {ikArray, ikTable}:
@@ -1859,6 +1916,9 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
   ## class-side sends and exception protocols retain the generic runtime path.
   if selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
     return sendMessage(runtime, receiver, selector, args)
+  let interpreted = boundInterpretedSend(receiver, selector, args)
+  if interpreted.handled:
+    return interpreted.value
   let className = getReceiverClassName(receiver)
   if className.len > 0:
     if cache.version == compiledClassDispatchVersion and cache.className == className and

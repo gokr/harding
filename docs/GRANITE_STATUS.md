@@ -6,8 +6,13 @@ Work branch: `granite-completeness`.
 
 Design for shipping opted-in stdlib classes natively while the rest stays
 interpreted, including the two deliverable modes, the frozen-class tiers, the
-runtime-redefinition policy, and the measured finding that engine crossing does
-not yet work in either direction: see PLAN.md section 6. Not implemented.
+runtime-redefinition policy: see PLAN.md section 6. Generated instance-method
+shims now expose compiled bodies through interpreter dispatch. Explicitly bound
+instance sends check live method resolution before generic/native cache dispatch,
+falling back for replacements and runtime subclass overrides through literal-valued
+VM messages. Class-side/layout changes, cross-engine control-transfer translation,
+complete mixed-mode fallback and sealing are not implemented. Hosts must release
+boundary registrations before interpreter disposal.
 
 ## Collection/JSON follow-up
 

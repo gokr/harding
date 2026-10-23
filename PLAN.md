@@ -527,8 +527,18 @@ Effort is relative to this codebase, not a schedule commitment.
    activation does **not** work — during native dispatch
    `currentActivation.currentMethod` is the enclosing `doIt`, not the method being
    invoked. Per-method shims keep the identity static.
-2. **Guard and deoptimize (low).** Redefine a frozen class at runtime; assert
-   fallback rather than divergence.
+2. **Guard and deoptimize (instance-send slice implemented).** Explicitly bound
+   instance classes retain their host interpreter and original shim identities.
+   Generic and cached native sends check live method resolution before using a
+   compiled target; replacements and runtime subclass overrides dispatch via a
+   literal-valued VM message, without source reconstruction or nil-as-miss.
+   Hosts release registrations with `unbindCompiledMethodsFrom` before disposal.
+   Coverage: warm-cache replacement, subclass nil overrides and unchanged inherited
+   shims in `test_engine_boundary`. The guard currently resolves live methods on
+   every bound send rather than relying on interpreter mutations updating the
+   compiled version counter. Class-side changes, layout replacement, explicit
+   super-send boundaries, exception/return translation, scheduler suspension and
+   full-deliverable sealing remain follow-up work; this is not complete deoptimization.
 3. **Real compiled → interpreted fallback (medium).** Replace the `toString()`
    round-trip in `sendMessageHybrid` with actual value passing.
 4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
