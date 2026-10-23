@@ -400,6 +400,20 @@ suite "Compiler: Engine binding shims":
     lexical.parameters.add("UnlistedGlobal")
     check genSymbolAccess(lexical, "UnlistedGlobal") == mangleIdentifier("UnlistedGlobal")
 
+  test "uppercase writes use host assignment after local and slot checks":
+    let (nodes, syntax) = parse("Writer := Object derive: #(). Writer>>write: value [ UnlistedGlobal := value. ^ UnlistedGlobal ]. Writer>>setter [ ^ [:value | UnlistedGlobal := value] ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "bound_writes")
+    check code.contains("boundGlobalWrite(self, \"UnlistedGlobal\", assignedValue)")
+    check not code.contains("var " & mangleIdentifier("UnlistedGlobal") & " =")
+    let lexical = newGenContext()
+    lexical.inMethod = true
+    lexical.parameters.add("UnlistedGlobal")
+    let assignment = AssignNode(variable: "UnlistedGlobal", expression: LiteralNode(value: toValue(1)))
+    check not genStatement(lexical, assignment).contains("boundGlobalWrite")
+    check not genExpression(lexical, assignment).contains("boundGlobalWrite")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

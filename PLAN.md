@@ -584,9 +584,15 @@ Effort is relative to this codebase, not a schedule commitment.
    Reads stay live after alias rebinding; nil/missing values do not fall back to
    native globals. Ordinary class sends, including local aliases and class-valued
    parameters, use the receiver's host even when the target class has no shims.
-   Pure native reads keep their existing fallback. Global writes, specialized
-   builtin sends, library-scoped static allocation and explicit super boundaries
-   are not covered by this read/ordinary-send slice.
+   Pure native reads keep their existing fallback.
+   Uppercase global writes in bound methods/escaped closures assign through a fresh
+   host VM block activation, so imported-library bindings, protected names and
+   class renaming follow the interpreter's own `setVariable` path. Existing,
+   newly created and imported variables work, including `nil` values; pure native
+   writes keep `setGlobal`. Compiled blocks whose last statement is an assignment
+   now answer the assigned value like the interpreter, evaluating the RHS once.
+   Specialized builtin sends, library-scoped static allocation and explicit super
+   boundaries are not covered by this read/write/ordinary-send slice.
    Remaining: automatic native-instance binding, complete global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use

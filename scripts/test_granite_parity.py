@@ -7,6 +7,22 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("block_assignment_results", """
+GlobalValue := 0.
+writer := [:value | GlobalValue := value].
+(writer value: 7) println.
+GlobalValue println.
+[| local | local := 11] value println.
+count := 0.
+next := [count := count + 1].
+next value println.
+count println.
+SlotWriter := Object derivePublic: #(stored).
+SlotWriter>>writer [ ^ [:value | stored := value] ].
+instance := SlotWriter new.
+(instance writer value: 9) println.
+instance stored println.
+""", "7\n7\n11\n1\n1\n9\n9\n"),
     ("write_only_cleanup_capture", """
 cleaned := false.
 [[Error signal: "x"] ensure: [cleaned := true]] on: Error do: [:error | nil].

@@ -139,6 +139,12 @@ suite "Class-side engine boundary":
     other.globals[]["LiveSetting"] = toValue(22)
     check boundGlobalValue(owner, "LiveSetting").value.intVal == 11
     check boundGlobalValue(toValue(otherOwner), "LiveSetting").value.intVal == 22
+    check boundGlobalWrite(owner, "LiveSetting", toValue(31)).value.intVal == 31
+    check interp.globals[]["LiveSetting"].intVal == 31
+    check other.globals[]["LiveSetting"].intVal == 22
+    check isNilValue(boundGlobalWrite(toValue(otherOwner), "LiveSetting", nilValue()).value)
+    check isNilValue(other.globals[]["LiveSetting"])
+    check not boundGlobalWrite(toValue(1), "LiveSetting", toValue(99)).handled
     check boundGlobalValue(owner, "MissingGlobal").handled
     check isNilValue(boundGlobalValue(owner, "MissingGlobal").value)
     check sendMessageBound(toValue(otherOwner), toValue(otherTarget), "new", @[]).classVal == otherTarget
@@ -146,6 +152,8 @@ suite "Class-side engine boundary":
     unbindCompiledMethodsFrom(interp)
     check not boundNewInstance(owner, "AllocationTarget").handled
     check not boundGlobalValue(owner, "LiveSetting").handled
+    check not boundGlobalWrite(owner, "LiveSetting", toValue(99)).handled
+    check interp.globals[]["LiveSetting"].intVal == 31
     check boundNewInstance(toValue(otherOwner), "AllocationTarget").handled
 
   test "unknown class selector and existing native class primitive are not rebound":

@@ -639,6 +639,21 @@ proc boundGlobalValue*(ownerReceiver: NodeValue, name: string): tuple[handled: b
   result.value = evalCallbackNonFatal(interp, IdentNode(name: name, localIndex: -1))
   result.handled = true
 
+proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
+                       value: NodeValue): tuple[handled: bool, value: NodeValue] =
+  ## Assign via a fresh VM block activation: imported bindings and protected
+  ## globals use exactly the interpreter's ordinary assignment path.
+  let owner = boundClassFor(ownerReceiver)
+  if owner == nil:
+    return
+  var interp = boundCompiledClasses[owner].interpreter
+  let assignment = AssignNode(variable: name, expression: LiteralNode(value: value), localIndex: -1)
+  let body = BlockNode(body: @[Node(assignment)])
+  let message = MessageNode(receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: body)),
+                            selector: "value")
+  result.value = evalCallbackNonFatal(interp, message)
+  result.handled = true
+
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
   ## Ordinary class sends from bound code use the host, even for unbound classes.

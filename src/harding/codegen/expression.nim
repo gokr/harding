@@ -287,6 +287,11 @@ proc inlineBlockExpression(ctx: GenContext, blk: BlockNode): string =
     result.add("    nilValue()\n")
   result.add(")")
 
+proc genGlobalAssignment(ctx: GenContext, name, value: string): string =
+  if ctx.inMethod and not ctx.mixed and name.len > 0 and name[0] in {'A'..'Z'}:
+    return fmt("(block:\n    let assignedValue = {value}\n    let binding = boundGlobalWrite(self, \"{name}\", assignedValue)\n    if binding.handled: binding.value else: setGlobal(\"{name}\", assignedValue))")
+  return fmt("setGlobal(\"{name}\", {value})")
+
 proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
@@ -867,8 +872,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # A Harding global (typically a top-level uppercase variable) assigns the
     # shared binding so main, methods and blocks all observe the same value.
     # Declaring a fresh local here would silently shadow it.
-    if varName in ctx.globals:
-      return fmt("setGlobal(\"{varName}\", {exprCode})")
+    if varName in ctx.globals or (ctx.inMethod and varName.len > 0 and varName[0] in {'A'..'Z'}):
+      return genGlobalAssignment(ctx, varName, exprCode)
 
     # New local variable assignment
     ctx.locals.add(varName)
@@ -1014,8 +1019,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # A Harding global assigns the shared binding; in statement position the
     # returned value is discarded.
-    if varName in ctx.globals:
-      return fmt("discard setGlobal(\"{varName}\", {exprCode})")
+    if varName in ctx.globals or (ctx.inMethod and varName.len > 0 and varName[0] in {'A'..'Z'}):
+      return "discard " & genGlobalAssignment(ctx, varName, exprCode)
 
     # New local variable assignment
     ctx.locals.add(varName)
@@ -1250,7 +1255,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       elif ctx.isLocal(receiverName):
         return fmt("{bindingTarget(ctx, receiverName)} = {msgCode}")
       elif receiverName in ctx.globals:
-        return fmt("discard setGlobal(\"{receiverName}\", {msgCode})")
+        return "discard " & genGlobalAssignment(ctx, receiverName, msgCode)
 
     # Default: message send as statement
     let msgCode = genMessage(ctx, node.MessageNode)
@@ -1341,7 +1346,20 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
       if stmtCode.len > 0:
         output.add(indentBlock(stmtCode))
       output.add("  return NodeValue(kind: vkNil)\n")
-    elif i == blkNode.body.len - 1 and stmt.kind notin {nkReturn, nkAssign}:
+    elif i == blkNode.body.len - 1 and stmt.kind == nkAssign:
+      # Preserve the value before assignment (including global/class naming)
+      # without re-evaluating an RHS that may have side effects.
+      let assignment = stmt.AssignNode
+      let temporary = "\x00blockAssignmentValue"
+      let temporaryName = mangleIdentifier(temporary)
+      let rhs = genExpression(bodyCtx, assignment.expression)
+      output.add(fmt("  let {temporaryName} = {rhs}\n"))
+      bodyCtx.locals.add(temporary)
+      let stored = AssignNode(variable: assignment.variable,
+        expression: IdentNode(name: temporary))
+      output.add(indentBlock(genStatement(bodyCtx, stored)))
+      output.add(fmt("  return {temporaryName}\n"))
+    elif i == blkNode.body.len - 1 and stmt.kind != nkReturn:
       # Last statement is the return value
       let exprCode = genExpression(bodyCtx, stmt)
       output.add("  return " & exprCode & "\n")

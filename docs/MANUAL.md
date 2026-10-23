@@ -217,8 +217,11 @@ Uppercase global reads in bound methods and escaped closures use live VM lookup,
 including imported libraries; lexical parameters/locals/slots still take priority.
 Aliases remain live after rebinding. Ordinary class sends through aliases or
 class-valued parameters use the receiver's host even without target-class shims.
-Global writes, specialized builtins, library-scoped static allocation and explicit
-super boundaries are not yet unified.
+Uppercase global writes in bound methods and closures assign through the host VM,
+so imported-library bindings, protected globals and class renaming behave as they
+do in interpreted code. A compiled block ending in an assignment answers the
+assigned value and evaluates its right-hand side once. Specialized builtins,
+library-scoped static allocation and explicit super boundaries are not yet unified.
 
 This is not yet a complete `--mixed` compiler contract: automatic native-instance
 binding, layout migration, cross-engine exception/non-local-return translation

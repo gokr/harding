@@ -34,6 +34,15 @@ Factory>>localAlias [ | target | target := AliasTarget. ^ target new ].
 Factory>>shadow: AliasTarget [ ^ [AliasTarget] ].
 Factory>>classArgument: target [ ^ target answer ].
 Factory>>importedReader [ ^ [LibrarySetting] ].
+Factory>>writeGlobal: value [ LiveSetting := value. ^ LiveSetting ].
+Factory>>globalWriter [ ^ [:value | LiveSetting := value] ].
+Factory>>nestedWriter [ ^ [[:value | CreatedSetting := value]] ].
+Factory>>libraryWriter [ ^ [:value | LibrarySetting := value. LibrarySetting] ].
+Factory>>protectedWriter [ Object := nil ].
+Factory>>shadowWrite: LiveSetting [ ^ [:value | LiveSetting := value. LiveSetting] ].
+Factory class>>writeGlobal: value [ LiveSetting := value. ^ LiveSetting ].
+Factory>>sideEffectWriter: next [ ^ [CreatedSetting := next value] ].
+Factory>>counter [ | count | count := 0. ^ [count := count + 1] ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
@@ -92,6 +101,15 @@ Factory>>localAlias [ ^ nil ].
 Factory>>shadow: AliasTarget [ ^ nil ].
 Factory>>classArgument: target [ ^ nil ].
 Factory>>importedReader [ ^ nil ].
+Factory>>writeGlobal: value [ ^ nil ].
+Factory>>globalWriter [ ^ nil ].
+Factory>>nestedWriter [ ^ nil ].
+Factory>>libraryWriter [ ^ nil ].
+Factory>>protectedWriter [ ^ nil ].
+Factory>>shadowWrite: LiveSetting [ ^ nil ].
+Factory class>>writeGlobal: value [ ^ nil ].
+Factory>>sideEffectWriter: next [ ^ nil ].
+Factory>>counter [ ^ nil ].
 BoundaryLib := Library name: "BoundaryLib".
 BoundaryLib at: "LibrarySetting" put: 31.
 Harding import: BoundaryLib.
@@ -188,6 +206,36 @@ doAssert invokeBlock(interp, importedReader.blockVal, @[]).intVal == 31
 let (_, updateLibraryError) = interp.evalStatements("BoundaryLib at: \\\"LibrarySetting\\\" put: 32")
 doAssert updateLibraryError.len == 0, updateLibraryError
 doAssert invokeBlock(interp, importedReader.blockVal, @[]).intVal == 32
+doAssert sendMessageInterpreted(interp, instance, "writeGlobal:", @[toValue(40)]).intVal == 40
+doAssert interp.globals[]["LiveSetting"].intVal == 40
+let globalWriter = sendMessageInterpreted(interp, instance, "globalWriter", @[])
+let writeResult = invokeBlock(interp, globalWriter.blockVal, @[nilValue()])
+doAssert isNilValue(writeResult)
+doAssert isNilValue(interp.globals[]["LiveSetting"])
+let nestedWriter = sendMessageInterpreted(interp, instance, "nestedWriter", @[])
+let innerWriter = invokeBlock(interp, nestedWriter.blockVal, @[])
+doAssert invokeBlock(interp, innerWriter.blockVal, @[toValue(51)]).intVal == 51
+doAssert interp.globals[]["CreatedSetting"].intVal == 51
+let libraryWriter = sendMessageInterpreted(interp, instance, "libraryWriter", @[])
+doAssert invokeBlock(interp, libraryWriter.blockVal, @[toValue(33)]).intVal == 33
+doAssert invokeBlock(interp, importedReader.blockVal, @[]).intVal == 33
+let shadowWriter = sendMessageInterpreted(interp, instance, "shadowWrite:", @[toValue(1)])
+doAssert invokeBlock(interp, shadowWriter.blockVal, @[toValue(2)]).intVal == 2
+doAssert isNilValue(interp.globals[]["LiveSetting"])
+let savedObject = interp.globals[]["Object"]
+var protectedFailed = false
+try:
+  discard sendMessageInterpreted(interp, instance, "protectedWriter", @[])
+except CatchableError:
+  protectedFailed = true
+doAssert protectedFailed
+doAssert interp.globals[]["Object"].classVal == savedObject.classVal
+doAssert sendMessageInterpreted(interp, instance, "writeGlobal:", @[toValue(42)]).intVal == 42
+doAssert sendMessageInterpreted(interp, cls, "writeGlobal:", @[toValue(43)]).intVal == 43
+let counter = sendMessageInterpreted(interp, instance, "counter", @[])
+let countedWriter = sendMessageInterpreted(interp, instance, "sideEffectWriter:", @[counter])
+doAssert invokeBlock(interp, countedWriter.blockVal, @[]).intVal == 1
+doAssert invokeBlock(interp, counter.blockVal, @[]).intVal == 2
 # Overridden new may answer nil: host allocation must not retry the native path.
 let (_, nilFactoryError) = interp.evalStatements("SlotChild class>>new [ ^ nil ]")
 doAssert nilFactoryError.len == 0, nilFactoryError
