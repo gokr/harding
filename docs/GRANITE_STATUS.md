@@ -2,6 +2,13 @@
 
 Work branch: `granite-completeness`.
 
+## Frozen stdlib and engine boundary
+
+Design for shipping opted-in stdlib classes natively while the rest stays
+interpreted, including the two deliverable modes, the frozen-class tiers, the
+runtime-redefinition policy, and the measured finding that engine crossing does
+not yet work in either direction: see PLAN.md section 6. Not implemented.
+
 ## Collection/JSON follow-up
 
 The current follow-up fixes write-only captures and uses shared Instance storage

@@ -409,7 +409,132 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Catch/translate error and return transfers at C ABI boundaries; validate
       foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.
-- [ ] Cover mixed-mode execution separately from pure compilation.
+- [ ] Cover mixed-mode execution separately from pure compilation. Crossing
+      is currently non-functional in both directions; see section 6 for the
+      measured state and the staged plan.
+
+## 6. Frozen stdlib and the engine boundary
+
+Status: **design agreed, not implemented.** This section records the target
+architecture for shipping opted-in parts of a program as native code while the
+rest stays interpreted. Nothing below is available today; the "Current state"
+subsection is measured evidence, not an estimate.
+
+### Two deliverable modes
+
+1. **Full compilation.** Everything is compiled; no runtime code changes are
+   permitted. Frozen classes may be sealed outright.
+2. **Partial compilation.** Frozen classes compile natively; unfrozen code keeps
+   running in the embedded interpreter, and user code can create classes at
+   runtime. This is the intended shape for a compiled Bona: tools and stdlib
+   compiled, user Workspace code interpreted, Smalltalk-style live definition
+   preserved. Image persistence is still out of scope.
+
+### What "frozen" means
+
+"Frozen" is a **compile-time artifact**, not a new core concept. A `.hrd` file
+declares it with a header comment annotation (`# @frozen`); the annotation is the
+declaration of intent, and a checked manifest is the enforcement.
+
+Frozen classes come in three tiers:
+
+| Tier | Mechanism | Intended use |
+|---|---|---|
+| Generic | `.hrd` source compiled to Nim codegen | Default; broadest stdlib coverage |
+| Counterpart | Hand-written Nim implementation of the same semantics | Collections, Integer, String — where representation control pays |
+| Sealed | No runtime redefinition permitted | Full-compilation deliverables |
+
+Counterpart classes accept two sources of truth. That is already true of the
+existing `nt_*` helpers, but it must be made *checkable*: a frozen class whose
+counterpart has no executed conformance case against the interpreter path fails
+the build. Reuse the `examples/manifest.json` discipline (unlisted/stale entries
+fail) and the existing parity runner.
+
+Freezing is meaningful only as a **dependency closure**, not per file. Freezing
+`SortedCollection` alone gains little because it calls Array, Iterable and
+closures over `sortBlock`; a set of classes must be frozen together.
+
+### Current state: crossing does not exist
+
+Measured in `granite-completeness` at commit `5be9168`:
+
+- `--mixed` compiles calls to `sendMessageHybrid` (`codegen/expression.nim:734`).
+  That function (`runtime/runtime.nim:1863`) **rebuilds source text** from
+  `receiver.toString()` and `evalStatements`. Object identity, captured state and
+  block closures do not survive the crossing.
+- Nim-proxy receivers are explicitly unsupported there: it prints a warning and
+  returns `nil`.
+- `registerCompiledMethod` writes only `compiledMethodProcs` and never
+  `Class.methods`; the interpreter contains **zero** references to
+  `compiledMethodProcs`. Interpreted code therefore cannot reach any compiled
+  method at all.
+- No mixed-mode regression tests exist. The flag is unexercised.
+
+For a compiled Bona the missing direction is **interpreted → compiled**: a
+Workspace Do It sending `SortedCollection new add: 3` must reach a compiled class.
+Compiled → interpreted fallback is the second half.
+
+### Why the dangerous direction is cheap
+
+`lookupMethod` (`interpreter/vm.nim:881`) returns a `MethodResult` carrying a
+`BlockNode`, not a callable — which looks like a blocker. But the VM already
+invokes `nativeImpl` procs off `BlockNode`s (`vm.nim:1067-1081`, `8011-8105`;
+`hasInterpreterParam` distinguishes the two arities). Each registered compiled
+method therefore gets a shim `BlockNode` whose `nativeImpl` adapts the call:
+
+```nim
+proc adapter(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+  compiledMethodProcs[key](self, args)
+```
+
+The interpreter then dispatches into compiled code through machinery it already
+has — no new dispatch mechanism, no marshalling, and the receiver stays a real
+`Instance`, so identity and captured state survive. `NodeValue` and `Instance`
+are shared types (`core/types.nim`), and the compiled runtime already imports
+them, so the boundary is a dispatch-table problem, not a serialization problem.
+
+### Redefinition policy (agreed)
+
+When runtime code redefines a frozen class or method:
+
+1. **Hard error** — simplest; the posture for full-compilation deliverables.
+2. **Shadow** — user definition wins for new sends while compiled call sites keep
+   the baked-in body. Fast but yields two behaviours for one class and must not
+   be the default.
+3. **Deoptimize and fall back** — frozen call sites carry a guard; a change
+   invalidates it and dispatch falls back to the interpreter. **Agreed default
+   for partial compilation**, because silent divergence is the worst outcome.
+
+The existing `compiledClassDispatchVersion` (`runtime/runtime.nim:158`) already
+implements this invalidation pattern for guarded allocation and per-site caches
+(`runtime.nim:1821`), so (3) reuses established machinery rather than new design.
+
+### Staging
+
+Effort is relative to this codebase, not a schedule commitment.
+
+1. **Shim dispatch (low–medium).** Interpreted code calls one compiled method
+   through adapter `BlockNode`s, with an executed parity case. Smallest proof the
+   boundary works.
+2. **Guard and deoptimize (low).** Redefine a frozen class at runtime; assert
+   fallback rather than divergence.
+3. **Real compiled → interpreted fallback (medium).** Replace the `toString()`
+   round-trip in `sendMessageHybrid` with actual value passing.
+4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
+   OrderedCollection as hand-written or generically compiled natives, each with
+   conformance cases against the interpreter.
+5. **Generic freezing (`# @frozen` → codegen, high).** Whole-stdlib codegen plus
+   dependency-closure analysis and the drift manifest.
+
+Steps 1–4 deliver the compiled-Bona scenario (compiled stdlib reachable from an
+interpreted Workspace) **without** ever compiling a `.hrd` file generically.
+Step 5 is the real project and carries the schedule risk; it is not a prerequisite
+for the target user experience. Keep sealing posture (step 2) orthogonal to freeze
+annotation (step 5): "can the two engines talk" and "may this class change" are
+separate axes and should not be entangled.
+
+Not covered here: debugging across the boundary, GC/ownership interaction between
+engines, process/green-thread state, and library-external classes.
 
 ## Legacy work salvage
 
@@ -420,7 +545,7 @@ Collection/reflection implementations remain design material for section 4.
 Printable output routing and the three historical stashes are retained for
 separate review, not silently applied or dropped.
 
-## 6. Optimize after semantic coverage
+## 7. Optimize after semantic coverage
 
 Near-term order: measured numeric-local unboxing, collection semantics, then
 native processes. Numeric optimization may proceed independently. Before
