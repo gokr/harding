@@ -415,10 +415,11 @@ arbitrary error resumption solely in the interpreter.
 
 ## 6. Frozen stdlib and the engine boundary
 
-Status: **design agreed, not implemented.** This section records the target
-architecture for shipping opted-in parts of a program as native code while the
-rest stays interpreted. Nothing below is available today; the "Current state"
-subsection is measured evidence, not an estimate.
+Status: **design agreed, step 1 implemented.** Step 1 (interpreted-to-compiled
+shim dispatch) has landed; the remaining stages are not implemented. This section
+records the target architecture for shipping opted-in parts of a program as native
+code while the rest stays interpreted. The "Current state" subsection is measured
+evidence, not an estimate.
 
 ### Two deliverable modes
 
@@ -467,7 +468,8 @@ Measured in `granite-completeness` at commit `5be9168`:
 - `registerCompiledMethod` writes only `compiledMethodProcs` and never
   `Class.methods`; the interpreter contains **zero** references to
   `compiledMethodProcs`. Interpreted code therefore cannot reach any compiled
-  method at all.
+  method at all. *(Fixed by step 1: generated modules now emit per-method shims
+  bound onto the interpreter's method table.)*
 - No mixed-mode regression tests exist. The flag is unexercised.
 
 For a compiled Bona the missing direction is **interpreted → compiled**: a
@@ -513,9 +515,18 @@ implements this invalidation pattern for guarded allocation and per-site caches
 
 Effort is relative to this codebase, not a schedule commitment.
 
-1. **Shim dispatch (low–medium).** Interpreted code calls one compiled method
-   through adapter `BlockNode`s, with an executed parity case. Smallest proof the
-   boundary works.
+1. **[x] Shim dispatch.** Interpreted code reaches compiled method bodies.
+   Generated modules emit one shim proc per instance method with class/selector
+   baked in, plus `bindCompiledMethodsTo(interp)`; `bindCompiledMethodShim` binds
+   it onto the interpreter's own method table as the native implementation, so
+   ordinary VM dispatch reaches compiled code. Receiver identity and arguments
+   survive; an existing hand-written native implementation keeps precedence.
+   Coverage: `tests/test_engine_boundary.nim` (ARC and ORC) and a generated-module
+   end-to-end check.
+   Note: a single generic adapter that reads its own selector from the running
+   activation does **not** work — during native dispatch
+   `currentActivation.currentMethod` is the enclosing `doIt`, not the method being
+   invoked. Per-method shims keep the identity static.
 2. **Guard and deoptimize (low).** Redefine a frozen class at runtime; assert
    fallback rather than divergence.
 3. **Real compiled → interpreted fallback (medium).** Replace the `toString()`

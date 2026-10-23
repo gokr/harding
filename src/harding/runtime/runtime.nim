@@ -578,6 +578,49 @@ proc registerCompiledMethod*(className: string, selector: string,
   compiledMethodProcs[key] = fn
   inc compiledClassDispatchVersion
 
+# Interpreted-to-compiled dispatch
+################################
+#
+# A compiled method must also be reachable from interpreted code: a Workspace
+# Do It or a subclass created at runtime sends to a compiled class. Each compiled
+# method gets a generated shim proc whose class/selector are baked in, bound onto
+# the interpreter's own method table as a native implementation. Generating one
+# shim per method (instead of one generic adapter) keeps the identity static and
+# mirrors how generated modules already emit per-class slot accessor procs.
+
+proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: string,
+                             shim: pointer): bool =
+  ## Bind `shim` as the native implementation for className>>selector.
+  ##
+  ## Answers false when the interpreter does not know the class or method, or when
+  ## the method already has a native implementation. A hand-written or
+  ## interpreter-registered primitive therefore keeps precedence over generated
+  ## code.
+  if interp.globals == nil or shim == nil:
+    return false
+  if className notin interp.globals[]:
+    return false
+  let classValue = interp.globals[][className]
+  if classValue.kind != vkClass or classValue.classVal == nil:
+    return false
+  let cls = classValue.classVal
+  if selector notin cls.methods:
+    return false
+  let boundMethod = cls.methods[selector]
+  if boundMethod == nil or boundMethod.nativeImpl != nil or
+     boundMethod.nativeValueImpl != nil:
+    return false
+  boundMethod.primitiveSelector = selector
+  boundMethod.nativeImpl = shim
+  boundMethod.hasInterpreterParam = true
+  return true
+
+proc bindCompiledMethodsToInterpreter*(interp: var Interpreter, shims: pointer) =
+  ## Compatibility hook for generated modules that batch-register shims.
+  ## Individual methods are bound with bindCompiledMethodShim.
+  discard interp
+  discard shims
+
 proc registerNimProxyClassName*(nimValue: pointer, className: string) =
   ## Register the class name for a Nim proxy object
   nimProxyClassNames[nimValue] = className

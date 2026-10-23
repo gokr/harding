@@ -284,6 +284,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
+  var shimBindingCode = ""
   
   if methodDefs.len == 0:
     # Generate slot accessor registrations even with no methods
@@ -402,6 +403,14 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     # Add registration call
     let registrationProc = if md.isClassMethod: "registerCompiledClassMethod" else: "registerCompiledMethod"
     registrationCode.add(fmt("  {registrationProc}(\"{clsName}\", \"{selector}\", {procName})\n"))
+    # Interpreted-to-compiled shim. Class and selector are baked in so the
+    # interpreter can reach this body without inspecting the running activation.
+    if not md.isClassMethod:
+      let shimName = fmt("shim_{mangledClass}_{mangledSelector}")
+      output.add(fmt("proc {shimName}*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {{.nimcall.}} =\n"))
+      output.add(fmt("  ## Interpreted-to-compiled entry point for {clsName}>>{selector}\n"))
+      output.add(fmt("  {procName}(NodeValue(kind: vkInstance, instVal: self), args)\n\n"))
+      shimBindingCode.add(fmt("  discard bindCompiledMethodShim(interp, \"{clsName}\", \"{selector}\", cast[pointer]({shimName}))\n"))
   
   # Generate slot accessor registrations for all compiled classes
   var slotRegCode = ""
@@ -418,6 +427,15 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add(slotRegCode)
   else:
     output.add("  discard 0\n")
+  output.add("\n")
+
+  # Interpreted-to-compiled binding. The host calls this once an interpreter is
+  # live (mixed mode or an embedded host); pure compiled programs simply skip it.
+  output.add("proc bindCompiledMethodsTo*(interp: var Interpreter) =\n")
+  if shimBindingCode.len > 0:
+    output.add(shimBindingCode)
+  else:
+    output.add("  discard\n")
   output.add("\n")
 
   return output
