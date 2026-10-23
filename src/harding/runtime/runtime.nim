@@ -108,7 +108,7 @@ proc initRuntime*() =
   ## Initialize global runtime
   if currentRuntime == nil:
     ensureCompiledExceptionHierarchy()
-    currentRuntime = cast[ptr Runtime](allocShared(sizeof(Runtime)))
+    currentRuntime = cast[ptr Runtime](allocShared0(sizeof(Runtime)))
     currentRuntime[] = newRuntime()
 
 proc shutdownRuntime*() =
@@ -117,6 +117,7 @@ proc shutdownRuntime*() =
     # Clean up classes
     currentRuntime.classes.clear()
     currentRuntime.methodCache.clear()
+    currentRuntime[] = nil
     deallocShared(cast[pointer](currentRuntime))
     currentRuntime = nil
 
@@ -594,6 +595,20 @@ type BoundCompiledClass = object
 
 var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
 
+proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
+                             selector: string, args: seq[NodeValue]): NodeValue =
+  ## Send actual values through the non-fatal host callback boundary.
+  ## Native-layout proxies require a separate slot/control-transfer bridge.
+  if receiver.kind == vkInstance and receiver.instVal != nil and
+     receiver.instVal.isNimProxy and receiver.instVal.nimValue != nil:
+    raise newException(ValueError, "Interpreted sends to native-layout proxies are not supported")
+  var arguments: seq[Node]
+  for argument in args:
+    arguments.add(LiteralNode(value: argument))
+  let message = MessageNode(receiver: LiteralNode(value: receiver),
+                            selector: selector, arguments: arguments)
+  result = evalCallbackNonFatal(interp, message)
+
 proc boundInterpretedSend(receiver: NodeValue, selector: string,
                           args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
   if boundCompiledClasses.len == 0 or receiver.kind != vkInstance or receiver.instVal == nil:
@@ -621,12 +636,7 @@ proc boundInterpretedSend(receiver: NodeValue, selector: string,
      binding.methods[selector] == resolved:
     return
   var interp = binding.interpreter
-  var arguments: seq[Node]
-  for argument in args:
-    arguments.add(LiteralNode(value: argument))
-  let message = MessageNode(receiver: LiteralNode(value: receiver),
-                            selector: selector, arguments: arguments)
-  result.value = evalCallbackNonFatal(interp, message)
+  result.value = sendMessageInterpreted(interp, receiver, selector, args)
   result.handled = true
 
 proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: string,
@@ -1965,65 +1975,29 @@ proc initHybridRuntime*(sourceFiles: seq[string] = @[]) =
 
 proc sendMessageHybrid*(receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
-  ## Hybrid message dispatch: try compiled first, fall back to interpreter
-  ## This is used in mixed mode (--mixed flag) for unsupported features
-  
-  # First, try to use the compiled runtime if available
-  if currentRuntime != nil:
-    try:
-      let dispatchResult = sendMessage(currentRuntime[], receiver, selector, args)
-      # If result is not nil, the compiled version handled it
-      if dispatchResult.kind != vkNil:
-        return dispatchResult
-    except CompiledHardingError as failure:
-      if failure.value.kind != vkInstance or failure.value.instVal == nil or
-         failure.value.instVal.class == nil or failure.value.instVal.class.name != "MessageNotUnderstood":
-        raise
-  
-  # Fall back to interpreter for uncompiled methods
+  ## Mixed sends select an engine before execution, never by inspecting a result.
+  ## Interpreter-owned objects use the live VM method table (including shims).
+  ## Native-layout objects and compiled blocks remain in the native runtime;
+  ## their missing sends propagate rather than retrying and duplicating effects.
+  if receiver.kind == vkInstance and receiver.instVal != nil and
+     receiver.instVal.isNimProxy and receiver.instVal.nimValue != nil:
+    initRuntime()
+    return sendMessage(currentRuntime[], receiver, selector, args)
+  if receiver.kind == vkBlock and receiver.blockVal != nil and
+     receiver.blockVal.nativeImpl != nil:
+    initRuntime()
+    return sendMessage(currentRuntime[], receiver, selector, args)
+  # Native class objects and collection owners are distinct from the VM's
+  # classes even when their names match. Select by identity, not spelling.
+  let cls = if receiver.kind == vkClass: receiver.classVal
+            elif receiver.kind == vkInstance and receiver.instVal != nil and
+                 receiver.instVal.kind in {ikArray, ikTable}: receiver.instVal.class
+            else: nil
+  if cls != nil and cls.name in compiledClasses and compiledClasses[cls.name] == cls:
+    initRuntime()
+    return sendMessage(currentRuntime[], receiver, selector, args)
   initHybridRuntime()
-  
-  # If receiver is a Nim proxy (native object), we need to find or create interpreter instance
-  if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.isNimProxy:
-    # This is a native object - we need the interpreter to know about it
-    # For now, return nil with a warning
-    when not defined(release):
-      echo "Mixed mode: Nim proxy not yet supported for '", selector, "'"
-    return NodeValue(kind: vkNil)
-  
-  # Use interpreter to evaluate the message send
-  when not defined(release):
-    echo "Mixed mode: Falling back to interpreter for '", selector, "'"
-  
-  # Build source code to evaluate
-  var source = ""
-  if receiver.kind == vkInstance and receiver.instVal != nil:
-    # Get the class name for display
-    let className = if receiver.instVal.class != nil: receiver.instVal.class.name else: "?"
-    source = className
-  elif receiver.kind == vkClass:
-    source = "Class"
-  else:
-    source = receiver.toString()
-  
-  if args.len == 0:
-    source.add(" " & selector)
-  else:
-    source.add(" " & selector & " ")
-    for i, arg in args:
-      source.add(arg.toString())
-      if i < args.len - 1:
-        source.add(" ")
-  
-  let (results, err) = hybridInterpreter.evalStatements(source)
-  if err.len > 0:
-    when not defined(release):
-      echo "Mixed mode error: ", err
-    return NodeValue(kind: vkNil)
-  
-  if results.len > 0:
-    return results[results.len - 1]  # Return last result
-  return NodeValue(kind: vkNil)
+  result = sendMessageInterpreted(hybridInterpreter, receiver, selector, args)
 
 # Convenience procs for common operations
 

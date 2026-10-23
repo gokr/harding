@@ -20,6 +20,21 @@ proc greetShim(interp: var Interpreter, self: Instance,
   let name = if self != nil and self.class != nil: self.class.name else: "?"
   NodeValue(kind: vkString, strVal: "hello from " & name)
 
+var nativeNilCalls = 0
+
+proc nilOnce(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  inc nativeNilCalls
+  nilValue()
+
+proc missingInside(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  inc nativeNilCalls
+  sendMessage(nil, toValue(1), "missingInCompiledBody", @[])
+
+proc roundTripShim(interp: var Interpreter, self: Instance,
+                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+  sendMessageInterpreted(interp, NodeValue(kind: vkInstance, instVal: self),
+                         "interpreted:", args)
+
 proc newTestInterpreter(): Interpreter =
   let ctx = newSchedulerContext()
   result = ctx.mainProcess.getInterpreter()
@@ -34,6 +49,117 @@ proc defineClass(interp: Interpreter, name, selector: string): Class =
   cls.allMethods[selector] = meth
   interp.globals[][name] = cls.toValue()
   cls
+
+suite "Value-based mixed dispatch":
+  let ctx = newSchedulerContext()
+  var interp = ctx.mainProcess.getInterpreter()
+  interp.hardingHome = "."
+  loadStdlib(interp)
+  let (_, setupError) = interp.evalStatements("""
+    MixedProbe := Object derivePublic: #(stored).
+    MixedProbe>>echo: argument [ ^ argument ].
+    MixedProbe>>remember: argument [ stored := argument. ^ self ].
+    MixedProbe>>empty [ ^ nil ].
+    MixedProbe>>explode [ Error signal: "mixed failure" ].
+    MixedProbe class>>answer [ ^ 42 ].
+    MixedProbe>>round: n [ ^ 0 ].
+    MixedProbe>>double: n [ ^ 0 ].
+    MixedProbe>>interpreted: n [ ^ self double: n ].
+  """)
+  doAssert setupError.len == 0, setupError
+  let cls = interp.globals[]["MixedProbe"].classVal
+  let receiver = NodeValue(kind: vkInstance, instVal: newInstance(cls))
+
+  setup:
+    hybridInterpreter = interp
+    hybridScheduler = ctx
+
+  teardown:
+    hybridInterpreter = nil
+    hybridScheduler = nil
+    unbindCompiledMethodsFrom(interp)
+
+  test "objects and source-like strings cross as values":
+    let payload = toValue("quotes \"\n; Error signal: \"not code\"")
+    check sendMessageHybrid(receiver, "echo:", @[payload]).strVal == payload.strVal
+    check sendMessageHybrid(receiver, "remember:", @[receiver]).instVal == receiver.instVal
+    check sendMessageHybrid(receiver, "stored", @[]).instVal == receiver.instVal
+    check sendMessageHybrid(NodeValue(kind: vkClass, classVal: cls), "answer", @[]).intVal == 42
+
+  test "nil is a result, never a request to execute again":
+    check isNilValue(sendMessageHybrid(receiver, "empty", @[]))
+    let native = newInstance(newClass(name = "MixedNativeNil"))
+    native.isNimProxy = true
+    # A retained owner represents real native-layout storage, without dereferencing it.
+    native.compiledOwner = RootRef()
+    native.nimValue = cast[pointer](native.compiledOwner)
+    registerCompiledMethod("MixedNativeNil", "empty", nilOnce)
+    nativeNilCalls = 0
+    check isNilValue(sendMessageHybrid(NodeValue(kind: vkInstance, instVal: native), "empty", @[]))
+    check nativeNilCalls == 1
+
+  test "runtime reference storage is initialized and released repeatedly":
+    for iteration in 0..<3:
+      shutdownRuntime()
+      initRuntime()
+      require currentRuntime != nil
+      check currentRuntime[].classes.len == 0
+
+  test "native collection owners retain native storage and identity":
+    let collection = compiledArray(@[toValue(1)])
+    let alias = collection
+    discard sendMessageHybrid(collection, "add:", @[toValue(2)])
+    check sendMessageHybrid(alias, "size", @[]).intVal == 2
+    check sendMessageHybrid(collection, "class", @[]).classVal == collection.instVal.class
+
+  test "missing interpreted sends report failure rather than silently returning nil":
+    expect ValueError:
+      discard sendMessageHybrid(receiver, "absentSelector", @[])
+    check sendMessageHybrid(receiver, "echo:", @[receiver]).instVal == receiver.instVal
+
+  test "a failure inside a native body does not trigger interpreted retry":
+    let native = newInstance(newClass(name = "MixedNativeFailure"))
+    native.isNimProxy = true
+    native.compiledOwner = RootRef()
+    native.nimValue = cast[pointer](native.compiledOwner)
+    registerCompiledMethod("MixedNativeFailure", "run", missingInside)
+    nativeNilCalls = 0
+    expect CompiledHardingError:
+      discard sendMessageHybrid(NodeValue(kind: vkInstance, instVal: native), "run", @[])
+    check nativeNilCalls == 1
+
+  test "block identity and captured state survive argument passing":
+    let (values, err) = interp.evalStatements("Maker := [ | count | count := 0. [count := count + 1. count] ] value")
+    require err.len == 0
+    let original = values[^1]
+    let echoed = sendMessageHybrid(receiver, "echo:", @[original])
+    require echoed.kind == vkBlock
+    check echoed.blockVal == original.blockVal
+    check sendMessageInterpreted(interp, echoed, "value", @[]).intVal == 1
+    check sendMessageInterpreted(interp, original, "value", @[]).intVal == 2
+
+  test "native-layout proxies cannot silently enter the interpreted slot path":
+    let native = newInstance(newClass(name = "MixedLayoutProbe"))
+    native.isNimProxy = true
+    native.compiledOwner = RootRef()
+    native.nimValue = cast[pointer](native.compiledOwner)
+    expect ValueError:
+      discard sendMessageInterpreted(interp, NodeValue(kind: vkInstance, instVal: native),
+                                     "echo:", @[toValue(1)])
+
+  test "interpreted compiled interpreted compiled round trip":
+    check bindCompiledMethodShim(interp, "MixedProbe", "round:", cast[pointer](roundTripShim))
+    check bindCompiledMethodShim(interp, "MixedProbe", "double:", cast[pointer](doubleShim))
+    check sendMessageHybrid(receiver, "round:", @[toValue(21)]).intVal == 42
+
+  test "host errors propagate without quitting and later sends recover":
+    let previousSuppress = interp.suppressUncaughtExit
+    let previousDepth = interp.activationStack.len
+    expect ValueError:
+      discard sendMessageHybrid(receiver, "explode", @[])
+    check interp.suppressUncaughtExit == previousSuppress
+    check interp.activationStack.len == previousDepth
+    check sendMessageHybrid(receiver, "echo:", @[toValue(7)]).intVal == 7
 
 suite "Interpreted to compiled dispatch":
   # The generated-module variant lives in build/test_engine_boundary_generated.nim

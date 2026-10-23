@@ -415,9 +415,10 @@ arbitrary error resumption solely in the interpreter.
 
 ## 6. Frozen stdlib and the engine boundary
 
-Status: **design agreed, step 1 implemented.** Step 1 (interpreted-to-compiled
-shim dispatch) has landed; the remaining stages are not implemented. This section
-records the target architecture for shipping opted-in parts of a program as native
+Status: **design agreed, instance-shim and value-send slices implemented.**
+Step 1 instance shims, step 2 instance guards and step 3 value-based host sends
+have landed in slices; complete mixed-mode compilation remains unimplemented.
+This section records the target architecture for shipping opted-in parts of a program as native
 code while the rest stays interpreted. The "Current state" subsection is measured
 evidence, not an estimate.
 
@@ -455,7 +456,7 @@ Freezing is meaningful only as a **dependency closure**, not per file. Freezing
 `SortedCollection` alone gains little because it calls Array, Iterable and
 closures over `sortBlock`; a set of classes must be frozen together.
 
-### Current state: crossing does not exist
+### Historical baseline: crossing did not exist
 
 Measured in `granite-completeness` at commit `5be9168`:
 
@@ -493,7 +494,9 @@ The interpreter then dispatches into compiled code through machinery it already
 has — no new dispatch mechanism, no marshalling, and the receiver stays a real
 `Instance`, so identity and captured state survive. `NodeValue` and `Instance`
 are shared types (`core/types.nim`), and the compiled runtime already imports
-them, so the boundary is a dispatch-table problem, not a serialization problem.
+them, so no source-text serialization is needed. Shared types alone do not
+establish compatible native slot layouts, class identity, block calling conventions
+or stackless control transfers; those remain separate boundary requirements.
 
 ### Redefinition policy (agreed)
 
@@ -539,8 +542,19 @@ Effort is relative to this codebase, not a schedule commitment.
    compiled version counter. Class-side changes, layout replacement, explicit
    super-send boundaries, exception/return translation, scheduler suspension and
    full-deliverable sealing remain follow-up work; this is not complete deoptimization.
-3. **Real compiled → interpreted fallback (medium).** Replace the `toString()`
-   round-trip in `sendMessageHybrid` with actual value passing.
+3. **Value-based host sends implemented; full mixed mode still open.**
+   `sendMessageInterpreted` builds a literal-valued VM message and uses the
+   non-fatal callback boundary. `sendMessageHybrid` selects the engine by receiver
+   ownership before execution: interpreted objects/classes reach live VM methods
+   and bound shims; native-layout proxies, compiled blocks and native collection
+   owners stay native. Nil is a successful result; a missing send or failure
+   inside a compiled body is never retried in the interpreter. Tests cover object
+   and block identity, captured state, nested round trips, missing messages and
+   host recovery. Native-layout proxies explicitly reject interpreted slot access.
+   Remaining: unify object layouts/class identity, compiled-block execution inside
+   interpreted methods, error/non-local-return translation, yielding, generated
+   host bootstrap (which still replays source), and class-side native shims.
+   This does not yet establish a compiled Bona or arbitrary `--mixed` support.
 4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
    OrderedCollection as hand-written or generically compiled natives, each with
    conformance cases against the interpreter.
