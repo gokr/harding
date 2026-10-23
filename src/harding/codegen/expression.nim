@@ -375,12 +375,10 @@ proc tryGenerateNamedAccess*(ctx: GenContext, node: NamedAccessNode, receiverCod
   if not slotFound:
     return ""
 
-  let nativeReceiver = fmt("cast[{mangleClass(receiverType.className)}]({receiverCode}.instVal.nimValue)")
-  let mangledSlot = mangleSlot(node.memberName)
   if node.isAssignment and node.valueExpr != nil:
     let valueCode = genExpression(ctx, node.valueExpr)
-    return fmt("set{mangledSlot}({nativeReceiver}, {valueCode})")
-  return fmt("get{mangledSlot}({nativeReceiver})")
+    return fmt("compiledNamedAccess({receiverCode}, \"{node.memberName}\", {valueCode}, true)")
+  return fmt("compiledNamedAccess({receiverCode}, \"{node.memberName}\")")
 
 proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): string =
   ## Generate expression-safe block creation for captured blocks.
@@ -957,9 +955,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       return directAccess
     if namedNode.isAssignment and namedNode.valueExpr != nil:
       let valCode = genExpression(ctx, namedNode.valueExpr)
-      return fmt("sendMessageHybrid({recvCode}, \"at:put:\", @[NodeValue(kind: vkSymbol, symVal: \"{namedNode.memberName}\"), {valCode}])")
+      return fmt("compiledNamedAccess({recvCode}, \"{namedNode.memberName}\", {valCode}, true)")
     else:
-      return fmt("sendMessageHybrid({recvCode}, \"at:\", @[NodeValue(kind: vkSymbol, symVal: \"{namedNode.memberName}\")])")
+      return fmt("compiledNamedAccess({recvCode}, \"{namedNode.memberName}\")")
 
   else:
     return "NodeValue(kind: vkNil)"

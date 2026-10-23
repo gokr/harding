@@ -555,7 +555,12 @@ Effort is relative to this codebase, not a schedule commitment.
    inside a compiled body is never retried in the interpreter. Tests cover object
    and block identity, captured state, nested round trips, missing messages and
    host recovery. Native-layout proxies explicitly reject interpreted slot access.
-   Remaining: unify object layouts/class identity, compiled-block execution inside
+   Slot access is now layout-dispatched (`getSlotValue`/`setSlotValue`), so compiled
+   methods read and write interpreter-owned instances, runtime subclasses and native
+   instances through each receiver's own layout instead of casting to a generated
+   Nim type; `::` keeps its permission checks instead of lowering to `at:`.
+   Remaining: a real native↔interpreted slot bridge (native objects still cannot be
+   read from interpreted code), compiled-block execution inside
    interpreted methods, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.

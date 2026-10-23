@@ -792,24 +792,66 @@ proc getReceiverClassName*(receiver: NodeValue): string =
   return ""
 
 proc getSlotValue*(self: NodeValue, slotName: string): NodeValue =
-  ## Get a slot value from a compiled instance, dispatching by actual class
-  if self.kind != vkInstance or self.instVal == nil or not self.instVal.isNimProxy:
-    return NodeValue(kind: vkNil)
-  let className = getReceiverClassName(self)
-  let key = className & "::" & slotName
+  ## Read the receiver's storage without assuming a native or interpreted layout.
+  if self.kind != vkInstance or self.instVal == nil or self.instVal.kind != ikObject:
+    return nilValue()
+  let instance = self.instVal
+  if not instance.isNimProxy:
+    if instance.class != nil:
+      let index = instance.class.getSlotIndex(slotName)
+      if index >= 0 and index < instance.slots.len:
+        return instance.slots[index]
+    return nilValue()
+  if instance.nimValue == nil:
+    return nilValue()
+  let key = getReceiverClassName(self) & "::" & slotName
   if key in slotGetters:
-    return slotGetters[key](self.instVal.nimValue)
-  return NodeValue(kind: vkNil)
+    return slotGetters[key](instance.nimValue)
+  return nilValue()
 
 proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeValue =
-  ## Set a slot value on a compiled instance, dispatching by actual class
-  if self.kind != vkInstance or self.instVal == nil or not self.instVal.isNimProxy:
+  ## Write through the receiver's own layout; never cast VM-owned slot storage.
+  if self.kind != vkInstance or self.instVal == nil or self.instVal.kind != ikObject:
     return value
-  let className = getReceiverClassName(self)
-  let key = className & "::" & slotName
+  let instance = self.instVal
+  if not instance.isNimProxy:
+    if instance.class != nil:
+      let index = instance.class.getSlotIndex(slotName)
+      if index >= 0 and index < instance.slots.len:
+        instance.slots[index] = value
+    return value
+  if instance.nimValue == nil:
+    return value
+  let key = getReceiverClassName(self) & "::" & slotName
   if key in slotSetters:
-    return slotSetters[key](self.instVal.nimValue, value)
+    return slotSetters[key](instance.nimValue, value)
   return value
+
+proc compiledErrorValue*(name, message: string): NodeValue
+proc raiseCompiledError*(value: NodeValue): NodeValue
+
+proc compiledNamedAccess*(receiver: NodeValue, name: string,
+                          value: NodeValue = NodeValue(kind: vkNil),
+                          isAssignment: bool = false): NodeValue =
+  ## Named slot access is distinct from at:, including visibility checks.
+  if receiver.kind == vkInstance and receiver.instVal != nil:
+    let instance = receiver.instVal
+    if instance.kind == ikObject and instance.class != nil and
+       instance.class.getSlotIndex(name) >= 0:
+      let permitted = if isAssignment: name in instance.class.writableSlotNames
+                      else: name in instance.class.readableSlotNames
+      if not permitted:
+        return raiseCompiledError(compiledErrorValue("Error", "Named access to private slot: " & name))
+      if isAssignment: return setSlotValue(receiver, name, value)
+      return getSlotValue(receiver, name)
+    if instance.kind == ikTable:
+      let symbol = toSymbol(name)
+      let key = if instance.entries.hasKey(symbol): symbol else: toValue(name)
+      if isAssignment:
+        instance.entries[key] = value
+        return value
+      return instance.entries.getOrDefault(key, nilValue())
+  return nilValue()
 
 proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
                                       selector: string, args: seq[NodeValue]): NodeValue =

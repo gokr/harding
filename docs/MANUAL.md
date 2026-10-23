@@ -188,6 +188,9 @@ The native host API passes receivers and arguments as values to the interpreter;
 it does not turn them into source text. Interpreter-owned objects use live method
 lookup, including explicitly bound instance and class-side compiled method shims.
 Class-side shims preserve the actual class receiver, including inherited sends.
+Slot reads and writes resolve through the receiver's live class layout, so a
+compiled method works on interpreter-owned instances and runtime subclasses;
+native objects still have no interpreted slot bridge.
 Native-layout objects,
 compiled blocks and native collection owners stay on the native dispatch path.
 A `nil` result does not request fallback, and a native method that fails is not

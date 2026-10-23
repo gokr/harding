@@ -32,6 +32,23 @@ Interval classes, all removal/bulk operations, arbitrary callback arities, mutat
 during iteration, user-defined collection subclasses and mixed mode still need
 broader coverage. See COLLECTION_PROTOCOL_AUDIT.md for Smalltalk-80 gaps.
 
+## Slot layout boundary
+
+Generated slot reads and writes dispatch through the receiver's own live class
+layout (`getSlotValue`/`setSlotValue`) instead of casting `instVal.nimValue` to the
+generated class. A compiled method therefore works on interpreter-owned instances,
+including runtime subclasses and slots declared after code generation, and on
+native instances. Native classes emit a concrete self-contained layout and accessor
+for every slot, inherited fields included; registered accessors are keyed by the
+concrete receiver class so an inherited native slot uses the right layout.
+
+`::` is not lowered to `at:`/`at:put:`. Named access checks live readable/writable
+permissions (raising `Error` otherwise) and handles tables directly; this preserved
+`accessor_override` parity, where a hand-written parent accessor must not be shadowed
+by a generated child accessor. Native-layout proxies do not yet have an interpreted
+slot bridge: compiled blocks and native objects that need interpreted slot access
+remain unsupported rather than silently reading nil.
+
 ## Object JSON
 
 Generated code registers parent-first slot names separately from accessor

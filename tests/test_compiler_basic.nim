@@ -607,6 +607,24 @@ suite "Compiler: Codegen - Blocks":
     check code.contains("compiledOwner: self")
     check code.contains("inst.nimValue = cast[pointer](self)")
 
+  test "slot access is layout-dispatched instead of cast to the receiver class":
+    let (nodes, syntax) = parse("""
+      SlotBase := Object derivePublic: #(base).
+      SlotBase>>baseValue [ ^ base ].
+      SlotBase>>baseValue: value [ base := value. ^ self ].
+      SlotDerived := SlotBase derivePublic: #(extra).
+      SlotDerived>>total: other [ ^ base + extra + other::base ].
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "layout_dispatch")
+    check code.contains("getSlotValue(self, \"base\")")
+    check code.contains("compiledNamedAccess(other, \"base\")")
+    check not code.contains("cast[" & mangleClass("SlotDerived") & "](other.instVal.nimValue)")
+    check code.contains("slotGet_SlotDerived_" & mangleSlot("base") & "(nimValue: pointer)")
+    check code.contains("readableSlotNames = @[\"base\", \"extra\"]")
+    check code.contains("writableSlotNames = @[\"base\", \"extra\"]")
+
   test "method-owned blocks retain home even without variable captures":
     let reg = newBlockRegistry()
     var info = registerBlock(reg, BlockNode(body: @[]))

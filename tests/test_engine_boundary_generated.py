@@ -20,6 +20,14 @@ Factory>>identity [ ^ self ].
 Factory class>>identity [ ^ self ].
 Factory class>>double: n [ ^ n * 2 ].
 Factory class>>make [ ^ self new ].
+SlotParent := Object derivePublic: #(base).
+SlotParent>>baseValue [ ^ base ].
+SlotParent>>baseValue: value [ base := value. ^ self ].
+SlotChild := SlotParent derivePublic: #(extra).
+SlotChild>>total [ ^ base + extra ].
+SlotChild>>remember: value [ extra := value. ^ extra ].
+SlotChild>>writer [ ^ [:value | extra := value. extra] ].
+SlotChild>>readOther: other [ ^ other::base ].
 ''')
 
             def run(command, log, timeout=180):
@@ -51,6 +59,15 @@ Factory class>>identity [ ^ nil ].
 Factory class>>double: n [ ^ 0 ].
 Factory class>>make [ ^ nil ].
 ChildFactory := Factory derive: #().
+SlotParent := Object derivePublic: #(base).
+SlotParent>>baseValue [ ^ nil ].
+SlotParent>>baseValue: value [ ^ nil ].
+SlotChild := SlotParent derivePublic: #(extra).
+SlotChild>>total [ ^ nil ].
+SlotChild>>remember: value [ ^ nil ].
+SlotChild>>writer [ ^ nil ].
+SlotChild>>readOther: other [ ^ nil ].
+RuntimeSlotChild := SlotChild derivePublic: #(runtimeSlot).
 """)
 doAssert err.len == 0, err
 generated.registerCompiledMethods()
@@ -68,6 +85,29 @@ doAssert created.instVal.class == child.classVal
 let (_, replacementError) = interp.evalStatements("Factory class>>double: n [ ^ n + 1 ]")
 doAssert replacementError.len == 0, replacementError
 doAssert sendMessage(nil, cls, "double:", @[toValue(21)]).intVal == 22
+let liveClass = interp.globals[]["RuntimeSlotChild"].classVal
+let live = NodeValue(kind: vkInstance, instVal: newInstance(liveClass))
+discard sendMessageInterpreted(interp, live, "base:", @[toValue(10)])
+discard sendMessageInterpreted(interp, live, "extra:", @[toValue(4)])
+discard sendMessageInterpreted(interp, live, "runtimeSlot:", @[toValue(99)])
+doAssert sendMessageInterpreted(interp, live, "total", @[]).intVal == 14
+doAssert sendMessageInterpreted(interp, live, "baseValue:", @[toValue(20)]).instVal == live.instVal
+doAssert sendMessageInterpreted(interp, live, "base", @[]).intVal == 20
+doAssert sendMessageInterpreted(interp, live, "baseValue", @[]).intVal == 20
+doAssert sendMessageInterpreted(interp, live, "remember:", @[toValue(5)]).intVal == 5
+doAssert sendMessageInterpreted(interp, live, "extra", @[]).intVal == 5
+doAssert sendMessageInterpreted(interp, live, "runtimeSlot", @[]).intVal == 99
+let writer = sendMessageInterpreted(interp, live, "writer", @[])
+doAssert sendMessage(nil, writer, "value:", @[toValue(8)]).intVal == 8
+doAssert sendMessageInterpreted(interp, live, "extra", @[]).intVal == 8
+doAssert sendMessageInterpreted(interp, live, "readOther:", @[live]).intVal == 20
+# Native inherited slots use accessors for their concrete, self-contained layout.
+generated.registerSuperclassHierarchy()
+let native = generated.toValue(generated.newClass_''' + "SlotChild".encode().hex().upper() + '''())
+discard sendMessage(nil, native, "base:", @[toValue(30)])
+discard sendMessage(nil, native, "extra:", @[toValue(2)])
+doAssert sendMessage(nil, native, "baseValue", @[]).intVal == 30
+doAssert sendMessage(nil, native, "total", @[]).intVal == 32
 unbindCompiledMethodsFrom(interp)
 echo "generated boundary passed"
 ''')

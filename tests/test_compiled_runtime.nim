@@ -36,6 +36,28 @@ suite "Compiled reference collections":
     check compiledJsonStringify(array).strVal == "[7]"
     array.instVal.elements = @[]
 
+suite "Compiled slot storage boundary":
+  test "VM instances resolve inherited slots through their live layout":
+    let parent = newClass(slotNames = @["base"], name = "StorageParent")
+    let child = newClass(superclasses = @[parent], slotNames = @["extra"], name = "StorageChild")
+    let instance = newInstance(child)
+    let value = NodeValue(kind: vkInstance, instVal: instance)
+    check setSlotValue(value, "base", toValue(12)).intVal == 12
+    check setSlotValue(value, "extra", toValue(5)).intVal == 5
+    check getSlotValue(value, "base").intVal == 12
+    check getSlotValue(value, "extra").intVal == 5
+    check instance.slots[child.getSlotIndex("base")].intVal == 12
+    check isNilValue(getSlotValue(value, "missing"))
+    discard setSlotValue(value, "missing", toValue(99))
+    check instance.slots.len == 2
+
+  test "a proxy without native storage never invokes pointer accessors":
+    let instance = newInstance(newClass(slotNames = @["slot"], name = "EmptySlotProxy"))
+    instance.isNimProxy = true
+    let value = NodeValue(kind: vkInstance, instVal: instance)
+    check isNilValue(getSlotValue(value, "slot"))
+    check setSlotValue(value, "slot", toValue(7)).intVal == 7
+
 suite "Compiled runtime nil predicates":
   test "nil and immediate values":
     let rt = newRuntime()

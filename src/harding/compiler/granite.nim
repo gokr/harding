@@ -62,6 +62,23 @@ proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassI
               let slotName = bodyNode.SlotAccessNode.slotName
               if selector == slotName & ":":
                 classInfo.setterSlots.add(slotName)
+        # The VM records actual access permissions; method bodies are only a
+        # fallback for classes that declare access differently. Inherited
+        # permissions belong to the ancestor that declared them: emitting an
+        # accessor here would shadow a hand-written parent method.
+        var inheritedReadable: seq[string]
+        var inheritedWritable: seq[string]
+        for parent in cls.superclasses:
+          for slotName in parent.readableSlotNames:
+            if slotName notin inheritedReadable: inheritedReadable.add(slotName)
+          for slotName in parent.writableSlotNames:
+            if slotName notin inheritedWritable: inheritedWritable.add(slotName)
+        for slotName in cls.readableSlotNames:
+          if slotName notin classInfo.getterSlots and slotName notin inheritedReadable:
+            classInfo.getterSlots.add(slotName)
+        for slotName in cls.writableSlotNames:
+          if slotName notin classInfo.setterSlots and slotName notin inheritedWritable:
+            classInfo.setterSlots.add(slotName)
         result[cls.name] = classInfo
 
   # Second pass: wire parent links (first superclass for ClassInfo.parent)

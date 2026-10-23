@@ -107,6 +107,16 @@ proc genClassInit*(cls: ClassInfo): string =
 
 """)
 
+proc inheritedSlotPermissions*(cls: ClassInfo, readable: bool): seq[string] =
+  ## Parent-first slot permissions, matching newClass inheritance order.
+  if cls == nil:
+    return @[]
+  if cls.parent != nil:
+    result = inheritedSlotPermissions(cls.parent, readable)
+  for name in (if readable: cls.getterSlots else: cls.setterSlots):
+    if name notin result:
+      result.add(name)
+
 proc genSlotAccessors*(cls: ClassInfo): string =
   ## Generate native Nim slot accessor procs for a class
   let clsName = mangleClass(cls.name)
@@ -135,10 +145,8 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("  self[].{slotName} = value\n"))
     output.add(fmt("  return value\n\n"))
 
-  # Pointer-based wrappers for runtime slot dispatch (inheritance-safe)
+  # Each native class has its own full layout, including inherited fields.
   for slot in slots:
-    if slot.isInherited:
-      continue
     let slotName = mangleSlot(slot.name)
     output.add(fmt("proc slotGet_{cls.name}_{slotName}(nimValue: pointer): NodeValue {{.nimcall.}} =\n"))
     output.add(fmt("  return cast[{clsName}](nimValue)[].{slotName}\n\n"))
@@ -164,9 +172,12 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   var output = ""
   let names = slots.mapIt("\"" & it.name & "\"").join(", ")
   output.add(fmt("  registerCompiledSlotNames(\"{cls.name}\", @[{names}])\n"))
+  # Slot permissions inherit parent-first, as in newClass; dedupe by name.
+  let readable = inheritedSlotPermissions(cls, true).mapIt("\"" & it & "\"").join(", ")
+  let writable = inheritedSlotPermissions(cls, false).mapIt("\"" & it & "\"").join(", ")
+  output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.readableSlotNames = @[{readable}]\n"))
+  output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.writableSlotNames = @[{writable}]\n"))
   for slot in slots:
-    if slot.isInherited:
-      continue
     let slotName = mangleSlot(slot.name)
     output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{cls.name}_{slotName}, slotSet_{cls.name}_{slotName})\n"))
   for slotName in cls.getterSlots:
