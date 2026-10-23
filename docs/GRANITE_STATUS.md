@@ -6,15 +6,16 @@ Work branch: `granite-completeness`.
 
 Design for shipping opted-in stdlib classes natively while the rest stays
 interpreted, including the two deliverable modes, the frozen-class tiers, the
-runtime-redefinition policy: see PLAN.md section 6. Generated instance-method
-shims now expose compiled bodies through interpreter dispatch. Explicitly bound
+runtime-redefinition policy: see PLAN.md section 6. Generated instance and
+class-side shims expose compiled bodies through interpreter dispatch, preserving
+the actual class receiver for inherited sends. Explicitly bound
 instance sends check live method resolution before generic/native cache dispatch,
 falling back for replacements and runtime subclass overrides through literal-valued
 VM messages. Mixed dispatch no longer reconstructs source or retries nil results:
 engine selection uses receiver ownership, and interpreter-owned receivers cross
 through literal-valued messages. Boundary regressions cover nested calls, identity,
 captured blocks and error recovery. Native-layout fallback, compiled blocks inside
-interpreted methods, class-side native shims, cross-engine control transfers,
+interpreted methods, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.
 

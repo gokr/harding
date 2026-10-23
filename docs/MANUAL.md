@@ -186,14 +186,16 @@ for differences from Smalltalk-80.
 
 The native host API passes receivers and arguments as values to the interpreter;
 it does not turn them into source text. Interpreter-owned objects use live method
-lookup, including explicitly bound compiled method shims. Native-layout objects,
+lookup, including explicitly bound instance and class-side compiled method shims.
+Class-side shims preserve the actual class receiver, including inherited sends.
+Native-layout objects,
 compiled blocks and native collection owners stay on the native dispatch path.
 A `nil` result does not request fallback, and a native method that fails is not
 executed again through the interpreter. Host callback failures are non-fatal and
 propagate to the embedding caller.
 
 This is not yet a complete `--mixed` compiler contract: native object layouts,
-class-side shims, compiled-block callbacks into interpreted methods, cross-engine
+compiled-block callbacks into interpreted methods, cross-engine
 exception/non-local-return translation and yielding remain open. See section 6
 of [the Granite plan](../PLAN.md).
 

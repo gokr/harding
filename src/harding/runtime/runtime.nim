@@ -592,6 +592,7 @@ proc registerCompiledMethod*(className: string, selector: string,
 type BoundCompiledClass = object
   interpreter: Interpreter
   methods: Table[string, BlockNode]
+  classMethods: Table[string, BlockNode]
 
 var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
 
@@ -611,9 +612,12 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
 
 proc boundInterpretedSend(receiver: NodeValue, selector: string,
                           args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
-  if boundCompiledClasses.len == 0 or receiver.kind != vkInstance or receiver.instVal == nil:
+  if boundCompiledClasses.len == 0:
     return
-  let cls = receiver.instVal.class
+  let classSide = receiver.kind == vkClass
+  let cls = if classSide: receiver.classVal
+            elif receiver.kind == vkInstance and receiver.instVal != nil: receiver.instVal.class
+            else: nil
   if cls == nil:
     return
   # Find the host through the live hierarchy, not the compiled name registry.
@@ -629,19 +633,24 @@ proc boundInterpretedSend(receiver: NodeValue, selector: string,
   if owner == nil:
     return
   let binding = boundCompiledClasses[owner]
-  let resolved = lookupInstanceMethod(cls, selector)
-  # A bound shim remains native. Any replacement (including a subclass override)
-  # must go through the VM, even after a compiled cache has warmed.
-  if cls == owner and selector in binding.methods and
-     binding.methods[selector] == resolved:
-    return
+  let resolved = if classSide: vm.lookupClassMethod(cls, selector).currentMethod
+                 else: lookupInstanceMethod(cls, selector)
+  # A bound shim remains native. Replacements and subclass overrides go through
+  # the VM even after a compiled cache has warmed.
+  if cls == owner:
+    if classSide:
+      if selector in binding.classMethods and binding.classMethods[selector] == resolved:
+        return
+    elif selector in binding.methods and binding.methods[selector] == resolved:
+      return
   var interp = binding.interpreter
   result.value = sendMessageInterpreted(interp, receiver, selector, args)
   result.handled = true
 
 proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: string,
-                             shim: pointer): bool =
-  ## Bind `shim` as the native implementation for className>>selector.
+                             shim: pointer, isClassMethod: bool = false): bool =
+  ## Bind an instance (Instance receiver) or class-side (NodeValue receiver) shim.
+  ## Both signatures include the interpreter and use the nimcall convention.
   ##
   ## Answers false when the interpreter does not know the class or method, or when
   ## the method already has a native implementation. A hand-written or
@@ -655,18 +664,25 @@ proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: strin
   if classValue.kind != vkClass or classValue.classVal == nil:
     return false
   let cls = classValue.classVal
-  if selector notin cls.methods:
+  let declared = if isClassMethod: cls.classMethods else: cls.methods
+  if selector notin declared:
     return false
-  let boundMethod = cls.methods[selector]
+  let boundMethod = declared[selector]
   if boundMethod == nil or boundMethod.nativeImpl != nil or
      boundMethod.nativeValueImpl != nil:
     return false
   boundMethod.primitiveSelector = selector
-  boundMethod.nativeImpl = shim
+  if isClassMethod:
+    boundMethod.setNativeValueImpl(shim)
+  else:
+    boundMethod.setNativeImpl(shim)
   boundMethod.hasInterpreterParam = true
   var binding = boundCompiledClasses.getOrDefault(cls)
   binding.interpreter = interp
-  binding.methods[selector] = boundMethod
+  if isClassMethod:
+    binding.classMethods[selector] = boundMethod
+  else:
+    binding.methods[selector] = boundMethod
   boundCompiledClasses[cls] = binding
   inc compiledClassDispatchVersion
   return true

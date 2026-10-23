@@ -405,12 +405,15 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     registrationCode.add(fmt("  {registrationProc}(\"{clsName}\", \"{selector}\", {procName})\n"))
     # Interpreted-to-compiled shim. Class and selector are baked in so the
     # interpreter can reach this body without inspecting the running activation.
-    if not md.isClassMethod:
-      let shimName = fmt("shim_{mangledClass}_{mangledSelector}")
-      output.add(fmt("proc {shimName}*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {{.nimcall.}} =\n"))
-      output.add(fmt("  ## Interpreted-to-compiled entry point for {clsName}>>{selector}\n"))
-      output.add(fmt("  {procName}(NodeValue(kind: vkInstance, instVal: self), args)\n\n"))
-      shimBindingCode.add(fmt("  discard bindCompiledMethodShim(interp, \"{clsName}\", \"{selector}\", cast[pointer]({shimName}))\n"))
+    let shimName = fmt("shim_{mangledClass}_{sidePrefix}{mangledSelector}")
+    let receiverType = if md.isClassMethod: "NodeValue" else: "Instance"
+    let receiverValue = if md.isClassMethod: "self" else: "NodeValue(kind: vkInstance, instVal: self)"
+    let classSide = if md.isClassMethod: "true" else: "false"
+    output.add(fmt("proc {shimName}*(interp: var Interpreter, self: {receiverType}, args: seq[NodeValue]): NodeValue {{.nimcall.}} =\n"))
+    output.add(fmt("  ## Interpreted-to-compiled entry point for {clsName}>>{selector}\n"))
+    output.add("  initRuntime()\n")
+    output.add(fmt("  {procName}({receiverValue}, args)\n\n"))
+    shimBindingCode.add(fmt("  discard bindCompiledMethodShim(interp, \"{clsName}\", \"{selector}\", cast[pointer]({shimName}), isClassMethod = {classSide})\n"))
   
   # Generate slot accessor registrations for all compiled classes
   var slotRegCode = ""

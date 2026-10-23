@@ -519,19 +519,22 @@ implements this invalidation pattern for guarded allocation and per-site caches
 Effort is relative to this codebase, not a schedule commitment.
 
 1. **[x] Shim dispatch.** Interpreted code reaches compiled method bodies.
-   Generated modules emit one shim proc per instance method with class/selector
+   Generated modules emit distinct instance and class-side shim procs with class/selector
    baked in, plus `bindCompiledMethodsTo(interp)`; `bindCompiledMethodShim` binds
    it onto the interpreter's own method table as the native implementation, so
    ordinary VM dispatch reaches compiled code. Receiver identity and arguments
    survive; an existing hand-written native implementation keeps precedence.
-   Coverage: `tests/test_engine_boundary.nim` (ARC and ORC) and a generated-module
-   end-to-end check.
+   Coverage: `tests/test_engine_boundary.nim` (ARC and ORC), generated-shim
+   codegen assertions and `tests/test_engine_boundary_generated.py` (run via
+   Python unittest discovery after building Granite; ARC/ORC generated host).
+   Generated shims initialize the native runtime before invoking compiled bodies;
+   integration tests exercise inherited factories with `self new`.
    Note: a single generic adapter that reads its own selector from the running
    activation does **not** work — during native dispatch
    `currentActivation.currentMethod` is the enclosing `doIt`, not the method being
    invoked. Per-method shims keep the identity static.
-2. **Guard and deoptimize (instance-send slice implemented).** Explicitly bound
-   instance classes retain their host interpreter and original shim identities.
+2. **Guard and deoptimize (method-send slices implemented).** Explicitly bound
+   classes retain their host interpreter and original instance/class shim identities.
    Generic and cached native sends check live method resolution before using a
    compiled target; replacements and runtime subclass overrides dispatch via a
    literal-valued VM message, without source reconstruction or nil-as-miss.
@@ -539,7 +542,8 @@ Effort is relative to this codebase, not a schedule commitment.
    Coverage: warm-cache replacement, subclass nil overrides and unchanged inherited
    shims in `test_engine_boundary`. The guard currently resolves live methods on
    every bound send rather than relying on interpreter mutations updating the
-   compiled version counter. Class-side changes, layout replacement, explicit
+   compiled version counter. Class-side method replacement now uses the same
+   live-resolution guard with separately tracked class-side shims. Layout replacement, explicit
    super-send boundaries, exception/return translation, scheduler suspension and
    full-deliverable sealing remain follow-up work; this is not complete deoptimization.
 3. **Value-based host sends implemented; full mixed mode still open.**
@@ -553,7 +557,8 @@ Effort is relative to this codebase, not a schedule commitment.
    host recovery. Native-layout proxies explicitly reject interpreted slot access.
    Remaining: unify object layouts/class identity, compiled-block execution inside
    interpreted methods, error/non-local-return translation, yielding, generated
-   host bootstrap (which still replays source), and class-side native shims.
+   host bootstrap (which still replays source). Class-side native shims now use
+   the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
 4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
    OrderedCollection as hand-written or generically compiled natives, each with

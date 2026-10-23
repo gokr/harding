@@ -362,6 +362,20 @@ suite "Compiler: Script temporaries":
     check syntax.hasError
     check syntax.errorMsg.contains("line 3")
 
+suite "Compiler: Engine binding shims":
+  test "class and instance selectors generate distinct receiver-safe shims":
+    let (nodes, syntax) = parse("ShimFactory := Object derive: #(). ShimFactory>>identity [ ^ self ]. ShimFactory class>>identity [ ^ self ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "shim_factory")
+    let className = mangleClass("ShimFactory")
+    let selectorName = mangleSelector("identity")
+    check code.contains("proc shim_" & className & "_" & selectorName & "*(interp: var Interpreter, self: Instance,")
+    check code.contains("proc shim_" & className & "_class_" & selectorName & "*(interp: var Interpreter, self: NodeValue,")
+    check code.contains("isClassMethod = true)")
+    check code.contains("isClassMethod = false)")
+    check code.contains("proc bindCompiledMethodsTo*(interp: var Interpreter)")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

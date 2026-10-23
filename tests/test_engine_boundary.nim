@@ -35,6 +35,14 @@ proc roundTripShim(interp: var Interpreter, self: Instance,
   sendMessageInterpreted(interp, NodeValue(kind: vkInstance, instVal: self),
                          "interpreted:", args)
 
+proc classSelfShim(interp: var Interpreter, self: NodeValue,
+                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+  self
+
+proc classDoubleShim(interp: var Interpreter, self: NodeValue,
+                     args: seq[NodeValue]): NodeValue {.nimcall.} =
+  toValue(args[0].intVal * 2)
+
 proc newTestInterpreter(): Interpreter =
   let ctx = newSchedulerContext()
   result = ctx.mainProcess.getInterpreter()
@@ -49,6 +57,68 @@ proc defineClass(interp: Interpreter, name, selector: string): Class =
   cls.allMethods[selector] = meth
   interp.globals[][name] = cls.toValue()
   cls
+
+suite "Class-side engine boundary":
+  let ctx = newSchedulerContext()
+  var interp = ctx.mainProcess.getInterpreter()
+  interp.hardingHome = "."
+  loadStdlib(interp)
+
+  teardown:
+    unbindCompiledMethodsFrom(interp)
+
+  test "class shims preserve the real class receiver and inherited identity":
+    let (_, err) = interp.evalStatements("""
+      ClassShimParent := Object derive: #().
+      ClassShimParent class>>identity [ ^ nil ].
+      ClassShimParent>>identity [ ^ 7 ].
+      ClassShimChild := ClassShimParent derive: #().
+    """)
+    require err.len == 0
+    check bindCompiledMethodShim(interp, "ClassShimParent", "identity",
+                                cast[pointer](classSelfShim), isClassMethod = true)
+    let parent = interp.globals[]["ClassShimParent"]
+    let child = interp.globals[]["ClassShimChild"]
+    check sendMessageInterpreted(interp, parent, "identity", @[]).classVal == parent.classVal
+    check sendMessageInterpreted(interp, child, "identity", @[]).classVal == child.classVal
+    let instance = NodeValue(kind: vkInstance, instVal: newInstance(parent.classVal))
+    check sendMessageInterpreted(interp, instance, "identity", @[]).intVal == 7
+    check not bindCompiledMethodShim(interp, "ClassShimParent", "identity",
+                                    cast[pointer](classSelfShim), isClassMethod = true)
+
+  test "class arguments and runtime replacements use live class-side lookup":
+    let (_, err) = interp.evalStatements("""
+      ClassShimGuard := Object derive: #().
+      ClassShimGuard class>>double: n [ ^ 0 ].
+      ClassShimOverride := ClassShimGuard derive: #().
+      ClassShimOverride class>>double: n [ ^ nil ].
+    """)
+    require err.len == 0
+    registerCompiledClassMethod("ClassShimGuard", "double:",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(args[0].intVal * 2))
+    check bindCompiledMethodShim(interp, "ClassShimGuard", "double:",
+                                cast[pointer](classDoubleShim), isClassMethod = true)
+    let parent = interp.globals[]["ClassShimGuard"]
+    let child = interp.globals[]["ClassShimOverride"]
+    check sendMessage(nil, parent, "double:", @[toValue(21)]).intVal == 42
+    check isNilValue(sendMessage(nil, child, "double:", @[toValue(21)]))
+    let (_, replaceError) = interp.evalStatements("ClassShimGuard class>>double: n [ ^ n + 1 ]")
+    require replaceError.len == 0
+    check sendMessage(nil, parent, "double:", @[toValue(21)]).intVal == 22
+    check sendMessageInterpreted(interp, parent, "double:", @[toValue(21)]).intVal == 22
+
+  test "unknown class selector and existing native class primitive are not rebound":
+    let (_, err) = interp.evalStatements("ClassShimNative := Object derive: #(). ClassShimNative class>>identity [ ^ nil ]")
+    require err.len == 0
+    check bindCompiledMethodShim(interp, "ClassShimNative", "identity",
+                                cast[pointer](classSelfShim), isClassMethod = true)
+    let cls = interp.globals[]["ClassShimNative"].classVal
+    let nativePointer = cls.classMethods["identity"].nativeValueImpl
+    check not bindCompiledMethodShim(interp, "ClassShimNative", "identity",
+                                    cast[pointer](classDoubleShim), isClassMethod = true)
+    check cls.classMethods["identity"].nativeValueImpl == nativePointer
+    check not bindCompiledMethodShim(interp, "ClassShimNative", "absent",
+                                    cast[pointer](classSelfShim), isClassMethod = true)
 
 suite "Value-based mixed dispatch":
   let ctx = newSchedulerContext()
@@ -162,8 +232,8 @@ suite "Value-based mixed dispatch":
     check sendMessageHybrid(receiver, "echo:", @[toValue(7)]).intVal == 7
 
 suite "Interpreted to compiled dispatch":
-  # The generated-module variant lives in build/test_engine_boundary_generated.nim
-  # because it depends on a generated artifact; see PLAN.md section 6.
+  # Generated ABI coverage: tests/test_engine_boundary_generated.py builds its
+  # own module and embedded host under build/; see PLAN.md section 6.
   test "a bound compiled method is reachable from interpreted code":
     var interp = newTestInterpreter()
     defer: unbindCompiledMethodsFrom(interp)
