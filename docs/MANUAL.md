@@ -212,8 +212,13 @@ In bound compiled methods, statically named `ClassName new` sends resolve the
 live class in the receiver's host and use its ordinary `new` protocol. These
 allocations produce VM-owned objects unless the live `new` overrides that result.
 Escaped method closures retain their receiver for allocation routing. Pure native
-and top-level calls retain native allocation; this does not unify class aliases or
-other global references and does not install a global current interpreter.
+and top-level calls retain native allocation without a global current interpreter.
+Uppercase global reads in bound methods and escaped closures use live VM lookup,
+including imported libraries; lexical parameters/locals/slots still take priority.
+Aliases remain live after rebinding. Ordinary class sends through aliases or
+class-valued parameters use the receiver's host even without target-class shims.
+Global writes, specialized builtins, library-scoped static allocation and explicit
+super boundaries are not yet unified.
 
 This is not yet a complete `--mixed` compiler contract: automatic native-instance
 binding, layout migration, cross-engine exception/non-local-return translation

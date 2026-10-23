@@ -24,6 +24,16 @@ Factory class>>makeNamed [ ^ SlotChild new ].
 Factory>>makeNamed [ ^ SlotChild new ].
 Factory>>maker [ ^ [SlotChild new] ].
 Factory>>nestedMaker [ ^ [[SlotChild new]] ].
+Factory>>classReference [ ^ SlotChild ].
+Factory>>aliasNew [ ^ AliasTarget new ].
+Factory>>aliasAnswer [ ^ AliasTarget answer ].
+Factory>>aliasReader [ ^ [[AliasTarget]] ].
+Factory>>globalReader [ ^ LiveSetting ].
+Factory>>globalBlock [ ^ [LiveSetting] ].
+Factory>>localAlias [ | target | target := AliasTarget. ^ target new ].
+Factory>>shadow: AliasTarget [ ^ [AliasTarget] ].
+Factory>>classArgument: target [ ^ target answer ].
+Factory>>importedReader [ ^ [LibrarySetting] ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
@@ -72,6 +82,24 @@ Factory class>>makeNamed [ ^ nil ].
 Factory>>makeNamed [ ^ nil ].
 Factory>>maker [ ^ nil ].
 Factory>>nestedMaker [ ^ nil ].
+Factory>>classReference [ ^ nil ].
+Factory>>aliasNew [ ^ nil ].
+Factory>>aliasAnswer [ ^ nil ].
+Factory>>aliasReader [ ^ nil ].
+Factory>>globalReader [ ^ nil ].
+Factory>>globalBlock [ ^ nil ].
+Factory>>localAlias [ ^ nil ].
+Factory>>shadow: AliasTarget [ ^ nil ].
+Factory>>classArgument: target [ ^ nil ].
+Factory>>importedReader [ ^ nil ].
+BoundaryLib := Library name: "BoundaryLib".
+BoundaryLib at: "LibrarySetting" put: 31.
+Harding import: BoundaryLib.
+AliasTarget := Object derive: #().
+AliasTarget class>>answer [ ^ 81 ].
+AlternateTarget := Object derive: #().
+AlternateTarget class>>answer [ ^ 82 ].
+LiveSetting := 11.
 ChildFactory := Factory derive: #().
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ nil ].
@@ -129,6 +157,37 @@ doAssert fromMaker.instVal.class == liveSlotIdentity
 let outerMaker = sendMessageInterpreted(interp, instance, "nestedMaker", @[])
 let innerMaker = invokeBlock(interp, outerMaker.blockVal, @[])
 doAssert invokeBlock(interp, innerMaker.blockVal, @[]).instVal.class == liveSlotIdentity
+# Reads stay live inside escaped closures; lexical parameters still shadow globals.
+doAssert sendMessageInterpreted(interp, instance, "classReference", @[]).classVal == liveSlotIdentity
+let aliasOne = interp.globals[]["AliasTarget"]
+let aliasTwo = interp.globals[]["AlternateTarget"]
+doAssert sendMessageInterpreted(interp, instance, "aliasNew", @[]).instVal.class == aliasOne.classVal
+doAssert sendMessageInterpreted(interp, instance, "localAlias", @[]).instVal.class == aliasOne.classVal
+doAssert sendMessageInterpreted(interp, instance, "aliasAnswer", @[]).intVal == 81
+doAssert sendMessageInterpreted(interp, instance, "classArgument:", @[aliasTwo]).intVal == 82
+let aliasOuter = sendMessageInterpreted(interp, instance, "aliasReader", @[])
+let aliasInner = invokeBlock(interp, aliasOuter.blockVal, @[])
+doAssert invokeBlock(interp, aliasInner.blockVal, @[]).classVal == aliasOne.classVal
+interp.globals[]["AliasTarget"] = aliasTwo
+doAssert invokeBlock(interp, aliasInner.blockVal, @[]).classVal == aliasTwo.classVal
+doAssert sendMessageInterpreted(interp, instance, "aliasAnswer", @[]).intVal == 82
+doAssert sendMessageInterpreted(interp, instance, "aliasNew", @[]).instVal.class == aliasTwo.classVal
+let shadow = sendMessageInterpreted(interp, instance, "shadow:", @[toValue(17)])
+doAssert invokeBlock(interp, shadow.blockVal, @[]).intVal == 17
+let globalBlock = sendMessageInterpreted(interp, instance, "globalBlock", @[])
+doAssert invokeBlock(interp, globalBlock.blockVal, @[]).intVal == 11
+interp.globals[]["LiveSetting"] = toValue(12)
+doAssert invokeBlock(interp, globalBlock.blockVal, @[]).intVal == 12
+doAssert sendMessageInterpreted(interp, instance, "globalReader", @[]).intVal == 12
+interp.globals[]["LiveSetting"] = nilValue()
+doAssert isNilValue(invokeBlock(interp, globalBlock.blockVal, @[]))
+interp.globals[].del("LiveSetting")
+doAssert isNilValue(sendMessageInterpreted(interp, instance, "globalReader", @[]))
+let importedReader = sendMessageInterpreted(interp, instance, "importedReader", @[])
+doAssert invokeBlock(interp, importedReader.blockVal, @[]).intVal == 31
+let (_, updateLibraryError) = interp.evalStatements("BoundaryLib at: \\\"LibrarySetting\\\" put: 32")
+doAssert updateLibraryError.len == 0, updateLibraryError
+doAssert invokeBlock(interp, importedReader.blockVal, @[]).intVal == 32
 # Overridden new may answer nil: host allocation must not retry the native path.
 let (_, nilFactoryError) = interp.evalStatements("SlotChild class>>new [ ^ nil ]")
 doAssert nilFactoryError.len == 0, nilFactoryError

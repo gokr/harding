@@ -388,6 +388,18 @@ suite "Compiler: Engine binding shims":
     check code.contains("let self = envTyped[].self.value")
     check not code.contains("Product: MutableCell")
 
+  test "bound global reads are live and lexical shadows are captured":
+    let (nodes, syntax) = parse("GlobalReader := Object derive: #(). GlobalReader>>read [ ^ UnlistedGlobal ]. GlobalReader>>reader [ ^ [UnlistedGlobal] ]. GlobalReader>>shadow: UnlistedGlobal [ ^ [UnlistedGlobal] ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "bound_globals")
+    check code.contains("boundGlobalValue(self, \"UnlistedGlobal\")")
+    check code.contains(mangleIdentifier("UnlistedGlobal") & ": MutableCell")
+    let lexical = newGenContext()
+    lexical.inMethod = true
+    lexical.parameters.add("UnlistedGlobal")
+    check genSymbolAccess(lexical, "UnlistedGlobal") == mangleIdentifier("UnlistedGlobal")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

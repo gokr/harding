@@ -21,8 +21,10 @@ environments and validating arity before pointer calls. Explicit native-instance
 binding validates layout and exposes authoritative native fields to interpreted
 methods, slot reflection, JSON and shallow cloning; no mirror slot array is used.
 Statically named allocations in bound methods/escaped closures use the receiver's
-host live `new` protocol; pure native allocation stays native. Class aliases and
-general global references are not unified. Automatic instance binding, layout
+host live `new` protocol; pure native allocation stays native. Bound uppercase
+global reads use live VM/library lookup and ordinary class sends support aliases
+and class-valued parameters. Writes, specialized builtin sends and explicit super
+boundaries remain separate work. Automatic instance binding, layout
 migration, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.

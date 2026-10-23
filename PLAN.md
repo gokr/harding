@@ -578,9 +578,16 @@ Effort is relative to this codebase, not a schedule commitment.
    returning interpreter-owned objects. Escaped/nested method closures retain the
    receiver for the same routing. Pure native/top-level code keeps native allocation;
    no ambient interpreter or source replay is introduced. Live `new` overrides,
-   including nil, are respected without native retry. Class aliases and general
-   global/class references are not unified by this allocation-only slice.
-   Remaining: automatic native-instance binding, general global/class resolution,
+   including nil, are respected without native retry.
+   Uppercase global reads in bound methods/escaped closures now use isolated VM
+   lookup (including imported libraries), retaining lexical local/slot precedence.
+   Reads stay live after alias rebinding; nil/missing values do not fall back to
+   native globals. Ordinary class sends, including local aliases and class-valued
+   parameters, use the receiver's host even when the target class has no shims.
+   Pure native reads keep their existing fallback. Global writes, specialized
+   builtin sends, library-scoped static allocation and explicit super boundaries
+   are not covered by this read/ordinary-send slice.
+   Remaining: automatic native-instance binding, complete global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.

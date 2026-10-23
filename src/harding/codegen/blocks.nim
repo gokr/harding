@@ -289,6 +289,14 @@ proc scopeLocalNames*(body: seq[Node], declared: seq[string] = @[]): seq[string]
       if name.len > 0 and name[0] in {'a'..'z'} and name notin result:
         result.add(name)
 
+proc uppercaseReferences*(node: Node): seq[string] =
+  ## Candidate global names; capture analysis still gives lexical locals priority.
+  var refs = initHashSet[string]()
+  collectIdentRefs(node, refs)
+  for name in refs:
+    if name.len > 0 and name[0] in {'A'..'Z'}:
+      result.add(name)
+
 proc analyzeCaptures*(blockNode: BlockNode, knownGlobals: seq[string] = @[],
                       ownerSlotNames: seq[string] = @[],
                       ownerLocalNames: seq[string] = @[]): seq[string] =

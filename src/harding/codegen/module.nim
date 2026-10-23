@@ -693,7 +693,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     for t in md.temporaries:
       ownerLocals.add(t)
     for stmt in md.body:
-      collectBlocks(blockReg, stmt, knownGlobals & compiledClassNames, ownerSlots, ownerLocals)
+      collectBlocks(blockReg, stmt, knownGlobals & compiledClassNames & uppercaseReferences(stmt),
+                    ownerSlots, ownerLocals)
   # Stamp method ownership so ^ inside these blocks targets the right method.
   # Walk the registry once per method, matching block nodes by identity against
   # the method body's registered nodes.

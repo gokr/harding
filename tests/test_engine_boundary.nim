@@ -135,9 +135,17 @@ suite "Class-side engine boundary":
     let fromOther = boundNewInstance(toValue(otherOwner), "AllocationTarget")
     check fromOther.handled
     check fromOther.value.classVal == otherTarget
+    interp.globals[]["LiveSetting"] = toValue(11)
+    other.globals[]["LiveSetting"] = toValue(22)
+    check boundGlobalValue(owner, "LiveSetting").value.intVal == 11
+    check boundGlobalValue(toValue(otherOwner), "LiveSetting").value.intVal == 22
+    check boundGlobalValue(owner, "MissingGlobal").handled
+    check isNilValue(boundGlobalValue(owner, "MissingGlobal").value)
+    check sendMessageBound(toValue(otherOwner), toValue(otherTarget), "new", @[]).classVal == otherTarget
     check isNilValue(boundNewInstance(owner, "AllocationTarget").value)
     unbindCompiledMethodsFrom(interp)
     check not boundNewInstance(owner, "AllocationTarget").handled
+    check not boundGlobalValue(owner, "LiveSetting").handled
     check boundNewInstance(toValue(otherOwner), "AllocationTarget").handled
 
   test "unknown class selector and existing native class primitive are not rebound":

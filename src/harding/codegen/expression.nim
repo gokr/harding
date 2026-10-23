@@ -287,7 +287,7 @@ proc inlineBlockExpression(ctx: GenContext, blk: BlockNode): string =
     result.add("    nilValue()\n")
   result.add(")")
 
-proc genSymbolAccess*(ctx: GenContext, name: string): string =
+proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
   ## Generate code for symbol/variable access
   ## Priority: parameters > locals > slots > globals
 
@@ -352,6 +352,15 @@ proc genSymbolAccess*(ctx: GenContext, name: string): string =
 
   # Fallback: treat as symbol
   return fmt("NodeValue(kind: vkSymbol, symVal: \"{name}\")")
+
+proc genSymbolAccess*(ctx: GenContext, name: string): string =
+  ## Lexical locals/slots win; bound uppercase globals are looked up at each use.
+  let fallback = genUnboundSymbolAccess(ctx, name)
+  if ctx.inMethod and not ctx.mixed and name.len > 0 and name[0] in {'A'..'Z'} and
+     not ctx.isLocal(name) and not ctx.isSlot(name):
+    let owner = genUnboundSymbolAccess(ctx, "self")
+    return fmt("(block:\n    let binding = boundGlobalValue({owner}, \"{name}\")\n    if binding.handled: binding.value else: {fallback})")
+  return fallback
 
 proc tryGenerateNamedAccess*(ctx: GenContext, node: NamedAccessNode, receiverCode: string): string =
   ## Try to generate direct access for named access on known compiled classes.
@@ -736,6 +745,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if ctx.mixed:
       return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
     else:
+      if ctx.inMethod:
+        let owner = genSymbolAccess(ctx, "self")
+        return fmt("sendMessageBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
@@ -743,6 +755,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
     if ctx.mixed:
       return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
+    if ctx.inMethod:
+      let owner = genSymbolAccess(ctx, "self")
+      return fmt("sendMessageBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
     return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc blockOwnerLocals*(ctx: GenContext): seq[string] =

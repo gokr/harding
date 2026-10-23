@@ -629,6 +629,26 @@ proc boundClassFor(receiver: NodeValue): Class =
       if found != nil: return found
   result = findBinding(cls)
 
+proc boundGlobalValue*(ownerReceiver: NodeValue, name: string): tuple[handled: bool, value: NodeValue] =
+  ## Resolve a lexical global through isolated host lookup, including libraries.
+  ## A bound missing/nil binding is not a request to use the native globals table.
+  let owner = boundClassFor(ownerReceiver)
+  if owner == nil:
+    return
+  var interp = boundCompiledClasses[owner].interpreter
+  result.value = evalCallbackNonFatal(interp, IdentNode(name: name, localIndex: -1))
+  result.handled = true
+
+proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
+                       args: seq[NodeValue]): NodeValue =
+  ## Ordinary class sends from bound code use the host, even for unbound classes.
+  let owner = boundClassFor(ownerReceiver)
+  if owner != nil and receiver.kind == vkClass:
+    var interp = boundCompiledClasses[owner].interpreter
+    return sendMessageInterpreted(interp, receiver, selector, args)
+  initRuntime()
+  result = sendMessage(currentRuntime[], receiver, selector, args)
+
 proc boundNewInstance*(ownerReceiver: NodeValue, className: string): tuple[handled: bool, value: NodeValue] =
   ## Host-bound code allocates through the live class's ordinary new protocol.
   ## Unbound/native code keeps the caller's native allocator path.
