@@ -62,9 +62,7 @@ when defined(granite):
 
   proc getSlotValue*(inst: Instance, slotIdx: int): NodeValue =
     ## Get slot value at index
-    if inst.kind == ikObject and slotIdx >= 0 and slotIdx < inst.slots.len:
-      return inst.slots[slotIdx]
-    return NodeValue(kind: vkNil)
+    inst.readInstanceSlot(slotIdx)
 
   proc findClassInGlobals*(interp: Interpreter, className: string): Class =
     ## Find a class by name in globals

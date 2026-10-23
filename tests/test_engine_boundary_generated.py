@@ -86,6 +86,11 @@ SlotChild>>call: callback with: a with: b [ ^ callback value: a value: b ].
 SlotChild>>call: callback with: a with: b with: c [ ^ callback value: a value: b value: c ].
 SlotChild>>map: callback [ ^ #(1, 2, 3) collect: callback ].
 SlotChild>>choose: callback [ ^ true ifTrue: callback ].
+SlotChild>>interpretedTotal [ ^ base + extra ].
+SlotChild>>interpretedSet: value [ base := value. extra := extra + 1. ^ self ].
+SlotChild>>interpretedWriter [ ^ [:value | base := value. base] ].
+SlotChild>>interpretedNamed [ ^ self::base ].
+SlotChild>>interpretedNamed: value [ self::base := value. ^ value ].
 RuntimeSlotChild := SlotChild derivePublic: #(runtimeSlot).
 """)
 doAssert err.len == 0, err
@@ -154,6 +159,57 @@ discard sendMessage(nil, native, "base:", @[toValue(30)])
 discard sendMessage(nil, native, "extra:", @[toValue(2)])
 doAssert sendMessage(nil, native, "baseValue", @[]).intVal == 30
 doAssert sendMessage(nil, native, "total", @[]).intVal == 32
+let originalOwner = native.instVal.compiledOwner
+let originalPointer = native.instVal.nimValue
+doAssert bindNativeInstanceTo(interp, native)
+doAssert native.instVal.class == interp.globals[]["SlotChild"].classVal
+doAssert native.instVal.slots.len == 0
+doAssert sendMessageInterpreted(interp, native, "interpretedTotal", @[]).intVal == 32
+doAssert sendMessageInterpreted(interp, native, "interpretedSet:", @[toValue(40)]).instVal == native.instVal
+doAssert getSlotValue(native, "base").intVal == 40
+doAssert getSlotValue(native, "extra").intVal == 3
+doAssert sendMessageHybrid(native, "interpretedTotal", @[]).intVal == 43
+doAssert sendMessageInterpreted(interp, native, "interpretedNamed:", @[toValue(41)]).intVal == 41
+doAssert sendMessageInterpreted(interp, native, "interpretedNamed", @[]).intVal == 41
+doAssert sendMessageInterpreted(interp, native, "slotAt:", @[toValue("base")]).intVal == 41
+discard sendMessageInterpreted(interp, native, "slotAt:put:", @[toValue("base"), toValue(42)])
+doAssert getSlotValue(native, "base").intVal == 42
+let interpretedWriter = sendMessageInterpreted(interp, native, "interpretedWriter", @[])
+doAssert invokeBlock(interp, interpretedWriter.blockVal, @[toValue(50)]).intVal == 50
+doAssert getSlotValue(native, "base").intVal == 50
+let jsonClass = interp.globals[]["Json"]
+let jsonText = sendMessageInterpreted(interp, jsonClass, "stringify:", @[native])
+doAssert jsonText.strVal == """{"base":50,"extra":3}"""
+let clone = sendMessageInterpreted(interp, native, "clone", @[])
+doAssert clone.instVal != native.instVal
+discard sendMessageInterpreted(interp, clone, "interpretedSet:", @[toValue(70)])
+doAssert getSlotValue(native, "base").intVal == 50
+doAssert getSlotValue(clone, "base").intVal == 70
+doAssert native.instVal.compiledOwner == originalOwner
+doAssert native.instVal.nimValue == originalPointer
+# Runtime method replacement sees the same native fields, including after a send cache warms.
+var cache: CompiledSendCache
+doAssert sendMessageCached(nil, native, "total", @[], cache).intVal == 53
+let (_, redefineError) = interp.evalStatements("SlotChild>>total [ ^ base + extra + 1 ]")
+doAssert redefineError.len == 0, redefineError
+doAssert sendMessageCached(nil, native, "total", @[], cache).intVal == 54
+# Binding rejects a mismatched live layout without changing class identity or storage.
+let rejected = generated.toValue(generated.newClass_''' + "SlotChild".encode().hex().upper() + '''())
+let savedClass = rejected.instVal.class
+let liveSlotClass = interp.globals[]["SlotChild"].classVal
+let savedNames = liveSlotClass.allSlotNames
+liveSlotClass.allSlotNames = @["wrong"]
+doAssert not bindNativeInstanceTo(interp, rejected)
+doAssert rejected.instVal.class == savedClass
+doAssert rejected.instVal.nativeSlots == nil
+var invalidLayout = false
+try:
+  discard getSlotValue(native, "base")
+except ValueError:
+  invalidLayout = true
+doAssert invalidLayout
+liveSlotClass.allSlotNames = savedNames
+doAssert getSlotValue(native, "base").intVal == 50
 unbindCompiledMethodsFrom(interp)
 echo "generated boundary passed"
 ''')

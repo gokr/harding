@@ -1,4 +1,4 @@
-import std/[unittest, os]
+import std/[unittest, os, tables]
 import ../src/harding/core/types
 import ../src/harding/runtime/runtime
 import ../src/harding/runtime/compiled_support
@@ -36,7 +36,71 @@ suite "Compiled reference collections":
     check compiledJsonStringify(array).strVal == "[7]"
     array.instVal.elements = @[]
 
+type NativeSlotProbe = ref object of RootObj
+  stored: NodeValue
+
+proc readProbe(storage: pointer): NodeValue {.nimcall.} =
+  cast[NativeSlotProbe](storage).stored
+
+proc writeProbe(storage: pointer, value: NodeValue): NodeValue {.nimcall.} =
+  cast[NativeSlotProbe](storage).stored = value
+  value
+
 suite "Compiled slot storage boundary":
+  test "explicit native binding uses one retained store and snapshots accessors":
+    var interp = Interpreter(globals: new(Table[string, NodeValue]))
+    let nativeClass = newClass(name = "NativeSlotProbe", slotNames = @["stored"])
+    let liveClass = newClass(name = "NativeSlotProbe", slotNames = @["stored"])
+    interp.globals[]["NativeSlotProbe"] = toValue(liveClass)
+    registerCompiledSlotNames("NativeSlotProbe", @["stored"])
+    registerSlotAccessor("NativeSlotProbe", "stored", readProbe, writeProbe)
+    let owner = NativeSlotProbe(stored: toValue(3))
+    let instance = Instance(kind: ikObject, class: nativeClass, isNimProxy: true,
+      compiledOwner: owner, nimValue: cast[pointer](owner))
+    let value = NodeValue(kind: vkInstance, instVal: instance)
+    defer: unbindCompiledMethodsFrom(interp)
+    check bindNativeInstanceTo(interp, value)
+    check instance.class == liveClass
+    check instance.slots.len == 0
+    check instance.getSlot(0).intVal == 3
+    instance.setSlot(0, toValue(5))
+    check owner.stored.intVal == 5
+    check getSlotValue(value, "stored").intVal == 5
+    check setSlotValue(value, "stored", toValue(6)).intVal == 6
+    check owner.stored.intVal == 6
+    let bridge = instance.nativeSlots
+    check bindNativeInstanceTo(interp, value)
+    check instance.nativeSlots == bridge
+    var otherHost = Interpreter(globals: new(Table[string, NodeValue]))
+    otherHost.globals[]["NativeSlotProbe"] = toValue(liveClass)
+    expect ValueError:
+      discard bindNativeInstanceTo(otherHost, value)
+    unbindCompiledMethodsFrom(interp)
+    check bindNativeInstanceTo(interp, value)
+    check instance.nativeSlots == bridge
+    registerSlotAccessor("NativeSlotProbe", "stored",
+      proc(storage: pointer): NodeValue {.nimcall.} = toValue(99), writeProbe)
+    check instance.getSlot(0).intVal == 6
+    registerSlotAccessor("NativeSlotProbe", "stored", readProbe, writeProbe)
+    liveClass.allSlotNames = @["changed"]
+    expect ValueError:
+      discard instance.getSlot(0)
+    liveClass.allSlotNames = @["stored"]
+    check instance.getSlot(0).intVal == 6
+
+  test "incomplete native bindings refuse without changing the receiver":
+    let cls = newClass(name = "IncompleteNative", slotNames = @["stored"])
+    var interp = Interpreter(globals: new(Table[string, NodeValue]))
+    interp.globals[][cls.name] = toValue(cls)
+    registerCompiledSlotNames(cls.name, @["stored"])
+    let owner = NativeSlotProbe(stored: toValue(3))
+    let instance = Instance(kind: ikObject, class: cls, isNimProxy: true,
+      compiledOwner: owner, nimValue: cast[pointer](owner))
+    check not bindNativeInstanceTo(interp, NodeValue(kind: vkInstance, instVal: instance))
+    check instance.nativeSlots == nil
+    check instance.class == cls
+    check not bindNativeInstanceTo(interp, toValue(1))
+
   test "VM instances resolve inherited slots through their live layout":
     let parent = newClass(slotNames = @["base"], name = "StorageParent")
     let child = newClass(superclasses = @[parent], slotNames = @["extra"], name = "StorageChild")

@@ -554,7 +554,7 @@ Effort is relative to this codebase, not a schedule commitment.
    owners stay native. Nil is a successful result; a missing send or failure
    inside a compiled body is never retried in the interpreter. Tests cover object
    and block identity, captured state, nested round trips, missing messages and
-   host recovery. Native-layout proxies explicitly reject interpreted slot access.
+   host recovery. Unbound native-layout proxies reject interpreted slot access.
    Slot access is now layout-dispatched (`getSlotValue`/`setSlotValue`), so compiled
    methods read and write interpreter-owned instances, runtime subclasses and native
    instances through each receiver's own layout instead of casting to a generated
@@ -565,8 +565,16 @@ Effort is relative to this codebase, not a schedule commitment.
    The native runtime shares the same arity-checked dispatcher (0–3 arguments).
    Generated ARC/ORC coverage includes captured updates, collection callbacks,
    conditional/loop callbacks, nil and recovery after a wrong-arity send.
-   Remaining: a real native↔interpreted slot bridge (native objects still cannot be
-   read from interpreted code), error/non-local-return translation, yielding, generated
+   Hosts can explicitly `bindNativeInstanceTo(interp, value)` for retained native
+   object wrappers. Binding validates exact live slot names/order, snapshots native
+   accessors and adopts live class identity without a mirrored VM slot array.
+   Interpreted ASTs, named/reflected slot access, escaped closures, JSON and shallow
+   clones use the bridge; clones have independent ordinary VM slot storage.
+   A changed live layout is rejected rather than migrated. Bound native receivers
+   participate in live method guards, including warmed-cache replacement fallback.
+   Hosts release retained host registrations with `unbindCompiledMethodsFrom`.
+   Remaining: automatic/generated instance binding and allocation ownership policy,
+   layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.

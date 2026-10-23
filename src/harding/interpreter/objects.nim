@@ -1782,8 +1782,8 @@ proc atCollectionImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
                       else: ""
       if slotName.len > 0:
         for i, name in self.class.allSlotNames:
-          if name == slotName and i < self.slots.len:
-            return self.slots[i]
+          if name == slotName and self.hasInstanceSlot(i):
+            return self.readInstanceSlot(i)
   else:
     discard
   return nilValue()
@@ -1809,8 +1809,8 @@ proc atCollectionPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
                       else: ""
       if slotName.len > 0:
         for i, name in self.class.allSlotNames:
-          if name == slotName and i < self.slots.len:
-            self.slots[i] = args[1]
+          if name == slotName and self.hasInstanceSlot(i):
+            self.writeInstanceSlot(i, args[1])
             return args[1]
   else:
     discard
@@ -2130,8 +2130,8 @@ proc tableAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
 proc getLibraryBindings*(self: Instance): Instance =
   ## Get the bindings Table instance from a Library's slot 0
-  if self.kind == ikObject and self.slots.len > 0:
-    let bindingsVal = self.slots[0]
+  if self.hasInstanceSlot(0):
+    let bindingsVal = self.readInstanceSlot(0)
     if bindingsVal.kind == vkInstance and bindingsVal.instVal != nil and bindingsVal.instVal.kind == ikTable:
       return bindingsVal.instVal
   return nil
@@ -2177,21 +2177,21 @@ proc libraryIncludesKeyImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
 
 proc libraryNameImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library name - get the name slot (slot 2: [bindings, imports, name])
-  if self.kind == ikObject and self.slots.len > 2:
-    return self.slots[2]
+  if self.hasInstanceSlot(2):
+    return self.readInstanceSlot(2)
   return nilValue()
 
 proc libraryNameSetImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library name: - set the name slot (slot 2: [bindings, imports, name])
-  if self.kind == ikObject and self.slots.len > 2 and args.len > 0:
-    self.slots[2] = args[0]
+  if self.hasInstanceSlot(2) and args.len > 0:
+    self.writeInstanceSlot(2, args[0])
   return self.toValue()
 
 proc libraryBindingsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library bindings - get the bindings slot (slot 0: [bindings, imports, name])
   ## Note: This is typically accessed via slot access (lib bindings), not via this primitive
-  if self.kind == ikObject and self.slots.len > 0:
-    return self.slots[0]
+  if self.hasInstanceSlot(0):
+    return self.readInstanceSlot(0)
   return nilValue()
 
 proc libraryAllNamesClassImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2209,8 +2209,8 @@ proc libraryAllNamesClassImpl(interp: var Interpreter, self: Instance, args: seq
       if isLibraryInstance(val):
           # Use the library's name property if available
           var libName = key.toValue()
-          if val.instVal.slots.len > 2:
-            let nameVal = val.instVal.slots[2]
+          if val.instVal.hasInstanceSlot(2):
+            let nameVal = val.instVal.readInstanceSlot(2)
             let resolvedName = nameVal.toString()
             if resolvedName.len > 0:
               libName = resolvedName.toValue()
@@ -2245,8 +2245,8 @@ proc libraryNamedClassImpl(interp: var Interpreter, self: Instance, args: seq[No
     let val = interp.globals[][key]
     if isLibraryInstance(val):
         # Check if library's name slot matches
-        if val.instVal.slots.len > 2:
-          let libName = val.instVal.slots[2].toString()
+        if val.instVal.hasInstanceSlot(2):
+          let libName = val.instVal.readInstanceSlot(2).toString()
           if libName == name:
             return val
   
@@ -2256,8 +2256,8 @@ proc libraryNamedClassImpl(interp: var Interpreter, self: Instance, args: seq[No
 
 proc getSetElements*(self: Instance): Instance =
   ## Get the elements Table instance from a Set's slot 0
-  if self.kind == ikObject and self.slots.len > 0:
-    let elementsVal = self.slots[0]
+  if self.hasInstanceSlot(0):
+    let elementsVal = self.readInstanceSlot(0)
     if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
       return elementsVal.instVal
   return nil
@@ -2458,6 +2458,12 @@ proc instanceCloneImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Clone an instance - creates a new instance with same class and copied slots
   case self.kind
   of ikObject:
+    if self.nativeSlots != nil:
+      self.validateNativeSlots()
+      let clone = newInstance(self.class)
+      for i in 0..<self.class.allSlotNames.len:
+        clone.slots[i] = self.readInstanceSlot(i)
+      return NodeValue(kind: vkInstance, instVal: clone)
     let clone = Instance(kind: ikObject, class: self.class)
     clone.slots = self.slots
     clone.isNimProxy = self.isNimProxy
@@ -2502,8 +2508,8 @@ proc primitiveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     return nilValue()
   let slotName = extractStringValue(args[0])
   let slotIdx = self.class.allSlotNames.find(slotName)
-  if slotIdx >= 0 and slotIdx < self.slots.len:
-    return self.slots[slotIdx]
+  if self.hasInstanceSlot(slotIdx):
+    return self.readInstanceSlot(slotIdx)
   return nilValue()
 
 proc primitiveAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2514,8 +2520,8 @@ proc primitiveAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     return args[1]
   let slotName = extractStringValue(args[0])
   let slotIdx = self.class.allSlotNames.find(slotName)
-  if slotIdx >= 0 and slotIdx < self.slots.len:
-    self.slots[slotIdx] = args[1]
+  if self.hasInstanceSlot(slotIdx):
+    self.writeInstanceSlot(slotIdx, args[1])
   return args[1]
 
 # ============================================================================

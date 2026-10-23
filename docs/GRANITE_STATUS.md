@@ -17,8 +17,10 @@ through literal-valued messages. Boundary regressions cover nested calls, identi
 captured blocks and error recovery. Slot reads/writes use each receiver's live
 layout, including runtime subclasses. Interpreted methods and VM block entry
 points can invoke compiled callbacks with 0–3 arguments, retaining native captured
-environments and validating arity before pointer calls. Native-layout fallback,
-cross-engine control transfers,
+environments and validating arity before pointer calls. Explicit native-instance
+binding validates layout and exposes authoritative native fields to interpreted
+methods, slot reflection, JSON and shallow cloning; no mirror slot array is used.
+Automatic instance binding, layout migration, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.
 

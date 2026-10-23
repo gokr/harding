@@ -124,6 +124,11 @@ type
     jsonConfigVersion*: int
     cachedJsonPlan*: JsonPlan
 
+  NativeSlotStorage* = ref object
+    names*: seq[string]
+    getters*: seq[proc(storage: pointer): NodeValue {.nimcall.}]
+    setters*: seq[proc(storage: pointer, value: NodeValue): NodeValue {.nimcall.}]
+
   Instance* = ref object of RootObj
     ## Instance object - pure data with reference to its class
     ## Using case object variant for memory efficiency - only allocate fields needed
@@ -144,6 +149,7 @@ type
     isNimProxy*: bool                       # Instance wraps Nim value
     nimValue*: pointer                      # Pointer to actual Nim value (for FFI)
     compiledOwner*: RootRef                 # Strong owner of compiled native storage
+    nativeSlots*: NativeSlotStorage         # Explicit bridge to authoritative native fields
 
   # Mutable cell for captured variables (shared between closures)
   MutableCell* = ref object
@@ -1264,6 +1270,37 @@ proc getSlotIndex*(cls: Class, name: string): int =
       return i
   return -1
 
+proc validateNativeSlots*(inst: Instance) =
+  ## Native fields cannot follow a changed live class layout.
+  if inst.nativeSlots != nil and (inst.class == nil or
+     inst.class.allSlotNames != inst.nativeSlots.names):
+    raise newException(ValueError, "Native slot layout no longer matches the live class")
+
+proc hasInstanceSlot*(inst: Instance, index: int): bool =
+  ## Test a physical slot in VM or explicitly bridged native storage.
+  if inst == nil or inst.kind != ikObject or index < 0:
+    return false
+  if inst.nativeSlots != nil:
+    inst.validateNativeSlots()
+    return index < inst.nativeSlots.names.len
+  return index < inst.slots.len
+
+proc readInstanceSlot*(inst: Instance, index: int): NodeValue =
+  ## Read without mirroring native fields into a second VM slot array.
+  if not inst.hasInstanceSlot(index):
+    return nilValue()
+  if inst.nativeSlots != nil:
+    return inst.nativeSlots.getters[index](inst.nimValue)
+  return inst.slots[index]
+
+proc writeInstanceSlot*(inst: Instance, index: int, value: NodeValue) =
+  ## Write to the authoritative physical storage for the receiver.
+  if inst.hasInstanceSlot(index):
+    if inst.nativeSlots != nil:
+      discard inst.nativeSlots.setters[index](inst.nimValue, value)
+    else:
+      inst.slots[index] = value
+
 proc getJsonSpec*(cls: Class): JsonSpec =
   if cls == nil:
     return nil
@@ -1289,18 +1326,11 @@ proc hasCachedJsonPlan*(cls: Class): bool =
 
 proc getSlot*(inst: Instance, index: int): NodeValue =
   ## Get slot value by index (only for ikObject instances)
-  if inst.kind != ikObject:
-    return nilValue()
-  if index < 0 or index >= inst.slots.len:
-    return nilValue()
-  return inst.slots[index]
+  inst.readInstanceSlot(index)
 
 proc setSlot*(inst: Instance, index: int, value: NodeValue) =
   ## Set slot value by index (only for ikObject instances)
-  if inst.kind != ikObject:
-    return
-  if index >= 0 and index < inst.slots.len:
-    inst.slots[index] = value
+  inst.writeInstanceSlot(index, value)
 
 # Helper procs for getting values from Instance variants
 proc getIntValue*(inst: Instance): int =

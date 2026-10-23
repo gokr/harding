@@ -521,7 +521,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
       for i in countdown(interp.importedLibraries.high, 0):
         let lib = interp.importedLibraries[i]
         if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
-          let bindingsVal = lib.slots[0]
+          let bindingsVal = lib.readInstanceSlot(0)
           let lookup = libraryBindingLookup(bindingsVal, name)
           if lookup.found:
             debug("Found variable in imported library (in block): ", name)
@@ -560,7 +560,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
   for i in countdown(interp.importedLibraries.high, 0):
     let lib = interp.importedLibraries[i]
     if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
-      let bindingsVal = lib.slots[0]
+      let bindingsVal = lib.readInstanceSlot(0)
       let lookup = libraryBindingLookup(bindingsVal, name)
       if lookup.found:
         debug("Found variable in imported library: ", name)
@@ -1721,7 +1721,7 @@ proc notificationClassLookup(interp: Interpreter): Class =
       return classValue.classVal
   for library in interp.importedLibraries:
     if library.kind == ikObject and library.class == libraryClass:
-      let binding = libraryBindingLookup(library.slots[0], "Notification")
+      let binding = libraryBindingLookup(library.readInstanceSlot(0), "Notification")
       if binding.found and binding.value.kind == vkClass:
         return binding.value.classVal
   return nil
@@ -1860,8 +1860,8 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   var message = "Exception"
   if self != nil and self.kind == ikObject and self.class != nil:
     let messageSlotIdx = self.class.allSlotNames.find("message")
-    if messageSlotIdx >= 0 and messageSlotIdx < self.slots.len:
-      let msgValue = self.slots[messageSlotIdx]
+    if self.hasInstanceSlot(messageSlotIdx):
+      let msgValue = self.readInstanceSlot(messageSlotIdx)
       if msgValue.kind == vkString:
         message = msgValue.strVal
 
@@ -2035,7 +2035,7 @@ proc findClassInLibraries(interp: Interpreter, name: string): Class =
   ## Find a class by name in imported libraries
   for lib in interp.importedLibraries:
     if lib.kind == ikObject and lib.class == libraryClass:
-      let bindingsVal = lib.slots[0]
+      let bindingsVal = lib.readInstanceSlot(0)
       let lookup = libraryBindingLookup(bindingsVal, name)
       if lookup.found and lookup.value.kind == vkClass:
         return lookup.value.classVal
@@ -2256,7 +2256,7 @@ proc primitiveHasPropertyImpl(interp: var Interpreter, self: Instance, args: seq
   if key.len == 0 or self.kind != ikObject or self.class == nil:
     return falseValue
   let slotIdx = self.class.slotNames.find(key)
-  toValue(slotIdx >= 0 and slotIdx < self.slots.len)
+  toValue(slotIdx >= 0 and self.hasInstanceSlot(self.class.getSlotIndex(key)))
 
 proc primitivePropertiesImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   ## Return slot names as an array
@@ -2533,15 +2533,15 @@ proc evaluateNamedAccess(interp: var Interpreter, namedNode: NamedAccessNode): b
 
   if inst.kind == ikObject and inst.class != nil:
     let slotIdx = inst.class.getSlotIndex(namedNode.memberName)
-    if slotIdx >= 0 and slotIdx < inst.slots.len:
+    if inst.hasInstanceSlot(slotIdx):
       if namedNode.isAssignment:
         if namedNode.memberName in inst.class.writableSlotNames:
           let valueVal = if namedNode.valueExpr != nil: evalWithVM(interp, namedNode.valueExpr).unwrap() else: nilValue()
-          inst.slots[slotIdx] = valueVal
+          inst.writeInstanceSlot(slotIdx, valueVal)
           interp.pushValue(valueVal)
           return true
       elif namedNode.memberName in inst.class.readableSlotNames:
-        interp.pushValue(inst.slots[slotIdx])
+        interp.pushValue(inst.readInstanceSlot(slotIdx))
         return true
 
   let msg = if namedNode.isAssignment:
@@ -2577,8 +2577,8 @@ proc primitiveSlotAtImpl(interp: var Interpreter, self: Instance, args: seq[Node
     return nilValue()
 
   let idx = self.class.getSlotIndex(slotName)
-  if idx >= 0 and idx < self.slots.len:
-    return self.slots[idx]
+  if self.hasInstanceSlot(idx):
+    return self.readInstanceSlot(idx)
   return nilValue()
 
 proc primitiveSlotAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2596,9 +2596,10 @@ proc primitiveSlotAtPutImpl(interp: var Interpreter, self: Instance, args: seq[N
 
   let idx = self.class.getSlotIndex(slotName)
   if idx >= 0:
-    while self.slots.len <= idx:
-      self.slots.add(nilValue())
-    self.slots[idx] = args[1]
+    if self.nativeSlots == nil:
+      while self.slots.len <= idx:
+        self.slots.add(nilValue())
+    self.writeInstanceSlot(idx, args[1])
   return args[1]
 
 # Block value methods
@@ -2686,8 +2687,8 @@ proc primitiveValueWithThreeArgsImpl(interp: var Interpreter, self: Instance, ar
 proc primitiveSetAsArrayImpl(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Materialize set elements as an Array instance.
   discard args
-  if self.kind == ikObject and self.slots.len > 0:
-    let elementsVal = self.slots[0]
+  if self.hasInstanceSlot(0):
+    let elementsVal = self.readInstanceSlot(0)
     if elementsVal.kind == vkInstance and elementsVal.instVal != nil and elementsVal.instVal.kind == ikTable:
       var elements: seq[NodeValue] = @[]
       for key in elementsVal.instVal.entries.keys():
@@ -5085,9 +5086,9 @@ proc initGlobals*(interp: var Interpreter) =
     buf.add '{'
     var emitted = 0
     for field in plan.fields:
-      if field.slotIndex < 0 or field.slotIndex >= inst.slots.len:
+      if not inst.hasInstanceSlot(field.slotIndex):
         continue
-      let slotValue = inst.slots[field.slotIndex]
+      let slotValue = inst.readInstanceSlot(field.slotIndex)
       if field.omitNil and isNilValue(slotValue):
         continue
       if field.omitEmpty and isJsonEmpty(slotValue):
@@ -5147,7 +5148,7 @@ proc initGlobals*(interp: var Interpreter) =
         writeJsonTable(buf, val.instVal.entries, interp, state)
         leaveInstance(state, val.instVal)
       of ikObject:
-        if val.instVal.isNimProxy:
+        if val.instVal.isNimProxy and val.instVal.nativeSlots == nil:
           writeJsonEscapedString(buf, val.toString())
         else:
           writeJsonObjectFast(val.instVal, buf, interp, state)
@@ -5469,7 +5470,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   proc findClassInLibraries(interp: Interpreter, name: string): Class =
     for lib in interp.importedLibraries:
       if lib.kind == ikObject and lib.class == libraryClass:
-        let bindingsVal = lib.slots[0]
+        let bindingsVal = lib.readInstanceSlot(0)
         let lookup = libraryBindingLookup(bindingsVal, name)
         if lookup.found and lookup.value.kind == vkClass:
           return lookup.value.classVal
@@ -5651,7 +5652,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
       debug("Checking imported library, class = ", lib.class.name)
       if lib.kind == ikObject and lib.class != nil and lib.class.name == "Library":
         # Try to get Exception from library bindings
-        let bindingsVal = lib.slots[0]  # bindings table is first slot
+        let bindingsVal = lib.readInstanceSlot(0)  # bindings table is first slot
         debug("Library bindings kind: ", $bindingsVal.kind)
         if bindingsVal.kind == vkInstance and bindingsVal.instVal.kind == ikTable:
           debug("Library has ", $bindingsVal.instVal.entries.len, " entries")
@@ -5780,8 +5781,7 @@ proc setNamedSlot(inst: Instance, slotName: string, value: NodeValue) =
   if inst == nil or inst.class == nil:
     return
   let idx = inst.class.allSlotNames.find(slotName)
-  if idx >= 0 and idx < inst.slots.len:
-    inst.slots[idx] = value
+  inst.writeInstanceSlot(idx, value)
 
 proc getFileStreamProxy(self: Instance): FileStreamProxy =
   if self != nil and self.isNimProxy and self.class != nil and
@@ -6415,13 +6415,13 @@ proc globalTableImportImpl(interp: var Interpreter, self: Instance, args: seq[No
     return nilValue()
 
   proc libraryDisplayName(libInst: Instance): string =
-    if libInst == nil or libInst.slots.len < 3:
+    if not libInst.hasInstanceSlot(2):
       return "<anonymous>"
-    case libInst.slots[2].kind
+    case libInst.readInstanceSlot(2).kind
     of vkString:
-      if libInst.slots[2].strVal.len > 0: libInst.slots[2].strVal else: "<anonymous>"
+      if libInst.readInstanceSlot(2).strVal.len > 0: libInst.readInstanceSlot(2).strVal else: "<anonymous>"
     of vkSymbol:
-      if libInst.slots[2].symVal.len > 0: libInst.slots[2].symVal else: "<anonymous>"
+      if libInst.readInstanceSlot(2).symVal.len > 0: libInst.readInstanceSlot(2).symVal else: "<anonymous>"
     else:
       "<anonymous>"
 
@@ -7305,7 +7305,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
     let slotNode = cast[SlotAccessNode](node)
     if interp.currentReceiver != nil and interp.currentReceiver.kind == ikObject:
       let inst = interp.currentReceiver
-      if slotNode.slotIndex >= 0 and slotNode.slotIndex < inst.slots.len:
+      if inst.hasInstanceSlot(slotNode.slotIndex):
         if slotNode.isAssignment:
           # Assignment: need to evaluate valueExpr first
           if slotNode.valueExpr != nil:
@@ -7318,7 +7318,7 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
             return true
         else:
           # Read slot value
-          interp.pushValue(inst.slots[slotNode.slotIndex])
+          interp.pushValue(inst.readInstanceSlot(slotNode.slotIndex))
           return true
     interp.pushValue(nilValue())
     return true
@@ -7618,8 +7618,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       let value = interp.popValue()
       if interp.currentReceiver != nil and interp.currentReceiver.kind == ikObject:
         let slotIndex = frame.currentArgIndex
-        if slotIndex >= 0 and slotIndex < interp.currentReceiver.slots.len:
-          interp.currentReceiver.slots[slotIndex] = value
+        interp.currentReceiver.writeInstanceSlot(slotIndex, value)
       interp.pushValue(value)
       return true
 

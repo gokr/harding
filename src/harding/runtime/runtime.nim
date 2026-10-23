@@ -599,10 +599,12 @@ var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
 proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                              selector: string, args: seq[NodeValue]): NodeValue =
   ## Send actual values through the non-fatal host callback boundary.
-  ## Native-layout proxies require a separate slot/control-transfer bridge.
+  ## Native-layout proxies must explicitly opt in through bindNativeInstanceTo.
   if receiver.kind == vkInstance and receiver.instVal != nil and
      receiver.instVal.isNimProxy and receiver.instVal.nimValue != nil:
-    raise newException(ValueError, "Interpreted sends to native-layout proxies are not supported")
+    if receiver.instVal.nativeSlots == nil:
+      raise newException(ValueError, "Interpreted sends require an explicit native slot binding")
+    receiver.instVal.validateNativeSlots()
   var arguments: seq[Node]
   for argument in args:
     arguments.add(LiteralNode(value: argument))
@@ -791,11 +793,56 @@ proc getReceiverClassName*(receiver: NodeValue): string =
 
   return ""
 
+proc bindNativeInstanceTo*(interp: Interpreter, receiver: NodeValue): bool =
+  ## Attach live class identity and a checked native slot bridge, without copying
+  ## fields or retaining the interpreter. Unknown/incompatible layouts are refused.
+  if interp == nil or interp.globals == nil or receiver.kind != vkInstance or
+     receiver.instVal == nil:
+    return false
+  let instance = receiver.instVal
+  if instance.kind != ikObject or not instance.isNimProxy or
+     instance.compiledOwner == nil or instance.nimValue == nil or instance.class == nil:
+    return false
+  let name = instance.class.name
+  if name notin compiledSlotNames or name notin interp.globals[]:
+    return false
+  let liveValue = interp.globals[][name]
+  if liveValue.kind != vkClass or liveValue.classVal == nil or
+     liveValue.classVal.allSlotNames != compiledSlotNames[name]:
+    return false
+  var binding = boundCompiledClasses.getOrDefault(liveValue.classVal)
+  if binding.interpreter != nil and binding.interpreter != interp:
+    raise newException(ValueError, "Native class is already bound to another interpreter")
+  if instance.nativeSlots != nil:
+    instance.validateNativeSlots()
+    if instance.class != liveValue.classVal:
+      return false
+    binding.interpreter = interp
+    boundCompiledClasses[instance.class] = binding
+    return true
+  let storage = NativeSlotStorage()
+  for slot in compiledSlotNames[name]:
+    let key = name & "::" & slot
+    if key notin slotGetters or key notin slotSetters:
+      return false
+    storage.names.add(slot)
+    storage.getters.add(slotGetters[key])
+    storage.setters.add(slotSetters[key])
+  # Publish only after all validation succeeds.
+  instance.class = liveValue.classVal
+  instance.nativeSlots = storage
+  binding.interpreter = interp
+  boundCompiledClasses[instance.class] = binding
+  return true
+
 proc getSlotValue*(self: NodeValue, slotName: string): NodeValue =
   ## Read the receiver's storage without assuming a native or interpreted layout.
   if self.kind != vkInstance or self.instVal == nil or self.instVal.kind != ikObject:
     return nilValue()
   let instance = self.instVal
+  if instance.nativeSlots != nil:
+    instance.validateNativeSlots()
+    return instance.readInstanceSlot(instance.class.getSlotIndex(slotName))
   if not instance.isNimProxy:
     if instance.class != nil:
       let index = instance.class.getSlotIndex(slotName)
@@ -814,6 +861,10 @@ proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeVal
   if self.kind != vkInstance or self.instVal == nil or self.instVal.kind != ikObject:
     return value
   let instance = self.instVal
+  if instance.nativeSlots != nil:
+    instance.validateNativeSlots()
+    instance.writeInstanceSlot(instance.class.getSlotIndex(slotName), value)
+    return value
   if not instance.isNimProxy:
     if instance.class != nil:
       let index = instance.class.getSlotIndex(slotName)

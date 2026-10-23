@@ -189,8 +189,13 @@ it does not turn them into source text. Interpreter-owned objects use live metho
 lookup, including explicitly bound instance and class-side compiled method shims.
 Class-side shims preserve the actual class receiver, including inherited sends.
 Slot reads and writes resolve through the receiver's live class layout, so a
-compiled method works on interpreter-owned instances and runtime subclasses;
-native objects still have no interpreted slot bridge.
+compiled method works on interpreter-owned instances and runtime subclasses.
+An embedding host can opt a retained native wrapper into interpreted slot access
+with `bindNativeInstanceTo(interp, value)`. It must match the live class's exact
+slot names/order. Interpreted reads/writes use the native fields directly; no slot
+array is copied. Clones receive independent shallow VM slot storage. Unbound
+proxies and later incompatible layout changes are rejected. Hosts must release
+host registrations with `unbindCompiledMethodsFrom` before interpreter disposal.
 Native-layout objects,
 compiled blocks and native collection owners stay on the native dispatch path.
 A `nil` result does not request fallback, and a native method that fails is not
@@ -203,8 +208,9 @@ answer their actual value, including `nil`. Wrong-arity calls fail before invoki
 the native procedure. This synchronous bridge does not translate resumable
 exceptions or non-local returns between engines, and cannot suspend native calls.
 
-This is not yet a complete `--mixed` compiler contract: native object layouts,
-cross-engine exception/non-local-return translation and yielding remain open. See section 6
+This is not yet a complete `--mixed` compiler contract: automatic native-instance
+binding, layout migration, cross-engine exception/non-local-return translation
+and yielding remain open. See section 6
 of [the Granite plan](../PLAN.md).
 
 ### Numeric string conversion
