@@ -255,6 +255,7 @@ proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): Nod
   ## Note: procPtr is cast to pointer inside this proc to avoid cast issues at call site
   var blk = BlockNode()
   blk.nativeImpl = procPtr
+  blk.compiledInvoker = invokeCompiledBlock
   blk.parameters = newSeq[string](paramCount)
   # Store env pointer in capturedEnv as a hack using a known key
   if envPtr != nil:

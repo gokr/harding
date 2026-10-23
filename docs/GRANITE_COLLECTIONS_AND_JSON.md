@@ -46,8 +46,9 @@ concrete receiver class so an inherited native slot uses the right layout.
 permissions (raising `Error` otherwise) and handles tables directly; this preserved
 `accessor_override` parity, where a hand-written parent accessor must not be shadowed
 by a generated child accessor. Native-layout proxies do not yet have an interpreted
-slot bridge: compiled blocks and native objects that need interpreted slot access
-remain unsupported rather than silently reading nil.
+slot bridge: native objects that need interpreted slot access remain unsupported.
+Compiled block callbacks can now be invoked from interpreted code (0–3 arguments),
+but callbacks that require interpreted access to native slots still need that bridge.
 
 ## Object JSON
 

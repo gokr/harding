@@ -12,6 +12,15 @@ proc increment(env: pointer): NodeValue {.cdecl.} =
   captured.counter.value.intVal += 1
   captured.counter.value
 
+proc identityArg(a: NodeValue): NodeValue {.cdecl.} =
+  a
+
+proc sumPair(a, b: NodeValue): NodeValue {.cdecl.} =
+  toValue(a.intVal + b.intVal)
+
+proc sumTriple(a, b, c: NodeValue): NodeValue {.cdecl.} =
+  toValue(a.intVal + b.intVal + c.intVal)
+
 var indexedElements: seq[NodeValue]
 var indexedIndices: seq[int]
 
@@ -70,11 +79,33 @@ suite "Compiled shared support":
     let rt = newRuntime()
     let plain = createBlock0(answer, 0)
     check sendMessage(rt, plain, "value", @[]).intVal == 42
+    check rt.evalBlock(plain.blockVal).intVal == 42
     let captured = block:
       let env = TestEnvironment(counter: MutableCell(value: NodeValue(kind: vkInt, intVal: 0)))
       createBlockWithEnv(cast[pointer](increment), 0, env)
     check sendMessage(rt, captured, "value", @[]).intVal == 1
     check sendMessage(rt, captured, "value", @[]).intVal == 2
+    check rt.evalBlock(captured.blockVal).intVal == 3
+
+  test "environment-free block ABI supports one to three arguments":
+    let one = createBlock1(identityArg, 1)
+    let two = createBlock2(sumPair, 2)
+    let three = createBlock3(sumTriple, 3)
+    check invokeCompiledBlock(one.blockVal, @[toValue(7)]).intVal == 7
+    check invokeCompiledBlock(two.blockVal, @[toValue(7), toValue(8)]).intVal == 15
+    check invokeCompiledBlock(three.blockVal, @[toValue(7), toValue(8), toValue(9)]).intVal == 24
+
+  test "compiled block invocation rejects mismatched and unsupported arities before casting":
+    let plain = createBlock0(answer, 0)
+    check plain.blockVal.compiledInvoker != nil
+    check plain.blockVal.compiledInvoker(plain.blockVal, @[]).intVal == 42
+    expect ValueError:
+      discard invokeCompiledBlock(plain.blockVal, @[toValue(1)])
+    expect ValueError:
+      discard sendMessage(nil, plain, "value:", @[toValue(1)])
+    let unsupported = createBlock(cast[pointer](answer), 4)
+    expect ValueError:
+      discard invokeCompiledBlock(unsupported.blockVal, @[toValue(1), toValue(2), toValue(3), toValue(4)])
 
   test "indexed iteration passes element and zero-based index and answers receiver":
     indexedElements = @[]

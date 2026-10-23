@@ -197,9 +197,14 @@ A `nil` result does not request fallback, and a native method that fails is not
 executed again through the interpreter. Host callback failures are non-fatal and
 propagate to the embedding caller.
 
+Interpreted methods can invoke compiled block callbacks with zero to three
+arguments. Captured state stays in the retained native environment; callbacks
+answer their actual value, including `nil`. Wrong-arity calls fail before invoking
+the native procedure. This synchronous bridge does not translate resumable
+exceptions or non-local returns between engines, and cannot suspend native calls.
+
 This is not yet a complete `--mixed` compiler contract: native object layouts,
-compiled-block callbacks into interpreted methods, cross-engine
-exception/non-local-return translation and yielding remain open. See section 6
+cross-engine exception/non-local-return translation and yielding remain open. See section 6
 of [the Granite plan](../PLAN.md).
 
 ### Numeric string conversion

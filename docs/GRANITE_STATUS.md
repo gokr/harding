@@ -15,8 +15,10 @@ VM messages. Mixed dispatch no longer reconstructs source or retries nil results
 engine selection uses receiver ownership, and interpreter-owned receivers cross
 through literal-valued messages. Boundary regressions cover nested calls, identity,
 captured blocks and error recovery. Slot reads/writes use each receiver's live
-layout, including runtime subclasses. Native-layout fallback, compiled blocks inside
-interpreted methods, cross-engine control transfers,
+layout, including runtime subclasses. Interpreted methods and VM block entry
+points can invoke compiled callbacks with 0–3 arguments, retaining native captured
+environments and validating arity before pointer calls. Native-layout fallback,
+cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.
 

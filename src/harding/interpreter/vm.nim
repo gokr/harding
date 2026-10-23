@@ -1147,6 +1147,8 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
 proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode): NodeValue =
   ## Evaluate a block in the context of the given receiver using the stackless VM
   ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  if blockNode.compiledInvoker != nil:
+    return blockNode.compiledInvoker(blockNode, @[])
   let blockReceiver = if receiver != nil:
                         receiver
                       elif blockNode.homeActivation != nil and
@@ -1187,6 +1189,8 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg: NodeValue): NodeValue =
   ## Evaluate a block with one argument using the stackless VM
   ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  if blockNode.compiledInvoker != nil:
+    return blockNode.compiledInvoker(blockNode, @[arg])
   let blockReceiver = if receiver != nil:
                         receiver
                       elif blockNode.homeActivation != nil and
@@ -1231,6 +1235,8 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
   ## Evaluate a block with two arguments using the stackless VM
   ## Returns (value, true) if a non-local return occurred, (value, false) otherwise
   ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  if blockNode.compiledInvoker != nil:
+    return (blockNode.compiledInvoker(blockNode, @[arg1, arg2]), false)
   let blockReceiver = if receiver != nil:
                         receiver
                       elif blockNode.homeActivation != nil and
@@ -1279,6 +1285,8 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
 proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNode: BlockNode, arg1, arg2, arg3: NodeValue): NodeValue =
   ## Evaluate a block with three arguments using the stackless VM
   ## If a non-nil receiver is passed, use it; otherwise fall back to homeActivation.receiver
+  if blockNode.compiledInvoker != nil:
+    return blockNode.compiledInvoker(blockNode, @[arg1, arg2, arg3])
   let blockReceiver = if receiver != nil:
                         receiver
                       elif blockNode.homeActivation != nil and
@@ -1328,6 +1336,8 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
 # Invoke a block with arguments using the stackless VM
 proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeValue]): NodeValue =
   ## Invoke a block with the given arguments using the stackless VM
+  if blockNode.compiledInvoker != nil:
+    return blockNode.compiledInvoker(blockNode, args)
 
   debug("Invoking block with ", args.len, " arguments")
 
@@ -8536,6 +8546,10 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       raise newException(ValueError,
         "Wrong number of arguments to block: expected " & $blockNode.parameters.len &
         ", got " & $args.len)
+
+    if blockNode.compiledInvoker != nil:
+      interp.pushValue(blockNode.compiledInvoker(blockNode, args))
+      return true
 
     # Block's home activation determines 'self'
     # Capture homeActivation NOW before any recursive calls can overwrite blockNode.homeActivation

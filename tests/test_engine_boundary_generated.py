@@ -28,6 +28,12 @@ SlotChild>>total [ ^ base + extra ].
 SlotChild>>remember: value [ extra := value. ^ extra ].
 SlotChild>>writer [ ^ [:value | extra := value. extra] ].
 SlotChild>>readOther: other [ ^ other::base ].
+SlotChild>>adder: start [ | count | count := start. ^ [:step | count := count + step. count] ].
+SlotChild>>constant [ ^ [42] ].
+SlotChild>>pair [ ^ [:a :b | a + b] ].
+SlotChild>>triple [ ^ [:a :b :c | a + b + c] ].
+SlotChild>>emptyBlock [ ^ [nil] ].
+SlotChild>>countdown: start [ | remaining | remaining := start. ^ [remaining := remaining - 1. remaining > 0] ].
 ''')
 
             def run(command, log, timeout=180):
@@ -67,6 +73,19 @@ SlotChild>>total [ ^ nil ].
 SlotChild>>remember: value [ ^ nil ].
 SlotChild>>writer [ ^ nil ].
 SlotChild>>readOther: other [ ^ nil ].
+SlotChild>>adder: start [ ^ nil ].
+SlotChild>>constant [ ^ nil ].
+SlotChild>>pair [ ^ nil ].
+SlotChild>>triple [ ^ nil ].
+SlotChild>>emptyBlock [ ^ nil ].
+SlotChild>>countdown: start [ ^ nil ].
+SlotChild>>loop: condition body: callback [ condition whileTrue: callback. ^ 7 ].
+SlotChild>>call: callback [ ^ callback value ].
+SlotChild>>call: callback with: a [ ^ callback value: a ].
+SlotChild>>call: callback with: a with: b [ ^ callback value: a value: b ].
+SlotChild>>call: callback with: a with: b with: c [ ^ callback value: a value: b value: c ].
+SlotChild>>map: callback [ ^ #(1, 2, 3) collect: callback ].
+SlotChild>>choose: callback [ ^ true ifTrue: callback ].
 RuntimeSlotChild := SlotChild derivePublic: #(runtimeSlot).
 """)
 doAssert err.len == 0, err
@@ -101,6 +120,33 @@ let writer = sendMessageInterpreted(interp, live, "writer", @[])
 doAssert sendMessage(nil, writer, "value:", @[toValue(8)]).intVal == 8
 doAssert sendMessageInterpreted(interp, live, "extra", @[]).intVal == 8
 doAssert sendMessageInterpreted(interp, live, "readOther:", @[live]).intVal == 20
+# Interpreted methods invoke native closures without consuming their environments.
+let constant = sendMessageInterpreted(interp, live, "constant", @[])
+doAssert sendMessageInterpreted(interp, live, "call:", @[constant]).intVal == 42
+doAssert sendMessageInterpreted(interp, live, "choose:", @[constant]).intVal == 42
+let adder = sendMessageInterpreted(interp, live, "adder:", @[toValue(10)])
+doAssert sendMessageInterpreted(interp, live, "call:with:", @[adder, toValue(2)]).intVal == 12
+doAssert sendMessageInterpreted(interp, live, "call:with:", @[adder, toValue(3)]).intVal == 15
+let mapped = sendMessageInterpreted(interp, live, "map:", @[adder])
+doAssert sendMessageInterpreted(interp, mapped, "at:", @[toValue(2)]).intVal == 21
+let pair = sendMessageInterpreted(interp, live, "pair", @[])
+doAssert sendMessageInterpreted(interp, live, "call:with:with:", @[pair, toValue(4), toValue(5)]).intVal == 9
+let triple = sendMessageInterpreted(interp, live, "triple", @[])
+doAssert sendMessageInterpreted(interp, live, "call:with:with:with:", @[triple, toValue(4), toValue(5), toValue(6)]).intVal == 15
+let empty = sendMessageInterpreted(interp, live, "emptyBlock", @[])
+doAssert isNilValue(sendMessageInterpreted(interp, live, "call:", @[empty]))
+var wrongArity = false
+try:
+  discard sendMessageInterpreted(interp, live, "call:", @[pair])
+except ValueError:
+  wrongArity = true
+doAssert wrongArity
+doAssert sendMessageInterpreted(interp, live, "call:", @[constant]).intVal == 42
+doAssert invokeBlock(interp, constant.blockVal, @[]).intVal == 42
+doAssert invokeBlock(interp, pair.blockVal, @[toValue(7), toValue(8)]).intVal == 15
+let condition = sendMessageInterpreted(interp, live, "countdown:", @[toValue(3)])
+doAssert sendMessageInterpreted(interp, live, "loop:body:", @[condition, constant]).intVal == 7
+doAssert not invokeBlock(interp, condition.blockVal, @[]).boolVal
 # Native inherited slots use accessors for their concrete, self-contained layout.
 generated.registerSuperclassHierarchy()
 let native = generated.toValue(generated.newClass_''' + "SlotChild".encode().hex().upper() + '''())

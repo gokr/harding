@@ -343,6 +343,8 @@ type
     primitiveSelector*: string            # for declarative primitives: selector of underlying primitive
     localCount*: int                      # total indexed locals: 1(self) + params.len + temps.len
     compiledEnv*: RootRef                # managed owner of a compiled closure environment
+    # Explicit closure ABI; nativeImpl on method blocks has a different signature.
+    compiledInvoker*: proc(blk: BlockNode, args: seq[NodeValue]): NodeValue {.nimcall.}
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter

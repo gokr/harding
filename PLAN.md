@@ -559,9 +559,14 @@ Effort is relative to this codebase, not a schedule commitment.
    methods read and write interpreter-owned instances, runtime subclasses and native
    instances through each receiver's own layout instead of casting to a generated
    Nim type; `::` keeps its permission checks instead of lowering to `at:`.
+   Compiled closures now carry an explicit `compiledInvoker` callback, separate
+   from the native-method ABI. VM block application, direct invocation and native
+   primitive helpers use it without copying captured cells into VM activations.
+   The native runtime shares the same arity-checked dispatcher (0–3 arguments).
+   Generated ARC/ORC coverage includes captured updates, collection callbacks,
+   conditional/loop callbacks, nil and recovery after a wrong-arity send.
    Remaining: a real native↔interpreted slot bridge (native objects still cannot be
-   read from interpreted code), compiled-block execution inside
-   interpreted methods, error/non-local-return translation, yielding, generated
+   read from interpreted code), error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.

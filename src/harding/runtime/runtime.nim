@@ -930,11 +930,14 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
     return dispatchCompiledClassMethod(receiver, startClass, selector, args)
   return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
 
+proc invokeCompiledBlock*(blk: BlockNode, args: seq[NodeValue]): NodeValue
+
 proc evalBlock*(runtime: Runtime, blk: BlockNode,
                 args: seq[NodeValue] = @[]): NodeValue =
-  ## Evaluate a block (placeholder - needs full evaluator integration)
-  discard
-  return NodeValue(kind: vkNil)
+  ## Evaluate native blocks used by compiled control-flow helpers.
+  if blk != nil and blk.nativeImpl != nil:
+    return invokeCompiledBlock(blk, args)
+  return nilValue()
 
 type
   BlockProc0* = proc(): NodeValue {.cdecl.}
@@ -951,6 +954,30 @@ proc getBlockEnvPtr*(blk: BlockNode): pointer =
   if blk.capturedEnvInitialized and "__env_ptr__" in blk.capturedEnv:
     return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
   return nil
+
+proc invokeCompiledBlock*(blk: BlockNode, args: seq[NodeValue]): NodeValue =
+  ## Shared native block ABI for the native runtime and VM callback boundary.
+  if blk == nil or blk.nativeImpl == nil:
+    raise newException(ValueError, "Compiled block has no native implementation")
+  if args.len != blk.parameters.len:
+    raise newException(ValueError, "Wrong number of arguments to block: expected " &
+      $blk.parameters.len & ", got " & $args.len)
+  let env = getBlockEnvPtr(blk)
+  case args.len
+  of 0:
+    if env != nil: return cast[BlockEnvProc0](blk.nativeImpl)(env)
+    return cast[BlockProc0](blk.nativeImpl)()
+  of 1:
+    if env != nil: return cast[BlockEnvProc1](blk.nativeImpl)(env, args[0])
+    return cast[BlockProc1](blk.nativeImpl)(args[0])
+  of 2:
+    if env != nil: return cast[BlockEnvProc2](blk.nativeImpl)(env, args[0], args[1])
+    return cast[BlockProc2](blk.nativeImpl)(args[0], args[1])
+  of 3:
+    if env != nil: return cast[BlockEnvProc3](blk.nativeImpl)(env, args[0], args[1], args[2])
+    return cast[BlockProc3](blk.nativeImpl)(args[0], args[1], args[2])
+  else:
+    raise newException(ValueError, "Compiled block calls support at most three arguments")
 
 proc compiledExceptionClassValue*(name: string): NodeValue =
   ## Built-in exception class receiver for pure compiled programs.
@@ -1392,42 +1419,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   # Block evaluation: value, value:, value:value:, value:value:value:
   if receiver.kind == vkBlock and receiver.blockVal != nil and
      receiver.blockVal.nativeImpl != nil:
-    let envPtr = getBlockEnvPtr(receiver.blockVal)
-    let hasEnv = envPtr != nil
-    case selector
-    of "value":
-      if hasEnv:
-        let fn = cast[BlockEnvProc0](receiver.blockVal.nativeImpl)
-        return fn(envPtr)
-      else:
-        let fn = cast[BlockProc0](receiver.blockVal.nativeImpl)
-        return fn()
-    of "value:":
-      if args.len >= 1:
-        if hasEnv:
-          let fn = cast[BlockEnvProc1](receiver.blockVal.nativeImpl)
-          return fn(envPtr, args[0])
-        else:
-          let fn = cast[BlockProc1](receiver.blockVal.nativeImpl)
-          return fn(args[0])
-    of "value:value:":
-      if args.len >= 2:
-        if hasEnv:
-          let fn = cast[BlockEnvProc2](receiver.blockVal.nativeImpl)
-          return fn(envPtr, args[0], args[1])
-        else:
-          let fn = cast[BlockProc2](receiver.blockVal.nativeImpl)
-          return fn(args[0], args[1])
-    of "value:value:value:":
-      if args.len >= 3:
-        if hasEnv:
-          let fn = cast[BlockEnvProc3](receiver.blockVal.nativeImpl)
-          return fn(envPtr, args[0], args[1], args[2])
-        else:
-          let fn = cast[BlockProc3](receiver.blockVal.nativeImpl)
-          return fn(args[0], args[1], args[2])
-    else:
-      discard
+    if selector in ["value", "value:", "value:value:", "value:value:value:", "value:value:value:value:"]:
+      return invokeCompiledBlock(receiver.blockVal, args)
 
   # A dynamic send reads its selector from an argument, so the builtin table
   # cannot run it: the `perform:` builtins sit after the class-side and compiled
