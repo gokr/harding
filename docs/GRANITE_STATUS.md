@@ -20,7 +20,10 @@ points can invoke compiled callbacks with 0–3 arguments, retaining native capt
 environments and validating arity before pointer calls. Explicit native-instance
 binding validates layout and exposes authoritative native fields to interpreted
 methods, slot reflection, JSON and shallow cloning; no mirror slot array is used.
-Automatic instance binding, layout migration, cross-engine control transfers,
+Statically named allocations in bound methods/escaped closures use the receiver's
+host live `new` protocol; pure native allocation stays native. Class aliases and
+general global references are not unified. Automatic instance binding, layout
+migration, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.
 

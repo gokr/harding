@@ -417,6 +417,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       if ctx.mixed:
         return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
       else:
+        if ctx.inMethod:
+          let owner = genSymbolAccess(ctx, "self")
+          return fmt("guardedNew_{mangleClass(className)}({owner})")
         return fmt("guardedNew_{mangleClass(className)}()")
 
   # Check for inline control flow with literal blocks

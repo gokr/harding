@@ -612,17 +612,13 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                             selector: selector, arguments: arguments)
   result = evalCallbackNonFatal(interp, message)
 
-proc boundInterpretedSend(receiver: NodeValue, selector: string,
-                          args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+proc boundClassFor(receiver: NodeValue): Class =
   if boundCompiledClasses.len == 0:
-    return
-  let classSide = receiver.kind == vkClass
-  let cls = if classSide: receiver.classVal
+    return nil
+  let cls = if receiver.kind == vkClass: receiver.classVal
             elif receiver.kind == vkInstance and receiver.instVal != nil: receiver.instVal.class
             else: nil
-  if cls == nil:
-    return
-  # Find the host through the live hierarchy, not the compiled name registry.
+  # Find the host through live class identity, not the compiled name registry.
   var visited: seq[Class]
   proc findBinding(current: Class): Class =
     if current == nil or current in visited: return nil
@@ -631,9 +627,28 @@ proc boundInterpretedSend(receiver: NodeValue, selector: string,
     for parent in current.superclasses:
       let found = findBinding(parent)
       if found != nil: return found
-  let owner = findBinding(cls)
+  result = findBinding(cls)
+
+proc boundNewInstance*(ownerReceiver: NodeValue, className: string): tuple[handled: bool, value: NodeValue] =
+  ## Host-bound code allocates through the live class's ordinary new protocol.
+  ## Unbound/native code keeps the caller's native allocator path.
+  let owner = boundClassFor(ownerReceiver)
   if owner == nil:
     return
+  var interp = boundCompiledClasses[owner].interpreter
+  if interp.globals == nil or className notin interp.globals[] or
+     interp.globals[][className].kind != vkClass:
+    raise newException(ValueError, "Bound allocation requires a live class: " & className)
+  result.value = sendMessageInterpreted(interp, interp.globals[][className], "new", @[])
+  result.handled = true
+
+proc boundInterpretedSend(receiver: NodeValue, selector: string,
+                          args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  let owner = boundClassFor(receiver)
+  if owner == nil:
+    return
+  let classSide = receiver.kind == vkClass
+  let cls = if classSide: receiver.classVal else: receiver.instVal.class
   let binding = boundCompiledClasses[owner]
   let resolved = if classSide: vm.lookupClassMethod(cls, selector).currentMethod
                  else: lookupInstanceMethod(cls, selector)

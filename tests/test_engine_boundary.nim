@@ -107,6 +107,39 @@ suite "Class-side engine boundary":
     check sendMessage(nil, parent, "double:", @[toValue(21)]).intVal == 22
     check sendMessageInterpreted(interp, parent, "double:", @[toValue(21)]).intVal == 22
 
+  test "allocation follows receiver host identity and nil is a handled result":
+    discard defineClass(interp, "AllocationOwner", "identity")
+    check bindCompiledMethodShim(interp, "AllocationOwner", "identity",
+                                cast[pointer](greetShim))
+    let owner = interp.globals[]["AllocationOwner"]
+    let (_, err) = interp.evalStatements("AllocationTarget := Object derive: #(). AllocationTarget class>>new [ ^ nil ].")
+    require err.len == 0
+    let allocated = boundNewInstance(owner, "AllocationTarget")
+    check allocated.handled
+    check isNilValue(allocated.value)
+    check not boundNewInstance(toValue(1), "AllocationTarget").handled
+    expect ValueError:
+      discard boundNewInstance(owner, "AbsentAllocationTarget")
+    # A different host uses distinct live owner identity, not a global class name.
+    var other = Interpreter(globals: new(Table[string, NodeValue]))
+    defer: unbindCompiledMethodsFrom(other)
+    let otherOwner = defineClass(other, "AllocationOwner", "identity")
+    check bindCompiledMethodShim(other, "AllocationOwner", "identity", cast[pointer](greetShim))
+    let otherTarget = newClass(name = "AllocationTarget")
+    let factory = createCoreMethod("new")
+    factory.setNativeValueImpl(cast[pointer](classSelfShim))
+    factory.hasInterpreterParam = true
+    otherTarget.classMethods["new"] = factory
+    otherTarget.allClassMethods["new"] = factory
+    other.globals[]["AllocationTarget"] = toValue(otherTarget)
+    let fromOther = boundNewInstance(toValue(otherOwner), "AllocationTarget")
+    check fromOther.handled
+    check fromOther.value.classVal == otherTarget
+    check isNilValue(boundNewInstance(owner, "AllocationTarget").value)
+    unbindCompiledMethodsFrom(interp)
+    check not boundNewInstance(owner, "AllocationTarget").handled
+    check boundNewInstance(toValue(otherOwner), "AllocationTarget").handled
+
   test "unknown class selector and existing native class primitive are not rebound":
     let (_, err) = interp.evalStatements("ClassShimNative := Object derive: #(). ClassShimNative class>>identity [ ^ nil ]")
     require err.len == 0

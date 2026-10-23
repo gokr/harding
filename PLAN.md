@@ -573,7 +573,14 @@ Effort is relative to this codebase, not a schedule commitment.
    A changed live layout is rejected rather than migrated. Bound native receivers
    participate in live method guards, including warmed-cache replacement fallback.
    Hosts release retained host registrations with `unbindCompiledMethodsFrom`.
-   Remaining: automatic/generated instance binding and allocation ownership policy,
+   Generated statically named `ClassName new` sends in bound method bodies now
+   resolve the target class in the receiver's host and use ordinary VM `new`,
+   returning interpreter-owned objects. Escaped/nested method closures retain the
+   receiver for the same routing. Pure native/top-level code keeps native allocation;
+   no ambient interpreter or source replay is introduced. Live `new` overrides,
+   including nil, are respected without native retry. Class aliases and general
+   global/class references are not unified by this allocation-only slice.
+   Remaining: automatic native-instance binding, general global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.

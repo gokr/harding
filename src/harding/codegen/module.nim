@@ -219,7 +219,23 @@ proc collectAstNodes(nodes: var Table[pointer, bool], node: Node) =
   of nkArray:
     for elem in node.ArrayNode.elements:
       collectAstNodes(nodes, elem)
+  of nkTable:
+    for (key, value) in node.TableNode.entries:
+      collectAstNodes(nodes, key)
+      collectAstNodes(nodes, value)
+  of nkNamedAccess:
+    collectAstNodes(nodes, node.NamedAccessNode.receiver)
+    collectAstNodes(nodes, node.NamedAccessNode.valueExpr)
+  of nkSlotAccess:
+    collectAstNodes(nodes, node.SlotAccessNode.valueExpr)
+  of nkSuperSend:
+    for arg in node.SuperSendNode.arguments:
+      collectAstNodes(nodes, arg)
+  of nkPrimitiveCall:
+    for arg in node.PrimitiveCallNode.arguments:
+      collectAstNodes(nodes, arg)
   of nkCascade:
+    collectAstNodes(nodes, node.CascadeNode.receiver)
     for msg in node.CascadeNode.messages:
       collectAstNodes(nodes, msg)
   of nkLiteral:
@@ -677,7 +693,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     for t in md.temporaries:
       ownerLocals.add(t)
     for stmt in md.body:
-      collectBlocks(blockReg, stmt, knownGlobals, ownerSlots, ownerLocals)
+      collectBlocks(blockReg, stmt, knownGlobals & compiledClassNames, ownerSlots, ownerLocals)
   # Stamp method ownership so ^ inside these blocks targets the right method.
   # Walk the registry once per method, matching block nodes by identity against
   # the method body's registered nodes.
@@ -688,6 +704,11 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     for info in blockReg.blocks.mitems:
       if info.ownerMethodId == 0 and cast[pointer](info.blockNode) in bodyNodes:
         info.ownerMethodId = md.methodId
+        # Method-owned closures retain their receiver for allocation routing,
+        # even if no source expression explicitly references self.
+        if "self" notin info.captures:
+          info.captures.add("self")
+          info.captureTypes.add("MutableCell")
 
   # Generate for each class
   for cls in analysis.classes.values:
@@ -699,7 +720,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(fmt("  new{nativeClass}().toValue()\n\n"))
     output.add(fmt("var allocationVersion_{nativeClass} {{.threadvar.}}: uint64\n"))
     output.add(fmt("var directAllocation_{nativeClass} {{.threadvar.}}: bool\n"))
-    output.add(fmt("proc guardedNew_{nativeClass}(): NodeValue =\n"))
+    output.add(fmt("proc guardedNew_{nativeClass}(ownerReceiver: NodeValue = NodeValue(kind: vkNil)): NodeValue =\n"))
+    output.add(fmt("  let hostAllocation = boundNewInstance(ownerReceiver, \"{cls.name}\")\n"))
+    output.add("  if hostAllocation.handled:\n    return hostAllocation.value\n")
     output.add(fmt("  if allocationVersion_{nativeClass} != compiledClassDispatchVersion:\n"))
     output.add(fmt("    directAllocation_{nativeClass} = canDirectAllocate(\"{cls.name}\", allocate{nativeClass})\n"))
     output.add(fmt("    allocationVersion_{nativeClass} = compiledClassDispatchVersion\n"))

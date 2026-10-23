@@ -376,6 +376,18 @@ suite "Compiler: Engine binding shims":
     check code.contains("isClassMethod = false)")
     check code.contains("proc bindCompiledMethodsTo*(interp: var Interpreter)")
 
+  test "named allocation carries a receiver through escaped method closures":
+    let (nodes, syntax) = parse("Allocator := Object derive: #(). Product := Object derive: #(). Allocator>>make [ ^ Product new ]. Allocator>>maker [ ^ [[Product new]] ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "bound_allocation")
+    let name = mangleClass("Product")
+    check code.contains("guardedNew_" & name & "(self)")
+    check code.contains("boundNewInstance(ownerReceiver, \"Product\")")
+    check code.contains("self: MutableCell")
+    check code.contains("let self = envTyped[].self.value")
+    check not code.contains("Product: MutableCell")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

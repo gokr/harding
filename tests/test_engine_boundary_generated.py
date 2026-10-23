@@ -20,6 +20,10 @@ Factory>>identity [ ^ self ].
 Factory class>>identity [ ^ self ].
 Factory class>>double: n [ ^ n * 2 ].
 Factory class>>make [ ^ self new ].
+Factory class>>makeNamed [ ^ SlotChild new ].
+Factory>>makeNamed [ ^ SlotChild new ].
+Factory>>maker [ ^ [SlotChild new] ].
+Factory>>nestedMaker [ ^ [[SlotChild new]] ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
@@ -64,6 +68,10 @@ Factory>>identity [ ^ nil ].
 Factory class>>identity [ ^ nil ].
 Factory class>>double: n [ ^ 0 ].
 Factory class>>make [ ^ nil ].
+Factory class>>makeNamed [ ^ nil ].
+Factory>>makeNamed [ ^ nil ].
+Factory>>maker [ ^ nil ].
+Factory>>nestedMaker [ ^ nil ].
 ChildFactory := Factory derive: #().
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ nil ].
@@ -106,6 +114,37 @@ doAssert sendMessageInterpreted(interp, cls, "double:", @[toValue(21)]).intVal =
 let created = sendMessageInterpreted(interp, child, "make", @[])
 doAssert created.kind == vkInstance
 doAssert created.instVal.class == child.classVal
+# Named allocations in class/instance bodies and escaped closures use live classes.
+let liveSlotIdentity = interp.globals[]["SlotChild"].classVal
+let namedClassObject = sendMessageInterpreted(interp, cls, "makeNamed", @[])
+doAssert namedClassObject.instVal.class == liveSlotIdentity
+doAssert not namedClassObject.instVal.isNimProxy
+let namedInstanceObject = sendMessageInterpreted(interp, instance, "makeNamed", @[])
+doAssert namedInstanceObject.instVal.class == liveSlotIdentity
+discard sendMessageInterpreted(interp, namedInstanceObject, "extra:", @[toValue(0)])
+discard sendMessageInterpreted(interp, namedInstanceObject, "interpretedSet:", @[toValue(4)])
+let maker = sendMessageInterpreted(interp, instance, "maker", @[])
+let fromMaker = invokeBlock(interp, maker.blockVal, @[])
+doAssert fromMaker.instVal.class == liveSlotIdentity
+let outerMaker = sendMessageInterpreted(interp, instance, "nestedMaker", @[])
+let innerMaker = invokeBlock(interp, outerMaker.blockVal, @[])
+doAssert invokeBlock(interp, innerMaker.blockVal, @[]).instVal.class == liveSlotIdentity
+# Overridden new may answer nil: host allocation must not retry the native path.
+let (_, nilFactoryError) = interp.evalStatements("SlotChild class>>new [ ^ nil ]")
+doAssert nilFactoryError.len == 0, nilFactoryError
+doAssert isNilValue(sendMessageInterpreted(interp, cls, "makeNamed", @[]))
+doAssert isNilValue(invokeBlock(interp, maker.blockVal, @[]))
+let (_, failingNewError) = interp.evalStatements("SlotChild class>>new [ Error signal: \\\"allocation failure\\\" ]")
+doAssert failingNewError.len == 0, failingNewError
+var allocationFailed = false
+try:
+  discard invokeBlock(interp, maker.blockVal, @[])
+except ValueError:
+  allocationFailed = true
+doAssert allocationFailed
+let (_, restoreNewError) = interp.evalStatements("SlotChild class>>new [ ^ super new ]")
+doAssert restoreNewError.len == 0, restoreNewError
+doAssert invokeBlock(interp, maker.blockVal, @[]).instVal.class == liveSlotIdentity
 let (_, replacementError) = interp.evalStatements("Factory class>>double: n [ ^ n + 1 ]")
 doAssert replacementError.len == 0, replacementError
 doAssert sendMessage(nil, cls, "double:", @[toValue(21)]).intVal == 22

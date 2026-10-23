@@ -208,6 +208,13 @@ answer their actual value, including `nil`. Wrong-arity calls fail before invoki
 the native procedure. This synchronous bridge does not translate resumable
 exceptions or non-local returns between engines, and cannot suspend native calls.
 
+In bound compiled methods, statically named `ClassName new` sends resolve the
+live class in the receiver's host and use its ordinary `new` protocol. These
+allocations produce VM-owned objects unless the live `new` overrides that result.
+Escaped method closures retain their receiver for allocation routing. Pure native
+and top-level calls retain native allocation; this does not unify class aliases or
+other global references and does not install a global current interpreter.
+
 This is not yet a complete `--mixed` compiler contract: automatic native-instance
 binding, layout migration, cross-engine exception/non-local-return translation
 and yielding remain open. See section 6
