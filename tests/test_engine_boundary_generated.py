@@ -56,6 +56,10 @@ SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
 SlotChild := SlotParent derivePublic: #(extra).
 SlotChild>>total [ ^ base + extra ].
+SlotChild>>parentValue [ ^ super baseValue ].
+SlotChild>>parentBlock [ ^ [super baseValue] ].
+SlotParent class>>classIdentity [ ^ self ].
+SlotChild class>>parentIdentity [ ^ super classIdentity ].
 SlotChild>>remember: value [ extra := value. ^ extra ].
 SlotChild>>writer [ ^ [:value | extra := value. extra] ].
 SlotChild>>readOther: other [ ^ other::base ].
@@ -147,6 +151,10 @@ SlotParent>>baseValue [ ^ nil ].
 SlotParent>>baseValue: value [ ^ nil ].
 SlotChild := SlotParent derivePublic: #(extra).
 SlotChild>>total [ ^ nil ].
+SlotChild>>parentValue [ ^ nil ].
+SlotChild>>parentBlock [ ^ nil ].
+SlotParent class>>classIdentity [ ^ nil ].
+SlotChild class>>parentIdentity [ ^ nil ].
 SlotChild>>remember: value [ ^ nil ].
 SlotChild>>writer [ ^ nil ].
 SlotChild>>readOther: other [ ^ nil ].
@@ -412,6 +420,25 @@ except ValueError:
 doAssert invalidLayout
 liveSlotClass.allSlotNames = savedNames
 doAssert getSlotValue(native, "base").intVal == 50
+# Super lookup starts from the lexical class, preserving live receiver identity.
+doAssert sendMessageInterpreted(interp, live, "parentValue", @[]).intVal == 20
+let superBlock = sendMessageInterpreted(interp, live, "parentBlock", @[])
+doAssert invokeBlock(interp, superBlock.blockVal, @[]).intVal == 20
+let runtimeSlotIdentity = interp.globals[]["RuntimeSlotChild"]
+doAssert sendMessageInterpreted(interp, runtimeSlotIdentity, "parentIdentity", @[]).classVal == runtimeSlotIdentity.classVal
+let (_, superReplacementError) = interp.evalStatements("SlotParent>>baseValue [ ^ base + 100 ]. SlotParent class>>classIdentity [ ^ nil ]")
+doAssert superReplacementError.len == 0, superReplacementError
+doAssert sendMessageInterpreted(interp, live, "parentValue", @[]).intVal == 120
+doAssert invokeBlock(interp, superBlock.blockVal, @[]).intVal == 120
+doAssert sendMessageInterpreted(interp, native, "parentValue", @[]).intVal == 150
+doAssert isNilValue(sendMessageInterpreted(interp, runtimeSlotIdentity, "parentIdentity", @[]))
+var invalidParent = false
+try:
+  discard sendSuperMessage(live, "SlotChild", "baseValue", @[], "MissingParent")
+except ValueError:
+  invalidParent = true
+doAssert invalidParent
+doAssert interp.activationStack.len == 0
 # Static compiled class allocation uses imported bindings before host globals.
 let (_, libraryClassError) = interp.evalStatements("BoundaryLib at: \\\"SlotChild\\\" put: AlternateTarget")
 doAssert libraryClassError.len == 0, libraryClassError

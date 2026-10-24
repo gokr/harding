@@ -28,8 +28,9 @@ preserving library bindings, protected names and single RHS evaluation. Bound
 builtin helper sends consult the host for interpreter-owned receivers first, so
 runtime overrides hold; operands are evaluated once before routing and native
 collection/proxy ownership plus identity-send handling stay native. Static
-allocation respects imported-library lookup precedence. Explicit super boundaries
-remain separate work. Automatic instance binding, layout
+allocation respects imported-library lookup precedence. Bound super sends use
+live lexical-parent lookup and preserve instance/class receiver identity, including
+escaped closures and parent replacements. Automatic instance binding, layout
 migration, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release
 boundary registrations before interpreter disposal.

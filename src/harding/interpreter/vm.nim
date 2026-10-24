@@ -1069,7 +1069,9 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
       let savedReceiver = interp.currentReceiver
       try:
         if nativeValueImplIsSet(currentMethod):
-          return callNativeValueMethod(interp, currentMethod, receiver.toValue().unwrap(), arguments)
+          let receiverValue = if isClassMethod: receiver.class.toValue()
+                              else: receiver.toValue().unwrap()
+          return callNativeValueMethod(interp, currentMethod, receiverValue, arguments)
         else:
           if currentMethod.hasInterpreterParam:
             type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
@@ -9287,6 +9289,37 @@ proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
     result = evalWithVMCleanContext(interp, node)
   finally:
     interp.suppressUncaughtExit = previousSuppress
+
+proc evalSuperCallbackNonFatal*(interp: var Interpreter, receiver: NodeValue,
+                                definingClass: Class, selector: string,
+                                args: seq[NodeValue], explicitParent = ""): NodeValue =
+  ## Host entry for a lexical super send; use ordinary VM lookup and execution.
+  let savedStack = interp.activationStack
+  let savedActivation = interp.currentActivation
+  let savedReceiver = interp.currentReceiver
+  let savedSuppress = interp.suppressUncaughtExit
+  let classSide = receiver.kind == vkClass
+  let instance = if classSide:
+                   Instance(kind: ikObject, class: receiver.classVal, isNimProxy: true,
+                            nimValue: cast[pointer](receiver.classVal))
+                 else: receiver.instVal
+  let context = newActivation(nil, instance, nil, definingClass, classSide)
+  var arguments: seq[Node]
+  for arg in args:
+    arguments.add(LiteralNode(value: arg))
+  interp.activationStack = @[context]
+  interp.currentActivation = context
+  interp.currentReceiver = instance
+  interp.suppressUncaughtExit = true
+  try:
+    result = interp.evalWithVM(SuperSendNode(selector: selector, arguments: arguments,
+                                           explicitParent: explicitParent))
+  finally:
+    interp.activationStack = savedStack
+    interp.currentActivation = savedActivation
+    interp.currentReceiver = savedReceiver
+    interp.suppressUncaughtExit = savedSuppress
+    releaseActivation(context)
 
 proc doit*(interp: var Interpreter, source: string, dumpAst = false): (NodeValue, string) =
   ## Parse and evaluate source code using the stackless VM.

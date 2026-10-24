@@ -227,8 +227,11 @@ calling method's host before the native helper, so runtime overrides apply;
 primitive and native-collection receivers keep the fast path. Operands are
 evaluated once, left to right, before engine selection; fallback does not repeat
 them. Identity sends (`==`/`~=`) stay native. Static class allocation follows
-imported-library precedence, just like global lookup. Explicit super boundaries
-are not yet unified.
+imported-library precedence, just like global lookup. Bound `super` sends use
+live VM lookup starting at the lexical defining class's parent, not the runtime
+receiver's parent. Qualified parents must be direct parents; class-side sends
+preserve the actual class receiver, and parent replacements remain visible.
+This is synchronous dispatch, not cross-engine exception/return translation.
 
 This is not yet a complete `--mixed` compiler contract: automatic native-instance
 binding, layout migration, cross-engine exception/non-local-return translation

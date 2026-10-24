@@ -156,6 +156,37 @@ suite "Class-side engine boundary":
     check interp.globals[]["LiveSetting"].intVal == 31
     check boundNewInstance(toValue(otherOwner), "AllocationTarget").handled
 
+  test "bound super sends use lexical direct parents and restore context after errors":
+    let (_, err) = interp.evalStatements("""
+      SuperLeft := Object derive: #().
+      SuperLeft>>value [ ^ 10 ].
+      SuperRight := Object derive: #().
+      SuperRight>>value [ ^ 20 ].
+      SuperLexical := SuperLeft derive: #().
+      SuperLexical addSuperclass: SuperRight.
+      SuperLexical>>identity [ ^ nil ].
+      SuperGrandchild := SuperLexical derive: #().
+      SuperGrandchild>>value [ ^ 99 ].
+    """)
+    require err.len == 0
+    check bindCompiledMethodShim(interp, "SuperLexical", "identity", cast[pointer](greetShim))
+    let receiver = NodeValue(kind: vkInstance, instVal: newInstance(interp.globals[]["SuperGrandchild"].classVal))
+    let previousReceiver = interp.currentReceiver
+    let previousActivation = interp.currentActivation
+    let previousDepth = interp.activationStack.len
+    let previousSuppress = interp.suppressUncaughtExit
+    check sendSuperMessage(receiver, "SuperLexical", "value", @[]).intVal == 10
+    check sendSuperMessage(receiver, "SuperLexical", "value", @[], "SuperRight").intVal == 20
+    expect ValueError:
+      discard sendSuperMessage(receiver, "SuperLexical", "absentSuperSelector", @[])
+    expect ValueError:
+      discard sendSuperMessage(receiver, "SuperLexical", "value", @[], "Object")
+    check interp.currentReceiver == previousReceiver
+    check interp.currentActivation == previousActivation
+    check interp.activationStack.len == previousDepth
+    check interp.suppressUncaughtExit == previousSuppress
+    check sendSuperMessage(receiver, "SuperLexical", "value", @[]).intVal == 10
+
   test "unknown class selector and existing native class primitive are not rebound":
     let (_, err) = interp.evalStatements("ClassShimNative := Object derive: #(). ClassShimNative class>>identity [ ^ nil ]")
     require err.len == 0

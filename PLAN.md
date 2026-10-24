@@ -602,8 +602,11 @@ Effort is relative to this codebase, not a schedule commitment.
    Native collection ownership is checked by class identity, unbound proxies stay
    native, and `==`/`~=` preserve native identity handling rather than entering the
    VM. Static allocation now resolves its class through the same isolated VM lookup
-   as global reads, including imported-library precedence. Explicit super
-   boundaries remain outside this read/write/send slice.
+   as global reads, including imported-library precedence. Bound super sends now
+   locate the lexical class in the live receiver hierarchy and use a non-fatal VM
+   super entry with saved/restored host context. Direct/qualified parent lookup,
+   class identity, escaped closures, native slot bridges and replacements have
+   ARC/ORC regression coverage. This does not translate error/return transfers.
    Remaining: automatic native-instance binding, complete global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
@@ -611,7 +614,10 @@ Effort is relative to this codebase, not a schedule commitment.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
 4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
    OrderedCollection as hand-written or generically compiled natives, each with
-   conformance cases against the interpreter.
+   conformance cases against the interpreter. Inventory at `c893a42`: only
+   SortedCollection exists in `lib/`; Bag and OrderedCollection have no interpreter
+   definitions. Their protocol requires agreement before adding language/library
+   surface; compiler-only versions would violate interpreter parity.
 5. **Generic freezing (`# @frozen` → codegen, high).** Whole-stdlib codegen plus
    dependency-closure analysis and the drift manifest.
 

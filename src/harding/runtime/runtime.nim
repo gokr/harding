@@ -1042,6 +1042,25 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
                        explicitParent: string = ""): NodeValue =
   ## Keep the receiver and start lookup at a direct parent of the declaring class.
   ## An explicit qualifier must name one of that class's direct parents.
+  let boundOwner = boundClassFor(receiver)
+  if boundOwner != nil:
+    let receiverClass = if receiver.kind == vkClass: receiver.classVal else: receiver.instVal.class
+    var visited: seq[Class]
+    proc findDefinition(cls: Class): Class =
+      if cls == nil or cls in visited: return nil
+      visited.add(cls)
+      if cls.name == definingClassName: return cls
+      for parent in cls.superclasses:
+        let found = findDefinition(parent)
+        if found != nil: return found
+    let definition = findDefinition(receiverClass)
+    if definition == nil:
+      raise newException(ValueError, "Super send defining class is absent from live receiver hierarchy: " & definingClassName)
+    if receiver.kind == vkInstance and receiver.instVal.isNimProxy and
+       receiver.instVal.nativeSlots == nil:
+      raise newException(ValueError, "Super sends require an explicit native slot binding")
+    var interp = boundCompiledClasses[boundOwner].interpreter
+    return evalSuperCallbackNonFatal(interp, receiver, definition, selector, args, explicitParent)
   var startClass = explicitParent
   if startClass.len > 0:
     if startClass notin getSuperclasses(definingClassName):
