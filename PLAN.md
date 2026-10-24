@@ -642,9 +642,13 @@ Effort is relative to this codebase, not a schedule commitment.
    registration. Instance/class method, allocator, slot-layout/accessor and parent
    registration APIs reject subsequent writes before cache/version changes; normal
    initialization finishes before sealing. Default partial compilation is unchanged.
-   This is native registry sealing only: VM mutation, compile-time application
-   overrides and direct Nim field/table writes are not protected, so it is not the
-   complete full-deliverable contract.
+   A sealed application AST preflight rejects direct frozen class reassignment,
+   instance/class method definitions/removals and parent mutation, including nested
+   compile/closure/cascade forms, before executing reflection definitions. Lexical
+   parameter/temporary shadows and ordinary sends remain permitted. This remains
+   syntactic/native-registry enforcement: aliases, dynamic perform/evaluate,
+   VM mutation and direct Nim field/table writes are not proven safe, so it is not
+   the complete full-deliverable contract.
    Not complete: dependency analysis is syntactic, counterpart dependencies are
    declared, dynamic selectors/evaluation are not proven closed, conformance covers
    listed protocols rather than every method, and full-deliverable enforcement,

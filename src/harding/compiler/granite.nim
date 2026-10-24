@@ -334,6 +334,13 @@ proc compileFile(config: Config): bool =
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
 
+  if config.sealFrozen:
+    try:
+      rejectFrozenOverrides(nodes, sealedClasses, script.temporaries)
+    except ValueError as failure:
+      echo "Error: ", failure.msg
+      return false
+
   if frozenPrefix.len > 0:
     # Parse library definitions separately so application script temporaries and
     # diagnostics retain their original scope/line numbers. Merge definitions

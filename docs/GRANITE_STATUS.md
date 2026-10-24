@@ -63,8 +63,10 @@ checks syntactic dependency closure, executes declared parity cases and issues a
 local receipt; checked builds require matching engines, runtime sources, manifest
 and runner. Receipts are not signatures. Dynamic dependency closure, complete
 counterpart conformance, whole-stdlib compilation and mixed bootstrap are not
-established. Optional `--seal-frozen` rejects subsequent native registry writes;
-it does not seal VM classes or direct Nim access and is not full-deliverable
+established. Optional `--seal-frozen` rejects subsequent native registry writes
+and direct application redefinitions before reflection; nested scopes are checked
+while lexical shadows stay permitted. It does not prove alias/dynamic mutation
+safety, seal VM classes or protect direct Nim access and is not full-deliverable
 redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 
 ## Validation

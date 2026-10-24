@@ -1,6 +1,7 @@
 import std/[unittest, os, json, tables, strutils]
 import checksums/sha1
 import ../src/harding/compiler/frozen_manifest
+import ../src/harding/parser/parser
 
 let scratch = "build/frozen-manifest-tests"
 createDir(scratch)
@@ -17,6 +18,25 @@ proc fixture(): JsonNode =
 proc load(document: JsonNode): FrozenPlan =
   writeFile(scratch / "manifest.json", $document)
   loadFrozenPlan(scratch / "manifest.json", scratch)
+
+suite "Sealed application preflight":
+  test "direct class and method mutations are rejected through nested scopes":
+    for source in ["Child := Parent derive: #().", "Child>>answer [ ^ 99 ].",
+                   "Child class>>answer [ ^ 99 ].", "Child addSuperclass: Parent.",
+                   "Harding compile: [Child>>answer [ ^ 99 ]].",
+                   "[Child := nil] value.", "Child removeMethod: #answer; removeClassMethod: #other.",
+                   "Child primitiveRemoveMethod: #answer.", "Child primitiveRemoveClassMethod: #answer."]:
+      let (nodes, syntax) = parse(source)
+      require not syntax.hasError
+      expect ValueError: rejectFrozenOverrides(nodes, @["Child"])
+
+  test "ordinary sends and lexical shadows stay permitted":
+    for source in ["Child new.", "Other := Child derive: #(). Other>>answer [ ^ 99 ].",
+                   "[:Child | Child := 2. Child addSuperclass: Parent].",
+                   "[ | Child | Child := nil ]."]:
+      let (nodes, syntax) = parse(source)
+      require not syntax.hasError
+      rejectFrozenOverrides(nodes, @["Child"])
 
 suite "Frozen manifest":
   teardown:

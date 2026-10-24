@@ -72,6 +72,69 @@ proc globalReferences(node: Node, locals: HashSet[string], refs: var HashSet[str
   of nkPseudoVar: discard
   else: fail("unsupported AST in dependency analysis: " & $node.kind)
 
+proc rejectFrozenOverrides*(nodes: seq[Node], names: seq[string], temporaries: seq[string] = @[]) =
+  ## Syntactic preflight for direct application redefinitions, before reflection.
+  ## This does not claim to prove alias or dynamic-message safety.
+  proc walk(node: Node, locals: HashSet[string]) =
+    if node == nil: return
+    template visit(child: Node) = walk(child, locals)
+    case node.kind
+    of nkAssign:
+      if node.AssignNode.variable in names and node.AssignNode.variable notin locals:
+        fail("sealed application reassigns " & node.AssignNode.variable)
+      visit(node.AssignNode.expression)
+    of nkMessage:
+      let message = node.MessageNode
+      if message.receiver != nil and message.receiver.kind == nkIdent and
+         message.receiver.IdentNode.name in names and message.receiver.IdentNode.name notin locals and message.selector in
+         ["selector:put:", "classSelector:put:", "removeMethod:", "removeClassMethod:",
+          "primitiveRemoveMethod:", "primitiveRemoveClassMethod:", "addSuperclass:"]:
+        fail("sealed application mutates " & message.receiver.IdentNode.name & " " & message.selector)
+      visit(message.receiver)
+      for child in message.arguments: visit(child)
+    of nkBlock:
+      var scope = locals
+      for name in node.BlockNode.parameters & node.BlockNode.temporaries: scope.incl(name)
+      for child in node.BlockNode.body: walk(child, scope)
+    of nkLiteral:
+      if node.LiteralNode.value.kind == vkBlock: visit(node.LiteralNode.value.blockVal)
+    of nkReturn: visit(node.ReturnNode.expression)
+    of nkArray:
+      for child in node.ArrayNode.elements: visit(child)
+    of nkTable:
+      for (key, value) in node.TableNode.entries:
+        visit(key)
+        visit(value)
+    of nkCascade:
+      visit(node.CascadeNode.receiver)
+      for child in node.CascadeNode.messages:
+        if child.kind == nkMessage:
+          let message = child.MessageNode
+          visit(MessageNode(receiver: node.CascadeNode.receiver, selector: message.selector,
+                            arguments: message.arguments))
+        else: visit(child)
+    of nkIf:
+      visit(node.IfNode.condition)
+      visit(node.IfNode.thenBranch)
+      visit(node.IfNode.elseBranch)
+    of nkWhile:
+      visit(node.WhileNode.condition)
+      visit(node.WhileNode.body)
+    of nkNamedAccess:
+      visit(node.NamedAccessNode.receiver)
+      visit(node.NamedAccessNode.valueExpr)
+    of nkSlotAccess: visit(node.SlotAccessNode.valueExpr)
+    of nkSuperSend:
+      for child in node.SuperSendNode.arguments: visit(child)
+    of nkPrimitiveCall:
+      for child in node.PrimitiveCallNode.arguments: visit(child)
+    of nkPrimitive:
+      for child in node.PrimitiveNode.fallback: visit(child)
+    else: discard
+  var locals = initHashSet[string]()
+  for name in temporaries: locals.incl(name)
+  for node in nodes: walk(node, locals)
+
 proc frozenReferences*(source: string): seq[string] =
   ## Conservative syntactic closure; dynamic perform/evaluate are not inferred.
   let (nodes, syntax) = parse(source)

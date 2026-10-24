@@ -220,8 +220,12 @@ Optional `--seal-frozen` seals the closure's native registries after startup
 registration: subsequent method, class method, allocator, slot-layout/accessor
 and parent registration APIs reject writes before changing cache versions. Normal
 allocation and sends continue to work. Default partial compilation stays mutable.
-This is not VM sealing or a security boundary: direct Nim field/table writes and
-compile-time application overrides are not prevented. Full-deliverable enforcement,
+Before reflection executes application definitions, a sealed build rejects direct
+frozen class reassignment, method definitions/removals and parent mutations, even
+inside nested closures or `Harding compile:` blocks. Lexical parameter/temporary
+shadows and ordinary sends remain permitted. This is not VM sealing or a security
+boundary: aliases, dynamic sends/evaluation and direct Nim field/table writes are
+not proven safe. Full-deliverable enforcement,
 layout migration and a frozen mixed-mode bootstrap remain open;
 `--mixed` combined with the manifest currently fails explicitly.
 

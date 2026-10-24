@@ -71,6 +71,26 @@ class FrozenBuildTest(unittest.TestCase):
                     self.assertEqual(orc.returncode, 0, orc.stderr)
                     self.assertEqual(orc.stdout, native.stdout)
 
+    @unittest.skipUnless(os.environ.get("FROZEN_RECEIPT"), "Requires executed conformance receipt")
+    def test_sealed_application_overrides_are_refused_before_reflection(self):
+        base = ROOT / "build/frozen-tests"
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as temporary:
+            work = Path(temporary)
+            for body in ["SortedCollection>>size [ ^ 99 ].", "SortedCollection := Object derive: #().",
+                         "Harding compile: [SortedCollection class>>new [ ^ nil ]]."]:
+                with self.subTest(source=body):
+                    source = work / "override.hrd"
+                    source.write_text(body)
+                    command = [str(ROOT / "granite"), "compile", str(source), "--dir:" + str(work),
+                               "--freeze-manifest:" + str(ROOT / "config/granite-frozen.json"),
+                               "--freeze-receipt:" + str(Path(os.environ["FROZEN_RECEIPT"]).resolve()),
+                               "--seal-frozen"]
+                    refused = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=30)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertIn("sealed application", refused.stdout)
+                    self.assertEqual(list(work.glob("*.nim")), [])
+
     def test_compiler_requires_current_engine_and_case_evidence(self):
         base = ROOT / "build/frozen-tests"
         base.mkdir(parents=True, exist_ok=True)
