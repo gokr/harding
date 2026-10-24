@@ -35,6 +35,7 @@ type
     classes*: Table[string, ClassInfo]  ## Class registry
     currentClass*: ClassInfo  ## Currently compiling class
     symbols*: Table[string, string]  ## Selector -> mangled name
+    sealedClasses*: seq[string]   ## Opt-in native registry sealing after registration
 
 proc newCompiler*(outputDir = "./build", moduleName = "compiled"): CompilerContext =
   ## Create new compiler context

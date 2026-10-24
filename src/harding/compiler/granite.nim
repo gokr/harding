@@ -129,6 +129,7 @@ type
     bootstrapFile: string
     frozenManifest: string
     frozenReceipt: string
+    sealFrozen: bool
     maxStackDepth: int
 
 proc newConfig(): Config =
@@ -171,6 +172,7 @@ proc showUsage() =
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
   echo "  --freeze-manifest <file> Checked frozen dependency closure (experimental)"
   echo "  --freeze-receipt <file>  Executed conformance receipt for this toolchain"
+  echo "  --seal-frozen           Seal native frozen registries after startup (experimental)"
   echo "  --home <path>         Set HARDING_HOME directory (default: current directory)"
   echo "  --bootstrap <file>    Use custom bootstrap file (default: lib/core/Bootstrap.hrd)"
   echo "  --ast                 Dump AST after parsing and before compiling"
@@ -244,6 +246,8 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.frozenManifest = p.val
       of "freeze-receipt":
         result.frozenReceipt = p.val
+      of "seal-frozen":
+        result.sealFrozen = true
       else:
         echo "Unknown option: ", p.key
         quit(1)
@@ -264,6 +268,10 @@ proc compileFile(config: Config): bool =
   echo "Compiling: ", config.inputFile
 
   var frozenPrefix = ""
+  var sealedClasses: seq[string]
+  if config.sealFrozen and config.frozenManifest.len == 0:
+    echo "Error: --seal-frozen requires --freeze-manifest"
+    return false
   if config.frozenManifest.len > 0:
     try:
       if config.mixed:
@@ -295,6 +303,7 @@ proc compileFile(config: Config): bool =
           if conformance notin passed:
             raise newException(ValueError, "Missing executed frozen case: " & conformance)
       frozenPrefix = frozenSources(plan, config.hardingHome)
+      if config.sealFrozen: sealedClasses = plan.order
     except CatchableError as failure:
       echo "Error: ", failure.msg
       return false
@@ -395,6 +404,7 @@ proc compileFile(config: Config): bool =
   let outputPath = outputDir / moduleName & ".nim"
 
   var ctx = newCompiler(outputDir, moduleName)
+  ctx.sealedClasses = sealedClasses
   let reflectedClasses = extractClassInfoFromInterpreter(interp)
   let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
                           scriptTemporaries = script.temporaries)

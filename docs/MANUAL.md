@@ -214,8 +214,15 @@ script temporaries and explicit `Harding compile:/main:` scopes.
 Checksums and receipts are local build evidence, not authentication. Dependency
 analysis checks syntactic uppercase references in generic source; counterpart
 closure is declared, and dynamic sends/evaluation are not inferred. Conformance
-covers the listed cases, not every method. This does not seal classes, migrate
-layouts, prove full compilation or provide a frozen mixed-mode bootstrap;
+covers the listed cases, not every method.
+
+Optional `--seal-frozen` seals the closure's native registries after startup
+registration: subsequent method, class method, allocator, slot-layout/accessor
+and parent registration APIs reject writes before changing cache versions. Normal
+allocation and sends continue to work. Default partial compilation stays mutable.
+This is not VM sealing or a security boundary: direct Nim field/table writes and
+compile-time application overrides are not prevented. Full-deliverable enforcement,
+layout migration and a frozen mixed-mode bootstrap remain open;
 `--mixed` combined with the manifest currently fails explicitly.
 
 ### Mixed execution boundary (partial support)

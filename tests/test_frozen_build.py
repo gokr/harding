@@ -56,7 +56,7 @@ class FrozenBuildTest(unittest.TestCase):
                     command = [str(ROOT / "granite"), "build", str(source),
                                "--dir:" + str(work), "-o:" + str(binary),
                                "--freeze-manifest:" + str(ROOT / "config/granite-frozen.json"),
-                               "--freeze-receipt:" + str(receipt)]
+                               "--freeze-receipt:" + str(receipt), "--seal-frozen"]
                     compiled = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=180)
                     self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
                     native = subprocess.run([str(binary)], cwd=work, capture_output=True, text=True, timeout=30)
@@ -85,6 +85,10 @@ class FrozenBuildTest(unittest.TestCase):
             missing = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(missing.returncode, 0)
             self.assertIn("requires --freeze-receipt", missing.stdout)
+            no_manifest = subprocess.run([str(ROOT / "granite"), "compile", str(source), "--seal-frozen"],
+                                         cwd=ROOT, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(no_manifest.returncode, 0)
+            self.assertIn("--seal-frozen requires --freeze-manifest", no_manifest.stdout)
             mixed = subprocess.run(command + ["--mixed"], cwd=ROOT, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(mixed.returncode, 0)
             self.assertIn("Frozen mixed bootstrap is not implemented", mixed.stdout)

@@ -544,6 +544,12 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     output.add(fmt("  registerCompiledClass(\"{className}\", allocate{nativeClass})\n"))
   output.add("\n")
 
+  if ctx.sealedClasses.len > 0:
+    # Finish lazy built-in hierarchy setup before sealing the native registry.
+    output.add("  discard compiledBaseClassValue(\"Object\")\n")
+    for name in ctx.sealedClasses:
+      output.add(fmt("  sealCompiledClass(\"{name}\")\n"))
+
   # If mixed mode, initialize hybrid runtime with source file
   if mixed and sourceFile.len > 0:
     output.add(fmt("  initHybridRuntime(@[\"{sourceFile}\"])\n\n"))

@@ -62,8 +62,10 @@ declared native counterparts. `nimble testFrozen` validates drift/annotations,
 checks syntactic dependency closure, executes declared parity cases and issues a
 local receipt; checked builds require matching engines, runtime sources, manifest
 and runner. Receipts are not signatures. Dynamic dependency closure, complete
-counterpart conformance, whole-stdlib compilation, sealing and mixed bootstrap
-are not established. See the manual and PLAN.md section 6 for the scope.
+counterpart conformance, whole-stdlib compilation and mixed bootstrap are not
+established. Optional `--seal-frozen` rejects subsequent native registry writes;
+it does not seal VM classes or direct Nim access and is not full-deliverable
+redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 
 ## Validation
 

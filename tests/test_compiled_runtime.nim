@@ -12,6 +12,40 @@ proc defaultAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
 proc replacementAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkInt, intVal: 2)
 
+proc sealedSlotGet(storage: pointer): NodeValue {.nimcall.} = nilValue()
+proc sealedSlotSet(storage: pointer, value: NodeValue): NodeValue {.nimcall.} = value
+
+suite "Native registry sealing":
+  test "sealing refuses mutations before cache or registration changes":
+    let name = "SealedRegistryProbe"
+    registerCompiledClass(name, defaultAllocation)
+    registerCompiledSlotNames(name, @["stored"])
+    registerSlotAccessor(name, "stored", sealedSlotGet, sealedSlotSet)
+    registerCompiledMethod(name, "answer", defaultAllocation)
+    registerCompiledClassMethod(name, "answer", defaultAllocation)
+    registerSuperclass(name, "Object")
+    let instance = newInstance(compiledClassValue(name).classVal)
+    instance.isNimProxy = true
+    let receiver = NodeValue(kind: vkInstance, instVal: instance)
+    var cache: CompiledSendCache
+    check sendMessageCached(nil, receiver, "answer", @[], cache).intVal == 1
+    sealCompiledClass(name)
+    let version = compiledClassDispatchVersion
+    expect ValueError: registerCompiledMethod(name, "answer", replacementAllocation)
+    expect ValueError: registerCompiledClassMethod(name, "answer", replacementAllocation)
+    expect ValueError: registerCompiledClass(name, replacementAllocation)
+    expect ValueError: registerCompiledSlotNames(name, @["other"])
+    expect ValueError: registerSlotAccessor(name, "stored", sealedSlotGet, sealedSlotSet)
+    expect ValueError: registerSuperclass(name, "OtherParent")
+    check compiledClassDispatchVersion == version
+    check sendMessageCached(nil, receiver, "answer", @[], cache).intVal == 1
+    check sendMessage(nil, compiledClassValue(name), "answer", @[]).intVal == 1
+    check getSuperclasses(name) == @["Object"]
+    check compiledClassValue(name).classVal.allSlotNames == @["stored"]
+    registerCompiledClass("UnsealedRegistryNeighbor", defaultAllocation)
+    registerCompiledClass("UnsealedRegistryNeighbor", replacementAllocation)
+    check sendMessage(nil, compiledClassValue("UnsealedRegistryNeighbor"), "new", @[]).intVal == 2
+
 suite "Compiled reference collections":
   test "aliases share storage and clones copy only the container":
     let rt = newRuntime()

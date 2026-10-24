@@ -1,4 +1,4 @@
-import std/[tables, strformat, os, strutils, logging, json, options]
+import std/[tables, strformat, os, strutils, logging, json, options, sets]
 import ../interpreter/objects
 import ../core/log_support
 import ../core/string_conversion
@@ -44,6 +44,7 @@ type
 var activeErrorHandlers {.threadvar.}: seq[Instance]
 
 proc getSuperclassName*(className: string): string
+proc getSuperclasses*(className: string): seq[string]
 proc registerSuperclass*(className: string, superclassName: string)
 proc ensureCompiledExceptionHierarchy*(): void
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
@@ -157,9 +158,20 @@ var compiledClassMethods = initTable[string, CompiledProc]()
 var compiledAllocators = initTable[string, CompiledProc]()
 var compiledClasses = initTable[string, Class]()
 var compiledClassDispatchVersion*: uint64 = 1
+var sealedCompiledClasses = initHashSet[string]()
+
+proc requireMutableCompiledClass*(name: string) =
+  ## Full native artifacts reject registry mutation after initialization.
+  if name in sealedCompiledClasses:
+    raise newException(ValueError, "Frozen native class is sealed: " & name)
+
+proc sealCompiledClass*(name: string) =
+  ## Seal native registration only; does not alter any live interpreter class.
+  sealedCompiledClasses.incl(name)
 
 proc registerCompiledClass*(name: string, allocator: CompiledProc) =
   ## Register a class receiver and its native allocator.
+  requireMutableCompiledClass(name)
   compiledAllocators[name] = allocator
   inc compiledClassDispatchVersion
   if name notin compiledClasses:
@@ -177,8 +189,8 @@ proc compiledBaseClassValue*(name: string): NodeValue =
     return NodeValue(kind: vkNil)
   if name notin compiledClasses:
     compiledClasses[name] = newClass(name = name)
-  registerSuperclass("Object", "Root")
-  registerSuperclass("Mixin", "Root")
+  if "Root" notin getSuperclasses("Object"): registerSuperclass("Object", "Root")
+  if "Root" notin getSuperclasses("Mixin"): registerSuperclass("Mixin", "Root")
   return compiledClassValue(name)
 
 proc compiledSystemClassValue*(): NodeValue =
@@ -345,6 +357,7 @@ var compiledSlotNames = initTable[string, seq[string]]()
 
 proc registerCompiledSlotNames*(name: string, slots: seq[string]) =
   ## Preserve parser-defined parent-first layout independently of accessor permissions.
+  requireMutableCompiledClass(name)
   compiledSlotNames[name] = slots
   if name notin compiledClasses:
     compiledClasses[name] = newClass(name = name)
@@ -353,7 +366,6 @@ proc registerCompiledSlotNames*(name: string, slots: seq[string]) =
 proc getSlotValue*(self: NodeValue, slotName: string): NodeValue
 proc getReceiverClassName*(receiver: NodeValue): string
 proc hasCompiledMethodInHierarchy*(className, selector: string): bool
-proc getSuperclasses*(className: string): seq[string]
 
 proc effectiveCompiledJsonSpec(name: string, target: JsonSpec) =
   for parent in getSuperclasses(name):
@@ -555,6 +567,7 @@ proc compiledJsonStringify*(value: NodeValue): NodeValue =
 
 proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
   ## Register a class-side method separately from instance methods.
+  requireMutableCompiledClass(className)
   compiledClassMethods[className & ">>" & selector] = fn
   inc compiledClassDispatchVersion
 
@@ -569,12 +582,14 @@ var slotSetters*: Table[string, SlotSetter] = initTable[string, SlotSetter]()
 
 proc registerSlotAccessor*(className: string, slotName: string,
                            getter: SlotGetter, setter: SlotSetter) =
+  requireMutableCompiledClass(className)
   let key = className & "::" & slotName
   slotGetters[key] = getter
   slotSetters[key] = setter
 
 proc registerCompiledMethod*(className: string, selector: string,
                               fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
+  requireMutableCompiledClass(className)
   let key = className & ">>" & selector
   compiledMethodProcs[key] = fn
   inc compiledClassDispatchVersion
@@ -789,6 +804,7 @@ proc registerSuperclass*(className: string, superclassName: string) =
   ## parents (`addSuperclass:`), so this appends rather than replaces; repeated
   ## registration of the same parent is ignored. Dispatch searches parents in
   ## this order, matching the interpreter.
+  requireMutableCompiledClass(className)
   if superclassName.len == 0:
     if className notin superclassLists:
       superclassLists[className] = @[]
@@ -839,12 +855,12 @@ proc ensureCompiledExceptionHierarchy*(): void =
   ## Register the built-in exception chain once. Generated modules reference
   ## only the class values they name, so `Error -> Exception` may otherwise be
   ## missing and a user subclass would not match `on: Exception`.
-  registerSuperclass("Exception", "")
-  registerSuperclass("Error", "Exception")
-  registerSuperclass("Notification", "Exception")
+  if "Exception" notin superclassLists: registerSuperclass("Exception", "")
+  if "Exception" notin getSuperclasses("Error"): registerSuperclass("Error", "Exception")
+  if "Exception" notin getSuperclasses("Notification"): registerSuperclass("Notification", "Exception")
   for name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds",
                "BlockCannotReturn"]:
-    registerSuperclass(name, "Error")
+    if "Error" notin getSuperclasses(name): registerSuperclass(name, "Error")
 
 proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
   ## Look up a compiled method by class name and selector

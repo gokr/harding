@@ -362,6 +362,21 @@ suite "Compiler: Script temporaries":
     check syntax.hasError
     check syntax.errorMsg.contains("line 3")
 
+suite "Compiler: Native sealing":
+  test "seals only requested classes after all generated registration":
+    let (nodes, syntax) = parse("SealTarget := Object derive: #(). SealTarget>>answer [ ^ 42 ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    ctx.sealedClasses = @["SealTarget"]
+    let code = genModule(ctx, nodes, "sealed_native")
+    let mainStart = code.find("proc main(): int")
+    let registration = code.find("registerCompiledClass(\"SealTarget\"", mainStart)
+    let seal = code.find("sealCompiledClass(\"SealTarget\")", mainStart)
+    check mainStart >= 0
+    check registration > mainStart
+    check seal > registration
+    check not code.contains("sealCompiledClass(\"Object\")")
+
 suite "Compiler: Engine binding shims":
   test "class and instance selectors generate distinct receiver-safe shims":
     let (nodes, syntax) = parse("ShimFactory := Object derive: #(). ShimFactory>>identity [ ^ self ]. ShimFactory class>>identity [ ^ self ].")

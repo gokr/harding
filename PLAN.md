@@ -638,9 +638,16 @@ Effort is relative to this codebase, not a schedule commitment.
    and `Harding compile:/main:` scopes) without executing application source twice.
    `nimble testFrozen` exercises this path. The receipt is local build evidence,
    not a signature or security gate. SHA-1 is a drift checksum, not authentication.
+   `--seal-frozen` additionally seals the named native registries after startup
+   registration. Instance/class method, allocator, slot-layout/accessor and parent
+   registration APIs reject subsequent writes before cache/version changes; normal
+   initialization finishes before sealing. Default partial compilation is unchanged.
+   This is native registry sealing only: VM mutation, compile-time application
+   overrides and direct Nim field/table writes are not protected, so it is not the
+   complete full-deliverable contract.
    Not complete: dependency analysis is syntactic, counterpart dependencies are
    declared, dynamic selectors/evaluation are not proven closed, conformance covers
-   listed protocols rather than every method, and sealed/full-deliverable policy,
+   listed protocols rather than every method, and full-deliverable enforcement,
    whole-stdlib compilation and frozen mixed bootstrap remain open. `--mixed`
    with a freeze manifest fails explicitly instead of replaying an incomplete host.
 
