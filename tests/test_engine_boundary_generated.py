@@ -49,6 +49,8 @@ Factory>>item: collection at: index [ ^ collection at: index ].
 Factory>>lastOf: collection [ ^ collection last ].
 Factory>>absOf: value [ ^ value abs ].
 Factory>>stringOf: value [ ^ value asString ].
+Factory>>countedSum: next [ ^ next value + next value ].
+Factory>>same: value [ ^ value == value ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
@@ -122,6 +124,8 @@ Factory>>item: collection at: index [ ^ nil ].
 Factory>>lastOf: collection [ ^ nil ].
 Factory>>absOf: value [ ^ nil ].
 Factory>>stringOf: value [ ^ nil ].
+Factory>>countedSum: next [ ^ nil ].
+Factory>>same: value [ ^ nil ].
 SizedProbe := Object derivePublic: #(tag).
 SizedProbe>>size [ ^ 99 ].
 SizedProbe>>+ other [ ^ 123 ].
@@ -271,6 +275,23 @@ discard sendMessageInterpreted(interp, interpretedArray, "add:", @[toValue(2)])
 doAssert sendMessageInterpreted(interp, instance, "sized:", @[interpretedArray]).intVal == 2
 doAssert sendMessageInterpreted(interp, instance, "item:at:", @[interpretedArray, toValue(1)]).intVal == 2
 doAssert sendMessageInterpreted(interp, instance, "lastOf:", @[interpretedArray]).intVal == 2
+let operands = sendMessageInterpreted(interp, instance, "counter", @[])
+doAssert sendMessageInterpreted(interp, instance, "countedSum:", @[operands]).intVal == 3
+doAssert invokeBlock(interp, operands.blockVal, @[]).intVal == 3
+# Even when the caller is unbound, operands must not repeat on native fallback.
+let nativeFactory = generated.toValue(generated.newClass_''' + "Factory".encode().hex().upper() + '''())
+let nativeOperands = sendMessageInterpreted(interp, instance, "counter", @[])
+doAssert sendMessage(nil, nativeFactory, "countedSum:", @[nativeOperands]).intVal == 3
+doAssert invokeBlock(interp, nativeOperands.blockVal, @[]).intVal == 3
+let nativeArray = compiledArray(@[toValue(9), toValue(10)])
+doAssert sendMessageInterpreted(interp, instance, "sized:", @[nativeArray]).intVal == 2
+doAssert sendMessageInterpreted(interp, instance, "item:at:", @[nativeArray, toValue(1)]).intVal == 10
+doAssert sendMessageInterpreted(interp, instance, "lastOf:", @[nativeArray]).intVal == 10
+doAssert sendMessageInterpreted(interp, instance, "same:", @[nativeArray]).boolVal
+# Hosted nil results are successful, and method replacement is visible immediately.
+let (_, replaceSizeError) = interp.evalStatements("SizedProbe>>size [ ^ nil ]")
+doAssert replaceSizeError.len == 0, replaceSizeError
+doAssert isNilValue(sendMessageInterpreted(interp, instance, "sized:", @[probe]))
 # Overridden new may answer nil: host allocation must not retry the native path.
 let (_, nilFactoryError) = interp.evalStatements("SlotChild class>>new [ ^ nil ]")
 doAssert nilFactoryError.len == 0, nilFactoryError
@@ -391,6 +412,12 @@ except ValueError:
 doAssert invalidLayout
 liveSlotClass.allSlotNames = savedNames
 doAssert getSlotValue(native, "base").intVal == 50
+# Static compiled class allocation uses imported bindings before host globals.
+let (_, libraryClassError) = interp.evalStatements("BoundaryLib at: \\\"SlotChild\\\" put: AlternateTarget")
+doAssert libraryClassError.len == 0, libraryClassError
+doAssert boundNewInstance(instance, "SlotChild").value.instVal.class == aliasTwo.classVal
+doAssert sendMessageInterpreted(interp, instance, "makeNamed", @[]).instVal.class == aliasTwo.classVal
+doAssert invokeBlock(interp, maker.blockVal, @[]).instVal.class == aliasTwo.classVal
 unbindCompiledMethodsFrom(interp)
 echo "generated boundary passed"
 ''')

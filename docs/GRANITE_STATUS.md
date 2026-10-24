@@ -26,7 +26,9 @@ global reads use live VM/library lookup and ordinary class sends support aliases
 and class-valued parameters. Uppercase writes also assign through the host VM,
 preserving library bindings, protected names and single RHS evaluation. Bound
 builtin helper sends consult the host for interpreter-owned receivers first, so
-runtime overrides hold; native fast paths remain. Explicit super boundaries
+runtime overrides hold; operands are evaluated once before routing and native
+collection/proxy ownership plus identity-send handling stay native. Static
+allocation respects imported-library lookup precedence. Explicit super boundaries
 remain separate work. Automatic instance binding, layout
 migration, cross-engine control transfers,
 generated bootstrap/source replay and sealing remain open. Hosts must release

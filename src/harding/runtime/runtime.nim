@@ -661,6 +661,15 @@ proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
   ## fast helpers, and an unbound (pure compiled) call keeps native dispatch.
   if receiver.kind != vkInstance or receiver.instVal == nil:
     return
+  let instance = receiver.instVal
+  if selector in ["==", "~="]:
+    return
+  if instance.isNimProxy and instance.nativeSlots == nil:
+    return
+  if instance.kind in {ikArray, ikTable} and instance.class != nil and
+     instance.class.name in compiledClasses and
+     compiledClasses[instance.class.name] == instance.class:
+    return
   let owner = boundClassFor(ownerReceiver)
   if owner == nil:
     return
@@ -685,10 +694,10 @@ proc boundNewInstance*(ownerReceiver: NodeValue, className: string): tuple[handl
   if owner == nil:
     return
   var interp = boundCompiledClasses[owner].interpreter
-  if interp.globals == nil or className notin interp.globals[] or
-     interp.globals[][className].kind != vkClass:
+  let target = boundGlobalValue(ownerReceiver, className).value
+  if target.kind != vkClass or target.classVal == nil:
     raise newException(ValueError, "Bound allocation requires a live class: " & className)
-  result.value = sendMessageInterpreted(interp, interp.globals[][className], "new", @[])
+  result.value = sendMessageInterpreted(interp, target, "new", @[])
   result.handled = true
 
 proc boundInterpretedSend(receiver: NodeValue, selector: string,

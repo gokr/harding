@@ -7,6 +7,19 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("helper_operands_once", """
+OperandProbe := Object derive: #().
+OperandProbe>>sum: next [ ^ next value + next value ].
+OperandProbe>>measure: next [ ^ next value size ].
+count := 0.
+next := [count := count + 1].
+(OperandProbe new sum: next) println.
+count println.
+calls := 0.
+collection := [calls := calls + 1. #(1, 2, 3)].
+(OperandProbe new measure: collection) println.
+calls println.
+""", "3\n2\n3\n1\n"),
     ("block_assignment_results", """
 GlobalValue := 0.
 writer := [:value | GlobalValue := value].

@@ -217,6 +217,25 @@ suite "Value-based mixed dispatch":
     check isNilValue(sendMessageHybrid(NodeValue(kind: vkInstance, instVal: native), "empty", @[]))
     check nativeNilCalls == 1
 
+  test "hosted helpers refuse native ownership and preserve interpreted nil results":
+    discard defineClass(interp, "HostedHelperOwner", "double:")
+    let owner = interp.globals[]["HostedHelperOwner"]
+    check bindCompiledMethodShim(interp, "HostedHelperOwner", "double:", cast[pointer](doubleShim))
+    let nativeArray = compiledArray(@[toValue(1)])
+    check not hostedBuiltin(owner, nativeArray, "size", @[]).handled
+    let native = newInstance(newClass(name = "UnboundHelperNative"))
+    native.isNimProxy = true
+    native.compiledOwner = RootRef()
+    native.nimValue = cast[pointer](native.compiledOwner)
+    check not hostedBuiltin(owner, NodeValue(kind: vkInstance, instVal: native), "size", @[]).handled
+    check not hostedBuiltin(owner, receiver, "==", @[receiver]).handled
+    check not hostedBuiltin(owner, toValue(1), "abs", @[]).handled
+    let answer = hostedBuiltin(owner, receiver, "empty", @[])
+    check answer.handled
+    check isNilValue(answer.value)
+    unbindCompiledMethodsFrom(interp)
+    check not hostedBuiltin(owner, receiver, "empty", @[]).handled
+
   test "runtime reference storage is initialized and released repeatedly":
     for iteration in 0..<3:
       shutdownRuntime()

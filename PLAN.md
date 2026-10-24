@@ -597,8 +597,13 @@ Effort is relative to this codebase, not a schedule commitment.
    receivers to the calling method's host, falling back to the native helper.
    Runtime-defined overrides and VM collection species therefore apply, while
    primitive and native-collection receivers keep the fast helpers and pure
-   compiled code is unchanged. Library-scoped static allocation and explicit
-   super boundaries are not covered by this read/write/send slice.
+   compiled code retains native dispatch. Helper operands are stored once in
+   left-to-right order before engine selection; fallback never repeats expressions.
+   Native collection ownership is checked by class identity, unbound proxies stay
+   native, and `==`/`~=` preserve native identity handling rather than entering the
+   VM. Static allocation now resolves its class through the same isolated VM lookup
+   as global reads, including imported-library precedence. Explicit super
+   boundaries remain outside this read/write/send slice.
    Remaining: automatic native-instance binding, complete global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use
