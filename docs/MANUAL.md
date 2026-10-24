@@ -175,7 +175,15 @@ Granite Array and Table assignments retain shared mutable storage, as in the
 interpreter. Passing a collection through an argument, slot or closure does not
 copy it. `clone` creates an independent shallow container; contained objects
 remain shared. Array/Table equality follows the current identity contract.
-Native JSON parsing also returns reference-backed collections.
+Native JSON parsing also returns reference-backed collections. `add:` used as a
+statement never assigns its result back to the receiver variable: a collection
+method may return the added item while the original collection remains bound.
+
+The actual SortedCollection source can be compiled generically. Conformance
+covers insertion, duplicates, queries/callbacks, copying, indexed removal,
+custom comparator construction and conversions. Full protocol is not claimed:
+its `removeAll`/`resort` paths depend on missing interpreter Array `removeAll`.
+Native `basicNew` allocates without calling `initialize`; `new` retains initialization.
 
 Native object JSON serialization supports inherited slots, `jsonRepresentation`
 and class-side JSON specifications. See [native collections and JSON](GRANITE_COLLECTIONS_AND_JSON.md)

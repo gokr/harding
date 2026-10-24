@@ -618,6 +618,15 @@ Effort is relative to this codebase, not a schedule commitment.
    SortedCollection exists in `lib/`; Bag and OrderedCollection have no interpreter
    definitions. Their protocol requires agreement before adding language/library
    surface; compiler-only versions would violate interpreter parity.
+   The actual SortedCollection source now compiles generically with executed
+   `stdlib_sorted_collection` conformance (insertion/duplicates, callbacks, queries,
+   copies, indexed removal, comparator construction and conversions). Native
+   `basicNew` allocates without initialize. Statement-level `add:` no longer
+   rewrites the receiver binding with the added item; shared storage needs no
+   writeback. Full protocol is blocked by an interpreter defect: `SortedCollection
+   new removeAll` sends `removeAll` to an Array, which has no such method; `resort`
+   and comparator replacement depend on that missing path. Discuss the missing
+   Array protocol before adding semantics or claiming full conformance.
 5. **Generic freezing (`# @frozen` → codegen, high).** Whole-stdlib codegen plus
    dependency-closure analysis and the drift manifest.
 

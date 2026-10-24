@@ -7,6 +7,18 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("add_statement_keeps_receiver", """
+ItemAdder := Object derivePublic: #(stored).
+ItemAdder>>add: item [ stored := item. ^ item ].
+ItemAdder>>probe [ | other | other := ItemAdder new. other add: 7. ^ other stored ].
+instance := ItemAdder new.
+instance add: 9.
+instance stored println.
+instance probe println.
+GlobalAdder := ItemAdder new.
+GlobalAdder add: 11.
+GlobalAdder stored println.
+""", "9\n7\n11\n"),
     ("helper_operands_once", """
 OperandProbe := Object derive: #().
 OperandProbe>>sum: next [ ^ next value + next value ].
@@ -1224,6 +1236,40 @@ h probe println.
 ([:value | value last] value: Plain new) println.
 """, "L\n7\nAB\nAda Lovelace\nown last\nown abs\n3\n2\n4\nown last\nown last\n"),
 ])
+
+
+CASES.append(("stdlib_sorted_collection",
+              (ROOT / "lib/standard/SortedCollection.hrd").read_text() + """
+sc := SortedCollection new.
+(sc add: 3) println.
+sc add: 1. sc add: 2. sc add: 2.
+sc size println.
+sc asArray println.
+(sc collect: [:x | x * 2]) asArray println.
+(sc select: [:x | x > 1]) asArray println.
+(sc reject: [:x | x = 2]) asArray println.
+(sc detect: [:x | x > 2]) println.
+(sc detect: [:x | x > 9] ifNone: [99]) println.
+(sc inject: 0 into: [:sum :each | sum + each]) println.
+(sc anySatisfy: [:x | x > 2]) println.
+(sc allSatisfy: [:x | x > 0]) println.
+(sc noneSatisfy: [:x | x < 0]) println.
+sc sum println.
+(sc count: [:x | x = 2]) println.
+sc first println. sc last println.
+(sc includes: 2) println.
+(sc indexOf: 3) println.
+copy := sc copy.
+copy add: 4.
+sc size println. copy size println.
+(copy removeAt: 0) println.
+copy size println.
+(copy remove: 3) println.
+copy asArray println.
+descending := SortedCollection new: #(1, 3, 2) sortBlock: [:a :b | a > b].
+descending asArray println.
+(descending asSortedCollection == descending) println.
+""", "3\n4\n#(1 2 2 3)\n#(2 4 4 6)\n#(2 2 3)\n#(1 3)\n3\n99\n8\ntrue\ntrue\ntrue\n8\n2\n1\n3\ntrue\n3\n4\n5\n1\n4\n3\n#(2 2 4)\n#(3 2 1)\ntrue\n"))
 
 
 CASES.append(("json_parsing",

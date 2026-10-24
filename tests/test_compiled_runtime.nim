@@ -367,6 +367,26 @@ suite "Compiled monomorphic send caches":
 proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkString, strVal: args[0].symVal)
 
+suite "Compiled basic allocation":
+  test "basicNew allocates without initialize and user overrides keep precedence":
+    var initialized = 0
+    registerCompiledClass("BasicAllocationProbe",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+        NodeValue(kind: vkInstance, instVal: newInstance(newClass(name = "BasicAllocationProbe"))))
+    registerCompiledMethod("BasicAllocationProbe", "initialize",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+        inc initialized
+        self)
+    let cls = compiledClassValue("BasicAllocationProbe")
+    check sendMessage(nil, cls, "basicNew", @[]).kind == vkInstance
+    check initialized == 0
+    check sendMessage(nil, cls, "new", @[]).kind == vkInstance
+    check initialized == 1
+    registerCompiledClassMethod("BasicAllocationProbe", "basicNew",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = nilValue())
+    check isNilValue(sendMessage(nil, cls, "basicNew", @[]))
+    check initialized == 1
+
 suite "Compiled user-class reflection":
   test "class values and direct parents preserve declaration identity and order":
     let rt = newRuntime()

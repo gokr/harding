@@ -49,6 +49,12 @@ coverage/gaps below predate this follow-up: native object JSON is no longer
 entirely unsupported, but native JSON plan caching and full collection-protocol
 coverage remain open.
 
+SortedCollection's actual stdlib source now has executed generic-codegen
+conformance for insertion/duplicates, queries, copies, removal, custom comparator
+construction and conversions. Full protocol is blocked by its interpreter-side
+Array `removeAll` dependency; Bag and OrderedCollection are absent from the
+interpreter/stdlib and need protocol agreement rather than compiler-only versions.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:

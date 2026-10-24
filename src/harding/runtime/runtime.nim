@@ -1031,9 +1031,11 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
     proc(name: string): bool = name & ">>" & selector in compiledClassMethods)
   if owner.len > 0:
     return compiledClassMethods[owner & ">>" & selector](receiver, args)
-  if selector == "new" and receiver.kind == vkClass and receiver.classVal != nil:
+  if selector in ["new", "basicNew"] and receiver.kind == vkClass and receiver.classVal != nil:
     let name = receiver.classVal.name
     if name in compiledAllocators:
+      if selector == "basicNew":
+        return compiledAllocators[name](receiver, @[])
       return compiledNewInstance(name, compiledAllocators[name])
   return compiledMissingMessage(receiver, selector)
 
