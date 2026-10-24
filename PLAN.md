@@ -591,8 +591,14 @@ Effort is relative to this codebase, not a schedule commitment.
    newly created and imported variables work, including `nil` values; pure native
    writes keep `setGlobal`. Compiled blocks whose last statement is an assignment
    now answer the assigned value like the interpreter, evaluating the RHS once.
-   Specialized builtin sends, library-scoped static allocation and explicit super
-   boundaries are not covered by this read/write/ordinary-send slice.
+   Specialized builtin sends are now hosted as well: in bound methods, `size`,
+   `last`, `keys`, `at:`, `at:put:`, arithmetic/comparison operators, `abs`,
+   `even`, `odd`, `negated`, `asString` and `&` first offer interpreter-owned
+   receivers to the calling method's host, falling back to the native helper.
+   Runtime-defined overrides and VM collection species therefore apply, while
+   primitive and native-collection receivers keep the fast helpers and pure
+   compiled code is unchanged. Library-scoped static allocation and explicit
+   super boundaries are not covered by this read/write/send slice.
    Remaining: automatic native-instance binding, complete global/class resolution,
    layout migration, error/non-local-return translation, yielding, generated
    host bootstrap (which still replays source). Class-side native shims now use

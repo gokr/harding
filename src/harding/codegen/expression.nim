@@ -409,6 +409,14 @@ proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): stri
   let fieldsStr = initFields.join(", ")
   return fmt("(block:\n    createBlockWithEnv({blockInfo.nimName}, {blockInfo.paramCount}, {blockInfo.envStructName}({fieldsStr})))")
 
+proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, argsCode, fallback: string): string =
+  ## Bound methods ask the calling method's host before using a native helper,
+  ## so interpreter-owned receivers keep their own overrides and species.
+  if not ctx.inMethod:
+    return fallback
+  let owner = genSymbolAccess(ctx, "self")
+  return fmt("(block:\n    let builtin = hostedBuiltin({owner}, {receiverCode}, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})")
+
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
 
@@ -655,28 +663,32 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # Binary operators - these are generated as function calls
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})")
+      return genHostedBuiltin(ctx, receiverCode, node.selector, fmt("@[{argCode}]"),
+        fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})"))
     return receiverCode
 
   of "<", "<=", ">", ">=", "=", "==", "~=", "<>":
     # Comparison operators
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})")
+      return genHostedBuiltin(ctx, receiverCode, node.selector, fmt("@[{argCode}]"),
+        fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})"))
     return receiverCode
 
   of "//", "\\", "%":
     # Integer division and modulo
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})")
+      return genHostedBuiltin(ctx, receiverCode, node.selector, fmt("@[{argCode}]"),
+        fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})"))
     return receiverCode
 
   of "at:":
     # Slot access or collection access
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})")
+      return genHostedBuiltin(ctx, receiverCode, "at:", fmt("@[{argCode}]"),
+        fmt("{mangleSelector(node.selector)}({receiverCode}, {argCode})"))
     return receiverCode
 
   of "at:put:":
@@ -684,7 +696,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 2:
       let keyCode = genExpression(ctx, node.arguments[0])
       let valCode = genExpression(ctx, node.arguments[1])
-      return fmt("{mangleSelector(node.selector)}({receiverCode}, {keyCode}, {valCode})")
+      return genHostedBuiltin(ctx, receiverCode, "at:put:",
+        fmt("@[{keyCode}, {valCode}]"),
+        fmt("{mangleSelector(node.selector)}({receiverCode}, {keyCode}, {valCode})"))
     return receiverCode
 
   of "println", "writeLine:", "writeline:":
@@ -705,43 +719,48 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("nt_print({receiverCode})")
 
   of "asString":
-    # Convert to string
-    return fmt("nt_asString({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "asString", "@[]",
+      fmt("nt_asString({receiverCode})"))
 
   of "&":
     # Generic concatenation via string conversion
     if node.arguments.len >= 1:
       let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("nt_comma({receiverCode}, {argCode})")
+      return genHostedBuiltin(ctx, receiverCode, "&", fmt("@[{argCode}]"),
+        fmt("nt_comma({receiverCode}, {argCode})"))
     return receiverCode
 
   of "size":
     # Array/Table size
-    return fmt("nt_size({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "size", "@[]",
+      fmt("nt_size({receiverCode})"))
 
   of "last":
     # Array last element
-    return fmt("nt_last({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "last", "@[]",
+      fmt("nt_last({receiverCode})"))
 
   of "keys":
     # Table keys
-    return fmt("nt_table_keys({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "keys", "@[]",
+      fmt("nt_table_keys({receiverCode})"))
 
   of "abs":
-    # Absolute value
-    return fmt("nt_abs({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "abs", "@[]",
+      fmt("nt_abs({receiverCode})"))
 
   of "even":
-    # Is even
-    return fmt("nt_even({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "even", "@[]",
+      fmt("nt_even({receiverCode})"))
 
   of "odd":
-    # Is odd
-    return fmt("nt_odd({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "odd", "@[]",
+      fmt("nt_odd({receiverCode})"))
 
   of "negated":
-    # Negated value
-    return fmt("nt_negated({receiverCode})")
+    return genHostedBuiltin(ctx, receiverCode, "negated", "@[]",
+      fmt("nt_negated({receiverCode})"))
+
 
   of "derive:", "derive", "new", "selector:put:", "classSelector:put:":
     # Class-related messages - need runtime dispatch

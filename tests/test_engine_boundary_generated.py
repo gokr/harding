@@ -43,6 +43,12 @@ Factory>>shadowWrite: LiveSetting [ ^ [:value | LiveSetting := value. LiveSettin
 Factory class>>writeGlobal: value [ LiveSetting := value. ^ LiveSetting ].
 Factory>>sideEffectWriter: next [ ^ [CreatedSetting := next value] ].
 Factory>>counter [ | count | count := 0. ^ [count := count + 1] ].
+Factory>>sized: value [ ^ value size ].
+Factory>>added: a with: b [ ^ a + b ].
+Factory>>item: collection at: index [ ^ collection at: index ].
+Factory>>lastOf: collection [ ^ collection last ].
+Factory>>absOf: value [ ^ value abs ].
+Factory>>stringOf: value [ ^ value asString ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
 SlotParent>>baseValue: value [ base := value. ^ self ].
@@ -110,6 +116,19 @@ Factory>>shadowWrite: LiveSetting [ ^ nil ].
 Factory class>>writeGlobal: value [ ^ nil ].
 Factory>>sideEffectWriter: next [ ^ nil ].
 Factory>>counter [ ^ nil ].
+Factory>>sized: value [ ^ nil ].
+Factory>>added: a with: b [ ^ nil ].
+Factory>>item: collection at: index [ ^ nil ].
+Factory>>lastOf: collection [ ^ nil ].
+Factory>>absOf: value [ ^ nil ].
+Factory>>stringOf: value [ ^ nil ].
+SizedProbe := Object derivePublic: #(tag).
+SizedProbe>>size [ ^ 99 ].
+SizedProbe>>+ other [ ^ 123 ].
+SizedProbe>>at: key [ ^ 77 ].
+SizedProbe>>last [ ^ 88 ].
+SizedProbe>>abs [ ^ 55 ].
+SizedProbe>>asString [ ^ "probe-string" ].
 BoundaryLib := Library name: "BoundaryLib".
 BoundaryLib at: "LibrarySetting" put: 31.
 Harding import: BoundaryLib.
@@ -236,6 +255,22 @@ let counter = sendMessageInterpreted(interp, instance, "counter", @[])
 let countedWriter = sendMessageInterpreted(interp, instance, "sideEffectWriter:", @[counter])
 doAssert invokeBlock(interp, countedWriter.blockVal, @[]).intVal == 1
 doAssert invokeBlock(interp, counter.blockVal, @[]).intVal == 2
+# Builtin helper sends honor the calling method's host for interpreter objects.
+let probe = sendMessageInterpreted(interp, interp.globals[]["SizedProbe"], "new", @[])
+doAssert sendMessageInterpreted(interp, instance, "sized:", @[probe]).intVal == 99
+doAssert sendMessageInterpreted(interp, instance, "added:with:", @[probe, toValue(1)]).intVal == 123
+doAssert sendMessageInterpreted(interp, instance, "item:at:", @[probe, toValue(0)]).intVal == 77
+doAssert sendMessageInterpreted(interp, instance, "lastOf:", @[probe]).intVal == 88
+doAssert sendMessageInterpreted(interp, instance, "absOf:", @[probe]).intVal == 55
+doAssert sendMessageInterpreted(interp, instance, "stringOf:", @[probe]).strVal == "probe-string"
+# Native fast paths remain for primitive and native-collection receivers.
+doAssert sendMessageInterpreted(interp, instance, "added:with:", @[toValue(20), toValue(22)]).intVal == 42
+let interpretedArray = sendMessageInterpreted(interp, interp.globals[]["Array"], "new", @[])
+discard sendMessageInterpreted(interp, interpretedArray, "add:", @[toValue(1)])
+discard sendMessageInterpreted(interp, interpretedArray, "add:", @[toValue(2)])
+doAssert sendMessageInterpreted(interp, instance, "sized:", @[interpretedArray]).intVal == 2
+doAssert sendMessageInterpreted(interp, instance, "item:at:", @[interpretedArray, toValue(1)]).intVal == 2
+doAssert sendMessageInterpreted(interp, instance, "lastOf:", @[interpretedArray]).intVal == 2
 # Overridden new may answer nil: host allocation must not retry the native path.
 let (_, nilFactoryError) = interp.evalStatements("SlotChild class>>new [ ^ nil ]")
 doAssert nilFactoryError.len == 0, nilFactoryError

@@ -414,6 +414,21 @@ suite "Compiler: Engine binding shims":
     check not genStatement(lexical, assignment).contains("boundGlobalWrite")
     check not genExpression(lexical, assignment).contains("boundGlobalWrite")
 
+  test "bound builtin helper sends consult the host before native helpers":
+    let (nodes, syntax) = parse("BuiltinHost := Object derive: #(). BuiltinHost>>probe: value [ ^ (value size) + (value abs) + (value at: 0) ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "builtin_host")
+    check code.contains("hostedBuiltin(self, value, \"size\", @[])")
+    check code.contains("hostedBuiltin(self, value, \"abs\", @[])")
+    check code.contains("hostedBuiltin(self, value, \"at:\", @[")
+    check code.contains("else: nt_size(value)")
+    # Top-level helper use stays on the native fast path.
+    let top = newGenContext()
+    let send = MessageNode(receiver: IdentNode(name: "value"), selector: "size")
+    top.locals.add("value")
+    check not genExpression(top, send).contains("hostedBuiltin")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

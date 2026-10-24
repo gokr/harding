@@ -654,6 +654,20 @@ proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
   result.value = evalCallbackNonFatal(interp, message)
   result.handled = true
 
+proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
+                    args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  ## Builtin helper sends in bound code must honor the calling method's host.
+  ## Only interpreter-owned receivers are routed: native primitives keep the
+  ## fast helpers, and an unbound (pure compiled) call keeps native dispatch.
+  if receiver.kind != vkInstance or receiver.instVal == nil:
+    return
+  let owner = boundClassFor(ownerReceiver)
+  if owner == nil:
+    return
+  var interp = boundCompiledClasses[owner].interpreter
+  result.value = sendMessageInterpreted(interp, receiver, selector, args)
+  result.handled = true
+
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
   ## Ordinary class sends from bound code use the host, even for unbound classes.

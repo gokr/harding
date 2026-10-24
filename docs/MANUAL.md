@@ -220,8 +220,12 @@ class-valued parameters use the receiver's host even without target-class shims.
 Uppercase global writes in bound methods and closures assign through the host VM,
 so imported-library bindings, protected globals and class renaming behave as they
 do in interpreted code. A compiled block ending in an assignment answers the
-assigned value and evaluates its right-hand side once. Specialized builtins,
-library-scoped static allocation and explicit super boundaries are not yet unified.
+assigned value and evaluates its right-hand side once. In bound methods, builtin
+helper sends (`size`, `last`, `keys`, `at:`, `at:put:`, operators, `abs`, `even`,
+`odd`, `negated`, `asString`, `&`) offer interpreter-owned receivers to the
+calling method's host before the native helper, so runtime overrides apply;
+primitive and native-collection receivers keep the fast path. Library-scoped
+static allocation and explicit super boundaries are not yet unified.
 
 This is not yet a complete `--mixed` compiler contract: automatic native-instance
 binding, layout migration, cross-engine exception/non-local-return translation
