@@ -627,8 +627,22 @@ Effort is relative to this codebase, not a schedule commitment.
    new removeAll` sends `removeAll` to an Array, which has no such method; `resort`
    and comparator replacement depend on that missing path. Discuss the missing
    Array protocol before adding semantics or claiming full conformance.
-5. **Generic freezing (`# @frozen` → codegen, high).** Whole-stdlib codegen plus
-   dependency-closure analysis and the drift manifest.
+5. **Generic freezing (experimental checked slice implemented).**
+   `config/granite-frozen.json` inventories the annotated SortedCollection source
+   and declared native-counterpart closure. `freeze-check` rejects missing/stale
+   sources, annotations, entries, cases and undeclared uppercase references in
+   generic ASTs. `scripts/check_frozen.py` executes every named parity case and
+   writes a receipt bound to manifest, engines, runner and Nim runtime sources;
+   failure removes old receipts. `--freeze-manifest` plus `--freeze-receipt`
+   composes generic definitions with application ASTs (including script temporaries
+   and `Harding compile:/main:` scopes) without executing application source twice.
+   `nimble testFrozen` exercises this path. The receipt is local build evidence,
+   not a signature or security gate. SHA-1 is a drift checksum, not authentication.
+   Not complete: dependency analysis is syntactic, counterpart dependencies are
+   declared, dynamic selectors/evaluation are not proven closed, conformance covers
+   listed protocols rather than every method, and sealed/full-deliverable policy,
+   whole-stdlib compilation and frozen mixed bootstrap remain open. `--mixed`
+   with a freeze manifest fails explicitly instead of replaying an incomplete host.
 
 Steps 1–4 deliver the compiled-Bona scenario (compiled stdlib reachable from an
 interpreted Workspace) **without** ever compiling a `.hrd` file generically.

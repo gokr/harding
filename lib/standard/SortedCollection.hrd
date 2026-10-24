@@ -1,4 +1,5 @@
 #!/usr/bin/env harding
+# @frozen
 #
 # SortedCollection.hrd - Collection that maintains sorted order.
 # Uses composition with an internal Array, not inheritance.

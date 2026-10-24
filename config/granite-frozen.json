@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "roots": [
+    "SortedCollection"
+  ],
+  "classes": [
+    {
+      "name": "SortedCollection",
+      "tier": "generic",
+      "source": "lib/standard/SortedCollection.hrd",
+      "sha1": "8E2B417512A1A12D684A3EB3A5656A2BCDCABDD1",
+      "dependencies": [
+        "Object",
+        "Array"
+      ],
+      "cases": [
+        "stdlib_sorted_collection"
+      ]
+    },
+    {
+      "name": "Object",
+      "tier": "counterpart",
+      "source": "lib/core/Object.hrd",
+      "sha1": "A9C9ABF474651ADAACC36D04C70358CD248A6D7A",
+      "dependencies": [],
+      "cases": [
+        "class_factory",
+        "class_reflection"
+      ]
+    },
+    {
+      "name": "Array",
+      "tier": "counterpart",
+      "source": "lib/core/Array.hrd",
+      "sha1": "67F8F0C1CEC1D5364DE5B93F011FBC355FD19D23",
+      "dependencies": [
+        "Iterable",
+        "Block",
+        "Integer",
+        "Boolean"
+      ],
+      "cases": [
+        "array_query_protocol",
+        "bulk_sequence_protocol",
+        "collection_aliasing"
+      ]
+    },
+    {
+      "name": "Iterable",
+      "tier": "counterpart",
+      "source": "lib/core/Iterable.hrd",
+      "sha1": "4C2F5C61FD43603025E667F4426E2048C4850875",
+      "dependencies": [
+        "Object",
+        "Block"
+      ],
+      "cases": [
+        "array_query_protocol",
+        "bulk_sequence_protocol"
+      ]
+    },
+    {
+      "name": "Block",
+      "tier": "counterpart",
+      "source": "lib/core/Block.hrd",
+      "sha1": "885C69F00951B9466EB95F772F3351D81B9993B0",
+      "dependencies": [
+        "Object",
+        "Boolean"
+      ],
+      "cases": [
+        "captured_block",
+        "nested_capture"
+      ]
+    },
+    {
+      "name": "Integer",
+      "tier": "counterpart",
+      "source": "lib/core/Integer.hrd",
+      "sha1": "843E6324906EB9C9DCCC4DBD427B7220265A9C76",
+      "dependencies": [
+        "Object",
+        "Boolean"
+      ],
+      "cases": [
+        "numeric_specialization"
+      ]
+    },
+    {
+      "name": "Boolean",
+      "tier": "counterpart",
+      "source": "lib/core/Boolean.hrd",
+      "sha1": "7F11874077157EFAEF85FAC8D5E0F58450FFD89E",
+      "dependencies": [
+        "Object",
+        "Block"
+      ],
+      "cases": [
+        "lexical_shadowing"
+      ]
+    }
+  ]
+}

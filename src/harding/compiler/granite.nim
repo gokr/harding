@@ -7,7 +7,8 @@
 # NOTE: This compiler initializes the full Harding VM to ensure access to
 # the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, tables, logging]
+import std/[os, strutils, parseopt, strformat, tables, logging, json, sets]
+import checksums/sha1
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
@@ -15,6 +16,7 @@ import ../codegen/module
 import ../compiler/context
 import ../compiler/types
 import ../compiler/symbols
+import ../compiler/frozen_manifest
 import ../core/scheduler
 import ../interpreter/vm
 import ../repl/cli
@@ -125,6 +127,8 @@ type
     dumpAst: bool
     hardingHome: string
     bootstrapFile: string
+    frozenManifest: string
+    frozenReceipt: string
     maxStackDepth: int
 
 proc newConfig(): Config =
@@ -156,6 +160,7 @@ proc showUsage() =
   echo "  compile (c)           Compile Harding to Nim source code"
   echo "  build (b)             Compile to Nim and build executable"
   echo "  run (r)               Compile, build, and execute"
+  echo "  freeze-check <file> <root> Validate experimental frozen closure and drift"
   echo "  help                  Show this help"
   echo "  version               Show version"
   echo ""
@@ -164,6 +169,8 @@ proc showUsage() =
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
+  echo "  --freeze-manifest <file> Checked frozen dependency closure (experimental)"
+  echo "  --freeze-receipt <file>  Executed conformance receipt for this toolchain"
   echo "  --home <path>         Set HARDING_HOME directory (default: current directory)"
   echo "  --bootstrap <file>    Use custom bootstrap file (default: lib/core/Bootstrap.hrd)"
   echo "  --ast                 Dump AST after parsing and before compiling"
@@ -233,6 +240,10 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.dumpAst = true
       of "mixed":
         result.mixed = true
+      of "freeze-manifest":
+        result.frozenManifest = p.val
+      of "freeze-receipt":
+        result.frozenReceipt = p.val
       else:
         echo "Unknown option: ", p.key
         quit(1)
@@ -251,6 +262,42 @@ proc compileFile(config: Config): bool =
     return false
 
   echo "Compiling: ", config.inputFile
+
+  var frozenPrefix = ""
+  if config.frozenManifest.len > 0:
+    try:
+      if config.mixed:
+        raise newException(ValueError, "Frozen mixed bootstrap is not implemented; use an explicit embedded host")
+      let plan = loadFrozenPlan(config.frozenManifest, config.hardingHome)
+      if config.frozenReceipt.len == 0:
+        raise newException(ValueError, "Frozen build requires --freeze-receipt from scripts/check_frozen.py")
+      let receipt = parseJson(readFile(config.frozenReceipt))
+      if receipt.kind != JObject:
+        raise newException(ValueError, "Malformed frozen conformance receipt")
+      for field in ["manifestSha1", "graniteSha1", "hardingSha1", "runnerSha1", "toolchainSha1"]:
+        if receipt{field} == nil or receipt[field].kind != JString:
+          raise newException(ValueError, "Stale frozen conformance receipt")
+      if receipt{"passedCases"} == nil or receipt["passedCases"].kind != JArray:
+        raise newException(ValueError, "Malformed frozen conformance receipt")
+      if receipt{"manifestSha1"}.getStr != plan.manifestDigest or
+         receipt{"graniteSha1"}.getStr != $secureHash(readFile(getAppFilename())) or
+         receipt{"hardingSha1"}.getStr != $secureHash(readFile(config.hardingHome / "harding")) or
+         receipt{"runnerSha1"}.getStr != $secureHash(readFile(config.hardingHome / "scripts/test_granite_parity.py")) or
+         receipt{"toolchainSha1"}.getStr != frozenToolchainDigest(config.hardingHome):
+        raise newException(ValueError, "Stale frozen conformance receipt")
+      var passed = initHashSet[string]()
+      for item in receipt["passedCases"]:
+        if item.kind != JString:
+          raise newException(ValueError, "Malformed frozen conformance case")
+        passed.incl(item.getStr)
+      for entry in plan.entries.values:
+        for conformance in entry.cases:
+          if conformance notin passed:
+            raise newException(ValueError, "Missing executed frozen case: " & conformance)
+      frozenPrefix = frozenSources(plan, config.hardingHome)
+    except CatchableError as failure:
+      echo "Error: ", failure.msg
+      return false
 
   # Initialize the Harding VM with full stdlib (unified pipeline)
   # This gives us access to the complete class model for accurate compilation
@@ -271,12 +318,40 @@ proc compileFile(config: Config): bool =
   var parser = initParser(tokens)
   parser.lastLine = 1
   let script = parser.parseScript()
-  let nodes = if script != nil: script.body else: @[]
+  var nodes = if script != nil: script.body else: @[]
 
   if parser.hasError:
     echo "Parse error: ", parser.errorMsg
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
+
+  if frozenPrefix.len > 0:
+    # Parse library definitions separately so application script temporaries and
+    # diagnostics retain their original scope/line numbers. Merge definitions
+    # into compile: so Harding main: cannot hide them from module generation.
+    let (definitions, frozenSyntax) = parse(frozenPrefix)
+    if frozenSyntax.hasError:
+      echo "Frozen source parse error: ", frozenSyntax.errorMsg
+      return false
+    var merged = false
+    for node in nodes:
+      if node.kind == nkMessage:
+        let message = node.MessageNode
+        if message.selector == "compile:" and message.receiver != nil and
+           message.receiver.kind == nkIdent and message.receiver.IdentNode.name == "Harding" and
+           message.arguments.len == 1 and message.arguments[0].kind == nkBlock:
+          message.arguments[0].BlockNode.body = definitions & message.arguments[0].BlockNode.body
+          merged = true
+          break
+    if not merged:
+      var compileDefinitions = definitions
+      var application: seq[Node]
+      for node in nodes:
+        if isCompileTimeDefNode(node): compileDefinitions.add(node)
+        else: application.add(node)
+      nodes = application
+      nodes.insert(MessageNode(receiver: IdentNode(name: "Harding"), selector: "compile:",
+        arguments: @[Node(BlockNode(body: compileDefinitions))]), 0)
 
   # Execute compile-time definitions in interpreter to construct classes
   # If there's a Harding compile: block, execute only that block.
@@ -406,6 +481,16 @@ proc main() =
     showUsage()
   of "--version", "-v", "version":
     showVersion()
+  of "freeze-check":
+    if args.len != 3:
+      echo "Usage: granite freeze-check <manifest.json> <root>"
+      quit(1)
+    try:
+      let plan = loadFrozenPlan(args[1], args[2])
+      echo plan.manifestDigest
+    except CatchableError as failure:
+      echo failure.msg
+      quit(1)
   of "compile", "c":
     var config = if args.len > 1: parseArgs(args[1..^1]) else: parseArgs(@[])
     config.compile = true

@@ -55,6 +55,16 @@ construction and conversions. Full protocol is blocked by its interpreter-side
 Array `removeAll` dependency; Bag and OrderedCollection are absent from the
 interpreter/stdlib and need protocol agreement rather than compiler-only versions.
 
+## Experimental freeze gate
+
+`config/granite-frozen.json` inventories the SortedCollection generic source and
+declared native counterparts. `nimble testFrozen` validates drift/annotations,
+checks syntactic dependency closure, executes declared parity cases and issues a
+local receipt; checked builds require matching engines, runtime sources, manifest
+and runner. Receipts are not signatures. Dynamic dependency closure, complete
+counterpart conformance, whole-stdlib compilation, sealing and mixed bootstrap
+are not established. See the manual and PLAN.md section 6 for the scope.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:

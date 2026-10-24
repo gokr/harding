@@ -190,6 +190,34 @@ and class-side JSON specifications. See [native collections and JSON](GRANITE_CO
 for supported paths and validation limits, and [collection protocol audit](COLLECTION_PROTOCOL_AUDIT.md)
 for differences from Smalltalk-80.
 
+### Checked frozen compilation (experimental)
+
+A header comment `# @frozen` opts stdlib source into the checked manifest
+`config/granite-frozen.json`. Each entry declares a generic source or native
+counterpart, dependencies, source checksum and executed conformance case names.
+The current generic root is SortedCollection; this is not whole-stdlib freezing.
+
+After building `harding` and `granite`:
+
+```sh
+nimble testFrozen
+# Reuse the receipt only while its manifest, sources and toolchain are unchanged:
+./granite build app.hrd --freeze-manifest:config/granite-frozen.json --freeze-receipt:build/frozen/receipt.json
+```
+
+`testFrozen` validates source drift, annotations and declared closure, runs all
+listed parity cases, and tests checked application builds. Missing/stale receipts
+or unexecuted case names refuse the build. A failed conformance run deletes the
+old receipt. Generic definitions are composed as ASTs, preserving application
+script temporaries and explicit `Harding compile:/main:` scopes.
+
+Checksums and receipts are local build evidence, not authentication. Dependency
+analysis checks syntactic uppercase references in generic source; counterpart
+closure is declared, and dynamic sends/evaluation are not inferred. Conformance
+covers the listed cases, not every method. This does not seal classes, migrate
+layouts, prove full compilation or provide a frozen mixed-mode bootstrap;
+`--mixed` combined with the manifest currently fails explicitly.
+
 ### Mixed execution boundary (partial support)
 
 The native host API passes receivers and arguments as values to the interpreter;

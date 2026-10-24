@@ -11,6 +11,7 @@ srcDir = "src"
 
 # Current Nim version
 requires "nim == 2.2.12"
+requires "checksums == 0.2.2"
 
 # FFI dependencies
 when defined(linux):
@@ -302,6 +303,13 @@ task harding_release, "Build harding REPL (release) in repo root":
   let dependencyPaths = getExternalDependencyPaths()
   exec "nim c -p:external " & dependencyPaths & " -d:release " & externalFlags & " -o:harding src/harding/repl/harding.nim"
   echo "Binary available as ./harding (release)"
+
+task testFrozen, "Validate experimental Granite freeze closure and execute conformance":
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "nim c -r --out:build/test_frozen_manifest tests/test_frozen_manifest.nim"
+  exec "nim c -r --mm:orc --out:build/test_frozen_manifest_orc tests/test_frozen_manifest.nim"
+  exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
+  exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
 task bona, "Build bona IDE (debug) in repo root":
   # Build GUI IDE in debug mode with GTK4 + Granite primitives, output to repo root
