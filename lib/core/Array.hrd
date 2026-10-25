@@ -18,6 +18,8 @@ Array>>add: element <primitive primitiveArrayAdd: element>
 
 Array>>removeAt: index <primitive primitiveArrayRemoveAt: index>
 
+Array>>removeAll <primitive primitiveArrayRemoveAll>
+
 Array>>includes: element <primitive primitiveArrayIncludes: element>
 
 Array>>reverse <primitive primitiveArrayReverse>

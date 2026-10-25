@@ -4127,6 +4127,12 @@ proc initGlobals*(interp: var Interpreter) =
   arrayCls.methods["primitiveArrayAdd:"] = arrayAddMethod
   arrayCls.allMethods["primitiveArrayAdd:"] = arrayAddMethod
 
+  let arrayRemoveAllMethod = createCoreMethod("primitiveArrayRemoveAll")
+  arrayRemoveAllMethod.setNativeImpl(arrayRemoveAllImpl)
+  setNativeValueFromInstance(arrayRemoveAllMethod, arrayRemoveAllImpl)
+  arrayCls.methods["primitiveArrayRemoveAll"] = arrayRemoveAllMethod
+  arrayCls.allMethods["primitiveArrayRemoveAll"] = arrayRemoveAllMethod
+
   let arrayRemoveAtMethod = createCoreMethod("primitiveArrayRemoveAt:")
   arrayRemoveAtMethod.setNativeImpl(arrayRemoveAtImpl)
   setNativeValueFromInstance(arrayRemoveAtMethod, arrayRemoveAtImpl)

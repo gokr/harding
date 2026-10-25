@@ -51,9 +51,9 @@ coverage remain open.
 
 SortedCollection's actual stdlib source now has executed generic-codegen
 conformance for insertion/duplicates, queries, copies, removal, custom comparator
-construction and conversions. Full protocol is blocked by its interpreter-side
-Array `removeAll` dependency; Bag and OrderedCollection are absent from the
-interpreter/stdlib and need protocol agreement rather than compiler-only versions.
+construction, conversions and comparator replacement/resort. Array `removeAll`
+now clears in place and answers self in both engines. User decisions: add Bag to
+both paths; use Array as Harding's ordered collection instead of OrderedCollection.
 
 ## Experimental freeze gate
 

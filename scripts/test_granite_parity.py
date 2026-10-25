@@ -7,6 +7,20 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("array_clear_and_sort", """
+a := #(3, 1, 2).
+alias := a.
+sorted := a sorted.
+sorted println.
+a println.
+(a sorted: [:x :y | x > y]) println.
+(a removeAll == a) println.
+alias size println.
+sorted println.
+(a removeAll == a) println.
+a add: 7.
+alias println.
+""", "#(1 2 3)\n#(3 1 2)\n#(3 2 1)\ntrue\n0\n#(1 2 3)\ntrue\n#(7)\n"),
     ("add_statement_keeps_receiver", """
 ItemAdder := Object derivePublic: #(stored).
 ItemAdder>>add: item [ stored := item. ^ item ].
@@ -1269,7 +1283,12 @@ copy asArray println.
 descending := SortedCollection new: #(1, 3, 2) sortBlock: [:a :b | a > b].
 descending asArray println.
 (descending asSortedCollection == descending) println.
-""", "3\n4\n#(1 2 2 3)\n#(2 4 4 6)\n#(2 2 3)\n#(1 3)\n3\n99\n8\ntrue\ntrue\ntrue\n8\n2\n1\n3\ntrue\n3\n4\n5\n1\n4\n3\n#(2 2 4)\n#(3 2 1)\ntrue\n"))
+(descending sortBlock: [:a :b | a < b]) asArray println.
+(descending removeAll == descending) println.
+descending size println.
+descending add: 7.
+descending asArray println.
+""", "3\n4\n#(1 2 2 3)\n#(2 4 4 6)\n#(2 2 3)\n#(1 3)\n3\n99\n8\ntrue\ntrue\ntrue\n8\n2\n1\n3\ntrue\n3\n4\n5\n1\n4\n3\n#(2 2 4)\n#(3 2 1)\ntrue\n#(1 2 3)\ntrue\n0\n#(7)\n"))
 
 
 CASES.append(("json_parsing",

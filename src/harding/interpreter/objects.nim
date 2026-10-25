@@ -2042,6 +2042,12 @@ proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     self.elements.add(args[0])
   return self.toValue()
 
+proc arrayRemoveAllImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Clear array storage in place and answer the receiver.
+  if self.kind == ikArray:
+    self.elements.setLen(0)
+  return self.toValue()
+
 proc arrayRemoveAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Remove element at index and return the removed element
   if self.kind == ikArray and args.len > 0:

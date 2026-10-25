@@ -616,21 +616,19 @@ Effort is relative to this codebase, not a schedule commitment.
    while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
-4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
-   OrderedCollection as hand-written or generically compiled natives, each with
-   conformance cases against the interpreter. Inventory at `c893a42`: only
-   SortedCollection exists in `lib/`; Bag and OrderedCollection have no interpreter
-   definitions. Their protocol requires agreement before adding language/library
-   surface; compiler-only versions would violate interpreter parity.
+4. **Frozen collections (in progress).** SortedCollection and Bag use the same
+   interpreter/native protocols with executed conformance cases. User decision:
+   Array doubles as OrderedCollection; no separate OrderedCollection class is
+   needed. Bag is approved for addition to both engines.
    The actual SortedCollection source now compiles generically with executed
    `stdlib_sorted_collection` conformance (insertion/duplicates, callbacks, queries,
    copies, indexed removal, comparator construction and conversions). Native
    `basicNew` allocates without initialize. Statement-level `add:` no longer
    rewrites the receiver binding with the added item; shared storage needs no
-   writeback. Full protocol is blocked by an interpreter defect: `SortedCollection
-   new removeAll` sends `removeAll` to an Array, which has no such method; `resort`
-   and comparator replacement depend on that missing path. Discuss the missing
-   Array protocol before adding semantics or claiming full conformance.
+   writeback. User-approved Array `removeAll` clears in place and answers self
+   in both engines. Native Array `sorted`/`sorted:` return independent shallow
+   arrays using the interpreter's insertion-sort policy. SortedCollection clear,
+   resort and comparator replacement now have exact-output conformance coverage.
 5. **Generic freezing (experimental checked slice implemented).**
    `config/granite-frozen.json` inventories the annotated SortedCollection source
    and declared native-counterpart closure. `freeze-check` rejects missing/stale
@@ -673,23 +671,20 @@ The original steps 1–4 target the compiled-Bona scenario, but the current test
 host slices do not establish that complete deliverable. Do not check all stages
 complete from the focused host or freeze-task results.
 
-- Collection protocol: Bag and OrderedCollection do not exist in this checkout.
-  Choose interpreter+native definitions with an agreed protocol, or revise scope
-  to the existing classes. Compiler-only selectors are not acceptable.
-- Confirmed interpreter defect: `sc := SortedCollection new. sc add: 1.
-  sc removeAll.` fails with `Message not understood: removeAll`; internal Array
-  lacks that selector. Expected empty collection; `resort`/comparator replacement
-  also depend on it. Proposed compatible fix: Array `removeAll` clears in place
-  and answers self, with both-engine regression coverage. Await agreement.
+- Collection decisions agreed: add Bag to interpreter and native paths; retain
+  Array as the ordered collection instead of a separate OrderedCollection class.
+  Array `removeAll` clears in place and answers self. Its former missing-selector
+  defect is fixed with alias/identity, empty/reuse and SortedCollection resort
+  regressions; Bag implementation remains in progress.
 - Confirmed engine transfer defect (`build/repro_boundary_transfers.nim` and log):
   interpreted `[[Error signal: "boundary failure"] ensure: [Cleanup := true]]
   on: Error do: [:ex | 42]` answers 42 and sets Cleanup true. Replacing the signal
   block with a native callback raising `CompiledHardingError` reports a VM error,
   answers nil and leaves Cleanup false. A native `NonLocalReturnException` also
   bypasses VM cleanup. Affects interpreted `on:do:`/`ensure:` around compiled
-  callbacks. Proposed choices: translate native errors at VM entry and preserve
-  return tokens while scheduling intervening cleanup, or explicitly reject these
-  crossings and keep mixed mode restricted. No language contract chosen silently.
+  callbacks. User approved translation: native errors must reach interpreted
+  handlers and native return tokens must preserve intervening VM cleanup. This
+  remains to implement; no restriction-only substitute was chosen.
 - Evidence at `eeed034`: full parity sweep 94 passes / 2 build timeouts; both
   timeout cases pass in a focused rerun with 300s build limits, covering all 96
   cases across runs. This is not a clean single full-suite pass. Freeze task

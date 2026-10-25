@@ -181,8 +181,11 @@ method may return the added item while the original collection remains bound.
 
 The actual SortedCollection source can be compiled generically. Conformance
 covers insertion, duplicates, queries/callbacks, copying, indexed removal,
-custom comparator construction and conversions. Full protocol is not claimed:
-its `removeAll`/`resort` paths depend on missing interpreter Array `removeAll`.
+custom comparator construction, conversions and comparator replacement/resort.
+Array serves Harding's ordered-collection role; no separate OrderedCollection
+class is required. Array `removeAll` clears shared storage in place and answers
+`self`, including when empty. SortedCollection uses that path for clearing and
+resorting. Array `sorted`/`sorted:` return independent shallow sorted arrays.
 Native `basicNew` allocates without calling `initialize`; `new` retains initialization.
 
 Native object JSON serialization supports inherited slots, `jsonRepresentation`

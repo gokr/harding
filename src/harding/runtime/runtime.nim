@@ -1346,6 +1346,37 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
               break
           if not found: return toValue(false)
         return toValue(true)
+    of "removeAll":
+      if storage.kind == ikArray:
+        storage.elements.setLen(0)
+        return receiver
+    of "sorted", "sorted:":
+      if storage.kind == ikArray and (selector == "sorted" or args.len == 1):
+        var elements = storage.elements
+        for i in 1..<elements.len:
+          var j = i
+          while j > 0:
+            let left = elements[j]
+            let right = elements[j - 1]
+            let before = if selector == "sorted:":
+                           sendMessage(runtime, args[0], "value:value:", @[left, right])
+                         elif left.kind == vkInt and right.kind == vkInt:
+                           toValue(left.intVal < right.intVal)
+                         elif left.kind == vkFloat and right.kind == vkFloat:
+                           toValue(left.floatVal < right.floatVal)
+                         elif left.kind in {vkInt, vkFloat} and right.kind in {vkInt, vkFloat}:
+                           toValue((if left.kind == vkInt: float(left.intVal) else: left.floatVal) <
+                                   (if right.kind == vkInt: float(right.intVal) else: right.floatVal))
+                         elif left.kind == vkString and right.kind == vkString:
+                           toValue(left.strVal < right.strVal)
+                         elif left.kind == vkBool and right.kind == vkBool:
+                           toValue(left.boolVal < right.boolVal)
+                         else:
+                           sendMessage(runtime, left, "<", @[right])
+            if not isTruthy(before): break
+            swap(elements[j], elements[j - 1])
+            dec j
+        return compiledArray(elements)
     of "removeAt:":
       if storage.kind == ikArray and args.len == 1 and args[0].kind == vkInt:
         let index = args[0].intVal

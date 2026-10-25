@@ -61,6 +61,19 @@ suite "Compiled reference collections":
     check compiledIdentityEqual(nt_at_k(cloned, toValue(0)), child)
     check not compiledIdentityEqual(cloned, array)
 
+  test "removeAll retains receiver identity and sorted copies retain source order":
+    let array = compiledArray(@[toValue(3), toValue(1), toValue(2)])
+    let alias = array
+    let sorted = sendMessage(nil, array, "sorted", @[])
+    check compiledArrayElements(sorted) == @[toValue(1), toValue(2), toValue(3)]
+    check compiledArrayElements(array) == @[toValue(3), toValue(1), toValue(2)]
+    check compiledIdentityEqual(sendMessage(nil, array, "removeAll", @[]), array)
+    check compiledArrayElements(alias).len == 0
+    check compiledArrayElements(sorted).len == 3
+    discard sendMessage(nil, array, "removeAll", @[])
+    discard sendMessage(nil, array, "add:", @[toValue(7)])
+    check compiledArrayElements(alias) == @[toValue(7)]
+
   test "cycles fail without poisoning later JSON writes":
     let array = compiledArray(@[])
     discard sendMessage(newRuntime(), array, "add:", @[array])
