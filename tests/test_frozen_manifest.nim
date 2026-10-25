@@ -102,6 +102,22 @@ suite "Frozen manifest":
       removeDir(scratch / "lib")
     expect ValueError: discard load(document)
 
+  test "embedded bootstrap sources participate in toolchain freshness":
+    createDir(scratch / "src/harding")
+    createDir(scratch / "lib")
+    let path = scratch / "lib/Bootstrap.hrd"
+    defer:
+      removeFile(path)
+      removeDir(scratch / "lib")
+      removeDir(scratch / "src/harding")
+      removeDir(scratch / "src")
+    writeFile(path, "# first")
+    let first = frozenToolchainDigest(scratch)
+    writeFile(path, "# changed")
+    check frozenToolchainDigest(scratch) != first
+    writeFile(path, "# first")
+    check frozenToolchainDigest(scratch) == first
+
   test "mutually recursive method references form a closure":
     var document = fixture()
     document["classes"][0]["dependencies"] = %*["Child"]

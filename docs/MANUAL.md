@@ -209,7 +209,8 @@ nimble testFrozen
 listed parity cases, and tests checked application builds. Missing/stale receipts
 or unexecuted case names refuse the build. A failed conformance run deletes the
 old receipt. Generic definitions are composed as ASTs, preserving application
-script temporaries and explicit `Harding compile:/main:` scopes.
+script temporaries and explicit `Harding compile:/main:` scopes. Receipt freshness
+also includes all embedded stdlib/bootstrap `.hrd` sources, not just frozen entries.
 
 Checksums and receipts are local build evidence, not authentication. Dependency
 analysis checks syntactic uppercase references in generic source; counterpart

@@ -632,7 +632,8 @@ Effort is relative to this codebase, not a schedule commitment.
    and declared native-counterpart closure. `freeze-check` rejects missing/stale
    sources, annotations, entries, cases and undeclared uppercase references in
    generic ASTs. `scripts/check_frozen.py` executes every named parity case and
-   writes a receipt bound to manifest, engines, runner and Nim runtime sources;
+   writes a receipt bound to manifest, engines, runner, Nim runtime sources and
+   all embedded `lib/**/*.hrd` bootstrap sources;
    failure removes old receipts. `--freeze-manifest` plus `--freeze-receipt`
    composes generic definitions with application ASTs (including script temporaries
    and `Harding compile:/main:` scopes) without executing application source twice.

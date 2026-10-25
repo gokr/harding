@@ -16,6 +16,20 @@ spec.loader.exec_module(gate)
 
 
 class FrozenBuildTest(unittest.TestCase):
+    def test_embedded_library_changes_invalidate_toolchain_digest(self):
+        base = ROOT / "build/frozen-tests"
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as temporary:
+            root = Path(temporary)
+            library = root / "lib/Bootstrap.hrd"
+            library.parent.mkdir()
+            library.write_text("# original")
+            before = gate.toolchain_digest(root)
+            library.write_text("# changed")
+            self.assertNotEqual(gate.toolchain_digest(root), before)
+            library.write_text("# original")
+            self.assertEqual(gate.toolchain_digest(root), before)
+
     def test_failures_do_not_leave_a_success_receipt(self):
         base = ROOT / "build/frozen-tests"
         base.mkdir(parents=True, exist_ok=True)

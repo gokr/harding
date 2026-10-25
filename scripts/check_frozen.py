@@ -21,6 +21,7 @@ def digest(path):
 def toolchain_digest(root):
     root = Path(root)
     paths = [path.relative_to(root) for path in (root / "src/harding").rglob("*.nim")]
+    paths += [path.relative_to(root) for path in (root / "lib").rglob("*.hrd")]
     paths += [Path(name) for name in ("config.nims", "harding.nimble") if (root / name).is_file()]
     combined = "".join(path.as_posix() + ":" + digest(root / path) + "\n"
                        for path in sorted(paths))

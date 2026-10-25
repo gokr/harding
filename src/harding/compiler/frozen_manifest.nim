@@ -145,10 +145,13 @@ proc frozenReferences*(source: string): seq[string] =
   result.sort()
 
 proc frozenToolchainDigest*(root: string): string =
-  ## Include generated-program runtime sources, not just the compiler binary.
+  ## Include generated runtime and embedded bootstrap sources, not just binaries.
   var paths: seq[string]
   for path in walkDirRec(root / "src/harding"):
     if path.endsWith(".nim"): paths.add(relativePath(path, root))
+  if dirExists(root / "lib"):
+    for path in walkDirRec(root / "lib"):
+      if path.endsWith(".hrd"): paths.add(relativePath(path, root))
   for name in ["config.nims", "harding.nimble"]:
     if fileExists(root / name): paths.add(name)
   paths.sort()
