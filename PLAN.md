@@ -616,10 +616,14 @@ Effort is relative to this codebase, not a schedule commitment.
    while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
-4. **Frozen collections (in progress).** SortedCollection and Bag use the same
-   interpreter/native protocols with executed conformance cases. User decision:
-   Array doubles as OrderedCollection; no separate OrderedCollection class is
-   needed. Bag is approved for addition to both engines.
+4. **Frozen collections (Bag and Array slices done).** SortedCollection and Bag
+   use the same interpreter/native protocols with executed conformance cases
+   (`stdlib_sorted_collection`, `stdlib_bag`). User decision: Array doubles as
+   OrderedCollection, so no separate OrderedCollection class is added. Bag lives
+   in `lib/core/Bag.hrd` and compiles generically: duplicates count, `remove:`
+   drops one occurrence, queries keep Bag species and `removeAll` clears in place.
+   Bag declares its protocol explicitly rather than inheriting the Iterable mixin,
+   because native class creation does not model mixins.
    The actual SortedCollection source now compiles generically with executed
    `stdlib_sorted_collection` conformance (insertion/duplicates, callbacks, queries,
    copies, indexed removal, comparator construction and conversions). Native
@@ -671,11 +675,16 @@ The original steps 1–4 target the compiled-Bona scenario, but the current test
 host slices do not establish that complete deliverable. Do not check all stages
 complete from the focused host or freeze-task results.
 
-- Collection decisions agreed: add Bag to interpreter and native paths; retain
-  Array as the ordered collection instead of a separate OrderedCollection class.
-  Array `removeAll` clears in place and answers self. Its former missing-selector
-  defect is fixed with alias/identity, empty/reuse and SortedCollection resort
-  regressions; Bag implementation remains in progress.
+- Collection decisions agreed and implemented: Bag exists in both engines from
+  one generic source, and Array remains the ordered collection instead of a new
+  OrderedCollection class. Array `removeAll` clears in place and answers self.
+  Array-literal parsing still treats a bare uppercase identifier as a symbol, so
+  tests parenthesise such elements; that is existing dialect behaviour.
+- Fixed interpreter defect: redefining a derived class into an existing global
+  kept the creation placeholder name (`Object+Derived`), and binding an existing
+  class to a new global (`Alias := Bag`) renamed the original class. Binding
+  names now apply only while a class still carries a placeholder name, in both
+  assignment paths.
 - Confirmed engine transfer defect (`build/repro_boundary_transfers.nim` and log):
   interpreted `[[Error signal: "boundary failure"] ensure: [Cleanup := true]]
   on: Error do: [:ex | 42]` answers 42 and sets Cleanup true. Replacing the signal

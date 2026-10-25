@@ -1252,6 +1252,49 @@ h probe println.
 ])
 
 
+CASES.append(("stdlib_bag",
+              (ROOT / "lib/core/Bag.hrd").read_text() + """
+b := Bag new.
+(b add: 3) println.
+b add: 1. b add: 3. b add: 2. b add: 3.
+b size println.
+(b occurrencesOf: 3) println.
+(b occurrencesOf: 9) println.
+(b includes: 2) println.
+(b includes: 9) println.
+b asArray println.
+(b collect: [:each | each * 2]) asArray println.
+(b select: [:each | each > 1]) asArray println.
+(b reject: [:each | each > 1]) asArray println.
+(b inject: 0 into: [:sum :each | sum + each]) println.
+b sum println.
+(b count: [:each | each = 3]) println.
+(b anySatisfy: [:each | each = 2]) println.
+(b allSatisfy: [:each | each > 0]) println.
+(b noneSatisfy: [:each | each > 9]) println.
+(b detect: [:each | each > 1]) println.
+(b detect: [:each | each > 9] ifNone: [42]) println.
+b isEmpty println.
+b notEmpty println.
+(b remove: 3) println.
+b size println.
+(b occurrencesOf: 3) println.
+(b remove: 9) println.
+b size println.
+b2 := Bag new.
+(b2 addAll: #(1, 1, 2)) println.
+b2 size println.
+(b2 includesAll: #(1, 1)) println.
+(b2 includesAll: #(1, 1, 1)) println.
+(b2 species name) println.
+alias := b2.
+(b2 removeAll == b2) println.
+alias size println.
+(b2 removeAll == b2) println.
+b2 add: 7.
+alias asArray println.
+""", "3\n5\n3\n0\ntrue\nfalse\n#(3 1 3 2 3)\n#(6 2 6 4 6)\n#(3 3 2 3)\n#(1)\n12\n12\n3\ntrue\ntrue\ntrue\n3\n42\nfalse\ntrue\n3\n4\n2\nnil\n4\n#(1 1 2)\n3\ntrue\nfalse\nBag\ntrue\n0\ntrue\n#(7)\n"))
+
 CASES.append(("stdlib_sorted_collection",
               (ROOT / "lib/standard/SortedCollection.hrd").read_text() + """
 sc := SortedCollection new.

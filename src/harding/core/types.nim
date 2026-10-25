@@ -1057,6 +1057,13 @@ proc registerSubclass*(parent, child: Class) =
   kept.add(child)
   parent.subclasses = kept
 
+proc needsBindingName*(cls: Class): bool =
+  ## True while a class still carries its creation placeholder name.
+  ## Aliasing an existing class must not rename it.
+  if cls == nil:
+    return false
+  cls.name.len == 0 or cls.name == "Anonymous" or cls.name.endsWith("+Derived")
+
 proc renameClass*(cls: Class, name: string) =
   ## Give a class its binding name and re-register it with its parents.
   ##

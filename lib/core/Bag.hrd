@@ -1,0 +1,182 @@
+#!/usr/bin/env harding
+# @frozen
+#
+# Bag.hrd - Unordered multiset. Duplicates are kept and counted.
+# Uses composition with an internal Array; iteration order is insertion order,
+# but that order is not part of the contract.
+#
+
+Bag := Object derive: #(elements)
+# A Bag keeps every added object, including duplicates, and answers its
+# multiplicity rather than a membership boolean. Equality is `=`, so two equal
+# but distinct objects count as the same element. Use a Bag when counts matter
+# and order does not; use Array when insertion order matters and Set when
+# duplicates must be collapsed.
+
+Bag class>>new [
+    ^self basicNew initialize
+]
+
+Bag>>initialize [
+    elements := Array new
+]
+
+Bag>>size [
+    ^elements size
+]
+
+Bag>>isEmpty [
+    ^self size = 0
+]
+
+Bag>>notEmpty [
+    ^self size > 0
+]
+
+Bag>>add: anObject [
+    elements add: anObject.
+    ^anObject
+]
+
+Bag>>remove: anObject [
+    # Remove one occurrence; answer the removed object, or nil when absent.
+    | index |
+    index := self indexOf: anObject.
+    index isNil ifTrue: [ ^nil ].
+    ^elements removeAt: index
+]
+
+Bag>>removeAll [
+    # Clear shared storage in place; answers the receiver.
+    elements removeAll.
+    ^self
+]
+
+Bag>>indexOf: anObject [
+    | i size |
+    i := 0.
+    size := self size.
+    [ i < size ] whileTrue: [
+        (elements at: i) = anObject ifTrue: [ ^i ].
+        i := i + 1
+    ].
+    ^nil
+]
+
+Bag>>includes: anObject [
+    ^(self indexOf: anObject) notNil
+]
+
+Bag>>occurrencesOf: anObject [
+    # Multiplicity of the argument.
+    ^self count: [ :each | each = anObject ]
+]
+
+Bag>>do: block [
+    | i size |
+    i := 0.
+    size := self size.
+    [ i < size ] whileTrue: [
+        block value: (elements at: i).
+        i := i + 1
+    ].
+    ^self
+]
+
+Bag>>species [
+    ^Bag
+]
+
+Bag>>copyEmpty [
+    ^Bag new
+]
+
+Bag>>asArray [
+    | result |
+    result := Array new.
+    self do: [ :each | result add: each ].
+    ^result
+]
+
+Bag>>collect: block [
+    | result |
+    result := self copyEmpty.
+    self do: [ :each | result add: (block value: each) ].
+    ^result
+]
+
+Bag>>select: block [
+    | result |
+    result := self copyEmpty.
+    self do: [ :each | (block value: each) ifTrue: [ result add: each ] ].
+    ^result
+]
+
+Bag>>reject: block [
+    | result |
+    result := self copyEmpty.
+    self do: [ :each | (block value: each) ifFalse: [ result add: each ] ].
+    ^result
+]
+
+Bag>>detect: block [
+    self do: [ :each | (block value: each) ifTrue: [ ^each ] ].
+    ^nil
+]
+
+Bag>>detect: block ifNone: noneBlock [
+    self do: [ :each | (block value: each) ifTrue: [ ^each ] ].
+    ^noneBlock value
+]
+
+Bag>>inject: initialValue into: block [
+    | result |
+    result := initialValue.
+    self do: [ :each | result := block value: result value: each ].
+    ^result
+]
+
+Bag>>count: block [
+    | total |
+    total := 0.
+    self do: [ :each | (block value: each) ifTrue: [ total := total + 1 ] ].
+    ^total
+]
+
+Bag>>anySatisfy: block [
+    self do: [ :each | (block value: each) ifTrue: [ ^true ] ].
+    ^false
+]
+
+Bag>>allSatisfy: block [
+    self do: [ :each | (block value: each) ifFalse: [ ^false ] ].
+    ^true
+]
+
+Bag>>noneSatisfy: block [
+    self do: [ :each | (block value: each) ifTrue: [ ^false ] ].
+    ^true
+]
+
+Bag>>sum [
+    ^self inject: 0 into: [ :sum :each | sum + each ]
+]
+
+Bag>>addAll: aCollection [
+    aCollection isNil ifTrue: [ ^aCollection ].
+    aCollection do: [ :each | self add: each ].
+    ^aCollection
+]
+
+Bag>>includesAll: aCollection [
+    # Every occurrence in the argument must be matched by receiver multiplicity.
+    | available |
+    aCollection isNil ifTrue: [ ^true ].
+    available := Bag new.
+    self do: [ :each | available add: each ].
+    aCollection do: [ :each |
+        (available occurrencesOf: each) = 0 ifTrue: [ ^false ].
+        available remove: each
+    ].
+    ^true
+]

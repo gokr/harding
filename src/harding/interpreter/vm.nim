@@ -722,6 +722,9 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
       # Check for protected global
       if isProtectedGlobal(name):
         raise newException(EvalError, "Cannot reassign protected global: " & name)
+      # Redefining a class global must bind the new placeholder class name.
+      if value.kind == vkClass and needsBindingName(value.classVal):
+        renameClass(value.classVal, name)
       interp.globals[][name] = value
       debug("Global updated: ", name, " = ", value.toString())
       return
@@ -740,8 +743,8 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
       # Check for protected global
       if isProtectedGlobal(name):
         raise newException(EvalError, "Cannot reassign protected global: " & name)
-      # If assigning a Class, set its name to the variable name
-      if value.kind == vkClass and value.classVal != nil:
+      # Only a still-unbound derived class takes its binding name.
+      if value.kind == vkClass and needsBindingName(value.classVal):
         renameClass(value.classVal, name)
       interp.globals[][name] = value
       debug("Global set (uppercase variable): ", name, " = ", value.toString())
@@ -760,8 +763,8 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
   if name.len > 0 and name[0] notin {'A'..'Z'}:
     raise newException(EvalError, "Global variables must start with uppercase letter: " & name)
 
-  # If assigning a Class, set its name to the variable name
-  if value.kind == vkClass and value.classVal != nil:
+  # Only a still-unbound derived class takes its binding name.
+  if value.kind == vkClass and needsBindingName(value.classVal):
     renameClass(value.classVal, name)
 
   interp.globals[][name] = value

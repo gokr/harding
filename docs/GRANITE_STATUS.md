@@ -54,6 +54,9 @@ conformance for insertion/duplicates, queries, copies, removal, custom comparato
 construction, conversions and comparator replacement/resort. Array `removeAll`
 now clears in place and answers self in both engines. User decisions: add Bag to
 both paths; use Array as Harding's ordered collection instead of OrderedCollection.
+`Bag` is implemented as `lib/core/Bag.hrd` and compiled generically with executed
+`stdlib_bag` parity covering duplicates, multiplicity, single-occurrence removal,
+species-preserving queries and clearing.
 
 ## Experimental freeze gate
 

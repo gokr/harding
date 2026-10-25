@@ -183,7 +183,11 @@ The actual SortedCollection source can be compiled generically. Conformance
 covers insertion, duplicates, queries/callbacks, copying, indexed removal,
 custom comparator construction, conversions and comparator replacement/resort.
 Array serves Harding's ordered-collection role; no separate OrderedCollection
-class is required. Array `removeAll` clears shared storage in place and answers
+class is required. `Bag` (`lib/core/Bag.hrd`) is an unordered multiset: it keeps
+duplicates, `occurrencesOf:` answers multiplicity, `remove:` drops one occurrence
+and answers it (or `nil` when absent), `includesAll:` respects multiplicity,
+`select:`/`collect:` keep Bag species, and `removeAll` clears storage in place
+answering the receiver. Array `removeAll` clears shared storage in place and answers
 `self`, including when empty. SortedCollection uses that path for clearing and
 resorting. Array `sorted`/`sorted:` return independent shallow sorted arrays.
 Native `basicNew` allocates without calling `initialize`; `new` retains initialization.

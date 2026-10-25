@@ -1,7 +1,8 @@
 {
   "version": 1,
   "roots": [
-    "SortedCollection"
+    "SortedCollection",
+    "Bag"
   ],
   "classes": [
     {
@@ -98,6 +99,19 @@
       ],
       "cases": [
         "lexical_shadowing"
+      ]
+    },
+    {
+      "name": "Bag",
+      "tier": "generic",
+      "source": "lib/core/Bag.hrd",
+      "sha1": "F0CAA22988B18FE730DE099ED65DA1B4AC2F03BD",
+      "dependencies": [
+        "Object",
+        "Array"
+      ],
+      "cases": [
+        "stdlib_bag"
       ]
     }
   ]

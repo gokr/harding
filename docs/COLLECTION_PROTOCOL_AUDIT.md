@@ -23,12 +23,18 @@ Those differences must be documented rather than silently changed for parity.
   collect/select/reject and query implementations.
 - `lib/core/Set.hrd`: membership, insertion/removal, union/intersection/difference,
   conversion and iteration; adopts Iterable through bootstrap.
+- `lib/core/Bag.hrd`: unordered multiset; duplicates counted, `occurrencesOf:`
+  multiplicity, `remove:` drops one occurrence, species-preserving queries,
+  `removeAll` clearing. Adopts the Iterable protocol by defining its methods
+  explicitly rather than inheriting the mixin.
 - `lib/standard/Interval.hrd`: interval iteration and query methods.
 - `lib/standard/SortedCollection.hrd`: sorted insertion, custom comparator,
   sequence queries and transformations, composed over an Array.
 
-Dedicated Bag, OrderedCollection, LinkedList, Association, Dictionary and
-IdentityDictionary classes are not established by this inventory. Table and
+Bag is defined for both engines. OrderedCollection is deliberately not added:
+Array already serves that ordered/growable role, and a second class would
+duplicate protocol without agreement. LinkedList, Association, Dictionary,
+IdentityDictionary and IdentitySet are still absent. Table and
 Array may supply overlapping behavior; coverage must be assessed by operation,
 not by simply matching class names.
 
