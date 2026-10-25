@@ -236,6 +236,9 @@ interpreter. Stdlib/bootstrap sources are embedded at compilation, loaded throug
 package-only resolution and then bound to generated shims. Application statements
 are not replayed and the application source file is not needed at runtime. Release
 host registrations with `unbindCompiledMethodsFrom(interp)` before host disposal.
+Detach restores original interpreted method metadata only where the installed
+native pointer still belongs to that binding; runtime replacements remain intact.
+The same live methods can subsequently be rebound.
 The factory currently uses the standard core bootstrap; custom bootstraps and
 external-library packaging are not supported by this contract. Bootstrap source
 is interpreted, not all compiled natively. Package-only loading is a source

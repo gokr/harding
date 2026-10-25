@@ -200,6 +200,31 @@ suite "Class-side engine boundary":
     check not bindCompiledMethodShim(interp, "ClassShimNative", "absent",
                                     cast[pointer](classSelfShim), isClassMethod = true)
 
+  test "detach restores interpreted bodies and allows rebind without replacing user edits":
+    let (_, err) = interp.evalStatements("""
+      DetachProbe := Object derive: #().
+      DetachProbe>>value: n [ ^ n + 1 ].
+      DetachProbe class>>identity [ ^ nil ].
+    """)
+    require err.len == 0
+    let cls = interp.globals[]["DetachProbe"]
+    let receiver = NodeValue(kind: vkInstance, instVal: newInstance(cls.classVal))
+    check bindCompiledMethodShim(interp, "DetachProbe", "value:", cast[pointer](doubleShim))
+    check bindCompiledMethodShim(interp, "DetachProbe", "identity", cast[pointer](classSelfShim), true)
+    check sendMessageInterpreted(interp, receiver, "value:", @[toValue(3)]).intVal == 6
+    unbindCompiledMethodsFrom(interp)
+    check cls.classVal.methods["value:"].nativeImpl == nil
+    check cls.classVal.classMethods["identity"].nativeValueImpl == nil
+    check sendMessageInterpreted(interp, receiver, "value:", @[toValue(3)]).intVal == 4
+    check isNilValue(sendMessageInterpreted(interp, cls, "identity", @[]))
+    check bindCompiledMethodShim(interp, "DetachProbe", "value:", cast[pointer](doubleShim))
+    check bindCompiledMethodShim(interp, "DetachProbe", "identity", cast[pointer](classSelfShim), true)
+    let (_, replacementError) = interp.evalStatements("DetachProbe>>value: n [ ^ n + 10 ]")
+    require replacementError.len == 0
+    unbindCompiledMethodsFrom(interp)
+    check sendMessageInterpreted(interp, receiver, "value:", @[toValue(3)]).intVal == 13
+    unbindCompiledMethodsFrom(interp)
+
 suite "Value-based mixed dispatch":
   let ctx = newSchedulerContext()
   var interp = ctx.mainProcess.getInterpreter()

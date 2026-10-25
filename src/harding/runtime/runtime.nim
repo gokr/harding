@@ -604,10 +604,18 @@ proc registerCompiledMethod*(className: string, selector: string,
 # shim per method (instead of one generic adapter) keeps the identity static and
 # mirrors how generated modules already emit per-class slot accessor procs.
 
-type BoundCompiledClass = object
-  interpreter: Interpreter
-  methods: Table[string, BlockNode]
-  classMethods: Table[string, BlockNode]
+type
+  BoundShimState = object
+    currentMethod: BlockNode
+    nativePointer: pointer
+    primitiveSelector: string
+    hasInterpreterParam: bool
+    classSide: bool
+  BoundCompiledClass = object
+    interpreter: Interpreter
+    methods: Table[string, BlockNode]
+    classMethods: Table[string, BlockNode]
+    originals: seq[BoundShimState]
 
 var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
 
@@ -764,13 +772,18 @@ proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: strin
   if boundMethod == nil or boundMethod.nativeImpl != nil or
      boundMethod.nativeValueImpl != nil:
     return false
+  var binding = boundCompiledClasses.getOrDefault(cls)
+  if binding.interpreter != nil and binding.interpreter != interp:
+    raise newException(ValueError, "Compiled class is already bound to another interpreter")
+  binding.originals.add(BoundShimState(currentMethod: boundMethod, nativePointer: shim,
+    primitiveSelector: boundMethod.primitiveSelector,
+    hasInterpreterParam: boundMethod.hasInterpreterParam, classSide: isClassMethod))
   boundMethod.primitiveSelector = selector
   if isClassMethod:
     boundMethod.setNativeValueImpl(shim)
   else:
     boundMethod.setNativeImpl(shim)
   boundMethod.hasInterpreterParam = true
-  var binding = boundCompiledClasses.getOrDefault(cls)
   binding.interpreter = interp
   if isClassMethod:
     binding.classMethods[selector] = boundMethod
@@ -781,10 +794,21 @@ proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: strin
   return true
 
 proc unbindCompiledMethodsFrom*(interp: Interpreter) =
-  ## Release host registrations before disposing the embedded interpreter.
+  ## Restore only our own shim metadata before releasing interpreter ownership.
   var classes: seq[Class]
   for cls, binding in boundCompiledClasses:
-    if binding.interpreter == interp: classes.add(cls)
+    if binding.interpreter != interp: continue
+    for original in binding.originals:
+      let currentMethod = original.currentMethod
+      if original.classSide:
+        if currentMethod.nativeValueImpl != original.nativePointer: continue
+        currentMethod.nativeValueImpl = nil
+      else:
+        if currentMethod.nativeImpl != original.nativePointer: continue
+        currentMethod.nativeImpl = nil
+      currentMethod.primitiveSelector = original.primitiveSelector
+      currentMethod.hasInterpreterParam = original.hasInterpreterParam
+    classes.add(cls)
   for cls in classes:
     boundCompiledClasses.del(cls)
   if classes.len > 0: inc compiledClassDispatchVersion

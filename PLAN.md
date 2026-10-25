@@ -539,6 +539,9 @@ Effort is relative to this codebase, not a schedule commitment.
    compiled target; replacements and runtime subclass overrides dispatch via a
    literal-valued VM message, without source reconstruction or nil-as-miss.
    Hosts release registrations with `unbindCompiledMethodsFrom` before disposal.
+   Detach restores original interpreted/native-dispatch metadata only for shim
+   pointers still owned by that registration, preserving runtime replacements and
+   allowing rebind. Instance/class detach and recovery are tested under ARC/ORC.
    Coverage: warm-cache replacement, subclass nil overrides and unchanged inherited
    shims in `test_engine_boundary`. The guard currently resolves live methods on
    every bound send rather than relying on interpreter mutations updating the

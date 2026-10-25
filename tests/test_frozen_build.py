@@ -121,6 +121,12 @@ Collection asArray
 doAssert error.len == 0, error
 let array = values[^1].instVal
 doAssert array.elements[0].intVal == 1 and array.elements[2].intVal == 3
+unbindCompiledMethodsFrom(interp)
+doAssert cls.methods["add:"].nativeImpl == nil
+frozenmodule.bindCompiledMethodsTo(interp)
+doAssert cls.methods["add:"].nativeImpl != nil
+let rebound = sendMessageInterpreted(interp, interp.globals[]["Collection"], "size", @[])
+doAssert rebound.intVal == 3
 let (_, redefineError) = interp.evalStatements("SortedCollection>>size [ ^ 99 ]")
 doAssert redefineError.len == 0, redefineError
 let changed = sendMessageInterpreted(interp, interp.globals[]["Collection"], "size", @[])
