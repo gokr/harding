@@ -409,18 +409,18 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Catch/translate error and return transfers at C ABI boundaries; validate
       foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.
-- [ ] Cover mixed-mode execution separately from pure compilation. Crossing
-      is currently non-functional in both directions; see section 6 for the
-      measured state and the staged plan.
+- [ ] Complete mixed-mode execution coverage separately from pure compilation.
+      Value/shim/slot/block/super host slices work in executed tests; arbitrary
+      control transfers and automatic mixed startup remain incomplete. See section 6.
 
 ## 6. Frozen stdlib and the engine boundary
 
-Status: **design agreed, instance-shim and value-send slices implemented.**
-Step 1 instance shims, step 2 instance guards and step 3 value-based host sends
-have landed in slices; complete mixed-mode compilation remains unimplemented.
-This section records the target architecture for shipping opted-in parts of a program as native
-code while the rest stays interpreted. The "Current state" subsection is measured
-evidence, not an estimate.
+Status: **partial implementation, not complete mixed-mode compilation.**
+Instance/class shims, live method guards, value/slot/block/super host dispatch,
+explicit embedded hosts, checked frozen source composition and limited native
+sealing have executed regressions. Remaining language/protocol choices and
+control-transfer defects are listed below. The historical baseline records the
+original measurements, not the current implementation.
 
 ### Two deliverable modes
 
@@ -546,8 +546,8 @@ Effort is relative to this codebase, not a schedule commitment.
    shims in `test_engine_boundary`. The guard currently resolves live methods on
    every bound send rather than relying on interpreter mutations updating the
    compiled version counter. Class-side method replacement now uses the same
-   live-resolution guard with separately tracked class-side shims. Layout replacement, explicit
-   super-send boundaries, exception/return translation, scheduler suspension and
+   live-resolution guard with separately tracked class-side shims. Layout replacement,
+   exception/return translation, scheduler suspension and
    full-deliverable sealing remain follow-up work; this is not complete deoptimization.
 3. **Value-based host sends implemented; full mixed mode still open.**
    `sendMessageInterpreted` builds a literal-valued VM message and uses the
@@ -611,8 +611,9 @@ Effort is relative to this codebase, not a schedule commitment.
    class identity, escaped closures, native slot bridges and replacements have
    ARC/ORC regression coverage. This does not translate error/return transfers.
    Remaining: automatic native-instance binding, complete global/class resolution,
-   layout migration, error/non-local-return translation, yielding, generated
-   host bootstrap (which still replays source). Class-side native shims now use
+   layout migration, error/non-local-return translation, yielding and automatic
+   mixed startup. Checked modules have an explicit embedded host factory (step 5),
+   while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
 4. **Counterpart frozen collections (medium).** SortedCollection, Bag,
@@ -666,8 +667,39 @@ Effort is relative to this codebase, not a schedule commitment.
    are not established. This embeds source for VM bootstrap, not whole-stdlib
    native compilation. `--mixed` with a freeze manifest still fails explicitly.
 
-Steps 1–4 deliver the compiled-Bona scenario (compiled stdlib reachable from an
-interpreted Workspace) **without** ever compiling a `.hrd` file generically.
+### Open discussion gates and completion evidence
+
+The original steps 1–4 target the compiled-Bona scenario, but the current tested
+host slices do not establish that complete deliverable. Do not check all stages
+complete from the focused host or freeze-task results.
+
+- Collection protocol: Bag and OrderedCollection do not exist in this checkout.
+  Choose interpreter+native definitions with an agreed protocol, or revise scope
+  to the existing classes. Compiler-only selectors are not acceptable.
+- Confirmed interpreter defect: `sc := SortedCollection new. sc add: 1.
+  sc removeAll.` fails with `Message not understood: removeAll`; internal Array
+  lacks that selector. Expected empty collection; `resort`/comparator replacement
+  also depend on it. Proposed compatible fix: Array `removeAll` clears in place
+  and answers self, with both-engine regression coverage. Await agreement.
+- Confirmed engine transfer defect (`build/repro_boundary_transfers.nim` and log):
+  interpreted `[[Error signal: "boundary failure"] ensure: [Cleanup := true]]
+  on: Error do: [:ex | 42]` answers 42 and sets Cleanup true. Replacing the signal
+  block with a native callback raising `CompiledHardingError` reports a VM error,
+  answers nil and leaves Cleanup false. A native `NonLocalReturnException` also
+  bypasses VM cleanup. Affects interpreted `on:do:`/`ensure:` around compiled
+  callbacks. Proposed choices: translate native errors at VM entry and preserve
+  return tokens while scheduling intervening cleanup, or explicitly reject these
+  crossings and keep mixed mode restricted. No language contract chosen silently.
+- Evidence at `eeed034`: full parity sweep 94 passes / 2 build timeouts; both
+  timeout cases pass in a focused rerun with 300s build limits, covering all 96
+  cases across runs. This is not a clean single full-suite pass. Freeze task
+  executes 10 declared parity cases, manifest/host unit tests under ARC/ORC and
+  7 Python gate/build tests (including generated ARC/ORC hosts). These tests do
+  not prove dynamic dependency closure, every counterpart method, full sealing,
+  native process suspension, C ABI transfer safety or compiled Bona acceptance.
+
+The original plan aimed to reach this scenario **without** requiring generic
+whole-stdlib compilation.
 Step 5 is the real project and carries the schedule risk; it is not a prerequisite
 for the target user experience. Keep sealing posture (step 2) orthogonal to freeze
 annotation (step 5): "can the two engines talk" and "may this class change" are

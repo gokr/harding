@@ -73,6 +73,17 @@ while lexical shadows stay permitted. It does not prove alias/dynamic mutation
 safety, seal VM classes or protect direct Nim access and is not full-deliverable
 redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 
+## Blocking cross-engine transfers
+
+A native callback raising `CompiledHardingError` through interpreted
+`on:do:`/`ensure:` currently reports a VM error instead of invoking the Harding
+handler, and skips its VM cleanup. A native non-local-return token crossing the
+VM also skips cleanup. Reproduced in `build/repro_boundary_transfers.nim` and its
+log; the all-interpreted control answers 42 and runs cleanup. This prevents a
+safe arbitrary mixed-mode claim. Translation versus explicit crossing rejection
+needs agreement under the interpreter/language discussion gate. See PLAN.md
+section 6 for the reproduction, choices and collection protocol blockers.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:
