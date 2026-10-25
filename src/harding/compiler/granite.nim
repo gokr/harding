@@ -7,7 +7,7 @@
 # NOTE: This compiler initializes the full Harding VM to ensure access to
 # the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, tables, logging, json, sets]
+import std/[os, strutils, parseopt, strformat, tables, logging, json, sets, algorithm]
 import checksums/sha1
 import ../core/types
 import ../parser/parser
@@ -412,6 +412,13 @@ proc compileFile(config: Config): bool =
 
   var ctx = newCompiler(outputDir, moduleName)
   ctx.sealedClasses = sealedClasses
+  if frozenPrefix.len > 0:
+    var paths: seq[string]
+    for path in walkDirRec(config.hardingHome / "lib"):
+      if path.endsWith(".hrd"): paths.add(path)
+    paths.sort()
+    for path in paths:
+      ctx.frozenHostSources.add((relativePath(path, config.hardingHome).replace('\\', '/'), readFile(path)))
   let reflectedClasses = extractClassInfoFromInterpreter(interp)
   let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
                           scriptTemporaries = script.temporaries)

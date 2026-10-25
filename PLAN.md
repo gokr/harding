@@ -652,8 +652,15 @@ Effort is relative to this codebase, not a schedule commitment.
    Not complete: dependency analysis is syntactic, counterpart dependencies are
    declared, dynamic selectors/evaluation are not proven closed, conformance covers
    listed protocols rather than every method, and full-deliverable enforcement,
-   whole-stdlib compilation and frozen mixed bootstrap remain open. `--mixed`
-   with a freeze manifest fails explicitly instead of replaying an incomplete host.
+   whole-stdlib compilation and automatic mixed bootstrap remain open. Checked
+   modules expose `newFrozenHost()` for explicit embedding: it creates a scheduler
+   host, loads embedded stdlib sources once, and binds generated method shims;
+   application statements and the application source file are not replayed.
+   `packageOnlyLoads` prevents bootstrap/Harding/Library loads from reading disk
+   and propagates through isolated evaluation and forks. The current factory uses
+   the standard core bootstrap; custom bootstrap and external-library packaging
+   are not established. This embeds source for VM bootstrap, not whole-stdlib
+   native compilation. `--mixed` with a freeze manifest still fails explicitly.
 
 Steps 1–4 deliver the compiled-Bona scenario (compiled stdlib reachable from an
 interpreted Workspace) **without** ever compiling a `.hrd` file generically.

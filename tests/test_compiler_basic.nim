@@ -377,6 +377,22 @@ suite "Compiler: Native sealing":
     check seal > registration
     check not code.contains("sealCompiledClass(\"Object\")")
 
+suite "Compiler: Embedded frozen host":
+  test "factory embeds library definitions but never application statements":
+    let (nodes, syntax) = parse("HostProbe := Object derive: #(). HostProbe>>answer [ ^ 42 ]. 99 println.")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    ctx.frozenHostSources = @[("lib/core/Bootstrap.hrd", "# library only\n")]
+    let code = genModule(ctx, nodes, "embedded_host")
+    let start = code.find("proc newFrozenHost*")
+    let stop = code.find("# Main Entry Point", start)
+    require start >= 0 and stop > start
+    let factory = code[start..<stop]
+    check factory.contains("newEmbeddedFrozenHost")
+    check factory.contains("bindCompiledMethodsTo(interp)")
+    check not factory.contains("99")
+    check not factory.contains("initHybridRuntime")
+
 suite "Compiler: Engine binding shims":
   test "class and instance selectors generate distinct receiver-safe shims":
     let (nodes, syntax) = parse("ShimFactory := Object derive: #(). ShimFactory>>identity [ ^ self ]. ShimFactory class>>identity [ ^ self ].")

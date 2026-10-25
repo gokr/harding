@@ -308,6 +308,8 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "nim c -r --out:build/test_frozen_manifest tests/test_frozen_manifest.nim"
   exec "nim c -r --mm:orc --out:build/test_frozen_manifest_orc tests/test_frozen_manifest.nim"
+  exec "nim c -r --out:build/test_frozen_host tests/test_frozen_host.nim"
+  exec "nim c -r --mm:orc --out:build/test_frozen_host_orc tests/test_frozen_host.nim"
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 

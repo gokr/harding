@@ -226,8 +226,19 @@ inside nested closures or `Harding compile:` blocks. Lexical parameter/temporary
 shadows and ordinary sends remain permitted. This is not VM sealing or a security
 boundary: aliases, dynamic sends/evaluation and direct Nim field/table writes are
 not proven safe. Full-deliverable enforcement,
-layout migration and a frozen mixed-mode bootstrap remain open;
+layout migration and automatic mixed-mode startup remain open;
 `--mixed` combined with the manifest currently fails explicitly.
+
+Checked generated modules also expose an explicit Nim `newFrozenHost()` factory.
+It returns a scheduler context; `frozenHostInterpreter(context)` retrieves its main
+interpreter. Stdlib/bootstrap sources are embedded at compilation, loaded through
+package-only resolution and then bound to generated shims. Application statements
+are not replayed and the application source file is not needed at runtime. Release
+host registrations with `unbindCompiledMethodsFrom(interp)` before host disposal.
+The factory currently uses the standard core bootstrap; custom bootstraps and
+external-library packaging are not supported by this contract. Bootstrap source
+is interpreted, not all compiled natively. Package-only loading is a source
+resolution policy, not a sandbox: file/network primitives retain their behavior.
 
 ### Mixed execution boundary (partial support)
 

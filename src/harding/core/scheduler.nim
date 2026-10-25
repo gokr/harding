@@ -135,6 +135,8 @@ proc forkProcess*(ctx: SchedulerContext, blockNode: BlockNode,
     ctx.mainProcess.getInterpreter().packageSources
   )
 
+  newInterp.packageOnlyLoads = ctx.mainProcess.getInterpreter().packageOnlyLoads
+
   # Preserve command-line arguments across forked interpreters
   newInterp.commandLineArgs = ctx.mainProcess.getInterpreter().commandLineArgs
 

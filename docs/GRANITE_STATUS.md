@@ -62,8 +62,12 @@ declared native counterparts. `nimble testFrozen` validates drift/annotations,
 checks syntactic dependency closure, executes declared parity cases and issues a
 local receipt; checked builds require matching engines, runtime sources, manifest
 and runner. Receipts are not signatures. Dynamic dependency closure, complete
-counterpart conformance, whole-stdlib compilation and mixed bootstrap are not
-established. Optional `--seal-frozen` rejects subsequent native registry writes
+counterpart conformance, whole-stdlib compilation and automatic mixed startup
+are not established. Checked modules expose `newFrozenHost()` for an explicit
+scheduler-owned host with embedded standard bootstrap/library sources, package-only
+load resolution and generated shim binding. It does not replay application source;
+bootstrap source is still interpreted. Custom bootstrap/external packaging remain
+outside the contract. Optional `--seal-frozen` rejects subsequent native registry writes
 and direct application redefinitions before reflection; nested scopes are checked
 while lexical shadows stay permitted. It does not prove alias/dynamic mutation
 safety, seal VM classes or protect direct Nim access and is not full-deliverable

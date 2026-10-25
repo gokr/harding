@@ -350,6 +350,7 @@ proc evaluateIsolated*(interp: Interpreter, source: string): tuple[value: NodeVa
   var evaluation = newInterpreterWithShared(interp.globals, interp.rootObject,
     interp.packageSources, trace = interp.traceExecution, maxStackDepth = interp.maxStackDepth)
   evaluation.hardingHome = interp.hardingHome
+  evaluation.packageOnlyLoads = interp.packageOnlyLoads
   evaluation.commandLineArgs = interp.commandLineArgs
   evaluation.importedLibraries = interp.importedLibraries
   evaluation.sourceIndex = interp.sourceIndex
@@ -5397,16 +5398,24 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
     debug("MCP bridge initialized")
 
   # Use lib/core/Bootstrap.hrd as default if no bootstrapFile provided
-  let actualBootstrapFile = if bootstrapFile.len > 0 and fileExists(bootstrapFile):
+  let actualBootstrapFile = if bootstrapFile.len > 0 and
+                               (interp.packageOnlyLoads or fileExists(bootstrapFile)):
                              bootstrapFile
                            else:
                              interp.hardingHome / "lib" / "core" / "Bootstrap.hrd"
 
-  if fileExists(actualBootstrapFile):
+  let embeddedBootstrap = if interp.packageOnlyLoads:
+                            resolveLoadInput(interp, actualBootstrapFile)
+                          else: (false, "", "")
+  if interp.packageOnlyLoads and not embeddedBootstrap[0]:
+    raise newException(ValueError, "Embedded bootstrap not found: " & actualBootstrapFile)
+  if fileExists(actualBootstrapFile) or embeddedBootstrap[0]:
     debug("Loading bootstrap file: ", actualBootstrapFile)
-    let source = readFile(actualBootstrapFile)
+    let source = if interp.packageOnlyLoads: embeddedBootstrap[1] else: readFile(actualBootstrapFile)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
+      if interp.packageOnlyLoads:
+        raise newException(ValueError, "Embedded bootstrap failed: " & err)
       stderr.writeLine("WARNING: Failed to load bootstrap file ", actualBootstrapFile, ": ", err)
     else:
       debug("Successfully loaded bootstrap: ", actualBootstrapFile)
@@ -6080,6 +6089,14 @@ proc resolveLoadInput(interp: Interpreter,
                        requestedPath
                      else:
                        interp.hardingHome / requestedPath
+
+  if interp.packageOnlyLoads:
+    if interp.packageSources != nil:
+      if requestedPath in interp.packageSources[]:
+        return (true, interp.packageSources[][requestedPath], requestedPath)
+      if resolvedPath in interp.packageSources[]:
+        return (true, interp.packageSources[][resolvedPath], resolvedPath)
+    return (false, "", resolvedPath)
 
   if fileExists(resolvedPath):
     try:

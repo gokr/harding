@@ -327,6 +327,7 @@ type
     importedLibraries*: seq[Instance]  # Stack of imported Library instances for namespace search
     commandLineArgs*: seq[string]  # Command-line arguments available to Harding code
     packageSources*: ref Table[string, string]  # Embedded source files keyed by virtual path
+    packageOnlyLoads*: bool  # Explicit embedded host: never read load sources from disk
     sourceIndex*: ref Table[string, SourceEntry]  # Source entries keyed by class/side/selector
     sourceFileKeys*: ref Table[string, seq[string]]  # Reverse index for file invalidation
     # Debugger support

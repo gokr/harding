@@ -694,7 +694,10 @@ proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
 
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =
-  ## Ordinary class sends from bound code use the host, even for unbound classes.
+  ## Ordinary sends from bound code use live host lookup for VM-owned receivers.
+  let hosted = hostedBuiltin(ownerReceiver, receiver, selector, args)
+  if hosted.handled:
+    return hosted.value
   let owner = boundClassFor(ownerReceiver)
   if owner != nil and receiver.kind == vkClass:
     var interp = boundCompiledClasses[owner].interpreter
@@ -2163,6 +2166,26 @@ template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
   block:
     var siteCache {.global, threadvar.}: CompiledSendCache
     sendMessageCached(runtime, receiver, selector, args, siteCache)
+
+proc frozenHostInterpreter*(host: SchedulerContext): Interpreter =
+  ## Access the interpreter owned by this explicit host's main process.
+  host.mainProcess.getInterpreter()
+
+proc newEmbeddedFrozenHost*(sources: openArray[tuple[path, source: string]]): SchedulerContext =
+  ## Create an explicit scheduler-owned host from embedded library sources only.
+  ## No application source replay and no ambient hybrid interpreter are involved.
+  result = newSchedulerContext()
+  var interp = result.mainProcess.getInterpreter()
+  interp.packageOnlyLoads = true
+  interp.hardingHome = "."
+  for (path, source) in sources:
+    interp.packageSources[][path] = source
+  let previousSuppress = interp.suppressUncaughtExit
+  interp.suppressUncaughtExit = true
+  try:
+    loadStdlib(interp, "lib/core/Bootstrap.hrd")
+  finally:
+    interp.suppressUncaughtExit = previousSuppress
 
 # Global interpreter instance for mixed mode (initialized on first use)
 var hybridInterpreter*: Interpreter = nil

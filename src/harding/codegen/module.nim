@@ -834,6 +834,17 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
       output.add("  return NodeValue(kind: vkNil)\n")
     output.add("\n\n")
 
+  if ctx.frozenHostSources.len > 0:
+    output.add("proc newFrozenHost*(): SchedulerContext =\n")
+    output.add("  ## Embedded library host; application statements are not replayed.\n")
+    output.add("  initRuntime()\n  registerCompiledMethods()\n  registerSuperclassHierarchy()\n")
+    output.add("  result = newEmbeddedFrozenHost([\n")
+    for (path, source) in ctx.frozenHostSources:
+      output.add("    (\"" & escapeNimString(path) & "\", \"" & escapeNimString(source) & "\"),\n")
+    output.add("  ])\n")
+    output.add("  var interp = frozenHostInterpreter(result)\n")
+    output.add("  bindCompiledMethodsTo(interp)\n\n")
+
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
                          analysis.classes, mixed, sourceFile, injectMainArgsVar,
