@@ -76,16 +76,17 @@ while lexical shadows stay permitted. It does not prove alias/dynamic mutation
 safety, seal VM classes or protect direct Nim access and is not full-deliverable
 redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 
-## Blocking cross-engine transfers
+## Cross-engine transfers
 
-A native callback raising `CompiledHardingError` through interpreted
-`on:do:`/`ensure:` currently reports a VM error instead of invoking the Harding
-handler, and skips its VM cleanup. A native non-local-return token crossing the
-VM also skips cleanup. Reproduced in `build/repro_boundary_transfers.nim` and its
-log; the all-interpreted control answers 42 and runs cleanup. This prevents a
-safe arbitrary mixed-mode claim. Translation versus explicit crossing rejection
-needs agreement under the interpreter/language discussion gate. See PLAN.md
-section 6 for the reproduction, choices and collection protocol blockers.
+Compiled errors and non-local returns raised inside an interpreted call are
+translated at the VM boundary: owed interpreted `ensure:` scopes run, errors are
+signalled to ordinary `on:do:` handlers, and return tokens stop VM unwinding and
+are re-raised to their compiled home. Unknown compiled exception names fall back
+to the previous VM diagnostic, and uncaught compiled errors still do not quit an
+embedded host. Return targets are compared only within one engine. Not covered:
+cross-engine `BlockCannotReturn` semantics, suspension across the boundary,
+cancellation of in-flight evaluation, and green-thread state transfer. See PLAN.md
+section 6 for the tests and remaining limits.
 
 ## Validation
 

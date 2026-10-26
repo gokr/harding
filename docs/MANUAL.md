@@ -251,6 +251,14 @@ external-library packaging are not supported by this contract. Bootstrap source
 is interpreted, not all compiled natively. Package-only loading is a source
 resolution policy, not a sandbox: file/network primitives retain their behavior.
 
+Compiled methods and blocks invoked by interpreted code translate their control
+transfers. An error raised by compiled code runs owed interpreted `ensure:`
+cleanups and is then delivered to the ordinary `on:do:` handlers; an uncaught one
+remains a VM diagnostic rather than terminating an embedded host. A compiled
+non-local return stops interpreted unwinding after running owed cleanups and
+propagates to its compiled home. Cross-engine return-target identity and
+`BlockCannotReturn` are not provided.
+
 ### Mixed execution boundary (partial support)
 
 The native host API passes receivers and arguments as values to the interpreter;

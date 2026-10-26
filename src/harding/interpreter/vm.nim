@@ -106,6 +106,36 @@ type
 # ARC needs a rooted reference to avoid premature collection.
 var fileStreamProxies: seq[FileStreamProxy] = @[]
 
+# Compiled-engine control transfer schema (shared with runtime.nim)
+type
+  BoundaryTransferKind* = enum
+    btNone        # Not a compiled-engine control transfer
+    btError       # Compiled Harding error crossing into the VM
+    btReturn      # Compiled non-local return crossing the VM
+
+  BoundaryTransfer* = object
+    ## Description of a compiled-to-interpreted control transfer. The VM cannot
+    ## import the native runtime, so the runtime installs a translator and
+    ## describes the transfer with values the VM already understands.
+    kind*: BoundaryTransferKind
+    className*: string   # Harding exception class name for btError
+    message*: string     # Exception message for btError
+
+  BoundaryTranslator* = proc(failure: ref CatchableError): BoundaryTransfer {.nimcall.}
+
+  ControlTransfer* = object of CatchableError
+    ## Internal VM signal: a compiled engine raised a Harding error or non-local
+    ## return inside an interpreted call. `failure` keeps the original object so
+    ## its identity (return target) survives interpreter cleanup.
+    failure*: ref CatchableError
+
+proc raiseControlTransfer(failure: ref CatchableError) {.noreturn.} =
+  ## Carry an engine failure out of native invocation. newException's optional
+  ## arguments are the parent exception, not our field, so build it explicitly.
+  var transfer = newException(ControlTransfer, "")
+  transfer.failure = failure
+  raise transfer
+
 # Forward declarations
 proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue
 proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue
@@ -134,6 +164,8 @@ proc primitiveGetenvImpl(interp: var Interpreter, self: Instance,
                          args: seq[NodeValue]): NodeValue {.nimcall.}
 proc resolveLoadInput(interp: Interpreter,
                       requestedPath: string): tuple[ok: bool, source: string, displayPath: string]
+proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer
+proc boundaryHasHandler(interp: Interpreter, className: string): bool
 proc makeStandardFileStreamInstance(fileStreamCls: Class,
                                     kind: FileStreamKind,
                                     mode: string): Instance
@@ -7026,11 +7058,27 @@ type
     vmYielded     # Processor yielded, can be resumed
     vmCompleted   # Execution finished
     vmError       # Error occurred
+    vmTransfer    # Compiled control transfer escaping this VM invocation
 
   VMResult* = object
     status*: VMStatus
     value*: NodeValue
     error*: string
+    transferFailure*: ref CatchableError  # Set for vmTransfer
+
+var boundaryTranslator*: BoundaryTranslator = nil
+  ## Installed by the native runtime at module load; nil in pure VM builds.
+
+type
+  BoundaryReturnSignal = object of CatchableError
+    ## Internal: carries an escaping compiled non-local return through
+    ## interpreter cleanup frames. Never leaves the VM.
+    failure: ref CatchableError
+
+  BoundaryErrorSignal = object of CatchableError
+    ## Internal: carries an escaping compiled error after interpreter cleanup has
+    ## run. The loop reports it as the VM diagnostics it would have produced.
+    failure: ref CatchableError
 
 # Work frame constructors
 proc newEvalFrame*(node: Node): WorkFrame =
@@ -8055,7 +8103,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
             try:
               type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
               let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-              resultVal = nativeProc(interp, classReceiver, args)
+              try:
+                resultVal = nativeProc(interp, classReceiver, args)
+              except CatchableError as failure:
+                if compiledTransfer(interp, failure).kind != btNone:
+                  raiseControlTransfer(failure)
+                raise
             finally:
               interp.currentReceiver = savedReceiver
           else:
@@ -8140,7 +8193,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
               if currentMethod.hasInterpreterParam:
                 type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
                 let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
-                resultVal = nativeProc(interp, classReceiver, args)
+                try:
+                  resultVal = nativeProc(interp, classReceiver, args)
+                except CatchableError as failure:
+                  if compiledTransfer(interp, failure).kind != btNone:
+                    raiseControlTransfer(failure)
+                  raise
               else:
                 type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
                 let nativeProc = cast[NativeProc](currentMethod.nativeImpl)
@@ -8222,7 +8280,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
                 try:
                   type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
                   let nativeProc = cast[NativeProcWithInterp](classMethodToRun.nativeImpl)
-                  resultVal = nativeProc(interp, classReceiver, args)
+                  try:
+                    resultVal = nativeProc(interp, classReceiver, args)
+                  except CatchableError as failure:
+                    if compiledTransfer(interp, failure).kind != btNone:
+                      raiseControlTransfer(failure)
+                    raise
                 finally:
                   interp.currentReceiver = savedReceiver
               else:
@@ -8483,7 +8546,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
           type NativeProcWithInterp = proc(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
           let nativeProc = cast[NativeProcWithInterp](currentMethod.nativeImpl)
           debug("VM: About to call nativeProc, receiver=", (if receiver != nil: receiver.class.name else: "nil"), " receiver ptr=", cast[int](receiver))
-          resultVal = nativeProc(interp, receiver, args)
+          try:
+            resultVal = nativeProc(interp, receiver, args)
+          except CatchableError as failure:
+            if compiledTransfer(interp, failure).kind != btNone:
+              raiseControlTransfer(failure)
+            raise
           debug("VM: Native method returned: ", resultVal.toString())
         else:
           type NativeProc = proc(self: Instance, args: seq[NodeValue]): NodeValue {.nimcall.}
@@ -8575,7 +8643,12 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         ", got " & $args.len)
 
     if blockNode.compiledInvoker != nil:
-      interp.pushValue(blockNode.compiledInvoker(blockNode, args))
+      try:
+        interp.pushValue(blockNode.compiledInvoker(blockNode, args))
+      except CatchableError as failure:
+        if compiledTransfer(interp, failure).kind != btNone:
+          raiseControlTransfer(failure)
+        raise
       return true
 
     # Block's home activation determines 'self'
@@ -9145,9 +9218,35 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
       discard primitiveSignalImpl(interp, frame.exceptionInstance, @[])
     return true
 
+  of wfResumeTransfer:
+    # Interpreted cleanup finished; finish unwinding outward.
+    if compiledTransfer(interp, frame.transferFailure).kind == btReturn:
+      raise newException(BoundaryReturnSignal, "")
+    raise newException(BoundaryErrorSignal, "", frame.transferFailure)
   of wfEvalNode:
     # Should not reach here - wfEvalNode is handled in handleEvalNode
     return handleEvalNode(interp, frame)
+
+proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer =
+  ## Classify a compiled-engine transfer using the runtime's registered translator.
+  if boundaryTranslator == nil or failure == nil:
+    return
+  result = boundaryTranslator(failure)
+
+proc boundaryHasHandler(interp: Interpreter, className: string): bool =
+  ## True when a live interpreted handler would accept this compiled error.
+  var exceptionClass = findClassInLibraries(interp, className)
+  if exceptionClass == nil and interp.globals != nil and className in interp.globals[]:
+    let classVal = interp.globals[][className]
+    if classVal.kind == vkClass:
+      exceptionClass = classVal.classVal
+    elif classVal.kind == vkInstance and classVal.instVal != nil:
+      exceptionClass = classVal.instVal.class
+  if exceptionClass == nil:
+    return false
+  for handler in interp.exceptionHandlers:
+    if not handler.consumed and isKindOf(exceptionClass, handler.exceptionClass):
+      return true
 
 # Main execution loop
 proc runASTInterpreter*(interp: var Interpreter): VMResult =
@@ -9210,6 +9309,44 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       frame.skipRelease = false
       signalExceptionByName(interp, "Error", rejection.reason)
       continue
+    except ControlTransfer as e:
+      # A compiled body raised a Harding error or a non-local return. Interpreted
+      # ensure: scopes still owed cleanup run first; then an error is signalled
+      # into the interpreter (ordinary on:do: handling) and a return continues
+      # outward to its compiled home.
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      let transfer = compiledTransfer(interp, e.failure)
+      if transfer.kind == btReturn:
+        let continuation = acquireFrame()
+        continuation.kind = wfResumeTransfer
+        continuation.transferFailure = e.failure
+        if interp.scheduleUnwindCleanup(-1, continuation):
+          continue
+        releaseFrame(continuation)
+        raise newException(BoundaryReturnSignal, "")
+      elif transfer.kind == btError and boundaryHasHandler(interp, transfer.className):
+        signalExceptionByName(interp, transfer.className, transfer.message)
+        continue
+      elif transfer.kind == btError:
+        let continuation = acquireFrame()
+        continuation.kind = wfResumeTransfer
+        continuation.transferFailure = e.failure
+        if interp.scheduleUnwindCleanup(-1, continuation):
+          continue
+        releaseFrame(continuation)
+      return VMResult(status: vmError, error: "VM error: " & e.failure.msg)
+    except BoundaryReturnSignal as escaped:
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      return VMResult(status: vmTransfer, transferFailure: escaped.failure)
+    except BoundaryErrorSignal as escaped:
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      return VMResult(status: vmError, error: "VM error: " & escaped.failure.msg)
     except ValueError as e:
       if not frame.skipRelease:
         releaseFrame(frame)
@@ -9262,6 +9399,10 @@ proc evalWithVM*(interp: var Interpreter, node: Node): NodeValue =
         vmResult.value
       of vmError:
         raise newException(ValueError, vmResult.error)
+      of vmTransfer:
+        # A compiled transfer escaped this nested evaluation: keep it raising so
+        # the host boundary (or the enclosing compiled call) sees the original.
+        raiseControlTransfer(vmResult.transferFailure)
       of vmRunning:
         nilValue()
   finally:
@@ -9313,6 +9454,11 @@ proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
   interp.suppressUncaughtExit = true
   try:
     result = evalWithVMCleanContext(interp, node)
+  except ControlTransfer as transfer:
+    # Hand the original engine transfer back to the caller: a compiled host
+    # must receive its own NonLocalReturnException instance because return
+    # targets are compared by identity.
+    raise transfer.failure
   finally:
     interp.suppressUncaughtExit = previousSuppress
 

@@ -36,6 +36,11 @@ proc newRuntime*(): Runtime =
   )
 
 type
+  CompiledControlTransfer* = object of CatchableError
+    ## Exported marker for compiled-engine control transfers (non-local return
+    ## and equivalents). The VM schema BoundaryTransfer selects what the
+    ## interpreter does with each kind.
+
   CompiledHardingError* = object of CatchableError
     value*: NodeValue
   HandlerRetry = object of CatchableError
@@ -812,6 +817,29 @@ proc unbindCompiledMethodsFrom*(interp: Interpreter) =
   for cls in classes:
     boundCompiledClasses.del(cls)
   if classes.len > 0: inc compiledClassDispatchVersion
+
+proc compiledExceptionMessage*(value: NodeValue): string
+
+proc boundaryTransferOf*(failure: ref CatchableError): BoundaryTransfer =
+  ## Describe a compiled-engine transfer for the VM's callback boundary.
+  ## Ordinary Nim/Harding errors stay ordinary VM errors.
+  if failure == nil:
+    return
+  if failure of CompiledControlTransfer:
+    # Compiled return targets are compared by identity by their own home frames;
+    # the VM only needs to know it must finish unwinding and re-raise.
+    return BoundaryTransfer(kind: btReturn)
+  if failure of CompiledHardingError:
+    let value = (ref CompiledHardingError)(failure).value
+    let className = if value.kind == vkInstance and value.instVal != nil and
+                       value.instVal.class != nil:
+                      value.instVal.class.name
+                    else:
+                      "Error"
+    return BoundaryTransfer(kind: btError, className: className,
+                            message: compiledExceptionMessage(value))
+
+boundaryTranslator = boundaryTransferOf
 
 proc registerNimProxyClassName*(nimValue: pointer, className: string) =
   ## Register the class name for a Nim proxy object

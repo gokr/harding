@@ -685,22 +685,25 @@ complete from the focused host or freeze-task results.
   class to a new global (`Alias := Bag`) renamed the original class. Binding
   names now apply only while a class still carries a placeholder name, in both
   assignment paths.
-- Confirmed engine transfer defect (`build/repro_boundary_transfers.nim` and log):
-  interpreted `[[Error signal: "boundary failure"] ensure: [Cleanup := true]]
-  on: Error do: [:ex | 42]` answers 42 and sets Cleanup true. Replacing the signal
-  block with a native callback raising `CompiledHardingError` reports a VM error,
-  answers nil and leaves Cleanup false. A native `NonLocalReturnException` also
-  bypasses VM cleanup. Affects interpreted `on:do:`/`ensure:` around compiled
-  callbacks. User approved translation: native errors must reach interpreted
-  handlers and native return tokens must preserve intervening VM cleanup. This
-  remains to implement; no restriction-only substitute was chosen.
-- Evidence at `eeed034`: full parity sweep 94 passes / 2 build timeouts; both
-  timeout cases pass in a focused rerun with 300s build limits, covering all 96
-  cases across runs. This is not a clean single full-suite pass. Freeze task
-  executes 10 declared parity cases, manifest/host unit tests under ARC/ORC and
-  7 Python gate/build tests (including generated ARC/ORC hosts). These tests do
-  not prove dynamic dependency closure, every counterpart method, full sealing,
-  native process suspension, C ABI transfer safety or compiled Bona acceptance.
+- Engine transfer translation implemented (user-approved).`CompiledHardingError`
+  and compiled non-local returns raised inside an interpreted call are now caught
+  at the VM's native/compiled-block invocation sites: pending interpreted
+  `ensure:` scopes run first, then an error is signalled into the interpreter so
+  ordinary `on:do:` handling applies, and a return token stops VM unwinding and is
+  re-raised to its compiled home. Error identifiers become Harding exception
+  class names (unknown names fall back to a VM diagnostic). Uncaught compiled
+  errors keep their previous diagnostic and do not terminate a host. Return
+  targets are not compared across engines: `BlockCannotReturn` still applies only
+  within an engine. Regression coverage:
+  `test_engine_boundary` (ARC/ORC) for handler, cleanup and uncaught paths.
+- Evidence: full native parity sweep passes 98/98 in one run with 300s build
+  limits (after adding `array_clear_and_sort` and `stdlib_bag`). Interpreter
+  regressions pass: 172 tests across exception handling, interpreter core,
+  closures, load/eval and the scheduler suites. Freeze task executes the declared
+  parity cases, manifest/host unit tests under ARC/ORC and the Python gate/build
+  tests including generated ARC/ORC hosts. These tests do not prove dynamic
+  dependency closure, every counterpart method, full sealing, native process
+  suspension, complete C ABI lifetime coverage or compiled Bona acceptance.
 
 The original plan aimed to reach this scenario **without** requiring generic
 whole-stdlib compilation.

@@ -237,6 +237,10 @@ proc runCurrentProcess*(ctx: SchedulerContext): NodeValue =
     # Process encountered an error - terminate it
     sched.terminateProcess(sched.currentProcess)
     return nilValue()
+  of vmTransfer:
+    # A compiled control transfer cannot cross a scheduled process boundary.
+    sched.terminateProcess(sched.currentProcess)
+    return nilValue()
   of vmCompleted:
     # Normal completion - continue to next statement
     discard

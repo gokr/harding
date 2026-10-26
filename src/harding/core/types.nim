@@ -237,6 +237,7 @@ type
     wfExceptionReturn     # Barrier: when handler completes, unwind to on:do: point
     wfEnsureDone          # Cleanup scope completed: unregister and drop the value
     wfBeginCleanup        # Mark a cleanup scope as running
+    wfResumeTransfer      # Re-raise a compiled transfer after interpreter cleanup
 
   # Work frame for explicit stack VM execution
   WorkFrame* = ref object
@@ -287,6 +288,8 @@ type
     protectedBlockForHandler*: BlockNode
     # For wfEnsureDone
     cleanupEntry*: CleanupEntry
+    # For wfResumeTransfer: the compiled transfer being re-raised after cleanup
+    transferFailure*: ref CatchableError
 
   SourceEntry* = object
     found*: bool

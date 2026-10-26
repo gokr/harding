@@ -238,7 +238,7 @@ proc setGlobal*(name: string, value: NodeValue): NodeValue =
 type
   CompiledReturnTarget* = ref object
     active*: bool
-  NonLocalReturnException* = object of CatchableError
+  NonLocalReturnException* = object of CompiledControlTransfer
     value*: NodeValue
     target*: CompiledReturnTarget
 

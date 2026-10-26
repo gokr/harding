@@ -1,9 +1,10 @@
-import std/[unittest, tables]
+import std/[unittest, tables, strutils]
 import ../src/harding/core/types
 import ../src/harding/core/scheduler
 import ../src/harding/interpreter/vm
 import ../src/harding/interpreter/objects
 import ../src/harding/runtime/runtime
+import ../src/harding/runtime/compiled_support
 
 # Interpreted-to-compiled dispatch.
 #
@@ -38,6 +39,12 @@ proc roundTripShim(interp: var Interpreter, self: Instance,
 proc classSelfShim(interp: var Interpreter, self: NodeValue,
                    args: seq[NodeValue]): NodeValue {.nimcall.} =
   self
+
+proc compiledErrorCallback(): NodeValue {.cdecl.} =
+  raiseCompiledError(compiledErrorValue("Error", "boundary failure"))
+
+proc compiledReturnCallback(): NodeValue {.cdecl.} =
+  raiseNonLocalReturn(CompiledReturnTarget(active: true), toValue(42))
 
 proc classDoubleShim(interp: var Interpreter, self: NodeValue,
                      args: seq[NodeValue]): NodeValue {.nimcall.} =
@@ -224,6 +231,43 @@ suite "Class-side engine boundary":
     unbindCompiledMethodsFrom(interp)
     check sendMessageInterpreted(interp, receiver, "value:", @[toValue(3)]).intVal == 13
     unbindCompiledMethodsFrom(interp)
+
+  test "compiled errors reach interpreted handlers after ensure: cleanup":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    interp.globals[]["CompiledFail"] = createBlock0(compiledErrorCallback, 0)
+    let (_, err) = interp.evalStatements("""
+      CleanupRan := false.
+      Handled := [[CompiledFail value] ensure: [CleanupRan := true]]
+                   on: Error do: [:error | error message].
+    """)
+    require err.len == 0
+    let handled = interp.doit("Handled")
+    require handled[1].len == 0
+    check handled[0].strVal == "boundary failure"
+    let cleaned = interp.doit("CleanupRan")
+    require cleaned[1].len == 0
+    check cleaned[0].boolVal
+
+  test "compiled non-local return runs interpreted ensure: cleanup":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    interp.globals[]["CompiledReturn"] = createBlock0(compiledReturnCallback, 0)
+    let (_, err) = interp.evalStatements("""
+      ReturnCleanup := false.
+      [[CompiledReturn value] ensure: [ReturnCleanup := true]] value.
+    """)
+    check err.len > 0
+    let cleaned = interp.doit("ReturnCleanup")
+    require cleaned[1].len == 0
+    check cleaned[0].boolVal
+
+  test "uncaught compiled errors keep their diagnostic outside handlers":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    interp.globals[]["CompiledFail"] = createBlock0(compiledErrorCallback, 0)
+    let (_, err) = interp.evalStatements("CompiledFail value")
+    check err.contains("boundary failure")
 
 suite "Value-based mixed dispatch":
   let ctx = newSchedulerContext()
