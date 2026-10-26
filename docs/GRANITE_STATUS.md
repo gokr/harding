@@ -86,10 +86,12 @@ through nested cleanup, cleanup-error replacement and generated instance/class
 method returns under ARC/ORC. Unknown compiled exception names fall back
 to the previous VM diagnostic, and uncaught compiled errors still do not quit an
 embedded host. An inactive compiled home signals `BlockCannotReturn`, catchable
-by interpreted handlers. Not covered: a unified interpreted/compiled return-target
-model (interpreted-home returns through a compiled caller currently signal
-`BlockCannotReturn` despite an active home), suspension across the boundary,
-cancellation of in-flight evaluation, and green-thread state transfer. See PLAN.md
+by interpreted handlers. Interpreted-home returns through compiled callers use a
+re-entrant same-host entry: local VM cleanup, compiled cleanup, then the suspended
+VM's return processing. Tests cover nested calls, nil, replacement transfers and
+generated instance/class/super sends under ARC/ORC. External callbacks remain
+isolated. Not covered: suspension across the boundary, cancellation of in-flight
+evaluation, and green-thread state transfer. See PLAN.md
 section 6 for the tests and remaining limits.
 
 ## Validation

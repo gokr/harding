@@ -18,6 +18,18 @@ class GeneratedBoundaryTest(unittest.TestCase):
 TransferFactory>>through: host [ host invoke: [ ^ 42 ]. ^ 99 ].
 TransferFactory class>>through: host [ host invoke: [ ^ 43 ]. ^ 99 ].
 TransferFactory>>fail [ ^ 1 / 0 ].
+TransferFactory>>apply: block [
+  [block value: 41. Continued := true] ensure: [Trace add: 2]. ^ 99
+].
+TransferFactory class>>apply: block [
+  [block value: 41. Continued := true] ensure: [Trace add: 2]. ^ 99
+].
+TransferParent := Object derive: #().
+TransferParent>>invoke: block [ ^ block value: 41 ].
+TransferChild := TransferParent derive: #().
+TransferChild>>apply: block [
+  [super invoke: block. Continued := true] ensure: [Trace add: 2]. ^ 99
+].
 ''')
             generated = subprocess.run([str(ROOT / "granite"), "compile", str(source),
                                         "--dir:" + str(work)], cwd=ROOT,
@@ -38,6 +50,19 @@ TransferFactory := Object derive: #().
 TransferFactory>>through: host [ ^ nil ].
 TransferFactory class>>through: host [ ^ nil ].
 TransferFactory>>fail [ ^ nil ].
+TransferFactory>>apply: block [ ^ nil ].
+TransferFactory class>>apply: block [ ^ nil ].
+TransferParent := Object derive: #().
+TransferParent>>invoke: block [ ^ block value: 41 ].
+TransferChild := TransferParent derive: #().
+TransferChild>>apply: block [ ^ nil ].
+TransferDriver := Object derive: #().
+TransferDriver>>run: target [
+  [target apply: [:n | [^ n + 1] ensure: [Trace add: 1]]]
+    ensure: [Trace add: 3]. ^ 99
+].
+TransferDriver>>nilRun: target [ target apply: [:n | ^ nil]. ^ 99 ].
+TransferDriver>>escape [ ^ [:n | ^ n + 1] ].
 TransferHost := Object derive: #().
 TransferHost>>invoke: block [
   [[block value] ensure: [Trace add: 1]] ensure: [Trace add: 2].
@@ -61,6 +86,24 @@ for (expression, expected) in [("FactoryInstance through: TransferHost new", 42)
 let (handled, error) = interp.doit("[FactoryInstance fail] on: DivisionByZero do: [:ex | 7]")
 doAssert error.len == 0, error
 doAssert handled.intVal == 7
+for target in ["FactoryInstance", "TransferFactory", "TransferChild new"]:
+  let (_, resetError) = interp.evalStatements("Trace := Array new. Continued := false")
+  doAssert resetError.len == 0, resetError
+  let (answer, returnError) = interp.doit("TransferDriver new run: " & target)
+  doAssert returnError.len == 0, returnError
+  doAssert answer.intVal == 42
+  doAssert not interp.globals[]["Continued"].boolVal
+  doAssert interp.globals[]["Trace"].instVal.elements == @[toValue(1), toValue(2), toValue(3)]
+let (nilAnswer, nilError) = interp.doit("TransferDriver new nilRun: FactoryInstance")
+doAssert nilError.len == 0, nilError
+doAssert isNilValue(nilAnswer)
+let (expired, expiredError) = interp.doit("[FactoryInstance apply: TransferDriver new escape] on: BlockCannotReturn do: [:ex | 17]")
+doAssert expiredError.len == 0, expiredError
+doAssert expired.intVal == 17
+doAssert interp.activationStack.len == 0
+doAssert interp.engineActivationScopes.len == 0
+doAssert interp.cleanupStack.len == 0
+doAssert interp.exceptionHandlers.len == 0
 unbindCompiledMethodsFrom(interp)
 echo "transfer identity passed"
 ''')

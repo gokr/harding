@@ -123,6 +123,13 @@ type
 
   BoundaryTranslator* = proc(failure: ref CatchableError): BoundaryTransfer {.nimcall.}
 
+  InterpretedReturnTransfer = object of CatchableError
+    target: Activation
+    value: NodeValue
+
+  EngineSignalTransfer = object of CatchableError
+    exceptionInstance: Instance
+
   ControlTransfer* = object of CatchableError
     ## Internal VM signal: a compiled engine raised a Harding error or non-local
     ## return inside an interpreted call. `failure` keeps the original object so
@@ -176,6 +183,7 @@ proc callNativeValueMethod(interp: var Interpreter, meth: BlockNode,
                           receiverVal: NodeValue,
                           args: seq[NodeValue]): NodeValue =
   ## Execute a NodeValue-oriented native implementation.
+  markHostBlocks(interp, receiverVal, args)
   if meth.hasInterpreterParam:
     type NativeValueProcWithInterp = proc(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue {.nimcall.}
     let nativeProc = cast[NativeValueProcWithInterp](meth.nativeValueImpl)
@@ -1984,6 +1992,10 @@ proc primitiveSignalImpl(interp: var Interpreter, self: Instance, args: seq[Node
   debug("primitiveSignal: no handler found for exception, calling defaultAction")
 
   if interp.suppressUncaughtExit:
+    if interp.engineActivationScopes.len > 0:
+      var transfer = newException(EngineSignalTransfer, message)
+      transfer.exceptionInstance = self
+      raise transfer
     let className = if self != nil and self.class != nil: self.class.name else: "Exception"
     raise newException(EvalError, className & ": " & message)
 
@@ -8858,6 +8870,15 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         releaseFrame(continuation)
         break
 
+    if isNonLocalReturn or frame.returnTarget != nil:
+      for idx, activation in interp.activationStack:
+        if activation == targetActivation:
+          var handlerCount = interp.exceptionHandlers.len
+          while handlerCount > 0 and interp.exceptionHandlers[handlerCount - 1].stackDepth > idx:
+            dec handlerCount
+          interp.truncateExceptionHandlers(handlerCount)
+          break
+
     # Fast path for ordinary local method returns (legacy executeMethod path).
     # Do not unwind workQueue here, because queued frames may belong to caller
     # expressions (e.g. outer binary sends like `C count < 5`).
@@ -8875,6 +8896,13 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         break
 
     if not targetOnStack:
+      for scope in interp.engineActivationScopes:
+        for activation in scope:
+          if activation == targetActivation and not activation.hasReturned:
+            var transfer = newException(InterpretedReturnTransfer, "Interpreted non-local return")
+            transfer.target = targetActivation
+            transfer.value = returnVal
+            raise transfer
       # The home invocation has already finished. The block can still be
       # evaluated and its captured variables remain usable, but there is no
       # longer an invocation to return from, so report BlockCannotReturn rather
@@ -9234,6 +9262,8 @@ proc markHostBlocks(interp: var Interpreter, receiverVal: NodeValue,
 
 proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer =
   ## Classify a compiled-engine transfer using the runtime's registered translator.
+  if failure of InterpretedReturnTransfer or failure of EngineSignalTransfer:
+    return BoundaryTransfer(kind: btReturn)
   if boundaryTranslator == nil or failure == nil:
     return
   result = boundaryTranslator(failure)
@@ -9323,6 +9353,30 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       if not frame.skipRelease:
         releaseFrame(frame)
       frame.skipRelease = false
+      if failure of InterpretedReturnTransfer:
+        let returning = (ref InterpretedReturnTransfer)(failure)
+        var targetHere = false
+        for activation in interp.activationStack:
+          if activation == returning.target:
+            targetHere = true
+            break
+        if targetHere:
+          let continuation = acquireFrame()
+          continuation.kind = wfReturnValue
+          continuation.returnTarget = returning.target
+          continuation.returnValue = returning.value
+          interp.pushWorkFrame(continuation)
+          continue
+      if failure of EngineSignalTransfer:
+        let exceptionInstance = (ref EngineSignalTransfer)(failure).exceptionInstance
+        var handledHere = false
+        for handler in interp.exceptionHandlers:
+          if not handler.consumed and isKindOf(exceptionInstance.class, handler.exceptionClass):
+            handledHere = true
+            break
+        if handledHere or interp.engineActivationScopes.len == 0:
+          discard primitiveSignalImpl(interp, exceptionInstance, @[])
+          continue
       if transfer.kind == btError and boundaryHasHandler(interp, transfer.className):
         signalExceptionByName(interp, transfer.className, transfer.message)
         continue
@@ -9438,6 +9492,12 @@ proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
   ## error instead, and the caller reports it (see invokeGtkCallbackBlock and
   ## its except handlers).
   let previousSuppress = interp.suppressUncaughtExit
+  let savedHandlers = interp.exceptionHandlers
+  let savedCleanup = interp.cleanupStack
+  let savedScopes = interp.engineActivationScopes
+  interp.exceptionHandlers = @[]
+  interp.cleanupStack = @[]
+  interp.engineActivationScopes = @[]
   interp.suppressUncaughtExit = true
   try:
     result = evalWithVMCleanContext(interp, node)
@@ -9447,7 +9507,44 @@ proc evalCallbackNonFatal*(interp: var Interpreter, node: Node): NodeValue =
     # targets are compared by identity.
     raise transfer.failure
   finally:
+    interp.truncateExceptionHandlers(0)
+    interp.exceptionHandlers = savedHandlers
+    interp.cleanupStack = savedCleanup
+    interp.engineActivationScopes = savedScopes
     interp.suppressUncaughtExit = previousSuppress
+
+proc evalEngineNonFatal*(interp: var Interpreter, node: Node,
+                         context: Activation = nil): NodeValue =
+  ## Re-enter the same VM from compiled code without losing suspended homes.
+  ## Each entry owns its handler/cleanup depths; transfers cross compiled frames
+  ## before the suspended VM resumes its own stackless unwinding.
+  let savedStack = interp.activationStack
+  let savedActivation = interp.currentActivation
+  let savedReceiver = interp.currentReceiver
+  let savedHandlers = interp.exceptionHandlers
+  let savedCleanup = interp.cleanupStack
+  let savedSuppress = interp.suppressUncaughtExit
+  interp.engineActivationScopes.add(savedStack)
+  interp.activationStack = if context == nil: @[] else: @[context]
+  interp.currentActivation = context
+  interp.currentReceiver = if context == nil: nil else: context.receiver
+  interp.exceptionHandlers = @[]
+  interp.cleanupStack = @[]
+  interp.suppressUncaughtExit = true
+  try:
+    try:
+      result = interp.evalWithVM(node)
+    except ControlTransfer as transfer:
+      raise transfer.failure
+  finally:
+    interp.truncateExceptionHandlers(0)
+    interp.activationStack = savedStack
+    interp.currentActivation = savedActivation
+    interp.currentReceiver = savedReceiver
+    interp.exceptionHandlers = savedHandlers
+    interp.cleanupStack = savedCleanup
+    interp.suppressUncaughtExit = savedSuppress
+    discard interp.engineActivationScopes.pop()
 
 proc evalSuperCallbackNonFatal*(interp: var Interpreter, receiver: NodeValue,
                                 definingClass: Class, selector: string,
@@ -9466,13 +9563,19 @@ proc evalSuperCallbackNonFatal*(interp: var Interpreter, receiver: NodeValue,
   var arguments: seq[Node]
   for arg in args:
     arguments.add(LiteralNode(value: arg))
+  let message = SuperSendNode(selector: selector, arguments: arguments,
+                              explicitParent: explicitParent)
+  if savedStack.len > 0 or interp.engineActivationScopes.len > 0:
+    try:
+      return interp.evalEngineNonFatal(message, context)
+    finally:
+      releaseActivation(context)
   interp.activationStack = @[context]
   interp.currentActivation = context
   interp.currentReceiver = instance
   interp.suppressUncaughtExit = true
   try:
-    result = interp.evalWithVM(SuperSendNode(selector: selector, arguments: arguments,
-                                           explicitParent: explicitParent))
+    result = interp.evalWithVM(message)
   finally:
     interp.activationStack = savedStack
     interp.currentActivation = savedActivation

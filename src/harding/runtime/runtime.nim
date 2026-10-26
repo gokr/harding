@@ -661,6 +661,11 @@ proc interpretedBlockHost(blk: BlockNode): Interpreter =
     return nil
   cast[Interpreter](blk.hostInterpreterPtr)
 
+proc evalBoundNode(interp: var Interpreter, node: Node): NodeValue =
+  if interp.activationStack.len > 0 or interp.engineActivationScopes.len > 0:
+    return evalEngineNonFatal(interp, node)
+  evalCallbackNonFatal(interp, node)
+
 proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                              selector: string, args: seq[NodeValue]): NodeValue =
   ## Send actual values through the non-fatal host callback boundary.
@@ -682,7 +687,7 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
     arguments.add(LiteralNode(value: argument))
   let message = MessageNode(receiver: LiteralNode(value: receiver),
                             selector: selector, arguments: arguments)
-  result = evalCallbackNonFatal(interp, message)
+  result = evalBoundNode(interp, message)
 
 proc boundClassFor(receiver: NodeValue): Class =
   if boundCompiledClasses.len == 0:
@@ -708,7 +713,7 @@ proc boundGlobalValue*(ownerReceiver: NodeValue, name: string): tuple[handled: b
   if owner == nil:
     return
   var interp = boundCompiledClasses[owner].interpreter
-  result.value = evalCallbackNonFatal(interp, IdentNode(name: name, localIndex: -1))
+  result.value = evalBoundNode(interp, IdentNode(name: name, localIndex: -1))
   result.handled = true
 
 proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
@@ -723,7 +728,7 @@ proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
   let body = BlockNode(body: @[Node(assignment)])
   let message = MessageNode(receiver: LiteralNode(value: NodeValue(kind: vkBlock, blockVal: body)),
                             selector: "value")
-  result.value = evalCallbackNonFatal(interp, message)
+  result.value = evalBoundNode(interp, message)
   result.handled = true
 
 proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,

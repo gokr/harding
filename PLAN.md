@@ -612,11 +612,11 @@ Effort is relative to this codebase, not a schedule commitment.
    locate the lexical class in the live receiver hierarchy and use a non-fatal VM
    super entry with saved/restored host context. Direct/qualified parent lookup,
    class identity, escaped closures, native slot bridges and replacements have
-   ARC/ORC regression coverage. This does not translate error/return transfers.
-   Remaining: complete global/class resolution,
-   layout migration, success-branch cross-engine transfers, yielding and automatic
-   mixed startup. Checked modules have an explicit embedded host factory (step 5),
-   while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
+   ARC/ORC regression coverage, including bidirectional synchronous return
+   transfers through compiled, interpreted and super calls. Remaining: complete
+   global/class resolution, layout migration, yielding and automatic mixed startup.
+   Checked modules have an explicit embedded host factory (step 5), while the legacy
+   `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
    This does not yet establish a compiled Bona or arbitrary `--mixed` support.
 4. **Frozen collections (Bag and Array slices done).** SortedCollection and Bag
@@ -692,13 +692,20 @@ complete from the focused host or freeze-task results.
   `value:value:value:`). Blocks record their owning VM when they cross into a
   native/compiled implementation, so the call returns to that VM, captured cells
   persist across repeated calls. Coverage: `test_engine_boundary` (ARC/ORC).
-  Returning from an interpreted home through a compiled caller is not yet safe:
-  `run [ self apply: [:n | ^ n + 1]. ^ 99 ]` returns 42 with an interpreted
-  `apply: block [ ^ block value: 41 ]`, but reports `BlockCannotReturn` after
-  binding that method to a compiled shim that invokes the block. The host
-  callback clears the active VM home. Reproduction:
-  `build/probe_interpreted_return_home.nim` and its log. The earlier test only
-  exercised an all-interpreted send and has been relabelled as a control.
+  Interpreted-home returns through compiled callers now use `evalEngineNonFatal`:
+  each same-host entry retains suspended activation identities but owns separate
+  handler/cleanup stacks. A return to a suspended home unwinds local cleanup,
+  propagates through compiled cleanup, and resumes `wfReturnValue` only when the
+  home is back on the active VM stack. Nil results and repeated/nested crossings
+  preserve the actual target; expired homes still signal `BlockCannotReturn`.
+  `evalCallbackNonFatal` remains isolated for external callbacks, including from
+  caller handlers, cleanup and suspended homes. Ordinary hosted sends, global
+  helpers and super sends select the re-entrant entry when a VM call is active.
+  Coverage: `test_engine_reentrant_returns` plus generated ARC/ORC instance,
+  class-side and super-call integration in the freeze task. Returning abandons
+  handler scopes only after owed cleanup, allowing cleanup failures to reach
+  still-active handlers; abandoned handlers are then unregistered. Both the mixed
+  and all-interpreted non-local return paths have regressions for stale handlers.
 - Engine transfer translation implemented (user-approved). `CompiledHardingError`
   and compiled non-local returns raised inside an interpreted call are now caught
   at the VM's native/compiled-block invocation sites: pending interpreted
@@ -709,7 +716,8 @@ complete from the focused host or freeze-task results.
   errors keep their previous diagnostic and do not terminate a host. The original
   compiled target is preserved, not remapped to a VM activation. An inactive
   compiled home signals `BlockCannotReturn`, catchable by an interpreted handler;
-  a unified interpreted/compiled return-target model remains open. Regression coverage:
+  return targets stay engine-specific while crossing tokens preserve their identity.
+  Regression coverage:
   `test_engine_boundary` (ARC/ORC) for handler, cleanup and uncaught paths.
   `test_engine_transfers` asserts original return-target/value identity through
   zero/nested cleanup, uncaught diagnostics, replacement errors and pooled-frame

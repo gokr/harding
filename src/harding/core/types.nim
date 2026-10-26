@@ -317,6 +317,7 @@ type
     lastResult*: NodeValue
     exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
     cleanupStack*: seq[CleanupEntry]  # Active `ensure:` scopes, innermost last
+    engineActivationScopes*: seq[seq[Activation]]  # Suspended same-host engine entries
     schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
     hardingHome*: string  # Home directory for loading libraries
     shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch
