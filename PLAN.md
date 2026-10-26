@@ -611,7 +611,7 @@ Effort is relative to this codebase, not a schedule commitment.
    class identity, escaped closures, native slot bridges and replacements have
    ARC/ORC regression coverage. This does not translate error/return transfers.
    Remaining: automatic native-instance binding, complete global/class resolution,
-   layout migration, error/non-local-return translation, yielding and automatic
+   layout migration, success-branch cross-engine transfers, yielding and automatic
    mixed startup. Checked modules have an explicit embedded host factory (step 5),
    while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
    the VM's NodeValue-native ABI, preserving actual/inherited class receiver identity.
