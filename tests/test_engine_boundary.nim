@@ -40,6 +40,16 @@ proc classSelfShim(interp: var Interpreter, self: NodeValue,
                    args: seq[NodeValue]): NodeValue {.nimcall.} =
   self
 
+type AutoProbe = ref object of RootObj
+  stored: NodeValue
+
+proc readAutoProbe(storage: pointer): NodeValue {.nimcall.} =
+  cast[AutoProbe](storage).stored
+
+proc writeAutoProbe(storage: pointer, value: NodeValue): NodeValue {.nimcall.} =
+  cast[AutoProbe](storage).stored = value
+  value
+
 proc compiledErrorCallback(): NodeValue {.cdecl.} =
   raiseCompiledError(compiledErrorValue("Error", "boundary failure"))
 
@@ -231,6 +241,45 @@ suite "Class-side engine boundary":
     unbindCompiledMethodsFrom(interp)
     check sendMessageInterpreted(interp, receiver, "value:", @[toValue(3)]).intVal == 13
     unbindCompiledMethodsFrom(interp)
+
+  test "compiled-created native objects adopt the live class automatically":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let (_, setupError) = interp.evalStatements("""
+      AutoProbe := Object derivePublic: #(stored).
+      AutoProbe>>describe [ ^ "auto:" & stored printString ].
+    """)
+    require setupError.len == 0
+    let live = interp.globals[]["AutoProbe"].classVal
+    registerCompiledSlotNames("AutoProbe", @["stored"])
+    registerSlotAccessor("AutoProbe", "stored", readAutoProbe, writeAutoProbe)
+    let nativeClass = newClass(name = "AutoProbe", slotNames = @["stored"])
+    let owner = AutoProbe(stored: toValue(4))
+    let instance = Instance(kind: ikObject, class: nativeClass, isNimProxy: true,
+      compiledOwner: owner, nimValue: cast[pointer](owner))
+    let value = NodeValue(kind: vkInstance, instVal: instance)
+    check sendMessageInterpreted(interp, value, "describe", @[]).strVal == "auto:4"
+    check instance.class == live
+    check instance.nativeSlots != nil
+    instance.setSlot(0, toValue(9))
+    check owner.stored.intVal == 9
+    check sendMessageInterpreted(interp, value, "describe", @[]).strVal == "auto:9"
+
+  test "automatic binding refuses mismatched native layouts":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let (_, setupError) = interp.evalStatements("MismatchProbe := Object derivePublic: #(stored).")
+    require setupError.len == 0
+    registerCompiledSlotNames("MismatchProbe", @["other"])
+    registerSlotAccessor("MismatchProbe", "other", readAutoProbe, writeAutoProbe)
+    let nativeClass = newClass(name = "MismatchProbe", slotNames = @["other"])
+    let owner = AutoProbe(stored: toValue(1))
+    let instance = Instance(kind: ikObject, class: nativeClass, isNimProxy: true,
+      compiledOwner: owner, nimValue: cast[pointer](owner))
+    let value = NodeValue(kind: vkInstance, instVal: instance)
+    expect ValueError:
+      discard sendMessageInterpreted(interp, value, "describe", @[])
+    check instance.nativeSlots == nil
 
   test "compiled errors reach interpreted handlers after ensure: cleanup":
     var interp = newTestInterpreter()

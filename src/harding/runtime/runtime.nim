@@ -624,14 +624,41 @@ type
 
 var boundCompiledClasses = initTable[Class, BoundCompiledClass]()
 
+proc bindNativeInstanceTo*(interp: Interpreter, receiver: NodeValue): bool
+
+proc autoBindNativeInstance*(interp: Interpreter, receiver: NodeValue): bool =
+  ## Adopt a compiled-created native object into the live class on first
+  ## interpreted use. Only an exact layout match with registered accessors is
+  ## accepted; anything else stays refused, so no field is guessed or migrated.
+  if interp == nil or interp.globals == nil or receiver.kind != vkInstance or
+     receiver.instVal == nil:
+    return false
+  let instance = receiver.instVal
+  if not instance.isNimProxy or instance.nativeSlots != nil or instance.class == nil:
+    return false
+  let name = instance.class.name
+  # Compiled collection owners keep native storage and identity.
+  if instance.kind != ikObject or name notin compiledSlotNames or
+     name notin interp.globals[]:
+    return false
+  let liveValue = interp.globals[][name]
+  if liveValue.kind != vkClass or liveValue.classVal == nil or
+     liveValue.classVal.allSlotNames != compiledSlotNames[name]:
+    return false
+  bindNativeInstanceTo(interp, receiver)
+
 proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                              selector: string, args: seq[NodeValue]): NodeValue =
   ## Send actual values through the non-fatal host callback boundary.
-  ## Native-layout proxies must explicitly opt in through bindNativeInstanceTo.
+  ## A compiled-created native object adopts the live class automatically when
+  ## its layout matches exactly; bindNativeInstanceTo remains available for
+  ## retained wrappers the host wants to bind eagerly.
   if receiver.kind == vkInstance and receiver.instVal != nil and
      receiver.instVal.isNimProxy and receiver.instVal.nimValue != nil:
     if receiver.instVal.nativeSlots == nil:
-      raise newException(ValueError, "Interpreted sends require an explicit native slot binding")
+      discard autoBindNativeInstance(interp, receiver)
+    if receiver.instVal.nativeSlots == nil:
+      raise newException(ValueError, "Interpreted sends require a matching native slot binding")
     receiver.instVal.validateNativeSlots()
   var arguments: seq[Node]
   for argument in args:

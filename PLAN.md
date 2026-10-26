@@ -568,8 +568,11 @@ Effort is relative to this codebase, not a schedule commitment.
    The native runtime shares the same arity-checked dispatcher (0–3 arguments).
    Generated ARC/ORC coverage includes captured updates, collection callbacks,
    conditional/loop callbacks, nil and recovery after a wrong-arity send.
-   Hosts can explicitly `bindNativeInstanceTo(interp, value)` for retained native
-   object wrappers. Binding validates exact live slot names/order, snapshots native
+   Compiled-created native objects are now adopted automatically on first
+   interpreted use when live slot names/order match exactly and accessors are
+   registered, which removes the remaining mirroring step for normal crossing.
+   Hosts can still call `bindNativeInstanceTo(interp, value)` eagerly for retained
+   native object wrappers; mismatched layouts are refused in both paths. Binding validates exact live slot names/order, snapshots native
    accessors and adopts live class identity without a mirrored VM slot array.
    Interpreted ASTs, named/reflected slot access, escaped closures, JSON and shallow
    clones use the bridge; clones have independent ordinary VM slot storage.
@@ -610,7 +613,7 @@ Effort is relative to this codebase, not a schedule commitment.
    super entry with saved/restored host context. Direct/qualified parent lookup,
    class identity, escaped closures, native slot bridges and replacements have
    ARC/ORC regression coverage. This does not translate error/return transfers.
-   Remaining: automatic native-instance binding, complete global/class resolution,
+   Remaining: complete global/class resolution,
    layout migration, success-branch cross-engine transfers, yielding and automatic
    mixed startup. Checked modules have an explicit embedded host factory (step 5),
    while the legacy `--mixed` source-replay bootstrap remains outside that path. Class-side native shims now use
@@ -696,10 +699,14 @@ complete from the focused host or freeze-task results.
   targets are not compared across engines: `BlockCannotReturn` still applies only
   within an engine. Regression coverage:
   `test_engine_boundary` (ARC/ORC) for handler, cleanup and uncaught paths.
-- Evidence: full native parity sweep passes 98/98 in one run with 300s build
-  limits (after adding `array_clear_and_sort` and `stdlib_bag`). Interpreter
-  regressions pass: 172 tests across exception handling, interpreter core,
-  closures, load/eval and the scheduler suites. Freeze task executes the declared
+- Evidence: full native parity sweep covers all 98 cases; the latest run passed
+  97 in-suite and the remaining `benchmark_queens` case passed in an isolated
+  rerun (it timed out at 30s in the interpreter while a build saturated the host,
+  not a semantic mismatch). An earlier sweep passed 98/98 in one run. Interpreter
+  regressions pass: 388 tests across exception handling, interpreter core,
+  closures, load/eval, scheduler, precedence, primitives, dynamic features,
+  literals, slots, extend, cascade, floats, nil conditionals, tagged values,
+  library namespace, signal points, source editing and stdlib collections. Freeze task executes the declared
   parity cases, manifest/host unit tests under ARC/ORC and the Python gate/build
   tests including generated ARC/ORC hosts. These tests do not prove dynamic
   dependency closure, every counterpart method, full sealing, native process

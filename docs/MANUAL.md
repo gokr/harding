@@ -268,8 +268,12 @@ Class-side shims preserve the actual class receiver, including inherited sends.
 Slot reads and writes resolve through the receiver's live class layout, so a
 compiled method works on interpreter-owned instances and runtime subclasses.
 An embedding host can opt a retained native wrapper into interpreted slot access
-with `bindNativeInstanceTo(interp, value)`. It must match the live class's exact
-slot names/order. Interpreted reads/writes use the native fields directly; no slot
+with `bindNativeInstanceTo(interp, value)`. Compiled-created objects are adopted
+automatically on first interpreted use when the live class has exactly the
+compiled slot names in the same order and every field has a registered accessor;
+otherwise the send is refused, so no field is guessed. Native collection owners
+keep their native storage and are not adopted. Interpreted reads/writes use the
+native fields directly; no slot
 array is copied. Clones receive independent shallow VM slot storage. Unbound
 proxies and later incompatible layout changes are rejected. Hosts must release
 host registrations with `unbindCompiledMethodsFrom` before interpreter disposal.
