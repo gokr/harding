@@ -7072,17 +7072,6 @@ type
 var boundaryTranslator*: BoundaryTranslator = nil
   ## Installed by the native runtime at module load; nil in pure VM builds.
 
-type
-  BoundaryReturnSignal = object of CatchableError
-    ## Internal: carries an escaping compiled non-local return through
-    ## interpreter cleanup frames. Never leaves the VM.
-    failure: ref CatchableError
-
-  BoundaryErrorSignal = object of CatchableError
-    ## Internal: carries an escaping compiled error after interpreter cleanup has
-    ## run. The loop reports it as the VM diagnostics it would have produced.
-    failure: ref CatchableError
-
 # Work frame constructors
 proc newEvalFrame*(node: Node): WorkFrame =
   result = acquireFrame()
@@ -9225,10 +9214,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     return true
 
   of wfResumeTransfer:
-    # Interpreted cleanup finished; finish unwinding outward.
-    if compiledTransfer(interp, frame.transferFailure).kind == btReturn:
-      raise newException(BoundaryReturnSignal, "")
-    raise newException(BoundaryErrorSignal, "", frame.transferFailure)
+    raiseControlTransfer(frame.transferFailure)
   of wfEvalNode:
     # Should not reach here - wfEvalNode is handled in handleEvalNode
     return handleEvalNode(interp, frame)
@@ -9328,48 +9314,30 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       frame.skipRelease = false
       signalExceptionByName(interp, "Error", rejection.reason)
       continue
-    except ControlTransfer as e:
-      # A compiled body raised a Harding error or a non-local return. Interpreted
-      # ensure: scopes still owed cleanup run first; then an error is signalled
-      # into the interpreter (ordinary on:do: handling) and a return continues
-      # outward to its compiled home.
+    except CatchableError as caught:
+      var failure = caught
+      while failure of ControlTransfer:
+        failure = (ref ControlTransfer)(failure).failure
+      # Keep the original payload alive before the pooled frame releases it.
+      let transfer = compiledTransfer(interp, failure)
       if not frame.skipRelease:
         releaseFrame(frame)
       frame.skipRelease = false
-      let transfer = compiledTransfer(interp, e.failure)
-      if transfer.kind == btReturn:
-        let continuation = acquireFrame()
-        continuation.kind = wfResumeTransfer
-        continuation.transferFailure = e.failure
-        if interp.scheduleUnwindCleanup(-1, continuation):
-          continue
-        releaseFrame(continuation)
-        raise newException(BoundaryReturnSignal, "")
-      elif transfer.kind == btError and boundaryHasHandler(interp, transfer.className):
+      if transfer.kind == btError and boundaryHasHandler(interp, transfer.className):
         signalExceptionByName(interp, transfer.className, transfer.message)
         continue
-      elif transfer.kind == btError:
+      if transfer.kind in {btReturn, btError}:
         let continuation = acquireFrame()
         continuation.kind = wfResumeTransfer
-        continuation.transferFailure = e.failure
+        continuation.transferFailure = failure
         if interp.scheduleUnwindCleanup(-1, continuation):
           continue
         releaseFrame(continuation)
-      return VMResult(status: vmError, error: "VM error: " & e.failure.msg)
-    except BoundaryReturnSignal as escaped:
-      if not frame.skipRelease:
-        releaseFrame(frame)
-      frame.skipRelease = false
-      return VMResult(status: vmTransfer, transferFailure: escaped.failure)
-    except BoundaryErrorSignal as escaped:
-      if not frame.skipRelease:
-        releaseFrame(frame)
-      frame.skipRelease = false
-      return VMResult(status: vmError, error: "VM error: " & escaped.failure.msg)
-    except ValueError as e:
-      if not frame.skipRelease:
-        releaseFrame(frame)
-      return VMResult(status: vmError, error: e.msg)
+        if transfer.kind == btReturn:
+          return VMResult(status: vmTransfer, transferFailure: failure)
+      if failure of ValueError:
+        return VMResult(status: vmError, error: failure.msg)
+      return VMResult(status: vmError, error: "VM error: " & failure.msg)
     except Exception as e:
       if not frame.skipRelease:
         releaseFrame(frame)

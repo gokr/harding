@@ -309,23 +309,21 @@ suite "Class-side engine boundary":
     let (_, setupError) = interp.evalStatements("Count := 0. BlockCounter := Object derive: #(). BlockCounter>>twice: block [ ^ nil ].")
     require setupError.len == 0
     check bindCompiledMethodShim(interp, "BlockCounter", "twice:", cast[pointer](applyBlockTwiceShim))
-    let (value, err) = interp.doit("BlockCounter new twice: [:step | Count := Count + step]")
+    let (_, err) = interp.doit("BlockCounter new twice: [:step | Count := Count + step]")
     require err.len == 0
     let counter = interp.doit("Count")
     require counter[1].len == 0
     # The shim passes 1 then 2; accumulation proves the cell survived both calls.
     check counter[0].intVal == 3
 
-  test "non-local return inside a compiled-called interpreted block reaches its VM home":
+  test "interpreted non-local return control reaches its VM home":
     var interp = newTestInterpreter()
     defer: unbindCompiledMethodsFrom(interp)
     let (_, setupError) = interp.evalStatements("""
       ReturnHost := Object derive: #().
-      ReturnHost>>apply: block [ ^ nil ].
       ReturnHost>>run: block [ ^ block value: 1 ].
     """)
     require setupError.len == 0
-    check bindCompiledMethodShim(interp, "ReturnHost", "apply:", cast[pointer](applyBlockShim))
     let (value, err) = interp.doit("ReturnHost new run: [:x | ^ x + 100]")
     require err.len == 0
     check value.intVal == 101

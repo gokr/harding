@@ -8,6 +8,72 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class GeneratedBoundaryTest(unittest.TestCase):
+    def test_return_target_survives_interpreted_cleanup(self):
+        base = ROOT / "build" / "engine-boundary"
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="transfers_", dir=base) as directory:
+            work = Path(directory)
+            source = work / "transfers.hrd"
+            source.write_text('''TransferFactory := Object derive: #().
+TransferFactory>>through: host [ host invoke: [ ^ 42 ]. ^ 99 ].
+TransferFactory class>>through: host [ host invoke: [ ^ 43 ]. ^ 99 ].
+TransferFactory>>fail [ ^ 1 / 0 ].
+''')
+            generated = subprocess.run([str(ROOT / "granite"), "compile", str(source),
+                                        "--dir:" + str(work)], cwd=ROOT,
+                                       capture_output=True, text=True, timeout=120)
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+            imports = "\n".join('import "' + (ROOT / path).as_posix() + '"' for path in
+                                ["src/harding/core/types", "src/harding/core/scheduler",
+                                 "src/harding/interpreter/vm", "src/harding/runtime/runtime"])
+            host = work / "host.nim"
+            host.write_text('import std/tables\n' + imports + '''
+import ./transfers
+let context = newSchedulerContext()
+var interp = context.mainProcess.getInterpreter()
+interp.hardingHome = "."
+loadStdlib(interp)
+let (_, setupError) = interp.evalStatements("""
+TransferFactory := Object derive: #().
+TransferFactory>>through: host [ ^ nil ].
+TransferFactory class>>through: host [ ^ nil ].
+TransferFactory>>fail [ ^ nil ].
+TransferHost := Object derive: #().
+TransferHost>>invoke: block [
+  [[block value] ensure: [Trace add: 1]] ensure: [Trace add: 2].
+  Trace add: 99
+].
+Trace := Array new.
+FactoryInstance := TransferFactory new.
+""")
+doAssert setupError.len == 0, setupError
+registerCompiledMethods()
+registerSuperclassHierarchy()
+bindCompiledMethodsTo(interp)
+for (expression, expected) in [("FactoryInstance through: TransferHost new", 42),
+                               ("TransferFactory through: TransferHost new", 43)]:
+  let (_, resetError) = interp.evalStatements("Trace := Array new")
+  doAssert resetError.len == 0, resetError
+  let (answer, error) = interp.doit(expression)
+  doAssert error.len == 0, error
+  doAssert answer.intVal == expected
+  doAssert interp.globals[]["Trace"].instVal.elements == @[toValue(1), toValue(2)]
+let (handled, error) = interp.doit("[FactoryInstance fail] on: DivisionByZero do: [:ex | 7]")
+doAssert error.len == 0, error
+doAssert handled.intVal == 7
+unbindCompiledMethodsFrom(interp)
+echo "transfer identity passed"
+''')
+            for mm in ("arc", "orc"):
+                with self.subTest(mm=mm):
+                    binary = work / ("host_" + mm)
+                    compiled = subprocess.run(["nim", "c", "--mm:" + mm, "-o:" + str(binary), str(host)],
+                                              cwd=ROOT, capture_output=True, text=True, timeout=180)
+                    self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+                    executed = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=60)
+                    self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
+                    self.assertEqual(executed.stdout, "transfer identity passed\n")
+
     def test_generated_class_and_instance_shims(self):
         self.assertTrue((ROOT / "granite").is_file(), "Build ./granite first")
         base = ROOT / "build" / "engine-boundary"

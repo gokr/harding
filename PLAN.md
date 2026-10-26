@@ -691,19 +691,32 @@ complete from the focused host or freeze-task results.
 - Compiled code can call interpreted block arguments (`value` through
   `value:value:value:`). Blocks record their owning VM when they cross into a
   native/compiled implementation, so the call returns to that VM, captured cells
-  persist across repeated calls, and a non-local `^` inside such a block returns
-  to its interpreted home. Coverage: `test_engine_boundary` (ARC/ORC).
-- Engine transfer translation implemented (user-approved).`CompiledHardingError`
+  persist across repeated calls. Coverage: `test_engine_boundary` (ARC/ORC).
+  Returning from an interpreted home through a compiled caller is not yet safe:
+  `run [ self apply: [:n | ^ n + 1]. ^ 99 ]` returns 42 with an interpreted
+  `apply: block [ ^ block value: 41 ]`, but reports `BlockCannotReturn` after
+  binding that method to a compiled shim that invokes the block. The host
+  callback clears the active VM home. Reproduction:
+  `build/probe_interpreted_return_home.nim` and its log. The earlier test only
+  exercised an all-interpreted send and has been relabelled as a control.
+- Engine transfer translation implemented (user-approved). `CompiledHardingError`
   and compiled non-local returns raised inside an interpreted call are now caught
   at the VM's native/compiled-block invocation sites: pending interpreted
   `ensure:` scopes run first, then an error is signalled into the interpreter so
   ordinary `on:do:` handling applies, and a return token stops VM unwinding and is
   re-raised to its compiled home. Error identifiers become Harding exception
   class names (unknown names fall back to a VM diagnostic). Uncaught compiled
-  errors keep their previous diagnostic and do not terminate a host. Return
-  targets are not compared across engines: `BlockCannotReturn` still applies only
-  within an engine. Regression coverage:
+  errors keep their previous diagnostic and do not terminate a host. The original
+  compiled target is preserved, not remapped to a VM activation. An inactive
+  compiled home signals `BlockCannotReturn`, catchable by an interpreted handler;
+  a unified interpreted/compiled return-target model remains open. Regression coverage:
   `test_engine_boundary` (ARC/ORC) for handler, cleanup and uncaught paths.
+  `test_engine_transfers` asserts original return-target/value identity through
+  zero/nested cleanup, uncaught diagnostics, replacement errors and pooled-frame
+  release. Generated instance/class return methods now cross interpreted nested
+  `ensure:` scopes and return to their actual compiled home under ARC/ORC.
+  These regressions caught a payload-free cleanup-continuation exception which
+  previously crashed at callback exit despite the weaker tests passing.
 - Evidence: full native parity sweep covers all 98 cases; the latest run passed
   97 in-suite and the remaining `benchmark_queens` case passed in an isolated
   rerun (it timed out at 30s in the interpreter while a build saturated the host,

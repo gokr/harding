@@ -253,14 +253,19 @@ resolution policy, not a sandbox: file/network primitives retain their behavior.
 
 Interpreted blocks passed into compiled code can be called back with `value`,
 `value:`, `value:value:` and the three-argument form: they run on the VM that
-created them, keep their captured cells, and a `^` inside one returns to its
-interpreted home method. Compiled methods and blocks invoked by interpreted code
-translate their control transfers. An error raised by compiled code runs owed interpreted `ensure:`
+owns the boundary registration and keep their captured cells. A non-local `^`
+from such a block through its compiled caller is not yet supported: callback
+isolation can hide its still-active interpreted home and signal `BlockCannotReturn`.
+Compiled methods and blocks invoked by interpreted code translate their control
+transfers. An error raised by compiled code runs owed interpreted `ensure:`
 cleanups and is then delivered to the ordinary `on:do:` handlers; an uncaught one
 remains a VM diagnostic rather than terminating an embedded host. A compiled
 non-local return stops interpreted unwinding after running owed cleanups and
-propagates to its compiled home. Cross-engine return-target identity and
-`BlockCannotReturn` are not provided.
+propagates to its compiled home with the original target and return value intact,
+including through nested cleanup. Cleanup errors or returns replace a pending
+transfer, and remaining cleanup still runs. An inactive compiled home signals
+`BlockCannotReturn`, catchable by an interpreted handler. A unified return-target
+model spanning interpreted and compiled activations is not provided.
 
 ### Mixed execution boundary (partial support)
 

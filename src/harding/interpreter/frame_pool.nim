@@ -35,6 +35,7 @@ proc clearFrameRefs(frame: WorkFrame) {.inline.} =
   frame.protectedBlockForHandler = nil
   frame.cleanupEntry = nil
   frame.returnTarget = nil
+  frame.transferFailure = nil
   # Clear seqs (release their backing arrays)
   frame.blockArgs.setLen(0)
   frame.pendingArgs.setLen(0)

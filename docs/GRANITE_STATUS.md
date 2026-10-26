@@ -81,10 +81,14 @@ redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 Compiled errors and non-local returns raised inside an interpreted call are
 translated at the VM boundary: owed interpreted `ensure:` scopes run, errors are
 signalled to ordinary `on:do:` handlers, and return tokens stop VM unwinding and
-are re-raised to their compiled home. Unknown compiled exception names fall back
+are re-raised to their compiled home. Tests assert original target/value identity
+through nested cleanup, cleanup-error replacement and generated instance/class
+method returns under ARC/ORC. Unknown compiled exception names fall back
 to the previous VM diagnostic, and uncaught compiled errors still do not quit an
-embedded host. Return targets are compared only within one engine. Not covered:
-cross-engine `BlockCannotReturn` semantics, suspension across the boundary,
+embedded host. An inactive compiled home signals `BlockCannotReturn`, catchable
+by interpreted handlers. Not covered: a unified interpreted/compiled return-target
+model (interpreted-home returns through a compiled caller currently signal
+`BlockCannotReturn` despite an active home), suspension across the boundary,
 cancellation of in-flight evaluation, and green-thread state transfer. See PLAN.md
 section 6 for the tests and remaining limits.
 
