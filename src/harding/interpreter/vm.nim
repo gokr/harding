@@ -166,6 +166,8 @@ proc resolveLoadInput(interp: Interpreter,
                       requestedPath: string): tuple[ok: bool, source: string, displayPath: string]
 proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer
 proc boundaryHasHandler(interp: Interpreter, className: string): bool
+proc markHostBlocks(interp: var Interpreter, receiverVal: NodeValue,
+                    args: seq[NodeValue])
 proc makeStandardFileStreamInstance(fileStreamCls: Class,
                                     kind: FileStreamKind,
                                     mode: string): Instance
@@ -1102,6 +1104,7 @@ proc executeMethod(interp: var Interpreter, currentMethod: BlockNode,
   # Check for native implementation first
   if nativeValueImplIsSet(currentMethod) or nativeImplIsSet(currentMethod):
       debug("Calling native implementation: ", currentMethod.selector, " receiver=", $receiver.class.name, " receiver.kind=", $receiver.kind, " hasInterpreterParam=", currentMethod.hasInterpreterParam)
+      markHostBlocks(interp, if receiver != nil: receiver.toValue() else: nilValue(), arguments)
       let savedReceiver = interp.currentReceiver
       try:
         if nativeValueImplIsSet(currentMethod):
@@ -8096,6 +8099,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
         if nativeImplIsSet(currentMethod):
           var resultVal: NodeValue
           if currentMethod.hasInterpreterParam:
+            markHostBlocks(interp, receiverVal, args)
             let savedReceiver = interp.currentReceiver
             let classReceiver = Instance(kind: ikObject, class: cls, slots: @[], isNimProxy: true,
               nimValue: cast[pointer](cls))
@@ -8523,6 +8527,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # currentMethod is set either from cache (cacheHit) or from lookup (slow path)
     debug("VM: Found method '", frame.selector, "', native=", nativeImplIsSet(currentMethod), " nativeValue=", nativeValueImplIsSet(currentMethod))
     if nativeValueImplIsSet(currentMethod):
+      markHostBlocks(interp, receiverVal, args)
       let savedReceiver = interp.currentReceiver
       try:
         interp.pushValue(callNativeValueMethod(interp, currentMethod, receiverVal, args))
@@ -8538,6 +8543,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if nativeImplIsSet(currentMethod):
       # Call native method
       debug("VM: receiver ptr=", cast[int](receiver), " receiver class=", if receiver != nil and receiver.class != nil: receiver.class.name else: "NIL")
+      markHostBlocks(interp, receiverVal, args)
       let savedReceiver = interp.currentReceiver
       try:
         var resultVal: NodeValue
@@ -9226,6 +9232,19 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
   of wfEvalNode:
     # Should not reach here - wfEvalNode is handled in handleEvalNode
     return handleEvalNode(interp, frame)
+
+proc markHostBlocks(interp: var Interpreter, receiverVal: NodeValue,
+                     args: seq[NodeValue]) =
+  ## Interpreted blocks handed to a native/compiled implementation keep their
+  ## owning VM, so the compiled engine can call them back instead of reporting a
+  ## missing `value` selector.
+  if receiverVal.kind == vkBlock and receiverVal.blockVal != nil and
+     receiverVal.blockVal.nativeImpl == nil:
+    receiverVal.blockVal.hostInterpreterPtr = cast[pointer](interp)
+  for argument in args:
+    if argument.kind == vkBlock and argument.blockVal != nil and
+       argument.blockVal.nativeImpl == nil:
+      argument.blockVal.hostInterpreterPtr = cast[pointer](interp)
 
 proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer =
   ## Classify a compiled-engine transfer using the runtime's registered translator.

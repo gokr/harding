@@ -688,6 +688,11 @@ complete from the focused host or freeze-task results.
   class to a new global (`Alias := Bag`) renamed the original class. Binding
   names now apply only while a class still carries a placeholder name, in both
   assignment paths.
+- Compiled code can call interpreted block arguments (`value` through
+  `value:value:value:`). Blocks record their owning VM when they cross into a
+  native/compiled implementation, so the call returns to that VM, captured cells
+  persist across repeated calls, and a non-local `^` inside such a block returns
+  to its interpreted home. Coverage: `test_engine_boundary` (ARC/ORC).
 - Engine transfer translation implemented (user-approved).`CompiledHardingError`
   and compiled non-local returns raised inside an interpreted call are now caught
   at the VM's native/compiled-block invocation sites: pending interpreted

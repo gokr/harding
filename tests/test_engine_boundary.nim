@@ -50,6 +50,18 @@ proc writeAutoProbe(storage: pointer, value: NodeValue): NodeValue {.nimcall.} =
   cast[AutoProbe](storage).stored = value
   value
 
+proc applyBlockShim(interp: var Interpreter, self: Instance,
+                   args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## Compiled method calling back into an interpreted block argument.
+  initRuntime()
+  sendMessage(currentRuntime[], args[0], "value:", @[toValue(41)])
+
+proc applyBlockTwiceShim(interp: var Interpreter, self: Instance,
+                         args: seq[NodeValue]): NodeValue {.nimcall.} =
+  initRuntime()
+  discard sendMessage(currentRuntime[], args[0], "value:", @[toValue(1)])
+  sendMessage(currentRuntime[], args[0], "value:", @[toValue(2)])
+
 proc compiledErrorCallback(): NodeValue {.cdecl.} =
   raiseCompiledError(compiledErrorValue("Error", "boundary failure"))
 
@@ -280,6 +292,43 @@ suite "Class-side engine boundary":
     expect ValueError:
       discard sendMessageInterpreted(interp, value, "describe", @[])
     check instance.nativeSlots == nil
+
+  test "compiled code calls interpreted block arguments":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let (_, setupError) = interp.evalStatements("BlockCaller := Object derive: #(). BlockCaller>>apply: block [ ^ nil ].")
+    require setupError.len == 0
+    check bindCompiledMethodShim(interp, "BlockCaller", "apply:", cast[pointer](applyBlockShim))
+    let (value, err) = interp.doit("(BlockCaller new) apply: [:x | x + 1]")
+    require err.len == 0
+    check value.intVal == 42
+
+  test "interpreted block keeps its own captured state across the compiled callback":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let (_, setupError) = interp.evalStatements("Count := 0. BlockCounter := Object derive: #(). BlockCounter>>twice: block [ ^ nil ].")
+    require setupError.len == 0
+    check bindCompiledMethodShim(interp, "BlockCounter", "twice:", cast[pointer](applyBlockTwiceShim))
+    let (value, err) = interp.doit("BlockCounter new twice: [:step | Count := Count + step]")
+    require err.len == 0
+    let counter = interp.doit("Count")
+    require counter[1].len == 0
+    # The shim passes 1 then 2; accumulation proves the cell survived both calls.
+    check counter[0].intVal == 3
+
+  test "non-local return inside a compiled-called interpreted block reaches its VM home":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let (_, setupError) = interp.evalStatements("""
+      ReturnHost := Object derive: #().
+      ReturnHost>>apply: block [ ^ nil ].
+      ReturnHost>>run: block [ ^ block value: 1 ].
+    """)
+    require setupError.len == 0
+    check bindCompiledMethodShim(interp, "ReturnHost", "apply:", cast[pointer](applyBlockShim))
+    let (value, err) = interp.doit("ReturnHost new run: [:x | ^ x + 100]")
+    require err.len == 0
+    check value.intVal == 101
 
   test "compiled errors reach interpreted handlers after ensure: cleanup":
     var interp = newTestInterpreter()

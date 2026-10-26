@@ -647,6 +647,20 @@ proc autoBindNativeInstance*(interp: Interpreter, receiver: NodeValue): bool =
     return false
   bindNativeInstanceTo(interp, receiver)
 
+proc markInterpretedBlocks(interp: var Interpreter, values: openArray[NodeValue]) =
+  ## Record which VM owns an interpreted block passed into compiled code, so the
+  ## compiled engine can call it back through this host instead of reporting a
+  ## missing `value` selector.
+  for value in values:
+    if value.kind == vkBlock and value.blockVal != nil and
+       value.blockVal.nativeImpl == nil and value.blockVal.compiledInvoker == nil:
+      value.blockVal.hostInterpreterPtr = cast[pointer](interp)
+
+proc interpretedBlockHost(blk: BlockNode): Interpreter =
+  if blk == nil or blk.hostInterpreterPtr == nil:
+    return nil
+  cast[Interpreter](blk.hostInterpreterPtr)
+
 proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                              selector: string, args: seq[NodeValue]): NodeValue =
   ## Send actual values through the non-fatal host callback boundary.
@@ -660,6 +674,9 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
     if receiver.instVal.nativeSlots == nil:
       raise newException(ValueError, "Interpreted sends require a matching native slot binding")
     receiver.instVal.validateNativeSlots()
+  markInterpretedBlocks(interp, args)
+  if receiver.kind == vkBlock:
+    markInterpretedBlocks(interp, [receiver])
   var arguments: seq[Node]
   for argument in args:
     arguments.add(LiteralNode(value: argument))
@@ -1695,6 +1712,16 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
      receiver.blockVal.nativeImpl != nil:
     if selector in ["value", "value:", "value:value:", "value:value:value:", "value:value:value:value:"]:
       return invokeCompiledBlock(receiver.blockVal, args)
+
+  # An interpreted block handed to compiled code runs on the VM that owns it.
+  # Control transfers inside it follow the same translation as method sends
+  # (errors reach interpreted handlers; returns keep their VM home).
+  if receiver.kind == vkBlock and receiver.blockVal != nil and
+     receiver.blockVal.nativeImpl == nil and
+     selector in ["value", "value:", "value:value:", "value:value:value:", "value:value:value:value:"]:
+    var host = interpretedBlockHost(receiver.blockVal)
+    if host != nil:
+      return sendMessageInterpreted(host, receiver, selector, args)
 
   # A dynamic send reads its selector from an argument, so the builtin table
   # cannot run it: the `perform:` builtins sit after the class-side and compiled

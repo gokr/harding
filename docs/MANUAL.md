@@ -251,8 +251,11 @@ external-library packaging are not supported by this contract. Bootstrap source
 is interpreted, not all compiled natively. Package-only loading is a source
 resolution policy, not a sandbox: file/network primitives retain their behavior.
 
-Compiled methods and blocks invoked by interpreted code translate their control
-transfers. An error raised by compiled code runs owed interpreted `ensure:`
+Interpreted blocks passed into compiled code can be called back with `value`,
+`value:`, `value:value:` and the three-argument form: they run on the VM that
+created them, keep their captured cells, and a `^` inside one returns to its
+interpreted home method. Compiled methods and blocks invoked by interpreted code
+translate their control transfers. An error raised by compiled code runs owed interpreted `ensure:`
 cleanups and is then delivered to the ordinary `on:do:` handlers; an uncaught one
 remains a VM diagnostic rather than terminating an embedded host. A compiled
 non-local return stops interpreted unwinding after running owed cleanups and

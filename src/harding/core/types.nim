@@ -355,6 +355,9 @@ type
     compiledEnv*: RootRef                # managed owner of a compiled closure environment
     # Explicit closure ABI; nativeImpl on method blocks has a different signature.
     compiledInvoker*: proc(blk: BlockNode, args: seq[NodeValue]): NodeValue {.nimcall.}
+    hostInterpreterPtr*: pointer  # owning VM interpreter once the block crosses
+                                  # into compiled code; SchedulerContext-style
+                                  # raw pointer, kept alive by its scheduler
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
