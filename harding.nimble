@@ -314,6 +314,8 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "nim c -r --mm:orc --out:build/test_engine_transfers_orc tests/test_engine_transfers.nim"
   exec "nim c -r --out:build/test_engine_reentrant_returns tests/test_engine_reentrant_returns.nim"
   exec "nim c -r --mm:orc --out:build/test_engine_reentrant_returns_orc tests/test_engine_reentrant_returns.nim"
+  exec "nim c -r --out:build/test_engine_block_lifetime tests/test_engine_block_lifetime.nim"
+  exec "nim c -r --mm:orc --out:build/test_engine_block_lifetime_orc tests/test_engine_block_lifetime.nim"
   exec "python3 -m unittest discover -s tests -p test_engine_boundary_generated.py"
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"

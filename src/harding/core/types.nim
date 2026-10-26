@@ -318,6 +318,7 @@ type
     exceptionHandlers*: seq[ExceptionHandler]  # Stack of active exception handlers
     cleanupStack*: seq[CleanupEntry]  # Active `ensure:` scopes, innermost last
     engineActivationScopes*: seq[seq[Activation]]  # Suspended same-host engine entries
+    blockHostId: uint64  # Current callback-host generation, zero when detached
     schedulerContextPtr*: pointer  # Scheduler context (cast to SchedulerContext when needed)
     hardingHome*: string  # Home directory for loading libraries
     shouldYield*: bool  # Set to true when Processor yield is called for immediate context switch
@@ -356,9 +357,7 @@ type
     compiledEnv*: RootRef                # managed owner of a compiled closure environment
     # Explicit closure ABI; nativeImpl on method blocks has a different signature.
     compiledInvoker*: proc(blk: BlockNode, args: seq[NodeValue]): NodeValue {.nimcall.}
-    hostInterpreterPtr*: pointer  # owning VM interpreter once the block crosses
-                                  # into compiled code; SchedulerContext-style
-                                  # raw pointer, kept alive by its scheduler
+    interpreterHostId: uint64  # Registry handle, never a raw interpreter pointer
     nativeImpl*: pointer                  # compiled implementation
     nativeValueImpl*: pointer             # NodeValue-oriented native implementation
     hasInterpreterParam*: bool            # true if native method needs interpreter parameter
@@ -508,6 +507,48 @@ type
       interpreted*: BlockNode
     of true:
       compiled*: CompiledMethod
+
+var
+  blockHosts = initTable[uint64, Interpreter]()
+  nextBlockHostId: uint64 = 0
+
+proc bindInterpretedBlockHost*(interp: Interpreter, blk: BlockNode) =
+  ## Retain the VM until explicit host detachment. A generation is never reused,
+  ## so escaped blocks cannot alias a later interpreter at the same address.
+  if interp == nil or blk == nil or blk.nativeImpl != nil or blk.compiledInvoker != nil:
+    return
+  if blk.interpreterHostId in blockHosts and blockHosts[blk.interpreterHostId] != interp:
+    raise newException(ValueError, "Interpreted block is already bound to another host")
+  if interp.blockHostId == 0:
+    if nextBlockHostId == high(uint64):
+      raise newException(ValueError, "Interpreted block host generations exhausted")
+    inc nextBlockHostId
+    interp.blockHostId = nextBlockHostId
+    blockHosts[interp.blockHostId] = interp
+  blk.interpreterHostId = interp.blockHostId
+
+proc retainInterpretedBlockHost*(interp: Interpreter, blk: BlockNode) =
+  ## Ordinary handoffs preserve an existing live owner across shared-image
+  ## evaluations. Explicit binding still rejects attempts to replace that owner.
+  if blk != nil and blk.interpreterHostId in blockHosts:
+    return
+  bindInterpretedBlockHost(interp, blk)
+
+proc interpretedBlockHost*(blk: BlockNode): Interpreter =
+  ## Resolve only a live generation. Detached blocks must be explicitly attached
+  ## through a host entry before native invocation can use them again.
+  if blk == nil or blk.interpreterHostId == 0:
+    return nil
+  if blk.interpreterHostId notin blockHosts:
+    raise newException(ValueError, "Interpreted block host has been detached")
+  blockHosts[blk.interpreterHostId]
+
+proc releaseInterpretedBlockHost*(interp: Interpreter) =
+  ## Invalidate escaped callback handles and release the registry's VM owner.
+  if interp == nil or interp.blockHostId == 0:
+    return
+  blockHosts.del(interp.blockHostId)
+  interp.blockHostId = 0
 
 # ============================================================================
 # Global Class Variables (declared early for use in helper procs)

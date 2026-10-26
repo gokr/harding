@@ -76,6 +76,17 @@ while lexical shadows stay permitted. It does not prove alias/dynamic mutation
 safety, seal VM classes or protect direct Nim access and is not full-deliverable
 redefinition enforcement. See the manual and PLAN.md section 6 for the scope.
 
+## Callback host lifetime
+
+Interpreted callback blocks use generation handles and a keep-alive registry,
+not raw interpreter pointers. Non-scheduler hosts remain live until explicit
+`unbindCompiledMethodsFrom`; detach invalidates escaped native callbacks.
+Explicit host entry can reattach a block, but does not revive detached siblings
+or permit stealing a live callback from another interpreter. Tests cover isolated
+evaluation, returned closures and preserved captures under ARC/ORC. This is
+owning-thread-only and does not implement scheduler disposal or cross-thread
+callbacks.
+
 ## Cross-engine transfers
 
 Compiled errors and non-local returns raised inside an interpreted call are

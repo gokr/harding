@@ -245,7 +245,19 @@ are not replayed and the application source file is not needed at runtime. Relea
 host registrations with `unbindCompiledMethodsFrom(interp)` before host disposal.
 Detach restores original interpreted method metadata only where the installed
 native pointer still belongs to that binding; runtime replacements remain intact.
-The same live methods can subsequently be rebound.
+The same live methods can subsequently be rebound. Interpreted callbacks carry
+monotonic host-generation handles, not interpreter pointers. A registry keeps
+each registered interpreter alive, including interpreters without schedulers and
+isolated evaluation contexts. Detach releases this registry ownership and native
+invocation of an escaped callback then raises `ValueError` (detached host).
+Explicit `sendMessageInterpreted` or `bindInterpretedBlockHost` can reattach a
+block; creating a new host or reattaching another block does not revive old
+handles. Ordinary argument/return handoffs preserve an existing live owner,
+including across evaluations sharing one image; a live callback cannot be
+explicitly rebound to another interpreter.
+These APIs remain confined to the VM's owning thread; this is not cross-thread
+callback support. Hosts must detach registrations even when only callbacks, not
+compiled methods, were registered.
 The factory currently uses the standard core bootstrap; custom bootstraps and
 external-library packaging are not supported by this contract. Bootstrap source
 is interpreted, not all compiled natively. Package-only loading is a source

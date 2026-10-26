@@ -654,17 +654,14 @@ proc markInterpretedBlocks(interp: var Interpreter, values: openArray[NodeValue]
   for value in values:
     if value.kind == vkBlock and value.blockVal != nil and
        value.blockVal.nativeImpl == nil and value.blockVal.compiledInvoker == nil:
-      value.blockVal.hostInterpreterPtr = cast[pointer](interp)
-
-proc interpretedBlockHost(blk: BlockNode): Interpreter =
-  if blk == nil or blk.hostInterpreterPtr == nil:
-    return nil
-  cast[Interpreter](blk.hostInterpreterPtr)
+      retainInterpretedBlockHost(interp, value.blockVal)
 
 proc evalBoundNode(interp: var Interpreter, node: Node): NodeValue =
   if interp.activationStack.len > 0 or interp.engineActivationScopes.len > 0:
-    return evalEngineNonFatal(interp, node)
-  evalCallbackNonFatal(interp, node)
+    result = evalEngineNonFatal(interp, node)
+  else:
+    result = evalCallbackNonFatal(interp, node)
+  markInterpretedBlocks(interp, [result])
 
 proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                              selector: string, args: seq[NodeValue]): NodeValue =
@@ -681,7 +678,7 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
     receiver.instVal.validateNativeSlots()
   markInterpretedBlocks(interp, args)
   if receiver.kind == vkBlock:
-    markInterpretedBlocks(interp, [receiver])
+    bindInterpretedBlockHost(interp, receiver.blockVal)
   var arguments: seq[Node]
   for argument in args:
     arguments.add(LiteralNode(value: argument))
@@ -866,6 +863,7 @@ proc unbindCompiledMethodsFrom*(interp: Interpreter) =
   for cls in classes:
     boundCompiledClasses.del(cls)
   if classes.len > 0: inc compiledClassDispatchVersion
+  releaseInterpretedBlockHost(interp)
 
 proc compiledExceptionMessage*(value: NodeValue): string
 
@@ -1182,7 +1180,10 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
        receiver.instVal.nativeSlots == nil:
       raise newException(ValueError, "Super sends require an explicit native slot binding")
     var interp = boundCompiledClasses[boundOwner].interpreter
-    return evalSuperCallbackNonFatal(interp, receiver, definition, selector, args, explicitParent)
+    markInterpretedBlocks(interp, args)
+    result = evalSuperCallbackNonFatal(interp, receiver, definition, selector, args, explicitParent)
+    markInterpretedBlocks(interp, [result])
+    return
   var startClass = explicitParent
   if startClass.len > 0:
     if startClass notin getSuperclasses(definingClassName):

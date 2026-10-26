@@ -706,6 +706,18 @@ complete from the focused host or freeze-task results.
   handler scopes only after owed cleanup, allowing cleanup failures to reach
   still-active handlers; abandoned handlers are then unregistered. Both the mixed
   and all-interpreted non-local return paths have regressions for stale handlers.
+- Callback host lifetime: interpreted blocks use private monotonically allocated
+  host-generation IDs with a keep-alive registry rather than raw interpreter
+  pointers. Non-scheduler/isolated-evaluation hosts remain live until explicit
+  detach; `unbindCompiledMethodsFrom` releases the registry entry and old native
+  callback handles fail with `ValueError`. Explicit reattachment creates a fresh
+  generation without reviving sibling handles; live cross-host rebinding is
+  rejected. Ordinary argument/return handoffs preserve existing live ownership
+  across shared-image evaluations. Return blocks from ordinary/global/super
+  sends are registered too.
+  The registry and VM are owning-thread-only, not a cross-thread callback API.
+  This does not dispose scheduler registries or claim whole-image collection.
+  Coverage: `test_engine_block_lifetime` under ARC/ORC in the freeze task.
 - Engine transfer translation implemented (user-approved). `CompiledHardingError`
   and compiled non-local returns raised inside an interpreted call are now caught
   at the VM's native/compiled-block invocation sites: pending interpreted

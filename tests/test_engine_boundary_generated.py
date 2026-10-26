@@ -104,6 +104,19 @@ doAssert interp.activationStack.len == 0
 doAssert interp.engineActivationScopes.len == 0
 doAssert interp.cleanupStack.len == 0
 doAssert interp.exceptionHandlers.len == 0
+let (escapedCallback, callbackError) = interp.doit("[:n | n + 1]")
+doAssert callbackError.len == 0, callbackError
+bindInterpretedBlockHost(interp, escapedCallback.blockVal)
+doAssert sendMessage(nil, escapedCallback, "value:", @[toValue(41)]).intVal == 42
+unbindCompiledMethodsFrom(interp)
+var detached = false
+try:
+  discard sendMessage(nil, escapedCallback, "value:", @[toValue(41)])
+except ValueError:
+  detached = true
+doAssert detached
+bindCompiledMethodsTo(interp)
+doAssert sendMessageInterpreted(interp, escapedCallback, "value:", @[toValue(41)]).intVal == 42
 unbindCompiledMethodsFrom(interp)
 echo "transfer identity passed"
 ''')

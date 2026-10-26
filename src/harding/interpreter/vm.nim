@@ -9254,11 +9254,11 @@ proc markHostBlocks(interp: var Interpreter, receiverVal: NodeValue,
   ## missing `value` selector.
   if receiverVal.kind == vkBlock and receiverVal.blockVal != nil and
      receiverVal.blockVal.nativeImpl == nil:
-    receiverVal.blockVal.hostInterpreterPtr = cast[pointer](interp)
+    retainInterpretedBlockHost(interp, receiverVal.blockVal)
   for argument in args:
     if argument.kind == vkBlock and argument.blockVal != nil and
        argument.blockVal.nativeImpl == nil:
-      argument.blockVal.hostInterpreterPtr = cast[pointer](interp)
+      retainInterpretedBlockHost(interp, argument.blockVal)
 
 proc compiledTransfer(interp: Interpreter, failure: ref CatchableError): BoundaryTransfer =
   ## Classify a compiled-engine transfer using the runtime's registered translator.
