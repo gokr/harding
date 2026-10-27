@@ -105,6 +105,21 @@ isolated. Not covered: suspension across the boundary, cancellation of in-flight
 evaluation, and green-thread state transfer. See PLAN.md
 section 6 for the tests and remaining limits.
 
+## Native GTK demo proof
+
+`demos/native-gtk-counter` assembles a GTK4 native shell with a Granite-compiled
+Harding counter model and action blocks. The package target is one executable
+plus system GTK4 dependencies, without runtime `.hrd` sources or interpreter
+startup. `test_native_gtk_demo.py` exercises the GTK event loop, button signals,
+label text, error recovery and closure destruction under ARC/ORC. Widget creation
+is still handwritten Nim; this is not general compilation of the existing GTK
+wrappers or a compiled Bona deliverable. Shared runtime imports still include
+VM support modules. `nimble testNativeGtkDemo` runs interpreter model tests
+under ARC/ORC and packaged-binary acceptance. Set `NATIVE_GTK_ATSPI=1` for real
+PID-scoped accessibility clicks and observed label checks. These have been
+exercised in the local GTK session; headless signal tests alone are not claimed
+as interactive acceptance. See the demo README for build and acceptance commands.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:

@@ -409,6 +409,12 @@ arbitrary error resumption solely in the interpreter.
 - [ ] Catch/translate error and return transfers at C ABI boundaries; validate
       foreign callback lifetime and resource ownership.
 - [ ] Compile library-heavy applications without interpreter fallback.
+      First GTK proof: `demos/native-gtk-counter` combines a handwritten native
+      GTK4 shell with a Granite-compiled Harding model/action blocks. Binary-only
+      acceptance checks ARC/ORC real event-loop signals, label updates, callback
+      error recovery and signal-owner release with no interpreter startup. UI
+      construction in Harding and native counterparts for existing GTK selectors
+      remain next; this is not general GTK codegen or compiled Bona acceptance.
 - [ ] Complete mixed-mode execution coverage separately from pure compilation.
       Value/shim/slot/block/super host slices work in executed tests; arbitrary
       control transfers and automatic mixed startup remain incomplete. See section 6.

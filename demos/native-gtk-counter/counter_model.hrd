@@ -1,0 +1,31 @@
+# Application state and event handlers compiled by Granite.
+# The native GTK shell supplies a CounterView instance implementing text:.
+CounterView := Object derive: #()
+CounterModel := Object derive: #(count, view)
+
+CounterModel>>startOn: aView [
+    view := aView.
+    count := 0.
+    self refresh.
+    ^self
+]
+
+CounterModel>>refresh [
+    view text: ("Count: " & count printString)
+]
+
+CounterModel>>incrementAction [
+    ^[count := count + 1. self refresh]
+]
+
+CounterModel>>resetAction [
+    ^[count := 0. self refresh]
+]
+
+CounterModel>>failingAction [
+    ^[Error signal: "Deliberate callback failure"]
+]
+
+CounterModel>>count [
+    ^count
+]

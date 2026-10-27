@@ -320,6 +320,12 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
+task testNativeGtkDemo, "Validate native GTK shell and Granite-compiled counter (display required)":
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "nim c -r --out:build/test_native_gtk_model tests/test_native_gtk_model.nim"
+  exec "nim c -r --mm:orc --out:build/test_native_gtk_model_orc tests/test_native_gtk_model.nim"
+  exec "python3 -m unittest discover -s tests -p test_native_gtk_demo.py"
+
 task bona, "Build bona IDE (debug) in repo root":
   # Build GUI IDE in debug mode with GTK4 + Granite primitives, output to repo root
   ensureExternalLibsFile()
