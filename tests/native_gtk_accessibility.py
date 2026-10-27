@@ -75,6 +75,23 @@ def check_label(expected):
 
 
 check_label("Count: 0")
+# Layout contract: primary actions share a row and diagnostics sit below them.
+def bounds(name, role):
+    matches = [node for node in walk(window)
+               if node.get_role_name() == role and node.get_name() == name]
+    assert len(matches) == 1, (name, len(matches))
+    return matches[0].get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+
+increment = bounds("Increment", "push button")
+reset = bounds("Reset", "push button")
+diagnostics = bounds("Test callback error", "push button")
+counter = bounds("Count: 0", "label")
+assert increment.width > 0 and increment.height > 0
+assert abs(increment.y - reset.y) <= 2
+assert reset.x >= increment.x + increment.width + 8
+assert counter.y + counter.height <= increment.y
+assert diagnostics.y >= increment.y + increment.height + 16
+print("Observed padded two-column action layout", flush=True)
 click("Increment")
 check_label("Count: 1")
 click("Increment")

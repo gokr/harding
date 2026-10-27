@@ -34,6 +34,15 @@ proc newLabel(text: cstring): Widget {.cdecl, importc: "gtk_label_new".}
 proc labelText(label: Widget, text: cstring) {.cdecl, importc: "gtk_label_set_text".}
 proc labelText(label: Widget): cstring {.cdecl, importc: "gtk_label_get_text".}
 proc newButton(text: cstring): Widget {.cdecl, importc: "gtk_button_new_with_label".}
+proc marginTop(widget: Widget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_top".}
+proc marginBottom(widget: Widget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_bottom".}
+proc marginStart(widget: Widget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_start".}
+proc marginEnd(widget: Widget, margin: cint) {.cdecl, importc: "gtk_widget_set_margin_end".}
+proc alignHorizontal(widget: Widget, alignment: cint) {.cdecl, importc: "gtk_widget_set_halign".}
+proc expandVertical(widget: Widget, expand: cint) {.cdecl, importc: "gtk_widget_set_vexpand".}
+proc addCssClass(widget: Widget, name: cstring) {.cdecl, importc: "gtk_widget_add_css_class".}
+proc homogeneous(box: Widget, enabled: cint) {.cdecl, importc: "gtk_box_set_homogeneous".}
+proc wrapLabel(label: Widget, enabled: cint) {.cdecl, importc: "gtk_label_set_wrap".}
 proc timeout(milliseconds: cuint, callback: proc(data: pointer): cint {.cdecl.},
              data: pointer): cuint {.cdecl, importc: "g_timeout_add".}
 
@@ -136,12 +145,42 @@ proc activate(application: pointer, data: pointer) {.cdecl.} =
   try:
     window = applicationWindow(application)
     windowTitle(window, "Harding — Native GTK Counter")
-    windowSize(window, 360, 200)
-    let box = newBox(1, 12)
+    windowSize(window, 420, 360)
+    let box = newBox(1, 20)
+    marginTop(box, 28)
+    marginBottom(box, 24)
+    marginStart(box, 32)
+    marginEnd(box, 32)
+    let heading = newLabel("Native counter")
+    addCssClass(heading, "title-2")
+    let subtitle = newLabel("Harding actions, compiled with Granite")
+    addCssClass(subtitle, "dim-label")
+    let header = newBox(1, 6)
+    append(header, heading)
+    append(header, subtitle)
     label = newLabel("")
+    addCssClass(label, "title-1")
+    marginTop(label, 16)
+    marginBottom(label, 16)
+    expandVertical(label, 1)
     incrementButton = newButton("Increment")
+    addCssClass(incrementButton, "suggested-action")
     resetButton = newButton("Reset")
+    let actions = newBox(0, 12)
+    homogeneous(actions, 1)
+    append(actions, incrementButton)
+    append(actions, resetButton)
+    let diagnostics = newBox(1, 8)
+    marginTop(diagnostics, 8)
+    let explanation = newLabel("Callback errors are reported without closing the window.")
+    addCssClass(explanation, "dim-label")
+    addCssClass(explanation, "caption")
+    wrapLabel(explanation, 1)
     errorButton = newButton("Test callback error")
+    alignHorizontal(errorButton, 3) # GTK_ALIGN_CENTER
+    addCssClass(errorButton, "flat")
+    append(diagnostics, explanation)
+    append(diagnostics, errorButton)
     model = sendMessage(nil, compiledClassValue("CounterModel"), "new", @[])
     let view = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
       class: compiledClassValue("CounterView").classVal, isNimProxy: true, nimValue: label))
@@ -149,7 +188,7 @@ proc activate(application: pointer, data: pointer) {.cdecl.} =
     connectButton(incrementButton, sendMessage(nil, model, "incrementAction", @[]))
     connectButton(resetButton, sendMessage(nil, model, "resetAction", @[]))
     connectButton(errorButton, sendMessage(nil, model, "failingAction", @[]))
-    for child in [label, incrementButton, resetButton, errorButton]: append(box, child)
+    for child in [header, label, actions, diagnostics]: append(box, child)
     windowChild(window, box)
     present(window)
     if selfTest:
