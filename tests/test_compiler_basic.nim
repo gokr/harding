@@ -362,6 +362,22 @@ suite "Compiler: Script temporaries":
     check syntax.hasError
     check syntax.errorMsg.contains("line 3")
 
+suite "Compiler: GTK applications":
+  test "GTK backend is opt-in and initialized after generated registration":
+    let (nodes, syntax) = parse("GtkWidget := Object derive: #(). GtkWidget>>padding: n [ ^ self ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let ordinary = genModule(ctx, nodes, "ordinary")
+    check not ordinary.contains("native_application")
+    check not ordinary.contains("registerNativeGtk()")
+    ctx.gtkApplication = true
+    let gtk = genModule(ctx, nodes, "gtk_app")
+    check gtk.contains("/harding/gui/gtk/native_application")
+    let mainStart = gtk.find("proc main(): int")
+    let backend = gtk.find("registerNativeGtk()", mainStart)
+    check backend > gtk.find("registerCompiledClass(\"GtkWidget\"", mainStart)
+    check not gtk.contains("initHybridRuntime(")
+
 suite "Compiler: Native sealing":
   test "seals only requested classes after all generated registration":
     let (nodes, syntax) = parse("SealTarget := Object derive: #(). SealTarget>>answer [ ^ 42 ].")

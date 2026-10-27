@@ -197,6 +197,17 @@ and class-side JSON specifications. See [native collections and JSON](GRANITE_CO
 for supported paths and validation limits, and [collection protocol audit](COLLECTION_PROTOCOL_AUDIT.md)
 for differences from Smalltalk-80.
 
+### Native GTK4 applications
+
+`granite build --gtk app.hrd` compiles widget creation, layout and actions from
+Harding using `lib/gui/Gtk.hrd`; no per-application Nim source is needed. The
+standalone `harding_gtk` interpreter runs the same library protocol. Initial
+coverage is application activation, windows, row/column boxes, labels and buttons
+with zero-argument action blocks. GTK4 is a runtime system dependency; native
+packages do not load `.hrd` source or start an interpreter. `--mixed` and freeze
+manifests are not yet supported together with `--gtk`. See
+[GTK applications](GTK_APPLICATIONS.md) for examples, builds and acceptance tests.
+
 ### Checked frozen compilation (experimental)
 
 A header comment `# @frozen` opts stdlib source into the checked manifest

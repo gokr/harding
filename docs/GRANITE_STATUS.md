@@ -105,14 +105,28 @@ isolated. Not covered: suspension across the boundary, cancellation of in-flight
 evaluation, and green-thread state transfer. See PLAN.md
 section 6 for the tests and remaining limits.
 
-## Native GTK demo proof
+## Pure Harding GTK applications
+
+`granite build --gtk app.hrd` compiles the entire application source, including
+widget construction/layout, through the shared `lib/gui/Gtk.hrd` library and a
+reusable native GTK4 backend. No application-specific Nim shell is required.
+`harding_gtk` runs the same protocol in the interpreter. The source-free native
+counter and both-engine ARC/ORC AT-SPI tests exercise the real event loop, label
+updates and callback-error recovery. Backend tests verify repeated sessions,
+resource release, invalid calls and closed-wrapper rejection. This is an initial
+standalone window/box/label/button slice, not the complete Bona bridge or general
+GTK signal ABI. `--mixed` and frozen-manifest combinations are rejected. See
+[GTK applications](GTK_APPLICATIONS.md) and `nimble testGtkApplications`.
+
+## Original native GTK demo proof
 
 `demos/native-gtk-counter` assembles a GTK4 native shell with a Granite-compiled
 Harding counter model and action blocks. The package target is one executable
 plus system GTK4 dependencies, without runtime `.hrd` sources or interpreter
 startup. `test_native_gtk_demo.py` exercises the GTK event loop, button signals,
 label text, error recovery and closure destruction under ARC/ORC. Widget creation
-is still handwritten Nim; this is not general compilation of the existing GTK
+in this original proof is handwritten Nim; the new `counter.hrd` uses the shared
+application backend above. Neither path is general compilation of the existing GTK
 wrappers or a compiled Bona deliverable. Shared runtime imports still include
 VM support modules. `nimble testNativeGtkDemo` runs interpreter model tests
 under ARC/ORC and packaged-binary acceptance. Set `NATIVE_GTK_ATSPI=1` for real

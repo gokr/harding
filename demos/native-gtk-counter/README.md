@@ -1,4 +1,26 @@
-# Native GTK counter proof
+# Native GTK counter
+
+## Pure Harding application (preferred)
+
+The whole UI, layout, state and actions are in `counter.hrd`; no app-specific Nim
+is needed:
+
+```sh
+nim c -p:external -o:granite src/harding/compiler/granite.nim
+./granite build --gtk --release demos/native-gtk-counter/counter.hrd \
+  --dir:build/pure-gtk -o:build/pure-gtk/counter
+./build/pure-gtk/counter
+# Run the same source in the interpreter:
+nimble harding_gtk
+./build/harding_gtk demos/native-gtk-counter/counter.hrd
+# Both-engine/backend/package checks, optionally real accessibility clicks:
+NATIVE_GTK_ATSPI=1 nimble testGtkApplications
+```
+
+See [GTK application library](../../docs/GTK_APPLICATIONS.md) for the shared API,
+lifecycle contract and current limitations. GTK4 remains a system dependency.
+
+## Original Nim-shell proof
 
 A GTK4 executable with Granite-compiled Harding state and action blocks.
 The counter starts at zero; Increment and Reset update the GTK label. A third

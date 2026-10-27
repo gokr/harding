@@ -320,6 +320,17 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
+task harding_gtk, "Build standalone GTK4-enabled Harding interpreter":
+  exec "nim c -p:src -o:build/harding_gtk src/harding/repl/harding_gtk.nim"
+
+task testGtkApplications, "Validate pure Harding GTK4 applications in both engines (display required)":
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "nim c -r --out:build/test_gtk_application_backend tests/test_gtk_application_backend.nim"
+  exec "nim c -r --mm:orc --out:build/test_gtk_application_backend_orc tests/test_gtk_application_backend.nim"
+  exec "nim c -r --out:build/test_gtk_native_backend tests/test_gtk_native_backend.nim"
+  exec "nim c -r --mm:orc --out:build/test_gtk_native_backend_orc tests/test_gtk_native_backend.nim"
+  exec "python3 -m unittest discover -s tests -p test_pure_gtk_application.py"
+
 task testNativeGtkDemo, "Validate native GTK shell and Granite-compiled counter (display required)":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "nim c -r --out:build/test_native_gtk_model tests/test_native_gtk_model.nim"

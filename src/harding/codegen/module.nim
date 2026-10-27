@@ -32,6 +32,8 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
   let sourceRoot = parentDir(parentDir(parentDir(currentSourcePath())))
   let importRoot = relativePath(sourceRoot, absolutePath(ctx.outputDir)).replace('\\', '/')
   output.add(fmt("import {importRoot}/harding/runtime/compiled_support\n\n"))
+  if ctx.gtkApplication:
+    output.add(fmt("import {importRoot}/harding/gui/gtk/native_application\n\n"))
 
   return output
 
@@ -543,6 +545,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
     let nativeClass = mangleClass(className)
     output.add(fmt("  registerCompiledClass(\"{className}\", allocate{nativeClass})\n"))
   output.add("\n")
+  if ctx.gtkApplication:
+    output.add("  registerNativeGtk()\n")
 
   if ctx.sealedClasses.len > 0:
     # Finish lazy built-in hierarchy setup before sealing the native registry.

@@ -1,0 +1,48 @@
+# Entire application: layout, state and actions are Harding.
+# Build: ./granite build --gtk demos/native-gtk-counter/counter.hrd -o:build/gtk-counter
+GtkApplication run: "org.hardinglang.NativeCounter" activate: [
+    | window content header display actions diagnostics count increment reset fail |
+    count := 0.
+    window := GtkWindow title: "Harding — Native GTK Counter" width: 420 height: 360.
+    content := (GtkBox column: 20) padding: 28.
+    header := GtkBox column: 6.
+    header add: (GtkLabel heading: "Native counter").
+    header add: (GtkLabel muted: "Pure Harding, compiled with Granite").
+    display := (GtkLabel title: "Count: 0") expand.
+    increment := GtkButton primary: "Increment" action: [
+        count := count + 1.
+        display text: ("Count: " & count printString)
+    ].
+    reset := GtkButton label: "Reset" action: [
+        count := 0.
+        display text: "Count: 0"
+    ].
+    actions := (GtkBox row: 12) equalWidth.
+    actions add: increment.
+    actions add: reset.
+    diagnostics := GtkBox column: 8.
+    diagnostics add: ((GtkLabel muted: "Callback errors do not close the window.") wrap: true).
+    fail := (GtkButton label: "Test callback error" action: [
+        Error signal: "Deliberate callback failure"
+    ]) center.
+    fail style: "flat".
+    diagnostics add: fail.
+    content add: header.
+    content add: display.
+    content add: actions.
+    content add: diagnostics.
+    window child: content.
+    window present.
+    (System arguments includes: "--self-test") ifTrue: [
+        increment emitSignal: "clicked".
+        increment emitSignal: "clicked".
+        (display text = "Count: 2") ifFalse: [Error signal: "Increment failed"].
+        fail emitSignal: "clicked".
+        increment emitSignal: "clicked".
+        (display text = "Count: 3") ifFalse: [Error signal: "Callback recovery failed"].
+        reset emitSignal: "clicked".
+        (display text = "Count: 0") ifFalse: [Error signal: "Reset failed"].
+        window close.
+        "pure GTK counter passed" println
+    ]
+]

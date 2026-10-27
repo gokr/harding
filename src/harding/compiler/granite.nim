@@ -7,7 +7,7 @@
 # NOTE: This compiler initializes the full Harding VM to ensure access to
 # the complete class model, enabling accurate compilation with type information.
 
-import std/[os, strutils, parseopt, strformat, tables, logging, json, sets, algorithm]
+import std/[os, strutils, parseopt, tables, logging, json, sets, algorithm]
 import checksums/sha1
 import ../core/types
 import ../parser/parser
@@ -121,6 +121,7 @@ type
     run: bool
     release: bool
     mixed: bool
+    gtk: bool
     help: bool
     version: bool
     logLevel: Level
@@ -170,6 +171,7 @@ proc showUsage() =
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
+  echo "  --gtk                 Compile the GTK4 application library (no VM startup)"
   echo "  --freeze-manifest <file> Checked frozen dependency closure (experimental)"
   echo "  --freeze-receipt <file>  Executed conformance receipt for this toolchain"
   echo "  --seal-frozen           Seal native frozen registries after startup (experimental)"
@@ -242,6 +244,8 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.dumpAst = true
       of "mixed":
         result.mixed = true
+      of "gtk":
+        result.gtk = true
       of "freeze-manifest":
         result.frozenManifest = p.val
       of "freeze-receipt":
@@ -267,6 +271,9 @@ proc compileFile(config: Config): bool =
 
   echo "Compiling: ", config.inputFile
 
+  if config.gtk and (config.mixed or config.frozenManifest.len > 0):
+    echo "Error: --gtk currently requires pure compilation without a freeze manifest"
+    return false
   var frozenPrefix = ""
   var sealedClasses: seq[string]
   if config.sealFrozen and config.frozenManifest.len == 0:
@@ -333,6 +340,36 @@ proc compileFile(config: Config): bool =
     echo "Parse error: ", parser.errorMsg
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
+
+  if config.gtk:
+    let source = readFile(config.hardingHome / "lib/gui/Gtk.hrd")
+    let (gtkNodes, gtkSyntax) = parse(source)
+    if gtkSyntax.hasError:
+      echo "GTK library parse error: ", gtkSyntax.errorMsg
+      return false
+    let (_, gtkError) = interp.evalStatements(source)
+    if gtkError.len > 0:
+      echo "GTK library error: ", gtkError
+      return false
+    var mergedGtk = false
+    for node in nodes:
+      if node.kind == nkMessage:
+        let message = node.MessageNode
+        if message.selector == "compile:" and message.receiver != nil and
+           message.receiver.kind == nkIdent and message.receiver.IdentNode.name == "Harding" and
+           message.arguments.len == 1 and message.arguments[0].kind == nkBlock:
+          message.arguments[0].BlockNode.body = gtkNodes & message.arguments[0].BlockNode.body
+          mergedGtk = true
+          break
+    if not mergedGtk:
+      var definitions = gtkNodes
+      var application: seq[Node]
+      for node in nodes:
+        if isCompileTimeDefNode(node): definitions.add(node)
+        else: application.add(node)
+      nodes = application
+      nodes.insert(MessageNode(receiver: IdentNode(name: "Harding"), selector: "compile:",
+        arguments: @[Node(BlockNode(body: definitions))]), 0)
 
   if config.sealFrozen:
     try:
@@ -412,6 +449,7 @@ proc compileFile(config: Config): bool =
 
   var ctx = newCompiler(outputDir, moduleName)
   ctx.sealedClasses = sealedClasses
+  ctx.gtkApplication = config.gtk
   if frozenPrefix.len > 0:
     var paths: seq[string]
     for path in walkDirRec(config.hardingHome / "lib"):
@@ -453,7 +491,7 @@ proc buildFile(config: Config): bool =
   let nimFile = outputDir / moduleName & ".nim"
   let binaryName = computeBinaryName(config)
   let releaseFlag = if config.release: " -d:release" else: ""
-  let cmd = fmt("nim c{releaseFlag} -o:{binaryName} {nimFile}")
+  let cmd = "nim c" & releaseFlag & " -o:" & quoteShell(binaryName) & " " & quoteShell(nimFile)
 
   echo "Building: ", cmd
   let exitCode = execShellCmd(cmd)

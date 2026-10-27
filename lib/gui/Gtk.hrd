@@ -1,0 +1,48 @@
+# GTK4 application library. Loaded by granite --gtk or harding_gtk.
+# Low-level selectors are supplied by the same GTK backend in both engines.
+GtkApplication := Object derive: #()
+GtkWidget := Object derive: #()
+GtkWindow := GtkWidget derive: #()
+GtkBox := GtkWidget derive: #()
+GtkLabel := GtkWidget derive: #()
+GtkButton := GtkWidget derive: #()
+
+GtkWidget>>padding: pixels [
+    self marginTop: pixels.
+    self marginBottom: pixels.
+    self marginStart: pixels.
+    self marginEnd: pixels.
+    ^self
+]
+GtkWidget>>expand [ self setHexpand: true. self setVexpand: true. ^self ]
+GtkWidget>>style: name [ self addCssClass: name. ^self ]
+
+GtkWindow class>>title: title width: width height: height [
+    | window |
+    window := self new.
+    window title: title.
+    window setDefaultSize: width height: height.
+    ^window
+]
+GtkWindow>>child: widget [ self setChild: widget. ^self ]
+
+GtkBox class>>column: spacing [ ^self newOrientation: 1 spacing: spacing ]
+GtkBox class>>row: spacing [ ^self newOrientation: 0 spacing: spacing ]
+GtkBox>>add: widget [ self append: widget. ^self ]
+GtkBox>>equalWidth [ self homogeneous: true. ^self ]
+
+GtkLabel class>>text: text [ | label | label := self new. label text: text. ^label ]
+GtkLabel class>>heading: text [ ^(self text: text) style: "title-2" ]
+GtkLabel class>>title: text [ ^(self text: text) style: "title-1" ]
+GtkLabel class>>muted: text [ ^(self text: text) style: "dim-label" ]
+
+GtkButton class>>label: text action: block [
+    | button |
+    button := self new.
+    button label: text.
+    button connect: "clicked" do: block.
+    ^button
+]
+GtkButton class>>primary: text action: block [
+    ^(self label: text action: block) style: "suggested-action"
+]

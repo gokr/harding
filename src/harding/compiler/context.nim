@@ -37,6 +37,7 @@ type
     symbols*: Table[string, string]  ## Selector -> mangled name
     sealedClasses*: seq[string]   ## Opt-in native registry sealing after registration
     frozenHostSources*: seq[tuple[path, source: string]]
+    gtkApplication*: bool
 
 proc newCompiler*(outputDir = "./build", moduleName = "compiled"): CompilerContext =
   ## Create new compiler context
