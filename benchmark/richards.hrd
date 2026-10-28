@@ -1,0 +1,222 @@
+#!/usr/bin/env harding
+# Richards task-dispatch benchmark, ported from Chromium Octane richards.js.
+# Copyright 2006-2008 the V8 project authors. All rights reserved.
+# BSD-3-Clause terms and pinned provenance: benchmark/licenses/RICHARDS.txt.
+# Task IDs, priorities, linked packet queues and workload match the reference.
+# All indices are 0-based. Benchmark-local arithmetic replaces bitwise ops;
+# no Harding green threads or interpreter-specific primitives are used.
+
+| repetitions scheduler queued held |
+
+RichardsBits := Object derive: #().
+RichardsBits class>>xor16: left with: right [
+    | a b place value abit bbit |
+    a := left. b := right. place := 1. value := 0.
+    [place < 65536] whileTrue: [
+        abit := a - ((a // 2) * 2).
+        bbit := b - ((b // 2) * 2).
+        abit <> bbit ifTrue: [value := value + place].
+        a := a // 2. b := b // 2. place := place * 2
+    ].
+    ^value
+].
+
+RichardsPacket := Object derivePublic: #(link, identity, kind, datum, data).
+RichardsPacket>>setupLink: aLink identity: anIdentity kind: aKind [
+    link := aLink. identity := anIdentity. kind := aKind.
+    datum := 0. data := Array new: 4 withAll: 0.
+    ^self
+].
+RichardsPacket>>addTo: queue [
+    | tail next |
+    link := nil.
+    queue isNil ifTrue: [^self].
+    tail := queue. next := tail link.
+    [next notNil] whileTrue: [tail := next. next := tail link].
+    tail link: self.
+    ^queue
+].
+
+RichardsTaskControlBlock := Object derivePublic: #(link, identity, priority, queue, task, state).
+RichardsTaskControlBlock>>setupLink: aLink identity: anIdentity priority: aPriority queue: aQueue task: aTask [
+    link := aLink. identity := anIdentity. priority := aPriority.
+    queue := aQueue. task := aTask.
+    queue isNil ifTrue: [state := 2] ifFalse: [state := 3].
+    ^self
+].
+RichardsTaskControlBlock>>setRunning [state := 0].
+RichardsTaskControlBlock>>markAsNotHeld [state >= 4 ifTrue: [state := state - 4]].
+RichardsTaskControlBlock>>markAsHeld [state < 4 ifTrue: [state := state + 4]].
+RichardsTaskControlBlock>>isHeldOrSuspended [^state >= 4 or: [state = 2]].
+RichardsTaskControlBlock>>markAsSuspended [
+    (state - ((state // 4) * 4)) < 2 ifTrue: [state := state + 2]
+].
+RichardsTaskControlBlock>>markAsRunnable [
+    (state - ((state // 2) * 2)) = 0 ifTrue: [state := state + 1]
+].
+RichardsTaskControlBlock>>run [
+    | packet |
+    state = 3 ifTrue: [
+        packet := queue. queue := packet link.
+        queue isNil ifTrue: [state := 0] ifFalse: [state := 1]
+    ] ifFalse: [packet := nil].
+    ^task run: packet
+].
+RichardsTaskControlBlock>>checkPriorityAdd: oldTask packet: packet [
+    queue isNil ifTrue: [
+        queue := packet. self markAsRunnable.
+        priority > oldTask priority ifTrue: [^self]
+    ] ifFalse: [queue := packet addTo: queue].
+    ^oldTask
+].
+
+RichardsTask := Object derive: #(scheduler).
+RichardsTask>>scheduler: aScheduler [scheduler := aScheduler. ^self].
+RichardsIdleTask := RichardsTask derive: #(control, count).
+RichardsIdleTask>>setupControl: value count: iterations [control := value. count := iterations. ^self].
+RichardsIdleTask>>run: packet [
+    count := count - 1.
+    count = 0 ifTrue: [^scheduler holdCurrent].
+    (control - ((control // 2) * 2)) = 0 ifTrue: [
+        control := control // 2. ^scheduler release: 4
+    ] ifFalse: [
+        control := RichardsBits xor16: (control // 2) with: 53256.
+        ^scheduler release: 5
+    ]
+].
+RichardsDeviceTask := RichardsTask derive: #(pending).
+RichardsDeviceTask>>setup [pending := nil. ^self].
+RichardsDeviceTask>>run: packet [
+    | work |
+    packet isNil ifTrue: [
+        pending isNil ifTrue: [^scheduler suspendCurrent].
+        work := pending. pending := nil. ^scheduler queue: work
+    ] ifFalse: [pending := packet. ^scheduler holdCurrent]
+].
+RichardsWorkerTask := RichardsTask derive: #(destination, count).
+RichardsWorkerTask>>setup [destination := 2. count := 0. ^self].
+RichardsWorkerTask>>run: packet [
+    | index |
+    packet isNil ifTrue: [^scheduler suspendCurrent].
+    destination = 2 ifTrue: [destination := 3] ifFalse: [destination := 2].
+    packet identity: destination. packet datum: 0.
+    index := 0.
+    [index < 4] whileTrue: [
+        count := count + 1. count > 26 ifTrue: [count := 1].
+        packet data at: index put: count.
+        index := index + 1
+    ].
+    ^scheduler queue: packet
+].
+RichardsHandlerTask := RichardsTask derive: #(workIn, deviceIn).
+RichardsHandlerTask>>setup [workIn := nil. deviceIn := nil. ^self].
+RichardsHandlerTask>>run: packet [
+    | count work |
+    packet notNil ifTrue: [
+        packet kind = 1 ifTrue: [workIn := packet addTo: workIn]
+            ifFalse: [deviceIn := packet addTo: deviceIn]
+    ].
+    workIn notNil ifTrue: [
+        count := workIn datum.
+        count < 4 ifTrue: [
+            deviceIn notNil ifTrue: [
+                work := deviceIn. deviceIn := work link.
+                work datum: (workIn data at: count).
+                workIn datum: count + 1.
+                ^scheduler queue: work
+            ]
+        ] ifFalse: [
+            work := workIn. workIn := work link. ^scheduler queue: work
+        ]
+    ].
+    ^scheduler suspendCurrent
+].
+
+RichardsScheduler := Object derivePublic: #(queueCount, holdCount, blocks, list, currentTcb, currentId).
+RichardsScheduler>>initialize [
+    queueCount := 0. holdCount := 0.
+    blocks := Array new: 6 withAll: nil.
+    list := nil. currentTcb := nil. currentId := nil
+].
+RichardsScheduler>>addTask: taskId priority: taskPriority queue: initialQueue task: taskBody [
+    currentTcb := RichardsTaskControlBlock new setupLink: list identity: taskId
+        priority: taskPriority queue: initialQueue task: taskBody.
+    list := currentTcb. blocks at: taskId put: currentTcb
+].
+RichardsScheduler>>schedule [
+    currentTcb := list.
+    [currentTcb notNil] whileTrue: [
+        currentTcb isHeldOrSuspended ifTrue: [currentTcb := currentTcb link]
+        ifFalse: [currentId := currentTcb identity. currentTcb := currentTcb run]
+    ]
+].
+RichardsScheduler>>release: identity [
+    | task |
+    task := blocks at: identity.
+    task isNil ifTrue: [^task].
+    task markAsNotHeld.
+    task priority > currentTcb priority ifTrue: [^task] ifFalse: [^currentTcb]
+].
+RichardsScheduler>>holdCurrent [
+    holdCount := holdCount + 1. currentTcb markAsHeld. ^currentTcb link
+].
+RichardsScheduler>>suspendCurrent [currentTcb markAsSuspended. ^currentTcb].
+RichardsScheduler>>queue: packet [
+    | task |
+    task := blocks at: packet identity.
+    task isNil ifTrue: [^task].
+    queueCount := queueCount + 1.
+    packet link: nil. packet identity: currentId.
+    ^task checkPriorityAdd: currentTcb packet: packet
+].
+RichardsScheduler>>start: iterations [
+    | queue task |
+    task := (RichardsIdleTask new scheduler: self) setupControl: 1 count: iterations.
+    self addTask: 0 priority: 0 queue: nil task: task.
+    currentTcb setRunning.
+    queue := RichardsPacket new setupLink: nil identity: 1 kind: 1.
+    queue := RichardsPacket new setupLink: queue identity: 1 kind: 1.
+    self addTask: 1 priority: 1000 queue: queue task: ((RichardsWorkerTask new scheduler: self) setup).
+    queue := RichardsPacket new setupLink: nil identity: 4 kind: 0.
+    queue := RichardsPacket new setupLink: queue identity: 4 kind: 0.
+    queue := RichardsPacket new setupLink: queue identity: 4 kind: 0.
+    self addTask: 2 priority: 2000 queue: queue task: ((RichardsHandlerTask new scheduler: self) setup).
+    queue := RichardsPacket new setupLink: nil identity: 5 kind: 0.
+    queue := RichardsPacket new setupLink: queue identity: 5 kind: 0.
+    queue := RichardsPacket new setupLink: queue identity: 5 kind: 0.
+    self addTask: 3 priority: 3000 queue: queue task: ((RichardsHandlerTask new scheduler: self) setup).
+    self addTask: 4 priority: 4000 queue: nil task: ((RichardsDeviceTask new scheduler: self) setup).
+    self addTask: 5 priority: 5000 queue: nil task: ((RichardsDeviceTask new scheduler: self) setup).
+    self schedule.
+    ^self
+].
+RichardsScheduler>>verify [
+    (queueCount = 2322 and: [holdCount = 928]) ifFalse: [
+        Error signal: ("Richards mismatch: queued=" & queueCount printString & " held=" & holdCount printString)
+    ].
+    ^true
+].
+# Break the benchmark's intentional scheduler/task cycles after a sample.
+RichardsScheduler>>dispose [
+    blocks do: [:block | block task scheduler: nil].
+    blocks := nil. list := nil. currentTcb := nil
+].
+
+Richards := Object derive: #().
+Richards>>benchmark [
+    | scheduler |
+    scheduler := RichardsScheduler new start: 1000.
+    [scheduler verify. ^scheduler] ensure: [scheduler dispose]
+].
+
+# Benchmark driver
+repetitions := 1.
+(System arguments size > 0) ifTrue: [repetitions := (System arguments at: 0) asInteger].
+(repetitions isNil or: [repetitions < 0]) ifTrue: [Error signal: "Expected a nonnegative repetition count"].
+queued := 0. held := 0.
+repetitions timesRepeat: [
+    scheduler := Richards new benchmark.
+    queued := queued + scheduler queueCount.
+    held := held + scheduler holdCount
+].
+("Richards queued=" & queued printString & " held=" & held printString) println.

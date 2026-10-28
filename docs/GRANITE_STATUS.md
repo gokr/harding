@@ -134,6 +134,17 @@ PID-scoped accessibility clicks and observed label checks. These have been
 exercised in the local GTK session; headless signal tests alone are not claimed
 as interactive acceptance. See the demo README for build and acceptance commands.
 
+## Richards benchmark
+
+`benchmark/richards.hrd` ports the pinned BSD-licensed Octane task dispatcher,
+not the differently licensed AWFY/Sun implementation. The six-task priority
+scheduler, four-word packets, linked FIFO queues and 1,000 idle iterations retain
+the reference's 2,322 queue and 928 hold counts. Local arithmetic implements the
+required bit operations without adding language primitives. `nimble testRichards`
+checks both engines under ARC/ORC; `scripts/bench_richards.py` records reproducible
+release timings, raw samples and startup baselines. See
+[Richards provenance and measurement](RICHARDS.md). DeltaBlue remains next.
+
 ## Validation
 
 Build the interpreter with `nimble harding` and the compiler with:

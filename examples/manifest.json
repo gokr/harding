@@ -22,6 +22,12 @@
       "stdout": "examples/expected/benchmark-queens.stdout"
     },
     {
+      "id": "benchmark-richards",
+      "path": "benchmark/richards.hrd",
+      "stdout": "examples/expected/benchmark-richards.stdout",
+      "timeout": 180
+    },
+    {
       "id": "benchmark-sieve",
       "path": "benchmark/sieve.hrd",
       "stdout": "examples/expected/benchmark-sieve.stdout"

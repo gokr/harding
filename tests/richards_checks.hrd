@@ -1,0 +1,85 @@
+# Execute after benchmark/richards.hrd with repetition count 0.
+RichardsCheck := Object derive: #().
+RichardsCheck class>>assert: condition [
+    condition ifFalse: [Error signal: "Richards conformance assertion failed"]
+].
+RichardsCheck class>>states [
+    | block index bitHeld bitSuspended bitRunnable |
+    block := RichardsTaskControlBlock new.
+    index := 0.
+    [index < 8] whileTrue: [
+        bitHeld := index >= 4.
+        bitSuspended := (index - ((index // 4) * 4)) >= 2.
+        bitRunnable := (index - ((index // 2) * 2)) = 1.
+        block state: index. block markAsHeld.
+        self assert: (block state = (bitHeld ifTrue: [index] ifFalse: [index + 4])).
+        block state: index. block markAsNotHeld.
+        self assert: (block state = (bitHeld ifTrue: [index - 4] ifFalse: [index])).
+        block state: index. block markAsSuspended.
+        self assert: (block state = (bitSuspended ifTrue: [index] ifFalse: [index + 2])).
+        block state: index. block markAsRunnable.
+        self assert: (block state = (bitRunnable ifTrue: [index] ifFalse: [index + 1])).
+        block state: index.
+        self assert: (block isHeldOrSuspended = (bitHeld or: [index = 2])).
+        index := index + 1
+    ]
+].
+RichardsCheck class>>packets [
+    | first second third head old high |
+    first := RichardsPacket new setupLink: nil identity: 1 kind: 1.
+    second := RichardsPacket new setupLink: nil identity: 2 kind: 0.
+    third := RichardsPacket new setupLink: first identity: 3 kind: 0.
+    head := first addTo: nil.
+    self assert: (head == first).
+    head := second addTo: head.
+    head := third addTo: head.
+    self assert: (head == first).
+    self assert: (first link == second).
+    self assert: (second link == third).
+    self assert: third link isNil.
+    self assert: (first data size = 4).
+    old := RichardsTaskControlBlock new setupLink: nil identity: 1 priority: 1 queue: nil task: nil.
+    high := RichardsTaskControlBlock new setupLink: nil identity: 2 priority: 2 queue: nil task: nil.
+    first link: nil.
+    self assert: ((high checkPriorityAdd: old packet: first) == high).
+    self assert: (high state = 3).
+    self assert: ((high checkPriorityAdd: old packet: second) == old).
+    self assert: (high queue == first).
+    self assert: (first link == second)
+].
+RichardsCheck class>>counters [
+    | workloads queues holds index scheduler |
+    workloads := #(1, 2, 10, 100, 1000, 10000).
+    queues := #(8, 12, 31, 239, 2322, 23246).
+    holds := #(3, 4, 12, 95, 928, 9297).
+    index := 0.
+    [index < workloads size] whileTrue: [
+        scheduler := RichardsScheduler new start: (workloads at: index).
+        [
+            self assert: (scheduler queueCount = (queues at: index)).
+            self assert: (scheduler holdCount = (holds at: index))
+        ] ensure: [scheduler dispose].
+        self assert: scheduler blocks isNil.
+        self assert: scheduler list isNil.
+        self assert: scheduler currentTcb isNil.
+        index := index + 1
+    ].
+    3 timesRepeat: [
+        scheduler := Richards new benchmark.
+        self assert: scheduler verify.
+        self assert: scheduler blocks isNil
+    ].
+    scheduler queueCount: 0.
+    self assert: ([scheduler verify. false] on: Error do: [:failure | true])
+].
+RichardsCheck class>>bits [
+    self assert: ((RichardsBits xor16: 0 with: 53256) = 53256).
+    self assert: ((RichardsBits xor16: 65535 with: 53256) = 12279).
+    self assert: ((RichardsBits xor16: 53256 with: 53256) = 0).
+    self assert: ((RichardsBits xor16: 12345 with: 53256) = 57393)
+].
+RichardsCheck states.
+RichardsCheck packets.
+RichardsCheck bits.
+RichardsCheck counters.
+"Richards conformance passed" println.
