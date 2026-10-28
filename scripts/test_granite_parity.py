@@ -7,6 +7,14 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("base_object_allocation", """
+first := Object new.
+second := Object basicNew.
+(first == second) println.
+first class name println.
+second class name println.
+(first isKindOf: Object) println.
+""", "false\nObject\nObject\ntrue\n"),
     ("slot_assignment_closures", """
 ClosureSlot := Object derivePublic: #(stored).
 ClosureSlot>>install: seed [stored := [seed + 1]. ^stored value].

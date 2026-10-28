@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Fixed
+- Native `Object new` and `Object basicNew` allocate distinct ordinary Object instances without requiring an application allocator; `new` still honors a registered initializer. Both-engine parity covers identity and class reflection.
 - Parser block limits now detect lack of token progress instead of rejecting valid blocks after 100 iterations; large methods and malformed-block regressions cover the guard.
 - Granite collects closures nested in rewritten slot assignments, named accesses, super/primitive arguments and cascades before emitting forward declarations.
 - Granite preserves indentation for multiline conditional receivers and arguments inside hosted builtin operand bindings; executed parity covers arithmetic and comparisons with both branches.

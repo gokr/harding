@@ -1155,6 +1155,12 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
       if selector == "basicNew":
         return compiledAllocators[name](receiver, @[])
       return compiledNewInstance(name, compiledAllocators[name])
+    if name == "Object":
+      let created = NodeValue(kind: vkInstance,
+        instVal: Instance(kind: ikObject, class: receiver.classVal, isNimProxy: true))
+      if selector == "new" and hasCompiledMethodInHierarchy(name, "initialize"):
+        return dispatchCompiledMethodFromClass(created, name, "initialize", @[])
+      return created
   return compiledMissingMessage(receiver, selector)
 
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
@@ -1813,7 +1819,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       let found = querySelector.len > 0 and
         (hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector) or
          hasCompiledMethodInHierarchy(receiver.classVal.name, querySelector) or
-         (querySelector == "new" and receiver.classVal.name in compiledAllocators))
+         (querySelector in ["new", "basicNew"] and
+          (receiver.classVal.name in compiledAllocators or receiver.classVal.name == "Object")))
       return NodeValue(kind: vkBool, boolVal: found)
     return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
