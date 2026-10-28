@@ -7,6 +7,25 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("lexical_scope_isolation", """
+LexBox := Object derivePublic: #(payload).
+LexBox>>sample [true ifTrue: [^payload]. ^nil].
+LexBox>>mutate [true ifTrue: [payload := 9]. ^self payload].
+LexCaller := Object derive: #().
+LexCaller>>sampleFrom: target [| payload | payload := 77. ^target sample].
+LexCaller>>mutateFrom: target [| payload | payload := 77. target mutate. ^payload].
+LexTarget := LexBox new.
+LexTarget payload: 5.
+(LexCaller new sampleFrom: LexTarget) println.
+(LexCaller new mutateFrom: LexTarget) println.
+LexTarget payload println.
+LexMaker := Object derive: #().
+LexMaker>>makeCounter [| count | count := 10. ^[true ifTrue: [count := count + 1]. count]].
+LexCaller>>invoke: callback [| count | count := 77. callback value println. ^count].
+LexCounter := LexMaker new makeCounter.
+(LexCaller new invoke: LexCounter) println.
+(LexCaller new invoke: LexCounter) println.
+""", "5\n77\n9\n11\n77\n12\n77\n"),
     ("array_clear_and_sort", """
 a := #(3, 1, 2).
 alias := a.

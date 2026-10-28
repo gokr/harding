@@ -494,6 +494,14 @@ at script entry, and closures share the binding even when created before its
 first assignment. `Harding main: [ | counter | ... ]` retains the main block's
 temporary declarations. Source error locations retain the original file lines.
 
+### Lexical scope
+
+Method arguments and temporaries belong to that invocation. A message send does
+not expose the caller's locals to the called method. Blocks capture variables
+from their definition environment through shared cells; their invoking caller's
+variables never substitute for those captures or the receiver's slots. This
+applies to control-flow blocks as well as escaped callbacks.
+
 ### Execution Context
 
 Script blocks execute with `self = nil`, following the Smalltalk workspace convention (like a do-it in a Workspace). A file script, the REPL, and `harding -e` all compile their top-level code as the `#doIt` method on `UndefinedObject`, so they share one rule: a lowercase top-level assignment is a local of that do-it, `| x |` temporaries are legal, and `^` returns from it. Only uppercase names are globals.

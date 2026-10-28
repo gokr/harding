@@ -523,10 +523,10 @@ proc isCapturedEnvInitialized(blk: BlockNode): bool =
   return blk.capturedEnvInitialized
 
 proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
-  ## Look up variable in activation chain, captured environment, and globals
+  ## Look up variables in the current lexical environment, receiver and globals.
   ## Returns (found: true, value: ...) if found, (found: false, value: nil) if not found
   debug("Looking up variable: ", name)
-  var activation = interp.currentActivation
+  let activation = interp.currentActivation
 
   # First check current activation (for block execution or method locals)
   if activation != nil:
@@ -555,49 +555,6 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
         let value = activation.currentMethod.capturedEnv[name].value
         debug("Found variable in captured environment: ", name, " = ", value.toString())
         return (true, value)
-
-    # If this is a block activation and variable not found yet, check globals BEFORE
-    # walking up the chain. This prevents blocks from inadvertently capturing variables
-    # from the calling method's local scope, which would break lexical scoping.
-    if activation.currentMethod != nil and activation.currentMethod.isMethod == false:
-      # This is a block - check imported libraries then globals first
-      for i in countdown(interp.importedLibraries.high, 0):
-        let lib = interp.importedLibraries[i]
-        if lib != nil and lib.kind == ikObject and lib.class == libraryClass:
-          let bindingsVal = lib.readInstanceSlot(0)
-          let lookup = libraryBindingLookup(bindingsVal, name)
-          if lookup.found:
-            debug("Found variable in imported library (in block): ", name)
-            return (true, lookup.value)
-      if name in interp.globals[]:
-        debug("Found variable in globals (in block): ", name, " = ", interp.globals[][name].toString())
-        let val = interp.globals[][name]
-        return (true, val)
-
-  # Walk up the activation chain (for nested scopes)
-  if activation != nil:
-    activation = activation.sender
-  while activation != nil:
-    # Check captured environment - IMPORTANT: Only for blocks, NOT methods
-    # Methods should access slots on the receiver, not captured lexical variables
-    if activation.currentMethod != nil and activation.currentMethod.capturedEnvInitialized and activation.currentMethod.capturedEnv.len > 0 and not activation.currentMethod.isMethod:
-      if name in activation.currentMethod.capturedEnv:
-        let value = activation.currentMethod.capturedEnv[name].value
-        debug("Found variable in captured environment (parent): ", name, " = ", value.toString())
-        return (true, value)
-
-    # Check capturedVars (shared cells from child blocks)
-    if name in activation.capturedVars:
-      let val = activation.capturedVars[name].value
-      debug("Found variable in capturedVars (parent): ", name, " = ", val.toString())
-      return (true, val)
-
-    # Check locals
-    if name in activation.locals:
-      debug("Found variable in activation (parent): ", name)
-      return (true, activation.locals[name])
-
-    activation = activation.sender
 
   # Check imported libraries (most recently imported first)
   for i in countdown(interp.importedLibraries.high, 0):
@@ -691,7 +648,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
     # Check if current method has a captured environment with this variable
     # This must be checked BEFORE locals because captured vars are copied to locals
     let currentMethod = interp.currentActivation.currentMethod
-    if currentMethod != nil and currentMethod.capturedEnvInitialized:
+    if currentMethod != nil and not currentMethod.isMethod and currentMethod.capturedEnvInitialized:
       if currentMethod.capturedEnv.len > 0 and name in currentMethod.capturedEnv:
         currentMethod.capturedEnv[name].value = value
         interp.currentActivation.locals[name] = value
@@ -713,36 +670,6 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
       interp.currentActivation.locals[name] = value
       syncIndexedLocal(interp.currentActivation, name, value)
       return
-
-    # Walk up the sender chain to find existing variable in outer scopes
-    # This is crucial for closures to update variables defined in enclosing methods
-    var parentActivation = interp.currentActivation.sender
-    while parentActivation != nil:
-      # Check captured environment in parent
-      if parentActivation.currentMethod != nil and parentActivation.currentMethod.capturedEnvInitialized:
-        if parentActivation.currentMethod.capturedEnv.len > 0 and name in parentActivation.currentMethod.capturedEnv:
-          parentActivation.currentMethod.capturedEnv[name].value = value
-          parentActivation.locals[name] = value
-          syncIndexedLocal(parentActivation, name, value)
-          debug("Variable updated in parent captured env: ", name, " = ", value.toString())
-          return
-
-      # Check capturedVars in parent (shared cells from child blocks)
-      if name in parentActivation.capturedVars:
-        parentActivation.capturedVars[name].value = value
-        parentActivation.locals[name] = value
-        syncIndexedLocal(parentActivation, name, value)
-        debug("Variable updated in parent capturedVars: ", name, " = ", value.toString())
-        return
-
-      # Check locals in parent
-      if name in parentActivation.locals:
-        parentActivation.locals[name] = value
-        syncIndexedLocal(parentActivation, name, value)
-        debug("Variable updated in parent activation: ", name, " = ", value.toString())
-        return
-
-      parentActivation = parentActivation.sender
 
     # Check imported libraries before globals. This allows mutable library state
     # like RenderCacheCurrent or TodoAppCurrent to live with the rest of the
@@ -818,7 +745,7 @@ proc setVariable*(interp: var Interpreter, name: string, value: NodeValue) =
 
 proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
   ## Capture the current lexical environment when a block is created
-  ## This walks up the activation chain and captures all local variables
+  ## Captures locals and inherited lexical cells, never the dynamic sender chain.
   ## Variables captured by nested closures share the same MutableCell
 
   debug("Capturing environment for block")
@@ -833,7 +760,7 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
   if interp.currentActivation != nil and interp.currentActivation.currentMethod != nil:
     let currentMethod = interp.currentActivation.currentMethod
     # Check if capturedEnv is initialized before accessing
-    if currentMethod.capturedEnvInitialized and currentMethod.capturedEnv.len > 0:
+    if not currentMethod.isMethod and currentMethod.capturedEnvInitialized and currentMethod.capturedEnv.len > 0:
       for name, cell in currentMethod.capturedEnv.pairs:
         # Don't inherit if this block has a parameter with the same name
         if name notin blockNode.parameters and name notin blockNode.temporaries:
@@ -890,8 +817,7 @@ proc captureEnvironment*(interp: Interpreter, blockNode: BlockNode) =
 
 proc prepareBlockForApplication(interp: var Interpreter, origBlock: BlockNode): BlockNode =
   ## Create a runtime copy of a parser block and capture its environment.
-  ## Used by IfNode/WhileNode handlers when the block contains nested blocks
-  ## that need closure capture.
+  ## Control-flow blocks also capture lexical cells for reads and assignments.
   result = BlockNode(
     parameters: origBlock.parameters,
     temporaries: origBlock.temporaries,
@@ -906,15 +832,8 @@ proc prepareBlockForApplication(interp: var Interpreter, origBlock: BlockNode): 
   captureEnvironment(interp, result)
 
 proc prepareControlFlowBlock(interp: var Interpreter, origBlock: BlockNode): BlockNode =
-  ## Prepare a block for IfNode/WhileNode execution. Uses the fast path
-  ## (just set homeActivation) when the block doesn't contain nested blocks,
-  ## or full capture when it does.
-  if origBlock.containsNestedBlocks:
-    return prepareBlockForApplication(interp, origBlock)
-  origBlock.homeActivation = interp.currentActivation
-  if interp.currentActivation != nil:
-    interp.currentActivation.wasCaptured = true
-  return origBlock
+  ## Each invocation owns its lexical environment, including reentrant branches.
+  prepareBlockForApplication(interp, origBlock)
 
 # Method lookup and dispatch
 type
@@ -1208,10 +1127,11 @@ proc evalBlock(interp: var Interpreter, receiver: Instance, blockNode: BlockNode
 
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
-  # Copy captured environment to activation locals
+  # Bind shared lexical cells as well as initial local values.
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
+      activation.capturedVars[name] = cell
 
   interp.activationStack.add(activation)
   let savedActivation = interp.currentActivation
@@ -1249,10 +1169,11 @@ proc evalBlockWithArg(interp: var Interpreter, receiver: Instance, blockNode: Bl
                         nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
-  # Copy captured environment to activation locals
+  # Bind shared lexical cells as well as initial local values.
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
+      activation.capturedVars[name] = cell
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg
@@ -1295,10 +1216,11 @@ proc evalBlockWithTwoArgs(interp: var Interpreter, receiver: Instance, blockNode
                         nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
-  # Copy captured environment to activation locals
+  # Bind shared lexical cells as well as initial local values.
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
+      activation.capturedVars[name] = cell
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
@@ -1345,10 +1267,11 @@ proc evalBlockWithThreeArgs(interp: var Interpreter, receiver: Instance, blockNo
                         nilInstance
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
-  # Copy captured environment to activation locals
+  # Bind shared lexical cells as well as initial local values.
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
+      activation.capturedVars[name] = cell
 
   if blockNode.parameters.len > 0:
     activation.locals[blockNode.parameters[0]] = arg1
@@ -1428,12 +1351,10 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
   
   let activation = newActivation(blockNode, blockReceiver, interp.currentActivation)
 
-  var capturedVarNames: seq[string] = @[]
-
   if isCapturedEnvInitialized(blockNode) and blockNode.capturedEnv.len > 0:
     for name, cell in blockNode.capturedEnv:
       activation.locals[name] = cell.value
-      capturedVarNames.add(name)
+      activation.capturedVars[name] = cell
 
   for i in 0..<blockNode.parameters.len:
     activation.locals[blockNode.parameters[i]] = args[i]
@@ -1472,25 +1393,6 @@ proc invokeBlock*(interp: var Interpreter, blockNode: BlockNode, args: seq[NodeV
       if activation.hasReturned:
         blockResult = activation.returnValue.unwrap()
         break
-
-    # Sync captured variable values from cells back to locals.
-    # The cell is the source of truth - nested blocks (via IfNode/WhileNode)
-    # may have updated cells directly without updating this activation's locals.
-    if capturedVarNames.len > 0:
-      for name in capturedVarNames:
-        if name in blockNode.capturedEnv:
-          activation.locals[name] = blockNode.capturedEnv[name].value
-
-    # Also update parent activation's captured variables (both table and indexed)
-    if savedActivation != nil:
-      var parent = savedActivation
-      while parent != nil:
-        for name in capturedVarNames:
-          if name in parent.locals and name in activation.locals:
-            let val = activation.locals[name]
-            parent.locals[name] = val
-            syncIndexedLocal(parent, name, val)
-        parent = parent.sender
 
   finally:
     if interp.activationStack.len > 0 and interp.activationStack[^1] == activation:
@@ -8677,6 +8579,7 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     if blockNode.capturedEnvInitialized and blockNode.capturedEnv.len > 0:
       for name, cell in blockNode.capturedEnv:
         activation.locals[name] = cell.value
+        activation.capturedVars[name] = cell
 
     # Bind parameters (both indexed and table-based)
     for i in 0..<blockNode.parameters.len:
