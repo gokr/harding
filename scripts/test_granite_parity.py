@@ -7,6 +7,17 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("nested_conditional_operands", """
+OperandChoice := Object derive: #().
+OperandChoice>>probe: flag [
+    ((flag ifTrue: [3] ifFalse: [4]) + 1) println.
+    (2 + (flag ifTrue: [3] ifFalse: [4])) println.
+    (3 = (flag ifTrue: [3] ifFalse: [4])) println.
+    ^self
+].
+OperandChoice new probe: true.
+OperandChoice new probe: false.
+""", "4\n5\ntrue\n5\n6\nfalse\n"),
     ("lexical_scope_isolation", """
 LexBox := Object derivePublic: #(payload).
 LexBox>>sample [true ifTrue: [^payload]. ^nil].

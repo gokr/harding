@@ -415,11 +415,11 @@ proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
   if not ctx.inMethod:
     return helper & "(" & (@[receiverCode] & arguments).join(", ") & ")"
   let owner = genSymbolAccess(ctx, "self")
-  result = "(block:\n    let hardingBuiltinReceiver = " & receiverCode & "\n"
+  result = "(block:\n    let hardingBuiltinReceiver = " & receiverCode.replace("\n", "\n    ") & "\n"
   var boundArguments: seq[string]
   for index, argument in arguments:
     let temporary = "hardingBuiltinArg" & $index
-    result.add("    let " & temporary & " = " & argument & "\n")
+    result.add("    let " & temporary & " = " & argument.replace("\n", "\n    ") & "\n")
     boundArguments.add(temporary)
   let argsCode = "@[" & boundArguments.join(", ") & "]"
   let fallback = helper & "(" & (@["hardingBuiltinReceiver"] & boundArguments).join(", ") & ")"
@@ -857,8 +857,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let no = asBlockNode(conditional.elseBranch)
     let yesCode = if yes != nil: inlineBlockExpression(ctx, yes) else: "nilValue()"
     let noCode = if no != nil: inlineBlockExpression(ctx, no) else: "nilValue()"
-    return "(if isTruthy(" & condition & "):\n" & indentBlock(yesCode, 4) &
-           " else:\n" & indentBlock(noCode, 4) & ")"
+    return "(block:\n    if isTruthy(" & condition & "):\n" & indentBlock(yesCode, 8) &
+           "    else:\n" & indentBlock(noCode, 8) & ")"
 
   of nkAssign:
     let assign = node.AssignNode
