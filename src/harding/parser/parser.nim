@@ -812,15 +812,15 @@ proc parseBlock*(parser: var Parser): BlockNode =
         parser.parseError("Expected | to close temporary variable declaration")
 
   # Parse statements until closing bracket
-  var loopCount = 0
+  var previousPosition = -1
   while true:
-    loopCount += 1
-    if loopCount > 100:
-      parser.parseError("Block parsing exceeded 100 iterations - possible infinite loop")
+    if parser.pos == previousPosition:
+      parser.parseError("Block parser made no progress")
       return nil
+    previousPosition = parser.pos
 
     let currentTok = parser.peek()
-    debug("parseBlock: loop ", loopCount, " pos=", parser.pos, " current=", currentTok.kind, " value='", currentTok.value, "'")
+    debug("parseBlock: pos=", parser.pos, " current=", currentTok.kind, " value='", currentTok.value, "'")
 
     # Check for closing bracket first
     if parser.expect(tkRBracket):

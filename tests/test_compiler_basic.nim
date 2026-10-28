@@ -10,6 +10,23 @@ import ../src/harding/compiler/[context, types, analyzer]
 import ../src/harding/compiler/symbols as symbols
 import ../src/harding/codegen/[expression, blocks, module, numeric]
 
+suite "Compiler: Closure collection":
+  test "rewritten expression containers collect nested closures before generation":
+    for wrapper in 0..<5:
+      let callback = BlockNode(body: @[Node(LiteralNode(value: toValue(42)))])
+      let argument = Node(callback)
+      let node: Node = case wrapper
+        of 0: SlotAccessNode(slotName: "stored", slotIndex: 0, isAssignment: true, valueExpr: argument)
+        of 1: NamedAccessNode(receiver: IdentNode(name: "target"), memberName: "stored", isAssignment: true, valueExpr: argument)
+        of 2: SuperSendNode(selector: "accept:", arguments: @[argument])
+        of 3: PrimitiveCallNode(selector: "accept:", arguments: @[argument])
+        else: CascadeNode(receiver: IdentNode(name: "target"), messages: @[
+          Node(MessageNode(selector: "accept:", arguments: @[argument]))])
+      let registry = newBlockRegistry()
+      collectBlocks(registry, node)
+      check registry.getAllBlocks().len == 1
+      check registry.findBlock(callback) == 0
+
 suite "Compiler: Lexer and Parser":
   test "lexes simple integer literal":
     let tokens = lex("42")

@@ -769,6 +769,27 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
       else:
         collectBlocks(registry, part, knownGlobals, ownerSlotNames, ownerLocalNames)
 
+  of nkSlotAccess:
+    collectBlocks(registry, node.SlotAccessNode.valueExpr, knownGlobals, ownerSlotNames, ownerLocalNames)
+
+  of nkNamedAccess:
+    let access = node.NamedAccessNode
+    collectBlocks(registry, access.receiver, knownGlobals, ownerSlotNames, ownerLocalNames)
+    collectBlocks(registry, access.valueExpr, knownGlobals, ownerSlotNames, ownerLocalNames)
+
+  of nkSuperSend:
+    for argument in node.SuperSendNode.arguments:
+      collectBlocks(registry, argument, knownGlobals, ownerSlotNames, ownerLocalNames)
+
+  of nkPrimitiveCall:
+    for argument in node.PrimitiveCallNode.arguments:
+      collectBlocks(registry, argument, knownGlobals, ownerSlotNames, ownerLocalNames)
+
+  of nkCascade:
+    collectBlocks(registry, node.CascadeNode.receiver, knownGlobals, ownerSlotNames, ownerLocalNames)
+    for message in node.CascadeNode.messages:
+      collectBlocks(registry, message, knownGlobals, ownerSlotNames, ownerLocalNames)
+
   else:
     # Other node types don't contain blocks
     discard

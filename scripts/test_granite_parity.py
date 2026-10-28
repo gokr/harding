@@ -7,6 +7,16 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("slot_assignment_closures", """
+ClosureSlot := Object derivePublic: #(stored).
+ClosureSlot>>install: seed [stored := [seed + 1]. ^stored value].
+ClosureSlot>>choose: flag [stored := flag and: [true]. ^stored].
+instance := ClosureSlot new.
+(instance install: 41) println.
+instance stored value println.
+(instance choose: true) println.
+(instance choose: false) println.
+""", "42\n42\ntrue\nfalse\n"),
     ("nested_conditional_operands", """
 OperandChoice := Object derive: #().
 OperandChoice>>probe: flag [

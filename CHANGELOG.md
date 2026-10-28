@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Fixed
+- Parser block limits now detect lack of token progress instead of rejecting valid blocks after 100 iterations; large methods and malformed-block regressions cover the guard.
+- Granite collects closures nested in rewritten slot assignments, named accesses, super/primitive arguments and cascades before emitting forward declarations.
 - Granite preserves indentation for multiline conditional receivers and arguments inside hosted builtin operand bindings; executed parity covers arithmetic and comparisons with both branches.
 - All activation paths initialize declared block temporaries before closures capture them, including `Harding main:` and callbacks invoked through helper primitives. This preserves forward captures after removing dynamic-scope fallback. The numeric-local example no longer declares a forbidden slot shadow.
 - Instance-method arguments and temporaries, including nested block declarations, cannot shadow receiver slots (including inherited/private slots). Interpreter method installation and Granite reflection reject the definition before replacing methods; class-side factories and unrelated caller locals remain legal. Renamed conflicting FileStream, Browser and Workspace bindings; generated setters choose a nonconflicting argument name.
