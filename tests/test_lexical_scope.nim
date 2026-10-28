@@ -11,6 +11,31 @@ proc evaluate(source: string): NodeValue =
   value
 
 suite "Lexical scope isolation":
+  test "main temporaries exist before their first assignment is captured":
+    discard evaluate("""
+      Harding main: [| total read |
+        read := [total].
+        total := 42.
+        LexMainAnswer := read value
+      ]
+    """)
+    check evaluate("LexMainAnswer").intVal == 42
+
+  test "nested unassigned block temporaries have independent capture cells":
+    let value = evaluate("""
+      LexForward := Array new.
+      2 timesRepeat: [| pending reader |
+        reader := [pending].
+        pending := LexForward size + 10.
+        LexForward add: reader
+      ].
+      LexResults := Array new.
+      LexResults add: ((LexForward at: 0) value).
+      LexResults add: ((LexForward at: 1) value).
+      LexResults
+    """)
+    check value.toString() == "#(10 11)"
+
   test "control-flow slot reads and writes ignore caller locals":
     let value = evaluate("""
       LexBox := Object derivePublic: #(payload).

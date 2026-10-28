@@ -37,10 +37,10 @@ Numeric>>shadow [
   ^ k
 ].
 Numeric>>localSlot [
-  | slot |
-  slot := 2.
-  slot := slot + 1.
-  ^ slot
+  | localValue |
+  localValue := 2.
+  localValue := localValue + 1.
+  ^ localValue
 ].
 Numeric>>slotDependency [
   | k |

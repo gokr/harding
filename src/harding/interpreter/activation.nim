@@ -53,6 +53,9 @@ proc newActivation*(blk: BlockNode,
 
   # Also keep self in locals table for backward compat
   result.locals["self"] = selfVal
+  if blk != nil:
+    for name in blk.temporaries:
+      result.locals[name] = nilValue()
 
   # Initialize 'super' in locals for super sends (as Class)
   if definingClass != nil and definingClass.superclasses.len > 0:
