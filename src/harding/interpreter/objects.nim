@@ -1,6 +1,7 @@
 import std/[tables, strutils, sequtils, math, hashes, options]
 import ../core/types
 import ../core/string_conversion
+import ./scope_validation
 
 # ============================================================================
 # Platform-Specific Helpers
@@ -355,6 +356,9 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   ## Add a method to a class (instance or class method)
   ## Default: deferRebuild=true for performance - rebuilds only on cache miss during lookup
   ## Use deferRebuild=false only when immediate rebuild is required
+  if not isClassMethod and cls.allSlotNames.len > 0:
+    validateSlotBindings(meth, cls, selector)
+
   # Mark block as a method so return (^) has correct semantics
   meth.isMethod = true
   meth.selector = selector  # Store the selector for later lookup
@@ -1299,7 +1303,9 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
     return nil
 
   # Parameter name for the setter (e.g., "aValue" or just "value")
-  let paramName = "aValue"
+  var paramName = "aValue"
+  while paramName in cls.allSlotNames:
+    paramName.add("_")
 
   # Create the parameter node as an IdentNode
   let paramNode = IdentNode(name: paramName, localIndex: -1)

@@ -320,6 +320,16 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
+task testLexicalScope, "Validate lexical isolation and slot binding errors in both engines":
+  exec "nimble harding"
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "nim c -r --out:build/test_lexical_scope tests/test_lexical_scope.nim"
+  exec "nim c -r --mm:orc --out:build/test_lexical_scope_orc tests/test_lexical_scope.nim"
+  exec "nim c -r --out:build/test_slot_binding_validation tests/test_slot_binding_validation.nim"
+  exec "nim c -r --mm:orc --out:build/test_slot_binding_validation_orc tests/test_slot_binding_validation.nim"
+  exec "python3 -m unittest discover -s tests -p test_slot_binding_cli.py"
+  exec "python3 scripts/test_granite_parity.py lexical_scope_isolation lexical_shadowing inline_shadowing"
+
 task harding_gtk, "Build standalone GTK4-enabled Harding interpreter":
   exec "nim c -p:src -o:build/harding_gtk src/harding/repl/harding_gtk.nim"
 

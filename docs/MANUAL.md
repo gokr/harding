@@ -502,6 +502,14 @@ from their definition environment through shared cells; their invoking caller's
 variables never substitute for those captures or the receiver's slots. This
 applies to control-flow blocks as well as escaped callbacks.
 
+An instance method may not declare an argument or temporary with the name of a
+receiver slot, including inherited or private slots. The rule also applies to
+parameters and temporaries in nested blocks. Definitions are rejected when
+installed in the interpreter or reflected during Granite compilation, even if
+the conflicting binding is unused. Class-side factory parameters are not
+instance-slot shadows and remain legal. Reusing names in unrelated methods is
+also legal; this rule does not prohibit local-over-local lexical shadowing.
+
 ### Execution Context
 
 Script blocks execute with `self = nil`, following the Smalltalk workspace convention (like a do-it in a Workspace). A file script, the REPL, and `harding -e` all compile their top-level code as the `#doIt` method on `UndefinedObject`, so they share one rule: a lowercase top-level assignment is a local of that do-it, `| x |` temporaries are legal, and `^` returns from it. Only uppercase names are globals.

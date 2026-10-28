@@ -106,7 +106,7 @@ proc isCompileTimeDefNode(node: Node): bool =
 
   of nkMessage:
     let msg = node.MessageNode
-    return msg.selector in ["selector:put:", "classSelector:put:", "addSuperclass:"]
+    return msg.selector in ["selector:put:", "classSelector:put:", "addSuperclass:", "extend:", "extendClass:"]
 
   else:
     return false
@@ -426,8 +426,12 @@ proc compileFile(config: Config): bool =
         compileNodes.add(node)
 
   if compileNodes.len > 0:
-    for node in compileNodes:
-      discard evalWithVM(interp, node)
+    try:
+      for node in compileNodes:
+        discard evalWithVM(interp, node)
+    except ValueError as failure:
+      echo "Definition error: ", failure.msg
+      return false
 
   # Dump AST if requested
   if config.dumpAst:

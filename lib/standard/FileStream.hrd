@@ -15,7 +15,7 @@ FileStream := Object derive: #(file, mode, isOpen)
 # Keep stream state management here so file cursor semantics stay isolated from File.
 # This class forms the standard streaming abstraction for host file interaction.
 
-FileStream>>open: filename mode: mode <primitive primitiveFileOpen: filename mode: mode>
+FileStream>>open: filename mode: openMode <primitive primitiveFileOpen: filename mode: openMode>
   # Open file with mode ("r", "w", "a", 'r+', 'w+')
 
 FileStream>>close <primitive primitiveFileClose>

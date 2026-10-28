@@ -407,7 +407,7 @@ count println.
 """, "20\n7\n1\n1\n1\n7\n42\n7\n"),
     ("lexical_shadowing", """
 Cell := Object derivePublic: #(amount).
-Cell>>localValue [ | amount blk | amount := 5. blk := [amount := amount + 1. amount]. ^ blk value ].
+Cell>>localValue [ | localAmount blk | localAmount := 5. blk := [localAmount := localAmount + 1. localAmount]. ^ blk value ].
 c := Cell new.
 c amount: 99.
 (c localValue) println.
@@ -735,8 +735,8 @@ k slotvalue println.
 """, "11\n22\n31\n42\n7\n11\n"),
     ("reserved_identifiers", """
 Keywords := Object derivePublic: #(object, type, result).
-Keywords>>set: object [ type := object. result := object + 1. ^ result ].
-Keywords>>capture: object [ | result env args home hardingHome | result := object. env := 2. args := 3. home := 4. hardingHome := 5. ^ [result + env + args + home + hardingHome] ].
+Keywords>>set: input [ type := input. result := input + 1. ^ result ].
+Keywords>>capture: input [ | captured env args home hardingHome | captured := input. env := 2. args := 3. home := 4. hardingHome := 5. ^ [captured + env + args + home + hardingHome] ].
 k := Keywords new.
 (k set: 10) println.
 k type println.

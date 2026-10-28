@@ -301,7 +301,7 @@ Workspace>>showError: messageText [
 ]
 
 Workspace>>showErrorDialog: messageText [
-    | dialog box label okButton |
+    | dialog dialogBox label okButton |
 
     (Harding includesKey: "GtkAlertDialog") ifTrue: [
         GtkAlertDialog
@@ -315,8 +315,8 @@ Workspace>>showErrorDialog: messageText [
     dialog title: "Workspace Error"
     dialog setDefaultSize: 520 height: 140
 
-    box := GtkBox vertical
-    box setSpacing: 8
+    dialogBox := GtkBox vertical
+    dialogBox setSpacing: 8
 
     label := GtkLabel new: messageText
     label halignStart
@@ -324,9 +324,9 @@ Workspace>>showErrorDialog: messageText [
     okButton := GtkButton newLabel: "OK"
     okButton clicked: [ dialog close ]
 
-    dialog setChild: box
-    box append: label
-    box append: okButton
+    dialog setChild: dialogBox
+    dialogBox append: label
+    dialogBox append: okButton
     dialog present
 ]
 

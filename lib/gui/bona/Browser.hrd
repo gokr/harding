@@ -941,7 +941,7 @@ Browser>>onDestroy [
 ]
 
 Browser>>resolveMethodFileForCurrentClass [
-    | classObj candidates index selector info found owner file |
+    | classObj candidates index selector info found methodOwner file |
     self currentMethodFile notNil ifTrue: [ ^ self currentMethodFile ]
 
     classObj := self classForName: self currentClass
@@ -960,8 +960,8 @@ Browser>>resolveMethodFileForCurrentClass [
     found := info at: "found" ifAbsent: [ false ]
 
         found ifTrue: [
-    owner := info at: "ownerClass" ifAbsent: [ self currentClass ]
-            (owner = self currentClass) ifTrue: [
+    methodOwner := info at: "ownerClass" ifAbsent: [ self currentClass ]
+            (methodOwner = self currentClass) ifTrue: [
     file := info at: "file" ifAbsent: [ nil ]
             ]
         ]

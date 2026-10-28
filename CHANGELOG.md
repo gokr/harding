@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Fixed
+- Instance-method arguments and temporaries, including nested block declarations, cannot shadow receiver slots (including inherited/private slots). Interpreter method installation and Granite reflection reject the definition before replacing methods; class-side factories and unrelated caller locals remain legal. Renamed conflicting FileStream, Browser and Workspace bindings; generated setters choose a nonconflicting argument name.
 - Interpreter variable reads and assignments no longer search unrelated caller activations. Control-flow blocks retain explicit lexical cells per invocation, and callback paths share those cells without copying values into dynamically named caller locals. Regressions cover slot collisions, nil slots, escaped/reentrant closures and both-engine lexical-scope parity.
 
 ### Added
