@@ -640,3 +640,43 @@ suite "Compiled missing messages":
     let receiver = proxyReceiver("MissingSuperTest")
     expect CompiledHardingError:
       discard sendSuperMessage(receiver, "MissingSuperTest", "absent", @[])
+
+suite "Compiled exception classification cache":
+  test "late Exception parent invalidates a cached non-exception answer":
+    let rt = newRuntime()
+    let name = "LateExceptionProbe"
+    proc allocate(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      proxyReceiver("LateExceptionProbe")
+    registerCompiledClass(name, allocate)
+    let receiver = compiledClassValue(name)
+    var caught = false
+    try:
+      discard sendMessage(rt, receiver, "signal:", @[toValue("ignored")])
+    except CompiledHardingError as failure:
+      caught = true
+      check failure.value.instVal.class.name == "MessageNotUnderstood"
+    check caught
+    caught = false
+    try:
+      discard sendMessage(rt, receiver, "signal:", @[toValue("ignored")])
+    except CompiledHardingError as failure:
+      caught = true
+      check failure.value.instVal.class.name == "MessageNotUnderstood"
+    check caught
+    # The cached non-exception answer must not survive a hierarchy change.
+    registerSuperclass(name, "Exception")
+    caught = false
+    try:
+      discard sendMessage(rt, receiver, "signal:", @[toValue("now an error")])
+    except CompiledHardingError as failure:
+      caught = true
+      check failure.value.instVal.class.name == "LateExceptionProbe"
+    check caught
+
+  test "a class-side signal method wins on a non-exception class":
+    let rt = newRuntime()
+    registerCompiledClass("OrdinarySignalReceiver", defaultAllocation)
+    registerCompiledClassMethod("OrdinarySignalReceiver", "signal:", defaultAllocation)
+    let receiver = compiledClassValue("OrdinarySignalReceiver")
+    check sendMessage(rt, receiver, "signal:", @[toValue("ignored")]).intVal == 1
+    check sendMessage(rt, receiver, "signal:", @[toValue("ignored")]).intVal == 1

@@ -123,3 +123,51 @@ The next slice should re-profile before choosing another target. Remaining
 hashing, slot-access lookup and allocation are visible candidates, not yet
 measured optimization results. Keep bound host lookup and live-layout checks;
 do not remove them merely because pure-native benchmarks do not use them.
+
+## Second slice: exception-class ancestry guard
+
+Re-profiling at `d7b1328` showed the first cache had removed most hierarchy
+walks, but one caller still dominated: `isCompiledExceptionClass` ran a whole
+graph traversal on nearly every send, because ordinary sends reached it before
+any fast rejection. On Queens it accounted for 10,398,511 of 10,398,524 walks.
+
+Two graph-independent corrections, no semantic change:
+
+- `signal:` is now tested before the ancestry predicate. A class can only enter
+  the built-in exception protocol for `signal:`, so other selectors never pay for
+  the lookup.
+- The ancestry answer is cached in a bounded thread-local table keyed by class
+  name and invalidated by `compiledClassDispatchVersion`, like the resolution
+  cache. It stores booleans, not class or receiver references.
+
+Profiled counts for thirty checked repetitions:
+
+| Workload | Hierarchy walks before | After | Raw allocator calls before | After |
+|---|---:|---:|---:|---:|
+| Richards | 2,982,341 | 14,986 | 46,682,638 | 34,417,771 |
+| DeltaBlue | 4,299,795 | 96,653 | 63,399,751 | 42,494,180 |
+| Queens | 10,398,524 | 15 | 144,377,631 | 102,783,598 |
+
+Paired uninstrumented ARC trials against retained `d7b1328` binaries, same
+methodology (seven measured alternating trials, thirty checked passes each):
+
+| Workload | Before ms/pass | After ms/pass | Throughput ratio | Time reduction |
+|---|---:|---:|---:|---:|
+| Richards | 64.665 | 52.643 | 1.228x | ~18.6% |
+| DeltaBlue | 94.866 | 70.212 | 1.351x | ~26.0% |
+| Queens | 185.194 | 152.419 | 1.215x | ~17.7% |
+
+The baseline in this table is the retained `run-ua7weblb` binaries, whose
+medians in that run were 66.94/96.24/203.61 ms. A separate slice-one baseline
+measured different absolute times; compare within a paired table only.
+
+Evidence: `build/granite-profiles/run-ua7weblb` (baseline),
+`run-21l77yc5` (paired comparison), `run-a2wno529` (post-change profiles).
+
+Validation for this slice: `test_compiled_runtime` (42 tests, ARC and ORC),
+including new cases for a cached non-exception answer that must be invalidated by
+adding an `Exception` parent and for a class-side `signal:` method on an ordinary
+class. Engine-boundary, reentrant-return, block-lifetime, compiled-support and
+base-allocation suites run under ARC and ORC. Richards and DeltaBlue two-engine
+conformance, the 102-case parity sweep, and GTK acceptance are re-run for the
+combined change set.

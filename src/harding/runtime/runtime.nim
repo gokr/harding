@@ -1279,8 +1279,23 @@ proc compiledExceptionClassValue*(name: string): NodeValue =
     registerSuperclass(name, "Error")
   return compiledClassValue(name)
 
+var
+  exceptionClassVersion {.threadvar.}: uint64
+  exceptionClassResults {.threadvar.}: Table[string, bool]
+
 proc isCompiledExceptionClass(name: string): bool =
-  return walkCompiledHierarchy(name, proc(candidate: string): bool = candidate == "Exception").len > 0
+  ## Graph ancestry is cached per registration version: this predicate runs for
+  ## most sends, and the answer only changes when the hierarchy does.
+  if exceptionClassVersion != compiledClassDispatchVersion:
+    exceptionClassResults.clear()
+    exceptionClassVersion = compiledClassDispatchVersion
+  if exceptionClassResults.hasKey(name):
+    return exceptionClassResults[name]
+  result = walkCompiledHierarchy(name,
+    proc(candidate: string): bool = candidate == "Exception").len > 0
+  if exceptionClassResults.len >= 4096:
+    exceptionClassResults.clear()
+  exceptionClassResults[name] = result
 
 proc compiledExceptionMessage*(value: NodeValue): string =
   ## Message slot of a compiled exception instance, proxy or plain instance.
@@ -1674,8 +1689,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         if not retryRequested:
           raise
 
-  if receiver.kind == vkClass and receiver.classVal != nil and
-     isCompiledExceptionClass(receiver.classVal.name) and selector == "signal:" and args.len == 1:
+  if receiver.kind == vkClass and selector == "signal:" and args.len == 1 and
+     receiver.classVal != nil and isCompiledExceptionClass(receiver.classVal.name):
     let notification = compiledErrorValue(receiver.classVal.name, args[0].toString())
     if isNotificationClass(receiver.classVal.name):
       # Synchronous: run the innermost handler now and answer with its result.
