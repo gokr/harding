@@ -585,12 +585,27 @@ type
 var slotGetters*: Table[string, SlotGetter] = initTable[string, SlotGetter]()
 var slotSetters*: Table[string, SlotSetter] = initTable[string, SlotSetter]()
 
+# Hot-path index: (class identity, slot name) -> accessor. Compiled instances
+# carry their resolved Class, so this avoids building a "Class::slot" string and
+# hashing it on every read and write. The name-keyed tables above stay canonical
+# and serve live-bound instances whose class identity is the interpreter's.
+# Deliberately a flat table: looking up a nested Table value would copy it.
+var
+  classSlotGetters: Table[tuple[cls: pointer, slot: string], SlotGetter]
+  classSlotSetters: Table[tuple[cls: pointer, slot: string], SlotSetter]
+
 proc registerSlotAccessor*(className: string, slotName: string,
                            getter: SlotGetter, setter: SlotSetter) =
   requireMutableCompiledClass(className)
   let key = className & "::" & slotName
   slotGetters[key] = getter
   slotSetters[key] = setter
+  # Index by the compiled class object when it exists; a miss simply means the
+  # hot path falls back to the name-keyed lookup.
+  if className in compiledClasses:
+    let id = cast[pointer](compiledClasses[className])
+    classSlotGetters[(id, slotName)] = getter
+    classSlotSetters[(id, slotName)] = setter
 
 proc registerCompiledMethod*(className: string, selector: string,
                               fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
@@ -1069,6 +1084,12 @@ proc getSlotValue*(self: NodeValue, slotName: string): NodeValue =
     return nilValue()
   if instance.nimValue == nil:
     return nilValue()
+  if instance.class != nil:
+    let id = (cls: cast[pointer](instance.class), slot: slotName)
+    if classSlotGetters.hasKey(id):
+      return classSlotGetters[id](instance.nimValue)
+    if instance.class.name in compiledClasses:
+      return nilValue()
   let key = getReceiverClassName(self) & "::" & slotName
   if key in slotGetters:
     return slotGetters[key](instance.nimValue)
@@ -1091,6 +1112,12 @@ proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeVal
     return value
   if instance.nimValue == nil:
     return value
+  if instance.class != nil:
+    let id = (cls: cast[pointer](instance.class), slot: slotName)
+    if classSlotSetters.hasKey(id):
+      return classSlotSetters[id](instance.nimValue, value)
+    if instance.class.name in compiledClasses:
+      return value
   let key = getReceiverClassName(self) & "::" & slotName
   if key in slotSetters:
     return slotSetters[key](instance.nimValue, value)

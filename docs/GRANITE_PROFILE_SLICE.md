@@ -231,3 +231,71 @@ Order-of-magnitude gaps to Cog from the earlier comparison (roughly 0.57/0.66/
 large. Production-quality value representation (unboxing), allocation strategy
 and slot dispatch are still unaddressed; they are larger, riskier changes than
 the three mechanical slices above and need separate agreement.
+
+## Fourth slice: slot accessor lookup (Level 1 of direct slot access)
+
+Goal context: the intended end state for Granite is compiled Nim objects with
+typed Nim members, so slot access eventually becomes a direct field access with
+no runtime lookup at all. This slice is the first mechanical step in that
+direction; it does not change field types yet.
+
+Compiled types already carry real Nim fields:
+
+```nim
+Class_...Obj* {.inheritable.} = object of HardingObject
+  classRef*: Class
+  row*: NodeValue
+  column*: NodeValue
+  previous*: NodeValue
+```
+
+But every access was emitted as `getSlotValue(self, "row")`, and the hot path
+built `getReceiverClassName(self) & "::" & slotName` — a fresh string allocation
+plus a hash plus a table probe plus an indirect call — before reaching an
+accessor whose body is a plain pointer cast. Note also that Granite emits **flat**
+types: each class is `object of HardingObject` carrying its own copy of all
+inherited slots, and language inheritance lives in the dispatch tables. A
+receiver cast to another class's generated type would therefore read the wrong
+memory, so any direct access must be guarded on the receiver's actual class.
+
+Change: accessors are additionally indexed by `(class identity, slot name)` in a
+flat table, keyed by the resolved `Class` pointer the instance already carries.
+The name-keyed tables stay canonical and still serve live-bound instances, whose
+class identity belongs to the interpreter. A miss on a compiled class answers nil
+rather than falling through to a name lookup that cannot succeed.
+
+Rejected first attempt: indexing as `Table[pointer, Table[string, accessor]]`.
+Looking up a value in the outer table **copies** the inner `Table`, which became
+519M deep copies at ~11% of runtime — a ~1.8x regression on all three workloads.
+That design was measured, discarded, and is recorded here so it is not retried.
+
+Paired uninstrumented ARC trials against retained `ebea5fd` binaries, seven
+measured alternating trials, thirty checked passes each:
+
+| Workload | Before ms/pass | After ms/pass | Throughput ratio | Time reduction |
+|---|---:|---:|---:|---:|
+| Richards | 54.860 | 48.785 | 1.125x | ~11.1% |
+| DeltaBlue | 87.687 | 78.736 | 1.114x | ~10.2% |
+| Queens | 154.666 | 139.671 | 1.107x | ~9.7% |
+
+Evidence: `build/granite-profiles/run-2obisa53` (baseline),
+`run-g3rqxtkt` (paired comparison). The regressed attempt's profiles remain in
+`run-o1i86_gi` as the record of the rejected design.
+
+### Where Level 1 stops, and what Level 2 needs
+
+This removes the per-access string allocation but still pays one hash and one
+hash-table probe per slot read/write, plus an indirect call through the accessor
+proc. Closing that needs the access to be resolved at compile time rather than
+looked up at run time, which in turn needs the field types to be known — i.e. it
+converges with Level 2:
+
+- Slot type inference (`row: int`, `previous: Class_QueenPlacement`) so
+  arithmetic and field loads compile to native operations instead of `NodeValue`
+  unions and `nt_plus` calls.
+- A boxing fallback for slots whose runtime type is not pinned, and a bridge so
+  the interpreter still observes `NodeValue` slots on adopted native instances.
+- Generated-code changes, hence invalidation when a class is redefined at runtime.
+
+That is a materially larger and riskier change than any slice so far; it should
+start with a written design agreement before code.
