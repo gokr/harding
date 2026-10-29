@@ -323,6 +323,54 @@ proc proxyReceiver(name: string): NodeValue =
   instance.isNimProxy = true
   NodeValue(kind: vkInstance, instVal: instance)
 
+suite "Compiled hierarchy resolution cache":
+  test "negative lookup invalidates on later method and parent registration":
+    check not hasCompiledMethodInHierarchy("ResolutionLateChild", "answer")
+    registerCompiledMethod("ResolutionLateParent", "answer", defaultAllocation)
+    check not hasCompiledMethodInHierarchy("ResolutionLateChild", "answer")
+    registerSuperclass("ResolutionLateChild", "ResolutionLateParent")
+    check hasCompiledMethodInHierarchy("ResolutionLateChild", "answer")
+    let receiver = proxyReceiver("ResolutionLateChild")
+    check sendMessage(nil, receiver, "answer", @[]).intVal == 1
+    registerCompiledMethod("ResolutionLateParent", "answer", replacementAllocation)
+    check dispatchCompiledMethodFromClass(receiver, "ResolutionLateChild", "answer", @[]).intVal == 2
+
+  test "multiple-parent order and explicit super start remain distinct":
+    registerSuperclass("ResolutionMulti", "ResolutionFirst")
+    registerSuperclass("ResolutionMulti", "ResolutionSecond")
+    registerCompiledMethod("ResolutionSecond", "answer", replacementAllocation)
+    let receiver = proxyReceiver("ResolutionMulti")
+    check sendMessage(nil, receiver, "answer", @[]).intVal == 2
+    registerCompiledMethod("ResolutionFirst", "answer", defaultAllocation)
+    check sendMessage(nil, receiver, "answer", @[]).intVal == 1
+    check dispatchCompiledMethodFromClass(receiver, "ResolutionSecond", "answer", @[]).intVal == 2
+
+  test "cyclic hierarchy misses terminate and later installs invalidate misses":
+    registerSuperclass("ResolutionCycleOne", "ResolutionCycleTwo")
+    registerSuperclass("ResolutionCycleTwo", "ResolutionCycleOne")
+    check not hasCompiledMethodInHierarchy("ResolutionCycleOne", "answer")
+    check not hasCompiledMethodInHierarchy("ResolutionCycleOne", "answer")
+    registerCompiledMethod("ResolutionCycleTwo", "answer", defaultAllocation)
+    check hasCompiledMethodInHierarchy("ResolutionCycleOne", "answer")
+
+  test "cache capacity clears do not change positive or negative answers":
+    registerCompiledMethod("ResolutionCapacity", "answer", defaultAllocation)
+    for index in 0..<5000:
+      check not hasCompiledMethodInHierarchy("ResolutionCapacity", "absent" & $index)
+    check hasCompiledMethodInHierarchy("ResolutionCapacity", "answer")
+    let receiver = proxyReceiver("ResolutionCapacity")
+    check sendMessage(nil, receiver, "answer", @[]).intVal == 1
+
+  test "a cached missing initializer does not skip a newly installed initializer":
+    let name = "ResolutionInitializer"
+    proc allocate(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      proxyReceiver("ResolutionInitializer")
+    registerCompiledClass(name, allocate)
+    let created = sendMessage(nil, compiledClassValue(name), "new", @[])
+    check created.kind == vkInstance
+    registerCompiledMethod(name, "initialize", replacementAllocation)
+    check sendMessage(nil, compiledClassValue(name), "new", @[]).intVal == 2
+
 suite "Compiled monomorphic send caches":
   test "receiver and selector changes never reuse a wrong target":
     let rt = newRuntime()

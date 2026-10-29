@@ -971,6 +971,25 @@ proc findCompiledMethod*(className: string, selector: string): proc(self: NodeVa
     return compiledMethodProcs[key]
   return nil
 
+var
+  resolvedMethodVersion {.threadvar.}: uint64
+  resolvedMethods {.threadvar.}: Table[tuple[className, selector: string], CompiledProc]
+
+proc resolveCompiledMethod(className, selector: string): CompiledProc =
+  ## Cache native resolution only; live interpreter lookup remains at send entry.
+  if resolvedMethodVersion != compiledClassDispatchVersion:
+    resolvedMethods.clear()
+    resolvedMethodVersion = compiledClassDispatchVersion
+  let key = (className, selector)
+  if resolvedMethods.hasKey(key):
+    return resolvedMethods[key]
+  let owner = walkCompiledHierarchy(className,
+    proc(name: string): bool = findCompiledMethod(name, selector) != nil)
+  result = if owner.len > 0: findCompiledMethod(owner, selector) else: nil
+  if resolvedMethods.len >= 4096:
+    resolvedMethods.clear()
+  resolvedMethods[key] = result
+
 proc getReceiverClassName*(receiver: NodeValue): string =
   ## Resolve runtime class name for compiled Nim proxy instances
   if receiver.kind != vkInstance or receiver.instVal == nil or not receiver.instVal.isNimProxy:
@@ -1103,16 +1122,14 @@ proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
     let interpreted = boundInterpretedSend(receiver, selector, args)
     if interpreted.handled:
       return interpreted.value
-  let owner = walkCompiledHierarchy(className,
-    proc(name: string): bool = findCompiledMethod(name, selector) != nil)
-  if owner.len > 0:
-    return findCompiledMethod(owner, selector)(receiver, args)
+  let target = resolveCompiledMethod(className, selector)
+  if target != nil:
+    return target(receiver, args)
   return compiledMissingMessage(receiver, selector)
 
 proc hasCompiledMethodInHierarchy*(className: string, selector: string): bool =
   ## Check if a compiled method exists on this class or any superclass.
-  return walkCompiledHierarchy(className,
-    proc(name: string): bool = findCompiledMethod(name, selector) != nil).len > 0
+  resolveCompiledMethod(className, selector) != nil
 
 proc hasCompiledClassMethodInHierarchy*(className, selector: string): bool =
   ## Detect a class-side override, including inherited methods.
@@ -2300,10 +2317,8 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
        cache.selector == selector and cache.target != nil:
       let target = cache.target
       return target(receiver, args)
-    let owner = walkCompiledHierarchy(className,
-      proc(name: string): bool = findCompiledMethod(name, selector) != nil)
-    if owner.len > 0:
-      let target = findCompiledMethod(owner, selector)
+    let target = resolveCompiledMethod(className, selector)
+    if target != nil:
       cache = CompiledSendCache(className: className, selector: selector,
                                 version: compiledClassDispatchVersion, target: target)
       return target(receiver, args)

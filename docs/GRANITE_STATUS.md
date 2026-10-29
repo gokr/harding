@@ -2,6 +2,16 @@
 
 Work branch: `granite-completeness`.
 
+## First profile-guided runtime slice
+
+Release gprof profiles show repeated hierarchy lookup and temporary allocation
+costs on Richards, DeltaBlue and Queens. A bounded versioned native resolution
+cache reduces those walks while retaining live interpreter fallback and dynamic
+registration invalidation. Paired uninstrumented ARC measurements observed
+~16–19% lower elapsed time; ARC/ORC runtime and boundary regressions and benchmark
+conformance pass. See [profiling evidence and limits](GRANITE_PROFILE_SLICE.md).
+This is one measured slice, not a claim of Cog-level performance or full parity.
+
 ## Frozen stdlib and engine boundary
 
 Design for shipping opted-in stdlib classes natively while the rest stays

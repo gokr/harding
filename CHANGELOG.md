@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Granite native instance-method resolution uses a bounded, version-checked thread-local cache for positive and negative hierarchy lookups, without bypassing live interpreted dispatch. Profile-guided paired ARC trials observed ~16–19% lower elapsed time on Richards/DeltaBlue/Queens; raw profiles, noise caveats and reproducible tooling are documented in `docs/GRANITE_PROFILE_SLICE.md`. ARC/ORC tests cover registration invalidation, hierarchy order, cycles, eviction and bound method replacement.
+
 ### Fixed
 - Native `Object new` and `Object basicNew` allocate distinct ordinary Object instances without requiring an application allocator; `new` still honors a registered initializer. Both-engine parity covers identity and class reflection.
 - Parser block limits now detect lack of token progress instead of rejecting valid blocks after 100 iterations; large methods and malformed-block regressions cover the guard.
