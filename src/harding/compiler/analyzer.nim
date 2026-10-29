@@ -20,10 +20,41 @@ proc newAnalysisResult*(): AnalysisResult =
     errors: @[]
   )
 
-proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeConstraint]] =
+proc hintConstraint(hint: string): tuple[constraint: TypeConstraint, objectClass, defaultText: string] =
+  ## `nil`/empty means explicitly dynamic; a literal declares the primitive type
+  ## and its default value; a primitive keyword names only the type; any other
+  ## capitalised word names an object class.
+  if hint.len == 0 or hint == "nil":
+    return (tcNone, "", "")
+  # Literal defaults: `0`, `5.0`, `"text"`, `true`, `false`.
+  if hint == "true" or hint == "false":
+    return (tcBool, "", hint)
+  if hint.len > 1 and hint[0] == '"' and hint[^1] == '"':
+    return (tcString, "", hint)
+  try:
+    discard parseInt(hint)
+    return (tcInt, "", hint)
+  except ValueError:
+    discard
+  try:
+    discard parseFloat(hint)
+    return (tcFloat, "", hint)
+  except ValueError:
+    discard
+  let primitive = parseTypeHint(hint)
+  if primitive != tcNone:
+    return (primitive, "", "")
+  if hint[0] in {'A'..'Z'}:
+    return (tcObject, hint, "")
+  return (tcNone, "", "")
+
+proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeConstraint, objectClass, defaultText: string]] =
   ## Parse type list from derive: slot lists. Supported forms:
-  ## #(name age), #(name, age), #(name: Type age: Int), #(name:, Int, age:, Float)
-  ## Returns (name, constraint) tuples, constraint = tcNone for untyped
+  ## #(name age), #(name, age), #(name: Type age: Int)
+  ## A capitalised hint that is not a primitive names an object class, so
+  ## `#(q: Banana)` constrains that slot to `Banana`. `nil` means explicitly
+  ## dynamic. A literal hint (`0`, `5.0`, `""`, `false`) declares both the
+  ## primitive type and the slot's default value.
   result = @[]
 
   var remaining = typeList.strip()
@@ -40,16 +71,29 @@ proc parseTypeList*(typeList: string): seq[tuple[name: string, constraint: TypeC
 
     if token.endsWith(":"):
       if pendingName.len > 0:
-        result.add((pendingName, tcNone))
+        result.add((pendingName, tcNone, "", ""))
       pendingName = token[0..^2]
+    elif ':' in token:
+      # Combined "name:Type" form emitted by the parser for `#(name: Type)`.
+      let colon = token.find(':')
+      let name = token[0 ..< colon].strip()
+      let hint = token[colon + 1 .. ^1].strip()
+      if pendingName.len > 0:
+        result.add((pendingName, tcNone, "", ""))
+        pendingName = ""
+      if name.len > 0:
+        let resolved = hintConstraint(hint)
+        result.add((name, resolved.constraint, resolved.objectClass, resolved.defaultText))
     elif pendingName.len > 0:
-      result.add((pendingName, parseTypeHint(token)))
+      let resolved = hintConstraint(token)
+      result.add((pendingName, resolved.constraint, resolved.objectClass, resolved.defaultText))
       pendingName = ""
     else:
-      result.add((token, tcNone))
+      let resolved = hintConstraint(token)
+      result.add((token, resolved.constraint, resolved.objectClass, resolved.defaultText))
 
   if pendingName.len > 0:
-    result.add((pendingName, tcNone))
+    result.add((pendingName, tcNone, "", ""))
 
   return result
 
@@ -105,6 +149,65 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
                  else:
                    nil
   
+  # `derivePublic: #{#x -> Integer, #y -> nil}` is the slot-hint form: symbol or
+  # string keys name slots, values name a primitive class, or `nil` to declare
+  # the slot explicitly dynamic. This needs no parser change: a table literal is
+  # already ordinary syntax.
+  if typeArg != nil and (typeArg.kind == nkTable or
+      (typeArg.kind == nkLiteral and typeArg.LiteralNode.value.kind == vkTable)):
+    var entries: seq[tuple[key: Node, value: Node]] = @[]
+    if typeArg.kind == nkTable:
+      entries = typeArg.TableNode.entries
+    else:
+      discard  # constant table: handled below through cachedValue
+    if entries.len == 0 and typeArg.kind == nkLiteral:
+      # Constant-folded table: recover pairs from its NodeValue.
+      let cached = typeArg.LiteralNode.value
+      if cached.kind == vkTable:
+        var parts: seq[string] = @[]
+        for key, value in cached.tableVal.pairs:
+          let keyName = if key.kind == vkSymbol: key.symVal
+                        elif key.kind == vkString: key.strVal else: ""
+          if keyName.len == 0:
+            continue
+          if value.kind == vkNil:
+            parts.add(keyName & ": nil")
+          elif value.kind == vkClass and value.classVal != nil:
+            parts.add(keyName & ": " & value.classVal.name)
+          elif value.kind == vkSymbol:
+            parts.add(keyName & ": " & value.symVal)
+          elif value.kind == vkString:
+            parts.add(keyName & ": " & value.strVal)
+        return (className, parent, "#(" & parts.join(" ") & ")")
+    else:
+      var parts: seq[string] = @[]
+      for (key, value) in entries:
+        var keyName = ""
+        if key.kind == nkLiteral:
+          if key.LiteralNode.value.kind == vkSymbol: keyName = key.LiteralNode.value.symVal
+          elif key.LiteralNode.value.kind == vkString: keyName = key.LiteralNode.value.strVal
+        elif key.kind == nkIdent:
+          keyName = key.IdentNode.name
+        if keyName.len == 0:
+          continue
+        var hint = "nil"
+        if value.kind == nkIdent:
+          hint = value.IdentNode.name
+        elif value.kind == nkPseudoVar:
+          hint = value.PseudoVarNode.name
+        elif value.kind == nkLiteral:
+          # A literal declares both type and default; keep its source spelling.
+          let literal = value.LiteralNode.value
+          case literal.kind
+          of vkInt: hint = $literal.intVal
+          of vkFloat: hint = $literal.floatVal
+          of vkBool: hint = (if literal.boolVal: "true" else: "false")
+          of vkString: hint = "\"" & literal.strVal & "\""
+          of vkSymbol: hint = literal.symVal
+          else: discard
+        parts.add(keyName & ": " & hint)
+      return (className, parent, "#(" & parts.join(" ") & ")")
+
   var typeList = ""
   if typeArg != nil:
     if typeArg.kind == nkLiteral:
@@ -183,8 +286,8 @@ proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
 
   if typeList.len > 0:
     let slots = parseTypeList(typeList)
-    for (name, constraint) in slots:
-      discard result.addSlot(name, constraint)
+    for (name, constraint, objectClass, defaultText) in slots:
+      discard result.addSlot(name, constraint, objectClass, defaultText)
   extractAccessorInfo(node, result)
 
 proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
@@ -222,8 +325,8 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
 
         if typeList.len > 0:
           let slots = parseTypeList(typeList)
-          for (name, constraint) in slots:
-            discard cls.addSlot(name, constraint)
+          for (name, constraint, objectClass, defaultText) in slots:
+            discard cls.addSlot(name, constraint, objectClass, defaultText)
 
         extractAccessorInfo(node, cls)
 

@@ -100,6 +100,7 @@ type
     allSlotNames*: seq[string]              # All slots including inherited (instance layout)
     readableSlotNames*: seq[string]         # Slots readable through direct access syntax
     writableSlotNames*: seq[string]         # Slots writable through direct access syntax
+    slotDefaults*: Table[string, NodeValue] # Declared defaults from `#{#x -> 0}`
 
     # Inheritance
     superclasses*: seq[Class]               # Direct superclasses
@@ -1290,12 +1291,27 @@ template nimValueIsSet*(nv: pointer): bool = nv != nil
 template nimValueIsNil*(nv: pointer): bool = nv == nil
 
 proc newInstance*(cls: Class): Instance =
-  ## Create a new Instance of the given Class (ikObject variant)
+  ## Create a new Instance of the given Class (ikObject variant). Slots start nil
+  ## and any declared default (`#{#x -> 0}`) seeds its slot here, before
+  ## `initialize` runs, so an unassigned primitive slot is never nil.
   result = Instance(kind: ikObject, class: cls)
   result.slots = newSeq[NodeValue](cls.allSlotNames.len)
-  # Initialize all slots to nil
   for i in 0..<result.slots.len:
     result.slots[i] = nilValue()
+  if cls != nil:
+    # Inherited declared defaults apply too, so walk the parent chain.
+    var owners: seq[Class] = @[]
+    var current = cls
+    while current != nil:
+      owners.add(current)
+      current = if current.superclasses.len > 0: current.superclasses[0] else: nil
+    for index, name in cls.allSlotNames:
+      for owner in owners:
+        if owner.slotDefaults.len > 0 and owner.slotDefaults.hasKey(name):
+          let declared = owner.slotDefaults[name]
+          if declared.kind != vkNil:
+            result.slots[index] = declared
+          break
   result.isNimProxy = false
   result.nimValue = NimValueDefault
 
@@ -1318,6 +1334,11 @@ proc newArrayInstance*(cls: Class, elements: seq[NodeValue]): Instance =
 proc newTableInstance*(cls: Class, entries: Table[NodeValue, NodeValue]): Instance =
   ## Create a new Table instance
   Instance(kind: ikTable, class: cls, entries: entries, isNimProxy: false, nimValue: NimValueDefault)
+
+proc setSlotDefault*(cls: Class, name: string, value: NodeValue) =
+  ## Record a declared slot default; instances are seeded from it at allocation.
+  if cls != nil and value.kind != vkNil:
+    cls.slotDefaults[name] = value
 
 proc getSlotIndex*(cls: Class, name: string): int =
   ## Get slot index by name, returns -1 if not found

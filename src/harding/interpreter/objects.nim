@@ -1069,9 +1069,71 @@ proc bumpJsonConfigVersion(cls: Class) =
   cls.jsonConfigVersion += 1
   invalidateJsonPlansRecursive(cls)
 
-proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
-  ## Extract slot names from an array NodeValue
+proc parseDefaultLiteral(text: string): NodeValue =
+  ## Turn a declared default spelling into its value. Empty text means the slot
+  ## has no declared default and keeps the ordinary nil initialisation.
+  if text.len == 0:
+    return nilValue()
+  if text == "nil":
+    return nilValue()
+  if text == "true":
+    return NodeValue(kind: vkBool, boolVal: true)
+  if text == "false":
+    return NodeValue(kind: vkBool, boolVal: false)
+  if text.len > 1 and text[0] == '"' and text[^1] == '"':
+    return NodeValue(kind: vkString, strVal: text[1 .. ^2])
+  try:
+    return NodeValue(kind: vkInt, intVal: parseInt(text))
+  except ValueError:
+    discard
+  try:
+    return NodeValue(kind: vkFloat, floatVal: parseFloat(text))
+  except ValueError:
+    discard
+  return nilValue()
+
+proc tableSlotDefaults(arr: NodeValue): seq[tuple[name: string, defaultText: string]] =
+  ## `#{#x -> 0}` pairs: the key names the slot, a literal value is its default.
   result = @[]
+  var entries: Table[NodeValue, NodeValue]
+  if arr.kind == vkTable:
+    entries = arr.tableVal
+  elif arr.kind == vkInstance and arr.instVal != nil and arr.instVal.kind == ikTable:
+    entries = arr.instVal.entries
+  else:
+    return
+  for key, value in entries.pairs:
+    var name = ""
+    if key.kind == vkSymbol: name = key.symVal
+    elif key.kind == vkString: name = key.strVal
+    if name.len == 0:
+      continue
+    var defaultText = ""
+    case value.kind
+    of vkInt: defaultText = $value.intVal
+    of vkFloat: defaultText = $value.floatVal
+    of vkBool: defaultText = (if value.boolVal: "true" else: "false")
+    of vkString: defaultText = "\"" & value.strVal & "\""
+    else: discard
+    result.add((name, defaultText))
+
+proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
+  ## Extract slot names from a declaration: an array of names, or the hinted
+  ## table form `#{#x -> Integer, #z -> nil}` whose keys are symbols/strings.
+  result = @[]
+  if arr.kind == vkTable or
+     (arr.kind == vkInstance and arr.instVal != nil and arr.instVal.kind == ikTable):
+    var entries: Table[NodeValue, NodeValue]
+    if arr.kind == vkTable:
+      entries = arr.tableVal
+    else:
+      entries = arr.instVal.entries
+    for key, _ in entries.pairs:
+      if key.kind == vkSymbol:
+        result.add(key.symVal)
+      elif key.kind == vkString:
+        result.add(key.strVal)
+    return
   if arr.kind == vkInstance and arr.instVal.kind == ikArray:
     for elem in arr.instVal.elements:
       if elem.kind == vkSymbol:
@@ -1337,7 +1399,13 @@ proc classDeriveWithAccessorsImpl*(self: Class, args: seq[NodeValue]): NodeValue
   if args.len > 0:
     slotNames = extractSlotNamesFromArray(args[0])
 
-  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, slotNames, slotNames, slotNames))
+  let derived = createDerivedClass(self, slotNames, slotNames, slotNames)
+  # Declared defaults (`#{#x -> 0}`) seed every instance at allocation.
+  if args.len > 0:
+    for (name, defaultText) in tableSlotDefaults(args[0]):
+      if defaultText.len > 0:
+        derived.setSlotDefault(name, parseDefaultLiteral(defaultText))
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc refreshSlotIndicesInNode(node: Node, cls: Class) =
   ## Recursively scan AST and update SlotAccessNode indices to match current class layout
@@ -1445,7 +1513,13 @@ proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   if args.len > 0:
     slotNames = extractSlotNamesFromArray(args[0])
 
-  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, slotNames, slotNames, slotNames))
+  let derived = createDerivedClass(self, slotNames, slotNames, slotNames)
+  # Declared defaults (`#{#x -> 0}`) seed every instance at allocation.
+  if args.len > 0 and derived != nil:
+    for (name, defaultText) in tableSlotDefaults(args[0]):
+      if defaultText.len > 0:
+        derived.setSlotDefault(name, parseDefaultLiteral(defaultText))
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Preferred selective direct-access wrapper.

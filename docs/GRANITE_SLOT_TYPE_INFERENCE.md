@@ -478,3 +478,68 @@ least (1), this slice is infrastructure with no measurable benefit yet.
   These are unresolvable statically and are treated as dynamic (poisoning every
   same-named slot). Mandatory-initialize or default-annotation systems must
   account for these outside writes or they will not hold.
+
+## Declared slot types and declared defaults (implemented)
+
+Declaration uses the table form, which needs **no parser change** — a table
+literal is already ordinary syntax:
+
+```harding
+P := Object derivePublic: #{#x -> 0, #y -> 5.0, #s -> "", #b -> false,
+                            #z -> nil, #q -> Banana}
+```
+
+| Declaration | Type | Default |
+|---|---|---|
+| `#x -> Integer` | int | `0` (zero of the type) |
+| `#x -> 0` | int | `0` |
+| `#y -> 5.0` | float | `5.0` |
+| `#s -> "hi"` | string | `"hi"` |
+| `#b -> false` | bool | `false` |
+| `#z -> nil` | dynamic | `nil` |
+| `#q -> Banana` | object `Banana` | `nil` |
+| `#(x, y)` | unchanged | `nil` |
+
+Symbol keys (`#x`) are the canonical spelling. String keys work too. **Bare words
+are deliberately not special-cased**: in a table literal a bare word is a live
+expression today (`#{x -> 1}` with `x := "hello"` keys on `"hello"`), so changing
+that would break computed keys.
+
+Verified behaviour, identical in both engines (7 parity cases in
+`tests/test_declared_slots.py`):
+
+- declared defaults seed instances at allocation, before `initialize`;
+- `initialize` overrides a declared default;
+- an explicit `nil` default keeps the slot dynamic;
+- a subclass inherits its parent's declared default;
+- an undeclared slot keeps today's nil behaviour.
+
+Implementation notes: `SlotDef` carries `constraint`, `objectClass` and
+`defaultValue`; `Class.slotDefaults` holds parsed defaults; `newInstance` walks the
+parent chain and seeds slots without disturbing allocation order. Granite emits the
+same literal in the generated constructor and registers it on the compiled class,
+because its merged class graph comes from reflected runtime classes that carry no
+hint metadata — declarations must be recovered from the AST side.
+
+### Demo effect vs inference (important)
+
+`#x -> 5.0` sets the default but does **not** yet narrow the type: the declared
+hint is `tcFloat`, so the slot is a float slot and `x := 5` would be a type
+mismatch once typing is enforced. Today enforcement does not exist, so the
+declared type is recorded but **not yet applied to generated field types**.
+
+That is the next step and it is explicitly *not* done: `genClassConstants` still
+emits `NodeValue` fields for every slot, so declaring types currently changes no
+generated field types and therefore **cannot change performance yet**. A diff of
+Queens generated code with and without declarations shows only slot-order and
+default-registration differences. Any performance claim about declared types must
+wait until typed fields land.
+
+### What remains, in order
+
+1. Emit typed Nim fields for declared primitive slots (`tcInt`/`tcFloat`/
+   `tcBool`/`tcString`) and enforce the declared kind on assignment.
+2. Emit `ref T` for declared object slots, which needs real Nim inheritance in
+   generated types (multi-parent state mixins must stay `NodeValue`).
+3. Then measure. Only then can the benchmark question ("does declaring types
+   help?") be answered.

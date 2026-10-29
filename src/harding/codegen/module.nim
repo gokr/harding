@@ -5,6 +5,7 @@ import ../parser/lexer
 import ../compiler/context
 import ../compiler/analyzer
 import ../compiler/symbols
+import ../compiler/types
 import ./methods
 import ./expression
 import ./numeric
@@ -85,7 +86,17 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("  if result.classRef == nil:\n"))
   output.add(fmt("    result.classRef = compiledClassValue(\"{cls.name}\").classVal\n"))
   for slot in slots:
-    output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
+    if slot.defaultValue.len > 0:
+      # A declared default (`#{#x -> 0}`) must match the interpreter exactly.
+      let literal = case slot.constraint
+        of tcInt: fmt("NodeValue(kind: vkInt, intVal: {slot.defaultValue})")
+        of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {slot.defaultValue})")
+        of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {slot.defaultValue})")
+        of tcString: fmt("NodeValue(kind: vkString, strVal: {slot.defaultValue})")
+        else: "NodeValue(kind: vkNil)"
+      output.add(fmt("  result.{mangleSlot(slot.name)} = {literal}\n"))
+    else:
+      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
   output.add("\n")
 
   # toValue - convert native type to NodeValue using stored classRef
@@ -174,6 +185,15 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   var output = ""
   let names = slots.mapIt("\"" & it.name & "\"").join(", ")
   output.add(fmt("  registerCompiledSlotNames(\"{cls.name}\", @[{names}])\n"))
+  for slot in slots:
+    if slot.defaultValue.len > 0:
+      let literal = case slot.constraint
+        of tcInt: fmt("NodeValue(kind: vkInt, intVal: {slot.defaultValue})")
+        of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {slot.defaultValue})")
+        of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {slot.defaultValue})")
+        of tcString: fmt("NodeValue(kind: vkString, strVal: {slot.defaultValue})")
+        else: "NodeValue(kind: vkNil)"
+      output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.setSlotDefault(\"{slot.name}\", {literal})\n"))
   # Slot permissions inherit parent-first, as in newClass; dedupe by name.
   let readable = inheritedSlotPermissions(cls, true).mapIt("\"" & it & "\"").join(", ")
   let writable = inheritedSlotPermissions(cls, false).mapIt("\"" & it & "\"").join(", ")
@@ -658,7 +678,18 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
         let mergedCls = newClassInfo(className)
         let slotSource = if className in reflectedClasses: reflectedClasses[className] else: astCls
         for slot in slotSource.slots:
-          discard mergedCls.addSlot(slot.name, slot.constraint)
+          # Declarations come from the AST (reflected runtime classes do not carry
+          # hint metadata), so recover the declared type/default from astCls.
+          let declared = if className in astAnalysis.classes:
+                           astAnalysis.classes[className].getSlotDef(slot.name)
+                         else: SlotDef(name: slot.name, constraint: slot.constraint)
+          let constraint = if declared.constraint != tcNone: declared.constraint
+                           else: slot.constraint
+          let objectClass = if declared.objectClass.len > 0: declared.objectClass
+                            else: (if slot.constraint == tcObject: slot.objectClass else: "")
+          let defaultValue = if declared.defaultValue.len > 0: declared.defaultValue
+                             else: slot.defaultValue
+          discard mergedCls.addSlot(slot.name, constraint, objectClass, defaultValue)
         mergedCls.getterSlots = slotSource.getterSlots
         mergedCls.setterSlots = slotSource.setterSlots
         mergedCls.instanceSelectors = astCls.instanceSelectors

@@ -10,6 +10,8 @@ type
   SlotDef* = object
     name*: string              ## Slot name
     constraint*: TypeConstraint ## Type constraint
+    objectClass*: string       ## For tcObject: the declared class name
+    defaultValue*: string      ## Literal default from `#{#x -> 0}`; "" = none
     index*: int                ## Slot index (O(1) access)
     isInherited*: bool         ## Inherited from parent
 
@@ -60,7 +62,9 @@ proc newClassInfo*(name: string, parent: ClassInfo = nil): ClassInfo =
   )
 
 proc addSlot*(cls: ClassInfo, name: string,
-              constraint: TypeConstraint = tcObject): int =
+              constraint: TypeConstraint = tcObject,
+              objectClass: string = "",
+              defaultValue: string = ""): int =
   ## Add a slot definition and return its index
   if name in cls.slotIndex:
     return cls.slotIndex[name]
@@ -68,6 +72,8 @@ proc addSlot*(cls: ClassInfo, name: string,
   let slot = SlotDef(
     name: name,
     constraint: constraint,
+    objectClass: objectClass,
+    defaultValue: defaultValue,
     index: cls.slots.len,
     isInherited: false
   )
