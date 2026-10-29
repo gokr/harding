@@ -1,5 +1,10 @@
 # Granite benchmark: cross-language baseline
 
+For the fresh current-revision comparison with Cog, including Richards and
+DeltaBlue, see [current benchmark comparison](BENCHMARK_COMPARISON_CURRENT.md).
+The measurements below are historical baselines; do not compare their absolute
+timings across runs as if host load and runtime versions were controlled.
+
 ## Purpose
 
 `PLAN.md` section 6 defers optimization until semantic coverage is done. This
