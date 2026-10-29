@@ -305,6 +305,121 @@ Do **not** eliminate nil. It buys no performance over a typed ref, and a global
 Null Object convention would convert loud failures into silent ones. Keep strict
 initialisation for temporaries as an independent proposal.
 
+
+## Feasibility: real Nim inheritance for generated types
+
+Checked before committing to object slots as `ref T`.
+
+### Multi-parent inheritance is real, and it carries state
+
+Single inheritance is not sufficient. Verified in `lib/`:
+
+- `TrackedList addSuperclass: TrackedSubject`, and `TrackedSubject` **has slots**
+  (`dependents`, `transactionDepth`, `pendingChange`).
+- `TrackedValue` and `TrackedTable` do the same.
+- `Array addSuperclass: Iterable`; `Browser` adds a superclass at runtime.
+
+The current codebase works around the absence of state mixins by **manually
+repeating the mixin's slots in the subclass**:
+
+```harding
+TrackedList := Object derivePublic: #(dependents, transactionDepth, pendingChange, items)
+TrackedList addSuperclass: TrackedSubject
+```
+
+`dependents`, `transactionDepth` and `pendingChange` are declared twice — once by
+`TrackedSubject`, once by `TrackedList` — and `Mixin` is explicitly documented as
+"slotless". This is a workaround, not a design.
+
+Nim objects support exactly **one** object parent. So real Nim inheritance can
+model the primary parent only. Multi-parent classes with state cannot be
+expressed and must stay `NodeValue`.
+
+That is not fatal: mixin-with-state is currently rare (three reactive classes and
+`Array`'s slotless `Iterable`), so the typed path can cover single-parent classes
+and fall back for the rest. But it means "object slots become `ref T`" is a
+**partial** win, and the fallback population must be reported, not hidden.
+
+### What real inheritance would incidentally fix
+
+`getAllSlots` copies every parent's slots into each subclass, so `Derived` today
+duplicates `Base`'s fields and is *not* a Nim subtype of `Base`. Real inheritance
+removes the duplication and makes `ref Base` accept `Derived` — which is what
+makes object slots genuinely typed.
+
+### Bridge impact
+
+The interpreter bridge revalidates exact layouts in two places
+(`allSlotNames != compiledSlotNames` in `autoBindNativeInstance`, and
+`validateNativeSlots`). With real inheritance, a subclass's `allSlotNames` is
+still parent-first and unchanged as a *list*, so the comparison keeps working —
+but a rebased field offset must not silently pass. This needs an explicit test
+before and after.
+
+### Verdict
+
+Feasible for single-parent class hierarchies; impossible for state mixins. Worth
+doing, with an honest fallback and reporting. It is a larger change than the
+slices in the typed-members design, and should be its own slice.
+
+## Proposed model: primitive types vs object types
+
+The question: how do we distinguish them, and which primitives must we support?
+
+### The runtime authority
+
+`ValueKind` in `src/harding/core/types.nim` is the definitive set of representable
+values. Any slot kind is one of:
+
+| `ValueKind` | Classification | Native Nim | nil possible today | Notes |
+|---|---|---|---|---|
+| `vkInt` | primitive | `int` | no | |
+| `vkFloat` | primitive | `float64` | no | |
+| `vkBool` | primitive | `bool` | no | |
+| `vkString` | primitive (value) | `string` | no | Nim string has no nil |
+| `vkSymbol` | primitive (interned) | `string` | no | 4 methods; matches Nim string |
+| `vkInstance` | object | `ref T` | **yes** | the 45–60% measured |
+| `vkBlock` | reference | existing block repr | yes | not a slot-typing target |
+| `vkArray` / `vkTable` | collection | shared reference | yes | shared, not value semantics |
+| `vkClass` | reference | `Class` | — | metalevel |
+| `vkNil` | — | nil ref / absent | — | |
+
+Method surface per primitive class is small: `Integer` 24, `Float` 15, `String` 25,
+`Symbol` 4, `Boolean` 4. All numeric methods are already declared as primitives
+(`Integer>>+ other <primitive primitivePlus: other>`), so a typed backend has a
+bounded, already-enumerated surface to cover.
+
+`Integer`/`Float`/`String`/`Symbol`/`Boolean` are interpreter-defined classes
+(not in `lib/`), which means their slot constraints cannot be discovered from
+source and should be treated as built-in knowledge in the compiler.
+
+### Classification rule (conservative, no declarations needed)
+
+1. A slot is **primitive** if every observed/static write is the same primitive
+   kind and no write is nil.
+2. A slot is **object** if every write is a non-nil instance of one class family.
+3. Everything else — mixed kinds, any nil, `Array`/`Table`/`Block`/`Class`,
+   multi-parent state mixes — stays **`NodeValue`**.
+
+### The one genuinely hard case: heterogeneous numerics
+
+Verified: `5 + 2.5` answers a `Float`. Smalltalk's numeric tower is polymorphic at
+the value level, so a slot inferred `int` that later receives a `Float` changes
+the *answer type*, not just performance. This is exactly why guards are required
+rather than optional: a typed `int` slot must fall back to the runtime path when
+it receives a `Float`, or the program's result changes. DeltaBlue's single
+polymorphic slot (`DBVariable#value -> vkInt,vkFloat`) is this case in practice.
+
+So among primitives, `Int`/`Float` are the delicate pair; `Bool`, `String` and
+`Symbol` are straightforward because they do not mix with numbers.
+
+### Recommendation on primitives
+
+Support exactly `int`, `float64`, `bool`, `string` (covering `vkSymbol`). Do not
+attempt `Array`/`Table` as value types — they are shared references today, and
+the `#()`-as-default idea would require either one allocation per slot per
+instance or a fresh-vs-shared distinction the runtime does not currently make.
+
 ## Open questions for you
 
 1. Is a two-step "run, then rebuild with feedback" workflow acceptable, or must
