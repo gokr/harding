@@ -221,6 +221,90 @@ Do not attempt to eliminate nil. Instead:
    well-motivated language improvement — prototype as a warning, measure the
    fallout across existing code, then decide.
 
+
+## Assessing the "eliminate nil entirely" proposal
+
+A design discussion proposed removing nil altogether: an integer slot starts at
+`0`, a string slot at `""`, an array slot at the empty array, and so on, so that
+no slot ever holds nil. Two premises in that discussion are **not true of
+Harding as implemented**, and correcting them changes the conclusion.
+
+### Verified corrections
+
+| Claim | Actual behaviour (verified) |
+|---|---|
+| "an uninitialized array slot defaults to `#()` rather than nil" | **False.** Uninitialized slots are nil: `C new` then `items isNil`, `name isNil`, `count isNil` all answer `true`. |
+| "Array is treated as a value-like container; assignment copies a zero-length sequence header" | **False.** Harding Arrays are shared references: `b := a. b at: 0 put: 99` also changes `a`. Not Nim `seq` value semantics. |
+
+What *is* true, and useful:
+
+- An empty array responds to `do:` and iterates zero times without error, while
+  `nil do:` raises `MessageNotUnderstood`. So "empty object over nil" does remove
+  that whole class of failure.
+- `#()` allocates a **fresh** array each time (identity is false, and mutating one
+  does not affect another), so using `#()` as a slot default is implementable
+  rather than dangerously aliasing one shared singleton. It does, however, mean
+  one allocation per slot per instance.
+
+### The decisive technical point: nil in a compiled ref is free
+
+The performance premise behind eliminating nil does not hold for typed references.
+A Nim `ref T` is a pointer; `nil` is the zero pointer. There is no `Option`
+wrapper, no tag, no branch, and no boxing to test for it. So:
+
+- **Object slot as `ref T`**: nil-capable, zero cost. Nothing to eliminate.
+- **Primitive slot as `int`**: cannot be nil, and gets native arithmetic.
+- **Today's `NodeValue`**: a tagged union — *this* is what costs, not nilability.
+
+Eliminating nil therefore does **not** buy performance. Typing the slot buys
+performance; nil in a typed ref is already free. This is why the object/primitive
+split is the right model and full nil removal is not required for speed.
+
+### The correctness argument against Null Object everywhere
+
+For primitive slots, "no nil, start at 0/""" is plausible and maps directly to
+Nim. For **object** slots it requires every class to nominate a neutral instance
+(the Null Object pattern, enforced globally). That has a specific failure mode:
+
+- `nil` fails **loudly** — `MessageNotUnderstood` at the point of use.
+- A neutral instance fails **silently** — it answers messages, so a sentinel
+  `Packet` propagates through traversal and yields a wrong answer rather than an
+  exception.
+
+Applying that to `Packet#link`, `Tower#heldDisk` or `DBVariable#planner` — the
+14–16 nil-bearing slots per benchmark measured earlier — would trade a loud,
+located failure for a silent, distant one. That is a worse trade than the billion
+dollar mistake it aims to fix.
+
+### Where the discussion's better ideas do apply
+
+Two of its suggestions do not depend on removing nil and are worth keeping:
+
+1. **Strict initialisation for temporaries.** Requiring a temporary to be assigned
+   before use is a definiteness rule, orthogonal to nil, which catches real bugs
+   and lets native locals be plain Nim `var`. Recommended as a separate
+   prototype (warning first, since it is a source-compatibility break).
+2. **Prefer explicit-fallback protocols** (`at:ifAbsent:`, `detect:ifNone:`) over
+   nil-returning forms in new library code. Note this is barely exercised today:
+   `ifNil:` appears 4 times and `ifNotNil:` 3 times across `lib/` and
+   `benchmark/`, and `detect:ifNone:`/`at:ifAbsent:` zero times — so there is
+   little legacy pressure either way, and no measurement yet showing these forms
+   matter for performance.
+
+### Conclusion
+
+Adopt the **object slot vs primitive slot** distinction:
+
+| Slot kind | Representation | nil | Proof needed |
+|---|---|---|---|
+| Object | `ref T` (T = widest static class) | native, free | no |
+| Primitive | `int` / `float64` / `bool` / `string` | impossible | yes, or guarded |
+| Mixed / uncertain | `NodeValue` | yes | no |
+
+Do **not** eliminate nil. It buys no performance over a typed ref, and a global
+Null Object convention would convert loud failures into silent ones. Keep strict
+initialisation for temporaries as an independent proposal.
+
 ## Open questions for you
 
 1. Is a two-step "run, then rebuild with feedback" workflow acceptable, or must
