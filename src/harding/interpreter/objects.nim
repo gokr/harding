@@ -1117,6 +1117,44 @@ proc tableSlotDefaults(arr: NodeValue): seq[tuple[name: string, defaultText: str
     else: discard
     result.add((name, defaultText))
 
+proc tableSlotHint(arr: NodeValue, name: string): (ValueKind, string, string) =
+  ## (zeroKind, className, defaultText) for a declared slot. zeroKind is the
+  ## primitive kind a type-only declaration should default to.
+  var entries: Table[NodeValue, NodeValue]
+  if arr.kind == vkTable:
+    entries = arr.tableVal
+  elif arr.kind == vkInstance and arr.instVal != nil and arr.instVal.kind == ikTable:
+    entries = arr.instVal.entries
+  else:
+    return (vkInstance, "", "")
+  for key, value in entries.pairs:
+    var keyName = ""
+    if key.kind == vkSymbol: keyName = key.symVal
+    elif key.kind == vkString: keyName = key.strVal
+    if keyName != name:
+      continue
+    case value.kind
+    of vkInt, vkFloat, vkBool, vkString: return (value.kind, "", "")
+    of vkClass:
+      # `#x -> Integer` evaluates the class object, not a symbol.
+      if value.classVal != nil:
+        case value.classVal.name
+        of "Integer": return (vkInt, "", "")
+        of "Float": return (vkFloat, "", "")
+        of "Boolean", "True", "False": return (vkBool, "", "")
+        of "String", "Symbol": return (vkString, "", "")
+        else: return (vkInstance, value.classVal.name, "")
+      return (vkInstance, "", "")
+    of vkSymbol:
+      case value.symVal
+      of "Integer", "int": return (vkInt, "", "")
+      of "Float": return (vkFloat, "", "")
+      of "Boolean": return (vkBool, "", "")
+      of "String": return (vkString, "", "")
+      else: return (vkInstance, value.symVal, "")
+    else: return (vkInstance, "", "")
+  return (vkInstance, "", "")
+
 proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
   ## Extract slot names from a declaration: an array of names, or the hinted
   ## table form `#{#x -> Integer, #z -> nil}` whose keys are symbols/strings.
@@ -1392,19 +1430,34 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
 
   return meth
 
+proc applyDeclaredSlotDefaults(cls: Class, declaration: NodeValue) =
+  ## Seed declared defaults and type zeroes. `#{#x -> 0}` sets a value;
+  ## `#{#x -> Integer}` sets the type's zero; `#x -> nil` stays dynamic.
+  for (name, defaultText) in tableSlotDefaults(declaration):
+    if defaultText.len > 0:
+      cls.setSlotDefault(name, parseDefaultLiteral(defaultText))
+  for name in extractSlotNamesFromArray(declaration):
+    # A literal default was already applied above; only fill in type zeroes.
+    if cls.slotDefaults.hasKey(name):
+      continue
+    let (zeroKind, _, _) = tableSlotHint(declaration, name)
+    case zeroKind
+    of vkInt: cls.setSlotDefault(name, NodeValue(kind: vkInt, intVal: 0))
+    of vkFloat: cls.setSlotDefault(name, NodeValue(kind: vkFloat, floatVal: 0.0))
+    of vkBool: cls.setSlotDefault(name, NodeValue(kind: vkBool, boolVal: false))
+    of vkString: cls.setSlotDefault(name, NodeValue(kind: vkString, strVal: ""))
+    else: discard
+
 proc classDeriveWithAccessorsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Compatibility wrapper for derivePublic:.
-  ## args[0]: array of slot names
+  ## args[0]: array of slot names, or the declared table form.
   var slotNames: seq[string] = @[]
   if args.len > 0:
     slotNames = extractSlotNamesFromArray(args[0])
 
   let derived = createDerivedClass(self, slotNames, slotNames, slotNames)
-  # Declared defaults (`#{#x -> 0}`) seed every instance at allocation.
-  if args.len > 0:
-    for (name, defaultText) in tableSlotDefaults(args[0]):
-      if defaultText.len > 0:
-        derived.setSlotDefault(name, parseDefaultLiteral(defaultText))
+  if args.len > 0 and derived != nil:
+    applyDeclaredSlotDefaults(derived, args[0])
   return NodeValue(kind: vkClass, classVal: derived)
 
 proc refreshSlotIndicesInNode(node: Node, cls: Class) =
@@ -1514,11 +1567,8 @@ proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue =
     slotNames = extractSlotNamesFromArray(args[0])
 
   let derived = createDerivedClass(self, slotNames, slotNames, slotNames)
-  # Declared defaults (`#{#x -> 0}`) seed every instance at allocation.
   if args.len > 0 and derived != nil:
-    for (name, defaultText) in tableSlotDefaults(args[0]):
-      if defaultText.len > 0:
-        derived.setSlotDefault(name, parseDefaultLiteral(defaultText))
+    applyDeclaredSlotDefaults(derived, args[0])
   return NodeValue(kind: vkClass, classVal: derived)
 
 proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue =

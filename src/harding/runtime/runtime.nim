@@ -1368,6 +1368,42 @@ proc raiseCompiledError*(value: NodeValue): NodeValue =
                     "Exception"
   raise (ref CompiledHardingError)(value: value, msg: className & ": " & compiledExceptionMessage(value))
 
+proc compiledSlotInt*(value: NodeValue): int =
+  ## Unbox a typed integer slot. A wrong kind signals an ordinary Harding error
+  ## instead of reinterpreting storage, matching the declared slot type.
+  if value.kind == vkInt:
+    return value.intVal
+  if value.kind == vkNil:
+    return 0
+  discard raiseCompiledError(compiledErrorValue("Error",
+    "Slot declared Integer received " & $value.kind))
+
+proc compiledSlotFloat*(value: NodeValue): float =
+  if value.kind == vkFloat:
+    return value.floatVal
+  if value.kind == vkInt:
+    return float(value.intVal)
+  if value.kind == vkNil:
+    return 0.0
+  discard raiseCompiledError(compiledErrorValue("Error",
+    "Slot declared Float received " & $value.kind))
+
+proc compiledSlotBool*(value: NodeValue): bool =
+  if value.kind == vkBool:
+    return value.boolVal
+  if value.kind == vkNil:
+    return false
+  discard raiseCompiledError(compiledErrorValue("Error",
+    "Slot declared Boolean received " & $value.kind))
+
+proc compiledSlotString*(value: NodeValue): string =
+  if value.kind == vkString:
+    return value.strVal
+  if value.kind == vkNil:
+    return ""
+  discard raiseCompiledError(compiledErrorValue("Error",
+    "Slot declared String received " & $value.kind))
+
 proc reportUncaughtError*(value: NodeValue): int =
   ## Default action and diagnostic for an error that reached the top of a
   ## compiled program: run `defaultAction`, report it, and answer a failing exit

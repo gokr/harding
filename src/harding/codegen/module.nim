@@ -38,6 +38,35 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
 
   return output
 
+
+proc nativeSlotType(slot: SlotDef): string =
+  ## Native Nim type for a declared primitive slot; "" keeps NodeValue.
+  case slot.constraint
+  of tcInt: "int"
+  of tcFloat: "float64"
+  of tcBool: "bool"
+  of tcString: "string"
+  else: ""
+
+proc boxExpression(slot: SlotDef, source: string): string =
+  ## Wrap a native field value as a NodeValue for the accessor boundary.
+  case slot.constraint
+  of tcInt: fmt("NodeValue(kind: vkInt, intVal: {source})")
+  of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {source})")
+  of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {source})")
+  of tcString: fmt("NodeValue(kind: vkString, strVal: {source})")
+  else: source
+
+proc unboxExpression(slot: SlotDef, source: string): string =
+  ## Read a native value out of a NodeValue argument, with a checked fallback so
+  ## a wrong kind is a Harding error rather than a silent reinterpretation.
+  case slot.constraint
+  of tcInt: fmt("compiledSlotInt({source})")
+  of tcFloat: fmt("compiledSlotFloat({source})")
+  of tcBool: fmt("compiledSlotBool({source})")
+  of tcString: fmt("compiledSlotString({source})")
+  else: source
+
 proc genClassConstants*(cls: ClassInfo): string =
   ## Generate native Nim type for Harding class with slot accessors
   let clsName = mangleClass(cls.name)
@@ -60,7 +89,9 @@ proc genClassConstants*(cls: ClassInfo): string =
   # Slot fields - include inherited slots so each native class is self-contained
   for slot in slots:
     let slotName = mangleSlot(slot.name)
-    output.add(fmt("    {slotName}*: NodeValue\n"))
+    let nativeType = nativeSlotType(slot)
+    let fieldType = if nativeType.len > 0: nativeType else: "NodeValue"
+    output.add(fmt("    {slotName}*: {fieldType}\n"))
   
   output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
   
@@ -88,15 +119,16 @@ proc genClassConstants*(cls: ClassInfo): string =
   for slot in slots:
     if slot.defaultValue.len > 0:
       # A declared default (`#{#x -> 0}`) must match the interpreter exactly.
-      let literal = case slot.constraint
-        of tcInt: fmt("NodeValue(kind: vkInt, intVal: {slot.defaultValue})")
-        of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {slot.defaultValue})")
-        of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {slot.defaultValue})")
-        of tcString: fmt("NodeValue(kind: vkString, strVal: {slot.defaultValue})")
-        else: "NodeValue(kind: vkNil)"
-      output.add(fmt("  result.{mangleSlot(slot.name)} = {literal}\n"))
+      output.add(fmt("  result.{mangleSlot(slot.name)} = {slot.defaultValue}\n"))
     else:
-      output.add(fmt("  result.{mangleSlot(slot.name)} = NodeValue(kind: vkNil)\n"))
+      let nativeType = nativeSlotType(slot)
+      let zero = case slot.constraint
+        of tcInt: "0"
+        of tcFloat: "0.0"
+        of tcBool: "false"
+        of tcString: "\"\""
+        else: "NodeValue(kind: vkNil)"
+      output.add(fmt("  result.{mangleSlot(slot.name)} = {zero}\n"))
   output.add("\n")
 
   # toValue - convert native type to NodeValue using stored classRef
@@ -150,21 +182,25 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     # Typed getter
     output.add(fmt("proc get{slotName}*(self: {clsName}): NodeValue =\n"))
     output.add(fmt("  ## Get slot '{slot.name}' from {cls.name}\n"))
-    output.add(fmt("  return self[].{slotName}\n\n"))
+    let boxed = boxExpression(slot, fmt("self[].{slotName}"))
+    output.add(fmt("  return {boxed}\n\n"))
 
     # Typed setter
     output.add(fmt("proc set{slotName}*(self: {clsName}, value: NodeValue): NodeValue =\n"))
     output.add(fmt("  ## Set slot '{slot.name}' on {cls.name}\n"))
-    output.add(fmt("  self[].{slotName} = value\n"))
+    let unboxed = unboxExpression(slot, "value")
+    output.add(fmt("  self[].{slotName} = {unboxed}\n"))
     output.add(fmt("  return value\n\n"))
 
   # Each native class has its own full layout, including inherited fields.
   for slot in slots:
     let slotName = mangleSlot(slot.name)
     output.add(fmt("proc slotGet_{cls.name}_{slotName}(nimValue: pointer): NodeValue {{.nimcall.}} =\n"))
-    output.add(fmt("  return cast[{clsName}](nimValue)[].{slotName}\n\n"))
+    let boxedPtr = boxExpression(slot, fmt("cast[{clsName}](nimValue)[].{slotName}"))
+    output.add(fmt("  return {boxedPtr}\n\n"))
     output.add(fmt("proc slotSet_{cls.name}_{slotName}(nimValue: pointer, value: NodeValue): NodeValue {{.nimcall.}} =\n"))
-    output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = value\n"))
+    let unboxedPtr = unboxExpression(slot, "value")
+    output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = {unboxedPtr}\n"))
     output.add(fmt("  return value\n\n"))
 
   for slotName in cls.getterSlots:

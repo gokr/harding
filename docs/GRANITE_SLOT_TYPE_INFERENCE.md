@@ -543,3 +543,60 @@ wait until typed fields land.
    generated types (multi-parent state mixins must stay `NodeValue`).
 3. Then measure. Only then can the benchmark question ("does declaring types
    help?") be answered.
+
+## Typed fields landed — and measured: ~1% on Queens
+
+Declared primitive slots now emit native Nim fields:
+
+```nim
+Class_...Obj {.inheritable.} = object of HardingObject
+  classRef*: Class
+  column*: int        # declared #{#column -> Integer}
+  row*: int
+  previous*: NodeValue
+```
+
+All 7 both-engine parity cases pass (`tests/test_declared_slots.py`), including
+defaults seeded at allocation, `initialize` overriding a default, inherited
+defaults, and `nil` staying dynamic. A type-only declaration seeds the type's
+zero in **both** engines.
+
+### The measurement
+
+Queens, release ARC, 9 alternating trials, checked output (92):
+
+| Build | Median | Min |
+|---|---:|---:|
+| Untyped slots (`NodeValue`) | 132.001 ms | 124.604 ms |
+| Typed slots (`int` fields) | 130.387 ms | 124.771 ms |
+
+**Speedup: 1.012x (~1.2%), i.e. within noise.** This is the honest answer to
+"does declaring types help performance?" today: barely.
+
+### Why, precisely
+
+The fields are native, but almost nothing reads them natively:
+
+1. **Reads still go through `getSlotValue(self, "row")`.** Codegen emits
+   `getSlotValue` for every slot read (`expression.nim`, `blocks.nim`), so the
+   class-indexed accessor lookup, its hash and its indirect call all still
+   happen. Only the terminal `cast[...][].row` is now native, and it immediately
+   boxes back into a `NodeValue`.
+2. **Arithmetic is emitted before unboxing.** `r - current row` compiles to
+   `hostedBuiltin(... "-" ...)` / `nt_plus` on `NodeValue` operands. Typed fields
+   never reach a machine `int` subtract, because the compiler does not know the
+   operand's native type at the send site.
+3. `canPlaceRow:column:after:` sends to `self` are dynamic (`sendMessageBound`),
+   so the receiver's slots are not statically addressable inside the callee.
+
+So the remaining win needs the two things already identified: **direct field
+access where the client class is known** (slice: replaces `getSlotValue`) and
+**unboxed arithmetic on slots known to be primitive** (extends `numericBindings`
+from locals to slots). Typed fields were a prerequisite for both, not the payoff
+by themselves.
+
+### What not to conclude
+
+This does not mean declared types are worthless — it means the *storage* is now
+native while *access and arithmetic* are still dynamic. The 1.2% measures only
+the storage change, correctly in isolation.
