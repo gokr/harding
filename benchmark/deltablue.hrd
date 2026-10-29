@@ -1,0 +1,383 @@
+#!/usr/bin/env harding
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2008 the V8 project authors. All rights reserved.
+# Copyright 1996 John Maloney and Mario Wolczko.
+# Harding adaptation: class syntax, explicit planner ownership, graph cleanup,
+# numeric tolerance checks and a repetition driver. See docs/DELTABLUE.md.
+# This program is free software: you can redistribute it and/or modify it under
+# the GNU General Public License, version 2 or (at your option) any later version.
+# It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+# benchmark/licenses/GPL-2.0.txt and benchmark/licenses/DELTABLUE.txt.
+
+| repetitions |
+
+DBCollection := Object derive: #(elements).
+DBCollection>>initialize [elements := Array new].
+DBCollection>>add: element [elements add: element].
+DBCollection>>at: index [^elements at: index].
+DBCollection>>size [^elements size].
+# The pinned JavaScript's removeFirst is pop(), i.e. LIFO, not FIFO.
+DBCollection>>removeFirst [^elements removeAt: (elements size - 1)].
+DBCollection>>remove: element [
+    | index |
+    index := elements size - 1.
+    [index >= 0] whileTrue: [
+        (elements at: index) == element ifTrue: [elements removeAt: index].
+        index := index - 1
+    ]
+].
+
+DBStrength := Object derivePublic: #(rank, label).
+DBStrength>>rank: aRank label: aLabel [rank := aRank. label := aLabel. ^self].
+DBStrength class>>stronger: left than: right [^left rank < right rank].
+DBStrength class>>weaker: left than: right [^left rank > right rank].
+DBStrength class>>weakest: left with: right [
+    (self weaker: left than: right) ifTrue: [^left] ifFalse: [^right]
+].
+DBStrength class>>strongest: left with: right [
+    (self stronger: left than: right) ifTrue: [^left] ifFalse: [^right]
+].
+# Preserve the pinned Octane mapping, including required -> weakest.
+DBStrength>>nextWeaker [
+    rank = 0 ifTrue: [^DBWeakest].
+    rank = 1 ifTrue: [^DBWeakDefault].
+    rank = 2 ifTrue: [^DBNormal].
+    rank = 3 ifTrue: [^DBStrongDefault].
+    rank = 4 ifTrue: [^DBPreferred].
+    rank = 5 ifTrue: [^DBRequired].
+    ^nil
+].
+DBRequired := DBStrength new rank: 0 label: "required".
+DBStrongPreferred := DBStrength new rank: 1 label: "strongPreferred".
+DBPreferred := DBStrength new rank: 2 label: "preferred".
+DBStrongDefault := DBStrength new rank: 3 label: "strongDefault".
+DBNormal := DBStrength new rank: 4 label: "normal".
+DBWeakDefault := DBStrength new rank: 5 label: "weakDefault".
+DBWeakest := DBStrength new rank: 6 label: "weakest".
+
+DBVariable := Object derivePublic: #(value, constraints, determinedBy, mark, walkStrength, stay, name).
+DBVariable>>named: aName value: initialValue [
+    name := aName. value := initialValue. constraints := DBCollection new.
+    determinedBy := nil. mark := 0. walkStrength := DBWeakest. stay := true.
+    ^self
+].
+DBVariable>>addConstraint: constraint [constraints add: constraint].
+DBVariable>>removeConstraint: constraint [
+    constraints remove: constraint.
+    determinedBy == constraint ifTrue: [determinedBy := nil]
+].
+DBVariable>>dispose [constraints := nil. determinedBy := nil].
+
+DBConstraint := Object derive: #(strength, planner).
+DBConstraint>>strength [^strength].
+DBConstraint>>setupStrength: aStrength planner: aPlanner [
+    strength := aStrength. planner := aPlanner. planner track: self. ^self
+].
+DBConstraint>>addConstraint [self addToGraph. planner incrementalAdd: self].
+DBConstraint>>satisfy: aMark [
+    | outputVariable overridden |
+    self chooseMethod: aMark.
+    self isSatisfied ifFalse: [
+        strength == DBRequired ifTrue: [Error signal: "Could not satisfy a required constraint"].
+        ^nil
+    ].
+    self markInputs: aMark.
+    outputVariable := self output.
+    overridden := outputVariable determinedBy.
+    overridden notNil ifTrue: [overridden markUnsatisfied].
+    outputVariable determinedBy: self.
+    (planner addPropagate: self mark: aMark) ifFalse: [Error signal: "Cycle encountered"].
+    outputVariable mark: aMark.
+    ^overridden
+].
+DBConstraint>>destroyConstraint [
+    self isSatisfied ifTrue: [planner incrementalRemove: self] ifFalse: [self removeFromGraph]
+].
+DBConstraint>>isInput [^false].
+DBConstraint>>dispose [planner := nil].
+
+DBUnaryConstraint := DBConstraint derive: #(myOutput, satisfied).
+DBUnaryConstraint>>on: variable strength: aStrength planner: aPlanner [
+    self setupStrength: aStrength planner: aPlanner.
+    myOutput := variable. satisfied := false. self addConstraint. ^self
+].
+DBUnaryConstraint>>addToGraph [myOutput addConstraint: self. satisfied := false].
+DBUnaryConstraint>>chooseMethod: aMark [
+    satisfied := (myOutput mark <> aMark) and: [DBStrength stronger: strength than: myOutput walkStrength]
+].
+DBUnaryConstraint>>isSatisfied [^satisfied].
+DBUnaryConstraint>>markInputs: aMark [].
+DBUnaryConstraint>>output [^myOutput].
+DBUnaryConstraint>>recalculate [
+    myOutput walkStrength: strength. myOutput stay: self isInput not.
+    myOutput stay ifTrue: [self execute]
+].
+DBUnaryConstraint>>markUnsatisfied [satisfied := false].
+DBUnaryConstraint>>inputsKnown: aMark [^true].
+DBUnaryConstraint>>removeFromGraph [
+    myOutput notNil ifTrue: [myOutput removeConstraint: self]. satisfied := false
+].
+DBUnaryConstraint>>dispose [super dispose. myOutput := nil].
+DBStayConstraint := DBUnaryConstraint derive: #().
+DBStayConstraint>>execute [].
+DBEditConstraint := DBUnaryConstraint derive: #().
+DBEditConstraint>>isInput [^true].
+DBEditConstraint>>execute [].
+
+DBBinaryConstraint := DBConstraint derive: #(v1, v2, direction).
+DBBinaryConstraint>>between: first and: second strength: aStrength planner: aPlanner [
+    self setupStrength: aStrength planner: aPlanner.
+    v1 := first. v2 := second. direction := 0. self addConstraint. ^self
+].
+DBBinaryConstraint>>chooseMethod: aMark [
+    v1 mark = aMark ifTrue: [
+        ((v2 mark <> aMark) and: [DBStrength stronger: strength than: v2 walkStrength])
+            ifTrue: [direction := 1] ifFalse: [direction := 0]
+    ].
+    v2 mark = aMark ifTrue: [
+        ((v1 mark <> aMark) and: [DBStrength stronger: strength than: v1 walkStrength])
+            ifTrue: [direction := -1] ifFalse: [direction := 0]
+    ].
+    (DBStrength weaker: v1 walkStrength than: v2 walkStrength) ifTrue: [
+        (DBStrength stronger: strength than: v1 walkStrength)
+            ifTrue: [direction := -1] ifFalse: [direction := 0]
+    ] ifFalse: [
+        (DBStrength stronger: strength than: v2 walkStrength)
+            ifTrue: [direction := 1] ifFalse: [direction := -1]
+    ]
+].
+DBBinaryConstraint>>addToGraph [v1 addConstraint: self. v2 addConstraint: self. direction := 0].
+DBBinaryConstraint>>isSatisfied [^direction <> 0].
+DBBinaryConstraint>>markInputs: aMark [self input mark: aMark].
+DBBinaryConstraint>>input [direction = 1 ifTrue: [^v1] ifFalse: [^v2]].
+DBBinaryConstraint>>output [direction = 1 ifTrue: [^v2] ifFalse: [^v1]].
+DBBinaryConstraint>>recalculate [
+    | inputVariable outputVariable |
+    inputVariable := self input. outputVariable := self output.
+    outputVariable walkStrength: (DBStrength weakest: strength with: inputVariable walkStrength).
+    outputVariable stay: inputVariable stay.
+    outputVariable stay ifTrue: [self execute]
+].
+DBBinaryConstraint>>markUnsatisfied [direction := 0].
+DBBinaryConstraint>>inputsKnown: aMark [
+    | inputVariable |
+    inputVariable := self input.
+    ^(inputVariable mark = aMark) or: [inputVariable stay or: [inputVariable determinedBy isNil]]
+].
+DBBinaryConstraint>>removeFromGraph [
+    v1 notNil ifTrue: [v1 removeConstraint: self].
+    v2 notNil ifTrue: [v2 removeConstraint: self]. direction := 0
+].
+DBBinaryConstraint>>dispose [super dispose. v1 := nil. v2 := nil].
+DBEqualityConstraint := DBBinaryConstraint derive: #().
+DBEqualityConstraint>>execute [self output value: self input value].
+DBScaleConstraint := DBBinaryConstraint derive: #(scale, offset).
+DBScaleConstraint>>from: source to: destination scale: scaleVariable offset: offsetVariable strength: aStrength planner: aPlanner [
+    scale := scaleVariable. offset := offsetVariable. direction := 0.
+    self between: source and: destination strength: aStrength planner: aPlanner. ^self
+].
+DBScaleConstraint>>addToGraph [super addToGraph. scale addConstraint: self. offset addConstraint: self].
+DBScaleConstraint>>removeFromGraph [
+    super removeFromGraph.
+    scale notNil ifTrue: [scale removeConstraint: self].
+    offset notNil ifTrue: [offset removeConstraint: self]
+].
+DBScaleConstraint>>markInputs: aMark [super markInputs: aMark. scale mark: aMark. offset mark: aMark].
+DBScaleConstraint>>execute [
+    direction = 1 ifTrue: [v2 value: (v1 value * scale value) + offset value]
+    ifFalse: [v1 value: (v2 value - offset value) / scale value]
+].
+DBScaleConstraint>>recalculate [
+    | inputVariable outputVariable |
+    inputVariable := self input. outputVariable := self output.
+    outputVariable walkStrength: (DBStrength weakest: strength with: inputVariable walkStrength).
+    outputVariable stay: (inputVariable stay and: [scale stay and: [offset stay]]).
+    outputVariable stay ifTrue: [self execute]
+].
+DBScaleConstraint>>dispose [super dispose. scale := nil. offset := nil].
+
+DBPlan := Object derive: #(steps).
+DBPlan>>initialize [steps := DBCollection new].
+DBPlan>>addConstraint: constraint [steps add: constraint].
+DBPlan>>size [^steps size].
+DBPlan>>constraintAt: index [^steps at: index].
+DBPlan>>execute [
+    | index |
+    index := 0.
+    [index < steps size] whileTrue: [(steps at: index) execute. index := index + 1]
+].
+DBPlanner := Object derive: #(currentMark, variables, ownedConstraints).
+DBPlanner>>initialize [currentMark := 0. variables := Array new. ownedConstraints := Array new].
+DBPlanner>>variableNamed: aName value: initialValue [
+    | variable |
+    variable := DBVariable new named: aName value: initialValue.
+    variables add: variable. ^variable
+].
+DBPlanner>>track: constraint [ownedConstraints add: constraint].
+DBPlanner>>newMark [currentMark := currentMark + 1. ^currentMark].
+DBPlanner>>incrementalAdd: constraint [
+    | aMark overridden |
+    aMark := self newMark. overridden := constraint satisfy: aMark.
+    [overridden notNil] whileTrue: [overridden := overridden satisfy: aMark]
+].
+DBPlanner>>incrementalRemove: constraint [
+    | outputVariable unsatisfied level index candidate |
+    outputVariable := constraint output. constraint markUnsatisfied. constraint removeFromGraph.
+    unsatisfied := self removePropagateFrom: outputVariable.
+    level := DBRequired.
+    [
+        index := 0.
+        [index < unsatisfied size] whileTrue: [
+            candidate := unsatisfied at: index.
+            candidate strength == level ifTrue: [self incrementalAdd: candidate].
+            index := index + 1
+        ].
+        level := level nextWeaker.
+        (level == DBWeakest) not
+    ] whileTrue: []
+].
+DBPlanner>>makePlan: sources [
+    | aMark plan todo constraint |
+    aMark := self newMark. plan := DBPlan new. todo := sources.
+    [todo size > 0] whileTrue: [
+        constraint := todo removeFirst.
+        ((constraint output mark <> aMark) and: [constraint inputsKnown: aMark]) ifTrue: [
+            plan addConstraint: constraint. constraint output mark: aMark.
+            self addConstraintsConsuming: constraint output to: todo
+        ]
+    ].
+    ^plan
+].
+DBPlanner>>extractPlanFromConstraints: constraints [
+    | sources index constraint |
+    sources := DBCollection new. index := 0.
+    [index < constraints size] whileTrue: [
+        constraint := constraints at: index.
+        (constraint isInput and: [constraint isSatisfied]) ifTrue: [sources add: constraint].
+        index := index + 1
+    ].
+    ^self makePlan: sources
+].
+DBPlanner>>addPropagate: constraint mark: aMark [
+    | todo downstream |
+    todo := DBCollection new. todo add: constraint.
+    [todo size > 0] whileTrue: [
+        downstream := todo removeFirst.
+        downstream output mark = aMark ifTrue: [self incrementalRemove: constraint. ^false].
+        downstream recalculate.
+        self addConstraintsConsuming: downstream output to: todo
+    ].
+    ^true
+].
+DBPlanner>>removePropagateFrom: outputVariable [
+    | unsatisfied todo variable index constraint determining next |
+    outputVariable determinedBy: nil. outputVariable walkStrength: DBWeakest. outputVariable stay: true.
+    unsatisfied := DBCollection new. todo := DBCollection new. todo add: outputVariable.
+    [todo size > 0] whileTrue: [
+        variable := todo removeFirst. index := 0.
+        [index < variable constraints size] whileTrue: [
+            constraint := variable constraints at: index.
+            constraint isSatisfied ifFalse: [unsatisfied add: constraint].
+            index := index + 1
+        ].
+        determining := variable determinedBy. index := 0.
+        [index < variable constraints size] whileTrue: [
+            next := variable constraints at: index.
+            (((next == determining) not) and: [next isSatisfied]) ifTrue: [
+                next recalculate. todo add: next output
+            ].
+            index := index + 1
+        ]
+    ].
+    ^unsatisfied
+].
+DBPlanner>>addConstraintsConsuming: variable to: collection [
+    | determining constraints index constraint |
+    determining := variable determinedBy. constraints := variable constraints. index := 0.
+    [index < constraints size] whileTrue: [
+        constraint := constraints at: index.
+        (((constraint == determining) not) and: [constraint isSatisfied]) ifTrue: [collection add: constraint].
+        index := index + 1
+    ]
+].
+DBPlanner>>change: variable to: newValue [
+    | edit edits plan |
+    edit := DBEditConstraint new on: variable strength: DBPreferred planner: self.
+    edits := DBCollection new. edits add: edit. plan := self extractPlanFromConstraints: edits.
+    10 timesRepeat: [variable value: newValue. plan execute].
+    edit destroyConstraint
+].
+DBPlanner>>dispose [
+    ownedConstraints do: [:constraint | constraint dispose].
+    variables do: [:variable | variable dispose].
+    ownedConstraints := nil. variables := nil
+].
+
+DeltaBlue := Object derive: #().
+DeltaBlue class>>assert: condition [condition ifFalse: [Error signal: "DeltaBlue verification failed"]].
+DeltaBlue class>>close: actual to: expected [self assert: ((actual - expected) abs < 0.000001)].
+DeltaBlue>>chain: count [
+    | planner previous first last variable index edit edits plan |
+    planner := DBPlanner new.
+    [
+        previous := nil. first := nil. last := nil. index := 0.
+        [index <= count] whileTrue: [
+            variable := planner variableNamed: ("v" & index printString) value: 0.
+            previous notNil ifTrue: [DBEqualityConstraint new between: previous and: variable strength: DBRequired planner: planner].
+            index = 0 ifTrue: [first := variable]. index = count ifTrue: [last := variable].
+            previous := variable. index := index + 1
+        ].
+        DBStayConstraint new on: last strength: DBStrongDefault planner: planner.
+        edit := DBEditConstraint new on: first strength: DBPreferred planner: planner.
+        edits := DBCollection new. edits add: edit. plan := planner extractPlanFromConstraints: edits.
+        index := 0.
+        [index < 100] whileTrue: [
+            first value: index. plan execute.
+            DeltaBlue assert: (last value = index). index := index + 1
+        ].
+        ^last value
+    ] ensure: [planner dispose]
+].
+DeltaBlue>>projection: count [
+    | planner scale offset source destination destinations index sum |
+    planner := DBPlanner new.
+    [
+        scale := planner variableNamed: "scale" value: 10.
+        offset := planner variableNamed: "offset" value: 1000.
+        destinations := DBCollection new. source := nil. destination := nil. index := 0.
+        [index < count] whileTrue: [
+            source := planner variableNamed: ("src" & index printString) value: index.
+            destination := planner variableNamed: ("dst" & index printString) value: index.
+            destinations add: destination.
+            DBStayConstraint new on: source strength: DBNormal planner: planner.
+            DBScaleConstraint new from: source to: destination scale: scale offset: offset strength: DBRequired planner: planner.
+            index := index + 1
+        ].
+        planner change: source to: 17. DeltaBlue close: destination value to: 1170.
+        planner change: destination to: 1050. DeltaBlue close: source value to: 5.
+        planner change: scale to: 5. index := 0.
+        [index < (count - 1)] whileTrue: [
+            DeltaBlue close: (destinations at: index) value to: (index * 5 + 1000).
+            index := index + 1
+        ].
+        planner change: offset to: 2000. index := 0. sum := 0.
+        [index < (count - 1)] whileTrue: [
+            DeltaBlue close: (destinations at: index) value to: (index * 5 + 2000).
+            index := index + 1
+        ].
+        index := 0.
+        [index < count] whileTrue: [sum := sum + (destinations at: index) value. index := index + 1].
+        ^sum
+    ] ensure: [planner dispose]
+].
+DeltaBlue>>benchmark [
+    self chain: 100.
+    ^self projection: 100
+].
+
+repetitions := 1.
+(System arguments size > 0) ifTrue: [repetitions := (System arguments at: 0) asInteger].
+(repetitions isNil or: [repetitions < 0]) ifTrue: [Error signal: "Expected a nonnegative repetition count"].
+repetitions timesRepeat: [DeltaBlue new benchmark].
+("DeltaBlue runs=" & repetitions printString & " verified") println.

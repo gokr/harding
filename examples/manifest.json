@@ -7,6 +7,12 @@
       "stdout": "examples/expected/benchmark-arith_simple.stdout"
     },
     {
+      "id": "benchmark-deltablue",
+      "path": "benchmark/deltablue.hrd",
+      "stdout": "examples/expected/benchmark-deltablue.stdout",
+      "timeout": 180
+    },
+    {
       "id": "benchmark-loop_10000",
       "path": "benchmark/loop_10000.hrd",
       "stdout": "examples/expected/benchmark-loop_10000.stdout"

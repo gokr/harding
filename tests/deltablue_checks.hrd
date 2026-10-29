@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Conformance checks for the separately licensed DeltaBlue adaptation.
+DBCheck := Object derive: #().
+DBCheck class>>collections [
+    | collection first second |
+    collection := DBCollection new. first := Object new. second := Object new.
+    collection add: first. collection add: second. collection add: first.
+    DeltaBlue assert: (collection removeFirst == first).
+    collection add: first. collection remove: first.
+    DeltaBlue assert: (collection size = 1).
+    DeltaBlue assert: (collection at: 0) == second.
+    DeltaBlue assert: (collection removeFirst == second).
+    DeltaBlue assert: (collection size = 0).
+    DeltaBlue assert: ((DBStrength strongest: DBNormal with: DBPreferred) == DBPreferred).
+    DeltaBlue assert: ((DBStrength weakest: DBNormal with: DBPreferred) == DBNormal).
+    DeltaBlue assert: (DBRequired nextWeaker == DBWeakest).
+    DeltaBlue assert: (DBPreferred nextWeaker == DBNormal)
+].
+DBCheck class>>plans [
+    | planner left right stay equality edit edits plan |
+    planner := DBPlanner new.
+    [
+        left := planner variableNamed: "left" value: 3.
+        right := planner variableNamed: "right" value: 0.
+        stay := DBStayConstraint new on: left strength: DBNormal planner: planner.
+        equality := DBEqualityConstraint new between: left and: right strength: DBRequired planner: planner.
+        DeltaBlue close: right value to: 3.
+        edit := DBEditConstraint new on: right strength: DBPreferred planner: planner.
+        edits := DBCollection new. edits add: edit.
+        plan := planner extractPlanFromConstraints: edits.
+        DeltaBlue assert: (plan size = 2).
+        right value: 21. plan execute. DeltaBlue close: left value to: 21.
+        edit destroyConstraint.
+        DeltaBlue assert: edit isSatisfied not.
+        DeltaBlue assert: equality isSatisfied.
+        equality destroyConstraint.
+        planner change: left to: 9.
+        DeltaBlue close: right value to: 21
+    ] ensure: [planner dispose].
+    DeltaBlue assert: left constraints isNil.
+    DeltaBlue assert: right determinedBy isNil
+].
+DBCheck class>>requiredFailure [
+    | planner variable rejected |
+    planner := DBPlanner new.
+    [
+        variable := planner variableNamed: "required" value: 1.
+        DBStayConstraint new on: variable strength: DBRequired planner: planner.
+        rejected := [
+            DBEditConstraint new on: variable strength: DBRequired planner: planner.
+            false
+        ] on: Error do: [:failure | true].
+        DeltaBlue assert: rejected
+    ] ensure: [planner dispose]
+].
+DBCheck class>>fractionalProjection [
+    | planner source destination scale offset |
+    planner := DBPlanner new.
+    [
+        source := planner variableNamed: "source" value: 0.
+        destination := planner variableNamed: "destination" value: 0.
+        scale := planner variableNamed: "scale" value: 10.
+        offset := planner variableNamed: "offset" value: 1000.
+        DBStayConstraint new on: source strength: DBNormal planner: planner.
+        DBScaleConstraint new from: source to: destination scale: scale offset: offset strength: DBRequired planner: planner.
+        planner change: destination to: 1055.
+        DeltaBlue close: source value to: 5.5
+    ] ensure: [planner dispose]
+].
+DBCheck class>>cycleFailure [
+    | planner first second third message |
+    planner := DBPlanner new.
+    [
+        first := planner variableNamed: "first" value: 1.
+        second := planner variableNamed: "second" value: 2.
+        third := planner variableNamed: "third" value: 3.
+        DBEqualityConstraint new between: first and: second strength: DBRequired planner: planner.
+        DBEqualityConstraint new between: second and: third strength: DBRequired planner: planner.
+        message := [
+            DBEqualityConstraint new between: third and: first strength: DBRequired planner: planner.
+            "not rejected"
+        ] on: Error do: [:failure | failure message].
+        DeltaBlue assert: (message = "Cycle encountered")
+    ] ensure: [planner dispose].
+    DeltaBlue assert: first constraints isNil.
+    DeltaBlue assert: second determinedBy isNil.
+    DeltaBlue assert: third constraints isNil
+].
+DBCheck class>>workloads [
+    | solver count expected |
+    solver := DeltaBlue new.
+    #(0, 1, 2, 10, 100) do: [:size | DeltaBlue assert: ((solver chain: size) = 99)].
+    #(1, 2, 10, 100) do: [:size |
+        count := size - 1.
+        expected := (count * 2000) + (5 * count * (count - 1) // 2) + 1050.
+        DeltaBlue close: (solver projection: size) to: expected
+    ].
+    3 timesRepeat: [DeltaBlue close: solver benchmark to: 223305]
+].
+DBCheck collections.
+DBCheck plans.
+DBCheck requiredFailure.
+DBCheck fractionalProjection.
+DBCheck cycleFailure.
+DBCheck workloads.
+"DeltaBlue conformance passed" println.

@@ -143,7 +143,18 @@ the reference's 2,322 queue and 928 hold counts. Local arithmetic implements the
 required bit operations without adding language primitives. `nimble testRichards`
 checks both engines under ARC/ORC; `scripts/bench_richards.py` records reproducible
 release timings, raw samples and startup baselines. See
-[Richards provenance and measurement](RICHARDS.md). DeltaBlue remains next.
+[Richards provenance and measurement](RICHARDS.md).
+
+## DeltaBlue benchmark
+
+`benchmark/deltablue.hrd` is a separately licensed GPL-2.0-or-later port of the
+pinned Octane incremental solver. Ordinary Harding classes implement constraint
+graphs, stay/edit/equality/scale constraints and extracted plans. The reference's
+LIFO collections and unusual strength-transition mapping are preserved. Explicit
+ownership cleanup and numeric tolerance checks are documented adaptations.
+`nimble testDeltaBlue` exercises interpreter/native release binaries under
+ARC/ORC; `scripts/bench_deltablue.py` records checked paired release timings.
+See [DeltaBlue provenance, licensing and measurement](DELTABLUE.md).
 
 ## Validation
 

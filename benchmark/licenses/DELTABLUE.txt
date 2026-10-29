@@ -1,0 +1,35 @@
+DeltaBlue Harding adaptation — GPL-2.0-or-later
+
+Reference: Chromium Octane deltablue.js
+Commit: 570ad1ccfe86e3eecba0636c8f932ac08edec517
+https://github.com/chromium/octane/blob/570ad1ccfe86e3eecba0636c8f932ac08edec517/deltablue.js
+SHA-256: 6c4784e82f3e8f5c18306d289653d08b17b38838f1bac16b38611d7318fa5a36
+
+Modifications: Harding classes and message syntax; prefixed class names; explicit
+per-graph planner ownership instead of a global planner; deterministic graph
+cleanup for ARC/ORC; numeric tolerance checks for mixed Integer/Float projection;
+repetition driver. Collection LIFO and strength mappings retain reference behavior.
+See docs/DELTABLUE.md. This benchmark is separately licensed, not under the
+repository default license. Distribution of linked benchmark binaries must also
+comply with the GPL and applicable runtime licenses; no linking exception is granted.
+
+Original source notice:
+
+Copyright 2008 the V8 project authors. All rights reserved.
+Copyright 1996 John Maloney and Mario Wolczko.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+The full GPL version 2 text is in GPL-2.0.txt.
