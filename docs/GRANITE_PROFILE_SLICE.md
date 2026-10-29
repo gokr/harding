@@ -171,3 +171,63 @@ class. Engine-boundary, reentrant-return, block-lifetime, compiled-support and
 base-allocation suites run under ARC and ORC. Richards and DeltaBlue two-engine
 conformance, the 102-case parity sweep, and GTK acceptance are re-run for the
 combined change set.
+
+## Third slice: closure allocation in bound-host lookup
+
+Profiling at `d56287c` showed `boundClassFor` at ~15% of Queens time with
+39,553,086 calls. Raw allocator counts had risen while hierarchy walks fell, and
+Queens was allocating 102.8M objects for a benchmark that mainly builds linked
+placements.
+
+The cause was structural, not a cache miss: `boundClassFor` tested
+`boundCompiledClasses.len == 0` for an early return, but defined its traversal as
+a nested proc capturing `visited`. Nim therefore allocated a closure environment
+on entry to every call — 39.5M allocations, all discarded unread by the early
+return in a pure compiled program.
+
+The traversal became a top-level proc taking `visited` as a `var` parameter, and
+the guard is `{.inline.}`. Traversal order, the cycle guard and the early return
+are unchanged; only the closure allocation is removed.
+
+Profiled counts for thirty checked repetitions:
+
+| Workload | Raw allocator calls before | After | `nimNewObj` before | After |
+|---|---:|---:|---:|---:|
+| Richards | 34,417,771 | 24,483,763 | 19,559,649 | 9,625,641 |
+| DeltaBlue | 42,494,180 | 28,334,090 | 29,166,890 | 15,006,800 |
+| Queens | 102,783,598 | 63,230,512 | 73,794,835 | 34,241,749 |
+
+`boundClassFor` no longer appears in the flat profile.
+
+Paired uninstrumented ARC trials against retained `d56287c` binaries, seven
+measured alternating trials, thirty checked passes each:
+
+| Workload | Before ms/pass | After ms/pass | Throughput ratio | Time reduction |
+|---|---:|---:|---:|---:|
+| Richards | 49.273 | 45.190 | 1.090x | ~8.3% |
+| DeltaBlue | 70.699 | 60.862 | 1.162x | ~13.9% |
+| Queens | 153.014 | 130.311 | 1.174x | ~14.8% |
+
+Richards gains least because its remaining cost is dominated by hashing and
+allocation elsewhere, which this slice does not address.
+
+Evidence: `build/granite-profiles/run-2obisa53` (baseline),
+`run-f0lkjgd9` (paired comparison), `run-lkztylzf` (post-change profiles).
+
+## Cumulative position
+
+Paired measurements accumulate but are not one continuous run, and each table
+uses its own baseline; do not sum the percentages. The same-session
+`run-2obisa53` baseline and these post-change medians indicate roughly:
+
+| Workload | At `732716d` | Current |
+|---|---:|---:|
+| Richards | ~64.7 ms | ~45.2 ms |
+| DeltaBlue | ~94.9 ms | ~60.9 ms |
+| Queens | ~185.2 ms | ~130.3 ms |
+
+Order-of-magnitude gaps to Cog from the earlier comparison (roughly 0.57/0.66/
+0.16 ms for adapted Richards/DeltaBlue/Towers and 1.99 ms for Queens) remain
+large. Production-quality value representation (unboxing), allocation strategy
+and slot dispatch are still unaddressed; they are larger, riskier changes than
+the three mechanical slices above and need separate agreement.

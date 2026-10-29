@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Granite's bound-host class lookup no longer allocates a closure environment on every call: the traversal is a top-level proc with an out-parameter, and the no-binding guard inlines before the walk. Re-profiling shows Queens allocations falling from 102.8M to 63.2M and paired ARC trials ~8–15% lower elapsed time. `docs/GRANITE_PROFILE_SLICE.md` records counts, samples and the remaining gap.
 - Granite caches exception-class ancestry per dispatch version and tests `signal:` before the ancestry predicate, so ordinary sends no longer traverse the hierarchy. Re-profiling shows Queens hierarchy walks falling from 10.4M to 15 and paired ARC trials ~18–26% lower elapsed time on Richards/DeltaBlue/Queens beyond the earlier resolution cache. `docs/GRANITE_PROFILE_SLICE.md` records counts, samples and limits.
 - Granite native instance-method resolution uses a bounded, version-checked thread-local cache for positive and negative hierarchy lookups, without bypassing live interpreted dispatch. Profile-guided paired ARC trials observed ~16–19% lower elapsed time on Richards/DeltaBlue/Queens; raw profiles, noise caveats and reproducible tooling are documented in `docs/GRANITE_PROFILE_SLICE.md`. ARC/ORC tests cover registration invalidation, hierarchy order, cycles, eviction and bound method replacement.
 

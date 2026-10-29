@@ -686,7 +686,22 @@ proc sendMessageInterpreted*(interp: var Interpreter, receiver: NodeValue,
                             selector: selector, arguments: arguments)
   result = evalBoundNode(interp, message)
 
-proc boundClassFor(receiver: NodeValue): Class =
+proc findBoundClass(current: Class, visited: var seq[Class]): Class =
+  ## Walk live class identity to its interpreter host. A top-level proc rather
+  ## than a nested one: a captured `visited` forces a closure environment to be
+  ## allocated on every call, including the common no-binding case.
+  if current == nil or current in visited:
+    return nil
+  visited.add(current)
+  if current in boundCompiledClasses:
+    return current
+  for parent in current.superclasses:
+    let found = findBoundClass(parent, visited)
+    if found != nil:
+      return found
+  return nil
+
+proc boundClassFor(receiver: NodeValue): Class {.inline.} =
   if boundCompiledClasses.len == 0:
     return nil
   let cls = if receiver.kind == vkClass: receiver.classVal
@@ -694,14 +709,7 @@ proc boundClassFor(receiver: NodeValue): Class =
             else: nil
   # Find the host through live class identity, not the compiled name registry.
   var visited: seq[Class]
-  proc findBinding(current: Class): Class =
-    if current == nil or current in visited: return nil
-    visited.add(current)
-    if current in boundCompiledClasses: return current
-    for parent in current.superclasses:
-      let found = findBinding(parent)
-      if found != nil: return found
-  result = findBinding(cls)
+  result = findBoundClass(cls, visited)
 
 proc boundGlobalValue*(ownerReceiver: NodeValue, name: string): tuple[handled: bool, value: NodeValue] =
   ## Resolve a lexical global through isolated host lookup, including libraries.
