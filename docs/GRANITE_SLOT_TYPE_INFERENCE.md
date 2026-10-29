@@ -144,6 +144,83 @@ already ~0%. Inference is worth doing because it *unblocks* unboxed fields and
 cheaper allocation — not because slot access itself is the bottleneck. That
 expectation should stay honest while this is scoped.
 
+
+## Nil incidence, and the language-design question
+
+Question raised: would changing Harding to reduce `nil` make native compilation
+easier — e.g. requiring explicit default values for slots, or requiring
+temporaries to be assigned before use?
+
+A second probe counted per-slot nil versus non-nil writes over interpreter runs
+(recipe in `build/typefeedback/NIL_HOWTO.md`).
+
+| Workload | Slots never written nil | Slots written nil at least once |
+|---|---:|---:|
+| Towers (13 disks) | 5 | 2 |
+| Richards | 17 | 14 |
+| DeltaBlue | 21 | 16 |
+
+No slot was nil-only. Typical nil-carrying slots are exactly the ones you would
+expect: `Packet#link`, `TaskControlBlock#queue`, `Tower#heldDisk`,
+`DBVariable`-style graph references and `planner` back-pointers.
+
+**Methodological note worth keeping:** an initial version of this probe tested
+`value.kind == vkNil` and reported *zero* nil writes for every workload,
+including Towers, which plainly assigns `heldLink := nil`. Harding represents
+nil both as `vkNil` and as a singleton `nilInstance` whose kind is `vkInstance`,
+so the vkNil-only test silently missed most nil writes. The corrected probe uses
+`isNilValue()`. Any future analysis of nil must do the same — and the fact that
+two representations exist is itself evidence for the language point below.
+
+### What this means for typing
+
+Roughly **45–60% of slots in these programs are legitimately nil-bearing.**
+So nil is not an edge case to be typed away; it is structural in linked
+structures and back-pointers. Concretely:
+
+- Requiring explicit non-nil defaults for every slot would force sentinel objects
+  (`NoPacket`) into `link`/`queue` fields that are *designed* to be nil, or force
+  `Option[...]` wrappers everywhere. Both cost performance on exactly the hot
+  paths (linked traversal) that matter.
+- A slot that legitimately holds `nil` or an instance cannot become a bare
+  `ref T` without either a sentinel or nil being permitted — so `ref T` (which is
+  nilable in Nim) is actually a fine native representation for object slots. The
+  difficult case is *primitive* slots (`int`, `float64`), which cannot hold nil.
+- Consequently the valuable split is not "eliminate nil" but **"distinguish
+  primitive slots from reference slots"**: references map to `ref T` (nil-capable,
+  already native), primitives map to `int`/`float64` only when proven never nil.
+
+### On the two language changes proposed
+
+**Requiring explicit default values for slot declarations** — the measurement
+argues against mandating it. It would push sentinels into structurally-nilable
+fields. It could be offered as an opt-in for classes that want typed primitives,
+but the default-value requirement would not pay for itself.
+
+**Requiring temporaries to be assigned before use** — this is a much better fit
+and is largely orthogonal to nil. It is a *definiteness* rule, already the kind
+of analysis `analyzeNumericBindings` performs for numeric locals (it rejects
+reads before definite initialisation). It would:
+- catch real bugs (use of uninitialised temporaries) — a genuine language win;
+- let native locals be ordinary Nim `var` without a nil sentinel;
+- cost nothing at runtime.
+
+Caveat: it is a **source-compatibility break** for existing `.hrd` code, so it
+needs either a deprecation cycle or a strictness mode. Worth prototyping as a
+warning first and measuring how much existing code (stdlib, external libs,
+Bona, examples) would violate it.
+
+### Recommendation
+
+Do not attempt to eliminate nil. Instead:
+1. Classify each slot as **primitive or reference**. References become `ref T`
+   and are already native and nil-honest.
+2. Only promote a primitive slot to `int`/`float64` when the evidence shows it is
+   never nil; otherwise keep `NodeValue`.
+3. Treat the "temporaries must be assigned before use" rule as a separate,
+   well-motivated language improvement — prototype as a warning, measure the
+   fallout across existing code, then decide.
+
 ## Open questions for you
 
 1. Is a two-step "run, then rebuild with feedback" workflow acceptable, or must
