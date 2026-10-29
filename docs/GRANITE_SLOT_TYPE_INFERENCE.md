@@ -429,3 +429,52 @@ instance or a fresh-vs-shared distinction the runtime does not currently make.
    gain)?
 4. Where should a profile file live and how should it be invalidated — follow the
    existing frozen-receipt pattern?
+
+## Slice 1 implementation status: literal-only inference
+
+`src/harding/compiler/slot_inference.nim` implements the conservative core with
+14 passing tests (`tests/test_slot_inference.nim`). It classifies a slot only
+from provable literal writes (`0` -> int, `0.0` -> float, `true`/`false` -> bool,
+`"s"` -> string, `C new` -> that class) and settles on dynamic for nil, mixed
+kinds, unresolved receivers, or any non-literal write. The result is advisory and
+changes no generated code.
+
+**Measured yield on real code is currently near zero**, and this is the
+important finding:
+
+| Source | Slots | Typed |
+|---|---:|---:|
+| `benchmark/queens.hrd` | 3 | 0 |
+| `benchmark/towers.hrd` | 4 | 0 |
+
+The reason is structural, not a bug: real initialisers pass values in.
+
+```harding
+QueenPlacement>>initializeRow: r column: c previous: p [
+  row := r. column := c. previous := p
+]
+```
+
+`row := r` writes a *parameter*. Literal-only inference sees "no evidence" and
+correctly stays dynamic. Almost no real slot is initialised from a literal, so
+the next increment is required before this slice pays for itself:
+
+1. **Parameter typing.** If every call site of a method passes a literal of one
+   kind, the parameter has that kind, and so does the slot it initialises. This
+   is the dominant real-world shape, and it is the natural companion to the
+   static-send-graph argument proposed for selector sets.
+2. **Selector-set inference for object slots.** If a receiver is sent only
+   selectors implemented by exactly one class, that class is its type.
+
+Both are still static, deterministic, and need no runtime profile. Without at
+least (1), this slice is infrastructure with no measurable benefit yet.
+
+### Also measured
+
+- 108 `derive:` and 54 `derivePublic:` call sites exist across `lib/`,
+  `benchmark/`, `tests/`, `examples/` — so any change to those forms is a
+  160-call-site migration, not a local edit.
+- 40 slots in `lib/` are written through `obj::slot :=` from another class.
+  These are unresolvable statically and are treated as dynamic (poisoning every
+  same-named slot). Mandatory-initialize or default-annotation systems must
+  account for these outside writes or they will not hold.
