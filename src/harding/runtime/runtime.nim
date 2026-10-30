@@ -584,6 +584,7 @@ type
 
 var slotGetters*: Table[string, SlotGetter] = initTable[string, SlotGetter]()
 var slotSetters*: Table[string, SlotSetter] = initTable[string, SlotSetter]()
+var compiledSlotAccessorVersion*: uint64 = 1
 
 # Hot-path index: (class identity, slot name) -> accessor. Compiled instances
 # carry their resolved Class, so this avoids building a "Class::slot" string and
@@ -600,6 +601,7 @@ proc registerSlotAccessor*(className: string, slotName: string,
   let key = className & "::" & slotName
   slotGetters[key] = getter
   slotSetters[key] = setter
+  inc compiledSlotAccessorVersion
   # Index by the compiled class object when it exists; a miss simply means the
   # hot path falls back to the name-keyed lookup.
   if className in compiledClasses:

@@ -1,6 +1,7 @@
 import std/[strutils, sequtils, strformat, tables]
 import ../core/types
 import ../compiler/context
+import ../compiler/types
 import ../compiler/symbols
 import ./blocks
 import ./numeric
@@ -32,6 +33,7 @@ type
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
     numericBindings*: NumericBindings ## Proven lexical native representations
+    suppressSlotArithmetic: bool
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -74,6 +76,19 @@ proc isSlot*(ctx: GenContext, name: string): bool =
   if ctx.cls == nil:
     return false
   return ctx.cls.getSlotIndex(name) >= 0
+
+proc directSlotPrefix(ctx: GenContext, name: string): string =
+  mangleClass(ctx.cls.name) & "_direct_" & mangleSlot(name)
+
+proc slotRead(ctx: GenContext, name: string): string =
+  if not ctx.mixed and ctx.cls != nil and ctx.cls.name in ctx.compiledClasses:
+    return directSlotPrefix(ctx, name) & "_read(self)"
+  fmt("getSlotValue(self, \"{name}\")")
+
+proc slotWrite(ctx: GenContext, name, value: string): string =
+  if not ctx.mixed and ctx.cls != nil and ctx.cls.name in ctx.compiledClasses:
+    return directSlotPrefix(ctx, name) & "_write(self, " & value & ")"
+  fmt("setSlotValue(self, \"{name}\", {value})")
 
 proc getSlotIndex*(ctx: GenContext, name: string): int =
   ## Get slot index for name, returns -1 if not a slot
@@ -329,7 +344,7 @@ proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
     let slotIdx = ctx.cls.getSlotIndex(name)
     if slotIdx >= 0:
       if ctx.inMethod:
-        return fmt("getSlotValue(self, \"{name}\")")
+        return slotRead(ctx, name)
       return fmt("self.slots[{slotIdx}]")
 
   if not ctx.mixed and name in ["Exception", "Error", "Notification", "DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds"]:
@@ -804,6 +819,42 @@ proc blockCaptureGlobals*(ctx: GenContext): seq[string] =
     if name != "self":
       result.add(name)
 
+proc slotNumericBindings(ctx: GenContext): NumericBindings =
+  result = ctx.numericBindings
+  if ctx.cls == nil or ctx.mixed or not ctx.inMethod:
+    return
+  for slot in ctx.cls.getAllSlots():
+    if not ctx.isLocal(slot.name):
+      case slot.constraint
+      of tcInt: result[slot.name] = nrInt
+      of tcFloat: result[slot.name] = nrFloat
+      else: discard
+
+proc numericSlotNode(ctx: GenContext, node: Node): Node =
+  if node == nil: return nil
+  if node.kind == nkSlotAccess and not node.SlotAccessNode.isAssignment:
+    for slot in ctx.cls.getAllSlots():
+      if slot.index == node.SlotAccessNode.slotIndex:
+        return IdentNode(name: slot.name, localIndex: -1)
+  if node.kind == nkMessage:
+    let msg = node.MessageNode
+    var args: seq[Node]
+    for arg in msg.arguments: args.add(numericSlotNode(ctx, arg))
+    return MessageNode(receiver: numericSlotNode(ctx, msg.receiver),
+                       selector: msg.selector, arguments: args)
+  return node
+
+proc numericSlotNames(ctx: GenContext, node: Node): seq[string] =
+  if node == nil: return
+  if node.kind == nkIdent:
+    let name = node.IdentNode.name
+    if not ctx.isLocal(name) and ctx.isSlot(name): result.add(name)
+  elif node.kind == nkMessage:
+    result = numericSlotNames(ctx, node.MessageNode.receiver)
+    for arg in node.MessageNode.arguments:
+      for name in numericSlotNames(ctx, arg):
+        if name notin result: result.add(name)
+
 proc nativeNumericExpression(ctx: GenContext, node: Node): string =
   case node.kind
   of nkLiteral:
@@ -812,7 +863,12 @@ proc nativeNumericExpression(ctx: GenContext, node: Node): string =
       return $value.intVal
     return $value.floatVal
   of nkIdent:
-    return mangleIdentifier(node.IdentNode.name)
+    let name = node.IdentNode.name
+    if not ctx.isLocal(name) and ctx.isSlot(name):
+      let clsName = mangleClass(ctx.cls.name)
+      let field = mangleSlot(name)
+      return fmt("{clsName}(self.instVal.compiledOwner)[].{field}")
+    return mangleIdentifier(name)
   of nkMessage:
     let message = node.MessageNode
     let left = nativeNumericExpression(ctx, message.receiver)
@@ -830,6 +886,29 @@ proc genExpression*(ctx: GenContext, node: Node): string =
 
   if node == nil:
     return "NodeValue(kind: vkNil)"
+
+  if not ctx.suppressSlotArithmetic and ctx.cls != nil and not ctx.mixed and
+     ctx.cls.name in ctx.compiledClasses:
+    let numericNode = numericSlotNode(ctx, node)
+    let slotNames = numericSlotNames(ctx, numericNode)
+    let slotRepresentation = numericKind(numericNode, slotNumericBindings(ctx))
+    if slotNames.len > 0 and slotRepresentation != nrDynamic:
+      let native = nativeNumericExpression(ctx, numericNode)
+      let tag = case slotRepresentation
+                of nrInt: "intVal"
+                of nrFloat: "floatVal"
+                else: "boolVal"
+      let kind = case slotRepresentation
+                 of nrInt: "vkInt"
+                 of nrFloat: "vkFloat"
+                 else: "vkBool"
+      var guards: seq[string]
+      for name in slotNames:
+        guards.add(directSlotPrefix(ctx, name) & "_guard(self)")
+      ctx.suppressSlotArithmetic = true
+      let fallback = genExpression(ctx, node)
+      ctx.suppressSlotArithmetic = false
+      return "(block:\n    if " & guards.join(" and ") & ":\n      NodeValue(kind: " & kind & ", " & tag & ": " & native & ")\n    else:\n" & indentBlock(fallback, 6).strip(leading = false, trailing = true) & ")"
 
   let representation = numericKind(node, ctx.numericBindings)
   if representation != nrDynamic:
@@ -874,7 +953,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
-        return fmt("setSlotValue(self, \"{varName}\", {exprCode})")
+        return slotWrite(ctx, varName, exprCode)
       let idx = ctx.getSlotIndex(varName)
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
     # Check if it's a local variable (reassignment)
@@ -972,9 +1051,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       if origSlotName.len > 0:
         if slotNode.isAssignment and slotNode.valueExpr != nil:
           let valCode = genExpression(ctx, slotNode.valueExpr)
-          return fmt("setSlotValue(self, \"{origSlotName}\", {valCode})")
+          return slotWrite(ctx, origSlotName, valCode)
         else:
-          return fmt("getSlotValue(self, \"{origSlotName}\")")
+          return slotRead(ctx, origSlotName)
 
     if slotNode.isAssignment and slotNode.valueExpr != nil:
       let valCode = genExpression(ctx, slotNode.valueExpr)
@@ -1021,7 +1100,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
-        return fmt("discard setSlotValue(self, \"{varName}\", {exprCode})")
+        return "discard " & slotWrite(ctx, varName, exprCode)
       let idx = ctx.getSlotIndex(varName)
       return fmt"self.slots[{idx}] = {exprCode}"
 

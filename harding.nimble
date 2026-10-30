@@ -320,6 +320,10 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
+task testDirectSlots, "Validate guarded native slot access and arithmetic under ARC/ORC":
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "python3 -m unittest discover -s tests -p test_direct_slots.py"
+
 task testDeltaBlue, "Validate separately licensed DeltaBlue solver under ARC/ORC":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "python3 -m unittest discover -s tests -p test_deltablue.py"

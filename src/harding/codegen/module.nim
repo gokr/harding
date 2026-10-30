@@ -121,7 +121,6 @@ proc genClassConstants*(cls: ClassInfo): string =
       # A declared default (`#{#x -> 0}`) must match the interpreter exactly.
       output.add(fmt("  result.{mangleSlot(slot.name)} = {slot.defaultValue}\n"))
     else:
-      let nativeType = nativeSlotType(slot)
       let zero = case slot.constraint
         of tcInt: "0"
         of tcFloat: "0.0"
@@ -203,14 +202,35 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = {unboxedPtr}\n"))
     output.add(fmt("  return value\n\n"))
 
+  for slot in slots:
+    let field = mangleSlot(slot.name)
+    let prefix = mangleClass(cls.name) & "_direct_" & field
+    output.add(fmt("var {prefix}_version {{.threadvar.}}: uint64\n"))
+    output.add(fmt("var {prefix}_valid {{.threadvar.}}: bool\n"))
+    output.add(fmt("proc {prefix}_guard(self: NodeValue): bool {{.inline.}} =\n"))
+    output.add(fmt("  if {prefix}_version != compiledSlotAccessorVersion:\n"))
+    output.add(fmt("    {prefix}_valid = slotGetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotGet_{cls.name}_{field} and slotSetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotSet_{cls.name}_{field}\n"))
+    output.add(fmt("    {prefix}_version = compiledSlotAccessorVersion\n"))
+    output.add(fmt("  {prefix}_valid and self.kind == vkInstance and self.instVal != nil and self.instVal.kind == ikObject and self.instVal.isNimProxy and self.instVal.nativeSlots == nil and self.instVal.compiledOwner != nil and self.instVal.compiledOwner of {clsName} and self.instVal.nimValue == cast[pointer](self.instVal.compiledOwner) and self.instVal.class != nil and self.instVal.class.name == \"{cls.name}\"\n\n"))
+    output.add(fmt("proc {prefix}_read(self: NodeValue): NodeValue {{.inline.}} =\n"))
+    let directRead = boxExpression(slot, fmt("{clsName}(self.instVal.compiledOwner)[].{field}"))
+    output.add(fmt("  if {prefix}_guard(self): return {directRead}\n"))
+    output.add(fmt("  getSlotValue(self, \"{slot.name}\")\n\n"))
+    output.add(fmt("proc {prefix}_write(self: NodeValue, value: NodeValue): NodeValue {{.inline.}} =\n"))
+    output.add(fmt("  if {prefix}_guard(self):\n"))
+    let directWrite = unboxExpression(slot, "value")
+    output.add(fmt("    {clsName}(self.instVal.compiledOwner)[].{field} = {directWrite}\n"))
+    output.add("    return value\n")
+    output.add(fmt("  setSlotValue(self, \"{slot.name}\", value)\n\n"))
+
   for slotName in cls.getterSlots:
     let mangledSlot = mangleSlot(slotName)
     output.add(fmt("proc methodGet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
-    output.add(fmt("  getSlotValue(self, \"{slotName}\")\n\n"))
+    output.add(fmt("  {clsName}_direct_{mangledSlot}_read(self)\n\n"))
   for slotName in cls.setterSlots:
     let mangledSlot = mangleSlot(slotName)
     output.add(fmt("proc methodSet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
-    output.add(fmt("  discard setSlotValue(self, \"{slotName}\", args[0])\n"))
+    output.add(fmt("  discard {clsName}_direct_{mangledSlot}_write(self, args[0])\n"))
     output.add("  self\n\n")
 
   return output
