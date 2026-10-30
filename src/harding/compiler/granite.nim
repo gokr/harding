@@ -15,6 +15,9 @@ import ../parser/lexer
 import ../codegen/module
 import ../compiler/context
 import ../compiler/types
+import ../compiler/analyzer
+import ../compiler/slot_inference
+import ../core/type_feedback
 import ../compiler/symbols
 import ../compiler/frozen_manifest
 import ../core/scheduler
@@ -151,6 +154,8 @@ type
     frozenManifest: string
     frozenReceipt: string
     sealFrozen: bool
+    typeFeedback: string
+    inferenceReport: string
     maxStackDepth: int
 
 proc newConfig(): Config =
@@ -190,6 +195,8 @@ proc showUsage() =
   echo "  -o, --output <file>   Output Nim file path (compile only)"
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
+  echo "  --type-feedback:<file> Validated interpreter feedback (requires --inference-report)"
+  echo "  --inference-report:<file> Write advisory static/observed slot candidates"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
   echo "  --gtk                 Compile the GTK4 application library (no VM startup)"
   echo "  --freeze-manifest <file> Checked frozen dependency closure (experimental)"
@@ -262,6 +269,10 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.logLevel = parseLogLevel(p.val)
       of "ast":
         result.dumpAst = true
+      of "type-feedback":
+        result.typeFeedback = p.val
+      of "inference-report":
+        result.inferenceReport = p.val
       of "mixed":
         result.mixed = true
       of "gtk":
@@ -360,6 +371,21 @@ proc compileFile(config: Config): bool =
     echo "Parse error: ", parser.errorMsg
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
+
+  if config.typeFeedback.len > 0 and config.inferenceReport.len == 0:
+    echo "Error: --type-feedback currently requires --inference-report"
+    return false
+  if config.inferenceReport.len > 0:
+    try:
+      let evidence = if config.typeFeedback.len > 0:
+                       loadTypeFeedback(config.typeFeedback, config.inputFile)
+                     else: nil
+      let report = inferenceReport(inferSlots(nodes, buildClassGraph(nodes).classes), evidence)
+      createDir(absolutePath(config.inferenceReport).parentDir)
+      writeFile(config.inferenceReport, pretty(report) & "\n")
+    except CatchableError as failure:
+      echo "Inference report error: ", failure.msg
+      return false
 
   if config.gtk:
     let source = readFile(config.hardingHome / "lib/gui/Gtk.hrd")

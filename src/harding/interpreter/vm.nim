@@ -1,3 +1,4 @@
+import ../core/type_feedback
 import std/[tables, strutils, math, strformat, os, random, algorithm, json, options]
 import ../core/types
 import ../core/process
@@ -5370,6 +5371,7 @@ proc loadStdlib*(interp: var Interpreter, bootstrapFile: string = "") =
   if fileExists(actualBootstrapFile) or embeddedBootstrap[0]:
     debug("Loading bootstrap file: ", actualBootstrapFile)
     let source = if interp.packageOnlyLoads: embeddedBootstrap[1] else: readFile(actualBootstrapFile)
+    recordFeedbackSource(actualBootstrapFile, source)
     let (_, err) = interp.evalStatements(source)
     if err.len > 0:
       if interp.packageOnlyLoads:
@@ -6208,6 +6210,7 @@ proc globalTableLoadImpl(interp: var Interpreter, self: Instance, args: seq[Node
     signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
+  recordFeedbackSource(displayPath, source)
   var failure = ""
   try:
     # Defer method table rebuilds during batch loading
@@ -6317,6 +6320,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     signalExceptionByName(interp, "LoadError", "File not found: " & displayPath)
     return nilValue()
 
+  recordFeedbackSource(displayPath, source)
   # Save original globals and create a copy for capturing new definitions.
   # Seed the temporary scope with existing library bindings so later files in
   # the same library can see names defined by earlier loads.
@@ -6340,6 +6344,7 @@ proc libraryLoadImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
   # Swap globals to temp table so new definitions go there
   interp.globals = tempGlobals
 
+  recordFeedbackSource(displayPath, source)
   var failure = ""
   try:
     # Defer method table rebuilds during batch loading

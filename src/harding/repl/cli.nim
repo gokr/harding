@@ -34,6 +34,7 @@ type
     showResults*: bool           # Print result of last expression
     maxStackDepth*: int
     hardingHome*: string
+    typeFeedback*: string      # Optional interpreted slot profile output
     bootstrapFile*: string
     debuggerPort*: int           # Debugger server port (0 = disabled)
     runtimeArgs*: seq[string]    # Args after '--' passed into Harding code
@@ -115,6 +116,12 @@ proc parseCliOptions*(allArgs: seq[string], appName: string, appDesc: string,
       else:
         echo "Error: --bootstrap requires a value"
         quit(1)
+    of "--type-feedback":
+      if i + 1 >= allArgs.len:
+        echo "Error: --type-feedback requires a file"
+        quit(1)
+      inc i
+      result.typeFeedback = allArgs[i]
     of "--ast":
       result.dumpAst = true
     of "--result":
@@ -164,6 +171,7 @@ proc showUsage*(appName: string, appDesc: string, examples: seq[string] = @[],
   echo "  --loglevel <level> Set log level: DEBUG, INFO, WARN, ERROR (default: ERROR)"
   echo "  --stack-depth <n>  Set maximum stack depth (default: 10000)"
   if appName == "harding":
+    echo "  --type-feedback <file> Collect interpreted slot types for Granite reports"
     echo "  --ast              Dump AST after parsing and continue execution"
     echo "  --result           Print result of each evaluated expression"
     echo "  --debugger-port <n>  Start debugger server on port (requires -d:debugger)"

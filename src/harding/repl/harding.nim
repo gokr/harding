@@ -7,6 +7,7 @@ import std/os
 import ../repl/doit
 import ../repl/cli
 import ../core/types
+import ../core/type_feedback
 import ../external/libmanager
 
 when defined(debugger):
@@ -124,6 +125,14 @@ proc main() =
       config.port = opts.debuggerPort
       startDebuggerServerInThread(config)
 
+  if opts.typeFeedback.len > 0:
+    if opts.positionalArgs.len != 1 or not fileExists(opts.positionalArgs[0]):
+      stderr.writeLine("--type-feedback requires one script file")
+      quit(1)
+    if absolutePath(opts.typeFeedback).normalizedPath() == absolutePath(opts.positionalArgs[0]).normalizedPath():
+      stderr.writeLine("Type feedback output must not overwrite the input script")
+      quit(1)
+
   # Now handle commands based on positional arguments
   if opts.positionalArgs.len == 0:
     # Start REPL
@@ -136,8 +145,27 @@ proc main() =
     # Check if it's a file
     if fileExists(opts.positionalArgs[0]):
       # Run script file
-      execScript(opts.positionalArgs[0], opts.dumpAst, opts.maxStackDepth,
-                 opts.hardingHome, opts.bootstrapFile, opts.runtimeArgs)
+      if opts.typeFeedback.len == 0:
+        execScript(opts.positionalArgs[0], opts.dumpAst, opts.maxStackDepth,
+                   opts.hardingHome, opts.bootstrapFile, opts.runtimeArgs)
+      else:
+        # Do not publish a profile from a failed run or leave old success data.
+        if fileExists(opts.typeFeedback): removeFile(opts.typeFeedback)
+        startTypeFeedback()
+        var feedbackError = ""
+        try:
+          let (_, error) = runScript(opts.positionalArgs[0], dumpAst = opts.dumpAst,
+            maxStackDepth = opts.maxStackDepth, hardingHome = opts.hardingHome,
+            bootstrapFile = opts.bootstrapFile, commandLineArgs = opts.runtimeArgs)
+          feedbackError = error
+          if feedbackError.len == 0: writeTypeFeedback(opts.typeFeedback)
+        except CatchableError as failure:
+          feedbackError = failure.msg
+        finally:
+          stopTypeFeedback()
+        if feedbackError.len > 0:
+          stderr.writeLine(feedbackError)
+          quit(1)
     else:
       # Unrecognized argument
       echo "Unknown option or file not found: " & opts.positionalArgs[0]

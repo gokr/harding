@@ -1,4 +1,4 @@
-import std/[unittest, tables, strutils]
+import std/[unittest, tables, strutils, json]
 import ../src/harding/parser/parser
 import ../src/harding/compiler/analyzer
 import ../src/harding/compiler/slot_inference
@@ -77,7 +77,7 @@ suite "Static slot-kind inference":
         ^ self
       ]
     """)
-    check result.slots["C#total"].kind == skDynamic
+    check result.slots["C#total"].kind == skInt
     check "C#scratch" notin result.slots
 
   test "unwritten slots are reported unresolved rather than assumed":
@@ -121,6 +121,49 @@ suite "Static slot-kind inference":
     check before.classes["C"].slots.len == slotCount
     check before.classes["C"].slots[0].constraint == tcNone
 
+suite "Static propagation candidates":
+  test "call arguments propagate through temporaries into slots":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [ | saved | saved := argument. value := saved ].
+      box := Box new.
+      box set: 3.
+    """)
+    check evidence.slots["Box#value"].kind == skInt
+
+  test "conflicting call sites keep a dynamic candidate":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [ value := argument ].
+      box := Box new. box set: 3. box set: 2.5.
+    """)
+    check evidence.slots["Box#value"].kind == skDynamic
+
+  test "self and super method returns propagate to slot assignments":
+    let evidence = infer("""
+      Parent := Object derivePublic: #().
+      Parent>>answer [^4].
+      Child := Parent derivePublic: #(total).
+      Child>>answer [^super answer].
+      Child>>setup [total := self answer + 1].
+    """)
+    check evidence.slots["Child#total"].kind == skInt
+
+  test "nested block locals cannot create phantom slots":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [ [| scratch | scratch := 3. value := scratch] value ].
+    """)
+    check "Box#scratch" notin evidence.slots
+    check evidence.slots["Box#value"].kind == skInt
+
+  test "Symbol literals are distinct candidates":
+    let evidence = infer("""
+      Box := Object derivePublic: #(state).
+      Box>>set [state := #""].
+    """)
+    check evidence.slots["Box#state"].kind == skSymbol
+
 suite "Outside and class-side writes":
   test "outside named access prevents typing the slot":
     let result = infer("""
@@ -148,3 +191,130 @@ suite "Outside and class-side writes":
     """)
     check result.slots["C#x"].writes == 0
     check "C#x" in result.unresolved
+
+suite "Observations reconcile with static candidates":
+  proc report(inferred: InferenceResult, observed: JsonNode): JsonNode =
+    inferenceReport(inferred, observed)
+
+  test "observations can reject a wrong static candidate":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [value := argument].
+      box := Box new. box set: 3.
+    """)
+    check evidence.slots["Box#value"].kind == skInt
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 5, "write:String": 1}}}
+    let slot = report(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["effectiveReason"].getStr == "contradicted by observations"
+
+  test "observed nil rejects a static candidate":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 1].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 2, "write:Nil": 1}}}
+    let slot = report(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["effectiveReason"].getStr == "nil observed at runtime"
+
+  test "agreement is recorded as confirmed but still guarded and unnarrowed":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 1].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 4}}}
+    let slot = report(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skInt"
+    check slot["evidence"].getStr == "static+observations"
+    check slot["requiresGuard"].getBool
+    check not slot["storageNarrowed"].getBool
+
+  test "a dynamic static slot is never narrowed by observations alone":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [value := argument].
+    """)
+    check evidence.slots["Box#value"].kind == skDynamic
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 9}}}
+    let slot = report(evidence, observed)["slots"]["Box#value"]
+    check slot["evidence"].getStr == "observed-proposal"
+    check slot["effectiveCandidate"].getStr == "skInt"
+    check slot["requiresGuard"].getBool
+    check not slot["storageNarrowed"].getBool
+
+  test "multiple observed kinds leave a dynamic slot dynamic":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [value := argument].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 1, "write:String": 1}}}
+    let slot = report(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["evidence"].getStr == "static"
+
+  test "report carries no storage-narrowing claim":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 1].
+    """)
+    let document = report(evidence, nil)
+    check document["semantics"].getStr == "advisory-no-storage-narrowing"
+    for _, slot in document["slots"]:
+      check slot["requiresGuard"].getBool
+      check not slot["storageNarrowed"].getBool
+
+suite "Integer and Float together widen to Float":
+  proc widen(inferred: InferenceResult, observed: JsonNode): JsonNode =
+    inferenceReport(inferred, observed)
+
+  test "a static Integer contradicted only by Float widens rather than failing":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 0].
+    """)
+    check evidence.slots["Box#value"].kind == skInt
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 12932, "write:Float": 33}}}
+    let slot = widen(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skFloat"
+    check slot["evidence"].getStr == "numeric-widening"
+    check slot["effectiveReason"].getStr.contains("Float accepts Integer")
+    check not slot["storageNarrowed"].getBool
+
+  test "Float alone stays a proposal, not a narrowing":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set: argument [value := argument].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 2, "write:Float": 1}}}
+    let slot = widen(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skFloat"
+    check slot["evidence"].getStr == "numeric-widening"
+
+  test "nil still wins over numeric widening":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 0].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 3, "write:Float": 1, "write:Nil": 1}}}
+    check widen(evidence, observed)["slots"]["Box#value"]["effectiveCandidate"].getStr == "skDynamic"
+
+  test "widening does not apply to non-numeric mixtures":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 0].
+    """)
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 1, "write:String": 1}}}
+    let slot = widen(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["effectiveReason"].getStr == "contradicted by observations"
+
+  test "a Float static candidate keeps Float":
+    let evidence = infer("""
+      Box := Object derivePublic: #(value).
+      Box>>set [value := 1.5].
+    """)
+    check evidence.slots["Box#value"].kind == skFloat
+    let observed = %*{"slots": {"Box#value": {"write:Integer": 1, "write:Float": 4}}}
+    let slot = widen(evidence, observed)["slots"]["Box#value"]
+    check slot["effectiveCandidate"].getStr == "skFloat"

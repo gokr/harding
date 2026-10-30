@@ -1,267 +1,344 @@
-## Conservative static slot-kind inference for Granite.
-##
-## Classifies each slot as primitive, object or dynamic from what the compiled
-## module actually does. The result is advisory: it changes no behaviour, and any
-## doubt resolves to `skDynamic`. Inferred kinds may later pick a native
-## representation, so inference must never change an answer.
-##
-## Deliberately simple, in the spirit of `analyzeNumericBindings`: literal
-## initialisers and agreement across all writes. Anything a conservative reading
-## cannot prove stays dynamic.
-
-import std/[tables, sets, sequtils, strutils]
+import std/[tables, sets, strutils, algorithm, json]
 import ../core/types
 import ./context
 
 type
   SlotKind* = enum
-    skDynamic   ## unresolved, mixed, or nil-bearing: keep NodeValue
-    skInt
-    skFloat
-    skBool
-    skString    ## String only; Symbol is not modelled (interning)
-    skObject    ## non-nil instance of one class
+    skDynamic, skInt, skFloat, skBool, skString, skSymbol, skObject
 
   SlotInference* = object
     kind*: SlotKind
-    className*: string    ## for skObject: the observed class
-    conclusive*: bool     ## at least one provable write was recorded
-    nilSeen*: bool        ## any nil literal write (poisons the slot)
+    className*: string
+    conclusive*: bool  # consistent module evidence, NOT a closed-world proof
+    nilSeen*: bool
     writes*: int
-    reason*: string       ## why it is dynamic, for auditing
+    reason*: string
 
   InferenceResult* = object
-    slots*: Table[string, SlotInference]  ## key: "Class#slot"
-    unresolved*: seq[string]              ## declared slots with no observed write
+    slots*: Table[string, SlotInference]
+    unresolved*: seq[string]
 
-const primitiveClasses* = ["Integer", "Float", "Boolean", "String", "Symbol",
-                           "True", "False", "Number"]
+  MethodEvidence = object
+    owner, selector: string
+    body: BlockNode
+    classSide: bool
 
-proc isCapitalised(name: string): bool =
-  name.len > 0 and name[0] in {'A'..'Z'}
+proc unknown(reason = "no evidence"): SlotInference =
+  SlotInference(kind: skDynamic, reason: reason)
 
-proc classifyWrite(expr: Node): SlotInference =
-  ## Conservative single-write classification. Only literal evidence is trusted.
-  result = SlotInference(kind: skDynamic, writes: 1)
-  if expr == nil:
-    result.reason = "no evidence"
-    return
-  # `nil`, `true` and `false` parse as pseudo-vars, not literals.
-  if expr.kind == nkPseudoVar:
-    case expr.PseudoVarNode.name
-    of "nil":
-      result.nilSeen = true
-      result.reason = "nil literal"
-    of "true", "false":
-      result.kind = skBool
-      result.conclusive = true
-    else:
-      result.reason = "unrecognised pseudo-var"
-    return
-  if expr.kind == nkLiteral:
-    let value = expr.LiteralNode.value
-    case value.kind
-    of vkNil:
-      result.nilSeen = true
-      result.reason = "nil literal"
-    of vkInt:
-      result.kind = skInt
-      result.conclusive = true
-    of vkFloat:
-      result.kind = skFloat
-      result.conclusive = true
-    of vkBool:
-      result.kind = skBool
-      result.conclusive = true
-    of vkString:
-      result.kind = skString
-      result.conclusive = true
-    else:
-      result.reason = "non-literal value"
-    return
-  # `Class new` / `Class basicNew` is object evidence for that class.
-  if expr.kind == nkMessage:
-    let msg = expr.MessageNode
-    if msg.selector in ["new", "basicNew"] and msg.receiver != nil and
-       msg.receiver.kind == nkIdent:
-      let name = msg.receiver.IdentNode.name
-      if isCapitalised(name) and name notin primitiveClasses:
-        result.kind = skObject
-        result.className = name
-        result.conclusive = true
-        return
-  result.reason = "no evidence"
+proc isUnknown(evidence: SlotInference): bool =
+  ## "Nothing known yet", as opposed to a known write we could not type. During
+  ## propagation an unresolved operand must not poison a parameter that another
+  ## call site proves, or the fixed point could never converge on anything.
+  not evidence.conclusive and not evidence.nilSeen and evidence.reason == "no evidence"
 
-proc mergeInference(slot: var SlotInference, write: SlotInference) =
-  ## Fold one write in. Any nil, any unproven write, or any disagreement settles
-  ## the slot as dynamic and it never recovers.
-  slot.writes = slot.writes + write.writes
-  if write.nilSeen:
-    slot.nilSeen = true
-  if slot.kind == skDynamic and slot.reason.len > 0:
-    return  # already poisoned
-  if not write.conclusive:
+proc combine(slot: var SlotInference, evidence: SlotInference) =
+  slot.nilSeen = slot.nilSeen or evidence.nilSeen
+  if isUnknown(evidence): return
+  inc slot.writes
+  if slot.reason.len > 0: return
+  if not evidence.conclusive:
     slot.kind = skDynamic
     slot.conclusive = false
-    slot.reason = write.reason
-    return
-  if write.nilSeen:
-    slot.kind = skDynamic
-    slot.conclusive = false
-    slot.reason = "nil literal"
-    return
-  if not slot.conclusive:
-    slot.kind = write.kind
-    slot.className = write.className
+    slot.reason = evidence.reason
+  elif not slot.conclusive:
+    slot.kind = evidence.kind
+    slot.className = evidence.className
     slot.conclusive = true
-    slot.reason = ""
-    return
-  if slot.kind != write.kind:
+  elif slot.kind != evidence.kind or slot.className != evidence.className:
     slot.kind = skDynamic
     slot.conclusive = false
-    slot.reason = "conflicting kinds"
-    return
-  if slot.kind == skObject and slot.className != write.className:
-    slot.kind = skDynamic
-    slot.conclusive = false
-    slot.reason = "conflicting classes"
+    slot.reason = if evidence.kind == skObject: "conflicting classes" else: "conflicting kinds"
 
-proc collectAssignments(nodes: seq[Node], className: string,
-                        into: var Table[string, SlotInference],
-                        classSide: bool = false,
-                        outsideWrites: var seq[string] = @[]) =
-  ## `outsideWrites` collects slot names written through a receiver whose class
-  ## cannot be resolved; those poison every slot of that name globally.
-  ## Record every assignment in a body, descending into nested blocks.
-  for node in nodes:
-    if node == nil:
-      continue
-    case node.kind
-    of nkAssign:
-      let assignment = node.AssignNode
-      # In a class-side method a bare name is a local or a global, never an
-      # instance slot; only `obj::slot := ...` can reach instance storage.
-      if not classSide and assignment.variable.len > 0:
-        let key = className & "#" & assignment.variable
-        var slot = into.getOrDefault(key, SlotInference(kind: skDynamic))
-        mergeInference(slot, classifyWrite(assignment.expression))
-        into[key] = slot
-      collectAssignments(@[assignment.expression], className, into, classSide, outsideWrites)
-    of nkBlock:
-      collectAssignments(node.BlockNode.body, className, into, classSide, outsideWrites)
-    of nkReturn:
-      collectAssignments(@[node.ReturnNode.expression], className, into, classSide, outsideWrites)
-    of nkWhile:
-      collectAssignments(@[node.WhileNode.condition, node.WhileNode.body], className, into, classSide, outsideWrites)
-    of nkIf:
-      collectAssignments(@[node.IfNode.condition, node.IfNode.thenBranch,
-                           node.IfNode.elseBranch], className, into, classSide, outsideWrites)
-    of nkNamedAccess:
-      # `obj::slot := value` -- an outside write through the named-access form.
-      # It is evidence about that slot, and the class it names is not necessarily
-      # this method's class, so record it under the receiver when it is a class.
-      let access = node.NamedAccessNode
-      collectAssignments(@[access.receiver], className, into, classSide, outsideWrites)
-      if access.isAssignment:
-        collectAssignments(@[access.valueExpr], className, into, classSide, outsideWrites)
-        if access.receiver != nil and access.receiver.kind == nkIdent and
-           isCapitalised(access.receiver.IdentNode.name):
-          let owner = access.receiver.IdentNode.name
-          let key = owner & "#" & access.memberName
-          var slot = into.getOrDefault(key, SlotInference(kind: skDynamic))
-          mergeInference(slot, classifyWrite(access.valueExpr))
-          into[key] = slot
-        elif access.memberName.len > 0:
-          # The receiver's class cannot be resolved here, so this write could
-          # reach ANY class owning a slot of that name. Poison them all rather
-          # than type a slot that an unresolvable write might violate.
-          outsideWrites.add(access.memberName)
-    of nkArray:
-      collectAssignments(node.ArrayNode.elements, className, into, classSide, outsideWrites)
-    of nkMessage:
-      let msg = node.MessageNode
-      var parts: seq[Node] = @[]
-      if msg.receiver != nil:
-        parts.add(msg.receiver)
-      for argument in msg.arguments:
-        parts.add(argument)
-      collectAssignments(parts, className, into, classSide, outsideWrites)
-    else:
-      discard
+proc children(node: Node): seq[Node] =
+  if node == nil: return
+  case node.kind
+  of nkAssign: result.add(node.AssignNode.expression)
+  of nkReturn: result.add(node.ReturnNode.expression)
+  of nkMessage:
+    result.add(node.MessageNode.receiver)
+    result.add(node.MessageNode.arguments)
+  of nkSuperSend: result.add(node.SuperSendNode.arguments)
+  of nkLiteral:
+    if node.LiteralNode.value.kind == vkBlock and node.LiteralNode.value.blockVal != nil:
+      result.add(node.LiteralNode.value.blockVal.body)
+  of nkBlock: result.add(node.BlockNode.body)
+  of nkIf:
+    result.add(@[node.IfNode.condition, node.IfNode.thenBranch, node.IfNode.elseBranch])
+  of nkWhile: result.add(@[node.WhileNode.condition, node.WhileNode.body])
+  of nkNamedAccess: result.add(@[node.NamedAccessNode.receiver, node.NamedAccessNode.valueExpr])
+  of nkSlotAccess: result.add(node.SlotAccessNode.valueExpr)
+  of nkArray: result.add(node.ArrayNode.elements)
+  of nkTable:
+    for entry in node.TableNode.entries: result.add(@[entry.key, entry.value])
+  of nkCascade:
+    result.add(node.CascadeNode.receiver)
+    for message in node.CascadeNode.messages: result.add(message)
+  of nkPrimitiveCall: result.add(node.PrimitiveCallNode.arguments)
+  else: discard
 
-proc methodBody(msg: MessageNode): BlockNode =
-  ## Body block of a `Class>>selector [ ... ]` definition, or nil.
-  if msg.arguments.len < 2 or msg.arguments[1].kind != nkLiteral:
-    return nil
-  let value = msg.arguments[1].LiteralNode.value
-  if value.kind != vkBlock:
-    return nil
-  value.blockVal
+proc methodBody(node: Node): BlockNode =
+  if node == nil: return nil
+  if node.kind == nkBlock: return node.BlockNode
+  if node.kind == nkLiteral and node.LiteralNode.value.kind == vkBlock:
+    return node.LiteralNode.value.blockVal
 
 proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): InferenceResult =
-  ## Seed every declared slot, then fold in writes observed in the same module.
-  ## A declared slot with no observed write is reported unresolved, not assumed.
-  result.slots = initTable[string, SlotInference]()
-  for className, cls in classes.pairs:
-    if cls == nil:
-      continue
-    for slot in cls.getAllSlots():
-      let key = className & "#" & slot.name
-      if key notin result.slots:
-        # Seeded but unproven: empty reason distinguishes this from a poisoned slot.
-        result.slots[key] = SlotInference(kind: skDynamic)
+  ## Advisory module evidence. No storage narrowing or source rewriting. Calls
+  ## outside this source, dynamic selectors and method replacement remain open.
+  var methods: seq[MethodEvidence]
+  proc collect(node: Node) =
+    if node == nil: return
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.selector in ["selector:put:", "classSelector:put:"] and
+         msg.receiver != nil and msg.receiver.kind == nkIdent and msg.arguments.len == 2:
+        let body = methodBody(msg.arguments[1])
+        if body != nil and msg.arguments[0].kind == nkLiteral:
+          let selector = msg.arguments[0].LiteralNode.value
+          if selector.kind in {vkSymbol, vkString}:
+            methods.add(MethodEvidence(owner: msg.receiver.IdentNode.name,
+              selector: if selector.kind == vkSymbol: selector.symVal else: selector.strVal,
+              body: body, classSide: msg.selector == "classSelector:put:"))
+        return
+    for child in children(node): collect(child)
+  for node in nodes: collect(node)
 
-  for node in nodes:
-    if node.kind != nkMessage:
-      continue
+  var parameters: Table[string, SlotInference]
+  var returns: Table[string, SlotInference]
+  proc methodKey(index: int): string = $index
+  proc target(selector, owner: string, classSide: bool): int =
+    result = -1
+    # Resolve lexical self/super owners first. Unknown receivers use only a
+    # unique module selector as candidate evidence, never as a proof.
+    var candidateOwner = owner
+    var seen: HashSet[string]
+    while candidateOwner.len > 0 and candidateOwner notin seen:
+      seen.incl(candidateOwner)
+      for index, methodInfo in methods:
+        if methodInfo.owner == candidateOwner and methodInfo.classSide == classSide and methodInfo.selector == selector:
+          return index
+      if candidateOwner in classes and classes[candidateOwner].parent != nil:
+        candidateOwner = classes[candidateOwner].parent.name
+      else: candidateOwner = ""
+    if owner.len > 0: return -1
+    for index, methodInfo in methods:
+      if methodInfo.selector == selector and not methodInfo.classSide:
+        if result >= 0: return -1
+        result = index
+
+  proc kind(node: Node, locals: Table[string, SlotInference], owner: string,
+            classSide: bool): SlotInference =
+    if node == nil: return unknown()
+    if node.kind == nkIdent:
+      return locals.getOrDefault(node.IdentNode.name, unknown())
+    if node.kind == nkPseudoVar:
+      case node.PseudoVarNode.name
+      of "nil": return SlotInference(nilSeen: true, reason: "nil literal")
+      of "true", "false": return SlotInference(kind: skBool, conclusive: true)
+      of "self": return SlotInference(kind: skObject, className: owner, conclusive: owner.len > 0)
+      else: return unknown()
+    if node.kind == nkLiteral:
+      case node.LiteralNode.value.kind
+      of vkInt: return SlotInference(kind: skInt, conclusive: true)
+      of vkFloat: return SlotInference(kind: skFloat, conclusive: true)
+      of vkBool: return SlotInference(kind: skBool, conclusive: true)
+      of vkString: return SlotInference(kind: skString, conclusive: true)
+      of vkSymbol: return SlotInference(kind: skSymbol, conclusive: true)
+      of vkNil: return SlotInference(nilSeen: true, reason: "nil literal")
+      else: return unknown()
+    if node.kind == nkSuperSend:
+      let parent = if owner in classes and classes[owner].parent != nil: classes[owner].parent.name else: ""
+      if parent.len > 0:
+        let index = target(node.SuperSendNode.selector, parent, classSide)
+        return returns.getOrDefault(methodKey(index), unknown())
+      return unknown()
+    if node.kind != nkMessage: return unknown()
     let msg = node.MessageNode
-    if msg.selector notin ["selector:put:", "classSelector:put:"]:
-      continue
-    let classSide = msg.selector == "classSelector:put:"
-    if msg.receiver == nil or msg.receiver.kind != nkIdent:
-      continue
-    let className = msg.receiver.IdentNode.name
-    let body = methodBody(msg)
-    if body == nil:
-      continue
-    # Method arguments and temporaries are locals, never slot writes.
-    var localNames = initHashSet[string]()
-    for name in body.temporaries:
-      localNames.incl(name)
-    for name in body.parameters:
-      localNames.incl(name)
-    var found = initTable[string, SlotInference]()
-    var outsideWrites: seq[string] = @[]
-    collectAssignments(body.body, className, found, classSide, outsideWrites)
-    for slotName in outsideWrites:
-      for key in result.slots.keys.toSeq():
-        if key.endsWith("#" & slotName):
-          var slot = result.slots[key]
-          mergeInference(slot, SlotInference(kind: skDynamic, writes: 1,
-                                             reason: "written from outside the class"))
-          result.slots[key] = slot
-    for key, write in found.pairs:
-      let slotName = key.split('#', maxsplit = 1)[^1]
-      if slotName in localNames:
-        continue
-      var slot = result.slots.getOrDefault(key, SlotInference(kind: skDynamic))
-      mergeInference(slot, write)
-      result.slots[key] = slot
+    if msg.receiver != nil and msg.receiver.kind == nkIdent and msg.selector in ["new", "basicNew"]:
+      let cls = msg.receiver.IdentNode.name
+      if cls in classes: return SlotInference(kind: skObject, className: cls, conclusive: true)
+    let left = kind(msg.receiver, locals, owner, classSide)
+    if msg.arguments.len == 1:
+      let right = kind(msg.arguments[0], locals, owner, classSide)
+      if left.kind in {skInt, skFloat} and left.kind == right.kind and left.conclusive and right.conclusive:
+        if msg.selector in ["+", "-", "*"]: return left
+        if msg.selector in ["=", "<", ">", "<=", ">="]: return SlotInference(kind: skBool, conclusive: true)
+    let selfSend = msg.receiver != nil and msg.receiver.kind == nkPseudoVar and msg.receiver.PseudoVarNode.name == "self"
+    let index = target(msg.selector, if selfSend: owner elif left.kind == skObject: left.className else: "", classSide and selfSend)
+    returns.getOrDefault(methodKey(index), unknown())
 
-  for key, inference in result.slots.pairs:
-    if inference.writes == 0:
-      result.unresolved.add(key)
+  # Bounded fixed point of call-site argument and method-return candidate facts.
+  for iteration in 0..<8:
+    var nextParameters: Table[string, SlotInference]
+    var nextReturns: Table[string, SlotInference]
+    proc scan(node: Node, locals: var Table[string, SlotInference], owner: string, classSide: bool) =
+      if node == nil: return
+      let blockNode = methodBody(node)
+      if blockNode != nil:
+        var nested = locals
+        for name in blockNode.parameters & blockNode.temporaries: nested[name] = unknown()
+        for statement in blockNode.body: scan(statement, nested, owner, classSide)
+        return
+      if node.kind == nkAssign:
+        scan(node.AssignNode.expression, locals, owner, classSide)
+        locals[node.AssignNode.variable] = kind(node.AssignNode.expression, locals, owner, classSide)
+        return
+      if node.kind == nkMessage:
+        let msg = node.MessageNode
+        if msg.selector in ["selector:put:", "classSelector:put:"]: return
+        let receiver = kind(msg.receiver, locals, owner, classSide)
+        let selfSend = msg.receiver != nil and msg.receiver.kind == nkPseudoVar and msg.receiver.PseudoVarNode.name == "self"
+        let index = target(msg.selector, if selfSend: owner elif receiver.kind == skObject: receiver.className else: "", classSide and selfSend)
+        if index >= 0:
+          for i, arg in msg.arguments:
+            let key = methodKey(index) & ":" & $i
+            var evidence = nextParameters.getOrDefault(key)
+            combine(evidence, kind(arg, locals, owner, classSide))
+            nextParameters[key] = evidence
+      for child in children(node): scan(child, locals, owner, classSide)
+    for index, methodInfo in methods:
+      var locals: Table[string, SlotInference]
+      for i, name in methodInfo.body.parameters:
+        locals[name] = parameters.getOrDefault(methodKey(index) & ":" & $i, unknown())
+      for name in methodInfo.body.temporaries: locals[name] = unknown()
+      var answer: SlotInference
+      for statement in methodInfo.body.body:
+        scan(statement, locals, methodInfo.owner, methodInfo.classSide)
+        if statement.kind == nkReturn:
+          combine(answer, kind(statement.ReturnNode.expression, locals, methodInfo.owner, methodInfo.classSide))
+      if answer.writes > 0: nextReturns[methodKey(index)] = answer
+    var mainLocals: Table[string, SlotInference]
+    for node in nodes: scan(node, mainLocals, "", false)
+    parameters = nextParameters
+    returns = nextReturns
+
+  result.slots = initTable[string, SlotInference]()
+  for name, cls in classes:
+    for slot in cls.getAllSlots(): result.slots[name & "#" & slot.name] = SlotInference()
+  var collected = result.slots
+  var outside: HashSet[string]
+  proc assignments(node: Node, locals: var Table[string, SlotInference], owner: string,
+                   classSide: bool) =
+    if node == nil: return
+    let blockNode = methodBody(node)
+    if blockNode != nil:
+      var nested = locals
+      for name in blockNode.parameters & blockNode.temporaries: nested[name] = unknown()
+      for statement in blockNode.body: assignments(statement, nested, owner, classSide)
+      return
+    if node.kind == nkAssign:
+      let assignment = node.AssignNode
+      let evidence = kind(assignment.expression, locals, owner, classSide)
+      let key = owner & "#" & assignment.variable
+      if not classSide and assignment.variable notin locals and key in collected:
+        var slot = collected[key]
+        combine(slot, evidence)
+        collected[key] = slot
+      else: locals[assignment.variable] = evidence
+    elif node.kind == nkNamedAccess and node.NamedAccessNode.isAssignment:
+      outside.incl(node.NamedAccessNode.memberName)
+    elif node.kind == nkSlotAccess and node.SlotAccessNode.isAssignment:
+      outside.incl(node.SlotAccessNode.slotName)
+    for child in children(node): assignments(child, locals, owner, classSide)
+  for index, methodInfo in methods:
+    var locals: Table[string, SlotInference]
+    for i, name in methodInfo.body.parameters:
+      locals[name] = parameters.getOrDefault(methodKey(index) & ":" & $i, unknown())
+    for name in methodInfo.body.temporaries: locals[name] = unknown()
+    for statement in methodInfo.body.body:
+      assignments(statement, locals, methodInfo.owner, methodInfo.classSide)
+  var mainLocals: Table[string, SlotInference]
+  for node in nodes:
+    if node.kind != nkMessage or node.MessageNode.selector notin ["selector:put:", "classSelector:put:"]:
+      assignments(node, mainLocals, "", false)
+  for key, evidence in collected.mpairs:
+    let name = key.split('#')[^1]
+    if name in outside:
+      combine(evidence, unknown("written from outside the class"))
+    if evidence.writes == 0: result.unresolved.add(key)
+  result.slots = collected
 
 proc summarise*(inference: InferenceResult): string =
-  ## Auditable one-line summary; used by tests and the optional report flag.
   var counts: array[SlotKind, int]
-  for _, slot in inference.slots.pairs:
-    inc counts[slot.kind]
-  result = "slots=" & $inference.slots.len &
-           " int=" & $counts[skInt] &
-           " float=" & $counts[skFloat] &
-           " bool=" & $counts[skBool] &
-           " string=" & $counts[skString] &
-           " object=" & $counts[skObject] &
-           " dynamic=" & $counts[skDynamic] &
-           " unresolved=" & $inference.unresolved.len
+  for slot in inference.slots.values: inc counts[slot.kind]
+  "slots=" & $inference.slots.len & " int=" & $counts[skInt] &
+    " float=" & $counts[skFloat] & " bool=" & $counts[skBool] &
+    " string=" & $counts[skString] & " symbol=" & $counts[skSymbol] &
+    " object=" & $counts[skObject] & " dynamic=" & $counts[skDynamic] &
+    " unresolved=" & $inference.unresolved.len
+
+proc observedKind(tag: string): string =
+  ## Map an observation tag to the static candidate vocabulary.
+  let colon = tag.find(':')
+  if colon < 0: return ""
+  let kind = tag[colon + 1 .. ^1]
+  case kind
+  of "Integer": "skInt"
+  of "Float": "skFloat"
+  of "Boolean": "skBool"
+  of "String": "skString"
+  of "Symbol": "skSymbol"
+  of "Nil": "Nil"
+  else:
+    if kind.startsWith("Object:"): "skObject" else: ""
+
+proc reconcile(staticCandidate: SlotInference, counts: JsonNode): tuple[effective: string,
+                                                                      source, reason: string] =
+  ## Observations can only ever *reject* a static candidate here, or propose one
+  ## when the module was silent. A dynamic slot is never narrowed as a result of
+  ## a partial run, and any disagreement keeps it dynamic.
+  var writes: seq[string]
+  var nilWritten = false
+  if counts != nil:
+    for tag, count in counts:
+      if not tag.startsWith("write:") or count.getInt == 0: continue
+      let kind = observedKind(tag)
+      if kind == "Nil": nilWritten = true
+      elif kind.len > 0 and kind notin writes: writes.add(kind)
+
+  # Smalltalk's numeric tower makes Integer+Float together mean Float: a Float
+  # slot already accepts Integer by conversion. Treating the pair as a conflict
+  # would discard the common "starts at 0, later holds 2.5" case.
+  var numericOnly = writes.len > 0
+  for kind in writes:
+    if kind notin ["skInt", "skFloat"]: numericOnly = false
+  if numericOnly and "skFloat" in writes:
+    if nilWritten:
+      return ("skDynamic", "observations", "nil observed at runtime")
+    if staticCandidate.kind in {skDynamic, skInt, skFloat}:
+      return ("skFloat", "numeric-widening",
+              "Integer and Float observed; Float accepts Integer")
+
+  if nilWritten and staticCandidate.kind != skDynamic:
+    return ("skDynamic", "observations", "nil observed at runtime")
+  if staticCandidate.kind != skDynamic:
+    for kind in writes:
+      if kind != $staticCandidate.kind:
+        return ("skDynamic", "observations", "contradicted by observations")
+    return ($staticCandidate.kind, "static+observations", staticCandidate.reason)
+  if writes.len == 1 and not nilWritten:
+    return (writes[0], "observed-proposal", "single observed write kind, still unproven")
+  return ($staticCandidate.kind, "static", staticCandidate.reason)
+
+proc inferenceReport*(inference: InferenceResult, feedback: JsonNode = nil): JsonNode =
+  ## Static and observed facts stay separate; the merged field names its evidence.
+  result = %*{"schema": 1, "semantics": "advisory-no-storage-narrowing", "slots": {}}
+  var keys: seq[string]
+  for key in inference.slots.keys: keys.add(key)
+  if feedback != nil and feedback["slots"].kind == JObject:
+    for key in feedback["slots"].keys:
+      if key notin keys: keys.add(key)
+  keys.sort()
+  for key in keys:
+    let slot = inference.slots.getOrDefault(key, unknown("not declared in module"))
+    let counts = if feedback != nil and feedback["slots"].hasKey(key): feedback["slots"][key] else: nil
+    let merged = reconcile(slot, counts)
+    result["slots"][key] = %*{"staticCandidate": $slot.kind, "objectClass": slot.className,
+      "nilSeen": slot.nilSeen, "writes": slot.writes, "reason": slot.reason,
+      "effectiveCandidate": merged.effective, "evidence": merged.source,
+      "effectiveReason": merged.reason,
+      "requiresGuard": true,
+      "storageNarrowed": false}
+    if counts != nil:
+      result["slots"][key]["observations"] = counts

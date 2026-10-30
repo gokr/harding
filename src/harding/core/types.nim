@@ -589,6 +589,8 @@ var
 # nil instance - singleton instance of UndefinedObject
 # Initialized during initCoreClasses, used by nilValue()
 var nilInstance*: Instance = nil
+var slotObservationHook* {.threadvar.}: proc(cls: Class, index: int, value: NodeValue,
+                                            event: string) {.nimcall.}
 
 # ============================================================================
 # Truthiness check for NodeValue
@@ -1340,6 +1342,27 @@ proc applySlotDefaults(instance: Instance, cls: Class, seen: var seq[Class],
   for parent in cls.superclasses:
     applySlotDefaults(instance, parent, seen, assigned)
 
+proc contractZero(contract: SlotContract): NodeValue =
+  ## A primitive contract can never be satisfied by nil, so an undeclared
+  ## default must still be that type's zero value.
+  case contract.kind
+  of scInteger: NodeValue(kind: vkInt, intVal: 0)
+  of scFloat: NodeValue(kind: vkFloat, floatVal: 0.0)
+  of scBoolean: NodeValue(kind: vkBool, boolVal: false)
+  of scString: NodeValue(kind: vkString, strVal: "")
+  of scSymbol: NodeValue(kind: vkSymbol, symVal: "")
+  else: nilValue()
+
+proc applyContractZeros(instance: Instance) =
+  ## Seed primitives whose contract has no declared default. Object and dynamic
+  ## slots stay nil; declared defaults take precedence over this.
+  for index, name in instance.class.allSlotNames:
+    if instance.slots[index].kind == vkNil or
+       (instance.slots[index].kind == vkInstance and instance.slots[index].instVal == nilInstance):
+      let zero = contractZero(instance.class.slotContract(name))
+      if zero.kind != vkNil:
+        instance.slots[index] = zero
+
 proc slotObjectMatches*(actual, expected: Class): bool =
   ## Class identity, not name equality, defines interpreted conformance.
   var seen: seq[Class]
@@ -1393,6 +1416,10 @@ proc newInstance*(cls: Class): Instance =
     var seen: seq[Class]
     var assigned: seq[string]
     applySlotDefaults(result, cls, seen, assigned)
+    applyContractZeros(result)
+    if slotObservationHook != nil:
+      for index, value in result.slots:
+        slotObservationHook(cls, index, value, "initial")
   result.isNimProxy = false
   result.nimValue = NimValueDefault
 
@@ -1453,9 +1480,10 @@ proc readInstanceSlot*(inst: Instance, index: int): NodeValue =
   ## Read without mirroring native fields into a second VM slot array.
   if not inst.hasInstanceSlot(index):
     return nilValue()
-  if inst.nativeSlots != nil:
-    return inst.nativeSlots.getters[index](inst.nimValue)
-  return inst.slots[index]
+  result = if inst.nativeSlots != nil: inst.nativeSlots.getters[index](inst.nimValue)
+           else: inst.slots[index]
+  if slotObservationHook != nil:
+    slotObservationHook(inst.class, index, result, "read")
 
 proc writeInstanceSlot*(inst: Instance, index: int, value: NodeValue) =
   ## Write to the authoritative physical storage for the receiver.
@@ -1467,6 +1495,8 @@ proc writeInstanceSlot*(inst: Instance, index: int, value: NodeValue) =
       discard inst.nativeSlots.setters[index](inst.nimValue, checked.value)
     else:
       inst.slots[index] = checked.value
+    if slotObservationHook != nil:
+      slotObservationHook(inst.class, index, checked.value, "write")
 
 proc getJsonSpec*(cls: Class): JsonSpec =
   if cls == nil:

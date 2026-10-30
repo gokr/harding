@@ -1,3 +1,4 @@
+import ../core/type_feedback
 import std/[strutils, os, terminal, rdstdin, tables]
 import ../core/types
 import ../core/scheduler
@@ -171,6 +172,7 @@ proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxSt
     return ("", "File not found: " & filename)
 
   let source = readFile(filename)
+  recordFeedbackSource(filename, source)
 
   # Auto-wrap script source in a block for execution
   # This enables temporary variable declarations like | counter total |
