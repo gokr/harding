@@ -85,6 +85,15 @@ type
     compiledForClassVersion*: int
     compiledForJsonVersion*: int
 
+  SlotContractKind* = enum
+    scDynamic, scInteger, scFloat, scBoolean, scString, scSymbol, scObject
+
+  SlotContract* = object
+    kind*: SlotContractKind
+    objectType*: Class
+
+  SlotTypeError* = object of CatchableError
+
   Class* {.acyclic.} = ref object of RootObj
     ## Class object - defines structure and behavior for instances
     # Instance methods (methods that instances of this class will have)
@@ -101,6 +110,7 @@ type
     readableSlotNames*: seq[string]         # Slots readable through direct access syntax
     writableSlotNames*: seq[string]         # Slots writable through direct access syntax
     slotDefaults*: Table[string, NodeValue] # Declared defaults from `#{#x -> 0}`
+    slotContracts*: Table[string, SlotContract]
 
     # Inheritance
     superclasses*: seq[Class]               # Direct superclasses
@@ -127,6 +137,7 @@ type
 
   NativeSlotStorage* = ref object
     names*: seq[string]
+    contracts*: seq[SlotContract]
     getters*: seq[proc(storage: pointer): NodeValue {.nimcall.}]
     setters*: seq[proc(storage: pointer, value: NodeValue): NodeValue {.nimcall.}]
 
@@ -1290,6 +1301,86 @@ const NimValueDefault* = nil
 template nimValueIsSet*(nv: pointer): bool = nv != nil
 template nimValueIsNil*(nv: pointer): bool = nv == nil
 
+proc findSlotContract(cls: Class, name: string,
+                      seen: var seq[Class]): tuple[found: bool, contract: SlotContract] =
+  if cls == nil or cls in seen: return
+  seen.add(cls)
+  if name in cls.slotContracts: return (true, cls.slotContracts[name])
+  for parent in cls.superclasses:
+    let inherited = findSlotContract(parent, name, seen)
+    if inherited.found: return inherited
+
+proc slotContract*(cls: Class, name: string): SlotContract =
+  ## Resolve a declaration in parent order, including secondary parents.
+  var seen: seq[Class]
+  findSlotContract(cls, name, seen).contract
+
+proc declaredSlotDefault*(cls: Class, name: string): tuple[found: bool, value: NodeValue] =
+  var pending = @[cls]
+  var seen: seq[Class]
+  while pending.len > 0:
+    let current = pending.pop()
+    if current == nil or current in seen: continue
+    seen.add(current)
+    if name in current.slotDefaults: return (true, current.slotDefaults[name])
+    for index in countdown(current.superclasses.high, 0):
+      pending.add(current.superclasses[index])
+
+proc applySlotDefaults(instance: Instance, cls: Class, seen: var seq[Class],
+                       assigned: var seq[string]) =
+  if cls == nil or cls in seen: return
+  seen.add(cls)
+  for name, initial in cls.slotDefaults:
+    if name notin assigned:
+      assigned.add(name)
+      for index, slot in instance.class.allSlotNames:
+        if slot == name:
+          instance.slots[index] = initial
+          break
+  for parent in cls.superclasses:
+    applySlotDefaults(instance, parent, seen, assigned)
+
+proc slotObjectMatches*(actual, expected: Class): bool =
+  ## Class identity, not name equality, defines interpreted conformance.
+  var seen: seq[Class]
+  proc matches(current: Class): bool =
+    if current == nil or current in seen: return false
+    if current == expected: return true
+    seen.add(current)
+    for parent in current.superclasses:
+      if matches(parent): return true
+    false
+  expected != nil and matches(actual)
+
+proc normalizeSlotValue*(contract: SlotContract, value: NodeValue,
+                        objectMatches = false): tuple[value: NodeValue, error: string] =
+  ## Validate without storing. A failure cannot overwrite the old slot value.
+  result.value = value
+  case contract.kind
+  of scDynamic: return
+  of scObject:
+    if isNilValue(value):
+      result.value = nilValue()
+      return
+    if objectMatches or (value.kind == vkInstance and value.instVal != nil and
+        slotObjectMatches(value.instVal.class, contract.objectType)):
+      return
+  of scInteger:
+    if value.kind == vkInt: return
+  of scFloat:
+    if value.kind == vkFloat: return
+    if value.kind == vkInt:
+      result.value = NodeValue(kind: vkFloat, floatVal: float(value.intVal))
+      return
+  of scBoolean:
+    if value.kind == vkBool: return
+  of scString:
+    if value.kind == vkString: return
+  of scSymbol:
+    if value.kind == vkSymbol: return
+  result.error = "Slot declared " & $contract.kind & " received " &
+    (if isNilValue(value): "nil" else: $value.kind)
+
 proc newInstance*(cls: Class): Instance =
   ## Create a new Instance of the given Class (ikObject variant). Slots start nil
   ## and any declared default (`#{#x -> 0}`) seeds its slot here, before
@@ -1299,19 +1390,9 @@ proc newInstance*(cls: Class): Instance =
   for i in 0..<result.slots.len:
     result.slots[i] = nilValue()
   if cls != nil:
-    # Inherited declared defaults apply too, so walk the parent chain.
-    var owners: seq[Class] = @[]
-    var current = cls
-    while current != nil:
-      owners.add(current)
-      current = if current.superclasses.len > 0: current.superclasses[0] else: nil
-    for index, name in cls.allSlotNames:
-      for owner in owners:
-        if owner.slotDefaults.len > 0 and owner.slotDefaults.hasKey(name):
-          let declared = owner.slotDefaults[name]
-          if declared.kind != vkNil:
-            result.slots[index] = declared
-          break
+    var seen: seq[Class]
+    var assigned: seq[string]
+    applySlotDefaults(result, cls, seen, assigned)
   result.isNimProxy = false
   result.nimValue = NimValueDefault
 
@@ -1337,7 +1418,7 @@ proc newTableInstance*(cls: Class, entries: Table[NodeValue, NodeValue]): Instan
 
 proc setSlotDefault*(cls: Class, name: string, value: NodeValue) =
   ## Record a declared slot default; instances are seeded from it at allocation.
-  if cls != nil and value.kind != vkNil:
+  if cls != nil:
     cls.slotDefaults[name] = value
 
 proc getSlotIndex*(cls: Class, name: string): int =
@@ -1352,6 +1433,12 @@ proc validateNativeSlots*(inst: Instance) =
   if inst.nativeSlots != nil and (inst.class == nil or
      inst.class.allSlotNames != inst.nativeSlots.names):
     raise newException(ValueError, "Native slot layout no longer matches the live class")
+  if inst.nativeSlots != nil and inst.nativeSlots.contracts.len > 0:
+    for index, name in inst.nativeSlots.names:
+      let expected = inst.nativeSlots.contracts[index]
+      let actual = inst.class.slotContract(name)
+      if expected.kind != actual.kind or expected.objectType != actual.objectType:
+        raise newException(ValueError, "Native slot contract no longer matches the live class")
 
 proc hasInstanceSlot*(inst: Instance, index: int): bool =
   ## Test a physical slot in VM or explicitly bridged native storage.
@@ -1373,10 +1460,13 @@ proc readInstanceSlot*(inst: Instance, index: int): NodeValue =
 proc writeInstanceSlot*(inst: Instance, index: int, value: NodeValue) =
   ## Write to the authoritative physical storage for the receiver.
   if inst.hasInstanceSlot(index):
+    let checked = normalizeSlotValue(inst.class.slotContract(inst.class.allSlotNames[index]), value)
+    if checked.error.len > 0:
+      raise newException(SlotTypeError, checked.error)
     if inst.nativeSlots != nil:
-      discard inst.nativeSlots.setters[index](inst.nimValue, value)
+      discard inst.nativeSlots.setters[index](inst.nimValue, checked.value)
     else:
-      inst.slots[index] = value
+      inst.slots[index] = checked.value
 
 proc getJsonSpec*(cls: Class): JsonSpec =
   if cls == nil:

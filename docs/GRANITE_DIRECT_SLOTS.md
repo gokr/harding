@@ -107,9 +107,9 @@ Validation completed for this change set:
 
 These are the named validation gates, not a claim that every repository test ran.
 
-This optimization does not complete declared-slot semantics: the interpreter
-currently stores declared values dynamically and does not enforce all declared
-kinds; native setters retain the conversions introduced earlier. Symbol fields,
-object-class enforcement and typed-reference inheritance are not implemented by
-this slice. These existing gaps must not be treated as proof of language-wide
-typed-slot parity. Static/dynamic inference remains subsequent work.
+At the time of this optimization, declared-slot enforcement was incomplete.
+The subsequent contract work is documented in `DECLARED_SLOTS.md`: Symbol fields,
+primitive rejection/conversion and object constraints now have shared semantics.
+Typed-reference inheritance and static/dynamic inference remain subsequent work.
+The performance observations above belong to the direct-access change, not to
+the later contract implementation.

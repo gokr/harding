@@ -45,7 +45,7 @@ proc nativeSlotType(slot: SlotDef): string =
   of tcInt: "int"
   of tcFloat: "float64"
   of tcBool: "bool"
-  of tcString: "string"
+  of tcString, tcSymbol: "string"
   else: ""
 
 proc boxExpression(slot: SlotDef, source: string): string =
@@ -55,6 +55,7 @@ proc boxExpression(slot: SlotDef, source: string): string =
   of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {source})")
   of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {source})")
   of tcString: fmt("NodeValue(kind: vkString, strVal: {source})")
+  of tcSymbol: fmt("NodeValue(kind: vkSymbol, symVal: {source})")
   else: source
 
 proc unboxExpression(slot: SlotDef, source: string): string =
@@ -65,6 +66,10 @@ proc unboxExpression(slot: SlotDef, source: string): string =
   of tcFloat: fmt("compiledSlotFloat({source})")
   of tcBool: fmt("compiledSlotBool({source})")
   of tcString: fmt("compiledSlotString({source})")
+  of tcSymbol: fmt("compiledSlotSymbol({source})")
+  of tcObject:
+    if slot.objectClass.len > 0: fmt("checkedCompiledSlot({source}, scObject, \"{slot.objectClass}\")")
+    else: source
   else: source
 
 proc genClassConstants*(cls: ClassInfo): string =
@@ -125,7 +130,7 @@ proc genClassConstants*(cls: ClassInfo): string =
         of tcInt: "0"
         of tcFloat: "0.0"
         of tcBool: "false"
-        of tcString: "\"\""
+        of tcString, tcSymbol: "\"\""
         else: "NodeValue(kind: vkNil)"
       output.add(fmt("  result.{mangleSlot(slot.name)} = {zero}\n"))
   output.add("\n")
@@ -242,14 +247,36 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   let names = slots.mapIt("\"" & it.name & "\"").join(", ")
   output.add(fmt("  registerCompiledSlotNames(\"{cls.name}\", @[{names}])\n"))
   for slot in slots:
+    let contractKind = case slot.constraint
+      of tcInt: "scInteger"
+      of tcFloat: "scFloat"
+      of tcBool: "scBoolean"
+      of tcString: "scString"
+      of tcSymbol: "scSymbol"
+      of tcObject:
+        if slot.objectClass.len > 0: "scObject" else: "scDynamic"
+      else: "scDynamic"
+    output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.slotContracts[\"{slot.name}\"] = SlotContract(kind: {contractKind})\n"))
+    if slot.objectClass.len > 0:
+      output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.slotContracts[\"{slot.name}\"].objectType = ensureCompiledClass(\"{slot.objectClass}\")\n"))
     if slot.defaultValue.len > 0:
       let literal = case slot.constraint
         of tcInt: fmt("NodeValue(kind: vkInt, intVal: {slot.defaultValue})")
         of tcFloat: fmt("NodeValue(kind: vkFloat, floatVal: {slot.defaultValue})")
         of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {slot.defaultValue})")
         of tcString: fmt("NodeValue(kind: vkString, strVal: {slot.defaultValue})")
+        of tcSymbol: fmt("NodeValue(kind: vkSymbol, symVal: {slot.defaultValue})")
         else: "NodeValue(kind: vkNil)"
       output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.setSlotDefault(\"{slot.name}\", {literal})\n"))
+    else:
+      let initial = case slot.constraint
+        of tcInt: "NodeValue(kind: vkInt, intVal: 0)"
+        of tcFloat: "NodeValue(kind: vkFloat, floatVal: 0.0)"
+        of tcBool: "NodeValue(kind: vkBool, boolVal: false)"
+        of tcString: "NodeValue(kind: vkString, strVal: \"\")"
+        of tcSymbol: "NodeValue(kind: vkSymbol, symVal: \"\")"
+        else: "NodeValue(kind: vkNil)"
+      output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.setSlotDefault(\"{slot.name}\", {initial})\n"))
   # Slot permissions inherit parent-first, as in newClass; dedupe by name.
   let readable = inheritedSlotPermissions(cls, true).mapIt("\"" & it & "\"").join(", ")
   let writable = inheritedSlotPermissions(cls, false).mapIt("\"" & it & "\"").join(", ")
@@ -400,6 +427,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add("# Method Registration\n")
     output.add("#####################\n\n")
     output.add("proc registerCompiledMethods*() =\n")
+    for className in compiledClasses:
+      output.add(fmt("  registerCompiledSlotNames(\"{className}\", @[])\n"))
     if slotRegCode.len > 0:
       output.add(slotRegCode)
     else:
@@ -530,6 +559,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   output.add("# Method Registration\n")
   output.add("#####################\n\n")
   output.add("proc registerCompiledMethods*() =\n")
+  for className in compiledClasses:
+    output.add(fmt("  registerCompiledSlotNames(\"{className}\", @[])\n"))
   if registrationCode.len > 0 or slotRegCode.len > 0:
     output.add(registrationCode)
     output.add(slotRegCode)

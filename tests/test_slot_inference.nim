@@ -1,6 +1,5 @@
 import std/[unittest, tables, strutils]
 import ../src/harding/parser/parser
-import ../src/harding/core/types
 import ../src/harding/compiler/analyzer
 import ../src/harding/compiler/slot_inference
 import ../src/harding/compiler/types

@@ -50,7 +50,27 @@ proc extractClassInfoFromInterpreter*(interp: Interpreter): Table[string, ClassI
         liveClasses[cls.name] = cls
         let classInfo = newClassInfo(cls.name)
         for slotName in cls.allSlotNames:
-          discard classInfo.addSlot(slotName, tcObject)
+          let contract = cls.slotContract(slotName)
+          let constraint = case contract.kind
+            of scInteger: tcInt
+            of scFloat: tcFloat
+            of scBoolean: tcBool
+            of scString: tcString
+            of scSymbol: tcSymbol
+            of scObject: tcObject
+            else: tcNone
+          let objectClass = if contract.objectType != nil: contract.objectType.name else: ""
+          let initial = cls.declaredSlotDefault(slotName)
+          var defaultText = ""
+          if initial.found:
+            case initial.value.kind
+            of vkInt: defaultText = $initial.value.intVal
+            of vkFloat: defaultText = $initial.value.floatVal
+            of vkBool: defaultText = $initial.value.boolVal
+            of vkString: defaultText = initial.value.strVal.escape()
+            of vkSymbol: defaultText = initial.value.symVal.escape()
+            else: discard
+          discard classInfo.addSlot(slotName, constraint, objectClass, defaultText)
         for selector, methodBlock in cls.methods:
           classInfo.instanceSelectors.add(selector)
           if methodBlock.body.len == 1:

@@ -22,7 +22,8 @@ are 0, 0.0, false, empty String and empty Symbol respectively. Object-constraine
 slots accept nil and instances of the declared class or subclasses, including
 multiple-parent ancestry. Dynamic slots remain unrestricted. Defaults are applied
 at allocation, including `basicNew`, before ordinary `initialize` behavior.
-These are the approved contract; enforcement parity is work in progress.
+These are the approved contract; see `DECLARED_SLOTS.md` for enforcement and
+validation details.
 
 ## Candidate additional scalars
 

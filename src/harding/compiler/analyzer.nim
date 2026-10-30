@@ -149,64 +149,14 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
                  else:
                    nil
   
-  # `derivePublic: #{#x -> Integer, #y -> nil}` is the slot-hint form: symbol or
-  # string keys name slots, values name a primitive class, or `nil` to declare
-  # the slot explicitly dynamic. This needs no parser change: a table literal is
-  # already ordinary syntax.
-  if typeArg != nil and (typeArg.kind == nkTable or
-      (typeArg.kind == nkLiteral and typeArg.LiteralNode.value.kind == vkTable)):
-    var entries: seq[tuple[key: Node, value: Node]] = @[]
-    if typeArg.kind == nkTable:
-      entries = typeArg.TableNode.entries
-    else:
-      discard  # constant table: handled below through cachedValue
-    if entries.len == 0 and typeArg.kind == nkLiteral:
-      # Constant-folded table: recover pairs from its NodeValue.
-      let cached = typeArg.LiteralNode.value
-      if cached.kind == vkTable:
-        var parts: seq[string] = @[]
-        for key, value in cached.tableVal.pairs:
-          let keyName = if key.kind == vkSymbol: key.symVal
-                        elif key.kind == vkString: key.strVal else: ""
-          if keyName.len == 0:
-            continue
-          if value.kind == vkNil:
-            parts.add(keyName & ": nil")
-          elif value.kind == vkClass and value.classVal != nil:
-            parts.add(keyName & ": " & value.classVal.name)
-          elif value.kind == vkSymbol:
-            parts.add(keyName & ": " & value.symVal)
-          elif value.kind == vkString:
-            parts.add(keyName & ": " & value.strVal)
-        return (className, parent, "#(" & parts.join(" ") & ")")
-    else:
-      var parts: seq[string] = @[]
-      for (key, value) in entries:
-        var keyName = ""
-        if key.kind == nkLiteral:
-          if key.LiteralNode.value.kind == vkSymbol: keyName = key.LiteralNode.value.symVal
-          elif key.LiteralNode.value.kind == vkString: keyName = key.LiteralNode.value.strVal
-        elif key.kind == nkIdent:
-          keyName = key.IdentNode.name
-        if keyName.len == 0:
-          continue
-        var hint = "nil"
-        if value.kind == nkIdent:
-          hint = value.IdentNode.name
-        elif value.kind == nkPseudoVar:
-          hint = value.PseudoVarNode.name
-        elif value.kind == nkLiteral:
-          # A literal declares both type and default; keep its source spelling.
-          let literal = value.LiteralNode.value
-          case literal.kind
-          of vkInt: hint = $literal.intVal
-          of vkFloat: hint = $literal.floatVal
-          of vkBool: hint = (if literal.boolVal: "true" else: "false")
-          of vkString: hint = "\"" & literal.strVal & "\""
-          of vkSymbol: hint = literal.symVal
-          else: discard
-        parts.add(keyName & ": " & hint)
-      return (className, parent, "#(" & parts.join(" ") & ")")
+  if typeArg != nil and typeArg.kind == nkTable:
+    var names: seq[string]
+    for entry in typeArg.TableNode.entries:
+      if entry.key.kind == nkLiteral:
+        let key = entry.key.LiteralNode.value
+        if key.kind == vkString: names.add(key.strVal)
+        elif key.kind == vkSymbol: names.add(key.symVal)
+    return (className, parent, "#(" & names.join(" ") & ")")
 
   var typeList = ""
   if typeArg != nil:
@@ -273,6 +223,44 @@ proc extractAccessorInfo(node: Node, cls: ClassInfo) =
     cls.getterSlots = slotNames(msg.arguments[1])
     cls.setterSlots = slotNames(msg.arguments[2])
 
+proc applySlotDeclarations(node: Node, cls: ClassInfo) =
+  let expression = if node.kind == nkAssign: node.AssignNode.expression else: node
+  if expression == nil or expression.kind != nkMessage: return
+  let msg = expression.MessageNode
+  if msg.arguments.len == 0 or msg.arguments[0].kind != nkTable: return
+  for entry in msg.arguments[0].TableNode.entries:
+    if entry.key.kind != nkLiteral: continue
+    let key = entry.key.LiteralNode.value
+    let name = if key.kind == vkSymbol: key.symVal
+               elif key.kind == vkString: key.strVal else: ""
+    for slot in cls.slots.mitems:
+      if slot.name != name: continue
+      slot.constraint = tcNone
+      slot.objectClass = ""
+      slot.defaultValue = ""
+      if entry.value.kind == nkIdent:
+        let declared = entry.value.IdentNode.name
+        slot.constraint = parseTypeHint(declared)
+        if slot.constraint == tcNone or slot.constraint in {tcObject, tcBlock, tcArray, tcTable}:
+          slot.constraint = tcObject
+          slot.objectClass = declared
+      elif entry.value.kind == nkPseudoVar:
+        case entry.value.PseudoVarNode.name
+        of "true", "false":
+          slot.constraint = tcBool
+          slot.defaultValue = entry.value.PseudoVarNode.name
+        else: discard
+      elif entry.value.kind == nkLiteral:
+        let value = entry.value.LiteralNode.value
+        slot.constraint = constraintForNode(value.kind)
+        case value.kind
+        of vkInt: slot.defaultValue = $value.intVal
+        of vkFloat: slot.defaultValue = $value.floatVal
+        of vkBool: slot.defaultValue = $value.boolVal
+        of vkString: slot.defaultValue = value.strVal.escape()
+        of vkSymbol: slot.defaultValue = value.symVal.escape()
+        else: discard
+
 proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
                       parentClass: ClassInfo): ClassInfo =
   ## Analyze a class definition and create ClassInfo
@@ -288,6 +276,7 @@ proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
     let slots = parseTypeList(typeList)
     for (name, constraint, objectClass, defaultText) in slots:
       discard result.addSlot(name, constraint, objectClass, defaultText)
+  applySlotDeclarations(node, result)
   extractAccessorInfo(node, result)
 
 proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
@@ -328,6 +317,7 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
           for (name, constraint, objectClass, defaultText) in slots:
             discard cls.addSlot(name, constraint, objectClass, defaultText)
 
+        applySlotDeclarations(node, cls)
         extractAccessorInfo(node, cls)
 
   for node in nodes:

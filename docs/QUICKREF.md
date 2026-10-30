@@ -399,6 +399,34 @@ ColoredPoint := Object derive: #(color, x, y)
 ColoredPoint := Point derive: #(color)
 ```
 
+### Declared Slot Types and Defaults
+
+Array declarations such as `#(x, y)` remain fully dynamic. A table can declare
+slot types or primitive defaults (Symbol or String keys):
+
+```harding
+Banana := Object derivePublic: #().
+Record := Object derivePublic: #{#count -> Integer, #weight -> 5.0,
+    #enabled -> Boolean, #label -> "", #state -> #"", #fruit -> Banana,
+    #extra -> nil}.
+```
+
+- Integer, Float, Boolean, String and Symbol slots reject nil and incompatible
+  writes with catchable `Error`, preserving the old value.
+- Float accepts Integer writes by conversion; Integer does not accept Float.
+- Class-only primitive defaults are `0`, `0.0`, `false`, `""`, and `#""`.
+  Primitive literal values declare both the type and initial value.
+- Object constraints accept nil or an instance of the declared class or a
+  subclass, including secondary-parent ancestry. Their default is nil.
+- `-> nil` leaves the slot dynamic and initially nil.
+- Defaults are applied at allocation, including `basicNew`; `new` still invokes
+  ordinary `initialize`. Parent defaults/contracts are inherited in parent order.
+- Bare table keys remain evaluated expressions, not implicit Symbols.
+
+This contract applies to ordinary writes, generated setters, `::` writes and
+reflective `at:put:` writes in both engines. Native storage remains a Granite
+implementation detail; object-constrained fields are not yet typed Nim refs.
+
 ### Creating Instances
 
 ```smalltalk

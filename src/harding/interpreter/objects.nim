@@ -160,6 +160,8 @@ proc classJsonFieldOrderImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc classJsonResetImpl*(self: Class, args: seq[NodeValue]): NodeValue
 proc createDerivedClass(self: Class, slotNames: seq[string], readableSlotNames: seq[string],
                         writableSlotNames: seq[string], extraParents: seq[Class] = @[]): Class
+proc extractSlotNamesFromArray(arr: NodeValue): seq[string]
+proc applyDeclaredSlotDefaults(cls: Class, declaration: NodeValue)
 proc createGetterMethod*(cls: Class, slotName: string): BlockNode
 proc createSetterMethod*(cls: Class, slotName: string): BlockNode
 
@@ -1048,13 +1050,11 @@ proc classDeriveImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Create a new subclass with slot names
   ## Extract slot names first so newClass() can properly populate allSlotNames
   var slotNames: seq[string] = @[]
-  if args.len > 0 and args[0].kind == vkInstance and args[0].instVal.kind == ikArray:
-    let slotNameValues = args[0].instVal.elements
-    for slot in slotNameValues:
-      if slot.kind == vkSymbol:
-        slotNames.add(slot.symVal)
-  let newClass = createDerivedClass(self, slotNames, @[], @[])
-  return NodeValue(kind: vkClass, classVal: newClass)
+  if args.len > 0:
+    slotNames = extractSlotNamesFromArray(args[0])
+  let derived = createDerivedClass(self, slotNames, @[], @[])
+  if args.len > 0: applyDeclaredSlotDefaults(derived, args[0])
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc invalidateJsonPlansRecursive(cls: Class) =
   if cls == nil:
@@ -1068,92 +1068,6 @@ proc bumpJsonConfigVersion(cls: Class) =
     return
   cls.jsonConfigVersion += 1
   invalidateJsonPlansRecursive(cls)
-
-proc parseDefaultLiteral(text: string): NodeValue =
-  ## Turn a declared default spelling into its value. Empty text means the slot
-  ## has no declared default and keeps the ordinary nil initialisation.
-  if text.len == 0:
-    return nilValue()
-  if text == "nil":
-    return nilValue()
-  if text == "true":
-    return NodeValue(kind: vkBool, boolVal: true)
-  if text == "false":
-    return NodeValue(kind: vkBool, boolVal: false)
-  if text.len > 1 and text[0] == '"' and text[^1] == '"':
-    return NodeValue(kind: vkString, strVal: text[1 .. ^2])
-  try:
-    return NodeValue(kind: vkInt, intVal: parseInt(text))
-  except ValueError:
-    discard
-  try:
-    return NodeValue(kind: vkFloat, floatVal: parseFloat(text))
-  except ValueError:
-    discard
-  return nilValue()
-
-proc tableSlotDefaults(arr: NodeValue): seq[tuple[name: string, defaultText: string]] =
-  ## `#{#x -> 0}` pairs: the key names the slot, a literal value is its default.
-  result = @[]
-  var entries: Table[NodeValue, NodeValue]
-  if arr.kind == vkTable:
-    entries = arr.tableVal
-  elif arr.kind == vkInstance and arr.instVal != nil and arr.instVal.kind == ikTable:
-    entries = arr.instVal.entries
-  else:
-    return
-  for key, value in entries.pairs:
-    var name = ""
-    if key.kind == vkSymbol: name = key.symVal
-    elif key.kind == vkString: name = key.strVal
-    if name.len == 0:
-      continue
-    var defaultText = ""
-    case value.kind
-    of vkInt: defaultText = $value.intVal
-    of vkFloat: defaultText = $value.floatVal
-    of vkBool: defaultText = (if value.boolVal: "true" else: "false")
-    of vkString: defaultText = "\"" & value.strVal & "\""
-    else: discard
-    result.add((name, defaultText))
-
-proc tableSlotHint(arr: NodeValue, name: string): (ValueKind, string, string) =
-  ## (zeroKind, className, defaultText) for a declared slot. zeroKind is the
-  ## primitive kind a type-only declaration should default to.
-  var entries: Table[NodeValue, NodeValue]
-  if arr.kind == vkTable:
-    entries = arr.tableVal
-  elif arr.kind == vkInstance and arr.instVal != nil and arr.instVal.kind == ikTable:
-    entries = arr.instVal.entries
-  else:
-    return (vkInstance, "", "")
-  for key, value in entries.pairs:
-    var keyName = ""
-    if key.kind == vkSymbol: keyName = key.symVal
-    elif key.kind == vkString: keyName = key.strVal
-    if keyName != name:
-      continue
-    case value.kind
-    of vkInt, vkFloat, vkBool, vkString: return (value.kind, "", "")
-    of vkClass:
-      # `#x -> Integer` evaluates the class object, not a symbol.
-      if value.classVal != nil:
-        case value.classVal.name
-        of "Integer": return (vkInt, "", "")
-        of "Float": return (vkFloat, "", "")
-        of "Boolean", "True", "False": return (vkBool, "", "")
-        of "String", "Symbol": return (vkString, "", "")
-        else: return (vkInstance, value.classVal.name, "")
-      return (vkInstance, "", "")
-    of vkSymbol:
-      case value.symVal
-      of "Integer", "int": return (vkInt, "", "")
-      of "Float": return (vkFloat, "", "")
-      of "Boolean": return (vkBool, "", "")
-      of "String": return (vkString, "", "")
-      else: return (vkInstance, value.symVal, "")
-    else: return (vkInstance, "", "")
-  return (vkInstance, "", "")
 
 proc extractSlotNamesFromArray(arr: NodeValue): seq[string] =
   ## Extract slot names from a declaration: an array of names, or the hinted
@@ -1431,22 +1345,41 @@ proc createSetterMethod*(cls: Class, slotName: string): BlockNode =
   return meth
 
 proc applyDeclaredSlotDefaults(cls: Class, declaration: NodeValue) =
-  ## Seed declared defaults and type zeroes. `#{#x -> 0}` sets a value;
-  ## `#{#x -> Integer}` sets the type's zero; `#x -> nil` stays dynamic.
-  for (name, defaultText) in tableSlotDefaults(declaration):
-    if defaultText.len > 0:
-      cls.setSlotDefault(name, parseDefaultLiteral(defaultText))
-  for name in extractSlotNamesFromArray(declaration):
-    # A literal default was already applied above; only fill in type zeroes.
-    if cls.slotDefaults.hasKey(name):
-      continue
-    let (zeroKind, _, _) = tableSlotHint(declaration, name)
-    case zeroKind
-    of vkInt: cls.setSlotDefault(name, NodeValue(kind: vkInt, intVal: 0))
-    of vkFloat: cls.setSlotDefault(name, NodeValue(kind: vkFloat, floatVal: 0.0))
-    of vkBool: cls.setSlotDefault(name, NodeValue(kind: vkBool, boolVal: false))
-    of vkString: cls.setSlotDefault(name, NodeValue(kind: vkString, strVal: ""))
-    else: discard
+  ## Table values are class declarations, primitive defaults, or explicit nil.
+  var entries: Table[NodeValue, NodeValue]
+  if declaration.kind == vkTable: entries = declaration.tableVal
+  elif declaration.kind == vkInstance and declaration.instVal != nil and
+       declaration.instVal.kind == ikTable: entries = declaration.instVal.entries
+  else: return
+  for key, value in entries:
+    let name = if key.kind == vkSymbol: key.symVal
+               elif key.kind == vkString: key.strVal else: ""
+    if name.len == 0:
+      raise newException(SlotTypeError, "Slot declaration keys must be Symbols or Strings")
+    var contract: SlotContract
+    var initial = value
+    if isNilValue(value):
+      initial = nilValue()
+    elif value.kind == vkClass and value.classVal != nil:
+      case value.classVal.name
+      of "Integer": contract.kind = scInteger; initial = toValue(0)
+      of "Float": contract.kind = scFloat; initial = toValue(0.0)
+      of "Boolean": contract.kind = scBoolean; initial = toValue(false)
+      of "String": contract.kind = scString; initial = toValue("")
+      of "Symbol": contract.kind = scSymbol; initial = NodeValue(kind: vkSymbol, symVal: "")
+      else:
+        contract = SlotContract(kind: scObject, objectType: value.classVal)
+        initial = nilValue()
+    else:
+      case value.kind
+      of vkInt: contract.kind = scInteger
+      of vkFloat: contract.kind = scFloat
+      of vkBool: contract.kind = scBoolean
+      of vkString: contract.kind = scString
+      of vkSymbol: contract.kind = scSymbol
+      else: raise newException(SlotTypeError, "Slot declaration requires a class, primitive default or nil")
+    cls.slotContracts[name] = contract
+    cls.setSlotDefault(name, initial)
 
 proc classDeriveWithAccessorsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Compatibility wrapper for derivePublic:.
@@ -1539,7 +1472,9 @@ proc classDeriveGettersSettersImpl*(self: Class, args: seq[NodeValue]): NodeValu
   # Extract setter slot names
   let setterSlotNames = extractSlotNamesFromArray(args[2])
 
-  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, allSlotNames, getterSlotNames, setterSlotNames))
+  let derived = createDerivedClass(self, allSlotNames, getterSlotNames, setterSlotNames)
+  applyDeclaredSlotDefaults(derived, args[0])
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc classDeriveReadWriteParentsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Canonical class derivation entry point.
@@ -1555,10 +1490,9 @@ proc classDeriveReadWriteParentsImpl*(self: Class, args: seq[NodeValue]): NodeVa
   let writableSlotNames = extractSlotNamesFromArray(args[2])
   let extraParents = extractParentClasses(args[3])
 
-  return NodeValue(
-    kind: vkClass,
-    classVal: createDerivedClass(self, slotNames, readableSlotNames, writableSlotNames, extraParents)
-  )
+  let derived = createDerivedClass(self, slotNames, readableSlotNames, writableSlotNames, extraParents)
+  applyDeclaredSlotDefaults(derived, args[0])
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc classDerivePublicImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Create a new subclass with all declared slots readable and writable.
@@ -1580,7 +1514,9 @@ proc classDeriveReadWriteImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   let readableSlotNames = extractSlotNamesFromArray(args[1])
   let writableSlotNames = extractSlotNamesFromArray(args[2])
 
-  return NodeValue(kind: vkClass, classVal: createDerivedClass(self, allSlotNames, readableSlotNames, writableSlotNames))
+  let derived = createDerivedClass(self, allSlotNames, readableSlotNames, writableSlotNames)
+  applyDeclaredSlotDefaults(derived, args[0])
+  return NodeValue(kind: vkClass, classVal: derived)
 
 proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): NodeValue =
   ## Create a new class with multiple parents and define methods
@@ -1601,14 +1537,7 @@ proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): Nod
   if parents.len == 0:
     parents.add(self)
 
-  # Extract slot names
-  var slotNames: seq[string] = @[]
-  if args[1].kind == vkInstance and args[1].instVal.kind == ikArray:
-    for elem in args[1].instVal.elements:
-      if elem.kind == vkString or elem.kind == vkSymbol:
-        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
-        if name.len > 0:
-          slotNames.add(name)
+  let slotNames = extractSlotNamesFromArray(args[1])
 
   # Check type compatibility: first parent determines the instance type
   # All other parents must have the same or compatible instance type
@@ -1628,6 +1557,7 @@ proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): Nod
                   else:
                     "Anonymous"
   let theClass = newClass(superclasses =actualParents, slotNames = slotNames, name = className)
+  applyDeclaredSlotDefaults(theClass, args[1])
 
   # Execute method block if provided (to define/override methods and resolve conflicts)
   # For now, skip block execution - it requires an interpreter context
@@ -1647,14 +1577,7 @@ proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[No
   if args.len < 5:
     return nilValue()
 
-  # Extract slot names (from derive: parameter)
-  var slotNames: seq[string] = @[]
-  if args[0].kind == vkInstance and args[0].instVal.kind == ikArray:
-    for elem in args[0].instVal.elements:
-      if elem.kind == vkString or elem.kind == vkSymbol:
-        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
-        if name.len > 0:
-          slotNames.add(name)
+  var slotNames = extractSlotNamesFromArray(args[0])
 
   # Extract parents array
   var parents: seq[Class] = @[]
@@ -1667,13 +1590,8 @@ proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[No
   if parents.len == 0:
     parents.add(self)
 
-  # Extract additional slot names (from slots: parameter)
-  if args[2].kind == vkInstance and args[2].instVal.kind == ikArray:
-    for elem in args[2].instVal.elements:
-      if elem.kind == vkString or elem.kind == vkSymbol:
-        let name = if elem.kind == vkString: elem.strVal else: elem.symVal
-        if name.len > 0 and name notin slotNames:
-          slotNames.add(name)
+  for name in extractSlotNamesFromArray(args[2]):
+    if name notin slotNames: slotNames.add(name)
 
   # Extract getter slot names
   var getterSlotNames: seq[string] = @[]
@@ -1702,6 +1620,8 @@ proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[No
                   else:
                     "Anonymous"
   let newClass = newClass(superclasses = actualParents, slotNames = slotNames, name = className)
+  applyDeclaredSlotDefaults(newClass, args[0])
+  applyDeclaredSlotDefaults(newClass, args[2])
 
   # Generate getters for specified slots
   for slotName in getterSlotNames:
@@ -1781,6 +1701,8 @@ proc classSlotsImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
       slotNames = newSlotNames,
       name = cls[].name
     )
+    replacementClass.slotContracts = cls[].slotContracts
+    replacementClass.slotDefaults = cls[].slotDefaults
     replacementClass.jsonSpec = cls[].jsonSpec
     replacementClass.jsonConfigVersion = cls[].jsonConfigVersion + 1
     replacementClass.cachedJsonPlan = nil

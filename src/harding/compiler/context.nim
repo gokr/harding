@@ -91,10 +91,9 @@ proc getSlotIndex*(cls: ClassInfo, name: string): int =
 
 proc getSlotDef*(cls: ClassInfo, name: string): SlotDef =
   ## Get slot definition, searching inheritance chain
-  if name in cls.slotIndex:
-    let idx = cls.slotIndex[name]
-    if idx < cls.slots.len and cls.slots[idx].name == name:
-      return cls.slots[idx]
+  for slot in cls.slots:
+    if slot.name == name:
+      return slot
   if cls.parent != nil:
     return cls.parent.getSlotDef(name)
   return SlotDef(name: name, constraint: tcNone, index: -1, isInherited: true)

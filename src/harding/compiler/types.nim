@@ -17,6 +17,7 @@ type
     tcBlock           ## Block/closure
     tcArray           ## Array of values
     tcTable           ## Hash table
+    tcSymbol          ## Symbol payload (distinct from String)
 
 proc toNimType*(constraint: TypeConstraint): string =
   ## Convert type constraint to Nim type name
@@ -24,7 +25,7 @@ proc toNimType*(constraint: TypeConstraint): string =
   of tcNone: "NodeValue"
   of tcInt: "int"
   of tcFloat: "float64"
-  of tcString: "string"
+  of tcString, tcSymbol: "string"
   of tcBool: "bool"
   of tcObject, tcBlock, tcArray: "NodeValue"
   of tcTable: "Table[string, NodeValue]"
@@ -36,6 +37,7 @@ proc toValueKind*(constraint: TypeConstraint): string =
   of tcInt: "vkInt"
   of tcFloat: "vkFloat"
   of tcString: "vkString"
+  of tcSymbol: "vkSymbol"
   of tcBool: "vkBool"
   of tcObject: "vkObject"
   of tcBlock: "vkBlock"
@@ -49,6 +51,7 @@ proc parseTypeHint*(hint: string): TypeConstraint =
   of "float", "float64": tcFloat
   of "string", "str": tcString
   of "bool", "boolean": tcBool
+  of "symbol": tcSymbol
   of "object", "obj": tcObject
   of "block", "closure": tcBlock
   of "array": tcArray
@@ -81,11 +84,12 @@ proc constraintForNode*(kind: ValueKind): TypeConstraint =
   of vkTable: tcTable
   of vkClass: tcObject  # Class is treated as Object for now
   of vkInstance: tcObject  # Instance is treated as Object for now
-  of vkSymbol, vkNil: tcNone
+  of vkSymbol: tcSymbol
+  of vkNil: tcNone
 
 const typeConstraintNames*: array[TypeConstraint, string] = [
   "None", "Int", "Float", "String", "Bool",
-  "Object", "Block", "Array", "Table"
+  "Object", "Block", "Array", "Table", "Symbol"
 ]
 
 proc `$`*(constraint: TypeConstraint): string =

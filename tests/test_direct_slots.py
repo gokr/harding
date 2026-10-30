@@ -78,8 +78,8 @@ doAssert sendMessage(nil, native, "compute", @[]).intVal == 96
 registerSlotAccessor("DirectCounter", "count", originalGet, originalSet)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 12
 
-# VM-owned storage must never be cast to a compiled layout. It may legally hold
-# values outside the declared type until the interpreter enforces declarations.
+# VM-owned storage must never be cast to a compiled layout; declared writes are
+# checked, while an undeclared VM class can still supply dynamic values.
 let context = newSchedulerContext()
 var interp = context.mainProcess.getInterpreter()
 interp.hardingHome = "."
@@ -100,11 +100,12 @@ let vmCounter = interp.globals[]["VmCounter"]
 let (answer, error) = interp.doit("VmCounter bump")
 doAssert error.len == 0, error
 doAssert answer.intVal == 1
-let (_, mutateError) = interp.evalStatements("VmCounter::count := 1.5")
+let (rejectedWrite, mutateError) = interp.doit("[VmCounter::count := 1.5] on: Error do: [:ex | 23]")
 doAssert mutateError.len == 0, mutateError
-let (fractional, fractionalError) = interp.doit("VmCounter compute")
-doAssert fractionalError.len == 0, fractionalError
-doAssert fractional.floatVal == 10.5
+doAssert rejectedWrite.intVal == 23
+let (preserved, preservedError) = interp.doit("VmCounter compute")
+doAssert preservedError.len == 0, preservedError
+doAssert preserved.intVal == 9
 let (_, sideEffectError) = interp.evalStatements("Calls := 0")
 doAssert sideEffectError.len == 0
 let (assigned, assignError) = interp.doit("VmCounter once: [Calls := Calls + 1. 8]")
@@ -124,6 +125,17 @@ let (boundAnswer, boundError) = interp.doit("NativeCounter bump")
 doAssert boundError.len == 0, boundError
 doAssert boundAnswer.intVal == 3
 let liveClass = native.instVal.class
+let savedContract = liveClass.slotContracts["count"]
+liveClass.slotContracts["count"] = SlotContract(kind: scFloat)
+let incompatible = newClass_446972656374436F756E746572().toValue()
+doAssert not bindNativeInstanceTo(interp, incompatible)
+var contractRejected = false
+try:
+  discard getSlotValue(native, "count")
+except ValueError:
+  contractRejected = true
+doAssert contractRejected
+liveClass.slotContracts["count"] = savedContract
 liveClass.allSlotNames.add("layoutDrift")
 var rejected = false
 try:

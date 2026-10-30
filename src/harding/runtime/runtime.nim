@@ -182,6 +182,11 @@ proc registerCompiledClass*(name: string, allocator: CompiledProc) =
   if name notin compiledClasses:
     compiledClasses[name] = newClass(name = name)
 
+proc ensureCompiledClass*(name: string): Class =
+  if name notin compiledClasses:
+    compiledClasses[name] = newClass(name = name)
+  compiledClasses[name]
+
 proc compiledClassValue*(name: string): NodeValue =
   ## Return the class-side receiver for a compiled class.
   if name in compiledClasses:
@@ -1060,7 +1065,16 @@ proc bindNativeInstanceTo*(interp: Interpreter, receiver: NodeValue): bool =
     let key = name & "::" & slot
     if key notin slotGetters or key notin slotSetters:
       return false
+    let compiledContract = compiledClasses[name].slotContract(slot)
+    let liveContract = liveValue.classVal.slotContract(slot)
+    if compiledContract.kind != liveContract.kind:
+      return false
+    if compiledContract.kind == scObject:
+      if compiledContract.objectType == nil or liveContract.objectType == nil or
+         compiledContract.objectType.name != liveContract.objectType.name:
+        return false
     storage.names.add(slot)
+    storage.contracts.add(liveContract)
     storage.getters.add(slotGetters[key])
     storage.setters.add(slotSetters[key])
   # Publish only after all validation succeeds.
@@ -1110,7 +1124,7 @@ proc setSlotValue*(self: NodeValue, slotName: string, value: NodeValue): NodeVal
     if instance.class != nil:
       let index = instance.class.getSlotIndex(slotName)
       if index >= 0 and index < instance.slots.len:
-        instance.slots[index] = value
+        instance.writeInstanceSlot(index, value)
     return value
   if instance.nimValue == nil:
     return value
@@ -1370,41 +1384,36 @@ proc raiseCompiledError*(value: NodeValue): NodeValue =
                     "Exception"
   raise (ref CompiledHardingError)(value: value, msg: className & ": " & compiledExceptionMessage(value))
 
+proc checkedCompiledSlot*(value: NodeValue, kind: SlotContractKind,
+                          className = ""): NodeValue =
+  var matches = false
+  var contract = SlotContract(kind: kind)
+  if kind == scObject:
+    if className in compiledClasses:
+      contract.objectType = compiledClasses[className]
+    let actual = if value.kind == vkInstance and value.instVal != nil and value.instVal.class != nil:
+                   value.instVal.class.name else: ""
+    if actual.len > 0:
+      matches = walkCompiledHierarchy(actual, proc(name: string): bool = name == className).len > 0
+  let checked = normalizeSlotValue(contract, value, matches)
+  if checked.error.len > 0:
+    return raiseCompiledError(compiledErrorValue("Error", checked.error))
+  checked.value
+
 proc compiledSlotInt*(value: NodeValue): int =
-  ## Unbox a typed integer slot. A wrong kind signals an ordinary Harding error
-  ## instead of reinterpreting storage, matching the declared slot type.
-  if value.kind == vkInt:
-    return value.intVal
-  if value.kind == vkNil:
-    return 0
-  discard raiseCompiledError(compiledErrorValue("Error",
-    "Slot declared Integer received " & $value.kind))
+  checkedCompiledSlot(value, scInteger).intVal
 
 proc compiledSlotFloat*(value: NodeValue): float =
-  if value.kind == vkFloat:
-    return value.floatVal
-  if value.kind == vkInt:
-    return float(value.intVal)
-  if value.kind == vkNil:
-    return 0.0
-  discard raiseCompiledError(compiledErrorValue("Error",
-    "Slot declared Float received " & $value.kind))
+  checkedCompiledSlot(value, scFloat).floatVal
 
 proc compiledSlotBool*(value: NodeValue): bool =
-  if value.kind == vkBool:
-    return value.boolVal
-  if value.kind == vkNil:
-    return false
-  discard raiseCompiledError(compiledErrorValue("Error",
-    "Slot declared Boolean received " & $value.kind))
+  checkedCompiledSlot(value, scBoolean).boolVal
 
 proc compiledSlotString*(value: NodeValue): string =
-  if value.kind == vkString:
-    return value.strVal
-  if value.kind == vkNil:
-    return ""
-  discard raiseCompiledError(compiledErrorValue("Error",
-    "Slot declared String received " & $value.kind))
+  checkedCompiledSlot(value, scString).strVal
+
+proc compiledSlotSymbol*(value: NodeValue): string =
+  checkedCompiledSlot(value, scSymbol).symVal
 
 proc reportUncaughtError*(value: NodeValue): int =
   ## Default action and diagnostic for an error that reached the top of a
@@ -2120,6 +2129,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkNil)
 
   of "at:":
+    if args.len > 0 and receiver.kind == vkInstance and receiver.instVal != nil and
+       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
+      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
+      return getSlotValue(receiver, name)
     if args.len > 0:
       if receiver.kind == vkArray and args[0].kind == vkInt:
         let idx = args[0].intVal
@@ -2131,6 +2144,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkNil)
 
   of "at:put:":
+    if args.len >= 2 and receiver.kind == vkInstance and receiver.instVal != nil and
+       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
+      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
+      return setSlotValue(receiver, name, args[1])
     if args.len >= 2:
       if receiver.kind == vkArray and args[0].kind == vkInt:
         let idx = args[0].intVal
@@ -2541,6 +2558,6 @@ proc setSlot*(obj: Instance, name: string, value: NodeValue): NodeValue =
   if idx >= 0:
     while obj.slots.len <= idx:
       obj.slots.add(NodeValue(kind: vkNil))
-    obj.slots[idx] = value
+    obj.writeInstanceSlot(idx, value)
 
   return value

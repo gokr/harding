@@ -9240,6 +9240,12 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       signalExceptionByName(interp, "DivisionByZero", e.msg)
       # Continue processing - signalExceptionByName schedules the handler
       continue
+    except SlotTypeError as failure:
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      signalExceptionByName(interp, "Error", failure.msg)
+      continue
     except NotificationActionRejected as rejection:
       # An unsupported notification action is a normal Harding Error.
       if not frame.skipRelease:
