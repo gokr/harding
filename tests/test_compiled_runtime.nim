@@ -361,6 +361,26 @@ suite "Compiled hierarchy resolution cache":
     let receiver = proxyReceiver("ResolutionCapacity")
     check sendMessage(nil, receiver, "answer", @[]).intVal == 1
 
+  test "interned keys distinguish pairs and survive ID recycling":
+    registerCompiledMethod("InternPairA", "bc", defaultAllocation)
+    registerCompiledMethod("InternPairAb", "c", replacementAllocation)
+    let first = proxyReceiver("InternPairA")
+    let second = proxyReceiver("InternPairAb")
+    check dispatchCompiledMethodFromClass(first, "InternPairA", "bc", @[]).intVal == 1
+    check dispatchCompiledMethodFromClass(second, "InternPairAb", "c", @[]).intVal == 2
+    check not hasCompiledMethodInHierarchy("InternPairA", "c")
+    # More unique names than the bounded interner can retain. Reused IDs must
+    # never inherit positive or negative answers from the previous epoch.
+    for index in 0..<9000:
+      check not hasCompiledMethodInHierarchy("InternTraffic" & $index, "absent" & $index)
+    check dispatchCompiledMethodFromClass(second, "InternPairAb", "c", @[]).intVal == 2
+    check dispatchCompiledMethodFromClass(first, "InternPairA", "bc", @[]).intVal == 1
+    check not hasCompiledMethodInHierarchy("InternPairAb", "bc")
+    registerCompiledMethod("InternPairA", "bc", replacementAllocation)
+    registerCompiledMethod("InternPairAb", "bc", defaultAllocation)
+    check dispatchCompiledMethodFromClass(first, "InternPairA", "bc", @[]).intVal == 2
+    check dispatchCompiledMethodFromClass(second, "InternPairAb", "bc", @[]).intVal == 1
+
   test "a cached missing initializer does not skip a newly installed initializer":
     let name = "ResolutionInitializer"
     proc allocate(self: NodeValue, args: seq[NodeValue]): NodeValue =

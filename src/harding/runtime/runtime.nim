@@ -1003,16 +1003,31 @@ proc findCompiledMethod*(className: string, selector: string): proc(self: NodeVa
 
 var
   resolvedMethodVersion {.threadvar.}: uint64
-  resolvedMethods {.threadvar.}: Table[tuple[className, selector: string], CompiledProc]
+  dispatchNames {.threadvar.}: Table[string, uint32]
+  resolvedMethods {.threadvar.}: Table[uint64, CompiledProc]
+
+proc internDispatchName(name: string): uint32 {.inline.} =
+  result = dispatchNames.getOrDefault(name)
+  if result == 0:
+    result = uint32(dispatchNames.len + 1)
+    dispatchNames[name] = result
 
 proc resolveCompiledMethod(className, selector: string): CompiledProc =
   ## Cache native resolution only; live interpreter lookup remains at send entry.
+  ## IDs belong to this thread's cache epoch, not to Classes or persisted code.
   if resolvedMethodVersion != compiledClassDispatchVersion:
     resolvedMethods.clear()
     resolvedMethodVersion = compiledClassDispatchVersion
-  let key = (className, selector)
-  if resolvedMethods.hasKey(key):
-    return resolvedMethods[key]
+  # Dynamic selector traffic must not turn the interner into an unbounded root.
+  # Clear both tables before reusing IDs; no ID escapes this resolution cache.
+  if dispatchNames.len >= 8192:
+    resolvedMethods.clear()
+    dispatchNames.clear()
+  let classId = internDispatchName(className)
+  let selectorId = internDispatchName(selector)
+  let key = (uint64(classId) shl 32) or uint64(selectorId)
+  resolvedMethods.withValue(key, target):
+    return target[]  # A cached nil is a resolved negative answer, not a miss.
   let owner = walkCompiledHierarchy(className,
     proc(name: string): bool = findCompiledMethod(name, selector) != nil)
   result = if owner.len > 0: findCompiledMethod(owner, selector) else: nil

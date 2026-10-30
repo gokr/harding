@@ -299,3 +299,77 @@ converges with Level 2:
 
 That is a materially larger and riskier change than any slice so far; it should
 start with a written design agreement before code.
+
+
+## Interned native resolution keys
+
+Baseline revision: `60f9844`. Native resolution now interns class and selector
+names into thread-local uint32 IDs, packs the pair into one uint64, and uses one
+`withValue` probe. A cached nil is still a resolved negative answer. The existing
+4,096-answer bound remains; an 8,192-name bound clears both interner and answers
+before IDs can be reused. IDs never escape this thread-local resolution cache.
+Version invalidation, hierarchy traversal order, explicit-super starts, and live
+interpreter dispatch before native lookup are unchanged. No Class identity or
+language Symbol representation is changed. Process-global registration remains
+subject to its existing concurrency contract.
+
+### Paired measurements and attribution
+
+Retained baseline `run-2xhzmmd2`, candidate `run-vmnvc9ne`; seven alternating
+measured trials, ten verified passes per process, release ARC:
+
+| Workload | Before ms/pass | After ms/pass | Elapsed reduction |
+|---|---:|---:|---:|
+| Richards | 35.633 | 31.351 | ~12.0% |
+| DeltaBlue | 52.905 | 46.982 | ~11.2% |
+| Queens | 107.618 | 94.577 | ~12.1% |
+
+An ablation retained a string-pair key but replaced `hasKey` plus `[]` with one
+`withValue` probe (`run-tuzvl7z1`). That alone reduced time ~8.5–12.2% versus the
+same original baseline, so it would be misleading to credit all of the gain to
+interning. Direct comparison of interned keys against the one-probe string cache
+(`run-qt8if0c9`, eleven alternating trials, twenty verified passes):
+
+| Workload | Single string-pair probe | Interned IDs | Elapsed reduction |
+|---|---:|---:|---:|
+| Richards | 32.606 | 30.949 | ~5.1% |
+| DeltaBlue | 52.480 | 52.223 | ~0.5% |
+| Queens | 108.680 | 107.204 | ~1.4% |
+
+The smaller differences are not strong portable speedup claims. Host load was
+not isolated; compare only within each paired table. Generated benchmark sources
+and expected output are identical within each comparison, and retained binaries
+are hash-checked by `scripts/profile_granite.py`.
+
+Gprof call counts normalized per benchmark pass, baseline versus interned keys:
+
+| Workload | String hash calls before | After | Raw allocations before | After |
+|---|---:|---:|---:|---:|
+| Richards | 936,008 | 588,115 | 594,868 | 594,808 |
+| DeltaBlue | 1,609,640 | 1,057,202 | 749,690 | 749,587 |
+| Queens | 3,151,749 | 1,924,548 | 1,856,462 | 1,856,436 |
+
+String hashing falls ~34–39%; allocation counts barely change. The earlier
+proposal that interning would remove ~149M allocations was not supported: the
+profile's allocation totals were whole-runtime counts, not allocations caused by
+resolution keys. String-to-ID lookups still hash strings on every resolution;
+full hash elimination would require carrying IDs at send sites and receivers.
+Neither that broader representation change nor argument-buffer work is included.
+
+### Validation
+
+`test_compiled_runtime` adds a regression that forces multiple ID-recycling
+cycles with distinct class/selector pairs, then checks positive and negative
+answers and late method replacement. Existing tests retain hierarchy order,
+cycles, capacity clearing, and live replacement coverage. Passed gates (logs
+use `build/intern-*`):
+
+- ARC/ORC runtime (43), support (10), engine-boundary (34), reentrant-return
+  (16), block-lifetime (15) and base allocation (2) tests per memory manager.
+- Richards and DeltaBlue both-engine conformance tasks; 102/102 wider parity
+  cases, executed in recorded batches.
+- Four GTK application acceptance tests and two generated-boundary tests.
+- Twelve freeze conformance cases with isolated Nim caches; seven frozen-build
+  tests.
+
+These named gates are not a full repository suite claim.
