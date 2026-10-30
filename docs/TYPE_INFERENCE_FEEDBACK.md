@@ -76,8 +76,8 @@ never partially applied.
 
 Rules, in order:
 
-- **Integer and Float observed together widen to Float**, because a Float slot
-  already accepts Integer by conversion;
+- **Integer and Float observed together keep the slot dynamic** with a
+  `numeric-conflict` reason and a recommendation to declare Float or Integer;
 - nil observed at runtime rejects a non-dynamic static candidate;
 - any other observed write kind that disagrees with the candidate rejects it
   (`contradicted by observations`);
@@ -86,32 +86,27 @@ Rules, in order:
   write kind is only a labelled `observed-proposal`;
 - several observed kinds leave a dynamic slot dynamic.
 
-### Numeric widening
+### Numeric conflicts are reported, not auto-widened
 
-A slot initialised to `0` and later written `2.5` is common and is not a bug in
-the program; the declaration was simply too narrow. Smalltalk's numeric tower
-resolves `5 + 2.5` to a Float, and our own contract already lets a Float slot
-accept Integer writes. So instead of discarding such a slot as dynamic, the
-report proposes **Float**:
+A slot initialised to `0` and later written `2.5` is common, but choosing Float
+is a real decision: a `float64` cannot represent every 64-bit Integer exactly
+beyond 2^53. The report therefore names the conflict instead of picking:
 
-> `Integer and Float observed; Float accepts Integer`
+> `numeric-conflict`: Integer and Float both observed; declare Float or Integer
 
 DeltaBlue's `DBVariable#value` is exactly this: module analysis says `skInt`,
 runtime observation shows **12,932 Integer and 33 Float writes**, and the merged
-report now says `skFloat` (`numeric-widening`) instead of losing the slot.
-
-Precision caveat: a `float64` cannot represent every 64-bit Integer exactly
-(beyond 2^53). Widening is safe under the type contract but is still a storage
-change, which is why it is a *proposal* and not applied to untyped slots
-automatically.
+report keeps it dynamic with a `numeric-conflict` reason. Granite additionally
+warns at compile time when an Integer is provably stored into a declared Float
+slot. See `NUMERIC_SLOT_POLICY.md`.
 
 ### Why this matters, measured
 
-A static-only or profile-only design would have shipped `DBVariable#value` as an
-Integer slot and changed the program's answers. Reconciliation caught that,
-rejected the candidate, and now proposes the type that actually fits. On the same
-benchmark, 10 slots are confirmed by both sources, 12 remain labelled proposals,
-and one is a numeric widening.
+A static-only design would have shipped `DBVariable#value` as an Integer slot and
+changed the program's answers. Reconciliation caught that and surfaced the
+conflict for a human decision instead of guessing. On the same benchmark, 10
+slots are confirmed by both sources, 12 remain labelled proposals, and one is a
+reported numeric conflict.
 
 ## What is deliberately not done
 

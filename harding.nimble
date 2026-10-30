@@ -328,6 +328,8 @@ task testTypeFeedback, "Validate static inference and interpreter slot feedback"
   exec "nim c -r --mm:arc --out:build/test_slot_inference tests/test_slot_inference.nim"
   exec "nim c -r --mm:orc --out:build/test_slot_inference_orc tests/test_slot_inference.nim"
   exec "python3 -m unittest discover -s tests -p test_type_feedback.py"
+  exec "nim c -r --mm:arc --out:build/test_slot_diagnostics tests/test_slot_diagnostics.nim"
+  exec "nim c -r --mm:orc --out:build/test_slot_diagnostics_orc tests/test_slot_diagnostics.nim"
 
 task testSlotContracts, "Validate declared-slot defaults and checked writes in both engines":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"

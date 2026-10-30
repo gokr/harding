@@ -50,7 +50,8 @@ proc combine(slot: var SlotInference, evidence: SlotInference) =
     slot.conclusive = false
     slot.reason = if evidence.kind == skObject: "conflicting classes" else: "conflicting kinds"
 
-proc children(node: Node): seq[Node] =
+proc nodeChildren*(node: Node): seq[Node] =
+  ## Structural child nodes, shared with the diagnostics pass.
   if node == nil: return
   case node.kind
   of nkAssign: result.add(node.AssignNode.expression)
@@ -101,7 +102,7 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
               selector: if selector.kind == vkSymbol: selector.symVal else: selector.strVal,
               body: body, classSide: msg.selector == "classSelector:put:"))
         return
-    for child in children(node): collect(child)
+    for child in nodeChildren(node): collect(child)
   for node in nodes: collect(node)
 
   var parameters: Table[string, SlotInference]
@@ -196,7 +197,7 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
             var evidence = nextParameters.getOrDefault(key)
             combine(evidence, kind(arg, locals, owner, classSide))
             nextParameters[key] = evidence
-      for child in children(node): scan(child, locals, owner, classSide)
+      for child in nodeChildren(node): scan(child, locals, owner, classSide)
     for index, methodInfo in methods:
       var locals: Table[string, SlotInference]
       for i, name in methodInfo.body.parameters:
@@ -240,7 +241,7 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
       outside.incl(node.NamedAccessNode.memberName)
     elif node.kind == nkSlotAccess and node.SlotAccessNode.isAssignment:
       outside.incl(node.SlotAccessNode.slotName)
-    for child in children(node): assignments(child, locals, owner, classSide)
+    for child in nodeChildren(node): assignments(child, locals, owner, classSide)
   for index, methodInfo in methods:
     var locals: Table[string, SlotInference]
     for i, name in methodInfo.body.parameters:
@@ -297,18 +298,18 @@ proc reconcile(staticCandidate: SlotInference, counts: JsonNode): tuple[effectiv
       if kind == "Nil": nilWritten = true
       elif kind.len > 0 and kind notin writes: writes.add(kind)
 
-  # Smalltalk's numeric tower makes Integer+Float together mean Float: a Float
-  # slot already accepts Integer by conversion. Treating the pair as a conflict
-  # would discard the common "starts at 0, later holds 2.5" case.
+  # Smalltalk's numeric tower lets an Integer flow into a Float slot, but a
+  # float64 cannot represent every 64-bit Integer. Rather than silently picking
+  # a representation, report the conflict so the developer decides. Granite also
+  # warns at compile time when an Integer is stored into a declared Float slot.
   var numericOnly = writes.len > 0
   for kind in writes:
     if kind notin ["skInt", "skFloat"]: numericOnly = false
-  if numericOnly and "skFloat" in writes:
+  if numericOnly and "skFloat" in writes and "skInt" in writes:
     if nilWritten:
       return ("skDynamic", "observations", "nil observed at runtime")
-    if staticCandidate.kind in {skDynamic, skInt, skFloat}:
-      return ("skFloat", "numeric-widening",
-              "Integer and Float observed; Float accepts Integer")
+    return ("skDynamic", "numeric-conflict",
+            "Integer and Float both observed; declare Float or Integer")
 
   if nilWritten and staticCandidate.kind != skDynamic:
     return ("skDynamic", "observations", "nil observed at runtime")

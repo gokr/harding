@@ -17,6 +17,7 @@ import ../compiler/context
 import ../compiler/types
 import ../compiler/analyzer
 import ../compiler/slot_inference
+import ../compiler/slot_diagnostics
 import ../core/type_feedback
 import ../compiler/symbols
 import ../compiler/frozen_manifest
@@ -156,6 +157,7 @@ type
     sealFrozen: bool
     typeFeedback: string
     inferenceReport: string
+    strictSlots: bool
     maxStackDepth: int
 
 proc newConfig(): Config =
@@ -197,6 +199,7 @@ proc showUsage() =
   echo "  -r, --release         Build with --release flag for optimization"
   echo "  --type-feedback:<file> Validated interpreter feedback (requires --inference-report)"
   echo "  --inference-report:<file> Write advisory static/observed slot candidates"
+  echo "  --strict-slots        Treat declared numeric slot store conflicts as errors"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
   echo "  --gtk                 Compile the GTK4 application library (no VM startup)"
   echo "  --freeze-manifest <file> Checked frozen dependency closure (experimental)"
@@ -273,6 +276,8 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.typeFeedback = p.val
       of "inference-report":
         result.inferenceReport = p.val
+      of "strict-slots":
+        result.strictSlots = true
       of "mixed":
         result.mixed = true
       of "gtk":
@@ -386,6 +391,24 @@ proc compileFile(config: Config): bool =
     except CatchableError as failure:
       echo "Inference report error: ", failure.msg
       return false
+
+  # Production builds make numeric decisions explicit: warn on Integer stored
+  # into a declared Float slot, always reject a provable Float into Integer, and
+  # escalate warnings with --strict-slots. Diagnostics never stop a normal build
+  # on their own; the interpreter remains permissive.
+  let diagnostics = diagnoseSlotStores(nodes, buildClassGraph(nodes).classes, config.inputFile)
+  var failed = false
+  for diagnostic in diagnostics:
+    let severity = if diagnostic.severity == dsError or config.strictSlots: "error" else: "warning"
+    if severity == "error": failed = true
+    # Parser positions are unavailable for these nodes; print the file only
+    # rather than a misleading 0:0.
+    let where = if diagnostic.line > 0: diagnostic.file & ":" & $diagnostic.line & ":" & $diagnostic.col
+                else: diagnostic.file
+    stderr.writeLine(where & ": " & severity & ": " & diagnostic.message & " [" & diagnostic.rule & "]")
+  if failed:
+    echo "Compilation stopped: numeric slot diagnostics"
+    return false
 
   if config.gtk:
     let source = readFile(config.hardingHome / "lib/gui/Gtk.hrd")

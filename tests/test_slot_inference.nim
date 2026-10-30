@@ -264,11 +264,11 @@ suite "Observations reconcile with static candidates":
       check slot["requiresGuard"].getBool
       check not slot["storageNarrowed"].getBool
 
-suite "Integer and Float together widen to Float":
+suite "Integer and Float together require a decision":
   proc widen(inferred: InferenceResult, observed: JsonNode): JsonNode =
     inferenceReport(inferred, observed)
 
-  test "a static Integer contradicted only by Float widens rather than failing":
+  test "Integer and Float together are reported as a conflict, not auto-widened":
     let evidence = infer("""
       Box := Object derivePublic: #(value).
       Box>>set [value := 0].
@@ -276,20 +276,20 @@ suite "Integer and Float together widen to Float":
     check evidence.slots["Box#value"].kind == skInt
     let observed = %*{"slots": {"Box#value": {"write:Integer": 12932, "write:Float": 33}}}
     let slot = widen(evidence, observed)["slots"]["Box#value"]
-    check slot["effectiveCandidate"].getStr == "skFloat"
-    check slot["evidence"].getStr == "numeric-widening"
-    check slot["effectiveReason"].getStr.contains("Float accepts Integer")
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["evidence"].getStr == "numeric-conflict"
+    check slot["effectiveReason"].getStr.contains("declare Float or Integer")
     check not slot["storageNarrowed"].getBool
 
-  test "Float alone stays a proposal, not a narrowing":
+  test "a dynamic slot seeing both numerics stays dynamic":
     let evidence = infer("""
       Box := Object derivePublic: #(value).
       Box>>set: argument [value := argument].
     """)
     let observed = %*{"slots": {"Box#value": {"write:Integer": 2, "write:Float": 1}}}
     let slot = widen(evidence, observed)["slots"]["Box#value"]
-    check slot["effectiveCandidate"].getStr == "skFloat"
-    check slot["evidence"].getStr == "numeric-widening"
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["evidence"].getStr == "numeric-conflict"
 
   test "nil still wins over numeric widening":
     let evidence = infer("""
@@ -309,7 +309,7 @@ suite "Integer and Float together widen to Float":
     check slot["effectiveCandidate"].getStr == "skDynamic"
     check slot["effectiveReason"].getStr == "contradicted by observations"
 
-  test "a Float static candidate keeps Float":
+  test "a declared Float that also sees Integers is flagged for a decision":
     let evidence = infer("""
       Box := Object derivePublic: #(value).
       Box>>set [value := 1.5].
@@ -317,4 +317,5 @@ suite "Integer and Float together widen to Float":
     check evidence.slots["Box#value"].kind == skFloat
     let observed = %*{"slots": {"Box#value": {"write:Integer": 1, "write:Float": 4}}}
     let slot = widen(evidence, observed)["slots"]["Box#value"]
-    check slot["effectiveCandidate"].getStr == "skFloat"
+    check slot["effectiveCandidate"].getStr == "skDynamic"
+    check slot["evidence"].getStr == "numeric-conflict"
