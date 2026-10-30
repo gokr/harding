@@ -124,6 +124,70 @@ tests plus both-engine language tests under ARC and ORC. The language test asser
 that enabling collection leaves program output unchanged and that the generated
 Nim is byte-identical with and without a merged report.
 
+## Guarded specialization (opt-in)
+
+Passing `--type-feedback` now also emits native arithmetic for slots whose
+candidate is confirmed by **both** sources (`static+observations`):
+
+```nim
+if direct_count_guard(self) and owner[].count.kind == vkInt:
+  NodeValue(kind: vkInt, intVal: owner[].count.intVal + 1)
+else:
+  ...original dynamic expression...
+```
+
+Properties:
+
+- storage is unchanged (`NodeValue`), so nothing is narrowed;
+- the layout guard *and* the runtime kind check must both pass;
+- the dynamic path is retained verbatim as the fallback;
+- module analysis alone emits nothing — observations are required;
+- a slot the report calls dynamic or a conflict is never specialized.
+
+A regression test forces a Float and then a String into an Integer-specialized
+slot and requires interpreter, plain build and specialized build to agree under
+ARC and ORC.
+
+### Measured effect: real in a tight loop, negligible on the benchmarks
+
+| Workload | Plain | Specialized | Ratio |
+|---|---:|---:|---:|
+| Synthetic slot-increment loop, 1,000,000 iterations | 177.9 ms | 140.8 ms | **1.26x** |
+| Richards, 20 runs (15 trials) | 825.2 ms | 807.3 ms | 1.02x |
+| DeltaBlue, 30 runs (15 trials) | 1797.7 ms | 1804.9 ms | 1.00x |
+| Queens (control: 0 guards emitted) | 126.3 ms | 122.4 ms | 1.03x |
+
+The Queens row is the **noise floor**: it emits no specialization at all, yet
+varies by ~3%. So Richards and DeltaBlue are within measurement noise, and the
+honest statement is that guarded specialization does not measurably speed up these
+benchmarks.
+
+### Native loop conditions
+
+Control structures (`ifTrue:`, `whileTrue:`, `timesRepeat:`) were already
+transcribed to Nim `if`/`while`/`for`, but every condition went through
+`isTruthy(block: NodeValue(...))` — boxing a `bool` and copying the `NodeValue`
+per iteration. Conditions that are provably Boolean are now emitted directly:
+
+```nim
+while (i < 1000000):        # was: while isTruthy((block: NodeValue(kind: vkBool, ...)))
+```
+
+| Workload | isTruthy condition | native condition | Ratio |
+|---|---:|---:|---:|
+| 1,000,000-iteration loop | 14.5 ms | 1.6 ms | **8.9x** |
+
+This applies whenever the condition is provably Boolean (numeric bindings,
+including inferred slots). It does not remove the loop body's boxing, and on the
+current benchmarks it yields only ~1%, because their conditions read slots
+through dynamic sends rather than local numerics.
+
+The reason slot specialization yields little is the same one the earlier profiles
+showed: slot arithmetic is a small share of runtime. `getSlotValue` was ~3% and hashing ~8-10%, while dispatch and
+allocation dominate. Specializing a handful of `self`-arithmetic sites cannot
+recover much of that. Queens emits nothing because its hot path reads `current row`
+through a dynamic send rather than direct self arithmetic.
+
 ## Possible next steps
 
 Only after the report shows enough confirmed candidates: emit guarded native

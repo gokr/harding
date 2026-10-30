@@ -377,9 +377,24 @@ proc compileFile(config: Config): bool =
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
 
-  if config.typeFeedback.len > 0 and config.inferenceReport.len == 0:
-    echo "Error: --type-feedback currently requires --inference-report"
-    return false
+  var numericCandidates = initTable[string, string]()
+  if not config.mixed:
+    # Guarded native arithmetic only where evidence is confirmed by both module
+    # analysis and observations; a proposal alone stays dynamic.
+    let staticOnly = inferSlots(nodes, buildClassGraph(nodes).classes)
+    var observed: JsonNode = nil
+    if config.typeFeedback.len > 0:
+      try:
+        observed = loadTypeFeedback(config.typeFeedback, config.inputFile)
+      except CatchableError as failure:
+        echo "Type feedback error: ", failure.msg
+        return false
+    for key, slot in inferenceReport(staticOnly, observed)["slots"]:
+      if slot["evidence"].getStr == "static+observations":
+        let kind = slot["effectiveCandidate"].getStr
+        if kind in ["skInt", "skFloat"]: numericCandidates[key] = kind
+
+  if defined(slotCandidateTrace): echo "candidates=", numericCandidates.len
   if config.inferenceReport.len > 0:
     try:
       let evidence = if config.typeFeedback.len > 0:
@@ -532,7 +547,8 @@ proc compileFile(config: Config): bool =
       ctx.frozenHostSources.add((relativePath(path, config.hardingHome).replace('\\', '/'), readFile(path)))
   let reflectedClasses = extractClassInfoFromInterpreter(interp)
   let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
-                          scriptTemporaries = script.temporaries)
+                          scriptTemporaries = script.temporaries,
+                          inferredNumeric = numericCandidates)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

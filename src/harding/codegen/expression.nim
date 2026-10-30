@@ -34,6 +34,10 @@ type
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
     numericBindings*: NumericBindings ## Proven lexical native representations
     suppressSlotArithmetic: bool
+    ## Advisory inference results: slot name -> kind, used only to emit *guarded*
+    ## native arithmetic. Storage is never narrowed, so a wrong candidate costs
+    ## speed and never correctness.
+    inferredNumericSlots*: Table[string, NumericRepresentation]
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -440,6 +444,79 @@ proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
   let fallback = helper & "(" & (@["hardingBuiltinReceiver"] & boundArguments).join(", ") & ")"
   result.add(fmt("    let builtin = hostedBuiltin({owner}, hardingBuiltinReceiver, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
 
+proc nativeNumericExpression(ctx: GenContext, node: Node): string =
+  case node.kind
+  of nkLiteral:
+    let value = node.LiteralNode.value
+    if value.kind == vkInt:
+      return $value.intVal
+    return $value.floatVal
+  of nkIdent:
+    let name = node.IdentNode.name
+    if not ctx.isLocal(name) and ctx.isSlot(name):
+      let clsName = mangleClass(ctx.cls.name)
+      let field = mangleSlot(name)
+      let slot = ctx.cls.getSlotDef(name)
+      let access = fmt("{clsName}(self.instVal.compiledOwner)[].{field}")
+      # A declared numeric slot already has a native field, so it is used
+      # directly. Only an inferred slot is still a NodeValue and needs unboxing,
+      # which the emitted kind guard has already proven safe.
+      case slot.constraint
+      of tcInt, tcFloat: return access
+      else:
+        let kind = ctx.inferredNumericSlots.getOrDefault(name, nrDynamic)
+        return case kind
+          of nrInt: fmt("{access}.intVal")
+          of nrFloat: fmt("{access}.floatVal")
+          else: access
+    return mangleIdentifier(name)
+  of nkMessage:
+    let message = node.MessageNode
+    let left = nativeNumericExpression(ctx, message.receiver)
+    let right = nativeNumericExpression(ctx, message.arguments[0])
+    let op = case message.selector
+             of "=", "==": "=="
+             of "~=": "!="
+             else: message.selector
+    return fmt("({left} {op} {right})")
+  else:
+    return ""
+
+proc nativeBoolCondition(ctx: GenContext, node: Node): string =
+  ## A raw `bool` expression when the condition is provably Boolean. Boxing a
+  ## bool into a NodeValue and calling isTruthy on every loop iteration is pure
+  ## overhead once the kind is known, so skip both. Returns "" when unsure, and
+  ## the caller keeps the generic isTruthy path.
+  if node == nil or ctx.mixed: return ""
+  if numericKind(node, ctx.numericBindings) != nrBool: return ""
+  let native = nativeNumericExpression(ctx, node)
+  if native.len == 0 or native == "()": return ""
+  native
+
+proc conditionBody(node: Node): Node =
+  ## Conditions arrive wrapped in the block that supplies them; a single-statement
+  ## block is the condition expression itself.
+  if node == nil: return nil
+  if node.kind == nkBlock:
+    if node.BlockNode.body.len == 1: return node.BlockNode.body[0]
+    return nil
+  if node.kind == nkLiteral and node.LiteralNode.value.kind == vkBlock:
+    let literalBlock = node.LiteralNode.value.blockVal
+    if literalBlock != nil and literalBlock.body.len == 1: return literalBlock.body[0]
+    return nil
+  node
+
+proc conditionClause(ctx: GenContext, conditionNode: Node, fallback: string,
+                      negate = false): tuple[code: string, native: bool] =
+  ## Prefer an unboxed boolean condition; otherwise keep isTruthy semantics,
+  ## which also preserves the "conditional requires Boolean" error.
+  let nativeCond = nativeBoolCondition(ctx, conditionBody(conditionNode))
+  if nativeCond.len > 0:
+    return ((if negate: "not (" & nativeCond & ")" else: nativeCond), true)
+  if negate:
+    return ("not isTruthy(" & fallback & ")", false)
+  ("isTruthy(" & fallback & ")", false)
+
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
 
@@ -478,7 +555,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
        not hasReturnNode(node.arguments[1]):
       let thenBlock = node.arguments[0].BlockNode
       let elseBlock = node.arguments[1].BlockNode
-      var code = "(if isTruthy(" & receiverCode & "):\n"
+      let clause = conditionClause(ctx, node.receiver, receiverCode)
+      var code = "(if " & clause.code & ":\n"
       code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
       code.add(indentBlock(inlineBlockExpression(ctx, elseBlock), 6))
@@ -490,7 +568,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
        not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
-      var code = "(if isTruthy(" & receiverCode & "):\n"
+      let clause = conditionClause(ctx, node.receiver, receiverCode)
+      var code = "(if " & clause.code & ":\n"
       code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
       code.add("      nilValue()\n")
@@ -502,7 +581,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
        not hasReturnNode(node.arguments[0]):
       let thenBlock = node.arguments[0].BlockNode
-      var code = "(if not isTruthy(" & receiverCode & "):\n"
+      let clause = conditionClause(ctx, node.receiver, receiverCode, negate = true)
+      var code = "(if " & clause.code & ":\n"
       code.add(indentBlock(inlineBlockExpression(ctx, thenBlock), 6))
       code.add("    else:\n")
       code.add("      nilValue()\n")
@@ -520,8 +600,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         let condBlock = node.receiver.BlockNode
         if condBlock.body.len > 0:
           condCode = inlineBlockExpression(ctx, condBlock)
+      let clause = conditionClause(ctx, node.receiver, condCode)
       var code = "(block:\n"
-      code.add("    while isTruthy(" & condCode & "):\n")
+      code.add("    while " & clause.code & ":\n")
       code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
       return code
@@ -537,8 +618,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
         let condBlock = node.receiver.BlockNode
         if condBlock.body.len > 0:
           condCode = inlineBlockExpression(ctx, condBlock)
+      let clause = conditionClause(ctx, node.receiver, condCode, negate = true)
       var code = "(block:\n"
-      code.add("    while not isTruthy(" & condCode & "):\n")
+      code.add("    while " & clause.code & ":\n")
       code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
       code.add("    nilValue())")
       return code
@@ -828,7 +910,10 @@ proc slotNumericBindings(ctx: GenContext): NumericBindings =
       case slot.constraint
       of tcInt: result[slot.name] = nrInt
       of tcFloat: result[slot.name] = nrFloat
-      else: discard
+      else:
+        # Undeclared slot with an inferred candidate: still only a guard.
+        if slot.name in ctx.inferredNumericSlots:
+          result[slot.name] = ctx.inferredNumericSlots[slot.name]
 
 proc numericSlotNode(ctx: GenContext, node: Node): Node =
   if node == nil: return nil
@@ -855,32 +940,6 @@ proc numericSlotNames(ctx: GenContext, node: Node): seq[string] =
       for name in numericSlotNames(ctx, arg):
         if name notin result: result.add(name)
 
-proc nativeNumericExpression(ctx: GenContext, node: Node): string =
-  case node.kind
-  of nkLiteral:
-    let value = node.LiteralNode.value
-    if value.kind == vkInt:
-      return $value.intVal
-    return $value.floatVal
-  of nkIdent:
-    let name = node.IdentNode.name
-    if not ctx.isLocal(name) and ctx.isSlot(name):
-      let clsName = mangleClass(ctx.cls.name)
-      let field = mangleSlot(name)
-      return fmt("{clsName}(self.instVal.compiledOwner)[].{field}")
-    return mangleIdentifier(name)
-  of nkMessage:
-    let message = node.MessageNode
-    let left = nativeNumericExpression(ctx, message.receiver)
-    let right = nativeNumericExpression(ctx, message.arguments[0])
-    let op = case message.selector
-             of "=", "==": "=="
-             of "~=": "!="
-             else: message.selector
-    return fmt("({left} {op} {right})")
-  else:
-    return ""
-
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
 
@@ -905,6 +964,14 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       var guards: seq[string]
       for name in slotNames:
         guards.add(directSlotPrefix(ctx, name) & "_guard(self)")
+        # A declared slot already enforces its kind at write time. An inferred
+        # one is still a NodeValue, so the fast path must check the tag itself.
+        let slot = ctx.cls.getSlotDef(name)
+        if slot.constraint notin {tcInt, tcFloat} and
+           name in ctx.inferredNumericSlots:
+          let field = mangleSlot(name)
+          let expected = if slotRepresentation == nrFloat: "vkFloat" else: "vkInt"
+          guards.add(fmt("{mangleClass(ctx.cls.name)}(self.instVal.compiledOwner)[].{field}.kind == {expected}"))
       ctx.suppressSlotArithmetic = true
       let fallback = genExpression(ctx, node)
       ctx.suppressSlotArithmetic = false
@@ -1146,10 +1213,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
                     else:
                       "NodeValue(kind: vkBool, boolVal: false)")
 
-    var code = if whileNode.isWhileTrue:
-                 "while isTruthy(" & condCode & "):\n"
-               else:
-                 "while not isTruthy(" & condCode & "):\n"
+    let clause = conditionClause(ctx, whileNode.condition, condCode,
+                                 negate = not whileNode.isWhileTrue)
+    var code = "while " & clause.code & ":\n"
 
     let bodyBlock = asBlockNode(whileNode.body)
     if bodyBlock != nil:

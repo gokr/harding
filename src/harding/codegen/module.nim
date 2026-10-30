@@ -412,7 +412,8 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
 proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil,
-                         knownGlobals: seq[string] = @[], mixed: bool = false): string =
+                         knownGlobals: seq[string] = @[], mixed: bool = false,
+                         inferredNumeric: Table[string, string] = initTable[string, string]()): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -477,6 +478,14 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       
       if clsName in classInfo:
         genCtx.cls = classInfo[clsName]
+        # Only numeric candidates for *this* class; guards make them safe.
+        for slotName in classInfo[clsName].getAllSlots().mapIt(it.name):
+          let key = clsName & "#" & slotName
+          if key in inferredNumeric:
+            case inferredNumeric[key]
+            of "skInt": genCtx.inferredNumericSlots[slotName] = nrInt
+            of "skFloat": genCtx.inferredNumericSlots[slotName] = nrFloat
+            else: discard
       
       genCtx.globals.add("self")
       genCtx.setVariableType("self", clsName, true)
@@ -710,7 +719,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 moduleName: string, mixed: bool = false, sourceFile: string = "",
                 reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
                 injectMainArgsVar: bool = false,
-                scriptTemporaries: seq[string] = @[]): string =
+                scriptTemporaries: seq[string] = @[],
+                inferredNumeric: Table[string, string] = initTable[string, string]()): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
@@ -920,7 +930,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate compiled methods from user definitions after primitive operators,
   # so compiled method bodies can call nt_* helpers without forward declarations.
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
-                                 knownGlobals, mixed))
+                                knownGlobals, mixed, inferredNumeric))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")

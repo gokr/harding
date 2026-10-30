@@ -317,7 +317,11 @@ proc reconcile(staticCandidate: SlotInference, counts: JsonNode): tuple[effectiv
     for kind in writes:
       if kind != $staticCandidate.kind:
         return ("skDynamic", "observations", "contradicted by observations")
-    return ($staticCandidate.kind, "static+observations", staticCandidate.reason)
+    # Only call it confirmed when observations actually agreed. A slot with no
+    # observations at all is still static-only evidence.
+    if writes.len > 0:
+      return ($staticCandidate.kind, "static+observations", staticCandidate.reason)
+    return ($staticCandidate.kind, "static", staticCandidate.reason)
   if writes.len == 1 and not nilWritten:
     return (writes[0], "observed-proposal", "single observed write kind, still unproven")
   return ($staticCandidate.kind, "static", staticCandidate.reason)
