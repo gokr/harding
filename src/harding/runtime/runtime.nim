@@ -758,11 +758,9 @@ proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
   result.value = evalBoundNode(interp, message)
   result.handled = true
 
-proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
-                    args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
-  ## Builtin helper sends in bound code must honor the calling method's host.
-  ## Only interpreter-owned receivers are routed: native primitives keep the
-  ## fast helpers, and an unbound (pure compiled) call keeps native dispatch.
+proc hostedBuiltinInterpreter(ownerReceiver, receiver: NodeValue,
+                              selector: string): Interpreter {.inline.} =
+  ## Select the host without constructing an argument buffer.
   if receiver.kind != vkInstance or receiver.instVal == nil:
     return
   let instance = receiver.instVal
@@ -777,9 +775,28 @@ proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
   let owner = boundClassFor(ownerReceiver)
   if owner == nil:
     return
-  var interp = boundCompiledClasses[owner].interpreter
-  result.value = sendMessageInterpreted(interp, receiver, selector, args)
-  result.handled = true
+  return boundCompiledClasses[owner].interpreter
+
+proc hostedBuiltin*(ownerReceiver, receiver: NodeValue, selector: string,
+                    args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  ## Eager compatibility entry for callers that already own an argument buffer.
+  var interp = hostedBuiltinInterpreter(ownerReceiver, receiver, selector)
+  if interp != nil:
+    result.value = sendMessageInterpreted(interp, receiver, selector, args)
+    result.handled = true
+
+template hostedBuiltinDeferred*(ownerReceiver, receiver: NodeValue, selector: string,
+                                args: untyped): untyped =
+  ## Generated callers bind evaluated operands before this entry. Only buffer
+  ## construction is deferred; the interpreted call still owns a normal seq.
+  block:
+    let hostReceiver {.cursor.} = receiver
+    var hostInterpreter = hostedBuiltinInterpreter(ownerReceiver, hostReceiver, selector)
+    var hostAnswer: tuple[handled: bool, value: NodeValue]
+    if hostInterpreter != nil:
+      hostAnswer.value = sendMessageInterpreted(hostInterpreter, hostReceiver, selector, args)
+      hostAnswer.handled = true
+    hostAnswer
 
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
                        args: seq[NodeValue]): NodeValue =

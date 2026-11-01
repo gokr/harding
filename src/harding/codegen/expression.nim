@@ -442,7 +442,7 @@ proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
     boundArguments.add(temporary)
   let argsCode = "@[" & boundArguments.join(", ") & "]"
   let fallback = helper & "(" & (@["hardingBuiltinReceiver"] & boundArguments).join(", ") & ")"
-  result.add(fmt("    let builtin = hostedBuiltin({owner}, hardingBuiltinReceiver, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
+  result.add(fmt("    let builtin = hostedBuiltinDeferred({owner}, hardingBuiltinReceiver, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
 
 proc nativeNumericExpression(ctx: GenContext, node: Node): string =
   case node.kind

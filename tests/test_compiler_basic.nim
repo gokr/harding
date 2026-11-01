@@ -483,9 +483,9 @@ suite "Compiler: Engine binding shims":
     require not syntax.hasError
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "builtin_host")
-    check code.contains("hostedBuiltin(self, hardingBuiltinReceiver, \"size\", @[])")
-    check code.contains("hostedBuiltin(self, hardingBuiltinReceiver, \"abs\", @[])")
-    check code.contains("hostedBuiltin(self, hardingBuiltinReceiver, \"at:\", @[hardingBuiltinArg0])")
+    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"size\", @[])")
+    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"abs\", @[])")
+    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"at:\", @[hardingBuiltinArg0])")
     check code.contains("else: nt_size(hardingBuiltinReceiver)")
     check code.contains("let hardingBuiltinReceiver = value")
     # Top-level helper use stays on the native fast path.
@@ -502,6 +502,13 @@ suite "Compiler: Engine binding shims":
     let code = genMessage(ctx, MessageNode(receiver: operand, selector: "+", arguments: @[Node(operand)]))
     check code.count("sendMessageBound(self, next, \"value\", @[])") == 2
     check code.contains("nt_plus(hardingBuiltinReceiver, hardingBuiltinArg0)")
+    let receiverBinding = code.find("let hardingBuiltinReceiver =")
+    let argumentBinding = code.find("let hardingBuiltinArg0 =")
+    let dispatch = code.find("let builtin = hostedBuiltinDeferred(")
+    check receiverBinding >= 0
+    check argumentBinding > receiverBinding
+    check dispatch > argumentBinding
+    check code.contains("\"+\", @[hardingBuiltinArg0])")
 
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":

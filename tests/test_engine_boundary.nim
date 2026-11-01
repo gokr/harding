@@ -432,6 +432,43 @@ suite "Value-based mixed dispatch":
     unbindCompiledMethodsFrom(interp)
     check not hostedBuiltin(owner, receiver, "empty", @[]).handled
 
+  test "deferred hosted helpers construct buffers only for live interpreted dispatch":
+    discard defineClass(interp, "DeferredHelperOwner", "double:")
+    let owner = interp.globals[]["DeferredHelperOwner"]
+    require bindCompiledMethodShim(interp, "DeferredHelperOwner", "double:", cast[pointer](doubleShim))
+    var buffers = 0
+    proc arguments(): seq[NodeValue] =
+      inc buffers
+      @[toValue(17)]
+    check not hostedBuiltinDeferred(owner, toValue(1), "+", arguments()).handled
+    check not hostedBuiltinDeferred(owner, compiledArray(@[toValue(1)]), "at:", arguments()).handled
+    let native = newInstance(newClass(name = "DeferredHelperNative"))
+    native.isNimProxy = true
+    native.compiledOwner = RootRef()
+    native.nimValue = cast[pointer](native.compiledOwner)
+    check not hostedBuiltinDeferred(owner, NodeValue(kind: vkInstance, instVal: native), "at:", arguments()).handled
+    check not hostedBuiltinDeferred(owner, receiver, "==", arguments()).handled
+    check buffers == 0
+    let answer = hostedBuiltinDeferred(owner, receiver, "echo:", arguments())
+    check answer.handled
+    check answer.value.intVal == 17
+    check buffers == 1
+    # Retention still receives an owned seq/value, not a borrowed stack buffer.
+    let stored = hostedBuiltinDeferred(owner, receiver, "remember:", @[receiver])
+    check stored.handled
+    check sendMessageHybrid(receiver, "stored", @[]).instVal == receiver.instVal
+    let (_, replaceError) = interp.evalStatements("MixedProbe>>echo: argument [ ^ nil ]")
+    require replaceError.len == 0
+    let changed = hostedBuiltinDeferred(owner, receiver, "echo:", arguments())
+    check changed.handled
+    check isNilValue(changed.value)
+    check buffers == 2
+    let (_, restoreError) = interp.evalStatements("MixedProbe>>echo: argument [ ^ argument ]")
+    require restoreError.len == 0
+    unbindCompiledMethodsFrom(interp)
+    check not hostedBuiltinDeferred(owner, receiver, "echo:", arguments()).handled
+    check buffers == 2
+
   test "runtime reference storage is initialized and released repeatedly":
     for iteration in 0..<3:
       shutdownRuntime()

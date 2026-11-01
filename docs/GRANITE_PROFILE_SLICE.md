@@ -373,3 +373,89 @@ use `build/intern-*`):
   tests.
 
 These named gates are not a full repository suite claim.
+
+
+## Deferred hosted-builtin argument materialization
+
+Baseline runtime `61e18c3` (comparison/tooling-only HEAD `601ebee` has the same
+runtime). `genHostedBuiltin` already binds operands once, left to right. It now
+passes those bound values to a hygienic template that selects the interpreted
+host *before* constructing `@[arguments]`. The runtime selection predicate is
+shared with the eager compatibility entry, so native immediates, native proxies,
+identity operations, native collections and unbound owners retain exactly the
+same routing rules. The interpreted path still receives an ordinary owned seq,
+not a stack buffer or borrowed arguments. Nil results remain successful sends.
+
+The template keeps a cursor alias of the already-evaluated receiver. A first
+version copied that managed variant and increased copy-helper counts; the alias
+removes that extra copy while the caller's operand binding owns the value across
+the call. No receiver or argument evaluation is deferred or repeated.
+
+### Allocation evidence
+
+Gprof call counts normalized per verified pass, release ARC. Baseline
+`run-93fku9xq` (50 passes), final candidate `run-gzs5m071` (30 passes):
+
+| Workload | Raw allocations before | After | Sequence payloads before | After |
+|---|---:|---:|---:|---:|
+| Richards | 594,772 | 446,813 | 283,725 | 135,754 |
+| DeltaBlue | 749,525 | 652,778 | 331,193 | 197,247 |
+| Queens | 1,856,421 | 1,326,678 | 1,057,538 | 527,789 |
+
+Raw allocations fall ~25%/~13%/~29%; sequence payload allocation falls
+~52%/~40%/~50%. The NodeValue-sequence copy-helper count stays effectively
+unchanged after removing the extra wrapper copy. This change removes avoidable
+buffer allocations, not all argument copies or the managed NodeValue ABI.
+
+### Wall-time evidence and variability
+
+Early unpinned timings overlapped test compilation and were unstable. Retained
+binary-only repeats also varied (including a Richards regression); do not claim
+a universal speedup from those medians. To reduce migration between this host's
+heterogeneous cores, two later comparisons pinned only the benchmark child to
+CPU 2, a performance core. No system priority, governor or desktop settings were
+changed. Eleven alternating measured trials, 30 verified passes per invocation,
+one warm-up discarded, identical source snapshots and hash-checked baseline:
+
+| Workload | First pinned before -> after ms/pass | Repeat before -> after | Reduction range |
+|---|---:|---:|---:|
+| Richards | 38.760 -> 36.854 | 33.432 -> 31.778 | ~4.9–5.0% |
+| DeltaBlue | 56.346 -> 50.713 | 52.077 -> 51.483 | ~1.1–10.0% |
+| Queens | 101.093 -> 94.835 | 108.829 -> 100.788 | ~6.2–7.4% |
+
+Richards/Queens improve in both same-core repeats. DeltaBlue's wall-time gain is
+not stable enough for a strong speedup claim despite fewer allocations. This is
+not an order-of-magnitude change, does not close the CPython gap, and is not
+comparable to the separate cross-engine table by mixing medians.
+
+Evidence: `build/deferred-pinned.log`, `build/deferred-pinned-repeat.log`,
+`run-gzs5m071/pinned-paired.json` (latest repeat), initial `run-d0pt402n` profiles
+and `build/deferred-retained*.log` show the intermediate/noisy attempts.
+`build/measure_deferred_pinned.py` records the affinity and per-trial samples.
+
+### Validation and next step
+
+New tests count deferred buffer construction for native/hosted/unbound sends,
+check retained values and live method replacement, and assert generated operand
+bindings precede selection. Existing generated-boundary tests execute immediate
+and VM-owned operands, custom operators, nil replacement, callbacks and
+exactly-once effects under ARC/ORC. Passed final gates (logs under
+`build/deferred-final-*`):
+
+- Compiler basic 84, runtime 43, support 10, boundary 35, reentrant-return 16,
+  block-lifetime 15 and base-allocation 2 tests per memory manager (ARC/ORC).
+- Slot contract task and type-feedback/specialization task, including generated
+  native/hosted executions under ARC/ORC; two generated-boundary tests.
+- Richards and DeltaBlue both-engine conformance; four GTK acceptance tests.
+- Twelve isolated-cache freeze conformance cases and seven frozen-build tests.
+
+The final wider parity sweep passed 102/102 in recorded batches
+(`build/deferred-final-parity.log`). Interpreter core (57) and load/evaluate
+regressions also pass under ARC/ORC. This is named-gate validation, not a blanket
+full suite claim.
+
+Re-profile after this slice. The profile still shows sequence copies and generic
+sends: consider a borrowed/small-arity native ABI or guarded receiver-call clones
+only after separating their actual costs. More arithmetic slot candidates alone
+are not evidence for another representation change. LuaJIT-related design
+lessons and boundaries are recorded in `GRANITE_LUAJIT_NOTES.md`.
