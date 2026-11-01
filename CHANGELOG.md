@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Checked CPython and GNU Smalltalk ports of the matched Richards, DeltaBlue and exhaustive linked-node Queens workloads, plus native Nim Richards/DeltaBlue references. `scripts/bench_compare_practical.py` records verified process totals, paired startup baselines, source hashes and versions; GNU Smalltalk is an optional locally built dependency. `nimble testBenchmarkPorts` covers the adapters and ARC/ORC native references.
 - Advisory slot type inference and opt-in interpreter type feedback. Module analysis propagates call arguments and self/super returns; `harding --type-feedback` records source-fingerprinted slot reads and successful writes; Granite merges both into `--inference-report`, naming per-slot evidence and rejecting stale profiles. Integer+Float observations widen to Float rather than being discarded. No storage is narrowed and source is never rewritten (`docs/TYPE_INFERENCE_FEEDBACK.md`).
 - Primitive representation roadmap covering specialized ByteArray/numeric arrays, fixed-width scalar candidates and opaque foreign handles, with aliasing, conversion and ownership requirements (`docs/PRIMITIVE_TYPES_ROADMAP.md`). These additions are planned, not implemented.
 

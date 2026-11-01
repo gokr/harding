@@ -320,6 +320,10 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
   exec "python3 scripts/check_frozen.py config/granite-frozen.json --receipt build/frozen/receipt.json"
   exec "FROZEN_RECEIPT=build/frozen/receipt.json python3 -m unittest discover -s tests -p test_frozen_build.py"
 
+task testBenchmarkPorts, "Validate matched CPython/GNU Smalltalk and native Nim benchmark ports":
+  exec "python3 -m unittest discover -s tests -p test_bench_compare.py"
+  exec "python3 -m unittest discover -s tests -p test_practical_benchmarks.py"
+
 task testTypeFeedback, "Validate static inference and interpreter slot feedback":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "nimble harding"

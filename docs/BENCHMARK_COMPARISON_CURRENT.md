@@ -1,5 +1,9 @@
 # Current cross-engine benchmark comparison
 
+For the newer `61e18c3` matched CPython/GNU Smalltalk/native Nim comparison,
+see [practical baselines](BENCHMARK_PRACTICAL_BASELINES.md). The tables below
+are historical measurements at the revision stated here, not current timings.
+
 Revision: `18e3728` (`granite-completeness`). Fresh release Harding/Granite builds,
 Nim 2.2.12, GCC 13.3.0, Linux x86-64, Intel Core Ultra 7 165U. ARC is selected for
 Harding, Granite and native Nim. Cog: Squeak 6.0 image, OpenSmalltalk production
