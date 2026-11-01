@@ -563,6 +563,45 @@ suite "Compiler: Method return convention":
     check code.contains("return NodeValue(kind: vkInt, intVal: 42)")
     check not code.contains("return NodeValue(kind: vkInt, intVal: 42)\n  return self")
 
+suite "Compiler: Guarded unary receiver sends":
+  test "unique selectors in inline loops use a checked baked-in target":
+    let (nodes, syntax) = parse("Target := Object derivePublic: #(payload). Target>>answer [^42]. Caller := Object derive: #(). Caller>>loop: target [ [false] whileTrue: [ target payload. target answer ]. ^target answer ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "guarded_unary")
+    let helper = "guardedSend_" & mangleClass("Target") & "_" & mangleSlot("answer")
+    check code.contains("canDirectCompiledSend(receiver")
+    check code.count(helper & "(self, target)") == 2
+    check code.contains("return " & mangleClass("Target") & "_nt_answer(receiver, @[])")
+    check code.contains("sendMessageBound(owner, receiver, \"answer\", @[])")
+
+  test "selectors differing only in case keep distinct helper names":
+    # Nim identifiers are style-insensitive; the generated names must not collide.
+    let (nodes, syntax) = parse("CaseTarget := Object derivePublic: #(slotValue, slotvalue). CaseTarget>>other [ ^slotValue + slotvalue ]. CaseUser := Object derive: #(). CaseUser>>use: target [ ^target slotValue + target slotvalue ].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "guarded_case_selectors")
+    check code.contains("guardedSend_" & mangleClass("CaseTarget") & "_slotvalue(owner, receiver")
+    check code.contains("guardedSend_" & mangleClass("CaseTarget") & "_" & mangleSlot("slotValue") & "(owner, receiver")
+    # Distinct spellings must not collapse in Nim's style-insensitive namespace.
+    check mangleSlot("slotValue") != mangleSlot("slotvalue")
+    let lowered = code.toLowerAscii()
+    let upper = ("proc guardedSend_" & mangleClass("CaseTarget") & "_" &
+                 mangleSlot("slotValue") & "(owner, receiver").toLowerAscii()
+    let lower = ("proc guardedSend_" & mangleClass("CaseTarget") &
+                 "_slotvalue(owner, receiver").toLowerAscii()
+    check lowered.count(upper) == 1
+    check lowered.count(lower) == 1
+
+  test "ambiguous selectors and mixed-mode code keep dynamic sends":
+    let (nodes, syntax) = parse("First := Object derive: #(). First>>answer [^1]. Second := Object derive: #(). Second>>answer [^2]. Caller := Object derive: #(). Caller>>ask: target [^target answer].")
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "ambiguous_unary")
+    check code.contains("sendMessageBound(self, target, \"answer\", @[])")
+    let mixedCode = genModule(ctx, nodes, "mixed_unary", mixed = true)
+    check not mixedCode.contains("canDirectCompiledSend(receiver")
+
 suite "Compiler: Cached ordinary sends":
   test "pure generic sends expand a per-site cache":
     let ctx = newGenContext()

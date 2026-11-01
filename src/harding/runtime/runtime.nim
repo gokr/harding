@@ -153,6 +153,9 @@ var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValu
   initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
 type
   CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
+  CompiledDirectGuard* = object
+    version: uint64
+    valid: bool
   CompiledSendCache* = object
     className: string
     selector: string
@@ -1051,6 +1054,21 @@ proc resolveCompiledMethod(className, selector: string): CompiledProc =
   if resolvedMethods.len >= 4096:
     resolvedMethods.clear()
   resolvedMethods[key] = result
+
+proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
+                            selector: string, target: CompiledProc,
+                            guard: var CompiledDirectGuard): bool {.inline.} =
+  ## An exact native receiver and unchanged method permit a baked-in call.
+  ## Bound hosts retain live interpreted lookup, regardless of cache warmth.
+  if boundCompiledClasses.len != 0 or expectedClass == nil or
+     receiver.kind != vkInstance or receiver.instVal == nil or
+     receiver.instVal.kind != ikObject or not receiver.instVal.isNimProxy or
+     receiver.instVal.nativeSlots != nil or receiver.instVal.class != expectedClass:
+    return false
+  if guard.version != compiledClassDispatchVersion:
+    guard.valid = resolveCompiledMethod(expectedClass.name, selector) == target
+    guard.version = compiledClassDispatchVersion
+  guard.valid
 
 proc getReceiverClassName*(receiver: NodeValue): string =
   ## Resolve runtime class name for compiled Nim proxy instances

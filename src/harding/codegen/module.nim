@@ -437,6 +437,42 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add("\n")
     return output
   
+  var directCandidates = initTable[string, string]()
+  if not mixed:
+    var targets = initTable[string, seq[tuple[owner, target, slot: string]]]()
+    for md in methodDefs:
+      if not md.isClassMethod and md.params.len == 0 and md.className in compiledClasses:
+        targets.mgetOrPut(md.selector, @[]).add((md.className,
+          mangleClass(md.className) & "_" & mangleSelector(md.selector), ""))
+    for name in compiledClasses:
+      if name notin classInfo: continue
+      let cls = classInfo[name]
+      for slot in cls.getterSlots:
+        if slot notin cls.instanceSelectors:
+          targets.mgetOrPut(slot, @[]).add((name, "methodGet_" & name & "_" & mangleSlot(slot), slot))
+    for selector, choices in targets:
+      if choices.len != 1 or selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
+        continue
+      let choice = choices[0]
+      # Nim identifiers are style-insensitive: selectors that differ only in case
+      # (slotValue vs slotvalue) must not share a helper name. mangleSlot uses
+      # the case-safe encoding, unlike the case-preserving selector mangling.
+      let helper = "guardedSend_" & mangleClass(choice.owner) & "_" & mangleSlot(selector)
+      directCandidates[selector] = helper
+      if choice.slot.len == 0:
+        output.add(fmt("proc {choice.target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+      output.add(fmt("var {helper}_class {{.threadvar.}}: Class\n"))
+      output.add(fmt("var {helper}_guard {{.threadvar.}}: CompiledDirectGuard\n"))
+      output.add(fmt("proc {helper}(owner, receiver: NodeValue): NodeValue {{.inline.}} =\n"))
+      output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+      output.add(fmt("  if canDirectCompiledSend(receiver, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard):\n"))
+      if choice.slot.len > 0:
+        let read = mangleClass(choice.owner) & "_direct_" & mangleSlot(choice.slot) & "_read"
+        output.add(fmt("    return {read}(receiver)\n"))
+      else:
+        output.add(fmt("    return {choice.target}(receiver, @[])\n"))
+      output.add(fmt("  sendMessageBound(owner, receiver, \"{selector}\", @[])\n\n"))
+
   output.add("\n# Compiled Methods\n")
   output.add("##################\n\n")
   
@@ -472,6 +508,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         if globalName notin genCtx.globals:
           genCtx.globals.add(globalName)
       genCtx.inMethod = true
+      genCtx.directSendCandidates = directCandidates
       genCtx.cellNames = methodCellNames
       if blockReg != nil:
         genCtx.blockRegistry = blockReg

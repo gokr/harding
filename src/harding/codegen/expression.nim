@@ -38,6 +38,7 @@ type
     ## native arithmetic. Storage is never narrowed, so a wrong candidate costs
     ## speed and never correctness.
     inferredNumericSlots*: Table[string, NumericRepresentation]
+    directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -267,6 +268,7 @@ proc genLocalDeclarations*(ctx: GenContext, names: seq[string]): string =
 proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
   result.inMethod = ctx.inMethod
+  result.directSendCandidates = ctx.directSendCandidates
   result.inBlock = ctx.inBlock
   result.returnTarget = ctx.returnTarget
   result.blockRegistry = ctx.blockRegistry
@@ -726,6 +728,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       let bodyBlock = node.arguments[2].BlockNode
       var loopCtx = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
       loopCtx.inMethod = ctx.inMethod
+      loopCtx.directSendCandidates = ctx.directSendCandidates
       loopCtx.inBlock = ctx.inBlock
       loopCtx.returnTarget = ctx.returnTarget
       loopCtx.locals = ctx.locals
@@ -865,6 +868,10 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
+    if not ctx.mixed and node.arguments.len == 0 and node.selector in ctx.directSendCandidates:
+      let owner = if ctx.inMethod: genSymbolAccess(ctx, "self") else: "nilValue()"
+      let helper = ctx.directSendCandidates[node.selector]
+      return fmt("{helper}({owner}, {receiverCode})")
     # Mixed-mode dispatch retains its fallback; pure sends use a per-site cache.
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
     if ctx.mixed:
@@ -1440,6 +1447,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     varTypes: ctx.varTypes,
     compiledClasses: ctx.compiledClasses,
     classInfo: ctx.classInfo,
+    directSendCandidates: ctx.directSendCandidates,
     cellNames: scopeCaptureCellNames(blkNode.body, blkNode.parameters & blkNode.temporaries)
   )
   for param in blkNode.parameters:
