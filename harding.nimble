@@ -323,6 +323,7 @@ task testFrozen, "Validate experimental Granite freeze closure and execute confo
 task testBenchmarkPorts, "Validate matched CPython/GNU Smalltalk and native Nim benchmark ports":
   exec "python3 -m unittest discover -s tests -p test_bench_compare.py"
   exec "python3 -m unittest discover -s tests -p test_practical_benchmarks.py"
+  exec "python3 -m unittest discover -s tests -p test_oil_benchmarks.py"
 
 task testTypeFeedback, "Validate static inference and interpreter slot feedback":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
