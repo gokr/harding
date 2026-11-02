@@ -913,3 +913,31 @@ suite "Compiler: Codegen - Blocks":
 #     check nimCode.contains("NodeValue")
 
 # Note: Tests run via nimble test (uses testament), not unittest.main()
+
+suite "Compiler: declarative primitives":
+  test "declarative primitives are reported instead of emitted":
+    ## The compiled runtime has no `primitiveArraySize`; emitting a call produced
+    ## an undeclared-identifier error inside generated Nim.
+    let (nodes, syntax) = parse("""
+      Thing := Object derive: #(v).
+      Thing>>size <primitive primitiveArraySize>
+    """)
+    require not syntax.hasError
+    var unsupported: seq[string]
+    collectDeclarativePrimitives(nodes, unsupported)
+    check unsupported.len == 1
+    check unsupported[0] == "Thing>>size (primitiveArraySize)"
+
+    let message = unsupportedPrimitiveMessage(unsupported)
+    check message.contains("Thing>>size")
+    check message.contains("--mixed")
+
+  test "methods without primitives are not reported":
+    let (nodes, syntax) = parse("""
+      Thing := Object derive: #(v).
+      Thing>>size [ ^ 3 ].
+    """)
+    require not syntax.hasError
+    var unsupported: seq[string]
+    collectDeclarativePrimitives(nodes, unsupported)
+    check unsupported.len == 0

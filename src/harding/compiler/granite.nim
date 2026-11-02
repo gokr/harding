@@ -399,12 +399,23 @@ proc compileFile(config: Config): bool =
         if kind in ["skInt", "skFloat"]: numericCandidates[key] = kind
 
   if defined(slotCandidateTrace): echo "candidates=", numericCandidates.len
+
+  # Declarative primitives have no native implementation. Reject them before
+  # code generation so the failure names the method instead of surfacing as an
+  # undeclared helper inside generated Nim.
+  if not config.mixed:
+    var unsupportedPrimitives: seq[string]
+    collectDeclarativePrimitives(nodes, unsupportedPrimitives)
+    if unsupportedPrimitives.len > 0:
+      echo "Error: ", unsupportedPrimitiveMessage(unsupportedPrimitives)
+      return false
+
   if config.inferenceReport.len > 0:
     try:
       let evidence = if config.typeFeedback.len > 0:
                        loadTypeFeedback(config.typeFeedback, config.inputFile)
                      else: nil
-      let report = inferenceReport(inferSlots(nodes, buildClassGraph(nodes).classes), evidence)
+      let report = inferenceReport(inferSlots(nodes, classModel.classes), evidence)
       createDir(absolutePath(config.inferenceReport).parentDir)
       writeFile(config.inferenceReport, pretty(report) & "\n")
     except CatchableError as failure:

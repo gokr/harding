@@ -412,6 +412,41 @@ proc extractMethodDefs(nodes: seq[Node]): seq[tuple[className, selector: string,
             result.add((className, selectorName, bodyBlock.parameters, bodyBlock.temporaries, bodyBlock.body, methodId,
                         msg.selector == "classSelector:put:"))
 
+proc collectDeclarativePrimitives*(nodes: seq[Node], unsupported: var seq[string]) =
+  ## Collect declarative primitive methods (`>>sel <primitive primName>`) found in
+  ## the definition nodes, described as "Class>>selector (primName)".
+  ##
+  ## Granite has no native implementation for these: the `.hrd` primitive form
+  ## names a VM primitive installed in Nim, and the compiled runtime carries none
+  ## of them. Emitting a call to a non-existent helper turned this into an
+  ## unrelated Nim error inside generated code, so the call site is diagnosed
+  ## here instead.
+  let (defs, _) = extractClassAndMethodDefs(nodes)
+  for md in extractMethodDefs(defs):
+    var tag = ""
+    for stmt in md.body:
+      if stmt != nil and stmt.kind == nkPrimitiveCall:
+        tag = stmt.PrimitiveCallNode.selector
+        break
+      if stmt != nil and stmt.kind == nkReturn and stmt.ReturnNode.expression != nil and
+         stmt.ReturnNode.expression.kind == nkPrimitiveCall:
+        tag = stmt.ReturnNode.expression.PrimitiveCallNode.selector
+        break
+    if tag.len > 0:
+      unsupported.add(md.className & ">>" & md.selector & " (" & tag & ")")
+
+proc unsupportedPrimitiveMessage*(names: seq[string]): string =
+  ## Explain why a declarative primitive cannot be compiled natively.
+  var listed = names
+  if listed.len > 5:
+    listed = listed[0..4]
+    listed.add("...")
+  "Granite cannot compile declarative primitives to native code.\n" &
+    "  Not supported: " & listed.join(", ") & "\n" &
+    "  These name VM primitives implemented in Nim; the compiled runtime does not\n" &
+    "  provide them. Run the program with the interpreter, or compile with --mixed\n" &
+    "  so those sends fall back to the VM."
+
 proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, params, temporaries: seq[string], body: seq[Node], methodId: int, isClassMethod: bool]],
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil,
