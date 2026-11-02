@@ -196,6 +196,19 @@ proc nt_negated*(n: NodeValue): NodeValue =
     return NodeValue(kind: vkFloat, floatVal: -n.floatVal)
   return NodeValue(kind: vkNil)
 
+proc nt_pipe*(a, b: NodeValue): NodeValue =
+  ## Eager Boolean disjunction. Both operands have already been evaluated;
+  ## non-Boolean receivers keep ordinary dispatch and its existing behavior.
+  if a.kind == vkBool and b.kind == vkBool:
+    return NodeValue(kind: vkBool, boolVal: a.boolVal or b.boolVal)
+  sendMessage(nil, a, "|", @[b])
+
+proc nt_not*(value: NodeValue): NodeValue =
+  ## Boolean negation; user-defined objects keep their normal method lookup.
+  if value.kind == vkBool:
+    return NodeValue(kind: vkBool, boolVal: not value.boolVal)
+  sendMessage(nil, value, "not", @[])
+
 # Global variable support
 
 var compiledGlobals = initTable[string, NodeValue]()

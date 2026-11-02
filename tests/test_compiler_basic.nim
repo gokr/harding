@@ -581,6 +581,23 @@ suite "Compiler: Engine binding shims":
     check dispatch > argumentBinding
     check code.contains("\"+\", @[hardingBuiltinArg0])")
 
+suite "Compiler: Boolean helper generation":
+  test "eager operands are bound before host routing and primitive helper":
+    let ctx = newGenContext()
+    ctx.inMethod = true
+    ctx.parameters = @["next"]
+    let operand = MessageNode(receiver: IdentNode(name: "next"), selector: "value")
+    let code = genMessage(ctx, MessageNode(receiver: operand, selector: "|", arguments: @[Node(operand)]))
+    check code.count("sendMessageBound(self, next, \"value\", @[])") == 2
+    check code.contains("nt_pipe(hardingBuiltinReceiver, hardingBuiltinArg0)")
+    check code.find("let hardingBuiltinArg0 =") < code.find("let builtin = hostedBuiltinDeferred(")
+    check code.contains("\"|\", @[hardingBuiltinArg0])")
+    let negation = genMessage(ctx, MessageNode(receiver: IdentNode(name: "next"), selector: "not"))
+    check negation.contains("nt_not(hardingBuiltinReceiver)")
+    ctx.mixed = true
+    check not genMessage(ctx, MessageNode(receiver: operand, selector: "|", arguments: @[Node(operand)])).contains("nt_pipe")
+    check not genMessage(ctx, MessageNode(receiver: operand, selector: "not")).contains("nt_not")
+
 suite "Compiler: Shared runtime support":
   test "generated modules import helpers instead of defining them":
     let (nodes, _) = parse("1 + 2.")

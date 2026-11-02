@@ -344,6 +344,11 @@ task testSlotContracts, "Validate declared-slot defaults and checked writes in b
   exec "python3 -m unittest discover -s tests -p test_slot_contract.py"
   exec "python3 -m unittest discover -s tests -p test_direct_slots.py"
 
+task testBooleanHelpers, "Validate eager Boolean helper semantics in both engines under ARC/ORC":
+  exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
+  exec "python3 -m unittest discover -s tests -p test_boolean_helpers.py"
+  exec "python3 -m unittest discover -s tests -p test_engine_boundary_generated.py"
+
 task testDirectSends, "Validate guarded unary receiver sends and live fallback under ARC/ORC":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "python3 -m unittest discover -s tests -p test_direct_sends.py"

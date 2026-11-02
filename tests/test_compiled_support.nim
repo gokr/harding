@@ -56,6 +56,24 @@ suite "Compiled shared support":
     registerCompiledMethod(cls.name, "last", nilHelperOverride)
     check isNilValue(nt_last(receiver))
 
+  test "Boolean helpers preserve truth tables and dynamic overrides":
+    for left in [false, true]:
+      check nt_not(toValue(left)).boolVal == not left
+      for right in [false, true]:
+        check nt_pipe(toValue(left), toValue(right)).boolVal == (left or right)
+    let instance = newInstance(newClass(name = "BooleanHelperOverride"))
+    instance.isNimProxy = true
+    let receiver = NodeValue(kind: vkInstance, instVal: instance)
+    registerCompiledMethod(instance.class.name, "|", helperOverride)
+    registerCompiledMethod(instance.class.name, "not", helperOverride)
+    check nt_pipe(receiver, toValue(false)).strVal == "override"
+    check nt_not(receiver).strVal == "override"
+    registerCompiledMethod(instance.class.name, "not", nilHelperOverride)
+    check isNilValue(nt_not(receiver))
+    # Wrong primitive kinds retain the existing generic answer, not a bool cast.
+    check isNilValue(nt_pipe(toValue(true), toValue(1)))
+    check isNilValue(nt_not(toValue(1)))
+
   test "base storage is retainable by instance wrappers":
     let owner = HardingObjectRef(className: "OwnedTest")
     let wrapper = Instance(kind: ikObject, compiledOwner: owner)

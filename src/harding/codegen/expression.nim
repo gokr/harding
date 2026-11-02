@@ -774,6 +774,13 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       code.add("    nilValue())")
       return code
 
+  if not ctx.mixed:
+    if node.selector == "|" and node.arguments.len == 1:
+      let argCode = genExpression(ctx, node.arguments[0])
+      return genHostedBuiltin(ctx, receiverCode, "|", "nt_pipe", @[argCode])
+    if node.selector == "not" and node.arguments.len == 0:
+      return genHostedBuiltin(ctx, receiverCode, "not", "nt_not")
+
   case node.selector
   of "+", "-", "*", "/":
     # Binary operators - these are generated as function calls

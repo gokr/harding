@@ -172,6 +172,9 @@ Factory>>lastOf: collection [ ^ collection last ].
 Factory>>absOf: value [ ^ value abs ].
 Factory>>stringOf: value [ ^ value asString ].
 Factory>>countedSum: next [ ^ next value + next value ].
+Factory>>either: a with: b [ ^ a | b ].
+Factory>>invert: target [ ^ target not ].
+Factory>>countedEither: next [ ^ next value | next value ].
 Factory>>same: value [ ^ value == value ].
 SlotParent := Object derivePublic: #(base).
 SlotParent>>baseValue [ ^ base ].
@@ -251,6 +254,9 @@ Factory>>lastOf: collection [ ^ nil ].
 Factory>>absOf: value [ ^ nil ].
 Factory>>stringOf: value [ ^ nil ].
 Factory>>countedSum: next [ ^ nil ].
+Factory>>either: a with: b [ ^ nil ].
+Factory>>invert: target [ ^ nil ].
+Factory>>countedEither: next [ ^ nil ].
 Factory>>same: value [ ^ nil ].
 SizedProbe := Object derivePublic: #(tag).
 SizedProbe>>size [ ^ 99 ].
@@ -258,6 +264,8 @@ SizedProbe>>+ other [ ^ 123 ].
 SizedProbe>>at: key [ ^ 77 ].
 SizedProbe>>last [ ^ 88 ].
 SizedProbe>>abs [ ^ 55 ].
+SizedProbe>>| other [ ^ other ].
+SizedProbe>>not [ ^ 71 ].
 SizedProbe>>asString [ ^ "probe-string" ].
 BoundaryLib := Library name: "BoundaryLib".
 BoundaryLib at: "LibrarySetting" put: 31.
@@ -397,6 +405,13 @@ doAssert sendMessageInterpreted(interp, instance, "item:at:", @[probe, toValue(0
 doAssert sendMessageInterpreted(interp, instance, "lastOf:", @[probe]).intVal == 88
 doAssert sendMessageInterpreted(interp, instance, "absOf:", @[probe]).intVal == 55
 doAssert sendMessageInterpreted(interp, instance, "stringOf:", @[probe]).strVal == "probe-string"
+doAssert sendMessageInterpreted(interp, instance, "either:with:", @[probe, toValue(72)]).intVal == 72
+doAssert sendMessageInterpreted(interp, instance, "invert:", @[probe]).intVal == 71
+doAssert sendMessageInterpreted(interp, instance, "either:with:", @[toValue(false), toValue(true)]).boolVal
+doAssert not sendMessageInterpreted(interp, instance, "invert:", @[toValue(true)]).boolVal
+let (_, replaceNotError) = interp.evalStatements("SizedProbe>>not [ ^nil ]")
+doAssert replaceNotError.len == 0
+doAssert isNilValue(sendMessageInterpreted(interp, instance, "invert:", @[probe]))
 # Native fast paths remain for primitive and native-collection receivers.
 doAssert sendMessageInterpreted(interp, instance, "added:with:", @[toValue(20), toValue(22)]).intVal == 42
 let interpretedArray = sendMessageInterpreted(interp, interp.globals[]["Array"], "new", @[])
