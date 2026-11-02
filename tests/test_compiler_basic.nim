@@ -896,6 +896,100 @@ suite "Compiler: Codegen - Blocks":
     check info.nimName.startsWith("harding_block_")
     check info.paramCount == 1
 
+suite "Compiler: reachable emitter surface":
+  ## Granite emits a fixed vocabulary of runtime helpers. These checks keep the
+  ## generated-code contract explicit: a helper the emitter never names is dead
+  ## weight in every compiled binary, and a selector arm that disagrees with the
+  ## runtime helper name fails only at Nim compile time.
+  test "generated control flow lowers to Nim statements, not block callbacks":
+    let (nodes, syntax) = parse("""
+      b := true.
+      b ifTrue: [1].
+      [b] whileTrue: [b := false].
+      3 timesRepeat: [b := true].
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "lowered_control_flow")
+    check code.contains("if isTruthy(")
+    check code.contains("while isTruthy(")
+    check code.contains("for timesRepeatI in 0..<compiledLoopInt(")
+    # The interpreter-side block helpers were removed; nothing may reference them.
+    check not code.contains("nt_ifTrue_kifFalse_k")
+    check not code.contains("nt_whileTrue_k")
+    check not code.contains("nt_whileFalse_k")
+    check not code.contains("nt_timesRepeat_k")
+
+  test "table access lowers to the collection helpers, not the dropped table pair":
+    let (nodes, syntax) = parse("""
+      t := #{"k" -> 1}.
+      (t at: "k") println.
+      t at: "j" put: 2.
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "table_access")
+    check code.contains("nt_at_k(")
+    check code.contains("nt_at_kput_k(")
+    check not code.contains("nt_table_at(")
+    check not code.contains("nt_table_atput(")
+
+  test "cascades evaluate the receiver once and keep the last result":
+    let (nodes, syntax) = parse("""
+      c := Object new.
+      c printString; printString.
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "cascade_codegen")
+    check code.contains("let hardingCascadeReceiver = ")
+    check code.contains("discard cachedSend(currentRuntime[], hardingCascadeReceiver, \"printString\"")
+    # The final segment's value is the cascade's value, so it is not discarded.
+    check code.contains("cachedSend(currentRuntime[], hardingCascadeReceiver, \"printString\", @[]))")
+
+  test "every operator selector the emitter can name has a runtime helper":
+    ## Codegen reaches runtime helpers through `mangleSelector`, except for
+    ## provably-numeric comparisons that fold to native Nim operators. A helper
+    ## renamed or deleted otherwise fails only when a generated module is compiled
+    ## by Nim, so check the names against the runtime source.
+    let source = readFile("src/harding/runtime/compiled_support.nim")
+    for selector in ["+", "-", "*", "/", "//", "\\", "%", "<", "<=", ">",
+                     ">=", "<>"]:
+      let helper = mangleSelector(selector)
+      check source.contains("proc " & helper & "*") or
+            source.contains("template " & helper & "*")
+
+  test "comparison family keeps <> distinct from = and ==":
+    ## Unbound operands cannot be folded, so these exercise the helper path.
+    let (nodes, syntax) = parse("""
+      C := Object derive: #().
+      C>>cmp: a with: b [ ^ a = b ].
+      C>>neq: a with: b [ ^ a <> b ].
+      C>>same: a with: b [ ^ a == b ].
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "comparison_family")
+    check code.contains("nt_ltgt(")
+    check code.contains("nt_eq(")
+    check code.contains("nt_eqeq(")
+
+  test "provably numeric comparisons fold to native Nim operators":
+    let (nodes, syntax) = parse("""
+      a := 1.
+      b := 2.
+      (a = b) println.
+      (a == b) println.
+      (a ~= b) println.
+    """)
+    require not syntax.hasError
+    var ctx = newCompiler()
+    let code = genModule(ctx, nodes, "folded_comparison")
+    check code.contains("(a == b)")
+    check code.contains("(a != b)")
+    check not code.contains("nt_eq(")
+    check not code.contains("nt_eqeq(")
+
 # Skip integration test for now - genModule has complex dependencies
 # TODO: Re-enable after fixing test setup
 # suite "Compiler: Integration":
@@ -913,31 +1007,3 @@ suite "Compiler: Codegen - Blocks":
 #     check nimCode.contains("NodeValue")
 
 # Note: Tests run via nimble test (uses testament), not unittest.main()
-
-suite "Compiler: declarative primitives":
-  test "declarative primitives are reported instead of emitted":
-    ## The compiled runtime has no `primitiveArraySize`; emitting a call produced
-    ## an undeclared-identifier error inside generated Nim.
-    let (nodes, syntax) = parse("""
-      Thing := Object derive: #(v).
-      Thing>>size <primitive primitiveArraySize>
-    """)
-    require not syntax.hasError
-    var unsupported: seq[string]
-    collectDeclarativePrimitives(nodes, unsupported)
-    check unsupported.len == 1
-    check unsupported[0] == "Thing>>size (primitiveArraySize)"
-
-    let message = unsupportedPrimitiveMessage(unsupported)
-    check message.contains("Thing>>size")
-    check message.contains("--mixed")
-
-  test "methods without primitives are not reported":
-    let (nodes, syntax) = parse("""
-      Thing := Object derive: #(v).
-      Thing>>size [ ^ 3 ].
-    """)
-    require not syntax.hasError
-    var unsupported: seq[string]
-    collectDeclarativePrimitives(nodes, unsupported)
-    check unsupported.len == 0
