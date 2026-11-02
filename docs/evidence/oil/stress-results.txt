@@ -1,0 +1,19 @@
+Cog richards 300 0 300
+Cog richards 1000 0 1000
+Cog richards 5000 0 5000
+Cog deltablue 300 0 300
+Cog deltablue 1000 0 1000
+Cog deltablue 5000 0 5000
+Cog queens 300 0 92
+Cog queens 1000 0 92
+Cog queens 5000 0 92
+Oil richards 300 0 300
+Oil richards 1000 0 1000
+Oil richards 5000 0 ERROR: MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:
+Oil deltablue 300 0 ERROR: Error: Instances of DBPlanner are not indexable
+Oil deltablue 1000 0 1000
+Oil deltablue 5000 0 ERROR: MessageNotUnderstood: DBCollection>><
+Oil queens 300 0 92
+Oil queens 1000 0 ERROR: MessageNotUnderstood: UndefinedObject>>row
+Oil queens 5000 0 ERROR: MessageNotUnderstood: HBQueens>>adaptToNumber:andSend:
+/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/stress-3bf69co0

@@ -83,26 +83,27 @@ Each row is a separate process; these are workload checks, not timed scores:
 | Oil / DeltaBlue | fail: DBPlanner not indexable | pass | fail: DBCollection>>< |
 | Oil / Queens | pass | fail: UndefinedObject>>row | fail: HBQueens>>adaptToNumber:andSend: |
 
-Evidence (committed, so a cloner can inspect it without rebuilding):
-`docs/evidence/oil/stress-results.log` and the per-process result/stderr files
+Evidence (committed, so a cloner can inspect it without rebuilding; retained as
+`.txt` because `*.log` is gitignored):
+`docs/evidence/oil/stress-results.txt` and the per-process result/stderr files
 under `docs/evidence/oil/stress-clang/`. The runner regenerates the same layout
 under `build/osvm/stress-*`. The mixed pass/fail threshold is not a claim of a
 deterministic iteration at which Oil fails. Short smoke passes do not establish
 correctness under optimization or GC.
 
 The long timing run also rejects Richards before producing a score:
-`docs/evidence/oil/oil-compare-long.log`, artifacts
+`docs/evidence/oil/oil-compare-long.txt`, artifacts
 `docs/evidence/oil/compare-long/`. Its explicit failure is
 `MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:`.
 The committed setup script was then exercised for both flavors
-(`docs/evidence/oil/setup-reproduced.log`); the rebuilt Oil repeats the same
+(`docs/evidence/oil/setup-reproduced.txt`); the rebuilt Oil repeats the same
 failure in `docs/evidence/oil/compare-rebuilt/results.json` with
 `status: failed`.
 
 A separate GCC 13.3.0 Oil build, same source/image, was tested to distinguish a
 clang-only problem. At 5,000 passes Richards passed, but DeltaBlue failed with
 `DBPlanner not indexable` and Queens with `HBQueens>>adaptToNumber:andSend:`.
-Evidence: `docs/evidence/oil/gcc-stress.log`,
+Evidence: `docs/evidence/oil/gcc-stress.txt`,
 `docs/evidence/oil/stress-gcc/`. Reproduce the variant with
 `python3 scripts/build_oil_gcc.py` after the main setup: it reuses the generated
 build script and only swaps the compiler-selection line, so no generated VM

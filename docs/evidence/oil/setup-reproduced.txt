@@ -1,0 +1,3 @@
+Built: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqcogspur64linuxht
+Built: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqoilspur64linuxht
+Image: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/image/Squeak6.1-23976-64bit.image

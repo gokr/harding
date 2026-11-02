@@ -1,0 +1,10 @@
+Artifacts: /home/gokr/git/harding/worktrees/granite-completeness/build/bench-compare-oil/run-107zfh7b
+Traceback (most recent call last):
+  File "/home/gokr/git/harding/worktrees/granite-completeness/scripts/bench_compare_oil.py", line 142, in <module>
+    main()
+  File "/home/gokr/git/harding/worktrees/granite-completeness/scripts/bench_compare_oil.py", line 120, in main
+    times[count] = execute(commands[name][count], directory,
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gokr/git/harding/worktrees/granite-completeness/scripts/bench_compare.py", line 134, in execute
+    raise RuntimeError(f'Wrong output: {label}: {observed!r}, {stderr!r}; {directory}')
+RuntimeError: Wrong output: Oil-0-5000: 'ERROR: MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:', 'pthread_setschedparam failed: Operation not permitted\nThis VM uses a separate heartbeat thread to update its internal clock\nand handle events.  For best operation, this thread should run at a\nhigher priority, however the VM was unable to change the priority.  The\neffect is that heavily loaded systems may experience some latency\nissues.  If this occurs, please create the appropriate configuration\nfile in /etc/security/limits.d/ as shown below:\n\ncat <<END | sudo tee /etc/security/limits.d/squeak.conf\n*      hard    rtprio  2\n*      soft    rtprio  2\nEND\n\nand report to the squeak mailing list whether this improves behaviour.\n\nYou will need to log out and log back in for the limits to take effect.\nFor more information please see\nhttps://github.com/OpenSmalltalk/opensmalltalk-vm/releases/tag/r3732#linux\n'; /home/gokr/git/harding/worktrees/granite-completeness/build/bench-compare-oil/run-107zfh7b/richards

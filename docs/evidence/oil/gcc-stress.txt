@@ -1,0 +1,4 @@
+richards 0 5000
+deltablue 0 ERROR: Error: Instances of DBPlanner are not indexable
+queens 0 ERROR: MessageNotUnderstood: HBQueens>>adaptToNumber:andSend:
+/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/gcc-stress-4zw1k0f7
