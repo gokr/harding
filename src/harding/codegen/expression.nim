@@ -893,7 +893,9 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
     if ctx.inMethod:
       let owner = genSymbolAccess(ctx, "self")
-      return fmt("sendMessageBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
+      # Method bodies are where hot sends live, so they get a per-site cache too;
+      # the helper keeps the owner-based host routing for VM-owned receivers.
+      return fmt("cachedSendBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
     return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
 proc blockOwnerLocals*(ctx: GenContext): seq[string] =

@@ -161,6 +161,7 @@ type
     selector: string
     version: uint64
     target: CompiledProc
+    negative: bool  ## A resolved "no compiled method" answer, so it is not re-resolved.
 
 var compiledClassMethods = initTable[string, CompiledProc]()
 var compiledAllocators = initTable[string, CompiledProc]()
@@ -1542,6 +1543,477 @@ proc compiledIdentityEqual*(a, b: NodeValue): bool =
     return a.instVal.compiledOwner == b.instVal.compiledOwner
   return identityEqual(a, b)
 
+proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
+                     args: seq[NodeValue], receiverClassName: string): NodeValue =
+  ## The builtin selector chain, after compiled resolution has already been
+  ## attempted. Split out so a caller that knows the resolution outcome does not
+  ## have to repeat it.
+  case selector
+  of "=":
+    if args.len == 1:
+      let other = args[0]
+      if receiver.kind != other.kind:
+        return toValue(false)
+      case receiver.kind
+      of vkInt: return toValue(receiver.intVal == other.intVal)
+      of vkFloat: return toValue(receiver.floatVal == other.floatVal)
+      of vkString: return toValue(receiver.strVal == other.strVal)
+      of vkSymbol: return toValue(receiver.symVal == other.symVal)
+      of vkBool: return toValue(receiver.boolVal == other.boolVal)
+      else: return toValue(compiledIdentityEqual(receiver, other))
+  of "<>":
+    if args.len == 1:
+      let other = args[0]
+      if receiver.kind in {vkInt, vkFloat} and other.kind in {vkInt, vkFloat}:
+        if receiver.kind != other.kind:
+          return toValue(true)
+        if receiver.kind == vkInt:
+          return toValue(receiver.intVal != other.intVal)
+        return toValue(receiver.floatVal != other.floatVal)
+      if receiver.kind == vkString and other.kind == vkString:
+        return toValue(receiver.strVal != other.strVal)
+      if receiver.kind == vkSymbol and other.kind == vkSymbol:
+        return toValue(receiver.symVal != other.symVal)
+    return compiledMissingMessage(receiver, selector)
+  of "class":
+    if args.len == 0 and receiverClassName.len > 0:
+      return compiledClassValue(receiverClassName)
+    return compiledMissingMessage(receiver, selector)
+  of "className":
+    if args.len == 0 and receiverClassName.len > 0:
+      return toValue(receiverClassName)
+    return compiledMissingMessage(receiver, selector)
+  of "superclassNames":
+    if args.len == 0 and receiverClassName.len > 0:
+      var names: seq[NodeValue] = @[]
+      for parent in getSuperclasses(receiverClassName):
+        names.add(toValue(parent))
+      return compiledArray(names)
+    return compiledMissingMessage(receiver, selector)
+  of "isKindOf:":
+    if args.len == 1 and args[0].kind == vkClass and args[0].classVal != nil and
+       receiverClassName.len > 0:
+      let targetName = args[0].classVal.name
+      let owner = walkCompiledHierarchy(receiverClassName,
+        proc(name: string): bool = name == targetName)
+      return toValue(owner.len > 0)
+    return toValue(false)
+
+  of "respondsTo:":
+    if args.len < 1:
+      return NodeValue(kind: vkBool, boolVal: false)
+    var querySelector = ""
+    if args[0].kind == vkSymbol:
+      querySelector = args[0].symVal
+    elif args[0].kind == vkString:
+      querySelector = args[0].strVal
+    if querySelector.len == 0:
+      return NodeValue(kind: vkBool, boolVal: false)
+    let queryName = getReceiverClassName(receiver)
+    if queryName.len > 0 and hasCompiledMethodInHierarchy(queryName, querySelector):
+      return NodeValue(kind: vkBool, boolVal: true)
+    if receiver.kind == vkClass and receiver.classVal != nil:
+      return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
+    return NodeValue(kind: vkBool, boolVal: false)
+
+  of "asInteger", "asFloat", "asNumber":
+    if receiver.kind == vkString and args.len == 0:
+      case selector
+      of "asInteger": return stringAsInteger(receiver.strVal)
+      of "asFloat": return stringAsFloat(receiver.strVal)
+      else: return stringAsNumber(receiver.strVal)
+    return compiledMissingMessage(receiver, selector)
+
+  of "isNil":
+    return toValue(isNilValue(receiver))
+  of "notNil":
+    return toValue(not isNilValue(receiver))
+  of "writeLine:", "writeline:", "println", "println:":
+    if args.len > 0:
+      echo args[0].toString()
+    return receiver
+  of "write:", "print", "print:":
+    if args.len > 0:
+      stdout.write(args[0].toString())
+    return receiver
+  of "toString", "asString":
+    return NodeValue(kind: vkString, strVal: receiver.toString())
+  of "printString":
+    return NodeValue(kind: vkString, strVal: receiver.toString())
+  of "+", "plus":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal + args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "-", "minus":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal - args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "*", "star":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal * args[0].intVal)
+    return NodeValue(kind: vkNil)
+  of "/":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkFloat, floatVal: float(receiver.intVal) / float(args[0].intVal))
+    return NodeValue(kind: vkNil)
+  of "//":
+    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
+      return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
+    return NodeValue(kind: vkNil)
+
+  of "new":
+    if receiver.kind == vkSymbol:
+      case receiver.symVal
+      of "Array":
+        return compiledArray(@[])
+      of "Table":
+        return compiledTable(initTable[NodeValue, NodeValue]())
+      of "Set":
+        let value = compiledTable(initTable[NodeValue, NodeValue]())
+        if "Set" notin compiledClasses:
+          compiledClasses["Set"] = newClass(name = "Set")
+        value.instVal.class = compiledClasses["Set"]
+        return value
+      of "String":
+        return NodeValue(kind: vkString, strVal: "")
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "new:":
+    if receiver.kind == vkSymbol and args.len > 0:
+      let size = if args[0].kind == vkInt: args[0].intVal else: -1
+      let isInt = args[0].kind == vkInt
+      case receiver.symVal
+      of "Array":
+        if isInt and size >= 0:
+          var elements = newSeq[NodeValue](size)
+          for i in 0..<size:
+            elements[i] = NodeValue(kind: vkNil)
+          return compiledArray(elements)
+      of "String":
+        if isInt and size >= 0:
+          return NodeValue(kind: vkString, strVal: "")
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "new:withAll:":
+    if receiver.kind == vkSymbol and args.len >= 2 and args[0].kind == vkInt and args[0].intVal >= 0:
+      case receiver.symVal
+      of "Array":
+        var elements = newSeq[NodeValue](args[0].intVal)
+        for i in 0..<args[0].intVal:
+          elements[i] = args[1]
+        return compiledArray(elements)
+      else:
+        discard
+    return NodeValue(kind: vkNil)
+
+  of "add:":
+    if receiver.kind == vkArray and args.len > 0:
+      var arr = receiver.arrayVal
+      arr.add(args[0])
+      return compiledArray(arr)
+    if receiver.kind == vkTable and args.len > 0:
+      # Tables back compiled Set values: the element is both key and value, so
+      # repeated adds are naturally deduplicated.
+      var tbl = receiver.tableVal
+      tbl[args[0]] = args[0]
+      return compiledTable(tbl)
+    return NodeValue(kind: vkNil)
+
+  of "includes:":
+    if args.len > 0:
+      if receiver.kind == vkArray:
+        for element in receiver.arrayVal:
+          if element == args[0]:
+            return NodeValue(kind: vkBool, boolVal: true)
+        return NodeValue(kind: vkBool, boolVal: false)
+      if receiver.kind == vkTable:
+        return NodeValue(kind: vkBool, boolVal: receiver.tableVal.hasKey(args[0]))
+    return NodeValue(kind: vkNil)
+
+  of "at:":
+    if args.len > 0 and receiver.kind == vkInstance and receiver.instVal != nil and
+       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
+      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
+      return getSlotValue(receiver, name)
+    if args.len > 0:
+      if receiver.kind == vkArray and args[0].kind == vkInt:
+        let idx = args[0].intVal
+        if idx >= 0 and idx < receiver.arrayVal.len:
+          return receiver.arrayVal[idx]
+      elif receiver.kind == vkTable:
+        if receiver.tableVal.hasKey(args[0]):
+          return receiver.tableVal[args[0]]
+    return NodeValue(kind: vkNil)
+
+  of "at:put:":
+    if args.len >= 2 and receiver.kind == vkInstance and receiver.instVal != nil and
+       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
+      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
+      return setSlotValue(receiver, name, args[1])
+    if args.len >= 2:
+      if receiver.kind == vkArray and args[0].kind == vkInt:
+        let idx = args[0].intVal
+        if idx >= 0:
+          var arr = receiver.arrayVal
+          if idx < arr.len:
+            arr[idx] = args[1]
+          elif idx == arr.len:
+            arr.add(args[1])
+          return compiledArray(arr)
+      elif receiver.kind == vkTable:
+        var tbl = receiver.tableVal
+        tbl[args[0]] = args[1]
+        return compiledTable(tbl)
+    return receiver
+
+  of "size":
+    if receiver.kind == vkArray:
+      return NodeValue(kind: vkInt, intVal: receiver.arrayVal.len)
+    if receiver.kind == vkTable:
+      return NodeValue(kind: vkInt, intVal: receiver.tableVal.len)
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkInt, intVal: receiver.strVal.len)
+    return NodeValue(kind: vkNil)
+
+  of "first":
+    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
+      return receiver.arrayVal[0]
+    return NodeValue(kind: vkNil)
+
+  of "last":
+    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
+      return receiver.arrayVal[^1]
+    return NodeValue(kind: vkNil)
+
+  of "keys":
+    if receiver.kind == vkTable:
+      var keys: seq[NodeValue] = @[]
+      for k in receiver.tableVal.keys:
+        keys.add(k)
+      return compiledArray(keys)
+    return NodeValue(kind: vkNil)
+
+  of "uppercase":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.toUpperAscii())
+    return NodeValue(kind: vkNil)
+
+  of "lowercase":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.toLowerAscii())
+    return NodeValue(kind: vkNil)
+
+  of "trim":
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.strip())
+    return NodeValue(kind: vkNil)
+
+  of "indexOf:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      return NodeValue(kind: vkInt, intVal: receiver.strVal.find(args[0].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "includesSubString:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      return NodeValue(kind: vkBool, boolVal: receiver.strVal.contains(args[0].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "replace:with:":
+    if receiver.kind == vkString and args.len >= 2 and args[0].kind == vkString and args[1].kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal.replace(args[0].strVal, args[1].strVal))
+    return NodeValue(kind: vkNil)
+
+  of "split:":
+    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
+      var parts: seq[NodeValue] = @[]
+      for part in receiver.strVal.split(args[0].strVal):
+        parts.add(NodeValue(kind: vkString, strVal: part))
+      return compiledArray(parts)
+    return NodeValue(kind: vkNil)
+
+  of "max:":
+    if args.len > 0:
+      if receiver.kind == vkInt and args[0].kind == vkInt:
+        return NodeValue(kind: vkInt, intVal: max(receiver.intVal, args[0].intVal))
+      if receiver.kind == vkFloat and args[0].kind == vkFloat:
+        return NodeValue(kind: vkFloat, floatVal: max(receiver.floatVal, args[0].floatVal))
+    return NodeValue(kind: vkNil)
+
+  of "min:":
+    if args.len > 0:
+      if receiver.kind == vkInt and args[0].kind == vkInt:
+        return NodeValue(kind: vkInt, intVal: min(receiver.intVal, args[0].intVal))
+      if receiver.kind == vkFloat and args[0].kind == vkFloat:
+        return NodeValue(kind: vkFloat, floatVal: min(receiver.floatVal, args[0].floatVal))
+    return NodeValue(kind: vkNil)
+
+  of "between:and:":
+    if args.len >= 2 and receiver.kind == vkInt and args[0].kind == vkInt and args[1].kind == vkInt:
+      return NodeValue(kind: vkBool, boolVal: receiver.intVal >= args[0].intVal and receiver.intVal <= args[1].intVal)
+    return NodeValue(kind: vkNil)
+
+  of "withIndexDo:":
+    if receiver.kind == vkArray and args.len == 1:
+      let size = receiver.arrayVal.len
+      for index in 0..<size:
+        discard sendMessage(runtime, args[0], "value:value:",
+                            @[receiver.arrayVal[index], toValue(index)])
+      return receiver
+    return compiledMissingMessage(receiver, selector)
+
+  of "do:":
+    if receiver.kind == vkArray and args.len > 0:
+      for item in receiver.arrayVal:
+        discard sendMessage(runtime, args[0], "value:", @[item])
+      return receiver
+    return NodeValue(kind: vkNil)
+
+  of "isEmpty", "notEmpty":
+    var size = -1
+    case receiver.kind
+    of vkArray: size = receiver.arrayVal.len
+    of vkTable: size = receiver.tableVal.len
+    of vkString: size = receiver.strVal.len
+    else: discard
+    if size >= 0:
+      return toValue(if selector == "isEmpty": size == 0 else: size > 0)
+    return compiledMissingMessage(receiver, selector)
+
+  of "collect:", "select:", "reject:", "detect:", "detect:ifNone:",
+     "anySatisfy:", "allSatisfy:", "noneSatisfy:":
+    let arity = if selector == "detect:ifNone:": 2 else: 1
+    if receiver.kind != vkArray or args.len != arity:
+      return compiledMissingMessage(receiver, selector)
+    var elements: seq[NodeValue]
+    for item in receiver.arrayVal:
+      let answer = sendMessage(runtime, args[0], "value:", @[item])
+      let matched = if selector == "collect:": false else: isTruthy(answer)
+      case selector
+      of "collect:": elements.add(answer)
+      of "select:":
+        if matched: elements.add(item)
+      of "reject:":
+        if not matched: elements.add(item)
+      of "detect:", "detect:ifNone:":
+        if matched: return item
+      of "anySatisfy:":
+        if matched: return toValue(true)
+      of "allSatisfy:":
+        if not matched: return toValue(false)
+      of "noneSatisfy:":
+        if matched: return toValue(false)
+      else: discard
+    case selector
+    of "collect:", "select:", "reject:":
+      return compiledArray(elements)
+    of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
+    of "detect:": return nilValue()
+    of "anySatisfy:": return toValue(false)
+    else: return toValue(true)
+
+  of "inject:into:":
+    if receiver.kind == vkArray and args.len >= 2:
+      var acc = args[0]
+      for item in receiver.arrayVal:
+        acc = sendMessage(runtime, args[1], "value:value:", @[acc, item])
+      return acc
+    return NodeValue(kind: vkNil)
+
+  of "to:do:":
+    if receiver.kind == vkInt and args.len >= 2 and args[0].kind == vkInt:
+      let startNum = receiver.intVal
+      let endNum = args[0].intVal
+      if startNum <= endNum:
+        for i in startNum..endNum:
+          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
+      else:
+        for i in countdown(startNum, endNum):
+          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
+      return receiver
+    return NodeValue(kind: vkNil)
+
+  of "ifNil:", "ifNotNil:", "ifNil:ifNotNil:", "ifNotNil:ifNil:":
+    let arity = if selector in ["ifNil:", "ifNotNil:"]: 1 else: 2
+    if args.len != arity:
+      return compiledMissingMessage(receiver, selector)
+    let absent = isTruthy(sendMessage(runtime, receiver, "isNil", @[]))
+    case selector
+    of "ifNil:":
+      if absent:
+        return sendMessage(runtime, args[0], "value", @[])
+      return receiver
+    of "ifNotNil:":
+      if absent:
+        return NodeValue(kind: vkNil)
+      return sendMessage(runtime, args[0], "value:", @[receiver])
+    of "ifNil:ifNotNil:":
+      if absent:
+        return sendMessage(runtime, args[0], "value", @[])
+      return sendMessage(runtime, args[1], "value:", @[receiver])
+    else:
+      if absent:
+        return sendMessage(runtime, args[1], "value", @[])
+      return sendMessage(runtime, args[0], "value:", @[receiver])
+
+  of "ifTrue:":
+    if args.len > 0 and isTruthy(receiver):
+      return sendMessage(runtime, args[0], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "ifFalse:":
+    if args.len > 0 and not isTruthy(receiver):
+      return sendMessage(runtime, args[0], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "ifTrue:ifFalse:":
+    if args.len >= 2:
+      if isTruthy(receiver):
+        return sendMessage(runtime, args[0], "value", @[])
+      return sendMessage(runtime, args[1], "value", @[])
+    return NodeValue(kind: vkNil)
+
+  of "and:":
+    if receiver.kind == vkBool and args.len > 0:
+      if not receiver.boolVal:
+        return NodeValue(kind: vkBool, boolVal: false)
+      let rhs = sendMessage(runtime, args[0], "value", @[])
+      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
+    return NodeValue(kind: vkNil)
+
+  of "or:":
+    if receiver.kind == vkBool and args.len > 0:
+      if receiver.boolVal:
+        return NodeValue(kind: vkBool, boolVal: true)
+      let rhs = sendMessage(runtime, args[0], "value", @[])
+      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
+    return NodeValue(kind: vkNil)
+
+  of "&":
+    if args.len > 0:
+      let aStr = receiver.toString()
+      let bStr = args[0].toString()
+      return NodeValue(kind: vkString, strVal: aStr & bStr)
+    return receiver
+
+  of "|":
+    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
+      return NodeValue(kind: vkBool, boolVal: receiver.boolVal or args[0].boolVal)
+    return NodeValue(kind: vkNil)
+
+  of "not":
+    if receiver.kind == vkBool:
+      return NodeValue(kind: vkBool, boolVal: not receiver.boolVal)
+    return NodeValue(kind: vkNil)
+  else:
+    if receiverClassName.len > 0:
+      return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
+    return compiledMissingMessage(receiver, selector)
+
+
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
@@ -2026,470 +2498,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if target != nil:
       return target(receiver, args)
 
-  case selector
-  of "=":
-    if args.len == 1:
-      let other = args[0]
-      if receiver.kind != other.kind:
-        return toValue(false)
-      case receiver.kind
-      of vkInt: return toValue(receiver.intVal == other.intVal)
-      of vkFloat: return toValue(receiver.floatVal == other.floatVal)
-      of vkString: return toValue(receiver.strVal == other.strVal)
-      of vkSymbol: return toValue(receiver.symVal == other.symVal)
-      of vkBool: return toValue(receiver.boolVal == other.boolVal)
-      else: return toValue(compiledIdentityEqual(receiver, other))
-  of "<>":
-    if args.len == 1:
-      let other = args[0]
-      if receiver.kind in {vkInt, vkFloat} and other.kind in {vkInt, vkFloat}:
-        if receiver.kind != other.kind:
-          return toValue(true)
-        if receiver.kind == vkInt:
-          return toValue(receiver.intVal != other.intVal)
-        return toValue(receiver.floatVal != other.floatVal)
-      if receiver.kind == vkString and other.kind == vkString:
-        return toValue(receiver.strVal != other.strVal)
-      if receiver.kind == vkSymbol and other.kind == vkSymbol:
-        return toValue(receiver.symVal != other.symVal)
-    return compiledMissingMessage(receiver, selector)
-  of "class":
-    if args.len == 0 and receiverClassName.len > 0:
-      return compiledClassValue(receiverClassName)
-    return compiledMissingMessage(receiver, selector)
-  of "className":
-    if args.len == 0 and receiverClassName.len > 0:
-      return toValue(receiverClassName)
-    return compiledMissingMessage(receiver, selector)
-  of "superclassNames":
-    if args.len == 0 and receiverClassName.len > 0:
-      var names: seq[NodeValue] = @[]
-      for parent in getSuperclasses(receiverClassName):
-        names.add(toValue(parent))
-      return compiledArray(names)
-    return compiledMissingMessage(receiver, selector)
-  of "isKindOf:":
-    if args.len == 1 and args[0].kind == vkClass and args[0].classVal != nil and
-       receiverClassName.len > 0:
-      let targetName = args[0].classVal.name
-      let owner = walkCompiledHierarchy(receiverClassName,
-        proc(name: string): bool = name == targetName)
-      return toValue(owner.len > 0)
-    return toValue(false)
-
-  of "respondsTo:":
-    if args.len < 1:
-      return NodeValue(kind: vkBool, boolVal: false)
-    var querySelector = ""
-    if args[0].kind == vkSymbol:
-      querySelector = args[0].symVal
-    elif args[0].kind == vkString:
-      querySelector = args[0].strVal
-    if querySelector.len == 0:
-      return NodeValue(kind: vkBool, boolVal: false)
-    let queryName = getReceiverClassName(receiver)
-    if queryName.len > 0 and hasCompiledMethodInHierarchy(queryName, querySelector):
-      return NodeValue(kind: vkBool, boolVal: true)
-    if receiver.kind == vkClass and receiver.classVal != nil:
-      return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
-    return NodeValue(kind: vkBool, boolVal: false)
-
-  of "asInteger", "asFloat", "asNumber":
-    if receiver.kind == vkString and args.len == 0:
-      case selector
-      of "asInteger": return stringAsInteger(receiver.strVal)
-      of "asFloat": return stringAsFloat(receiver.strVal)
-      else: return stringAsNumber(receiver.strVal)
-    return compiledMissingMessage(receiver, selector)
-
-  of "isNil":
-    return toValue(isNilValue(receiver))
-  of "notNil":
-    return toValue(not isNilValue(receiver))
-  of "writeLine:", "writeline:", "println", "println:":
-    if args.len > 0:
-      echo args[0].toString()
-    return receiver
-  of "write:", "print", "print:":
-    if args.len > 0:
-      stdout.write(args[0].toString())
-    return receiver
-  of "toString", "asString":
-    return NodeValue(kind: vkString, strVal: receiver.toString())
-  of "printString":
-    return NodeValue(kind: vkString, strVal: receiver.toString())
-  of "+", "plus":
-    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      return NodeValue(kind: vkInt, intVal: receiver.intVal + args[0].intVal)
-    return NodeValue(kind: vkNil)
-  of "-", "minus":
-    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      return NodeValue(kind: vkInt, intVal: receiver.intVal - args[0].intVal)
-    return NodeValue(kind: vkNil)
-  of "*", "star":
-    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      return NodeValue(kind: vkInt, intVal: receiver.intVal * args[0].intVal)
-    return NodeValue(kind: vkNil)
-  of "/":
-    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      return NodeValue(kind: vkFloat, floatVal: float(receiver.intVal) / float(args[0].intVal))
-    return NodeValue(kind: vkNil)
-  of "//":
-    if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
-      return NodeValue(kind: vkInt, intVal: receiver.intVal div args[0].intVal)
-    return NodeValue(kind: vkNil)
-
-  of "new":
-    if receiver.kind == vkSymbol:
-      case receiver.symVal
-      of "Array":
-        return compiledArray(@[])
-      of "Table":
-        return compiledTable(initTable[NodeValue, NodeValue]())
-      of "Set":
-        let value = compiledTable(initTable[NodeValue, NodeValue]())
-        if "Set" notin compiledClasses:
-          compiledClasses["Set"] = newClass(name = "Set")
-        value.instVal.class = compiledClasses["Set"]
-        return value
-      of "String":
-        return NodeValue(kind: vkString, strVal: "")
-      else:
-        discard
-    return NodeValue(kind: vkNil)
-
-  of "new:":
-    if receiver.kind == vkSymbol and args.len > 0:
-      let size = if args[0].kind == vkInt: args[0].intVal else: -1
-      let isInt = args[0].kind == vkInt
-      case receiver.symVal
-      of "Array":
-        if isInt and size >= 0:
-          var elements = newSeq[NodeValue](size)
-          for i in 0..<size:
-            elements[i] = NodeValue(kind: vkNil)
-          return compiledArray(elements)
-      of "String":
-        if isInt and size >= 0:
-          return NodeValue(kind: vkString, strVal: "")
-      else:
-        discard
-    return NodeValue(kind: vkNil)
-
-  of "new:withAll:":
-    if receiver.kind == vkSymbol and args.len >= 2 and args[0].kind == vkInt and args[0].intVal >= 0:
-      case receiver.symVal
-      of "Array":
-        var elements = newSeq[NodeValue](args[0].intVal)
-        for i in 0..<args[0].intVal:
-          elements[i] = args[1]
-        return compiledArray(elements)
-      else:
-        discard
-    return NodeValue(kind: vkNil)
-
-  of "add:":
-    if receiver.kind == vkArray and args.len > 0:
-      var arr = receiver.arrayVal
-      arr.add(args[0])
-      return compiledArray(arr)
-    if receiver.kind == vkTable and args.len > 0:
-      # Tables back compiled Set values: the element is both key and value, so
-      # repeated adds are naturally deduplicated.
-      var tbl = receiver.tableVal
-      tbl[args[0]] = args[0]
-      return compiledTable(tbl)
-    return NodeValue(kind: vkNil)
-
-  of "includes:":
-    if args.len > 0:
-      if receiver.kind == vkArray:
-        for element in receiver.arrayVal:
-          if element == args[0]:
-            return NodeValue(kind: vkBool, boolVal: true)
-        return NodeValue(kind: vkBool, boolVal: false)
-      if receiver.kind == vkTable:
-        return NodeValue(kind: vkBool, boolVal: receiver.tableVal.hasKey(args[0]))
-    return NodeValue(kind: vkNil)
-
-  of "at:":
-    if args.len > 0 and receiver.kind == vkInstance and receiver.instVal != nil and
-       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
-      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
-      return getSlotValue(receiver, name)
-    if args.len > 0:
-      if receiver.kind == vkArray and args[0].kind == vkInt:
-        let idx = args[0].intVal
-        if idx >= 0 and idx < receiver.arrayVal.len:
-          return receiver.arrayVal[idx]
-      elif receiver.kind == vkTable:
-        if receiver.tableVal.hasKey(args[0]):
-          return receiver.tableVal[args[0]]
-    return NodeValue(kind: vkNil)
-
-  of "at:put:":
-    if args.len >= 2 and receiver.kind == vkInstance and receiver.instVal != nil and
-       receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
-      let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
-      return setSlotValue(receiver, name, args[1])
-    if args.len >= 2:
-      if receiver.kind == vkArray and args[0].kind == vkInt:
-        let idx = args[0].intVal
-        if idx >= 0:
-          var arr = receiver.arrayVal
-          if idx < arr.len:
-            arr[idx] = args[1]
-          elif idx == arr.len:
-            arr.add(args[1])
-          return compiledArray(arr)
-      elif receiver.kind == vkTable:
-        var tbl = receiver.tableVal
-        tbl[args[0]] = args[1]
-        return compiledTable(tbl)
-    return receiver
-
-  of "size":
-    if receiver.kind == vkArray:
-      return NodeValue(kind: vkInt, intVal: receiver.arrayVal.len)
-    if receiver.kind == vkTable:
-      return NodeValue(kind: vkInt, intVal: receiver.tableVal.len)
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkInt, intVal: receiver.strVal.len)
-    return NodeValue(kind: vkNil)
-
-  of "first":
-    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
-      return receiver.arrayVal[0]
-    return NodeValue(kind: vkNil)
-
-  of "last":
-    if receiver.kind == vkArray and receiver.arrayVal.len > 0:
-      return receiver.arrayVal[^1]
-    return NodeValue(kind: vkNil)
-
-  of "keys":
-    if receiver.kind == vkTable:
-      var keys: seq[NodeValue] = @[]
-      for k in receiver.tableVal.keys:
-        keys.add(k)
-      return compiledArray(keys)
-    return NodeValue(kind: vkNil)
-
-  of "uppercase":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.toUpperAscii())
-    return NodeValue(kind: vkNil)
-
-  of "lowercase":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.toLowerAscii())
-    return NodeValue(kind: vkNil)
-
-  of "trim":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.strip())
-    return NodeValue(kind: vkNil)
-
-  of "indexOf:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      return NodeValue(kind: vkInt, intVal: receiver.strVal.find(args[0].strVal))
-    return NodeValue(kind: vkNil)
-
-  of "includesSubString:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      return NodeValue(kind: vkBool, boolVal: receiver.strVal.contains(args[0].strVal))
-    return NodeValue(kind: vkNil)
-
-  of "replace:with:":
-    if receiver.kind == vkString and args.len >= 2 and args[0].kind == vkString and args[1].kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.replace(args[0].strVal, args[1].strVal))
-    return NodeValue(kind: vkNil)
-
-  of "split:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      var parts: seq[NodeValue] = @[]
-      for part in receiver.strVal.split(args[0].strVal):
-        parts.add(NodeValue(kind: vkString, strVal: part))
-      return compiledArray(parts)
-    return NodeValue(kind: vkNil)
-
-  of "max:":
-    if args.len > 0:
-      if receiver.kind == vkInt and args[0].kind == vkInt:
-        return NodeValue(kind: vkInt, intVal: max(receiver.intVal, args[0].intVal))
-      if receiver.kind == vkFloat and args[0].kind == vkFloat:
-        return NodeValue(kind: vkFloat, floatVal: max(receiver.floatVal, args[0].floatVal))
-    return NodeValue(kind: vkNil)
-
-  of "min:":
-    if args.len > 0:
-      if receiver.kind == vkInt and args[0].kind == vkInt:
-        return NodeValue(kind: vkInt, intVal: min(receiver.intVal, args[0].intVal))
-      if receiver.kind == vkFloat and args[0].kind == vkFloat:
-        return NodeValue(kind: vkFloat, floatVal: min(receiver.floatVal, args[0].floatVal))
-    return NodeValue(kind: vkNil)
-
-  of "between:and:":
-    if args.len >= 2 and receiver.kind == vkInt and args[0].kind == vkInt and args[1].kind == vkInt:
-      return NodeValue(kind: vkBool, boolVal: receiver.intVal >= args[0].intVal and receiver.intVal <= args[1].intVal)
-    return NodeValue(kind: vkNil)
-
-  of "withIndexDo:":
-    if receiver.kind == vkArray and args.len == 1:
-      let size = receiver.arrayVal.len
-      for index in 0..<size:
-        discard sendMessage(runtime, args[0], "value:value:",
-                            @[receiver.arrayVal[index], toValue(index)])
-      return receiver
-    return compiledMissingMessage(receiver, selector)
-
-  of "do:":
-    if receiver.kind == vkArray and args.len > 0:
-      for item in receiver.arrayVal:
-        discard sendMessage(runtime, args[0], "value:", @[item])
-      return receiver
-    return NodeValue(kind: vkNil)
-
-  of "isEmpty", "notEmpty":
-    var size = -1
-    case receiver.kind
-    of vkArray: size = receiver.arrayVal.len
-    of vkTable: size = receiver.tableVal.len
-    of vkString: size = receiver.strVal.len
-    else: discard
-    if size >= 0:
-      return toValue(if selector == "isEmpty": size == 0 else: size > 0)
-    return compiledMissingMessage(receiver, selector)
-
-  of "collect:", "select:", "reject:", "detect:", "detect:ifNone:",
-     "anySatisfy:", "allSatisfy:", "noneSatisfy:":
-    let arity = if selector == "detect:ifNone:": 2 else: 1
-    if receiver.kind != vkArray or args.len != arity:
-      return compiledMissingMessage(receiver, selector)
-    var elements: seq[NodeValue]
-    for item in receiver.arrayVal:
-      let answer = sendMessage(runtime, args[0], "value:", @[item])
-      let matched = if selector == "collect:": false else: isTruthy(answer)
-      case selector
-      of "collect:": elements.add(answer)
-      of "select:":
-        if matched: elements.add(item)
-      of "reject:":
-        if not matched: elements.add(item)
-      of "detect:", "detect:ifNone:":
-        if matched: return item
-      of "anySatisfy:":
-        if matched: return toValue(true)
-      of "allSatisfy:":
-        if not matched: return toValue(false)
-      of "noneSatisfy:":
-        if matched: return toValue(false)
-      else: discard
-    case selector
-    of "collect:", "select:", "reject:":
-      return compiledArray(elements)
-    of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
-    of "detect:": return nilValue()
-    of "anySatisfy:": return toValue(false)
-    else: return toValue(true)
-
-  of "inject:into:":
-    if receiver.kind == vkArray and args.len >= 2:
-      var acc = args[0]
-      for item in receiver.arrayVal:
-        acc = sendMessage(runtime, args[1], "value:value:", @[acc, item])
-      return acc
-    return NodeValue(kind: vkNil)
-
-  of "to:do:":
-    if receiver.kind == vkInt and args.len >= 2 and args[0].kind == vkInt:
-      let startNum = receiver.intVal
-      let endNum = args[0].intVal
-      if startNum <= endNum:
-        for i in startNum..endNum:
-          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
-      else:
-        for i in countdown(startNum, endNum):
-          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
-      return receiver
-    return NodeValue(kind: vkNil)
-
-  of "ifNil:", "ifNotNil:", "ifNil:ifNotNil:", "ifNotNil:ifNil:":
-    let arity = if selector in ["ifNil:", "ifNotNil:"]: 1 else: 2
-    if args.len != arity:
-      return compiledMissingMessage(receiver, selector)
-    let absent = isTruthy(sendMessage(runtime, receiver, "isNil", @[]))
-    case selector
-    of "ifNil:":
-      if absent:
-        return sendMessage(runtime, args[0], "value", @[])
-      return receiver
-    of "ifNotNil:":
-      if absent:
-        return NodeValue(kind: vkNil)
-      return sendMessage(runtime, args[0], "value:", @[receiver])
-    of "ifNil:ifNotNil:":
-      if absent:
-        return sendMessage(runtime, args[0], "value", @[])
-      return sendMessage(runtime, args[1], "value:", @[receiver])
-    else:
-      if absent:
-        return sendMessage(runtime, args[1], "value", @[])
-      return sendMessage(runtime, args[0], "value:", @[receiver])
-
-  of "ifTrue:":
-    if args.len > 0 and isTruthy(receiver):
-      return sendMessage(runtime, args[0], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "ifFalse:":
-    if args.len > 0 and not isTruthy(receiver):
-      return sendMessage(runtime, args[0], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "ifTrue:ifFalse:":
-    if args.len >= 2:
-      if isTruthy(receiver):
-        return sendMessage(runtime, args[0], "value", @[])
-      return sendMessage(runtime, args[1], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "and:":
-    if receiver.kind == vkBool and args.len > 0:
-      if not receiver.boolVal:
-        return NodeValue(kind: vkBool, boolVal: false)
-      let rhs = sendMessage(runtime, args[0], "value", @[])
-      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
-    return NodeValue(kind: vkNil)
-
-  of "or:":
-    if receiver.kind == vkBool and args.len > 0:
-      if receiver.boolVal:
-        return NodeValue(kind: vkBool, boolVal: true)
-      let rhs = sendMessage(runtime, args[0], "value", @[])
-      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
-    return NodeValue(kind: vkNil)
-
-  of "&":
-    if args.len > 0:
-      let aStr = receiver.toString()
-      let bStr = args[0].toString()
-      return NodeValue(kind: vkString, strVal: aStr & bStr)
-    return receiver
-
-  of "|":
-    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
-      return NodeValue(kind: vkBool, boolVal: receiver.boolVal or args[0].boolVal)
-    return NodeValue(kind: vkNil)
-
-  of "not":
-    if receiver.kind == vkBool:
-      return NodeValue(kind: vkBool, boolVal: not receiver.boolVal)
-    return NodeValue(kind: vkNil)
-  else:
-    if receiverClassName.len > 0:
-      return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
-    return compiledMissingMessage(receiver, selector)
+  dispatchBuiltin(runtime, receiver, selector, args, receiverClassName)
 
 proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                         args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
@@ -2503,14 +2512,21 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
   let className = getReceiverClassName(receiver)
   if className.len > 0:
     if cache.version == compiledClassDispatchVersion and cache.className == className and
-       cache.selector == selector and cache.target != nil:
-      let target = cache.target
-      return target(receiver, args)
+       cache.selector == selector and (cache.target != nil or cache.negative):
+      if cache.target != nil:
+        let target = cache.target
+        return target(receiver, args)
+      # Cached negative: no compiled method exists, so go straight to the builtin
+      # chain instead of resolving the same pair again inside `sendMessage`.
+      return dispatchBuiltin(runtime, receiver, selector, args, className)
     let target = resolveCompiledMethod(className, selector)
     if target != nil:
       cache = CompiledSendCache(className: className, selector: selector,
                                 version: compiledClassDispatchVersion, target: target)
       return target(receiver, args)
+    cache = CompiledSendCache(className: className, selector: selector,
+                              version: compiledClassDispatchVersion, negative: true)
+    return dispatchBuiltin(runtime, receiver, selector, args, className)
   return sendMessage(runtime, receiver, selector, args)
 
 template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
@@ -2520,6 +2536,25 @@ template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
   block:
     var siteCache {.global, threadvar.}: CompiledSendCache
     sendMessageCached(runtime, receiver, selector, args, siteCache)
+
+proc sendMessageCachedBound*(ownerReceiver, receiver: NodeValue, selector: string,
+                             args: seq[NodeValue],
+                             cache: var CompiledSendCache): NodeValue =
+  ## Sends from inside a compiled method: keep the calling method's host routing
+  ## for VM-owned receivers, then use the per-site cache instead of resolving the
+  ## class/selector pair again on every send.
+  if boundCompiledClasses.len != 0:
+    let hosted = hostedBuiltin(ownerReceiver, receiver, selector, args)
+    if hosted.handled:
+      return hosted.value
+  sendMessageCached(nil, receiver, selector, args, cache)
+
+template cachedSendBound*(ownerReceiver, receiver: NodeValue, selector: string,
+                          args: seq[NodeValue]): NodeValue =
+  ## Each expanded send site owns its cache.
+  block:
+    var siteCache {.global, threadvar.}: CompiledSendCache
+    sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCache)
 
 proc frozenHostInterpreter*(host: SchedulerContext): Interpreter =
   ## Access the interpreter owned by this explicit host's main process.

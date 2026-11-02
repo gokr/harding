@@ -571,7 +571,7 @@ suite "Compiler: Engine binding shims":
     ctx.parameters = @["next"]
     let operand = MessageNode(receiver: IdentNode(name: "next"), selector: "value")
     let code = genMessage(ctx, MessageNode(receiver: operand, selector: "+", arguments: @[Node(operand)]))
-    check code.count("sendMessageBound(self, next, \"value\", @[])") == 2
+    check code.count("cachedSendBound(self, next, \"value\", @[])") == 2
     check code.contains("nt_plus(hardingBuiltinReceiver, hardingBuiltinArg0)")
     let receiverBinding = code.find("let hardingBuiltinReceiver =")
     let argumentBinding = code.find("let hardingBuiltinArg0 =")
@@ -588,7 +588,7 @@ suite "Compiler: Boolean helper generation":
     ctx.parameters = @["next"]
     let operand = MessageNode(receiver: IdentNode(name: "next"), selector: "value")
     let code = genMessage(ctx, MessageNode(receiver: operand, selector: "|", arguments: @[Node(operand)]))
-    check code.count("sendMessageBound(self, next, \"value\", @[])") == 2
+    check code.count("cachedSendBound(self, next, \"value\", @[])") == 2
     check code.contains("nt_pipe(hardingBuiltinReceiver, hardingBuiltinArg0)")
     check code.find("let hardingBuiltinArg0 =") < code.find("let builtin = hostedBuiltinDeferred(")
     check code.contains("\"|\", @[hardingBuiltinArg0])")
@@ -686,7 +686,7 @@ suite "Compiler: Guarded unary receiver sends":
     require not syntax.hasError
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "ambiguous_unary")
-    check code.contains("sendMessageBound(self, target, \"answer\", @[])")
+    check code.contains("cachedSendBound(self, target, \"answer\", @[])")
     let mixedCode = genModule(ctx, nodes, "mixed_unary", mixed = true)
     check not mixedCode.contains("canDirectCompiledSend(receiver")
 
