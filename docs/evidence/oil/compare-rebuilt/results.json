@@ -1,0 +1,41 @@
+{
+  "metadata": {
+    "revision": "ce53b2525cf680d14196538ab24ff312f58cd94e",
+    "versions": {
+      "Cog": {
+        "path": "/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202610302019-64bit/squeak",
+        "sha256": "7e31a57b3025754e9741c711c87378b864e0d8c4c2b39809235ca613951ea841",
+        "version": "[Production x86_64 64-bit Spur Cog VM]\n7.0-202610302019  Sun Nov  1 22:38:09 CET 2026 clang\nCoInterpreter VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  1 2026\nStackToRegisterMappingCogit VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  1 2026\nVM: 202610302019 gokr@yoda:git/harding/worktrees/granite-completeness/build/osvm/repo\nDate: Fri Oct 30 13:19:41 2026 CommitHash: 0310be549\nPlugins: 202610302019 gokr@yoda:git/harding/worktrees/granite-completeness/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202610302019-64bit/ [default: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202610302019-64bit/]\n"
+      },
+      "Oil": {
+        "path": "/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202610302019-64bit/squeak",
+        "sha256": "cc6806a5b6f74ab3b80b476858e9b2798fa0a0b58c675066a7c43aa0a260a40e",
+        "version": "[Production x86_64 64-bit Spur Oil VM]\n7.0-202610302019  Sun Nov  1 22:39:25 CET 2026 clang\nOilCoInterpreter VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  1 2026\nProfilingCogit VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  1 2026\nVM: 202610302019 gokr@yoda:git/harding/worktrees/granite-completeness/build/osvm/repo\nDate: Fri Oct 30 13:19:41 2026 CommitHash: 0310be549\nPlugins: 202610302019 gokr@yoda:git/harding/worktrees/granite-completeness/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202610302019-64bit/ [default: /home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202610302019-64bit/]\n"
+      }
+    },
+    "inputHashes": {
+      "/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/image/Squeak6.1-23976-64bit.image": "6dd129721af23643c8a7f35550700fa628cff3cc62ec3ee107615d0fdf945fa8"
+    },
+    "trials": 3,
+    "repetitions": 5000,
+    "method": "fresh processes; discarded warm-up; alternating engines and work/baseline order; checked output; median paired difference",
+    "cpu": "Intel(R) Core(TM) Ultra 7 165U"
+  },
+  "status": "failed",
+  "results": [],
+  "failure": {
+    "case": "richards",
+    "engine": "Oil",
+    "trial": 0,
+    "repetitions": 5000,
+    "command": [
+      "/home/gokr/git/harding/worktrees/granite-completeness/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202610302019-64bit/squeak",
+      "-nodisplay",
+      "-nosound",
+      "/home/gokr/git/harding/worktrees/granite-completeness/build/bench-compare-oil/run-tvdo1ifq/Oil/bench.image",
+      "/home/gokr/git/harding/worktrees/granite-completeness/build/bench-compare-oil/run-tvdo1ifq/richards/Oil-5000.st"
+    ],
+    "error": "Wrong output: Oil-0-5000: 'ERROR: MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:', 'pthread_setschedparam failed: Operation not permitted\\nThis VM uses a separate heartbeat thread to update its internal clock\\nand handle events.  For best operation, this thread should run at a\\nhigher priority, however the VM was unable to change the priority.  The\\neffect is that heavily loaded systems may experience some latency\\nissues.  If this occurs, please create the appropriate configuration\\nfile in /etc/security/limits.d/ as shown below:\\n\\ncat <<END | sudo tee /etc/security/limits.d/squeak.conf\\n*      hard    rtprio  2\\n*      soft    rtprio  2\\nEND\\n\\nand report to the squeak mailing list whether this improves behaviour.\\n\\nYou will need to log out and log back in for the limits to take effect.\\nFor more information please see\\nhttps://github.com/OpenSmalltalk/opensmalltalk-vm/releases/tag/r3732#linux\\n'; /home/gokr/git/harding/worktrees/granite-completeness/build/bench-compare-oil/run-tvdo1ifq/richards",
+    "observed": "ERROR: MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:"
+  }
+}

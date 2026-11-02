@@ -83,24 +83,30 @@ Each row is a separate process; these are workload checks, not timed scores:
 | Oil / DeltaBlue | fail: DBPlanner not indexable | pass | fail: DBCollection>>< |
 | Oil / Queens | pass | fail: UndefinedObject>>row | fail: HBQueens>>adaptToNumber:andSend: |
 
-Evidence: `build/osvm/stress-results.log`, per-process sources/result files in
-`build/osvm/stress-3bf69co0`. The mixed pass/fail threshold is not a claim of a
+Evidence (committed, so a cloner can inspect it without rebuilding):
+`docs/evidence/oil/stress-results.log` and the per-process result/stderr files
+under `docs/evidence/oil/stress-clang/`. The runner regenerates the same layout
+under `build/osvm/stress-*`. The mixed pass/fail threshold is not a claim of a
 deterministic iteration at which Oil fails. Short smoke passes do not establish
 correctness under optimization or GC.
 
 The long timing run also rejects Richards before producing a score:
-`build/oil-compare-long.log`, artifacts
-`build/bench-compare-oil/run-107zfh7b`. Its explicit failure is
+`docs/evidence/oil/oil-compare-long.log`, artifacts
+`docs/evidence/oil/compare-long/`. Its explicit failure is
 `MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:`.
 The committed setup script was then exercised for both flavors
-(`build/osvm/setup-reproduced.log`); the rebuilt Oil repeats the same failure
-in `build/bench-compare-oil/run-tvdo1ifq/results.json` with `status: failed`.
+(`docs/evidence/oil/setup-reproduced.log`); the rebuilt Oil repeats the same
+failure in `docs/evidence/oil/compare-rebuilt/results.json` with
+`status: failed`.
 
 A separate GCC 13.3.0 Oil build, same source/image, was tested to distinguish a
 clang-only problem. At 5,000 passes Richards passed, but DeltaBlue failed with
 `DBPlanner not indexable` and Queens with `HBQueens>>adaptToNumber:andSend:`.
-Evidence: `build/osvm/gcc-stress.log`, `gcc-stress-4zw1k0f7`, build recipe
-`build/osvm/build_oil_gcc.py`. No generated source edits were needed. This does
+Evidence: `docs/evidence/oil/gcc-stress.log`,
+`docs/evidence/oil/stress-gcc/`. Reproduce the variant with
+`python3 scripts/build_oil_gcc.py` after the main setup: it reuses the generated
+build script and only swaps the compiler-selection line, so no generated VM
+source is edited. This does
 not isolate a compiler/GC/register-allocation bug; it only rules out assuming the
 problem is specific to the clang warning flags.
 
