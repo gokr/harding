@@ -1989,8 +1989,14 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
   let receiverClassName = getReceiverClassName(receiver)
-  if receiverClassName.len > 0 and hasCompiledMethodInHierarchy(receiverClassName, selector):
-    return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
+  if receiverClassName.len > 0:
+    # Resolve once and call the target directly. Going through
+    # `hasCompiledMethodInHierarchy` + `dispatchCompiledMethodFromClass` resolved
+    # the same class/selector twice and repeated the host lookup and class-name
+    # read, all of which are already settled for this send.
+    let target = resolveCompiledMethod(receiverClassName, selector)
+    if target != nil:
+      return target(receiver, args)
 
   case selector
   of "=":
