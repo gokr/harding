@@ -1,6 +1,8 @@
 # Granite completeness work
 
-Work branch: `granite-completeness`.
+Merged into `main`. The sections below record the work done on the
+`granite-completeness` branch, which is now part of main; the branch name is kept
+only in the historical text.
 
 ## First profile-guided runtime slice
 

@@ -16,26 +16,34 @@ Granite is the Harding-to-Nim compiler. There are two entry points:
 - Compiles standalone `.hrd` scripts to native binaries via Nim
 - Supports `compile`, `build`, and `run` commands
 - Inline control flow compilation (ifTrue:, whileTrue:, timesRepeat:, etc)
+- Cascades (`obj a; b; c`) evaluate the receiver once and answer the last message
 - Exception handling compilation (`on:do:`, `ensure:`)
 - Direct slot access code generation (O(1) access)
-- Does NOT initialize Harding VM or load stdlib
+- Builds the class model once per compile (`analyzer.buildClassModel`), shared by
+  slot inference, the inference report, slot diagnostics and code generation
+- Initializes a Harding VM and loads the stdlib bootstrap, so definition nodes run
+  for class reflection before code generation
+- Does not support declarative primitives (`>>sel <primitive primName>`); they are
+  rejected with a diagnostic naming the method, because the compiled runtime
+  carries no VM primitives. Use the interpreter or `--mixed`.
 - Produces binaries 30-200x faster than interpreted code
 
 ### Harding Granite (in-VM)
 - Entry: `lib/granite/Granite.hrd` with primitives
 - Primitives: `primitiveGraniteCompile:`, `primitiveGraniteBuild:`
 - Has full access to loaded classes, methods, and object graph
-- Located in: `src/harding/compiler/compiler_primitives.nim`
+- Located in: `src/harding/interpreter/compiler_primitives.nim` (`-d:granite` only)
 - Application builds now inject host command-line arguments into `main: args`
 
-### Block Compilation (Phases 0-7 Complete)
-- **Phase 0-4**: Core compilation, expressions, statements, methods
-- **Phase 5**: Exception handling codegen (`on:do:`, handler actions, `ensure:`)
-- **Phase 6-7**: Remaining node types and direct slot access
+### Block Compilation
+- Core compilation of expressions, statements, methods and blocks
+- Exception handling codegen (`on:do:`, handler actions, `ensure:`)
+- Slot access is layout-dispatched; guarded direct access comes from confirmed
+  slot evidence (`compiler/slot_inference.nim`)
 - Block registry: `src/harding/codegen/blocks.nim`
 - Inline control flow: `src/harding/codegen/expression.nim` (statement and expression context)
-- Block procedure generation infrastructure in place
-- Capture analysis stub ready for implementation
+- Capture analysis is implemented (`analyzeCaptures`, `collectBlocks`): captured
+  bindings become shared `MutableCell`s in a per-block environment struct
 - Works at AST level - applicable to both paths
 
 ## Design Principles
@@ -51,7 +59,7 @@ Parser (lexer.nim, parser.nim)  ← shared
      ↓
 AST (types.nim)                  ← shared
      ↓
-Analyzer (compiler/analyzer.nim) ← shared (optional for CLI)
+Analyzer (compiler/analyzer.nim) ← shared (builds the class model once per compile)
      ↓
 Code Generator (codegen/*.nim)   ← shared
      ↓
@@ -79,9 +87,9 @@ Binary
 - Both use same `genModule()` function in `module.nim`
 
 **Medium term**:
-- CLI granite should initialize minimal Harding VM to access class model
-- This enables accurate method lookup, slot analysis, etc.
-- Add `--analyze` flag to CLI for full analysis
+- CLI granite already initializes a VM and loads the stdlib bootstrap for class
+  reflection; the remaining work is an explicit analysis-only mode that skips
+  execution of definition nodes where reflection is not needed
 
 **Long term**:
 - Unified entry point: `compileSource(source, options)` in `compiler/compiler.nim`
@@ -99,7 +107,7 @@ Binary
 - `src/harding/core/types.nim` - AST node types
 - `src/harding/codegen/` - All code generation
 - `src/harding/compiler/context.nim` - Compiler context
-- `src/harding/compiler/analyzer.nim` - Class/method analysis
+- `src/harding/compiler/analyzer.nim` - Class model (AST graph plus reflected classes)
 
 ### CLI-Specific
 - `src/harding/compiler/granite.nim` - CLI entry point
@@ -107,7 +115,7 @@ Binary
 - File I/O operations
 
 ### Harding-Specific
-- `src/harding/compiler/compiler_primitives.nim` - Primitive implementations
+- `src/harding/interpreter/compiler_primitives.nim` - Primitive implementations
 - `lib/granite/Granite.hrd` - Harding-side API
 
 ## Block Compilation Implementation
@@ -131,7 +139,8 @@ Both statement context (no value needed) and expression context (value required)
 1. **Block Registry** (`codegen/blocks.nim`):
    - Collects all non-inline blocks from AST before generation
    - Assigns unique Nim procedure names
-   - Tracks captures for closures (stub ready for implementation)
+   - Tracks captures; captured bindings become shared `MutableCell`s held by a
+     per-block environment struct retained for the block's lifetime
 
 2. **Generated Output**:
    - Block procedure definitions at module level
@@ -265,9 +274,11 @@ Benefits:
 ## Related Files
 
 - `src/harding/compiler/granite.nim` - CLI entry point
-- `src/harding/compiler/compiler_primitives.nim` - Primitive implementations
+- `src/harding/interpreter/compiler_primitives.nim` - Primitive implementations
 - `lib/granite/Granite.hrd` - Harding-side Granite class
 - `lib/granite/Application.hrd` - Application build support
 - `src/harding/codegen/module.nim` - Main code generation
 - `src/harding/codegen/blocks.nim` - Block compilation
 - `src/harding/codegen/expression.nim` - Expression generation with inline control flow
+- `src/harding/compiler/slot_inference.nim` - Advisory slot type inference
+- `src/harding/compiler/slot_diagnostics.nim` - Numeric slot store diagnostics

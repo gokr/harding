@@ -51,7 +51,7 @@ The active goal is a reliable Smalltalk environment: Workspace, Browser, Inspect
 2. Exercise every existing tool through deterministic model/integration tests and black-box GTK acceptance tests. Cover save/reload, errors and recovery, dialogs/cancellation, repeated open/close, and preservation of unsaved edits.
 3. Make creating GTK apps in Harding straightforward and make Builder produce a single executable that embeds the application sources and the Harding interpreter, with a defined system dependency contract (GTK4, GtkSourceView 5, VTE for the IDE, MummyX/NimCP for web/MCP builds). The embedded-interpreter target is agreed and is the first packaging mode; Granite compilation remains a separate backend that Builder can select later. A packaged app must run without the source tree and without a separate `harding` binary.
 
-Granite compiler development is separate (including `worktrees/granite-completeness`); do not modify that worktree or expand this effort into compiler parity work without agreement. Preserve unrelated/uncommitted changes, including installed external-library changes.
+Granite compiler development was tracked on `worktrees/granite-completeness` and is now merged into `main`; that worktree is a leftover and no longer a separate line of work. Compiler changes on main follow the validation in `docs/GRANITE_STATUS.md` and the parity runner below. Preserve unrelated/uncommitted changes, including installed external-library changes.
 
 ### Current progress
 
