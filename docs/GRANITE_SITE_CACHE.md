@@ -36,9 +36,9 @@ alternating trials after one warm-up:
 
 | Workload | Trial 1 | Trial 2 |
 |---|---:|---:|
-| Richards | **1.192x** | **1.200x** |
-| DeltaBlue | **1.149x** | **1.151x** |
-| Queens | **1.085x** | **1.072x** |
+| Richards | **1.154x** | **1.173x** |
+| DeltaBlue | **1.190x** | **1.190x** |
+| Queens | 0.990x | 0.995x |
 
 Counts per verified pass, before → after:
 
@@ -48,20 +48,43 @@ Counts per verified pass, before → after:
 | DeltaBlue | 106,325 → 69,711 | 650,554 → 452,237 | 447,225 → 262,570 |
 | Queens | 103,586 → 103,585 | 414,350 → 211,290 | 244,797 → 224,963 |
 
-Queens' resolution count does not fall because its sites are polymorphic: each
-site caches one class and misses on the other rows. It still gains from the
-removed re-resolution on the miss path and from halved string hashing.
+Queens is neutral: its sites are polymorphic, so each site caches one class and
+misses on the other rows. It still halves string hashing (414k -> 211k) but the
+miss path now falls back to `sendMessage`, which re-resolves.
+
+### What a negative answer may not skip
+
+The first version of this change dispatched straight to `dispatchBuiltin` on any
+cached negative. Two parity cases caught that this is wrong: `sendMessage` runs
+ordered steps *before* its builtin chain, and both are answerable without a
+compiled method.
+
+- `perform:` / `perform:with:` / `perform:with:with:` convey a selector taken
+  from an argument; skipping straight to the chain lost the conveyance.
+- The exception protocol answers `message`, `message:`, `signal`, `retry`,
+  `pass`, `defaultAction` and `printString` for exception instances.
+
+A negative is now cached and dispatched only for selectors in
+`negativeCacheSafeSelectors`, which excludes those families. Everything else falls
+through to the generic path and re-resolves — correct, and the reason Queens does
+not improve. Widening that list needs evidence that a selector truly has no
+pre-chain step.
 
 An earlier intermediate version — per-site cache but *without* negative caching —
 was measured and regressed Queens (0.892x, then 0.977x) because the miss path
-resolved twice. That is why the extraction and negative flag are part of this
-change rather than deferred.
+resolved twice. The negative gate is therefore needed just to reach neutral on
+polymorphic workloads; the gain comes from Richards and DeltaBlue.
 
 ## Validation
 
 ARC and ORC, zero failures: `test_compiler_basic` 88, `test_compiled_runtime` 43,
-`test_engine_boundary` 36 (logs `build/sc4-*`). Three compiler tests that asserted
-the old `sendMessageBound` spelling were updated to `cachedSendBound`.
+`test_engine_boundary` 36. Three compiler tests that asserted the old
+`sendMessageBound` spelling were updated to `cachedSendBound`.
+
+Full parity sweep: **102 passed, 0 failed** (`build/parity/run-9g37dbej`), after
+the `negativeCacheSafeSelectors` gate above. The intermediate version failed
+`custom_exception_hierarchy` and `equality_dynamic_dispatch`; those two are worth
+re-running specifically when touching this path.
 
 ## Caveat on host load
 

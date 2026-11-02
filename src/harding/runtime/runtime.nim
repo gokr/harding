@@ -149,6 +149,18 @@ proc registerMethod*(runtime: var Runtime, selector: string,
   )
   runtime.methodCache[selector] = meth
 
+# Selectors for which a cached "no compiled method" answer may skip straight to
+# the builtin chain. Deliberately excludes everything `sendMessage` handles before
+# that chain: the `perform:` family (dynamic selector conveyance), the exception
+# protocol (`message`, `message:`, `signal`, `retry`, `pass`, `defaultAction`,
+# `printString`), notifications, json specs and `respondsTo:`.
+const negativeCacheSafeSelectors = ["=", "<>", "==", "~=", "<", "<=", ">", ">=",
+  "+", "-", "*", "/", "//", "\\", "%", "&", "|", "not", "size", "last",
+  "at:", "at:put:", "abs", "even", "odd", "negated", "asString", "class",
+  "className", "superclassNames", "isKindOf:", "isNil", "notNil",
+  "ifTrue:", "ifFalse:", "ifTrue:ifFalse:", "and:", "or:", "value", "value:",
+  "println", "print", "keys"]
+
 var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
   initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
 type
@@ -2524,9 +2536,17 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
       cache = CompiledSendCache(className: className, selector: selector,
                                 version: compiledClassDispatchVersion, target: target)
       return target(receiver, args)
-    cache = CompiledSendCache(className: className, selector: selector,
-                              version: compiledClassDispatchVersion, negative: true)
-    return dispatchBuiltin(runtime, receiver, selector, args, className)
+    # A negative answer only says "no compiled method". `sendMessage` still runs
+    # ordered steps before its builtin chain — `perform:` conveys a selector
+    # dynamically and the exception protocol answers `message`/`signal`/`retry`
+    # for exception instances — so a negative is only safe to cache-and-dispatch
+    # for selectors none of those handle. Everything else falls through to the
+    # generic path, which re-resolves but stays correct.
+    if selector in negativeCacheSafeSelectors:
+      cache = CompiledSendCache(className: className, selector: selector,
+                                version: compiledClassDispatchVersion, negative: true)
+      return dispatchBuiltin(runtime, receiver, selector, args, className)
+  return sendMessage(runtime, receiver, selector, args)
   return sendMessage(runtime, receiver, selector, args)
 
 template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
