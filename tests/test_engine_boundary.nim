@@ -469,6 +469,28 @@ suite "Value-based mixed dispatch":
     check not hostedBuiltinDeferred(owner, receiver, "echo:", arguments()).handled
     check buffers == 2
 
+  test "bound-class lookup memo revalidates on bind and detach":
+    discard defineClass(interp, "MemoOwner", "double:")
+    let ownerClass = interp.globals[]["MemoOwner"].classVal
+    let leafClass = newClass(superclasses = @[ownerClass], name = "MemoLeaf")
+    let leaf = NodeValue(kind: vkInstance, instVal: newInstance(leafClass))
+    leaf.instVal.isNimProxy = true
+    # `boundGlobalValue` resolves the host through `boundClassFor`, so it observes
+    # the memoized walk without needing a compiled method on the leaf.
+    for iteration in 0..<2:
+      check not boundGlobalValue(leaf, "MixedProbe").handled
+    require bindCompiledMethodShim(interp, "MemoOwner", "double:", cast[pointer](doubleShim))
+    # Binding the ancestor gives the leaf a host: a memoized nil would be stale.
+    let bound = boundGlobalValue(leaf, "MixedProbe")
+    check bound.handled
+    check bound.value.kind == vkClass
+    unbindCompiledMethodsFrom(interp)
+    # Detached again: the leaf must fall back rather than keep the cached host.
+    check not boundGlobalValue(leaf, "MixedProbe").handled
+    require bindCompiledMethodShim(interp, "MemoOwner", "double:", cast[pointer](doubleShim))
+    check boundGlobalValue(leaf, "MixedProbe").handled
+    unbindCompiledMethodsFrom(interp)
+
   test "runtime reference storage is initialized and released repeatedly":
     for iteration in 0..<3:
       shutdownRuntime()

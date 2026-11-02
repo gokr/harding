@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Bound-host lookup memoizes its class walk per receiver class, invalidated on every bind and unbind, so embedded hosts no longer allocate a visited sequence per dynamic send. Negatives are cached too, because binding an ancestor gives its subclasses a host. No benchmark effect: standalone compiled programs exit at the empty-binding check before the walk (`docs/GRANITE_BOUND_CLASS_MEMO.md`).
 - Dynamic sends resolve a compiled method once instead of detecting and then dispatching it through two wrappers that each resolved the same class/selector. Same-core paired trials show ~1.14x Richards, ~1.22x DeltaBlue and ~1.03x Queens, with per-pass resolution lookups halved on DeltaBlue (`docs/GRANITE_SEND_RESOLUTION.md`).
 - Granite emits primitive helpers for eager Boolean `|` and `not` in compiled code, falling back to ordinary dispatch for user-defined methods and non-Boolean receivers; `and:`/`or:` keep their lazy block semantics. Same-core paired trials show Queens ~1.23x faster with Richards/DeltaBlue unchanged, and allocation counts are unchanged (`docs/GRANITE_BOOLEAN_PRIMITIVES.md`).
 - Pinned local stock Cog/Oil VM build and same-image benchmark tooling. Smalltalk failures are captured and rejected even when the process exits zero. Oil boots and passes smoke tests, but longer verified workloads fail under both clang and GCC builds, so no long-run Oil performance score is claimed (`docs/OPENSMALLTALK_OIL_COMPARISON.md`).

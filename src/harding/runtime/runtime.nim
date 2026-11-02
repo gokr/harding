@@ -726,15 +726,39 @@ proc findBoundClass(current: Class, visited: var seq[Class]): Class =
       return found
   return nil
 
+var
+  boundClassVersion = 0
+  boundClassMemo {.threadvar.}: Table[Class, Class]
+  # Starts at the initial version, so a thread that never clears sees an empty
+  # (uninitialized-but-nil-table) memo rather than a stale one.
+  boundClassMemoVersion {.threadvar.}: int
+
+proc invalidateBoundClassMemo() {.inline.} =
+  ## Bindings are rare; any change invalidates every cached answer, including
+  ## negatives, because binding an ancestor gives its subclasses a host.
+  inc boundClassVersion
+
 proc boundClassFor(receiver: NodeValue): Class {.inline.} =
   if boundCompiledClasses.len == 0:
     return nil
   let cls = if receiver.kind == vkClass: receiver.classVal
             elif receiver.kind == vkInstance and receiver.instVal != nil: receiver.instVal.class
             else: nil
+  if cls == nil:
+    return nil
   # Find the host through live class identity, not the compiled name registry.
+  # The walk allocates a visited seq, so memoize per class and dispatch version.
+  if boundClassMemoVersion != boundClassVersion:
+    if boundClassMemo.len != 0:
+      boundClassMemo.clear()
+    boundClassMemoVersion = boundClassVersion
+  boundClassMemo.withValue(cls, cached):
+    return cached[]
   var visited: seq[Class]
   result = findBoundClass(cls, visited)
+  if boundClassMemo.len >= 4096:
+    boundClassMemo.clear()
+  boundClassMemo[cls] = result
 
 proc boundGlobalValue*(ownerReceiver: NodeValue, name: string): tuple[handled: bool, value: NodeValue] =
   ## Resolve a lexical global through isolated host lookup, including libraries.
@@ -891,6 +915,7 @@ proc bindCompiledMethodShim*(interp: var Interpreter, className, selector: strin
   else:
     binding.methods[selector] = boundMethod
   boundCompiledClasses[cls] = binding
+  invalidateBoundClassMemo()
   inc compiledClassDispatchVersion
   return true
 
@@ -912,6 +937,7 @@ proc unbindCompiledMethodsFrom*(interp: Interpreter) =
     classes.add(cls)
   for cls in classes:
     boundCompiledClasses.del(cls)
+    invalidateBoundClassMemo()
   if classes.len > 0: inc compiledClassDispatchVersion
   releaseInterpretedBlockHost(interp)
 
@@ -1109,6 +1135,7 @@ proc bindNativeInstanceTo*(interp: Interpreter, receiver: NodeValue): bool =
       return false
     binding.interpreter = interp
     boundCompiledClasses[instance.class] = binding
+    invalidateBoundClassMemo()
     return true
   let storage = NativeSlotStorage()
   for slot in compiledSlotNames[name]:
@@ -1132,6 +1159,7 @@ proc bindNativeInstanceTo*(interp: Interpreter, receiver: NodeValue): bool =
   instance.nativeSlots = storage
   binding.interpreter = interp
   boundCompiledClasses[instance.class] = binding
+  invalidateBoundClassMemo()
   return true
 
 proc getSlotValue*(self: NodeValue, slotName: string): NodeValue =
