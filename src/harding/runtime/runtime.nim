@@ -110,8 +110,11 @@ proc dispatchCompiledNotification(runtime: Runtime, notification: NodeValue,
     dec index
   return (false, NodeValue(kind: vkNil))
 
+proc entrySpecializationProbe*()
+
 proc initRuntime*() =
   ## Initialize global runtime
+  entrySpecializationProbe()
   if currentRuntime == nil:
     ensureCompiledExceptionHierarchy()
     currentRuntime = cast[ptr Runtime](allocShared0(sizeof(Runtime)))
@@ -174,6 +177,25 @@ type
     version: uint64
     target: CompiledProc
     negative: bool  ## A resolved "no compiled method" answer, so it is not re-resolved.
+
+type
+  SpecializationProbe* = object
+    ## Upper bound on what interprocedural native parameters/returns could reach:
+    ## a compiled instance method call whose receiver is a native proxy, the
+    ## resolved method is inherited-and-unique for that receiver class, and every
+    ## argument is already an Integer.
+    calls: int          ## every compiled-method dispatch observed
+    ownMethod: int      ## defined on the receiver's own class
+    inheritedUnique: int ## inherited and the only compiled implementation on the path
+    inheritedShared: int ## inherited and more than one implementation on the path
+    allIntArgs: int     ## of `inheritedUnique`, those with all-Integer arguments
+    noAggregateArgs: int ## of `allIntArgs`, those with no Array/Table argument
+    ownDispatch: int    ## own-class resolution (no ambiguity): the best candidate
+    ownAllInt: int      ## of ownDispatch, all-Integer arguments
+    ownNoAggregate: int ## of ownAllInt, no Array/Table argument
+
+var specializationProbeEnabled {.threadvar.}: bool
+var specializationProbe {.threadvar.}: SpecializationProbe
 
 var compiledClassMethods = initTable[string, CompiledProc]()
 var compiledAllocators = initTable[string, CompiledProc]()
@@ -2535,6 +2557,73 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
 
   dispatchBuiltin(runtime, receiver, selector, args, receiverClassName)
 
+proc reportSpecializationProbe() {.noconv.} =
+  ## Print the accumulated probe to stderr so a benchmark run can be judged
+  ## without touching generated code.
+  if not specializationProbeEnabled or specializationProbe.calls == 0:
+    return
+  let p = specializationProbe
+  let sh = if p.calls == 0: 0.0 else: 100.0 * float(p.inheritedUnique) / float(p.calls)
+  let ia = if p.inheritedUnique == 0: 0.0 else: 100.0 * float(p.allIntArgs) / float(p.inheritedUnique)
+  let na = if p.allIntArgs == 0: 0.0 else: 100.0 * float(p.noAggregateArgs) / float(p.allIntArgs)
+  let oi = if p.ownDispatch == 0: 0.0 else: 100.0 * float(p.ownAllInt) / float(p.ownDispatch)
+  stderr.writeLine("SPECPROBE ownEligible=" & $p.ownAllInt & " (" & formatFloat(oi, ffDecimal, 1) & "% of own=" & $p.ownDispatch & ")")
+  stderr.writeLine("SPECPROBE calls=" & $p.calls & " own=" & $p.ownMethod &
+    " inheritedUnique=" & $p.inheritedUnique & " (" & formatFloat(sh, ffDecimal, 1) & "%)" &
+    " inheritedShared=" & $p.inheritedShared &
+    " allIntArgs=" & $p.allIntArgs & " (" & formatFloat(ia, ffDecimal, 1) & "% of unique)" &
+    " noAggregateArgs=" & $p.noAggregateArgs & " (" & formatFloat(na, ffDecimal, 1) & "% of int)")
+
+proc entrySpecializationProbe*() =
+  ## Opt-in via HARDING_SPEC_PROBE=1. Records at compiled dispatch and reports
+  ## once at process exit. Called from initRuntime so generated programs need no
+  ## probe code of their own.
+  if specializationProbeEnabled:
+    return
+  if getEnv("HARDING_SPEC_PROBE") != "1":
+    return
+  specializationProbeEnabled = true
+  addQuitProc(reportSpecializationProbe)
+
+proc probeCompiledDispatch(receiver: NodeValue, cls: Class, selector: string,
+                           target: CompiledProc, args: seq[NodeValue]) {.inline.} =
+  ## Count how much of this dispatch a native-parameter/return specialization
+  ## could convert: unique inherited resolution plus Integer-only arguments.
+  if not specializationProbeEnabled or cls == nil:
+    return
+  inc specializationProbe.calls
+  let key = cls.name & ">>" & selector
+  var allInt = true
+  var noAggregate = true
+  for arg in args:
+    if arg.kind != vkInt:
+      allInt = false
+    if arg.kind == vkInstance and arg.instVal != nil and
+       arg.instVal.kind in {ikArray, ikTable}:
+      noAggregate = false
+  if compiledMethodProcs.getOrDefault(key) == target:
+    # Defined on the receiver's own class: no inheritance ambiguity at all, so
+    # this is the strongest specialization candidate, not a rejection.
+    inc specializationProbe.ownMethod
+    inc specializationProbe.ownDispatch
+    if allInt: inc specializationProbe.ownAllInt
+    if allInt and noAggregate: inc specializationProbe.ownNoAggregate
+    return
+  # Inherited: how many compiled implementations sit on the receiver's path?
+  var implementations = 0
+  discard walkCompiledHierarchy(cls.name, proc(name: string): bool =
+    if compiledMethodProcs.getOrDefault(name & ">>" & selector) != nil:
+      inc implementations
+    false)
+  if implementations != 1:
+    inc specializationProbe.inheritedShared
+    return
+  inc specializationProbe.inheritedUnique
+  if allInt:
+    inc specializationProbe.allIntArgs
+    if noAggregate:
+      inc specializationProbe.noAggregateArgs
+
 proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                         args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
   ## Positive monomorphic cache for registered instance methods only. Builtins,
@@ -2554,12 +2643,22 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
        cache.selector == selector and (cache.target != nil or cache.negative):
       if cache.target != nil:
         let target = cache.target
+        let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
+                    receiver.instVal.class
+                  elif receiver.kind == vkClass: receiver.classVal
+                  else: nil
+        probeCompiledDispatch(receiver, cls, selector, target, args)
         return target(receiver, args)
       # Cached negative: no compiled method exists, so go straight to the builtin
       # chain instead of resolving the same pair again inside `sendMessage`.
       return dispatchBuiltin(runtime, receiver, selector, args, className)
     let target = resolveCompiledMethod(className, selector)
     if target != nil:
+      let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
+                  receiver.instVal.class
+                elif receiver.kind == vkClass: receiver.classVal
+                else: nil
+      probeCompiledDispatch(receiver, cls, selector, target, args)
       cache = CompiledSendCache(className: className, selector: selector,
                                 version: compiledClassDispatchVersion, target: target)
       return target(receiver, args)

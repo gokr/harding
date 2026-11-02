@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `scripts/probe_specialization.py` and an opt-in compiled-dispatch probe (`HARDING_SPEC_PROBE=1`) that measure how much of a workload a native-parameter/return specialization could convert. Richards 59.3% and DeltaBlue 77.7% of own-class dispatches carry all-Integer arguments with no aggregate argument; Queens is served by guarded direct sends and shows none (`docs/GRANITE_SPECIALIZATION_PROBE.md`).
+
 ### Not shipped
 - Per-site selector ids and class density ids for native resolution were implemented, passed all ARC/ORC gates and removed two orders of magnitude of hashing on Queens — and moved wall time by 0% (0.989-1.007x). Reverted rather than keep a second id space and a per-site threadvar that are only safe because the interner clears before recycling ids. The lesson: a call-count reduction is only evidence when paired wall time moves with it (`docs/GRANITE_SELECTOR_ID_EXPERIMENT.md`).
 
