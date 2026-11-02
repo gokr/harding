@@ -15,17 +15,10 @@ type
     index*: int                ## Slot index (O(1) access)
     isInherited*: bool         ## Inherited from parent
 
-  MethodType* = object
-    selector*: string          ## Method selector
-    parameters*: seq[TypeConstraint]  ## Parameter type constraints
-    returnType*: TypeConstraint ## Return type constraint
-    isPrimitive*: bool         ## Has primitive implementation
-
   ClassInfo* = ref object
     name*: string              ## Class name
     parent*: ClassInfo     ## Parent class (inheritance chain)
     slots*: seq[SlotDef]       ## Slot definitions
-    methods*: seq[MethodType]  ## Method type information
     slotIndex*: Table[string, int]  ## Slot name -> index
     getterSlots*: seq[string]
     setterSlots*: seq[string]
@@ -35,8 +28,6 @@ type
     outputDir*: string
     moduleName*: string
     classes*: Table[string, ClassInfo]  ## Class registry
-    currentClass*: ClassInfo  ## Currently compiling class
-    symbols*: Table[string, string]  ## Selector -> mangled name
     sealedClasses*: seq[string]   ## Opt-in native registry sealing after registration
     frozenHostSources*: seq[tuple[path, source: string]]
     gtkApplication*: bool
@@ -46,9 +37,7 @@ proc newCompiler*(outputDir = "./build", moduleName = "compiled"): CompilerConte
   result = CompilerContext(
     outputDir: outputDir,
     moduleName: moduleName,
-    classes: initTable[string, ClassInfo](),
-    currentClass: nil,
-    symbols: initTable[string, string]()
+    classes: initTable[string, ClassInfo]()
   )
 
 proc newClassInfo*(name: string, parent: ClassInfo = nil): ClassInfo =
@@ -57,7 +46,6 @@ proc newClassInfo*(name: string, parent: ClassInfo = nil): ClassInfo =
     name: name,
     parent: parent,
     slots: @[],
-    methods: @[],
     slotIndex: initTable[string, int]()
   )
 

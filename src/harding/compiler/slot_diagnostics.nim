@@ -7,7 +7,7 @@
 ## Only provable cases are reported. Anything uncertain stays silent rather than
 ## producing noise a developer would learn to ignore.
 
-import std/[tables, strutils, strformat]
+import std/[tables, strformat]
 import ../core/types
 import ./context
 import ./types
@@ -85,14 +85,6 @@ proc diagnoseSlotStores*(nodes: seq[Node], classes: Table[string, ClassInfo],
       return
     if node.kind == nkAssign:
       let assignment = node.AssignNode
-      # Assignment nodes carry no position of their own; the parser records the
-      # line on the value expression, so report that instead of 0:0.
-      let line = if node.line > 0: node.line
-                 elif assignment.expression != nil: assignment.expression.line
-                 else: 0
-      let col = if node.col > 0: node.col
-                elif assignment.expression != nil: assignment.expression.col
-                else: 0
       if assignment.variable.len > 0 and assignment.variable notin locals:
         let slot = resolveSlot(classes, owner, assignment.variable)
         if slot.found:

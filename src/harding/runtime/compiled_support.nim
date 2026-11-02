@@ -139,25 +139,6 @@ proc nt_last*(arr: NodeValue): NodeValue =
 
 # Table primitives
 
-proc nt_table_at*(tbl: NodeValue, key: NodeValue): NodeValue =
-  ## Table access: table at: key
-  if tbl.kind == vkInstance:
-    return sendMessage(nil, tbl, "at:", @[key])
-  if tbl.kind == vkTable:
-    if tbl.tableVal.hasKey(key):
-      return tbl.tableVal[key]
-  return NodeValue(kind: vkNil)
-
-proc nt_table_atput*(tbl: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
-  ## Table assignment: table at: key put: value
-  if tbl.kind == vkInstance:
-    return sendMessage(nil, tbl, "at:put:", @[key, value])
-  if tbl.kind == vkTable:
-    var newTbl = tbl
-    newTbl.tableVal[key] = value
-    return newTbl
-  return tbl
-
 proc nt_table_keys*(tbl: NodeValue): NodeValue =
   ## Table keys
   if tbl.kind in {vkInstance, vkClass}:
@@ -315,34 +296,6 @@ type
 # Control Flow Methods
 ######################
 
-proc nt_whileTrue_k*(self: NodeValue, condition: BlockNode, body: BlockNode = nil): NodeValue {.cdecl, exportc.} =
-  ## whileTrue: control structure
-  ## Repeatedly evaluate condition and body while condition is true
-  ##
-  while true:
-    let condResult = currentRuntime[].evalBlock(condition)
-    if condResult.kind != vkBool or not condResult.boolVal:
-      break
-
-    if body != nil:
-      discard currentRuntime[].evalBlock(body)
-
-  return self
-
-proc nt_whileFalse_k*(self: NodeValue, condition: BlockNode, body: BlockNode = nil): NodeValue {.cdecl, exportc.} =
-  ## whileFalse: control structure
-  ## Repeatedly evaluate condition and body while condition is false
-  ##
-  while true:
-    let condResult = currentRuntime[].evalBlock(condition)
-    if condResult.kind == vkBool and condResult.boolVal:
-      break
-
-    if body != nil:
-      discard currentRuntime[].evalBlock(body)
-
-  return self
-
 proc nt_tableFrom*(entries: openArray[(NodeValue, NodeValue)]): NodeValue =
   ## Build a table value from literal key/value pairs. Nim's `{}` literal infers
   ## the wrong native key type, so generated modules call this instead.
@@ -354,32 +307,6 @@ proc nt_tableFrom*(entries: openArray[(NodeValue, NodeValue)]): NodeValue =
 proc nt_emptyTable*(): NodeValue =
   ## Empty table value with the correct key type.
   return compiledTable(initTable[NodeValue, NodeValue]())
-
-proc nt_ifTrue_kifFalse_k*(self: NodeValue, trueBlock: BlockNode, falseBlock: BlockNode): NodeValue {.cdecl, exportc.} =
-  ## ifTrue:ifFalse: conditional
-  ## Evaluates appropriate block based on boolean value
-  ##
-  if self.kind == vkBool:
-    if self.boolVal:
-      return currentRuntime[].evalBlock(trueBlock)
-    else:
-      return currentRuntime[].evalBlock(falseBlock)
-
-  # Not a boolean - raise error
-  return NodeValue(kind: vkNil)
-
-proc nt_timesRepeat_k*(self: NodeValue, body: BlockNode): NodeValue {.cdecl, exportc.} =
-  ## timesRepeat: control structure
-  ## Evaluates block self times (if self is an integer)
-  ##
-  if self.kind != vkInt:
-    return self
-
-  let count = self.intVal
-  for _ in 0..<count:
-    discard currentRuntime[].evalBlock(body)
-
-  return self
 
 
 # Binary Operators

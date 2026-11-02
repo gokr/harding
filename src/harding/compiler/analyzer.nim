@@ -261,23 +261,6 @@ proc applySlotDeclarations(node: Node, cls: ClassInfo) =
         of vkSymbol: slot.defaultValue = value.symVal.escape()
         else: discard
 
-proc analyzeClassDef*(node: Node, ctx: var CompilerContext,
-                      parentClass: ClassInfo): ClassInfo =
-  ## Analyze a class definition and create ClassInfo
-  let (className, _, typeList) = extractDeriveChain(node)
-
-  if className.len == 0:
-    return nil
-
-  result = newClassInfo(className, parentClass)
-  ctx.classes[className] = result
-
-  if typeList.len > 0:
-    let slots = parseTypeList(typeList)
-    for (name, constraint, objectClass, defaultText) in slots:
-      discard result.addSlot(name, constraint, objectClass, defaultText)
-  applySlotDeclarations(node, result)
-  extractAccessorInfo(node, result)
 
 proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
   ## Build class graph from parsed nodes

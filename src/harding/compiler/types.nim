@@ -19,31 +19,6 @@ type
     tcTable           ## Hash table
     tcSymbol          ## Symbol payload (distinct from String)
 
-proc toNimType*(constraint: TypeConstraint): string =
-  ## Convert type constraint to Nim type name
-  case constraint
-  of tcNone: "NodeValue"
-  of tcInt: "int"
-  of tcFloat: "float64"
-  of tcString, tcSymbol: "string"
-  of tcBool: "bool"
-  of tcObject, tcBlock, tcArray: "NodeValue"
-  of tcTable: "Table[string, NodeValue]"
-
-proc toValueKind*(constraint: TypeConstraint): string =
-  ## Convert type constraint to ValueKind enum value
-  case constraint
-  of tcNone: "vkNone"
-  of tcInt: "vkInt"
-  of tcFloat: "vkFloat"
-  of tcString: "vkString"
-  of tcSymbol: "vkSymbol"
-  of tcBool: "vkBool"
-  of tcObject: "vkObject"
-  of tcBlock: "vkBlock"
-  of tcArray: "vkArray"
-  of tcTable: "vkTable"
-
 proc parseTypeHint*(hint: string): TypeConstraint =
   ## Parse type hint string to TypeConstraint
   case hint.toLowerAscii()
@@ -62,15 +37,6 @@ proc isNumeric*(constraint: TypeConstraint): bool =
   ## Check if type constraint is a numeric type
   constraint == tcInt or constraint == tcFloat
 
-proc unifies*(a, b: TypeConstraint): bool =
-  ## Check if two type constraints are compatible
-  if a == tcNone or b == tcNone:
-    return true
-  if a == b:
-    return true
-  if isNumeric(a) and isNumeric(b):
-    return false  ## Require explicit conversion for int<->float
-  return false
 
 proc constraintForNode*(kind: ValueKind): TypeConstraint =
   ## Infer type constraint from ValueKind

@@ -4,75 +4,7 @@ import ../compiler/symbols
 
 # Note: We cannot import expression.nim here due to circular dependency
 # (expression.nim imports blocks.nim)
-# Block body generation is handled separately in module.nim during code generation
-
-proc escapeNimStringLocal(s: string): string =
-  ## Escape a string for use in Nim code
-  result = s
-  result = result.replace("\\", "\\\\")
-  result = result.replace("\"", "\\\"")
-  result = result.replace("\n", "\\n")
-  result = result.replace("\r", "\\r")
-  result = result.replace("\t", "\\t")
-
-type
-  GenContext* = ref object
-    locals*: seq[string]
-    parameters*: seq[string]
-
-proc genBlockExpr*(ctx: GenContext, node: Node): string =
-  if node == nil:
-    return "NodeValue(kind: vkNil)"
-  
-  case node.kind
-  of nkLiteral:
-    let lit = node.LiteralNode
-    case lit.value.kind
-    of vkInt:
-      return fmt("NodeValue(kind: vkInt, intVal: {lit.value.intVal})")
-    of vkFloat:
-      return fmt("NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})")
-    of vkString:
-      return fmt("NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")")
-    of vkNil:
-      return "NodeValue(kind: vkNil)"
-    of vkBool:
-      return fmt("NodeValue(kind: vkBool, boolVal: {lit.value.boolVal})")
-    of vkSymbol:
-      return fmt("NodeValue(kind: vkSymbol, symVal: \"{lit.value.symVal}\")")
-    of vkArray:
-      return "NodeValue(kind: vkArray, arrayVal: @[])"
-    of vkTable:
-      return "nt_emptyTable()"
-    else:
-      return "NodeValue(kind: vkNil)"
-  
-  of nkIdent:
-    let ident = node.IdentNode
-    # Check if it's a local or parameter
-    if ident.name in ctx.parameters:
-      return mangleIdentifier(ident.name)
-    if ident.name in ctx.locals:
-      return mangleIdentifier(ident.name)
-    # Otherwise it's a slot or global - use runtime
-    return fmt("getSlotValue(self, \"{ident.name}\")")
-  
-  of nkMessage:
-    let msg = node.MessageNode
-    let recv = genBlockExpr(ctx, msg.receiver)
-    var args: seq[string] = @[]
-    for arg in msg.arguments:
-      args.add(genBlockExpr(ctx, arg))
-    return fmt("sendMessageBlock({recv}, \"{msg.selector}\", @[{args.join(\", \")}])")
-  
-  of nkAssign:
-    let assign = node.AssignNode
-    let expr = genBlockExpr(ctx, assign.expression)
-    let identifier = mangleIdentifier(assign.variable)
-    return fmt("({identifier} = {expr}; {identifier})")
-  
-  else:
-    return "NodeValue(kind: vkNil)"
+# Block body generation happens in expression.nim and module.nim.
 
 # ============================================================================
 # Block Registry for Code Generation
@@ -466,9 +398,6 @@ proc findBlock*(reg: BlockRegistry, blockNode: BlockNode): int =
       return i
   return -1
 
-proc dumpBlockRegistry*(reg: BlockRegistry) =
-  ## Debug: dump all blocks in registry
-  discard
 
 proc generateEnvStructDef*(info: BlockProcInfo): string =
   ## Generate the environment struct definition for a block
@@ -503,162 +432,9 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
   let paramsStr = params.join(", ")
   result = fmt("proc {info.nimName}*({paramsStr}): NodeValue {{.cdecl.}}")
 
-proc generateBlockProcBody*(info: BlockProcInfo): string =
-  ## Generate the procedure body for a block
-  ## - Extract captures from environment
-  ## - Generate basic body code
-  ## - Handle implicit returns for last expression
-  var output = ""
-  let ctx = GenContext(locals: @[], parameters: @[])
 
-  # If we have captures, cast env pointer and extract values
-  if info.captures.len > 0:
-    output.add(fmt("  let envTyped = cast[{info.envStructName}](env)\n"))
-    for capture in info.captures:
-      let identifier = mangleIdentifier(capture)
-      output.add(fmt("  let {identifier} = envTyped.{identifier}.value\n"))
 
-  for parameter in info.blockNode.parameters:
-    let identifier = mangleIdentifier(parameter)
-    output.add(fmt("  var {identifier} = hardingArg_{identifier}\n"))
 
-  # Generate temporaries
-  if info.blockNode.temporaries.len > 0:
-    output.add("  # Temporaries\n")
-    for temp in info.blockNode.temporaries:
-      output.add(fmt("  var {mangleIdentifier(temp)} = NodeValue(kind: vkNil)\n"))
-    output.add("\n")
-
-  # Get body statements
-  let body = info.blockNode.body
-  if body.len == 0:
-    output.add("  return NodeValue(kind: vkNil)\n")
-    return output
-
-  # Generate body statements with basic literal handling
-  var hasReturn = false
-  for i, stmt in body:
-    let isLast = (i == body.len - 1)
-    
-    case stmt.kind
-    of nkReturn:
-      let ret = stmt.ReturnNode
-      if ret.expression != nil and ret.expression.kind == nkLiteral:
-        let lit = ret.expression.LiteralNode
-        case lit.value.kind
-        of vkInt:
-          output.add(fmt("  return NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
-        of vkFloat:
-          output.add(fmt("  return NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
-        of vkString:
-          output.add(fmt("  return NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
-        of vkNil:
-          output.add("  return NodeValue(kind: vkNil)\n")
-        else:
-          output.add("  return NodeValue(kind: vkNil)\n")
-      else:
-        output.add("  return NodeValue(kind: vkNil)  # return via runtime\n")
-      hasReturn = true
-      
-    of nkAssign:
-      let assign = stmt.AssignNode
-      if assign.expression.kind == nkLiteral:
-        let lit = assign.expression.LiteralNode
-        case lit.value.kind
-        of vkInt:
-          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
-        of vkFloat:
-          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
-        of vkString:
-          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
-        of vkNil:
-          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)\n"))
-        else:
-          output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)\n"))
-      else:
-        output.add(fmt("  var {mangleIdentifier(assign.variable)} = NodeValue(kind: vkNil)  # assigned via runtime\n"))
-        
-    of nkMessage:
-      # Generate message send code
-      let msg = stmt.MessageNode
-      let recvCode = genBlockExpr(ctx, msg.receiver)
-      var code = recvCode
-      
-      # Handle different message types
-      case msg.selector
-      of "+", "-", "*", "/", "//", "%":
-        # Binary arithmetic
-        if msg.arguments.len > 0:
-          let argCode = genBlockExpr(ctx, msg.arguments[0])
-          code = fmt("binaryOp_{msg.selector}({recvCode}, {argCode})")
-      of "at:":
-        if msg.arguments.len > 0:
-          let argCode = genBlockExpr(ctx, msg.arguments[0])
-          code = fmt("collectionAt({recvCode}, {argCode})")
-      of "at:put:":
-        if msg.arguments.len > 1:
-          let keyCode = genBlockExpr(ctx, msg.arguments[0])
-          let valCode = genBlockExpr(ctx, msg.arguments[1])
-          code = fmt("collectionAtPut({recvCode}, {keyCode}, {valCode})")
-      else:
-        # Generic message - use runtime
-        var args = "@["
-        for j, arg in msg.arguments:
-          if j > 0: args.add(", ")
-          args.add(genBlockExpr(ctx, arg))
-        args.add("]")
-        code = fmt("sendMessageBlock({recvCode}, \"{msg.selector}\", {args})")
-      
-      if isLast:
-        output.add("  return " & code & "\n")
-      else:
-        output.add("  discard " & code & "\n")
-      hasReturn = isLast
-        
-    of nkLiteral:
-      if isLast:
-        let lit = stmt.LiteralNode
-        case lit.value.kind
-        of vkInt:
-          output.add(fmt("  return NodeValue(kind: vkInt, intVal: {lit.value.intVal})\n"))
-        of vkFloat:
-          output.add(fmt("  return NodeValue(kind: vkFloat, floatVal: {lit.value.floatVal})\n"))
-        of vkString:
-          output.add(fmt("  return NodeValue(kind: vkString, strVal: \"{escapeNimStringLocal(lit.value.strVal)}\")\n"))
-        of vkNil:
-          output.add("  return NodeValue(kind: vkNil)\n")
-        else:
-          output.add("  return NodeValue(kind: vkNil)\n")
-        hasReturn = true
-      
-    else:
-      if isLast:
-        output.add("  return NodeValue(kind: vkNil)\n")
-        hasReturn = true
-
-  if not hasReturn:
-    output.add("  return NodeValue(kind: vkNil)\n")
-
-  return output
-
-# Forward declaration - implemented in expression.nim
-# Note: GenContext is defined in expression.nim, we use it as a parameter here
-
-proc isLiteralBlock*(node: Node): bool =
-  ## Check if a node is a literal block (for inline compilation)
-  return node of BlockNode
-
-proc getBlockParameters*(node: Node): seq[string] =
-  ## Get parameter names from a block node
-  if node of BlockNode:
-    return node.BlockNode.parameters
-  return @[]
-
-proc getBlockBody*(node: Node): seq[Node] =
-  ## Get body statements from a block node
-  if node of BlockNode:
-    return node.BlockNode.body
-  return @[]
 
 const inlineControlSelectors = [
   "ifTrue:", "ifFalse:", "ifTrue:ifFalse:",

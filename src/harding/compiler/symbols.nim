@@ -1,38 +1,10 @@
-import std/[strutils, tables]
+import std/[strutils]
 
 # ============================================================================
-# Symbol Table Management
-# Handles symbol mangling and name resolution for code generation
+# Symbol mangling for code generation
+# Maps Harding selectors, class names, module names and bindings onto unique,
+# style-insensitive-safe Nim identifiers.
 # ============================================================================
-
-type
-  SymbolKind* = enum
-    skClass          ## Class name
-    skMethod         ## Method selector
-    skSlot           ## Slot
-    skParameter      ## Method parameter
-    skTemporary      ## Local temporary
-    skGlobal         ## Global variable
-
-  SymbolInfo* = object
-    name*: string            ## Original name
-    mangled*: string         ## Mangled identifier
-    kind*: SymbolKind        ## Symbol type
-    index*: int              ## Index (slot index, param index, etc.)
-    class*: string       ## Owning class name (if applicable)
-
-  SymbolTable* = ref object
-    symbols*: Table[string, SymbolInfo]  ## Name -> info
-    class*: string        ## Current class scope
-    currentMethod*: string    ## Current method scope
-
-proc newSymbolTable*(class = ""): SymbolTable =
-  ## Create new symbol table
-  result = SymbolTable(
-    symbols: initTable[string, SymbolInfo](),
-    class: class,
-    currentMethod: ""
-  )
 
 proc mangleSelector*(selector: string): string =
   ## Convert selector to valid Nim identifier
@@ -119,31 +91,3 @@ proc mangleSlot*(name: string): string =
   ## Preserve original slot spelling rather than collapsing punctuation or case.
   mangleIdentifier(name)
 
-proc addSymbol*(table: var SymbolTable, info: SymbolInfo) =
-  ## Add symbol to table
-  table.symbols[info.name] = info
-
-proc lookup*(table: SymbolTable, name: string): SymbolInfo =
-  ## Look up symbol by name
-  if name in table.symbols:
-    return table.symbols[name]
-  return SymbolInfo(name: name, mangled: name, kind: skGlobal, index: -1)
-
-proc exists*(table: SymbolTable, name: string): bool =
-  ## Check if symbol exists
-  name in table.symbols
-
-proc clearMethodScope*(table: var SymbolTable) =
-  ## Clear method-specific symbols
-  for name, info in table.symbols:
-    if info.kind == skParameter or info.kind == skTemporary:
-      table.symbols.del(name)
-  table.currentMethod = ""
-
-proc clearClassScope*(table: var SymbolTable) =
-  ## Clear all scope-local symbols
-  for name, info in table.symbols:
-    if info.kind in {skSlot, skMethod}:
-      table.symbols.del(name)
-  table.class = ""
-  table.clearMethodScope()

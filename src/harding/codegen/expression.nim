@@ -109,11 +109,6 @@ proc setVariableType*(ctx: GenContext, varName: string, className: string, isNat
     isNativeClass: isNative
   )
 
-proc getVariableType*(ctx: GenContext, varName: string): VarTypeInfo =
-  ## Get the type info for a variable
-  if varName in ctx.varTypes:
-    return ctx.varTypes[varName]
-  return VarTypeInfo(name: varName, className: "", isNativeClass: false)
 
 proc inferTypeFromExpression*(ctx: GenContext, node: Node): VarTypeInfo =
   ## Infer the type of an expression
@@ -1520,16 +1515,6 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
 
   return output
 
-proc genTemporaries*(tmp: seq[string]): string =
-  ## Generate temporary variable declarations
-  if tmp.len == 0:
-    return ""
-
-  var output = "  # Temporaries\n"
-  for t in tmp:
-    output.add(fmt("  var {mangleIdentifier(t)} = NodeValue(kind: vkNil)\n"))
-  output.add("\n")
-  return output
 
 proc asBlockNode(node: Node): BlockNode =
   ## Get BlockNode from either nkBlock or nkLiteral(vkBlock)
@@ -1566,15 +1551,6 @@ proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blo
   else:
     return (false, default(BlockProcInfo))
 
-proc genParameters*(params: seq[string]): string =
-  ## Generate parameter declarations for method signature
-  if params.len == 0:
-    return ""
-
-  var parts: seq[string] = @[]
-  for p in params:
-    parts.add(fmt("{mangleIdentifier(p)}: NodeValue"))
-  return ", " & parts.join(", ")
 
 proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
   ## Generate code for a top-level statement (for main proc)
