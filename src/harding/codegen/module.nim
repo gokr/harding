@@ -197,12 +197,14 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("  return value\n\n"))
 
   # Each native class has its own full layout, including inherited fields.
+  # Proc names embed the mangled class name: raw spellings such as FooBar/Foobar
+  # collapse under Nim's style-insensitive comparison and would redefine procs.
   for slot in slots:
     let slotName = mangleSlot(slot.name)
-    output.add(fmt("proc slotGet_{cls.name}_{slotName}(nimValue: pointer): NodeValue {{.nimcall.}} =\n"))
+    output.add(fmt("proc slotGet_{clsName}_{slotName}(nimValue: pointer): NodeValue {{.nimcall.}} =\n"))
     let boxedPtr = boxExpression(slot, fmt("cast[{clsName}](nimValue)[].{slotName}"))
     output.add(fmt("  return {boxedPtr}\n\n"))
-    output.add(fmt("proc slotSet_{cls.name}_{slotName}(nimValue: pointer, value: NodeValue): NodeValue {{.nimcall.}} =\n"))
+    output.add(fmt("proc slotSet_{clsName}_{slotName}(nimValue: pointer, value: NodeValue): NodeValue {{.nimcall.}} =\n"))
     let unboxedPtr = unboxExpression(slot, "value")
     output.add(fmt("  cast[{clsName}](nimValue)[].{slotName} = {unboxedPtr}\n"))
     output.add(fmt("  return value\n\n"))
@@ -214,7 +216,7 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("var {prefix}_valid {{.threadvar.}}: bool\n"))
     output.add(fmt("proc {prefix}_guard(self: NodeValue): bool {{.inline.}} =\n"))
     output.add(fmt("  if {prefix}_version != compiledSlotAccessorVersion:\n"))
-    output.add(fmt("    {prefix}_valid = slotGetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotGet_{cls.name}_{field} and slotSetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotSet_{cls.name}_{field}\n"))
+    output.add(fmt("    {prefix}_valid = slotGetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotGet_{clsName}_{field} and slotSetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotSet_{clsName}_{field}\n"))
     output.add(fmt("    {prefix}_version = compiledSlotAccessorVersion\n"))
     output.add(fmt("  {prefix}_valid and self.kind == vkInstance and self.instVal != nil and self.instVal.kind == ikObject and self.instVal.isNimProxy and self.instVal.nativeSlots == nil and self.instVal.compiledOwner != nil and self.instVal.compiledOwner of {clsName} and self.instVal.nimValue == cast[pointer](self.instVal.compiledOwner) and self.instVal.class != nil and self.instVal.class.name == \"{cls.name}\"\n\n"))
     output.add(fmt("proc {prefix}_read(self: NodeValue): NodeValue {{.inline.}} =\n"))
@@ -230,11 +232,11 @@ proc genSlotAccessors*(cls: ClassInfo): string =
 
   for slotName in cls.getterSlots:
     let mangledSlot = mangleSlot(slotName)
-    output.add(fmt("proc methodGet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc methodGet_{clsName}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
     output.add(fmt("  {clsName}_direct_{mangledSlot}_read(self)\n\n"))
   for slotName in cls.setterSlots:
     let mangledSlot = mangleSlot(slotName)
-    output.add(fmt("proc methodSet_{cls.name}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc methodSet_{clsName}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
     output.add(fmt("  discard {clsName}_direct_{mangledSlot}_write(self, args[0])\n"))
     output.add("  self\n\n")
 
@@ -243,6 +245,7 @@ proc genSlotAccessors*(cls: ClassInfo): string =
 proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   ## Generate registerSlotAccessor calls for a class
   let slots = cls.getAllSlots()
+  let clsName = mangleClass(cls.name)
   var output = ""
   let names = slots.mapIt("\"" & it.name & "\"").join(", ")
   output.add(fmt("  registerCompiledSlotNames(\"{cls.name}\", @[{names}])\n"))
@@ -284,15 +287,15 @@ proc genSlotAccessorRegistrations*(cls: ClassInfo): string =
   output.add(fmt("  compiledClassValue(\"{cls.name}\").classVal.writableSlotNames = @[{writable}]\n"))
   for slot in slots:
     let slotName = mangleSlot(slot.name)
-    output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{cls.name}_{slotName}, slotSet_{cls.name}_{slotName})\n"))
+    output.add(fmt("  registerSlotAccessor(\"{cls.name}\", \"{slot.name}\", slotGet_{clsName}_{slotName}, slotSet_{clsName}_{slotName})\n"))
   for slotName in cls.getterSlots:
     if slotName notin cls.instanceSelectors:
       let mangledSlot = mangleSlot(slotName)
-      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}\", methodGet_{cls.name}_{mangledSlot})\n"))
+      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}\", methodGet_{clsName}_{mangledSlot})\n"))
   for slotName in cls.setterSlots:
     if slotName & ":" notin cls.instanceSelectors:
       let mangledSlot = mangleSlot(slotName)
-      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}:\", methodSet_{cls.name}_{mangledSlot})\n"))
+      output.add(fmt("  registerCompiledMethod(\"{cls.name}\", \"{slotName}:\", methodSet_{clsName}_{mangledSlot})\n"))
   return output
 
 proc collectAstNodes(nodes: var Table[pointer, bool], node: Node) =
@@ -449,7 +452,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       let cls = classInfo[name]
       for slot in cls.getterSlots:
         if slot notin cls.instanceSelectors:
-          targets.mgetOrPut(slot, @[]).add((name, "methodGet_" & name & "_" & mangleSlot(slot), slot))
+          targets.mgetOrPut(slot, @[]).add((name, "methodGet_" & mangleClass(name) & "_" & mangleSlot(slot), slot))
     for selector, choices in targets:
       if choices.len != 1 or selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
         continue

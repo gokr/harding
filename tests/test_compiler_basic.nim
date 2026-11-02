@@ -3,7 +3,7 @@
 # Basic compiler tests for Harding
 # Tests parsing, code generation, and round-trip compilation
 
-import std/[unittest, strutils, tables]
+import std/[unittest, strutils, tables, sequtils]
 import ../src/harding/core/types
 import ../src/harding/parser/[lexer, parser]
 import ../src/harding/compiler/[context, types, analyzer]
@@ -794,7 +794,7 @@ suite "Compiler: Codegen - Blocks":
     check code.contains("getSlotValue(self, \"base\")")
     check code.contains("compiledNamedAccess(other, \"base\")")
     check not code.contains("cast[" & mangleClass("SlotDerived") & "](other.instVal.nimValue)")
-    check code.contains("slotGet_SlotDerived_" & mangleSlot("base") & "(nimValue: pointer)")
+    check code.contains("slotGet_" & mangleClass("SlotDerived") & "_" & mangleSlot("base") & "(nimValue: pointer)")
     check code.contains("readableSlotNames = @[\"base\", \"extra\"]")
     check code.contains("writableSlotNames = @[\"base\", \"extra\"]")
 
