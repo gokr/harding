@@ -8931,16 +8931,27 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # 2. Each message will leave its result on stack
     # 3. Only keep the last result
 
-    if messages.len == 1:
+    if messages.len == 1 and messages[0].kind == nkMessage:
       # Single message - just send it
       let msg = cast[MessageNode](messages[0])
       interp.pushWorkFrame(newAfterReceiverFrame(msg.selector, msg.arguments))
       interp.pushValue(receiverVal)  # Push receiver back for the message send
     else:
-      # Multiple messages - push them in reverse order with cascade continuation
-      # Push all message frames in reverse order
+      # Multiple messages, or a single control-flow segment: push them in reverse
+      # order with cascade continuation. Push all message frames in reverse order
       for i in countdown(messages.len - 1, 0):
-        let msg = cast[MessageNode](messages[i])
+        let segment = messages[i]
+        if segment.kind != nkMessage:
+          # A cascade segment may be a control-flow selector (`ifTrue:` and
+          # friends), which the parser rewrites into nkIf/nkWhile with the
+          # cascade receiver already substituted. Those are not MessageNodes, so
+          # they are evaluated as ordinary expressions instead of being cast to
+          # a MessageNode; only the final segment supplies the cascade result.
+          if i != messages.len - 1:
+            interp.pushWorkFrame(newDiscardFrame())
+          interp.pushWorkFrame(newEvalFrame(segment))
+          continue
+        let msg = cast[MessageNode](segment)
         if i == messages.len - 1:
           # Last message - keep its result
           interp.pushWorkFrame(newCascadeMessageFrame(msg.selector, msg.arguments, receiverVal))

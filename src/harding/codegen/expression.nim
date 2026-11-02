@@ -425,6 +425,19 @@ proc genCapturedBlockExpression(blockInfo: BlockProcInfo, ctx: GenContext): stri
   let fieldsStr = initFields.join(", ")
   return fmt("(block:\n    createBlockWithEnv({blockInfo.nimName}, {blockInfo.paramCount}, {blockInfo.envStructName}({fieldsStr})))")
 
+proc genSend(ctx: GenContext, receiverCode, selector: string,
+             arguments: seq[string]): string =
+  ## Ordinary send with an already-generated receiver. Mixed mode keeps the
+  ## hybrid entry point, method bodies route through the host, and top-level code
+  ## uses the per-site cache.
+  let args = arguments.join(", ")
+  if ctx.mixed:
+    return fmt("sendMessageHybrid({receiverCode}, \"{selector}\", @[{args}])")
+  if ctx.inMethod:
+    let owner = genSymbolAccess(ctx, "self")
+    return fmt("sendMessageBound({owner}, {receiverCode}, \"{selector}\", @[{args}])")
+  return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{selector}\", @[{args}])")
+
 proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
                       arguments: seq[string] = @[]): string =
   ## Evaluate operands once, left to right, before selecting an engine.
@@ -1083,6 +1096,25 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     else:
       return fmt("createBlock(cast[pointer]({blockInfo.nimName}), {blockInfo.paramCount})")
 
+  of nkCascade:
+    ## A cascade evaluates its receiver once, sends every collected message to
+    ## that same value, and answers the last message's result. Earlier messages
+    ## only run for their effects.
+    let cascade = node.CascadeNode
+    if cascade.receiver == nil or cascade.messages.len == 0:
+      return genExpression(ctx, cascade.receiver)
+    var code = "(block:\n    let hardingCascadeReceiver = " &
+               genExpression(ctx, cascade.receiver).replace("\n", "\n    ") & "\n"
+    for index, message in cascade.messages:
+      let send = cast[MessageNode](message)
+      let arguments = send.arguments.mapIt(genExpression(ctx, it))
+      let sendCode = genSend(ctx, "hardingCascadeReceiver", send.selector, arguments)
+      if index == cascade.messages.len - 1:
+        code.add("    " & sendCode.replace("\n", "\n    ") & ")")
+      else:
+        code.add("    discard " & sendCode.replace("\n", "\n    ") & "\n")
+    return code
+
   of nkPseudoVar:
     return genSymbolAccess(ctx, node.PseudoVarNode.name)
 
@@ -1403,6 +1435,21 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Default: message send as statement
     let msgCode = genMessage(ctx, node.MessageNode)
     return "discard " & msgCode
+
+  of nkCascade:
+    ## Statement position discards the cascade's answer, so the last message is
+    ## discarded too.
+    let cascade = node.CascadeNode
+    if cascade.receiver == nil or cascade.messages.len == 0:
+      return genStatement(ctx, cascade.receiver)
+    var code = "block:\n    let hardingCascadeReceiver = " &
+               genExpression(ctx, cascade.receiver).replace("\n", "\n    ") & "\n"
+    for message in cascade.messages:
+      let send = cast[MessageNode](message)
+      let arguments = send.arguments.mapIt(genExpression(ctx, it))
+      let sendCode = genSend(ctx, "hardingCascadeReceiver", send.selector, arguments)
+      code.add("    discard " & sendCode.replace("\n", "\n    ") & "\n")
+    return code
 
   of nkPrimitiveCall:
     # Primitive call as statement

@@ -490,11 +490,16 @@ proc rewriteNodeForSlotAccess(node: Node, cls: Class, shadowedNames: seq[string]
     return blk
 
   of nkCascade:
-    # Rewrite cascade receiver and all messages
+    # Rewrite cascade receiver and all messages. A segment may be a control-flow
+    # node (ifTrue:/whileTrue: are rewritten by the parser), which is recursed into
+    # rather than treated as a MessageNode.
     let cascade = cast[CascadeNode](node)
     if cascade.receiver != nil:
       cascade.receiver = rewriteNodeForSlotAccess(cascade.receiver, cls, shadowedNames)
     for i in 0..<cascade.messages.len:
+      if cascade.messages[i].kind != nkMessage:
+        cascade.messages[i] = rewriteNodeForSlotAccess(cascade.messages[i], cls, shadowedNames)
+        continue
       let msg = cast[MessageNode](cascade.messages[i])
       for j in 0..<msg.arguments.len:
         msg.arguments[j] = rewriteNodeForSlotAccess(msg.arguments[j], cls, shadowedNames)

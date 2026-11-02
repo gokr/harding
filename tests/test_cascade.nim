@@ -134,3 +134,28 @@ obj at: 1 put: #a;
     check(cast[MessageNode](cascade.messages[1]).selector == "at:put:")
     check(cast[MessageNode](cascade.messages[2]).selector == "at:put:")
 
+  test "Evaluate cascade containing a control-flow segment":
+    ## The parser rewrites ifTrue:/whileTrue: into nkIf/nkWhile with the cascade
+    ## receiver substituted, so cascade segments are not all MessageNodes. A blind
+    ## cast crashed the VM on `b printString; ifTrue: [...]`.
+    let (values, error) = interp.evalStatements("b := true. b printString; ifTrue: [7].")
+    check error.len == 0
+    check values.len > 0
+    check values[^1].kind == vkInt
+    check values[^1].intVal == 7
+
+  test "Evaluate cascade evaluates its receiver once":
+    let (values, error) = interp.evalStatements("""
+      CascadeProbe := Object derive: #(hits).
+      CascadeProbe>>touch [ hits := hits + 1 ].
+      CascadeProbe>>hits [ ^ hits ].
+      CascadeProbe>>hits: value [ hits := value ].
+      Target := CascadeProbe new.
+      Target hits: 0.
+      Target touch; touch; touch.
+      Target hits.
+    """)
+    check error.len == 0
+    check values.len > 0
+    check values[^1].kind == vkInt
+    check values[^1].intVal == 3

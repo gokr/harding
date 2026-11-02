@@ -1012,6 +1012,38 @@ Foobar>>tag [ ^ "pascal" ].
 FooBar new tag println.
 Foobar new tag println.
 """, "camel\npascal\n"),
+    # Generated slot accessor and guard procs embed the class name; raw spellings
+    # collapse under Nim's style-insensitive comparison, so those names must be
+    # mangled like the class types themselves.
+    ("class_spelling_accessors", """
+FooBar := Object derivePublic: #(x).
+Foobar := Object derivePublic: #(x).
+a := FooBar new.
+a x: 7.
+a x println.
+b := Foobar new.
+b x: 9.
+b x println.
+""", "7\n9\n"),
+    # Cascades send every message to the original receiver; the receiver is
+    # evaluated once and only the last message answers the cascade.
+    ("cascade_unary", """
+C := Object derive: #(n).
+C>>bump [ n := n + 1 ].
+C>>get [ ^ n ].
+C>>set: value [ n := value ].
+c := C new.
+c set: 0.
+c bump; bump; bump.
+c get println.
+""", "3\n"),
+    ("cascade_keyword_argument", """
+s := Set new.
+s add: 1; add: 2; add: 7.
+s size println.
+s includes: 9; includes: 1.
+s size println.
+""", "3\n3\n"),
     ("nil_override", """
 C := Object derive: #().
 C>>notNil [ ^ false ].
