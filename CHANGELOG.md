@@ -7,6 +7,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Opt-in `granite --trust-observed-types` turns validated, unambiguous primitive write observations into native slot contracts; conservative compilation remains the default. Nil/mixed observations stay dynamic, wrong-kind writes are checked, and allocation uses typed defaults. Mixed mode is refused. See `docs/TRUST_OBSERVED_TYPES.md` for the deliberate artifact-contract change and ARC/ORC tests.
+
+### Added
 - `scripts/probe_specialization.py` and an opt-in compiled-dispatch probe (`HARDING_SPEC_PROBE=1`) that measure how much of a workload a native-parameter/return specialization could convert. Richards 59.3% and DeltaBlue 77.7% of own-class dispatches carry all-Integer arguments with no aggregate argument; Queens is served by guarded direct sends and shows none (`docs/GRANITE_SPECIALIZATION_PROBE.md`).
 
 ### Not shipped

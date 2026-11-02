@@ -156,6 +156,7 @@ type
     frozenReceipt: string
     sealFrozen: bool
     typeFeedback: string
+    trustObservedTypes: bool
     inferenceReport: string
     strictSlots: bool
     maxStackDepth: int
@@ -198,6 +199,10 @@ proc showUsage() =
   echo "  -d, --dir <dir>       Output directory (default: ./build)"
   echo "  -r, --release         Build with --release flag for optimization"
   echo "  --type-feedback:<file> Validated interpreter feedback (requires --inference-report)"
+  echo "  --trust-observed-types Treat an unambiguous observed slot type as a real type,"
+  echo "                           narrowing storage even when static analysis cannot prove it"
+  echo "                           (requires --type-feedback; the program is then specialized"
+  echo "                           to the observed types)"
   echo "  --inference-report:<file> Write advisory static/observed slot candidates"
   echo "  --strict-slots        Treat declared numeric slot store conflicts as errors"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
@@ -274,6 +279,8 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.dumpAst = true
       of "type-feedback":
         result.typeFeedback = p.val
+      of "trust-observed-types":
+        result.trustObservedTypes = true
       of "inference-report":
         result.inferenceReport = p.val
       of "strict-slots":
@@ -381,12 +388,16 @@ proc compileFile(config: Config): bool =
   # and slot diagnostics. Each of these previously rebuilt the graph.
   let classModel = buildClassModel(nodes)
 
+  if config.trustObservedTypes and (config.mixed or config.typeFeedback.len == 0):
+    echo "Error: --trust-observed-types requires --type-feedback and native (not --mixed) compilation"
+    return false
   var numericCandidates = initTable[string, string]()
+  var observed: JsonNode = nil
+  var narrowedSlots: seq[string]
   if not config.mixed:
     # Guarded native arithmetic only where evidence is confirmed by both module
     # analysis and observations; a proposal alone stays dynamic.
     let staticOnly = inferSlots(nodes, classModel.classes)
-    var observed: JsonNode = nil
     if config.typeFeedback.len > 0:
       try:
         observed = loadTypeFeedback(config.typeFeedback, config.inputFile)
@@ -397,6 +408,36 @@ proc compileFile(config: Config): bool =
       if slot["evidence"].getStr == "static+observations":
         let kind = slot["effectiveCandidate"].getStr
         if kind in ["skInt", "skFloat"]: numericCandidates[key] = kind
+
+  # Opt-in aggressive mode: an unambiguous observed type is treated as the slot's
+  # real type, so it gets a native field exactly like a declared one. This
+  # specializes the program to the observed types: a later run writing another
+  # kind then fails the slot contract instead of degrading silently, which is why
+  # it is not the default.
+  if config.trustObservedTypes and observed != nil and not config.mixed:
+    var narrowed = 0
+    for key, slot in inferenceReport(inferSlots(nodes, classModel.classes), observed)["slots"]:
+      if slot["evidence"].getStr notin ["observed-proposal", "static+observations"]: continue
+      let kind = slot["effectiveCandidate"].getStr
+      let separator = key.rfind('#')
+      if separator <= 0: continue
+      let className = key[0 ..< separator]
+      let slotName = key[separator + 1 .. ^1]
+      if className notin classModel.classes: continue
+      for candidate in classModel.classes[className].slots.mitems:
+        if candidate.name != slotName or candidate.constraint != tcNone: continue
+        case kind
+        of "skInt": candidate.constraint = tcInt
+        of "skFloat": candidate.constraint = tcFloat
+        of "skBool": candidate.constraint = tcBool
+        of "skString": candidate.constraint = tcString
+        of "skSymbol": candidate.constraint = tcSymbol
+        else: discard
+        if candidate.constraint != tcNone:
+          inc narrowed
+          narrowedSlots.add(key)
+          echo "  narrowed ", key, " -> ", kind
+    echo "Observed-type narrowing: ", narrowed, " slot(s)"
 
   if defined(slotCandidateTrace): echo "candidates=", numericCandidates.len
 
@@ -416,6 +457,11 @@ proc compileFile(config: Config): bool =
                        loadTypeFeedback(config.typeFeedback, config.inputFile)
                      else: nil
       let report = inferenceReport(inferSlots(nodes, classModel.classes), evidence)
+      if config.trustObservedTypes:
+        report["semantics"] = %"observed-type-contracts"
+        for key in narrowedSlots:
+          report["slots"][key]["storageNarrowed"] = %true
+          report["slots"][key]["requiresGuard"] = %false
       createDir(absolutePath(config.inferenceReport).parentDir)
       writeFile(config.inferenceReport, pretty(report) & "\n")
     except CatchableError as failure:
@@ -563,7 +609,9 @@ proc compileFile(config: Config): bool =
   let reflectedClasses = extractClassInfoFromInterpreter(interp)
   let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
                           scriptTemporaries = script.temporaries,
-                          inferredNumeric = numericCandidates)
+                          inferredNumeric = numericCandidates,
+                          prebuiltClasses = (if config.trustObservedTypes: classModel.classes
+                                             else: initTable[string, ClassInfo]()))
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

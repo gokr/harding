@@ -795,7 +795,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
                 injectMainArgsVar: bool = false,
                 scriptTemporaries: seq[string] = @[],
-                inferredNumeric: Table[string, string] = initTable[string, string]()): string =
+                inferredNumeric: Table[string, string] = initTable[string, string](),
+                prebuiltClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
@@ -837,7 +838,12 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
   # This avoids pulling unrelated stdlib/internal classes into generated output.
-  let analysis = buildClassModel(defsSourceNodes, reflectedClasses)
+  # Reuse the caller's class model when it has one: rebuilding here would discard
+  # decisions already applied to it (observed-type narrowing, reflected layout).
+  let analysis = if prebuiltClasses.len > 0:
+                   AnalysisResult(classes: prebuiltClasses)
+                 else:
+                   buildClassModel(defsSourceNodes, reflectedClasses)
   # Collect compiled class names for native instantiation
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:
