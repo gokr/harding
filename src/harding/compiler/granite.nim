@@ -377,11 +377,15 @@ proc compileFile(config: Config): bool =
     showErrorContext(source, config.inputFile, parser.lastLine, parser.lastCol)
     return false
 
+  # One class model per compile, shared by slot inference, the inference report
+  # and slot diagnostics. Each of these previously rebuilt the graph.
+  let classModel = buildClassModel(nodes)
+
   var numericCandidates = initTable[string, string]()
   if not config.mixed:
     # Guarded native arithmetic only where evidence is confirmed by both module
     # analysis and observations; a proposal alone stays dynamic.
-    let staticOnly = inferSlots(nodes, buildClassGraph(nodes).classes)
+    let staticOnly = inferSlots(nodes, classModel.classes)
     var observed: JsonNode = nil
     if config.typeFeedback.len > 0:
       try:
@@ -411,7 +415,7 @@ proc compileFile(config: Config): bool =
   # into a declared Float slot, always reject a provable Float into Integer, and
   # escalate warnings with --strict-slots. Diagnostics never stop a normal build
   # on their own; the interpreter remains permissive.
-  let diagnostics = diagnoseSlotStores(nodes, buildClassGraph(nodes).classes, config.inputFile)
+  let diagnostics = diagnoseSlotStores(nodes, classModel.classes, config.inputFile)
   var failed = false
   for diagnostic in diagnostics:
     let severity = if diagnostic.severity == dsError or config.strictSlots: "error" else: "warning"

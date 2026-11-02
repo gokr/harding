@@ -802,48 +802,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
   # This avoids pulling unrelated stdlib/internal classes into generated output.
-  let analysis = block:
-    let astAnalysis = buildClassGraph(defsSourceNodes)
-    if reflectedClasses.len == 0:
-      astAnalysis
-    else:
-      let merged = newAnalysisResult()
-      merged.classes = initTable[string, ClassInfo]()
-
-      # First pass: create class entries and slot sets
-      for className, astCls in astAnalysis.classes.pairs:
-        let mergedCls = newClassInfo(className)
-        let slotSource = if className in reflectedClasses: reflectedClasses[className] else: astCls
-        for slot in slotSource.slots:
-          # Declarations come from the AST (reflected runtime classes do not carry
-          # hint metadata), so recover the declared type/default from astCls.
-          let declared = if className in astAnalysis.classes:
-                           astAnalysis.classes[className].getSlotDef(slot.name)
-                         else: SlotDef(name: slot.name, constraint: slot.constraint)
-          let constraint = if declared.constraint != tcNone: declared.constraint
-                           else: slot.constraint
-          let objectClass = if declared.objectClass.len > 0: declared.objectClass
-                            else: (if slot.constraint == tcObject: slot.objectClass else: "")
-          let defaultValue = if declared.defaultValue.len > 0: declared.defaultValue
-                             else: slot.defaultValue
-          discard mergedCls.addSlot(slot.name, constraint, objectClass, defaultValue)
-        mergedCls.getterSlots = slotSource.getterSlots
-        mergedCls.setterSlots = slotSource.setterSlots
-        mergedCls.instanceSelectors = astCls.instanceSelectors
-        merged.classes[className] = mergedCls
-
-      # Second pass: wire parent links using AST class graph names
-      for className, astCls in astAnalysis.classes.pairs:
-        if astCls.parent != nil:
-          merged.classes[className].parent = if astCls.parent.name in merged.classes:
-                                              merged.classes[astCls.parent.name]
-                                            else: astCls.parent
-
-      merged
-
-  # Resolve slot indices
-  ctx.resolveSlotIndices()
-  
+  let analysis = buildClassModel(defsSourceNodes, reflectedClasses)
   # Collect compiled class names for native instantiation
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:

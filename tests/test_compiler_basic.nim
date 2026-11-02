@@ -322,6 +322,77 @@ suite "Compiler: Accessor Registration":
     let registration = genSlotAccessorRegistrations(analysis.classes["Cell"])
     check not registration.contains("registerCompiledMethod")
 
+suite "Compiler: single class model":
+  test "AST-only model lays inherited slots out parent-first":
+    var p = initParser(lex("Base := Object derivePublic: #(a, b). Child := Base derivePublic: #(c)"))
+    let analysis = buildClassModel(p.parseStatements())
+    let child = analysis.classes["Child"]
+    check child.getAllSlots().mapIt(it.name) == @["a", "b", "c"]
+    check child.getSlotIndex("a") == 0
+    check child.getSlotIndex("c") == 2
+    # Indices must be non-overlapping with the parent's own slots.
+    check analysis.classes["Base"].getSlotIndex("b") == 1
+
+  test "reflected flattening does not duplicate inherited slots":
+    var p = initParser(lex("Base := Object derivePublic: #(a, b). Child := Base derivePublic: #(c)"))
+    let nodes = p.parseStatements()
+
+    # A host interpreter reflects `allSlotNames`, i.e. the flattened own+inherited
+    # list in parent-first order. Base exposes [a, b]; Child exposes [a, b, c].
+    let reflectedBase = newClassInfo("Base")
+    for name in ["a", "b"]: discard reflectedBase.addSlot(name, tcObject)
+    let reflectedChild = newClassInfo("Child")
+    for name in ["a", "b", "c"]: discard reflectedChild.addSlot(name, tcObject)
+    var reflected = initTable[string, ClassInfo]()
+    reflected["Base"] = reflectedBase
+    reflected["Child"] = reflectedChild
+
+    let merged = buildClassModel(nodes, reflected)
+    for name in ["Base", "Child"]:
+      let cls = merged.classes[name]
+      let laidOut = cls.getAllSlots().mapIt(it.name)
+      # slotIndex must agree with the laid-out list, or lookups silently miss.
+      for slot in cls.getAllSlots():
+        check cls.getSlotIndex(slot.name) == laidOut.find(slot.name)
+    check merged.classes["Base"].getAllSlots().mapIt(it.name) == @["a", "b"]
+    check merged.classes["Child"].getAllSlots().mapIt(it.name) == @["a", "b", "c"]
+    check merged.classes["Child"].getSlotIndex("a") == 0
+    check merged.classes["Child"].getSlotIndex("c") == 2
+
+  test "a class without a source type list takes its slots from reflection":
+    var p = initParser(lex("Base := Object derivePublic: #(a). Child := Base derivePublic: #()"))
+    let nodes = p.parseStatements()
+    let reflectedChild = newClassInfo("Child")
+    for name in ["a", "hidden"]: discard reflectedChild.addSlot(name, tcObject)
+    var reflected = initTable[string, ClassInfo]()
+    reflected["Child"] = reflectedChild
+    let merged = buildClassModel(nodes, reflected)
+    # Reflection is the only evidence for a slot the source never declares.
+    check merged.classes["Child"].getAllSlots().mapIt(it.name) == @["a", "hidden"]
+    check merged.classes["Child"].getSlotIndex("hidden") == 1
+
+  test "reflected slots added to ancestors are inherited exactly once":
+    var p = initParser(lex("Base := Object derivePublic: #(). Child := Base derivePublic: #(). Leaf := Child derivePublic: #()"))
+    var reflected = initTable[string, ClassInfo]()
+    for name in ["Base", "Child", "Leaf"]:
+      let cls = newClassInfo(name)
+      discard cls.addSlot("hidden", tcInt)
+      reflected[name] = cls
+    let merged = buildClassModel(p.parseStatements(), reflected)
+    for name in ["Base", "Child", "Leaf"]:
+      let cls = merged.classes[name]
+      check cls.getAllSlots().mapIt(it.name) == @["hidden"]
+      check cls.getSlotIndex("hidden") == 0
+    check merged.classes["Child"].slots.len == 0
+    check merged.classes["Leaf"].slots.len == 0
+
+  test "reflection preserves class graph errors":
+    var p = initParser(lex("Base := Object derive: #(). Base := Object derive: #()"))
+    var reflected = initTable[string, ClassInfo]()
+    reflected["Base"] = newClassInfo("Base")
+    let merged = buildClassModel(p.parseStatements(), reflected)
+    check merged.errors == @["Duplicate class definition: Base"]
+
 suite "Compiler: Codegen - Expression":
   test "generates integer literal":
     let node = LiteralNode(value: NodeValue(kind: vkInt, intVal: 42))

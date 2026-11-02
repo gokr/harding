@@ -335,14 +335,74 @@ proc buildClassGraph*(nodes: seq[Node]): AnalysisResult =
 
   result.classes = ctx.classes
 
-  # Resolve slot indices
-  for cls in ctx.classes.mvalues:
-    cls.slotIndex.clear()
-    var idx = cls.parent.getAllSlots().len
-    for slot in cls.slots.mitems:
-      if not slot.isInherited:
-        slot.index = idx
-        cls.slotIndex[slot.name] = idx
-        inc idx
+  # Resolve slot indices across the inheritance chain (shared with the merge step).
+  resolveSlotIndices(ctx)
 
   return result
+
+proc buildClassModel*(nodes: seq[Node],
+                      reflectedClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): AnalysisResult =
+  ## Build the class model used for code generation: the AST class graph, with
+  ## slot declarations and layout enriched from reflected runtime classes when a
+  ## host interpreter is available.
+  ##
+  ## This is the single place the class model is assembled. Compiler passes that
+  ## only need to inspect classes (slot inference, slot diagnostics) and the code
+  ## generator all call it, so they cannot disagree about a class's slots.
+  let astAnalysis = buildClassGraph(nodes)
+  if reflectedClasses.len == 0:
+    return astAnalysis
+
+  result = newAnalysisResult()
+  result.errors = astAnalysis.errors
+  for className, astCls in astAnalysis.classes.pairs:
+    let mergedCls = newClassInfo(className)
+    let slotSource = reflectedClasses.getOrDefault(className, astCls)
+    mergedCls.getterSlots = slotSource.getterSlots
+    mergedCls.setterSlots = slotSource.setterSlots
+    mergedCls.instanceSelectors = astCls.instanceSelectors
+    result.classes[className] = mergedCls
+
+  # Parent links use AST class graph names; a parent outside the compiled set
+  # keeps its standalone ClassInfo so ancestry still resolves.
+  for className, astCls in astAnalysis.classes.pairs:
+    if astCls.parent != nil:
+      result.classes[className].parent = if astCls.parent.name in result.classes:
+                                           result.classes[astCls.parent.name]
+                                         else: astCls.parent
+
+  var populated = initTable[string, bool]()
+  proc populateSlots(cls: ClassInfo) =
+    if cls == nil or cls.name notin astAnalysis.classes or cls.name in populated:
+      return
+    populateSlots(cls.parent)
+    let astCls = astAnalysis.classes[cls.name]
+    # Reflected layouts are flattened and authoritative: they describe the live
+    # VM layout, including slots added by runtime `addSuperclass:`, which the AST
+    # class graph cannot see. Populate ancestors first so slots supplied only by
+    # reflection there are not reintroduced as a child's own slots.
+    let slotSource = reflectedClasses.getOrDefault(cls.name, astCls)
+    let slots = if slotSource.slots.len > 0: slotSource.slots else: astCls.slots
+    for slot in slots:
+      if cls.parent != nil and cls.parent.getSlotIndex(slot.name) >= 0:
+        continue
+      # Type declarations come from the AST; reflected classes carry no hints.
+      let declared = astCls.getSlotDef(slot.name)
+      let constraint = if declared.constraint != tcNone: declared.constraint
+                       else: slot.constraint
+      let objectClass = if declared.objectClass.len > 0: declared.objectClass
+                        else: slot.objectClass
+      let defaultValue = if declared.defaultValue.len > 0: declared.defaultValue
+                         else: slot.defaultValue
+      discard cls.addSlot(slot.name, constraint, objectClass, defaultValue)
+    populated[cls.name] = true
+
+  for cls in result.classes.values:
+    populateSlots(cls)
+
+  # addSlot assigns own-slot indices from zero, so a merged model must be
+  # re-laid-out against its parents exactly like the AST-only graph.
+  var ctx = newCompiler()
+  ctx.classes = result.classes
+  resolveSlotIndices(ctx)
+  result.classes = ctx.classes
