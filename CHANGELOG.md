@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Not shipped
+- Per-site selector ids and class density ids for native resolution were implemented, passed all ARC/ORC gates and removed two orders of magnitude of hashing on Queens — and moved wall time by 0% (0.989-1.007x). Reverted rather than keep a second id space and a per-site threadvar that are only safe because the interner clears before recycling ids. The lesson: a call-count reduction is only evidence when paired wall time moves with it (`docs/GRANITE_SELECTOR_ID_EXPERIMENT.md`).
+
 ### Added
 - Integer overflow is now catchable as `Overflow`, a subclass of the new `ArithmeticError` root under `Error`, mirroring Nim's `ArithmeticDefect`; `DivisionByZero` is reparented onto `ArithmeticError` so one selector catches any arithmetic failure. Previously the condition surfaced as an uncatchable `VM error: over- or underflow` string (`docs/NIL_AND_ABSENCE.md`).
 - `NotFound`, an `Error` subclass signalled by access-style lookups that find nothing where the caller required something present (`lib/core/NotFound.hrd`).
