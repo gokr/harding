@@ -466,21 +466,58 @@ proc genSend(ctx: GenContext, receiverCode, selector: string,
     return fmt("sendMessageBound({owner}, {receiverCode}, \"{selector}\", @[{args}])")
   return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{selector}\", @[{args}])")
 
+proc isReusableOperand(code: string): bool =
+  ## True when re-reading the operand has no observable effect: a plain local or
+  ## parameter name, or a literal. Such an operand needs no `let` binding, which
+  ## avoids a NodeValue copy at every builtin operation on the hot path.
+  if code.len == 0:
+    return false
+  var start = 0
+  if code[0] == '-':
+    start = 1
+  if start >= code.len:
+    return false
+  # Numeric literal.
+  var digits = true
+  for ch in code[start..^1]:
+    if ch notin {'0'..'9', '.'}:
+      digits = false
+      break
+  if digits:
+    return true
+  # Bare identifier (a local, parameter or global read).
+  if code[0] notin {'A'..'Z', 'a'..'z', '_'}:
+    return false
+  for ch in code:
+    if ch notin {'A'..'Z', 'a'..'z', '0'..'9', '_'}:
+      return false
+  return true
+
 proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
                       arguments: seq[string] = @[]): string =
-  ## Evaluate operands once, left to right, before selecting an engine.
+  ## Evaluate operands once, left to right, before selecting an engine. Operands
+  ## that cannot have effects (names, literals) are passed through directly rather
+  ## than copied into a binding.
   if not ctx.inMethod:
     return helper & "(" & (@[receiverCode] & arguments).join(", ") & ")"
   let owner = genSymbolAccess(ctx, "self")
-  result = "(block:\n    let hardingBuiltinReceiver = " & receiverCode.replace("\n", "\n    ") & "\n"
+  var receiverRef = "hardingBuiltinReceiver"
+  result = "(block:\n"
+  if isReusableOperand(receiverCode):
+    receiverRef = receiverCode
+  else:
+    result.add("    let hardingBuiltinReceiver = " & receiverCode.replace("\n", "\n    ") & "\n")
   var boundArguments: seq[string]
   for index, argument in arguments:
-    let temporary = "hardingBuiltinArg" & $index
-    result.add("    let " & temporary & " = " & argument.replace("\n", "\n    ") & "\n")
-    boundArguments.add(temporary)
+    if isReusableOperand(argument):
+      boundArguments.add(argument)
+    else:
+      let temporary = "hardingBuiltinArg" & $index
+      result.add("    let " & temporary & " = " & argument.replace("\n", "\n    ") & "\n")
+      boundArguments.add(temporary)
   let argsCode = "@[" & boundArguments.join(", ") & "]"
-  let fallback = helper & "(" & (@["hardingBuiltinReceiver"] & boundArguments).join(", ") & ")"
-  result.add(fmt("    let builtin = hostedBuiltinDeferred({owner}, hardingBuiltinReceiver, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
+  let fallback = helper & "(" & (@[receiverRef] & boundArguments).join(", ") & ")"
+  result.add(fmt("    let builtin = hostedBuiltinDeferred({owner}, {receiverRef}, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
 
 proc nativeNumericExpression(ctx: GenContext, node: Node): string =
   case node.kind

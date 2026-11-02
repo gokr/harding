@@ -2541,9 +2541,13 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
   ## class-side sends and exception protocols retain the generic runtime path.
   if selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
     return sendMessage(runtime, receiver, selector, args)
-  let interpreted = boundInterpretedSend(receiver, selector, args)
-  if interpreted.handled:
-    return interpreted.value
+  # Standalone compiled programs never bind a host, so skip the call entirely
+  # rather than entering it to discover that. Rechecked per send: a callback may
+  # bind or detach an interpreter between sends.
+  if boundCompiledClasses.len != 0:
+    let interpreted = boundInterpretedSend(receiver, selector, args)
+    if interpreted.handled:
+      return interpreted.value
   let className = getReceiverClassName(receiver)
   if className.len > 0:
     if cache.version == compiledClassDispatchVersion and cache.className == className and

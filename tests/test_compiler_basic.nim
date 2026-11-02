@@ -554,11 +554,15 @@ suite "Compiler: Engine binding shims":
     require not syntax.hasError
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "builtin_host")
-    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"size\", @[])")
-    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"abs\", @[])")
-    check code.contains("hostedBuiltinDeferred(self, hardingBuiltinReceiver, \"at:\", @[hardingBuiltinArg0])")
-    check code.contains("else: nt_size(hardingBuiltinReceiver)")
-    check code.contains("let hardingBuiltinReceiver = value")
+    # A bare local receiver is re-readable, so it is used directly: no copy into
+    # a binding, but the host is still consulted first.
+    check code.contains("hostedBuiltinDeferred(self, value, \"size\", @[])")
+    check code.contains("hostedBuiltinDeferred(self, value, \"abs\", @[])")
+    check code.contains("hostedBuiltinDeferred(self, value, \"at:\", @[hardingBuiltinArg0])")
+    check code.contains("else: nt_size(value)")
+    check not code.contains("let hardingBuiltinReceiver = value")
+    # An operand with effects is bound exactly once, keeping its order.
+    check code.contains("let hardingBuiltinArg0 =")
     # Top-level helper use stays on the native fast path.
     let top = newGenContext()
     let send = MessageNode(receiver: IdentNode(name: "value"), selector: "size")
@@ -593,7 +597,7 @@ suite "Compiler: Boolean helper generation":
     check code.find("let hardingBuiltinArg0 =") < code.find("let builtin = hostedBuiltinDeferred(")
     check code.contains("\"|\", @[hardingBuiltinArg0])")
     let negation = genMessage(ctx, MessageNode(receiver: IdentNode(name: "next"), selector: "not"))
-    check negation.contains("nt_not(hardingBuiltinReceiver)")
+    check negation.contains("nt_not(next)")
     ctx.mixed = true
     check not genMessage(ctx, MessageNode(receiver: operand, selector: "|", arguments: @[Node(operand)])).contains("nt_pipe")
     check not genMessage(ctx, MessageNode(receiver: operand, selector: "not")).contains("nt_not")
