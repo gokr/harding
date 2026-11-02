@@ -128,6 +128,23 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
         if result >= 0: return -1
         result = index
 
+  proc chainedReceiverClass(node: Node, locals: Table[string, SlotInference],
+                            owner: string, classSide: bool): string =
+    ## Receiver class of a send whose receiver is itself a send, following the
+    ## `Class new`/`Class new selector: x` chain that idiomatic initializers use.
+    if node == nil: return ""
+    if node.kind == nkMessage:
+      let msg = node.MessageNode
+      if msg.receiver != nil and msg.receiver.kind == nkIdent and
+         msg.receiver.IdentNode.name in classes:
+        return msg.receiver.IdentNode.name
+      if msg.receiver != nil and msg.receiver.kind == nkMessage:
+        return chainedReceiverClass(msg.receiver, locals, owner, classSide)
+      if msg.receiver != nil and msg.receiver.kind == nkIdent:
+        let name = msg.receiver.IdentNode.name
+        if name in locals and locals[name].kind == skObject: return locals[name].className
+    return ""
+
   proc kind(node: Node, locals: Table[string, SlotInference], owner: string,
             classSide: bool): SlotInference =
     if node == nil: return unknown()
@@ -153,6 +170,24 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
       if parent.len > 0:
         let index = target(node.SuperSendNode.selector, parent, classSide)
         return returns.getOrDefault(methodKey(index), unknown())
+      return unknown()
+    # A conditional answers one of its branches, so a method whose body is an
+    # `ifTrue:ifFalse:` expression still returns a kind when every arm agrees.
+    if node.kind == nkIf:
+      var answer: SlotInference
+      proc branchKind(branch: Node): SlotInference =
+        if branch == nil: return unknown()
+        let blockNode = methodBody(branch)
+        if blockNode != nil and blockNode.body.len > 0:
+          var nested = locals
+          for name in blockNode.parameters & blockNode.temporaries:
+            nested[name] = unknown()
+          return kind(blockNode.body[^1], nested, owner, classSide)
+        return kind(branch, locals, owner, classSide)
+      combine(answer, branchKind(node.IfNode.thenBranch))
+      if node.IfNode.elseBranch != nil:
+        combine(answer, branchKind(node.IfNode.elseBranch))
+      if answer.writes > 0: return answer
       return unknown()
     if node.kind != nkMessage: return unknown()
     let msg = node.MessageNode
@@ -190,7 +225,16 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
         if msg.selector in ["selector:put:", "classSelector:put:"]: return
         let receiver = kind(msg.receiver, locals, owner, classSide)
         let selfSend = msg.receiver != nil and msg.receiver.kind == nkPseudoVar and msg.receiver.PseudoVarNode.name == "self"
-        let index = target(msg.selector, if selfSend: owner elif receiver.kind == skObject: receiver.className else: "", classSide and selfSend)
+        # A send whose answer is the receiver (`^self` cascade style) keeps that
+        # receiver's class, so `(Idle new selector: 7) setup: 1` still resolves
+        # the second call. Without this a chained initializer loses its evidence.
+        let chained = msg.receiver != nil and msg.receiver.kind == nkMessage and
+                      receiver.kind == skDynamic and chainedReceiverClass(msg.receiver, locals, owner, classSide).len > 0
+        let ownerName = if selfSend: owner
+                        elif receiver.kind == skObject: receiver.className
+                        elif chained: chainedReceiverClass(msg.receiver, locals, owner, classSide)
+                        else: ""
+        let index = target(msg.selector, ownerName, classSide and selfSend)
         if index >= 0:
           for i, arg in msg.arguments:
             let key = methodKey(index) & ":" & $i
@@ -204,10 +248,28 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
         locals[name] = parameters.getOrDefault(methodKey(index) & ":" & $i, unknown())
       for name in methodInfo.body.temporaries: locals[name] = unknown()
       var answer: SlotInference
+      # A method's answer is its explicit `^` values plus, when the body does not
+      # end in one, the trailing expression. Returns nested inside blocks count
+      # too: a conditional method still answers a kind if every arm agrees.
+      proc gatherReturns(node: Node, locals: Table[string, SlotInference], into: var SlotInference) =
+        if node == nil: return
+        if node.kind == nkReturn:
+          combine(into, kind(node.ReturnNode.expression, locals, methodInfo.owner, methodInfo.classSide))
+          return
+        let blockNode = methodBody(node)
+        if blockNode != nil:
+          var nested = locals
+          for name in blockNode.parameters & blockNode.temporaries: nested[name] = unknown()
+          for statement in blockNode.body: gatherReturns(statement, nested, into)
+          return
+        for child in nodeChildren(node): gatherReturns(child, locals, into)
       for statement in methodInfo.body.body:
         scan(statement, locals, methodInfo.owner, methodInfo.classSide)
-        if statement.kind == nkReturn:
-          combine(answer, kind(statement.ReturnNode.expression, locals, methodInfo.owner, methodInfo.classSide))
+        gatherReturns(statement, locals, answer)
+      if methodInfo.body.body.len > 0:
+        let last = methodInfo.body.body[^1]
+        if last.kind != nkReturn:
+          combine(answer, kind(last, locals, methodInfo.owner, methodInfo.classSide))
       if answer.writes > 0: nextReturns[methodKey(index)] = answer
     var mainLocals: Table[string, SlotInference]
     for node in nodes: scan(node, mainLocals, "", false)

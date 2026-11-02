@@ -47,6 +47,31 @@ suite "Static slot-kind inference":
     """)
     check result.slots["Box#value"].kind == skDynamic
 
+  test "an implicit last expression return carries its kind":
+    # `n + 1` is the answer; the body has no explicit ^, so the collector must
+    # treat the trailing expression as the return value. The evidence originates
+    # at a real call site with an Integer argument.
+    let result = infer("""
+      Helper := Object derivePublic: #(tag).
+      Helper>>plain: n [ n + 1 ]
+      Acc := Object derivePublic: #(total).
+      Acc>>bump: n [ total := Helper plain: n. ^ self ]
+      Entry := Object derivePublic: #(tag).
+      Entry>>run [ | a | a := Acc new. a bump: 3. ^ a ]
+    """)
+    check result.slots["Acc#total"].kind == skInt
+
+  test "a return inside a block carries its kind":
+    let result = infer("""
+      Picker := Object derivePublic: #(tag).
+      Picker>>choose: n [ ^(n > 0 ifTrue: [1] ifFalse: [2]) ]
+      Acc := Object derivePublic: #(chosen).
+      Acc>>set: n [ chosen := Picker choose: n. ^ self ]
+      Entry := Object derivePublic: #(tag).
+      Entry>>run [ | a | a := Acc new. a set: 5. ^ a ]
+    """)
+    check result.slots["Acc#chosen"].kind == skInt
+
   test "object evidence comes from Class new":
     let result = infer("""
       Link := Object derivePublic: #().
