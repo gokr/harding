@@ -1357,10 +1357,9 @@ proc applyContractZeros(instance: Instance) =
   ## Seed primitives whose contract has no declared default. Object and dynamic
   ## slots stay nil; declared defaults take precedence over this.
   for index, name in instance.class.allSlotNames:
-    if instance.slots[index].kind == vkNil or
-       (instance.slots[index].kind == vkInstance and instance.slots[index].instVal == nilInstance):
+    if isNilValue(instance.slots[index]):
       let zero = contractZero(instance.class.slotContract(name))
-      if zero.kind != vkNil:
+      if not isNilValue(zero):
         instance.slots[index] = zero
 
 proc slotObjectMatches*(actual, expected: Class): bool =

@@ -8,7 +8,7 @@ proc writeHardingLog*(level: logging.Level, value: NodeValue): NodeValue =
     logging.addHandler(logging.newConsoleLogger(levelThreshold = globalLogLevel,
                                                 useStderr = true))
   logging.log(level, value.toString())
-  return NodeValue(kind: vkNil)
+  return nilValue()
 
 proc logDebug*(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
   writeHardingLog(logging.lvlDebug, if args.len > 0: args[0] else: nilValue())

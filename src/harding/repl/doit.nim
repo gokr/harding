@@ -148,7 +148,7 @@ proc runREPL*(ctx: DoitContext = nil) =
       if err.len > 0:
         stderr.writeLine("Error: " & err)
       else:
-        if result.kind != vkNil:
+        if not isNilValue(result):
           stdout.writeLine(result.toString())
 
 # Run REPL with convenience function

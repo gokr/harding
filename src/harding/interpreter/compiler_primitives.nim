@@ -50,7 +50,7 @@ when defined(granite):
   # Primitive: Granite class>>compile: source
   proc graniteCompileImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
     if args.len < 1 or args[0].kind != vkString:
-      return NodeValue(kind: vkNil)
+      return nilValue()
 
     let source = args[0].strVal
     let compResult = compileHrdToNim(source, "")

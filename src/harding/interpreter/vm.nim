@@ -576,7 +576,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
   # Check if it's a property on self (legacy Dictionary objects - for backward compatibility)
   if interp.currentReceiver != nil and interp.currentReceiver.kind == ikTable:
     let val = getTableValue(interp.currentReceiver, toValue(name))
-    if val.kind != vkNil:
+    if not isNilValue(val):
       debug("Found table property on self: ", name)
       return (true, val)
 
@@ -585,7 +585,7 @@ proc lookupVariableWithStatus(interp: Interpreter, name: string): LookupResult =
     let idx = getSlotIndex(interp.currentReceiver.class, name)
     if idx >= 0:
       let val = getSlot(interp.currentReceiver, idx)
-      if val.kind != vkNil:
+      if not isNilValue(val):
         debug("Found slot on self: ", name, " = ", val.toString())
         return (true, val)
 
@@ -1425,6 +1425,7 @@ proc performWithImpl(interp: var Interpreter, self: Instance, args: seq[NodeValu
     return nilValue()
 
   # Prepare arguments (skip the selector, take remaining args)
+  # Raw vkNil test is deliberate: a real argument may legitimately be nil.
   var messageArgs: seq[NodeValue] = @[]
   if args.len >= 2 and args[1].kind != vkNil:
     messageArgs.add(args[1])
@@ -8714,6 +8715,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
 
   of wfReturnValue:
     # Handle return (^ expression) - must unwind work queue to target activation
+    # Raw vkNil test is deliberate: frame.returnValue uses vkNil as the
+    # "no explicit return value" placeholder, distinct from a nil value.
     let value = if frame.returnTarget != nil or frame.returnValue.kind != vkNil:
                   frame.returnValue
                 else:

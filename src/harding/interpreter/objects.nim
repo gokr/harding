@@ -1554,7 +1554,7 @@ proc classDeriveParentsSlotsMethodsImpl*(self: Class, args: seq[NodeValue]): Nod
 
   # Create the new class
   # Note: we use self as base if parents array is empty
-  let actualParents = if args[0].kind == vkNil: @[self] else: parents
+  let actualParents = if isNilValue(args[0]): @[self] else: parents
   let className = if parents.len > 0 and parents[0].name.len > 0:
                     parents[0].name & "+Derived"
                   elif self.name.len > 0:
@@ -1617,7 +1617,7 @@ proc classDeriveParentsSlotsGettersSettersMethodsImpl*(self: Class, args: seq[No
           setterSlotNames.add(name)
 
   # Create the new class
-  let actualParents = if args[1].kind == vkNil: @[self] else: parents
+  let actualParents = if isNilValue(args[1]): @[self] else: parents
   let className = if parents.len > 0 and parents[0].name.len > 0:
                     parents[0].name & "+Derived"
                   elif self.name.len > 0:

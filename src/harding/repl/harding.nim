@@ -181,7 +181,7 @@ proc main() =
       stderr.writeLine("Error: " & err)
       quit(1)
     else:
-      if result.kind != vkNil:
+      if not isNilValue(result):
         echo result.toString()
       quit(0)
   else:
