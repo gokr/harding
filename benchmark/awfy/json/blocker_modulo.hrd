@@ -1,0 +1,4 @@
+# Granite emits an unescaped backslash selector in hostedBuiltinDeferred.
+ModuloProbe := Object derive.
+ModuloProbe>>mod: value [ ^ value \\ 4 ]
+(ModuloProbe new mod: 7) println.

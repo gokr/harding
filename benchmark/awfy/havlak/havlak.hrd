@@ -1,0 +1,1266 @@
+# SOM Havlak port; see README.md for provenance and adaptation details.
+
+# SOM arrays are 1-based. Keep their indexing at the port boundary.
+HavlakArray := Object derive: #(storage).
+HavlakArray class>>new: size [^super new initialize: size].
+HavlakArray class>>with: first with: second [
+    | array |
+    array := self new: 2.
+    array at: 1 put: first.
+    array at: 2 put: second.
+    ^array
+].
+HavlakArray>>initialize: size [storage := Array new: size. ^self].
+HavlakArray>>at: index [^storage at: index - 1].
+HavlakArray>>at: index put: value [^storage at: index - 1 put: value].
+HavlakArray>>length [^storage size].
+HavlakArray>>doIndexes: block [1 to: storage size do: block].
+HavlakArray>>do: block [storage do: block].
+
+# Portable nonnegative operations pending generic Integer bitwise APIs.
+HavlakBits := Object derive.
+HavlakBits class>>xor: left with: right [
+    | a b place answer |
+    a := left. b := right. place := 1. answer := 0.
+    [(a > 0) or: [b > 0]] whileTrue: [
+        (a \\ 2) <> (b \\ 2) ifTrue: [answer := answer + place].
+        a := a // 2. b := b // 2. place := place * 2
+    ].
+    ^answer
+].
+HavlakBits class>>and: left with: right [
+    | a b place answer |
+    a := left. b := right. place := 1. answer := 0.
+    [(a > 0) and: [b > 0]] whileTrue: [
+        ((a \\ 2) = 1 and: [(b \\ 2) = 1]) ifTrue: [answer := answer + place].
+        a := a // 2. b := b // 2. place := place * 2
+    ].
+    ^answer
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+Vector := Object derive: #(first, last, storage).
+Vector>>initialize: size [
+first := 1.
+    last  := 1.
+
+    size = 0
+      ifFalse: [ storage := HavlakArray new: size ].
+    ^self
+].
+Vector>>at: index [
+(storage == nil or: [ index > storage length ]) ifTrue: [ ^ nil ].
+    ^ storage at: index.
+    ^self
+].
+Vector>>at: index put: val [
+storage == nil ifTrue: [
+      storage := HavlakArray new: (index max: 10)
+    ] ifFalse: [
+      index > storage length ifTrue: [
+        | newLength newStorage |
+        newLength := storage length.
+        [ newLength < index ] whileTrue: [
+          newLength := newLength * 2 ].
+        newStorage := HavlakArray new: newLength.
+        storage doIndexes: [:i | newStorage at: i put: (storage at: i) ].
+        storage := newStorage ] ].
+
+    storage at: index put: val.
+    last < (index + 1) ifTrue: [
+      last := index + 1 ].
+    ^self
+].
+Vector>>append: element [
+storage == nil ifTrue: [
+      storage := HavlakArray new: 10
+    ] ifFalse: [
+      last > storage length ifTrue: [
+
+        | newStorage |
+        newStorage := HavlakArray new: (2 * storage length).
+        storage doIndexes: [ :i | newStorage at: i put: (storage at: i) ].
+        storage := newStorage ] ].
+
+    storage at: last put: element.
+    last := last + 1.
+    ^ self.
+    ^self
+].
+Vector>>isEmpty [
+^ last = first.
+    ^self
+].
+Vector>>forEach: block [
+first to: last - 1 do: [ :i | block value: (storage at: i) ].
+    ^self
+].
+Vector>>hasSome: block [
+first to: last - 1 do: [ :i |
+      (block value: (storage at: i))
+        ifTrue: [ ^ true ] ].
+    ^ false.
+    ^self
+].
+Vector>>getOne: block [
+first to: last - 1 do: [ :i |
+      | e |
+      e := storage at: i.
+      (block value: e)
+        ifTrue: [ ^ e ] ].
+    ^ nil.
+    ^self
+].
+Vector>>removeFirst [
+self isEmpty ifTrue: [ ^ nil ].
+    first := first + 1.
+    ^ storage at: first - 1.
+    ^self
+].
+Vector>>removeAll [
+first := 1.
+    last  := 1.
+
+    storage == nil ifFalse: [
+      storage := HavlakArray new: storage length
+    ].
+    ^self
+].
+Vector>>remove: object [
+| newArray newLast found |
+    (storage == nil or: [ self isEmpty ]) ifTrue: [ ^ false ].
+
+    newArray := HavlakArray new: self capacity.
+    newLast := 1.
+    found := false.
+
+    self forEach: [ :it |
+      it == object
+          ifTrue:  [ found := true ]
+          ifFalse: [
+              newArray at: newLast put: it.
+              newLast := newLast + 1 ] ].
+
+    storage := newArray.
+    last := newLast.
+    first := 1.
+    ^ found.
+    ^self
+].
+Vector>>size [
+^ last - first.
+    ^self
+].
+Vector>>capacity [
+storage == nil ifTrue: [ ^ 0 ] ifFalse: [ ^ storage length ].
+    ^self
+].
+Vector class>>new [
+^ self new: 0.
+    ^self
+].
+Vector class>>new: initialSize [
+^ super new initialize: initialSize.
+    ^self
+].
+Vector class>>with: elem [
+| newVector |
+    newVector := self new: 1.
+    newVector append: elem.
+    ^ newVector.
+    ^self
+].
+
+# Copyright (c) 2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+DictEntry := Object derive: #(hash, key, value, next).
+DictEntry>>init: aHash key: aKey value: val next: anEntry [
+hash  := aHash.
+    key   := aKey.
+    value := val.
+    next  := anEntry.
+    ^self
+].
+DictEntry>>hash [
+^ hash.
+    ^self
+].
+DictEntry>>key [
+^ key.
+    ^self
+].
+DictEntry>>value [
+^ value.
+    ^self
+].
+DictEntry>>value: val [
+value := val.
+    ^self
+].
+DictEntry>>next [
+^ next.
+    ^self
+].
+DictEntry>>next: e [
+next := e.
+    ^self
+].
+DictEntry>>match: aHash key: aKey [
+^ hash = aHash and: [key = aKey].
+    ^self
+].
+DictEntry class>>new: hash key: key value: val next: next [
+^ self new init: hash key: key value: val next: next.
+    ^self
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+DictIdEntry := DictEntry derive: #().
+DictIdEntry>>match: aHash key: aKey [
+^ hash = aHash and: [key == aKey].
+    ^self
+].
+DictIdEntry class>>new: hash key: key value: val next: next [
+^ self new init: hash key: key value: val next: next.
+    ^self
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+SomDictionary := Object derive: #(buckets, sizeState).
+SomDictionary>>initialize: size [
+buckets := HavlakArray new: size.
+    sizeState   := 0.
+    ^self
+].
+SomDictionary>>hash: key [
+| hash |
+    key ifNil: [ ^ 0 ].
+    hash := key customHash.
+    ^ HavlakBits xor: hash with: (hash // 65536).
+    ^self
+].
+SomDictionary>>bucketIdx: hash [
+^ 1 + (hash \\ buckets length).
+    ^self
+].
+SomDictionary>>bucket: hash [
+^ buckets at: (self bucketIdx: hash).
+    ^self
+].
+SomDictionary>>at: aKey [
+| hash e |
+    hash := self hash: aKey.
+    e    := self bucket: hash.
+
+    [ e notNil ] whileTrue: [
+      (e match: hash key: aKey)
+        ifTrue: [ ^ e value ].
+      e := e next ].
+    ^ nil.
+    ^self
+].
+SomDictionary>>containsKey: aKey [
+| hash e |
+    hash := self hash: aKey.
+    e    := self bucket: hash.
+
+    [ e notNil ] whileTrue: [
+      (e match: hash key: aKey)
+        ifTrue: [ ^ true ].
+      e := e next ].
+    ^ false.
+    ^self
+].
+SomDictionary>>at: aKey put: aVal [
+| hash i current |
+    hash := self hash: aKey.
+    i    := self bucketIdx: hash.
+    current := buckets at: i.
+
+    current
+      ifNil: [
+        buckets at: i put: (self newEntry: aKey value: aVal hash: hash).
+        sizeState := sizeState + 1 ]
+      ifNotNil: [:ignored |
+        self insertBucketEntry: aKey value: aVal hash: hash head: current ].
+
+    sizeState > buckets length ifTrue: [ self resize ].
+    ^self
+].
+SomDictionary>>newEntry: aKey value: value hash: hash [
+^ DictEntry new: hash key: aKey value: value next: nil.
+    ^self
+].
+SomDictionary>>insertBucketEntry: key value: value hash: hash head: head [
+| current |
+    current := head.
+
+    [true] whileTrue: [
+      (current match: hash key: key) ifTrue: [
+        current value: value.
+        ^ self ].
+      current next ifNil: [
+        sizeState := sizeState + 1.
+        current next: (self newEntry: key value: value hash: hash).
+        ^ self ].
+      current := current next ].
+    ^self
+].
+SomDictionary>>resize [
+| oldStorage |
+    oldStorage := buckets.
+    buckets := HavlakArray new: oldStorage length * 2.
+    self transferEntries: oldStorage.
+    ^self
+].
+SomDictionary>>transferEntries: oldStorage [
+1 to: oldStorage length do: [:i |
+      | current |
+      current := oldStorage at: i.
+      current ifNotNil: [:ignored |
+        oldStorage at: i put: nil.
+        current next
+          ifNil: [
+            buckets at: 1 + (current hash \\ buckets length) put: current ]
+          ifNotNil: [:ignored |
+            self splitBucket: oldStorage bucket: i head: current ] ] ].
+    ^self
+].
+SomDictionary>>splitBucket: oldStorage bucket: i head: head [
+| loHead loTail hiHead hiTail current |
+    loHead := nil. loTail := nil.
+    hiHead := nil. hiTail := nil.
+    current := head.
+
+    [ current notNil ] whileTrue: [
+      (HavlakBits and: current hash with: oldStorage length) = 0
+        ifTrue: [
+          loTail
+            ifNil:    [ loHead := current ]
+            ifNotNil: [:ignored | loTail next: current ].
+          loTail := current ]
+        ifFalse: [
+          hiTail
+            ifNil:    [ hiHead := current ]
+            ifNotNil: [:ignored | hiTail next: current ].
+          hiTail := current ].
+      current := current next ].
+
+    loTail ifNotNil: [:ignored |
+      loTail next: nil.
+      buckets at: i put: loHead ].
+    hiTail ifNotNil: [:ignored |
+      hiTail next: nil.
+      buckets at: i + oldStorage length put: hiHead ].
+    ^self
+].
+SomDictionary>>size [
+^ sizeState.
+    ^self
+].
+SomDictionary>>isEmpty [
+^ sizeState = 0.
+    ^self
+].
+SomDictionary>>removeAll [
+buckets := HavlakArray new: buckets length.
+    sizeState := 0.
+    ^self
+].
+SomDictionary>>keys [
+| keys |
+    keys := Vector new: sizeState.
+    buckets do: [:b |
+      | current |
+      current := b.
+      [ current notNil ] whileTrue: [
+        keys append: current key.
+        current := current next ] ].
+    ^ keys.
+    ^self
+].
+SomDictionary>>values [
+| values |
+    values := Vector new: sizeState.
+    buckets do: [:b |
+      | current |
+      current := b.
+      [ current notNil ] whileTrue: [
+        values append: current value.
+        current := current next ] ].
+    ^ values.
+    ^self
+].
+SomDictionary class>>new: size [
+^ super new initialize: size.
+    ^self
+].
+SomDictionary class>>new [
+^ self new: 16.
+    ^self
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+SomIdentityDictionary := SomDictionary derive: #().
+SomIdentityDictionary>>newEntry: aKey value: value hash: hash [
+^ DictIdEntry new: hash key: aKey value: value next: nil.
+    ^self
+].
+SomIdentityDictionary class>>new [
+^ super new: 16.
+    ^self
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+SomSet := Object derive: #(items).
+SomSet>>initialize: size [
+items := Vector new: size.
+    ^self
+].
+SomSet>>forEach: block [
+items forEach: block.
+    ^self
+].
+SomSet>>hasSome: block [
+^ items hasSome: block.
+    ^self
+].
+SomSet>>getOne:  block [
+^ items getOne:  block.
+    ^self
+].
+SomSet>>add: anObject [
+(self contains: anObject)
+        ifFalse: [ items append: anObject ].
+    ^self
+].
+SomSet>>collect: block [
+| coll |
+    coll := Vector new.
+    self forEach: [ :e | coll append: (block value: e) ].
+    ^ coll.
+    ^self
+].
+SomSet>>contains: anObject [
+^ self hasSome: [ :it | it = anObject ].
+    ^self
+].
+SomSet>>size [
+^ items size.
+    ^self
+].
+SomSet>>removeAll [
+^ items removeAll.
+    ^self
+].
+SomSet class>>new [
+^ super new initialize: 10.
+    ^self
+].
+
+# Copyright (c) 2001-2016 see AUTHORS.md file
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+SomIdentitySet := SomSet derive: #().
+SomIdentitySet>>contains: anObject [
+^ self hasSome: [ :it |  it == anObject ].
+    ^self
+].
+SomIdentitySet class>>new: size [
+^ super new initialize: size.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+BasicBlock := Object derive: #(inEdges, outEdges, name).
+BasicBlock>>init: aName [
+inEdges  := Vector new: 2.
+    outEdges := Vector new: 2.
+    name     := aName.
+    ^self
+].
+BasicBlock>>inEdges [
+^ inEdges.
+    ^self
+].
+BasicBlock>>outEdges [
+^ outEdges.
+    ^self
+].
+BasicBlock>>numPred [
+^ inEdges size.
+    ^self
+].
+BasicBlock>>addOutEdge: to [
+outEdges append: to.
+    ^self
+].
+BasicBlock>>addInEdge: from [
+inEdges append: from.
+    ^self
+].
+BasicBlock>>customHash [
+^ name.
+    ^self
+].
+BasicBlock class>>new: name [
+^ self new init: name.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+BasicBlockEdge := Object derive: #(from, to).
+BasicBlockEdge>>init: cfg from: fromName to: toName [
+from := cfg createNode: fromName.
+    to   := cfg createNode: toName.
+
+    from addOutEdge: to.
+    to   addInEdge:  from.
+    cfg  addEdge:    self.
+    ^self
+].
+BasicBlockEdge class>>for: cfg from: fromName to: toName [
+^ self new init: cfg from: fromName to: toName.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+ControlFlowGraph := Object derive: #(basicBlockMap, startNode, edgeList).
+ControlFlowGraph>>initialize [
+basicBlockMap := Vector new.
+    edgeList := Vector new.
+    ^self
+].
+ControlFlowGraph>>createNode: name [
+| node |
+
+    (basicBlockMap at: name)
+      ifNotNil: [:ignored | node := basicBlockMap at: name ]
+      ifNil: [
+        node := BasicBlock new: name.
+        basicBlockMap at: name put: node ].
+
+    self numNodes = 1 ifTrue: [startNode := node].
+    ^ node.
+    ^self
+].
+ControlFlowGraph>>addEdge: edge [
+edgeList append: edge.
+    ^self
+].
+ControlFlowGraph>>numNodes [
+^ basicBlockMap size.
+    ^self
+].
+ControlFlowGraph>>startBasicBlock [
+^ startNode.
+    ^self
+].
+ControlFlowGraph>>basicBlocks [
+^ basicBlockMap.
+    ^self
+].
+ControlFlowGraph class>>new [
+^ super new initialize.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+SimpleLoop := Object derive: #(counter, depthLevel, parentState, isRootState, nestingLevelState, header, isReducible, basicBlocks, children).
+SimpleLoop>>init: aBB reducible: aBool [
+counter    := 0.
+    depthLevel := 0.
+
+    isRootState := false.
+    nestingLevelState := 0.
+    header  := aBB.
+    isReducible := aBool.
+    basicBlocks := SomIdentitySet new.
+    children    := SomIdentitySet new.
+
+    aBB ifNotNil: [:ignored | basicBlocks add: aBB ].
+    ^self
+].
+SimpleLoop>>counter [
+^ counter.
+    ^self
+].
+SimpleLoop>>counter: val [
+counter := val.
+    ^self
+].
+SimpleLoop>>depthLevel [
+^ depthLevel.
+    ^self
+].
+SimpleLoop>>depthLevel: val [
+depthLevel := val.
+    ^self
+].
+SimpleLoop>>children [
+^ children.
+    ^self
+].
+SimpleLoop>>addNode: bb [
+basicBlocks add: bb.
+    ^self
+].
+SimpleLoop>>addChildLoop: loop [
+children add: loop.
+    ^self
+].
+SimpleLoop>>parent [
+^ parentState.
+    ^self
+].
+SimpleLoop>>parent: val [
+parentState := val.
+    parentState addChildLoop: self.
+    ^self
+].
+SimpleLoop>>isRoot [
+^ isRootState.
+    ^self
+].
+SimpleLoop>>setIsRoot [
+isRootState := true.
+    ^self
+].
+SimpleLoop>>nestingLevel [
+^ nestingLevelState.
+    ^self
+].
+SimpleLoop>>nestingLevel: level [
+nestingLevelState := level.
+    level = 0 ifTrue: [ self setIsRoot ].
+    ^self
+].
+SimpleLoop class>>basicBlock: bb reducible: isReducible [
+^ self new init: bb reducible: isReducible.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+LoopStructureGraph := Object derive: #(root, loops, loopCounter).
+LoopStructureGraph>>initialize [
+root  := SimpleLoop basicBlock: nil reducible: false.
+    loops := Vector new.
+    loopCounter := 0.
+
+    root nestingLevel: 0.
+    root counter: loopCounter.
+    loopCounter := loopCounter + 1.
+    loops append: root.
+    ^self
+].
+LoopStructureGraph>>createNewLoop: bb reducible: isReducible [
+| loop |
+    loop := SimpleLoop basicBlock: bb reducible: isReducible.
+    loop counter: loopCounter.
+    loopCounter := loopCounter + 1.
+    loops append: loop.
+    ^ loop.
+    ^self
+].
+LoopStructureGraph>>calculateNestingLevel [
+loops forEach: [:liter |
+      liter isRoot ifFalse: [
+        liter parent ifNil: [
+          liter parent: root ] ] ].
+
+    self calculateNestingLevelRec: root depth: 0.
+    ^self
+].
+LoopStructureGraph>>calculateNestingLevelRec: loop depth: depth [
+loop depthLevel: depth.
+    loop children forEach: [:liter |
+      self calculateNestingLevelRec: liter depth: depth + 1.
+      loop nestingLevel: (loop nestingLevel max: 1 + liter nestingLevel) ].
+    ^self
+].
+LoopStructureGraph>>numLoops [
+^ loops size.
+    ^self
+].
+LoopStructureGraph class>>new [
+^ super new initialize.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+UnionFindNode := Object derive: #(parentState, bbState, dfsNumberState, loop).
+UnionFindNode>>initialize [
+dfsNumberState := 0.
+    ^self
+].
+UnionFindNode>>initNode: bb dfs: dfsNumber [
+parentState := self.
+    bbState := bb.
+    dfsNumberState := dfsNumber.
+    ^self
+].
+UnionFindNode>>loop [
+^ loop.
+    ^self
+].
+UnionFindNode>>loop: aLoop [
+loop := aLoop.
+    ^self
+].
+UnionFindNode>>findSet [
+| nodeList node |
+    nodeList := Vector new.
+
+    node := self.
+
+    [node ~= node parent] whileTrue: [
+      ((node parent) ~= (node parent parent)) ifTrue: [
+        nodeList append: node ].
+      node := node parent ].
+
+    nodeList forEach: [:iter | iter union: parentState ].
+    ^ node.
+    ^self
+].
+UnionFindNode>>union: basicBlock [
+parentState := basicBlock.
+    ^self
+].
+UnionFindNode>>parent [
+^ parentState.
+    ^self
+].
+UnionFindNode>>bb [
+^ bbState.
+    ^self
+].
+UnionFindNode>>dfsNumber [
+^ dfsNumberState.
+    ^self
+].
+UnionFindNode class>>new [
+^ super new initialize.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+HavlakLoopFinder := Object derive: #(cfg, lsg, nonBackPreds, backPreds, number, maxSize, header, type, last, nodes).
+HavlakLoopFinder>>init: aCfg lsg: aLsg [
+cfg := aCfg.
+    lsg := aLsg.
+
+    nonBackPreds := Vector new.
+    backPreds    := Vector new.
+    number := SomIdentityDictionary new.
+
+    maxSize := 0.
+    ^self
+].
+HavlakLoopFinder>>unvisited [
+^ 2147483647.
+    ^self
+].
+HavlakLoopFinder>>maxNonBackPreds [
+^ 32 * 1024.
+    ^self
+].
+HavlakLoopFinder>>isAncestor: w v: v [
+^ (w <= v) and: [v <= (last at: w)].
+    ^self
+].
+HavlakLoopFinder>>doDFS: currentNode current: current [
+| lastId outerBlocks |
+
+    (nodes at: current) initNode: currentNode dfs: current.
+    number at: currentNode put: current.
+
+    lastId := current.
+    outerBlocks := currentNode outEdges.
+
+    1 to: outerBlocks size do: [:i |
+      | target |
+      target := outerBlocks at: i.
+      (number at: target) = self unvisited ifTrue: [
+        lastId := self doDFS: target current: lastId + 1 ] ].
+
+    last at: current put: lastId.
+    ^ lastId.
+    ^self
+].
+HavlakLoopFinder>>initAllNodes [
+cfg basicBlocks forEach: [:bb |
+      number at: bb put: self unvisited ].
+
+    self doDFS: cfg startBasicBlock current: 1.
+    ^self
+].
+HavlakLoopFinder>>identifyEdges: size [
+1 to: size do: [:w |
+      | nodeW |
+      header at: w put: 1.
+      type   at: w put: #BBNonHeader.
+
+      nodeW := (nodes at: w) bb.
+      nodeW
+        ifNil:    [ type at: w put: #BBDead ]
+        ifNotNil: [:ignored | self processEdges: nodeW w: w ] ].
+    ^self
+].
+HavlakLoopFinder>>processEdges: nodeW w: w [
+nodeW numPred > 0 ifTrue: [
+      nodeW inEdges forEach: [:nodeV |
+        | v |
+        v := number at: nodeV.
+        v <> self unvisited ifTrue: [
+          (self isAncestor: w v: v)
+            ifTrue:  [ (backPreds at: w) append: v ]
+            ifFalse: [ (nonBackPreds at: w) add: v ] ] ] ].
+    ^self
+].
+HavlakLoopFinder>>findLoops [
+| size |
+    cfg startBasicBlock ifNil: [ ^ self ].
+
+    size := cfg numNodes.
+
+    nonBackPreds removeAll.
+    backPreds removeAll.
+    number removeAll.
+
+    size > maxSize ifTrue: [
+      header := HavlakArray new: size.
+      type   := HavlakArray new: size.
+      last   := HavlakArray new: size.
+      nodes  := HavlakArray new: size.
+      maxSize := size ].
+
+    1 to: size do: [:i |
+      nonBackPreds append: SomSet new.
+      backPreds append: Vector new.
+      nodes at: i put: UnionFindNode new ].
+
+    self initAllNodes.
+    self identifyEdges: size.
+    header at: 1 put: 1.
+
+    size to: 1 by: (0 - 1) do: [:w |
+      | nodePool nodeW |
+      nodePool := Vector new.
+      nodeW := (nodes at: w) bb.
+
+      nodeW ifNotNil: [:ignored |
+        | workList |
+        self stepD: w nodePool: nodePool.
+
+        workList := Vector new.
+        nodePool forEach: [:niter | workList append: niter ].
+
+        nodePool size <> 0 ifTrue: [
+          type at: w put: #BBReducible.
+        ].
+
+        [ workList isEmpty ] whileFalse: [
+          | x nonBackSize |
+          x := workList removeFirst.
+
+          nonBackSize := (nonBackPreds at: x dfsNumber) size.
+          nonBackSize > self maxNonBackPreds ifTrue: [ ^ self ].
+          self stepEProcessNonBackPreds: w nodePool: nodePool workList: workList x: x ].
+
+        (nodePool size > 0 or: [(type at: w) = #BBSelf]) ifTrue: [
+          | loop |
+          loop := lsg createNewLoop: nodeW reducible: ((type at: w) ~= #BBIrreducible).
+          self setLoopAttribute: w nodePool: nodePool loop: loop ] ] ].
+    ^self
+].
+HavlakLoopFinder>>stepEProcessNonBackPreds: w nodePool: nodePool workList: workList x: x [
+(nonBackPreds at: x dfsNumber) forEach: [:iter |
+      | y ydash |
+      y := nodes at: iter.
+      ydash := y findSet.
+
+      (self isAncestor: w v: ydash dfsNumber) not
+        ifTrue: [
+          type at: w put: #BBIrreducible.
+          (nonBackPreds at: w) add: ydash dfsNumber ]
+        ifFalse: [
+          ydash dfsNumber <> w ifTrue: [
+            (nodePool hasSome: [:e | e == ydash]) ifFalse: [
+              workList append: ydash.
+              nodePool append: ydash ] ] ] ].
+    ^self
+].
+HavlakLoopFinder>>setLoopAttribute: w nodePool: nodePool loop: loop [
+(nodes at: w) loop: loop.
+
+    nodePool forEach: [:node |
+      header at: node dfsNumber put: w.
+      node union: (nodes at: w).
+
+      node loop
+        ifNotNil: [:ignored | node loop parent: loop ]
+        ifNil: [ loop addNode: node bb ] ].
+    ^self
+].
+HavlakLoopFinder>>stepD: w nodePool: nodePool [
+(backPreds at: w) forEach: [:v |
+      v <> w ifTrue: [ nodePool append: (nodes at: v) findSet ]
+             ifFalse: [ type at: w put: #BBSelf ] ].
+    ^self
+].
+HavlakLoopFinder class>>new: cfg lsg: lsg [
+^ self new init: cfg lsg: lsg.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+LoopTesterApp := Object derive: #(cfg, lsg).
+LoopTesterApp>>initialize [
+cfg := ControlFlowGraph new.
+    lsg := LoopStructureGraph new.
+    cfg createNode: 1.
+    ^self
+].
+LoopTesterApp>>buildDiamond: start [
+| bb0 |
+    bb0 := start.
+    BasicBlockEdge for: cfg from: bb0 to: bb0 + 1.
+    BasicBlockEdge for: cfg from: bb0 to: bb0 + 2.
+    BasicBlockEdge for: cfg from: bb0 + 1 to: bb0 + 3.
+    BasicBlockEdge for: cfg from: bb0 + 2 to: bb0 + 3.
+    ^ bb0 + 3.
+    ^self
+].
+LoopTesterApp>>buildConnect: start end: end [
+BasicBlockEdge for: cfg from: start to: end.
+    ^self
+].
+LoopTesterApp>>buildStraight: start n: n [
+0 to: n - 1 do: [:i |
+      self buildConnect: start + i end: start + i + 1 ].
+    ^ start + n.
+    ^self
+].
+LoopTesterApp>>buildBaseLoop: from [
+| header diamond1 d11 diamond2 footer |
+    header   := self buildStraight: from n: 1.
+    diamond1 := self buildDiamond: header.
+    d11      := self buildStraight: diamond1 n: 1.
+    diamond2 := self buildDiamond: d11.
+    footer   := self buildStraight: diamond2 n: 1.
+
+    self buildConnect: diamond2 end: d11.
+    self buildConnect: diamond1 end: header.
+    self buildConnect: footer   end: from.
+    footer := self buildStraight: footer n: 1.
+    ^ footer.
+    ^self
+].
+LoopTesterApp>>main: numDummyLoops loop: findLoopIterations p: parLoop p: pparLoops p: ppparLoops [
+self constructSimpleCFG.
+    self addDummyLoops: numDummyLoops.
+    self constructCFG: parLoop p: pparLoops p: ppparLoops.
+
+    self findLoops: lsg.
+    findLoopIterations timesRepeat: [
+      self findLoops: LoopStructureGraph new ].
+
+    lsg calculateNestingLevel.
+    ^ HavlakArray with: lsg numLoops with: cfg numNodes.
+    ^self
+].
+LoopTesterApp>>constructCFG: parLoops p: pparLoops p: ppparLoops [
+| n |
+    n := 3.
+
+    parLoops timesRepeat: [
+      cfg createNode: n + 1.
+      self buildConnect: 2 end: n + 1.
+      n := n + 1.
+
+      pparLoops timesRepeat: [
+        | top bottom |
+        top := n.
+        n := self buildStraight: n n:1.
+        ppparLoops timesRepeat: [ n := self buildBaseLoop: n ].
+        bottom := self buildStraight: n n: 1.
+        self buildConnect: n end: top.
+        n := bottom ].
+
+      self buildConnect: n end: 1 ].
+    ^self
+].
+LoopTesterApp>>addDummyLoops: numDummyLoops [
+numDummyLoops timesRepeat: [
+      self findLoops: lsg ].
+    ^self
+].
+LoopTesterApp>>findLoops: loopStructure [
+| finder |
+    finder := HavlakLoopFinder new: cfg lsg: loopStructure.
+    finder findLoops.
+    ^self
+].
+LoopTesterApp>>constructSimpleCFG [
+cfg createNode: 1.
+    self buildBaseLoop: 1.
+    cfg createNode: 2.
+    BasicBlockEdge for: cfg from: 1 to:  3.
+    ^self
+].
+LoopTesterApp class>>new [
+^ super new initialize.
+    ^self
+].
+
+# Copyright 2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the 'License');
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an 'AS IS' BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+Havlak := Object derive: #().
+Havlak>>innerBenchmarkLoop: innerIterations [
+^ self verifyResult:
+       (LoopTesterApp new main: innerIterations loop: 50 p: 10 p: 10 p: 5)
+      iterations: innerIterations.
+    ^self
+].
+Havlak>>verifyResult: result iterations: innerIterations [
+innerIterations = 15000 ifTrue: [ ^ (result at: 1) = 46602 and: [(result at: 2) = 5213] ].
+    innerIterations =  1500 ifTrue: [ ^ (result at: 1) =  6102 and: [(result at: 2) = 5213] ].
+    innerIterations =   150 ifTrue: [ ^ (result at: 1) =  2052 and: [(result at: 2) = 5213] ].
+    innerIterations =    15 ifTrue: [ ^ (result at: 1) =  1647 and: [(result at: 2) = 5213] ].
+    innerIterations =     1 ifTrue: [ ^ (result at: 1) =  1605 and: [(result at: 2) = 5213] ].
+
+    ("No verification result for" & innerIterations & " found") println.
+    ("Result is " & (result at: 1) & ", " & (result at: 2)) println.
+    ^ false.
+    ^self
+].

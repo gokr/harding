@@ -1,4 +1,4 @@
-import std/[strutils, tables, os, strformat, sequtils]
+import std/[strutils, tables, os, strformat, sequtils, sets]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
@@ -768,11 +768,56 @@ proc collectTopLevelGlobals*(nodes: seq[Node]): seq[string] =
   ## globals (matching the interpreter's uppercase-means-global rule). They are
   ## emitted as module-level shared bindings rather than locals of main(), so
   ## methods and blocks observe the same value.
-  for node in nodes:
-    if node != nil and node.kind == nkAssign:
+  var names: seq[string]
+  var seen = initHashSet[string]()
+  proc walk(node: Node) =
+    if node == nil: return
+    case node.kind
+    of nkAssign:
       let name = node.AssignNode.variable
-      if name.len > 0 and name[0] in {'A'..'Z'} and name notin result:
-        result.add(name)
+      if name.len > 0 and name[0] in {'A'..'Z'} and name notin seen:
+        seen.incl(name)
+        names.add(name)
+      walk(node.AssignNode.expression)
+    of nkSlotAccess, nkNamedAccess:
+      # A class-side initializer may publish a global through a slot-like store,
+      # e.g. `JsonNULL := self new initializeWith: "null"`. Its reads elsewhere
+      # must resolve to that global instead of a symbol literal.
+      let assignment = if node.kind == nkSlotAccess: node.SlotAccessNode.isAssignment
+                       elif node.kind == nkNamedAccess: node.NamedAccessNode.isAssignment
+                       else: false
+      let valueExpr = if node.kind == nkSlotAccess: node.SlotAccessNode.valueExpr
+                      else: node.NamedAccessNode.valueExpr
+      if assignment and valueExpr != nil: walk(valueExpr)
+    of nkMessage:
+      walk(node.MessageNode.receiver)
+      for argument in node.MessageNode.arguments: walk(argument)
+    of nkBlock:
+      for statement in node.BlockNode.body: walk(statement)
+    of nkLiteral:
+      # Method bodies arrive as block literals, so a global published from one
+      # is only found by walking into the literal's block value.
+      let value = node.LiteralNode.value
+      if value.kind == vkBlock and value.blockVal != nil:
+        for statement in value.blockVal.body: walk(statement)
+    of nkIf:
+      walk(node.IfNode.condition)
+      walk(node.IfNode.thenBranch)
+      walk(node.IfNode.elseBranch)
+    of nkWhile:
+      walk(node.WhileNode.condition)
+      walk(node.WhileNode.body)
+    of nkReturn:
+      walk(node.ReturnNode.expression)
+    of nkCascade:
+      walk(node.CascadeNode.receiver)
+      for message in node.CascadeNode.messages: walk(message)
+    of nkSuperSend:
+      for argument in node.SuperSendNode.arguments: walk(argument)
+    else: discard
+  for node in nodes:
+    walk(node)
+  result = names
 
 proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: string,
                   blockReg: BlockRegistry = nil, compiledClasses: seq[string] = @[],
@@ -907,6 +952,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   var knownGlobals: seq[string] = @[]
   for name in collectTopLevelGlobals(executableMainNodes):
     if name notin mainTemporaries:
+      knownGlobals.add(name)
+  # Uppercase names are globals wherever they are assigned, matching the
+  # interpreter's rule. A class-side initializer such as
+  # `JsonLiteral class>>initialize [ JsonNULL := ... ]` publishes a global that
+  # other methods read; scanning only top-level code left those reads resolving
+  # to a symbol literal instead of the stored value.
+  for name in collectTopLevelGlobals(defsSourceNodes):
+    if name notin mainTemporaries and name notin knownGlobals:
       knownGlobals.add(name)
 
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.

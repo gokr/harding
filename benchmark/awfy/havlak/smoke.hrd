@@ -1,0 +1,4 @@
+| result |
+result := LoopTesterApp new main: 1 loop: 0 p: 1 p: 1 p: 1.
+(result at: 1) printString println.
+(result at: 2) printString println.

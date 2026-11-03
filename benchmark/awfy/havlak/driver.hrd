@@ -1,0 +1,11 @@
+# Prepend havlak.hrd after the local declaration when assembling this driver.
+| arguments dummy iterations parallel middle inner result |
+arguments := System arguments.
+dummy := 1. iterations := 0. parallel := 1. middle := 1. inner := 1.
+(arguments size > 0) ifTrue: [dummy := (arguments at: 0) asInteger].
+(arguments size > 1) ifTrue: [iterations := (arguments at: 1) asInteger].
+(arguments size > 2) ifTrue: [parallel := (arguments at: 2) asInteger].
+(arguments size > 3) ifTrue: [middle := (arguments at: 3) asInteger].
+(arguments size > 4) ifTrue: [inner := (arguments at: 4) asInteger].
+result := LoopTesterApp new main: dummy loop: iterations p: parallel p: middle p: inner.
+("Havlak loops=" & (result at: 1) printString & " nodes=" & (result at: 2) printString) println.

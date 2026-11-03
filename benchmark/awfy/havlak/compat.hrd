@@ -1,0 +1,37 @@
+# SOM arrays are 1-based. Keep their indexing at the port boundary.
+HavlakArray := Object derive: #(storage).
+HavlakArray class>>new: size [^super new initialize: size].
+HavlakArray class>>with: first with: second [
+    | array |
+    array := self new: 2.
+    array at: 1 put: first.
+    array at: 2 put: second.
+    ^array
+].
+HavlakArray>>initialize: size [storage := Array new: size. ^self].
+HavlakArray>>at: index [^storage at: index - 1].
+HavlakArray>>at: index put: value [^storage at: index - 1 put: value].
+HavlakArray>>length [^storage size].
+HavlakArray>>doIndexes: block [1 to: storage size do: block].
+HavlakArray>>do: block [storage do: block].
+
+# Portable nonnegative operations pending generic Integer bitwise APIs.
+HavlakBits := Object derive.
+HavlakBits class>>xor: left with: right [
+    | a b place answer |
+    a := left. b := right. place := 1. answer := 0.
+    [(a > 0) or: [b > 0]] whileTrue: [
+        (a \\ 2) <> (b \\ 2) ifTrue: [answer := answer + place].
+        a := a // 2. b := b // 2. place := place * 2
+    ].
+    ^answer
+].
+HavlakBits class>>and: left with: right [
+    | a b place answer |
+    a := left. b := right. place := 1. answer := 0.
+    [(a > 0) and: [b > 0]] whileTrue: [
+        ((a \\ 2) = 1 and: [(b \\ 2) = 1]) ifTrue: [answer := answer + place].
+        a := a // 2. b := b // 2. place := place * 2
+    ].
+    ^answer
+].

@@ -469,11 +469,11 @@ proc genSend(ctx: GenContext, receiverCode, selector: string,
   ## uses the per-site cache.
   let args = arguments.join(", ")
   if ctx.mixed:
-    return fmt("sendMessageHybrid({receiverCode}, \"{selector}\", @[{args}])")
+    return fmt("sendMessageHybrid({receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
   if ctx.inMethod:
     let owner = genSymbolAccess(ctx, "self")
-    return fmt("sendMessageBound({owner}, {receiverCode}, \"{selector}\", @[{args}])")
-  return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{selector}\", @[{args}])")
+    return fmt("sendMessageBound({owner}, {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
+  return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
 
 proc isReusableOperand(code: string): bool =
   ## True when re-reading the operand has no observable effect: a plain local or
@@ -526,7 +526,7 @@ proc genHostedBuiltin(ctx: GenContext, receiverCode, selector, helper: string,
       boundArguments.add(temporary)
   let argsCode = "@[" & boundArguments.join(", ") & "]"
   let fallback = helper & "(" & (@[receiverRef] & boundArguments).join(", ") & ")"
-  result.add(fmt("    let builtin = hostedBuiltinDeferred({owner}, {receiverRef}, \"{selector}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
+  result.add(fmt("    let builtin = hostedBuiltinDeferred({owner}, {receiverRef}, \"{escapeNimString(selector)}\", {argsCode})\n    if builtin.handled: builtin.value else: {fallback})"))
 
 proc nativeNumericExpression(ctx: GenContext, node: Node): string =
   case node.kind
@@ -998,12 +998,12 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
     let msgProc = if ctx.mixed: "sendMessageHybrid" else: "sendMessage"
     if ctx.mixed:
-      return fmt("{msgProc}({receiverCode}, \"{node.selector}\", @[{args}])")
+      return fmt("{msgProc}({receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
     else:
       if ctx.inMethod:
         let owner = genSymbolAccess(ctx, "self")
-        return fmt("sendMessageBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
-      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+        return fmt("sendMessageBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
+      return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
 
   else:
     # Class-side Integer region: only a literal class receiver, and only when
@@ -1056,13 +1056,13 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     # Mixed-mode dispatch retains its fallback; pure sends use a per-site cache.
     let args = node.arguments.mapIt(genExpression(ctx, it)).join(", ")
     if ctx.mixed:
-      return fmt("sendMessageHybrid({receiverCode}, \"{node.selector}\", @[{args}])")
+      return fmt("sendMessageHybrid({receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
     if ctx.inMethod:
       let owner = genSymbolAccess(ctx, "self")
       # Method bodies are where hot sends live, so they get a per-site cache too;
       # the helper keeps the owner-based host routing for VM-owned receivers.
-      return fmt("cachedSendBound({owner}, {receiverCode}, \"{node.selector}\", @[{args}])")
-    return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
+      return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
+    return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
 
 proc blockOwnerLocals*(ctx: GenContext): seq[string] =
   ## Parameters and locals declared in the enclosing method. These shadow
@@ -1299,12 +1299,12 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     let definingClass = if ctx.cls != nil: ctx.cls.name else: ""
     if definingClass.len > 0:
       if ss.explicitParent.len > 0:
-        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{ss.selector}\", @[{args}], \"{ss.explicitParent}\")")
+        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{escapeNimString(ss.selector)}\", @[{args}], \"{ss.explicitParent}\")")
       else:
-        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{ss.selector}\", @[{args}])")
+        return fmt("sendSuperMessage(self, \"{definingClass}\", \"{escapeNimString(ss.selector)}\", @[{args}])")
     else:
       # Fallback if class context is unavailable
-      return fmt("sendMessageHybrid(self, \"{ss.selector}\", @[{args}])")
+      return fmt("sendMessageHybrid(self, \"{escapeNimString(ss.selector)}\", @[{args}])")
 
   of nkPrimitive:
     # Primitives are handled separately
@@ -1314,7 +1314,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Primitive calls need runtime support
     let primCall = node.PrimitiveCallNode
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return fmt("callPrimitive(\"{primCall.selector}\", @[{args}])")
+    return fmt("callPrimitive(\"{escapeNimString(primCall.selector)}\", @[{args}])")
 
   of nkSlotAccess:
     let slotNode = node.SlotAccessNode
@@ -1630,7 +1630,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Primitive call as statement
     let primCall = node.PrimitiveCallNode
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
-    return "discard callPrimitive(\"" & primCall.selector & "\", @[" & args & "])"
+    return "discard callPrimitive(\"" & escapeNimString(primCall.selector) & "\", @[" & args & "])"
 
   else:
     # For other nodes, just generate the expression

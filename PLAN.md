@@ -6,6 +6,17 @@ changelog entry, reference-manual review, and build/test validation. Update this
 checklist as work lands. Compiler fixes must conform to documented Harding
 semantics; any intended language change must be explicit and documented.
 
+## Benchmark coverage
+
+- [x] Port AWFY SOM Bounce, Havlak and Json with pinned provenance and matched
+      Python comparators; all three pass interpreter and native ARC/ORC.
+      Exposed and fixed: selector escaping, slot-stored returning blocks,
+      method-assigned globals, native `String at:`/`from:to:`, empty-range
+      `to:do:`, `to:by:do:` and class-object `=`.
+- [ ] Add a Harding-specific collection-idiom workload (`collect:`, `select:`,
+      `inject:into:` over pipeline data), since AWFY deliberately excludes
+      standard-library breadth.
+
 ## Dispatch reliability
 
 - [x] Diagnose expression-block send-cache resets and retain per-site TLS in an

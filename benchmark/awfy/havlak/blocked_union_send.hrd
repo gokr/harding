@@ -1,0 +1,7 @@
+# Ordinary object selector, not Set union. Interpreter prints ok.
+HavlakUnionProbe := Object derive: #(parent).
+HavlakUnionProbe>>union: other [parent := other. ^self].
+HavlakUnionCaller := Object derive.
+HavlakUnionCaller>>call: node with: root [node union: root].
+HavlakUnionCaller new call: HavlakUnionProbe new with: HavlakUnionProbe new.
+"ok" println.

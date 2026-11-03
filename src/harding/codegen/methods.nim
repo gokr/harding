@@ -38,6 +38,30 @@ proc hasBlocksWithNonLocalReturn*(node: Node): bool =
       return true
     if whileNode.body != nil and hasBlocksWithNonLocalReturn(whileNode.body):
       return true
+  of nkSlotAccess, nkNamedAccess:
+    # A returning block may be stored through a slot or named member, e.g.
+    # `handler := [:x | ^x]`. The block literal lives in valueExpr, so omitting
+    # it left the method without a NonLocalReturn boundary and the escape
+    # exception left the method instead of being caught here.
+    let valueExpr = if node.kind == nkSlotAccess: node.SlotAccessNode.valueExpr
+                    else: node.NamedAccessNode.valueExpr
+    if valueExpr != nil and hasBlocksWithNonLocalReturn(valueExpr):
+      return true
+  of nkCascade:
+    let cascade = node.CascadeNode
+    if cascade.receiver != nil and hasBlocksWithNonLocalReturn(cascade.receiver):
+      return true
+    for message in cascade.messages:
+      if hasBlocksWithNonLocalReturn(message):
+        return true
+  of nkSuperSend:
+    for argument in node.SuperSendNode.arguments:
+      if hasBlocksWithNonLocalReturn(argument):
+        return true
+  of nkPrimitiveCall:
+    for argument in node.PrimitiveCallNode.arguments:
+      if hasBlocksWithNonLocalReturn(argument):
+        return true
   else:
     discard
   return false

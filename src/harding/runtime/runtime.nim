@@ -1683,6 +1683,26 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
     return NodeValue(kind: vkBool, boolVal: false)
 
+  of "from:to:":
+    var source: string
+    if receiver.kind == vkString:
+      source = receiver.strVal
+    elif receiver.kind == vkSymbol:
+      source = receiver.symVal
+    elif receiver.kind == vkInstance and receiver.instVal != nil and
+         receiver.instVal.kind == ikString:
+      source = receiver.instVal.strVal
+    else:
+      return compiledMissingMessage(receiver, selector)
+    if args.len < 2:
+      return toValue("")
+    let (validFrom, fromIndex) = args[0].tryGetInt()
+    let (validTo, toIndex) = args[1].tryGetInt()
+    if validFrom and validTo and fromIndex >= 0 and
+       toIndex < source.len and fromIndex <= toIndex:
+      return toValue(source[fromIndex..toIndex])
+    return toValue("")
+
   of "asInteger", "asFloat", "asNumber":
     if receiver.kind == vkString and args.len == 0:
       case selector
@@ -1809,6 +1829,21 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
     # Access-style lookup: a miss signals rather than answering nil, matching the
     # interpreter. Use at:ifAbsent: where a miss is expected.
     if args.len > 0:
+      if receiver.kind in {vkString, vkSymbol} or
+         (receiver.kind == vkInstance and receiver.instVal != nil and
+          receiver.instVal.kind == ikString):
+        # Byte-oriented string indexing with the interpreter's contract
+        # (primitiveStringAtValueImpl): a non-Integer, negative or past-the-end
+        # index answers the empty string, never nil. Without this branch native
+        # `at:` fell through to nil, which made string parsing impossible.
+        let source = if receiver.kind == vkString: receiver.strVal
+                     elif receiver.kind == vkSymbol: receiver.symVal
+                     else: receiver.instVal.strVal
+        if args[0].kind == vkInt:
+          let idx = args[0].intVal
+          if idx >= 0 and idx < source.len:
+            return toValue($source[idx])
+        return toValue("")
       if receiver.kind == vkArray and args[0].kind == vkInt:
         let idx = args[0].intVal
         if idx >= 0 and idx < receiver.arrayVal.len:
@@ -1996,15 +2031,29 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       return acc
     return NodeValue(kind: vkNil)
 
+  of "to:by:do:":
+    if receiver.kind == vkInt and args.len == 3 and
+       args[0].kind == vkInt and args[1].kind == vkInt:
+      var current = receiver.intVal
+      let stop = args[0].intVal
+      let step = args[1].intVal
+      if step > 0:
+        while current <= stop:
+          discard sendMessage(runtime, args[2], "value:", @[toValue(current)])
+          current = current + step
+      else:
+        while current >= stop:
+          discard sendMessage(runtime, args[2], "value:", @[toValue(current)])
+          current = current + step
+      return receiver
+    return compiledMissingMessage(receiver, selector)
+
   of "to:do:":
     if receiver.kind == vkInt and args.len >= 2 and args[0].kind == vkInt:
       let startNum = receiver.intVal
       let endNum = args[0].intVal
       if startNum <= endNum:
         for i in startNum..endNum:
-          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
-      else:
-        for i in countdown(startNum, endNum):
           discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
       return receiver
     return NodeValue(kind: vkNil)

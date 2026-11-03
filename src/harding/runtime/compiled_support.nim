@@ -85,6 +85,16 @@ proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
   ## Works for both Arrays (0-based indexing) and Tables
   if receiver.kind == vkInstance:
     return sendMessage(nil, receiver, "at:", @[key])
+  # Strings index by byte and answer the empty string past the end, matching the
+  # interpreter's primitiveStringAtValueImpl. Before this branch they fell
+  # through to nil, so compiled string parsing could not read a character.
+  if receiver.kind in {vkString, vkSymbol}:
+    let source = if receiver.kind == vkString: receiver.strVal else: receiver.symVal
+    if key.kind == vkInt:
+      let idx = key.intVal
+      if idx >= 0 and idx < source.len:
+        return toValue($source[idx])
+    return toValue("")
   if receiver.kind == vkArray and key.kind == vkInt:
     let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
@@ -591,6 +601,14 @@ proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   # Fast path: bool comparison
   if a.kind == vkBool and b.kind == vkBool:
     return NodeValue(kind: vkBool, boolVal: a.boolVal == b.boolVal)
+  # Class objects compare by identity, as the VM's cycClassVal case does. Without
+  # this, `SomeClass = SomeClass` fell through to dynamic dispatch, which has no
+  # class-identity branch and answered MessageNotUnderstood.
+  if a.kind == vkClass and b.kind == vkClass:
+    return NodeValue(kind: vkBool, boolVal: a.classVal == b.classVal)
+  # No kind-mismatch shortcut here: a user-defined `=` must still receive the
+  # send (EqCustom>>= answers "custom" even against an Integer or nil), and the
+  # builtin chain decides mismatched kinds after compiled resolution fails.
   return sendMessage(currentRuntime[], a, "=", @[b])
 
 

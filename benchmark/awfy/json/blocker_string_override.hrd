@@ -1,0 +1,4 @@
+# Granite currently omits this built-in class extension from generated methods.
+# Interpreter prints override; native prints ab.
+String>>from: start to: finish [ ^ "override" ]
+("abc" from: 0 to: 1) println.

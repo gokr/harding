@@ -1,0 +1,43 @@
+# Append after definitions; no top-level local declarations needed.
+HavlakChecks := Object derive.
+HavlakChecks class>>assert: condition [condition ifFalse: [Error signal: "Havlak conformance failure"]].
+HavlakChecks class>>run [
+    | vector left right dictionary set node root result verifier |
+    vector := Vector new.
+    vector at: 3 put: 7.
+    self assert: vector size = 3.
+    self assert: (vector at: 1) isNil.
+    vector removeAll.
+    vector append: 4. vector append: 5.
+    self assert: vector removeFirst = 4.
+    self assert: (vector hasSome: [:each | each = 5]).
+    self assert: vector size = 1.
+    left := BasicBlock new: 42. right := BasicBlock new: 42.
+    dictionary := SomIdentityDictionary new.
+    dictionary at: left put: 1. dictionary at: right put: 2.
+    self assert: dictionary size = 2.
+    self assert: (dictionary at: left) = 1.
+    self assert: (dictionary at: right) = 2.
+    dictionary at: left put: 3.
+    self assert: dictionary size = 2.
+    dictionary removeAll.
+    1 to: 40 do: [:i | dictionary at: (BasicBlock new: i) put: i].
+    self assert: dictionary size = 40.
+    self assert: dictionary values size = 40.
+    set := SomIdentitySet new.
+    set add: left. set add: left. set add: right.
+    self assert: set size = 2.
+    root := UnionFindNode new. root initNode: left dfs: 1.
+    node := UnionFindNode new. node initNode: right dfs: 2.
+    node union: root.
+    self assert: node findSet == root.
+    verifier := Havlak new.
+    self assert: (verifier verifyResult: (HavlakArray with: 46602 with: 5213) iterations: 15000).
+    self assert: (verifier verifyResult: (HavlakArray with: 6102 with: 5213) iterations: 1500).
+    self assert: (verifier verifyResult: (HavlakArray with: 2052 with: 5213) iterations: 150).
+    self assert: (verifier verifyResult: (HavlakArray with: 1647 with: 5213) iterations: 15).
+    self assert: (verifier verifyResult: (HavlakArray with: 1605 with: 5213) iterations: 1).
+    self assert: (verifier verifyResult: (HavlakArray with: 1606 with: 5213) iterations: 1) not.
+    "Havlak conformance passed" println
+].
+HavlakChecks run.

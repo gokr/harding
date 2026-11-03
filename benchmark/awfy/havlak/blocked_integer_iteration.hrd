@@ -1,0 +1,3 @@
+# Generic stdlib protocol used by Havlak's descending traversal.
+# Interpreter: 3,2,1; Granite currently signals MNU to:by:do:.
+3 to: 1 by: (0 - 1) do: [:i | i printString println].

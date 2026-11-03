@@ -1,0 +1,28 @@
+JsonChecks := Object derive.
+JsonChecks class>>assert: condition [ condition ifFalse: [ self error: "AWFY Json check failed" ] ]
+JsonChecks class>>run [
+    | parsed benchmark |
+    self assert: ((JsonParser with: "null") parse isNull).
+    self assert: ((JsonParser with: "true") parse isTrue).
+    self assert: ((JsonParser with: "false") parse isFalse).
+    self assert: ((JsonParser with: "-12.5e+2") parse asString = "-12.5e+2").
+    self assert: ((JsonParser with: "[]") parse size = 0).
+    self assert: ((JsonParser with: "{}") parse size = 0).
+    parsed := (JsonParser with: "[1, true, null, [2]]") parse.
+    self assert: (parsed size = 4).
+    self assert: ((parsed at: 0) asString = "1").
+    self assert: ((parsed at: 1) isTrue).
+    self assert: ((parsed at: 2) isNull).
+    self assert: (((parsed at: 3) at: 0) asString = "2").
+    self assert: ((JsonParser with: "\"a\\nb\\t\\\"c\\\\d\"") parse asString = "a\nb\t\"c\\d").
+    parsed := (JsonParser with: " {\"a\": 42, \"long\": [false]} \n") parse.
+    self assert: ((parsed at: "a") asString = "42").
+    self assert: (((parsed at: "long") at: 0) isFalse).
+    parsed := (JsonParser with: "[1,]") parse.
+    self assert: (parsed class = ParseException).
+    benchmark := AwfyJson new.
+    self assert: (benchmark verifyResult: benchmark benchmark).
+    self assert: (benchmark verifyResult: benchmark benchmark).
+    "AWFY Json checks passed" println.
+]
+JsonChecks run.

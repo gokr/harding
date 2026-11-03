@@ -1,0 +1,2 @@
+# Expected stdout: 1. Interpreter succeeds; retained Granite emits invalid Nim.
+(7 \\ 3) println.

@@ -1,0 +1,3 @@
+# Vendored AWFY sources are pinned by SHA-256 in each port's upstream/provenance
+# files. They must stay byte-identical to upstream, so never normalize them.
+upstream/** -text -whitespace

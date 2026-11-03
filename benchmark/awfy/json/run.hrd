@@ -1,0 +1,11 @@
+# Execute from the repository root.
+Harding load: "benchmark/awfy/json/json.hrd".
+JsonRun := Object derive.
+JsonRun class>>run [
+    | benchmark result |
+    benchmark := AwfyJson new.
+    result := benchmark benchmark.
+    (benchmark verifyResult: result) ifFalse: [ self error: "AWFY Json verification failed" ].
+    ("AWFY Json operations=" & (result at: "operations") size) println.
+]
+JsonRun run.

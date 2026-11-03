@@ -1,0 +1,34 @@
+{
+  "repository": "https://github.com/smarr/are-we-fast-yet",
+  "commit": "74306fec151070fd07157cefeacf19e7e0bcdc89",
+  "files": [
+    {
+      "path": "benchmarks/SOM/Bounce.som",
+      "sha256": "f97639a44597180e2737576253dfa391355e8d06190c07000ac9167485836d37"
+    },
+    {
+      "path": "benchmarks/SOM/Ball.som",
+      "sha256": "1828e34bc7db8103a33b4c19e00c0ce7f8ae503c29cff579c9c9ec8ab2535daa"
+    },
+    {
+      "path": "benchmarks/SOM/SomRandom.som",
+      "sha256": "3e35122a426eb50d9ef047a30483869f008f04877eddf453d0e4e890b53a0cf9"
+    },
+    {
+      "path": "benchmarks/Python/bounce.py",
+      "sha256": "145b5dec3d686cf27164012b131e4aaf67387d694dd5992c5caa7f69aebaf67d"
+    },
+    {
+      "path": "benchmarks/Python/som/random.py",
+      "sha256": "0e39bdc4ad99239651dc5db6168bdd16dde7665356b20b1a7c983bf3f8608d83"
+    },
+    {
+      "path": "benchmarks/Python/benchmark.py",
+      "sha256": "2e437f219050218803edb28ca04a7bd248bfa2599c29fbb82a77b769f9dea462"
+    },
+    {
+      "path": "LICENSE.md",
+      "sha256": "d04bd9676d6569e74da03bf58582cbf46ac6fcb348757d92ee53b9e46b9bf992"
+    }
+  ]
+}

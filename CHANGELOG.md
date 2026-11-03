@@ -6,6 +6,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- AWFY (Are We Fast Yet?) SOM ports under `benchmark/awfy/`: Bounce (1331), Havlak (1605 loops/5213 nodes on the full graph) and Json (recursive parser, all checks). Pinned to upstream `74306fec`, notices and SHA-256 provenance retained, matched Python comparators. All three now pass in the interpreter and natively under ARC/ORC. `docs/AWFY_STDLIB_AUDIT.md` records which SOM core classes stay port-local and which APIs were genuinely missing.
+
+### Fixed
+- Generated selector strings are escaped at every dynamic emission site, so a `\\` (integer modulo) send no longer produces invalid Nim source.
+- A returning block stored through a slot or named member now gets a method-boundary non-local-return catch; the escape exception previously left the method.
+- Uppercase globals assigned inside a method body (for example a class-side initializer publishing a singleton) are collected, so reads resolve to the stored value rather than a symbol literal.
+- Native runtime parity: `String>>from:to:` implemented; `String>>at:` answers the byte (or `""`) instead of nil; `Integer>>to:do:` no longer descends on an empty ascending range; `Integer>>to:by:do:` implemented with negative steps; `=` on class objects compares identity while user-defined `=` still wins.
+
 ### Fixed
 - Generated send-site caches now persist across loop expressions and repeated activations under Nim 2.2 ARC/ORC. Keeping the thread-local cache in a per-expansion accessor proc avoids expression-block resets; dispatch invalidation and host fallback are unchanged. Checked release trials show 1.09x Richards, 1.03x DeltaBlue and 1.18x Queens, without observed-type narrowing (`docs/GRANITE_CACHE_LIFETIME.md`).
 

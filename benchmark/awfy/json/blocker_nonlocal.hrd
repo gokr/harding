@@ -1,0 +1,5 @@
+# Faithful parser uses a block to return a ParseException from parse.
+ParserReturnProbe := Object derive: #(exceptionBlock).
+ParserReturnProbe>>parse [ exceptionBlock := [:ex | ^ ex]. self fail. ^ "unexpected" ]
+ParserReturnProbe>>fail [ exceptionBlock value: "expected" ]
+ParserReturnProbe new parse println.

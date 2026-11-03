@@ -1,0 +1,4 @@
+# Empty ascending ranges must not invoke their callbacks.
+# Interpreter prints only ok. Native currently calls the block for 1 and 0.
+1 to: 0 do: [:i | i printString println].
+"ok" println.
