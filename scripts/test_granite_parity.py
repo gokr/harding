@@ -1251,6 +1251,31 @@ Harding main: [
   read value println.
 ].
 """, "42\n"),
+    ("arithmetic_overflow_signals", """
+([9223372036854775807 + 1] on: Overflow do: [:e | "add" ]) println.
+([(-9223372036854775807 - 1) - 1] on: Overflow do: [:e | "sub" ]) println.
+([9223372036854775807 * 2] on: Overflow do: [:e | "mul" ]) println.
+([(-9223372036854775807 - 1) // -1] on: Overflow do: [:e | "div" ]) println.
+([(-9223372036854775807 - 1) \\\\ -1] on: Overflow do: [:e | "mod" ]) println.
+([1 // 0] on: DivisionByZero do: [:e | "divzero" ]) println.
+([9223372036854775807 + 1] on: ArithmeticError do: [:e | "arithmetic root" ]) println.
+([9223372036854775807 + 1] on: Error do: [:e | "error root" ]) println.
+(2 + 3) println.
+(10 - 4) println.
+(6 * 7) println.
+(10 // 3) println.
+(10 \\\\ 3) println.
+""", "add\nsub\nmul\ndiv\nmod\ndivzero\narithmetic root\nerror root\n5\n6\n42\n3\n1\n"),
+    ("access_lookup_signals", """
+([#(1, 2) at: 99] on: SubscriptOutOfBounds do: [:e | "index" ]) println.
+([#{"k" -> 1} at: "zz"] on: NotFound do: [:e | "key" ]) println.
+([#(1, 2) at: 99] on: Error do: [:e | "index as error" ]) println.
+((#{"k" -> 1} includesKey: "zz") ifFalse: ["absent"]) println.
+(#(1, 2) at: 0) println.
+(#{"k" -> 1} at: "k") println.
+(#(1, 2) indexOf: 9) isNil println.
+(#(1, 2) detect: [:x | false] ifNone: ["none"]) println.
+""", "index\nkey\nindex as error\nabsent\n1\n1\ntrue\nnone\n"),
     ("indexed_iteration", """
 items := #("a", "b").
 (items withIndexDo: [:element :index | (index asString & ":" & element) println]) size println.
