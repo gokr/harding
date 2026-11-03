@@ -161,7 +161,7 @@ const negativeCacheSafeSelectors = ["=", "<>", "==", "~=", "<", "<=", ">", ">=",
   "+", "-", "*", "/", "//", "\\", "%", "&", "|", "not", "size", "last",
   "at:", "at:put:", "abs", "even", "odd", "negated", "asString", "class",
   "className", "superclassNames", "isKindOf:", "isNil", "notNil",
-  "ifTrue:", "ifFalse:", "ifTrue:ifFalse:", "and:", "or:", "value", "value:",
+  "ifTrue:", "ifFalse:", "ifTrue:ifFalse:", "ifFalse:ifTrue:", "and:", "or:", "value", "value:",
   "println", "print", "keys"]
 
 var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
@@ -2098,6 +2098,16 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       return sendMessage(runtime, args[1], "value", @[])
     return NodeValue(kind: vkNil)
 
+  of "ifFalse:ifTrue:":
+    # The interpreter accepts either argument order; native only had
+    # ifTrue:ifFalse:, so a boolean sent ifFalse:ifTrue: raised
+    # MessageNotUnderstood in compiled code.
+    if args.len >= 2:
+      if isTruthy(receiver):
+        return sendMessage(runtime, args[1], "value", @[])
+      return sendMessage(runtime, args[0], "value", @[])
+    return NodeValue(kind: vkNil)
+
   of "and:":
     if receiver.kind == vkBool and args.len > 0:
       if not receiver.boolVal:
@@ -2169,6 +2179,28 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           return args[1]
     of "class": return toValue(storage.class)
     of "className": return toValue(storage.class.name)
+    # O(1) shape queries answer from the instance storage directly. Falling
+    # through to the value view below would deep-copy the whole element sequence
+    # to answer them, which made `size` O(n): the AWFY Havlak profile showed
+    # 380k such copies, and cost scaled linearly with the array length.
+    of "size":
+      if storage.kind == ikArray:
+        return NodeValue(kind: vkInt, intVal: storage.elements.len)
+      return NodeValue(kind: vkInt, intVal: storage.entries.len)
+    of "isEmpty":
+      return toValue(if storage.kind == ikArray: storage.elements.len == 0
+                     else: storage.entries.len == 0)
+    of "notEmpty":
+      return toValue(if storage.kind == ikArray: storage.elements.len > 0
+                     else: storage.entries.len > 0)
+    of "first":
+      if storage.kind == ikArray and storage.elements.len > 0:
+        return storage.elements[0]
+      return nilValue()
+    of "last":
+      if storage.kind == ikArray and storage.elements.len > 0:
+        return storage.elements[^1]
+      return nilValue()
     of "isKindOf:":
       if args.len == 1:
         let target = if args[0].kind == vkClass: args[0].classVal.name

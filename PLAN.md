@@ -13,9 +13,22 @@ semantics; any intended language change must be explicit and documented.
       Exposed and fixed: selector escaping, slot-stored returning blocks,
       method-assigned globals, native `String at:`/`from:to:`, empty-range
       `to:do:`, `to:by:do:` and class-object `=`.
+- [x] Compare the AWFY ports against CPython and GNU Smalltalk with checked,
+      paired timings (`scripts/bench_compare_awfy.py`, `docs/AWFY_COMPARISON.md`).
+      GNU Smalltalk covers Bounce only; Json's escape-heavy fixture and Havlak's
+      SOM Core collections are reported as uncovered rather than substituted.
 - [ ] Add a Harding-specific collection-idiom workload (`collect:`, `select:`,
       `inject:into:` over pipeline data), since AWFY deliberately excludes
       standard-library breadth.
+- [x] Remove the per-send collection value-view copy that made `size` O(n)
+      (`docs/GRANITE_COLLECTION_VIEWS.md`). Havlak 181.6s -> 48.4s.
+- [ ] Replace the remaining owning value view with a non-owning representation,
+      so materializing fallback selectors stop copying element sequences. Alias
+      semantics are reference-based already; this is a representation change that
+      needs its own ARC/ORC validation.
+- [ ] Extend GNU Smalltalk coverage honestly: a Harding-to-GST compiler for
+      string-literal-heavy sources (Json), and SOM Core collection translation
+      (Havlak). Neither should be faked with substitution.
 
 ## Dispatch reliability
 

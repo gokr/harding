@@ -7,9 +7,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- `scripts/bench_compare_awfy.py`: checked cross-engine timing of the AWFY ports against CPython and GNU Smalltalk, with per-run answer verification, measured (not estimated) startup subtraction, and explicit coverage reporting. GNU Smalltalk covers Bounce only; Json and Havlak are reported as uncovered rather than substituted (`docs/AWFY_COMPARISON.md`).
+- `benchmark/awfy/{json,havlak}/upstream/provenance.json`: per-file SHA-256 and upstream path for every vendored AWFY source, re-verified by `tests/test_awfy_compare.py`.
+- Native `Boolean>>ifFalse:ifTrue:`, which the interpreter already accepted.
 - AWFY (Are We Fast Yet?) SOM ports under `benchmark/awfy/`: Bounce (1331), Havlak (1605 loops/5213 nodes on the full graph) and Json (recursive parser, all checks). Pinned to upstream `74306fec`, notices and SHA-256 provenance retained, matched Python comparators. All three now pass in the interpreter and natively under ARC/ORC. `docs/AWFY_STDLIB_AUDIT.md` records which SOM core classes stay port-local and which APIs were genuinely missing.
 
 ### Fixed
+- Compiled `size`, `isEmpty`, `notEmpty`, `first` and `last` on instance-backed collections answer from the storage instead of building the value view. That view materialized an owning `NodeValue` from the instance's `seq`, so any selector reaching the fallback deep-copied every element: `size` was O(n) and the AWFY Havlak port spent 43% of its time in the copies. Havlak `main(1,50,10,10,5)` dropped from 181.6 s to 48.4 s with identical verified output; the shape of every other selector is unchanged (`docs/GRANITE_COLLECTION_VIEWS.md`).
 - Generated selector strings are escaped at every dynamic emission site, so a `\\` (integer modulo) send no longer produces invalid Nim source.
 - A returning block stored through a slot or named member now gets a method-boundary non-local-return catch; the escape exception previously left the method.
 - Uppercase globals assigned inside a method body (for example a class-side initializer publishing a singleton) are collected, so reads resolve to the stored value rather than a symbol literal.

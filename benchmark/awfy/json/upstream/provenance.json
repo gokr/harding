@@ -1,0 +1,116 @@
+{
+  "repo": "https://github.com/smarr/are-we-fast-yet",
+  "commit": "74306fec151070fd07157cefeacf19e7e0bcdc89",
+  "files": [
+    {
+      "path": "AUTORS.md",
+      "sha256": "42470e19ebb36817669cdd2ae2fb843858f889bfd186b30e2d0a44a7338c3aff",
+      "upstreamPath": "AUTORS.md"
+    },
+    {
+      "path": "HashIndexTable.som",
+      "sha256": "ecaaa4dbd008ba2435ef96d5b523d24122277644f1132cad701b9624b6a7ff49",
+      "upstreamPath": "benchmarks/SOM/Json/HashIndexTable.som"
+    },
+    {
+      "path": "Json.som",
+      "sha256": "2ae221310253bb9a797d40d6f86705b035d103c38427249ccddf7cde8c408fe4",
+      "upstreamPath": "benchmarks/SOM/Json/Json.som"
+    },
+    {
+      "path": "JsonArray.som",
+      "sha256": "38e5d5325ba9880ce8a9d8275102e7c87ff3e7bafb128b4541e8b93179a1bed0",
+      "upstreamPath": "benchmarks/SOM/Json/JsonArray.som"
+    },
+    {
+      "path": "JsonLiteral.som",
+      "sha256": "38d446526a1880078ab0e48cf3f8fe78b91e88d20b17e6a67bd36de5c38cb1cb",
+      "upstreamPath": "benchmarks/SOM/Json/JsonLiteral.som"
+    },
+    {
+      "path": "JsonNumber.som",
+      "sha256": "ac76ec6811bbdc6d400071ab6485ebc265e6878db478b67110d54b64f9d0e954",
+      "upstreamPath": "benchmarks/SOM/Json/JsonNumber.som"
+    },
+    {
+      "path": "JsonObject.som",
+      "sha256": "a5c12ba2f03e4849417350d13482201338de3ab971b048d2f3d72c35aef482a1",
+      "upstreamPath": "benchmarks/SOM/Json/JsonObject.som"
+    },
+    {
+      "path": "JsonParser.som",
+      "sha256": "7c5ac17346f420df4ef67aea46f2be19bba86b6878321b837c6fd3baddadbd54",
+      "upstreamPath": "benchmarks/SOM/Json/JsonParser.som"
+    },
+    {
+      "path": "JsonString.som",
+      "sha256": "ca53595fbb778c5d7e46e5c7f2f9fb8f323ba4f0dd6ccd5c4799474b5b621df7",
+      "upstreamPath": "benchmarks/SOM/Json/JsonString.som"
+    },
+    {
+      "path": "JsonValue.som",
+      "sha256": "7770de049b96c2320f7377eea8aaaf97b02fb314320c35b2174ba83008220945",
+      "upstreamPath": "benchmarks/SOM/Json/JsonValue.som"
+    },
+    {
+      "path": "LICENSE.md",
+      "sha256": "d04bd9676d6569e74da03bf58582cbf46ac6fcb348757d92ee53b9e46b9bf992",
+      "upstreamPath": "LICENSE.md"
+    },
+    {
+      "path": "ParseException.som",
+      "sha256": "4bd882d057d49627de24c5de62be7cab0dece1ea4dfb7c322ad1d890b7e5199b",
+      "upstreamPath": "benchmarks/SOM/Json/ParseException.som"
+    },
+    {
+      "path": "benchmark.py",
+      "sha256": "2e437f219050218803edb28ca04a7bd248bfa2599c29fbb82a77b769f9dea462",
+      "upstreamPath": "benchmarks/Python/benchmark.py"
+    },
+    {
+      "path": "json.py",
+      "sha256": "71a651d305667b8b2b3229ea90db17af3812ac33c846c2bc3e6fc7c44701cafe",
+      "upstreamPath": "benchmarks/Python/json.py"
+    },
+    {
+      "path": "som/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "upstreamPath": "benchmarks/Python/som/__init__.py"
+    },
+    {
+      "path": "som/constants.py",
+      "sha256": "695fcf58534d2bcfadcc66ad0f0b5f31aabd2c9330039d054be291aa978d0a97",
+      "upstreamPath": "benchmarks/Python/som/constants.py"
+    },
+    {
+      "path": "som/dictionary.py",
+      "sha256": "74d1575d22b77f4d016a7b6ac6c1b2da670f3a4cf1c3a0e9a38a66478adf2165",
+      "upstreamPath": "benchmarks/Python/som/dictionary.py"
+    },
+    {
+      "path": "som/identity_dictionary.py",
+      "sha256": "d05d4c0852fab03a88f367071d0a4d9eb62dea69cde8b9971df3e3f2131329c1",
+      "upstreamPath": "benchmarks/Python/som/identity_dictionary.py"
+    },
+    {
+      "path": "som/identity_set.py",
+      "sha256": "4bfef2fb2175c5a4b07f17b8e5ba57e5f58adf5aaee1e5532ad33bcff681904b",
+      "upstreamPath": "benchmarks/Python/som/identity_set.py"
+    },
+    {
+      "path": "som/random.py",
+      "sha256": "0e39bdc4ad99239651dc5db6168bdd16dde7665356b20b1a7c983bf3f8608d83",
+      "upstreamPath": "benchmarks/Python/som/random.py"
+    },
+    {
+      "path": "som/set.py",
+      "sha256": "07f7af8acf1282c50296e84ae6f8a0d10df44f6a16e546db09a0c4dab6f3b529",
+      "upstreamPath": "benchmarks/Python/som/set.py"
+    },
+    {
+      "path": "som/vector.py",
+      "sha256": "d9d2d4cfbc5ee29e7d919f02dbdbb115c34975e61a4c0e767ef73e758b65c0bf",
+      "upstreamPath": "benchmarks/Python/som/vector.py"
+    }
+  ]
+}

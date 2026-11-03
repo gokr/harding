@@ -1,0 +1,153 @@
+{
+  "repo": "https://github.com/smarr/are-we-fast-yet",
+  "commit": "74306fec151070fd07157cefeacf19e7e0bcdc89",
+  "files": [
+    {
+      "path": "AUTORS.md",
+      "sha256": "42470e19ebb36817669cdd2ae2fb843858f889bfd186b30e2d0a44a7338c3aff",
+      "upstreamPath": "AUTORS.md"
+    },
+    {
+      "path": "Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "upstreamPath": null,
+      "note": "canonical Apache License 2.0 text referenced by the Google copyright headers in the Havlak sources; not a file in the upstream repository"
+    },
+    {
+      "path": "BasicBlock.som",
+      "sha256": "b94b41f76b9dd21fb4bbb6f2a971048e3ad33a32f9e5ca022d8eb1f8e1b199c6",
+      "upstreamPath": "benchmarks/SOM/Havlak/BasicBlock.som"
+    },
+    {
+      "path": "BasicBlockEdge.som",
+      "sha256": "bf30a6284434bdd871340a273087dbc656439c7f2ca1a67e9bd70d311e60f7ec",
+      "upstreamPath": "benchmarks/SOM/Havlak/BasicBlockEdge.som"
+    },
+    {
+      "path": "ControlFlowGraph.som",
+      "sha256": "4ae559dcbd88b4dc5485db754601d9b424650ab8db872a70f3236d30ed810e3f",
+      "upstreamPath": "benchmarks/SOM/Havlak/ControlFlowGraph.som"
+    },
+    {
+      "path": "DictEntry.som",
+      "sha256": "e14745b8e65cd98a26279f9997c8c62d4a94add8b8556e49b9a5338ef3bcf005",
+      "upstreamPath": "benchmarks/SOM/Core/DictEntry.som"
+    },
+    {
+      "path": "DictIdEntry.som",
+      "sha256": "37c09901046e8a8c4fc8728c6df50bc99ad55235ef1526eeed0e59d08e63b923",
+      "upstreamPath": "benchmarks/SOM/Core/DictIdEntry.som"
+    },
+    {
+      "path": "Havlak.som",
+      "sha256": "7eee1b10cd0b588cdbb8f158b6c940afa3628a6cb52f793fc67789322dde9b8b",
+      "upstreamPath": "benchmarks/SOM/Havlak/Havlak.som"
+    },
+    {
+      "path": "HavlakLoopFinder.som",
+      "sha256": "24dbcaa3f42cdf14e7d8b07bf12c5f0f3acb5c7d625effddf720caa6abad44c9",
+      "upstreamPath": "benchmarks/SOM/Havlak/HavlakLoopFinder.som"
+    },
+    {
+      "path": "LICENSE.md",
+      "sha256": "d04bd9676d6569e74da03bf58582cbf46ac6fcb348757d92ee53b9e46b9bf992",
+      "upstreamPath": "LICENSE.md"
+    },
+    {
+      "path": "LoopStructureGraph.som",
+      "sha256": "e348d79ad849e36da20df4e06c493503a19e22726b6492fec562b050037d251e",
+      "upstreamPath": "benchmarks/SOM/Havlak/LoopStructureGraph.som"
+    },
+    {
+      "path": "LoopTesterApp.som",
+      "sha256": "e763624afd50a8ac44358841ec89543f8a1039a466428cb97e320b724beedd29",
+      "upstreamPath": "benchmarks/SOM/Havlak/LoopTesterApp.som"
+    },
+    {
+      "path": "SimpleLoop.som",
+      "sha256": "375bb6d2306555dbca3bd40e4b35495669a38956af2f0eb2afe40fdda355f871",
+      "upstreamPath": "benchmarks/SOM/Havlak/SimpleLoop.som"
+    },
+    {
+      "path": "SomDictionary.som",
+      "sha256": "16fa8c216d3d17aa8bc9b6dc4f9ec8efc503cd9c6be4aa6036118839262a2f7b",
+      "upstreamPath": "benchmarks/SOM/Core/SomDictionary.som"
+    },
+    {
+      "path": "SomIdentityDictionary.som",
+      "sha256": "cd7b58d94733f939d239e6a81e3e023bc80a15685a39273e0c334f2a6b8b0c1a",
+      "upstreamPath": "benchmarks/SOM/Core/SomIdentityDictionary.som"
+    },
+    {
+      "path": "SomIdentitySet.som",
+      "sha256": "c0ec1617c1562700980022270094b754b9ae7b01c001a04b3d75a9f187c28234",
+      "upstreamPath": "benchmarks/SOM/Core/SomIdentitySet.som"
+    },
+    {
+      "path": "SomSet.som",
+      "sha256": "3673bbea0a17badd0f59b374c6db101bd67c45693a6cb3325c8be526b835f1b1",
+      "upstreamPath": "benchmarks/SOM/Core/SomSet.som"
+    },
+    {
+      "path": "UnionFindNode.som",
+      "sha256": "96caf7580b9f7f04c051344521c59968018bdea1b617d681a467b4e8784161f8",
+      "upstreamPath": "benchmarks/SOM/Havlak/UnionFindNode.som"
+    },
+    {
+      "path": "Vector.som",
+      "sha256": "0aeed113ff6e13fdef556c06b835ae55654727a019c2c5ea683999c21431d41e",
+      "upstreamPath": "benchmarks/SOM/Core/Vector.som"
+    },
+    {
+      "path": "benchmarks/Python/benchmark.py",
+      "sha256": "2e437f219050218803edb28ca04a7bd248bfa2599c29fbb82a77b769f9dea462",
+      "upstreamPath": "benchmarks/Python/benchmark.py"
+    },
+    {
+      "path": "benchmarks/Python/havlak.py",
+      "sha256": "06cdfb4998e09085a45bc6090ec6186f593d207bece904ff949b2d5c86d60704",
+      "upstreamPath": "benchmarks/Python/havlak.py"
+    },
+    {
+      "path": "benchmarks/Python/som/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "upstreamPath": "benchmarks/Python/som/__init__.py"
+    },
+    {
+      "path": "benchmarks/Python/som/constants.py",
+      "sha256": "695fcf58534d2bcfadcc66ad0f0b5f31aabd2c9330039d054be291aa978d0a97",
+      "upstreamPath": "benchmarks/Python/som/constants.py"
+    },
+    {
+      "path": "benchmarks/Python/som/dictionary.py",
+      "sha256": "74d1575d22b77f4d016a7b6ac6c1b2da670f3a4cf1c3a0e9a38a66478adf2165",
+      "upstreamPath": "benchmarks/Python/som/dictionary.py"
+    },
+    {
+      "path": "benchmarks/Python/som/identity_dictionary.py",
+      "sha256": "d05d4c0852fab03a88f367071d0a4d9eb62dea69cde8b9971df3e3f2131329c1",
+      "upstreamPath": "benchmarks/Python/som/identity_dictionary.py"
+    },
+    {
+      "path": "benchmarks/Python/som/identity_set.py",
+      "sha256": "4bfef2fb2175c5a4b07f17b8e5ba57e5f58adf5aaee1e5532ad33bcff681904b",
+      "upstreamPath": "benchmarks/Python/som/identity_set.py"
+    },
+    {
+      "path": "benchmarks/Python/som/random.py",
+      "sha256": "0e39bdc4ad99239651dc5db6168bdd16dde7665356b20b1a7c983bf3f8608d83",
+      "upstreamPath": "benchmarks/Python/som/random.py"
+    },
+    {
+      "path": "benchmarks/Python/som/set.py",
+      "sha256": "07f7af8acf1282c50296e84ae6f8a0d10df44f6a16e546db09a0c4dab6f3b529",
+      "upstreamPath": "benchmarks/Python/som/set.py"
+    },
+    {
+      "path": "benchmarks/Python/som/vector.py",
+      "sha256": "d9d2d4cfbc5ee29e7d919f02dbdbb115c34975e61a4c0e767ef73e758b65c0bf",
+      "upstreamPath": "benchmarks/Python/som/vector.py"
+    }
+  ],
+  "licenseNote": "Havlak SOM sources carry Google Inc. Apache-2.0 headers; LICENSE.md is the upstream repository overview."
+}
