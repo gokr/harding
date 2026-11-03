@@ -25,6 +25,8 @@ Unplanned>>recursive: n [ ^self recursive: n ].
 Unplanned>>maybe: n [ | x | n > 0 ifTrue: [x := n]. ^x ].
 Unplanned>>zeroLoop: n [ | x | [n < 0] whileTrue: [x := n]. ^x ].
 Unplanned>>assignParameter: n [ n := n + 1. ^n ].
+top := Calc new.
+top sumTo: 3.
 '''
 
 
@@ -46,6 +48,11 @@ class NativeCallRegions(unittest.TestCase):
             native = 'integerCall_Class_43616C63_hardingUser696E6E65723A_native(n) * 3'
             self.assertIn(native, code)
             self.assertIn('canDirectCompiledSend(receiver', code)
+            # Top-level statements must route through the same adapters; `main()`
+            # previously used only the per-site cache and never entered a region.
+            main_start = code.index('proc main(): int =')
+            main_code = code[main_start:]
+            self.assertIn('integerCall_Class_43616C63_hardingUser73756D546F3A(', main_code)
             for selector in ('sumTo:', 'choose:', 'until:'):
                 stem = 'integerCall_Class_43616C63_hardingUser' + selector.encode().hex().upper()
                 self.assertIn('proc ' + stem + '_native', code)

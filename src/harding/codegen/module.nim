@@ -452,7 +452,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                          compiledClasses: seq[string], classInfo: Table[string, ClassInfo],
                          blockReg: BlockRegistry = nil,
                          knownGlobals: seq[string] = @[], mixed: bool = false,
-                         inferredNumeric: Table[string, string] = initTable[string, string]()): string =
+                         inferredNumeric: Table[string, string] = initTable[string, string](),
+                         integerCandidates: var Table[string, string]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -512,7 +513,6 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("    return {choice.target}(receiver, @[])\n"))
       output.add(fmt("  sendMessageBound(owner, receiver, \"{selector}\", @[])\n\n"))
 
-  var integerCandidates = initTable[string, string]()
   if not mixed:
     # Plan independently of source order, adding pure self-call chains only after
     # their callees have a native plan. Unique selectors keep routing conservative.
@@ -745,7 +745,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
                   mixed: bool = false, sourceFile: string = "",
                   injectMainArgsVar: bool = false,
                   knownGlobals: seq[string] = @[],
-                  temporaries: seq[string] = @[]): string =
+                  temporaries: seq[string] = @[],
+                  integerCandidates: Table[string, string] = initTable[string, string]()): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -786,6 +787,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
 
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
+  genCtx.integerSendCandidates = integerCandidates
   for globalName in knownGlobals:
     if globalName notin genCtx.globals:
       genCtx.globals.add(globalName)
@@ -998,8 +1000,9 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate compiled methods from user definitions after primitive operators,
   # so compiled method bodies can call nt_* helpers without forward declarations.
+  var integerCandidates = initTable[string, string]()
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
-                                knownGlobals, mixed, inferredNumeric))
+                                knownGlobals, mixed, inferredNumeric, integerCandidates))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")
@@ -1049,7 +1052,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
                          analysis.classes, mixed, sourceFile, injectMainArgsVar,
-                         knownGlobals, mainTemporaries))
+                         knownGlobals, mainTemporaries, integerCandidates))
 
   # Module initialization
   output.add("\n")

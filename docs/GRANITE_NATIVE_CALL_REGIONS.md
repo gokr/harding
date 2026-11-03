@@ -64,8 +64,32 @@ checks under ARC and ORC and the expanded generated-host fixture (including
 callee replacement inside a loop). Its full parity sweep also passes **105/105**
 (`build/native-loop-parity.log`, `build/parity/run-9id5654b`).
 
-An exploratory three-call arithmetic microbenchmark produced a promising result,
-but overlapped validation/build work and has large absolute-time drift. It is not
-accepted performance evidence. No Richards, DeltaBlue or Queens improvement is
-claimed. Next: measure the locals/control-flow extension with retained paired
-binaries before expanding the regions to slots or recursion.
+### `main()` consultation (top-level sends)
+
+Top-level statements used the per-site send cache and never consulted the
+adapters, so a script whose hot loop sat at top level gained nothing (the first
+measurement of this slice silently compared the same boxed path twice). `main()`
+now receives the candidate table like method bodies do, and a generation test
+asserts the adapter call appears inside `main()`.
+
+Measured against `dc97e2a`, release ARC, CPU 2, exact stdout checked on every run:
+
+| Workload | Before | After | Marginal speedup |
+|---|---:|---:|---:|
+| Top-level 100k→4M loop, 3 native calls per iteration | 146.4 ns/iter | 1.2 ns/iter | **126×** |
+| Richards (30 passes) | 20.385 ms | 20.407 ms | 0.999× |
+| DeltaBlue (30 passes) | 33.210 ms | 32.952 ms | 1.008× |
+| Queens (30 passes) | 37.196 ms | 36.785 ms | 1.011× |
+
+Per-iteration costs use a least-squares fit over 200k/1M/4M iterations, because
+process startup (~25 ms) dominates fixed-N timings. The emitted C still contains
+the real `while` loop, so this is not closed-form folding. Interpreter and
+compiled output agree at limits 0, 1, 2, 3, 7, 11 and 100
+(`build/toplevel-differential/`). Full parity: **105/105**
+(`build/parity/run-o4mxd82e`).
+
+**No main-workload gain yet.** Richards/DeltaBlue/Queens do not contain loops
+that qualify (their hot methods touch slots, send to other receivers, or use
+division), so the boxes they pay are elsewhere. The next lever is not more
+region shapes but slot-backed regions, which is where those workloads spend
+their time.
