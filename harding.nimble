@@ -345,6 +345,8 @@ task testSlotContracts, "Validate declared-slot defaults and checked writes in b
   exec "python3 -m unittest discover -s tests -p test_direct_slots.py"
 
 task testNativeCallRegions, "Validate native Integer call chains and dynamic fallback under ARC/ORC":
+  exec "nim c -r --mm:arc --out:build/native_planner_arc tests/test_native_region_planner.nim"
+  exec "nim c -r --mm:orc --out:build/native_planner_orc tests/test_native_region_planner.nim"
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"
   exec "python3 -m unittest discover -s tests -p test_native_call_regions.py"
 

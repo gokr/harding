@@ -7,7 +7,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
-- Prototype native Integer call regions keep parameters and results unboxed across pure arithmetic self-call chains. Exact receiver and transitive method-version guards preserve dynamic replacement, subclass and interpreted-host fallback; ARC/ORC regression tests exercise the boundary. Slots, loops and recursion are not yet included; no workload speedup is claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).
+- Native Integer regions now include definitely initialized temporaries, comparisons, if/else and while loops, preserving native parameters and returns across self calls inside loops. Branch/zero-iteration analysis rejects unsafe unboxing; heap mutation and callbacks remain dynamic.
+- Prototype native Integer call regions keep parameters and results unboxed across pure arithmetic self-call chains. Exact receiver and transitive method-version guards preserve dynamic replacement, subclass and interpreted-host fallback; ARC/ORC regression tests exercise the boundary. Slots and recursion are not yet included; no workload speedup is claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).
 - Opt-in `granite --trust-observed-types` turns validated, unambiguous primitive write observations into native slot contracts; conservative compilation remains the default. Nil/mixed observations stay dynamic, wrong-kind writes are checked, and allocation uses typed defaults. Mixed mode is refused. See `docs/TRUST_OBSERVED_TYPES.md` for the deliberate artifact-contract change and ARC/ORC tests.
 
 ### Added

@@ -12,7 +12,9 @@ semantics; any intended language change must be explicit and documented.
       guard all transitive method dependencies at entry and retain boxed fallback.
       ARC/ORC region boundary tests and 105-case parity sweep pass; no workload
       performance gain claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).
-- [ ] Extend regions to definitely initialized locals and structured control flow.
+- [x] Extend regions to definitely initialized Integer locals and structured if/while
+      control flow; ARC/ORC execution and eight definite-initialization tests pass,
+      plus 105-case parity (`build/native-loop-parity.log`).
 - [ ] Measure isolated paired workloads before expanding to slots or recursion.
 
 ## Baseline

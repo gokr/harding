@@ -4,8 +4,12 @@ The compiler plans pure expression methods with explicit returns, Integer
 parameters, literals and `+`, `-`, `*`. It builds plans in dependency order so a
 method can call a previously planned method through lexical `self`, keeping both
 parameters and returns as Nim `int` across that call. No benchmark names or
-selectors are special-cased. Methods with fallthrough, mutation, slots, callbacks,
-recursion, division or real closures are not planned yet.
+selectors are special-cased. Regions also support Integer temporaries, comparisons,
+`ifTrue:ifFalse:`, and `whileTrue:`/`whileFalse:` lowered to native Nim control
+structures. Definite initialization is tracked: both branches must initialize a
+new local, and a possibly empty loop cannot establish initialization afterward.
+Methods with fallthrough, heap/parameter mutation, slots, callbacks, recursion,
+division or real closures are not planned yet.
 
 For example:
 
@@ -33,7 +37,7 @@ Selectors must be unique within the module for this first routing implementation
 This is a conservative candidate filter, not a claim that the world is closed.
 No source declaration or training profile is needed for these pure regions.
 Observed slot contracts can support later extensions, but this prototype does not
-yet propagate slot values or loops into regions.
+yet propagate slot values into regions.
 
 ## Validation so far
 
@@ -55,8 +59,13 @@ yet propagate slot values or loops into regions.
   there, detaches, and checks native dispatch resumes. It verifies callbacks,
   recursion, division and implicit-return bodies are not planned.
 
+The locals/control-flow extension passes eight definite-initialization planner
+checks under ARC and ORC and the expanded generated-host fixture (including
+callee replacement inside a loop). Its full parity sweep also passes **105/105**
+(`build/native-loop-parity.log`, `build/parity/run-9id5654b`).
+
 An exploratory three-call arithmetic microbenchmark produced a promising result,
 but overlapped validation/build work and has large absolute-time drift. It is not
 accepted performance evidence. No Richards, DeltaBlue or Queens improvement is
-claimed. The next step is a quiet paired run, followed by extension to native
-locals and structured control flow after the boundary contract is validated.
+claimed. Next: measure the locals/control-flow extension with retained paired
+binaries before expanding the regions to slots or recursion.

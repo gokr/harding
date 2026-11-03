@@ -8,15 +8,23 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = '''Calc := Object derive: #().
 Calc>>outer: n [ ^(self inner: n) * 3 ].
 Calc>>inner: n [ ^n + 1 ].
+Calc>>sumTo: limit [ | index total | index := 0. total := 0.
+[index < limit] whileTrue: [total := total + (self inner: index). index := index + 1]. ^total ].
+Calc>>choose: n [ | result | n > 0 ifTrue: [result := n + 1] ifFalse: [result := 0 - n]. ^result ].
+Calc>>until: n [ | index | index := 0. [index >= n] whileFalse: [index := index + 1]. ^index ].
 Caller := Object derive: #().
 Caller>>apply: receiver with: n [ ^receiver outer: n ].
 Caller>>effectful: receiver with: action [ ^receiver outer: action value ].
+Caller>>loop: receiver with: limit [ ^receiver sumTo: limit ].
 Child := Calc derive: #().
 Unplanned := Object derive: #().
 Unplanned>>fallthrough: n [ n + 1 ].
 Unplanned>>callback: action [ ^action value ].
 Unplanned>>divide: n [ ^n / 2 ].
 Unplanned>>recursive: n [ ^self recursive: n ].
+Unplanned>>maybe: n [ | x | n > 0 ifTrue: [x := n]. ^x ].
+Unplanned>>zeroLoop: n [ | x | [n < 0] whileTrue: [x := n]. ^x ].
+Unplanned>>assignParameter: n [ n := n + 1. ^n ].
 '''
 
 
@@ -38,6 +46,13 @@ class NativeCallRegions(unittest.TestCase):
             native = 'integerCall_Class_43616C63_hardingUser696E6E65723A_native(n) * 3'
             self.assertIn(native, code)
             self.assertIn('canDirectCompiledSend(receiver', code)
+            for selector in ('sumTo:', 'choose:', 'until:'):
+                stem = 'integerCall_Class_43616C63_hardingUser' + selector.encode().hex().upper()
+                self.assertIn('proc ' + stem + '_native', code)
+                start = code.index('proc ' + stem + '_native')
+                end = code.index('\nvar ', start)
+                self.assertNotIn('NodeValue', code[start:end])
+                self.assertNotIn('@[', code[start:end])
             # No native region can be justified for these bodies.
             self.assertNotIn('integerCall_Class_556E706C616E6E6564', code)
             # Transitive native calls have no seq or boxed argument/return ABI.
@@ -60,9 +75,18 @@ proc apply(receiver, argument: NodeValue): NodeValue =
 for i in 0..<3:
   doAssert apply(calc, toValue(7)).intVal == 24
   doAssert apply(calc, toValue(2.5)).floatVal == 10.5
+doAssert integerCall_Class_43616C63_hardingUser73756D546F3A_native(10) == 55
+doAssert integerCall_Class_43616C63_hardingUser63686F6F73653A_native(-3) == 3
+doAssert integerCall_Class_43616C63_hardingUser756E74696C3A_native(7) == 7
+doAssert sendMessage(nil, calc, "sumTo:", @[toValue(10)]).intVal == 55
+doAssert sendMessage(nil, calc, "sumTo:", @[toValue(0)]).intVal == 0
+doAssert sendMessage(nil, calc, "choose:", @[toValue(3)]).intVal == 4
+doAssert sendMessage(nil, calc, "choose:", @[toValue(-3)]).intVal == 3
+doAssert sendMessage(nil, calc, "until:", @[toValue(7)]).intVal == 7
 proc changed(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(10)
 # Invalidating a transitive callee must invalidate the outer region too.
 registerCompiledMethod("Calc", "inner:", changed)
+doAssert sendMessage(nil, caller, "loop:with:", @[calc, toValue(10)]).intVal == 100
 doAssert apply(calc, toValue(7)).intVal == 30
 registerCompiledMethod("Calc", "inner:", Class_43616C63_nt_inner_k)
 doAssert apply(calc, toValue(7)).intVal == 24
@@ -96,6 +120,7 @@ Calc>>inner: n [ ^n + 1 ].
 Caller := Object derive: #().
 Caller>>apply: receiver with: n [ ^nil ].
 Caller>>effectful: receiver with: action [ ^nil ].
+Caller>>loop: receiver with: limit [ ^nil ].
 VmCalc := Calc new. VmCaller := Caller new.
 """)
 doAssert setupError.len == 0, setupError
