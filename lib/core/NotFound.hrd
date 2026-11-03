@@ -1,0 +1,12 @@
+#!/usr/bin/env harding
+#
+# NotFound.hrd - NotFound class.
+
+NotFound := Error derive
+# NotFound reports an access-style lookup that found nothing where the caller
+# required something present: a Table or Library keyed read, or a named binding.
+# It sits under Error because a missing key in an access lookup is normally a
+# programming error, not a value to test.
+# Search-style lookups (indexOf:, detect:, findFirst:, findLast:) keep answering
+# nil, because there absence is a normal result; use at:ifAbsent: or
+# detect:ifNone: when a miss is expected.

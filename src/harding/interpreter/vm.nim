@@ -3321,11 +3321,19 @@ proc initGlobals*(interp: var Interpreter) =
       discard
     return toValue(0)
 
-  proc primitiveArrayAtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  proc primitiveArrayAtValueImpl(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    ## Access-style lookup: a miss signals SubscriptOutOfBounds rather than
+    ## answering nil, so a bad index cannot travel on as a silent absence.
     if args.len == 0:
+      signalExceptionByName(interp, "SubscriptOutOfBounds", "Array at: requires an index")
       return nilValue()
     let (ok, idx) = args[0].tryGetInt()
-    if not ok or idx < 0:
+    if not ok:
+      signalExceptionByName(interp, "SubscriptOutOfBounds", "Array at: requires an integer index")
+      return nilValue()
+    if idx < 0:
+      signalExceptionByName(interp, "SubscriptOutOfBounds",
+        "Array index out of bounds: " & $idx)
       return nilValue()
 
     case self.kind
@@ -3337,6 +3345,8 @@ proc initGlobals*(interp: var Interpreter) =
         return self.instVal.elements[idx]
     else:
       discard
+    signalExceptionByName(interp, "SubscriptOutOfBounds",
+      "Array index out of bounds: " & $idx)
     return nilValue()
 
   proc primitiveArrayIncludesValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
@@ -3357,8 +3367,11 @@ proc initGlobals*(interp: var Interpreter) =
       discard
     return falseValue
 
-  proc primitiveTableAtValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  proc primitiveTableAtValueImpl(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    ## Access-style lookup: a miss signals NotFound rather than answering nil.
+    ## Use at:ifAbsent: where a miss is expected.
     if args.len == 0:
+      signalExceptionByName(interp, "NotFound", "Table at: requires a key")
       return nilValue()
 
     case self.kind
@@ -3370,6 +3383,7 @@ proc initGlobals*(interp: var Interpreter) =
         return self.instVal.entries[args[0]]
     else:
       discard
+    signalExceptionByName(interp, "NotFound", "Key not found: " & args[0].toString())
     return nilValue()
 
   proc primitiveTableKeysValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
@@ -4066,6 +4080,7 @@ proc initGlobals*(interp: var Interpreter) =
   let arrayAtMethod = createCoreMethod("primitiveArrayAt:")
   arrayAtMethod.setNativeImpl(arrayAtImpl)
   arrayAtMethod.setNativeValueImpl(primitiveArrayAtValueImpl)
+  arrayAtMethod.hasInterpreterParam = true
   arrayCls.methods["primitiveArrayAt:"] = arrayAtMethod
   arrayCls.allMethods["primitiveArrayAt:"] = arrayAtMethod
 
@@ -4161,6 +4176,7 @@ proc initGlobals*(interp: var Interpreter) =
   let tableAtMethod = createCoreMethod("primitiveTableAt:")
   tableAtMethod.setNativeImpl(tableAtImpl)
   tableAtMethod.setNativeValueImpl(primitiveTableAtValueImpl)
+  tableAtMethod.hasInterpreterParam = true
   tableCls.methods["primitiveTableAt:"] = tableAtMethod
   tableCls.allMethods["primitiveTableAt:"] = tableAtMethod
 

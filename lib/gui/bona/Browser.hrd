@@ -1390,7 +1390,7 @@ Browser>>addMixinToClass: aClassName mixinName: aMixinName [
         ^ self
     ]
     
-    mixinClass := Harding at: aMixinName
+    mixinClass := Harding at: aMixinName ifAbsent: [ nil ]
     mixinClass isNil ifTrue: [
         Transcript showCr: ("Mixin not found: " & aMixinName)
         ^ self
