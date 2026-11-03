@@ -9,6 +9,7 @@ import ../compiler/types
 import ./methods
 import ./expression
 import ./numeric
+import ./native_calls
 import ./blocks
 
 # ============================================================================
@@ -511,6 +512,33 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("    return {choice.target}(receiver, @[])\n"))
       output.add(fmt("  sendMessageBound(owner, receiver, \"{selector}\", @[])\n\n"))
 
+  var integerCandidates = initTable[string, string]()
+  if not mixed:
+    # Plan independently of source order, adding pure self-call chains only after
+    # their callees have a native plan. Unique selectors keep routing conservative.
+    var selectorCounts = initTable[string, int]()
+    for md in methodDefs:
+      selectorCounts[md.selector] = selectorCounts.getOrDefault(md.selector) + 1
+    for owner in compiledClasses:
+      var plans: IntegerPlans
+      var planned: seq[int]
+      for iteration in 0..<methodDefs.len:
+        var changed = false
+        for index, md in methodDefs:
+          if md.className != owner or md.isClassMethod or index in planned or
+             selectorCounts.getOrDefault(md.selector) != 1: continue
+          let plan = planIntegerCall(owner, md.params, md.body, plans)
+          if not plan.eligible: continue
+          let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
+          output.add(fmt("proc {target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+          let emitted = emitIntegerCall(owner, md.selector, md.params, plan)
+          output.add(emitted.code)
+          integerCandidates[md.selector] = emitted.helper
+          plans[md.selector] = plan
+          planned.add(index)
+          changed = true
+        if not changed: break
+
   output.add("\n# Compiled Methods\n")
   output.add("##################\n\n")
   
@@ -547,6 +575,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           genCtx.globals.add(globalName)
       genCtx.inMethod = true
       genCtx.directSendCandidates = directCandidates
+      genCtx.integerSendCandidates = integerCandidates
       genCtx.cellNames = methodCellNames
       if blockReg != nil:
         genCtx.blockRegistry = blockReg

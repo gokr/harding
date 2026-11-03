@@ -40,6 +40,7 @@ type
     ## speed and never correctness.
     inferredNumericSlots*: Table[string, NumericRepresentation]
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
+    integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -292,6 +293,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
   result.inMethod = ctx.inMethod
   result.directSendCandidates = ctx.directSendCandidates
+  result.integerSendCandidates = ctx.integerSendCandidates
   result.inBlock = ctx.inBlock
   result.returnTarget = ctx.returnTarget
   result.blockRegistry = ctx.blockRegistry
@@ -802,6 +804,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       var loopCtx = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
       loopCtx.inMethod = ctx.inMethod
       loopCtx.directSendCandidates = ctx.directSendCandidates
+      loopCtx.integerSendCandidates = ctx.integerSendCandidates
       loopCtx.inBlock = ctx.inBlock
       loopCtx.returnTarget = ctx.returnTarget
       loopCtx.locals = ctx.locals
@@ -948,6 +951,12 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
+    if not ctx.mixed and node.arguments.len > 0 and
+       node.arguments.len == node.selector.count(':') and
+       node.selector in ctx.integerSendCandidates:
+      let owner = if ctx.inMethod: genSymbolAccess(ctx, "self") else: "nilValue()"
+      let operands = @[owner, receiverCode] & node.arguments.mapIt(genExpression(ctx, it))
+      return ctx.integerSendCandidates[node.selector] & "(" & operands.join(", ") & ")"
     if not ctx.mixed and node.arguments.len == 0 and node.selector in ctx.directSendCandidates:
       let owner = if ctx.inMethod: genSymbolAccess(ctx, "self") else: "nilValue()"
       let helper = ctx.directSendCandidates[node.selector]
@@ -1564,6 +1573,7 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
     compiledClasses: ctx.compiledClasses,
     classInfo: ctx.classInfo,
     directSendCandidates: ctx.directSendCandidates,
+    integerSendCandidates: ctx.integerSendCandidates,
     cellNames: scopeCaptureCellNames(blkNode.body, blkNode.parameters & blkNode.temporaries)
   )
   for param in blkNode.parameters:

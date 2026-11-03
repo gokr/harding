@@ -6,6 +6,15 @@ changelog entry, reference-manual review, and build/test validation. Update this
 checklist as work lands. Compiler fixes must conform to documented Harding
 semantics; any intended language change must be explicit and documented.
 
+## Native call specialization
+
+- [x] Pure Integer expression/self-call regions with native parameters and returns;
+      guard all transitive method dependencies at entry and retain boxed fallback.
+      ARC/ORC region boundary tests and 105-case parity sweep pass; no workload
+      performance gain claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).
+- [ ] Extend regions to definitely initialized locals and structured control flow.
+- [ ] Measure isolated paired workloads before expanding to slots or recursion.
+
 ## Baseline
 
 - [x] Bounded execution-parity runner with isolated workspace build artifacts.
