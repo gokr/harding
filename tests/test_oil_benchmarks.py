@@ -12,12 +12,31 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from bench_compare_oil import checked_driver, vm_path
 from bench_compare import execute
 from setup_benchmark_osvm import REVISION
+import awfy_cog
 
 
 class OilBenchmarkTests(unittest.TestCase):
     def test_setup_pins_full_upstream_revision(self):
         self.assertRegex(REVISION, r'^[0-9a-f]{40}$')
         self.assertIn(REVISION, (ROOT / 'docs/OPENSMALLTALK_OIL_COMPARISON.md').read_text())
+
+    def test_awfy_provenance_and_driver_contract(self):
+        manifest = awfy_cog.provenance()
+        self.assertEqual(manifest['commit'], awfy_cog.REVISION)
+        for case in awfy_cog.CASES:
+            for count in (0, 1, 3):
+                code = checked_driver(case, count, Path("/owned/author's result.txt"), '')
+                self.assertIn(f'{count} timesRepeat:', code)
+                self.assertIn('on: Error do:', code)
+                self.assertIn('snapshot: false andQuit: true', code)
+                self.assertNotIn('snapshot: true', code)
+                self.assertIn("/owned/author''s result.txt", code)
+                self.assertNotIn("/owned/author's result.txt", code)
+                self.assertIn('innerBenchmarkLoop: 1' if case == 'havlak' else 'verifyResult:', code)
+            with self.assertRaises(ValueError):
+                checked_driver(case, 1, Path('/owned/out'), '', [Path('/owned/addon.st')])
+        with self.assertRaises(ValueError):
+            awfy_cog.driver('unknown', 1, Path('/owned/out'))
 
     def test_wrapped_sources_keep_verification_and_never_save_image(self):
         for case in ('richards', 'deltablue', 'queens'):
@@ -76,6 +95,20 @@ class OilBenchmarkTests(unittest.TestCase):
                                       (ROOT / 'benchmark' / (case + '.hrd')).read_text()))
                     execute([str(vm), '-nodisplay', '-nosound', str(work / 'bench.image'), str(script)],
                             work, vm.parent.parent.name + '-' + case, 30, 92 if case == 'queens' else 1, output)
+                for case in awfy_cog.CASES:
+                    for count in (0, 1, 3):
+                        script.write_text(checked_driver(case, count, output, ''))
+                        execute([str(vm), '-nodisplay', '-nosound', str(work / 'bench.image'), str(script)],
+                                work, vm.parent.parent.name + '-' + case + '-' + str(count),
+                                120, count, output)
+                    code = checked_driver(case, 1, output, '')
+                    check = ('solver innerBenchmarkLoop: 1' if case == 'havlak'
+                             else 'solver verifyResult: answer')
+                    script.write_text(code.replace(check, 'false'))
+                    with self.assertRaises(RuntimeError):
+                        execute([str(vm), '-nodisplay', '-nosound', str(work / 'bench.image'), str(script)],
+                                work, 'wrong-' + case, 120, 1, output)
+                    self.assertIn('ERROR:', output.read_text())
                 script.write_text(checked_driver('queens', 1, output, '').replace('answer = 92', 'answer = 0'))
                 with self.assertRaises(RuntimeError):
                     execute([str(vm), '-nodisplay', '-nosound', str(work / 'bench.image'), str(script)],

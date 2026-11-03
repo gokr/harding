@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """Compare stock Cog and Oil on the same disposable Squeak image and workloads.
 
-Uses the existing checked Smalltalk adapters, not image-provided benchmarks.
-Optional image add-ons are a separate variant; they never modify the input image.
+Two workload families are supported and must not be confused in a report:
+
+* `richards`, `deltablue`, `queens` — the mechanically adapted Harding programs
+  under `benchmark/`.
+* `bounce`, `json`, `havlak` — AWFY upstream's own SOM sources, loaded by its own
+  loader (`scripts/awfy_cog.py`). These are not the Harding AWFY ports, and
+  upstream Json verifies its fixture rather than running the ports' extra
+  parser checks.
+
+Optional image add-ons are a separate variant; they never modify the input image
+and apply to the benchmark/ workloads only.
 """
 import argparse
 import json
@@ -14,8 +23,16 @@ import tempfile
 
 from bench_compare import ROOT, cog, execute, sha
 from cog_benchmark_source import driver
+import awfy_cog
 
-CASES = ('richards', 'deltablue', 'queens')
+CASES = ('richards', 'deltablue', 'queens') + awfy_cog.CASES
+
+# AWFY workloads differ by orders of magnitude, so one global repetition count
+# either measures startup for Havlak or skips too little work for Bounce.
+# Per-pass timing makes the counts comparable; --repetitions overrides them all.
+# Havlak repeats upstream's checked full-size graph (three passes) rather than
+# timing a single 0.7 s run, whose per-pass figure is mostly noise.
+DEFAULT_REPETITIONS = {'bounce': 2000, 'json': 200, 'havlak': 3}
 
 
 def st_string(text):
@@ -27,6 +44,10 @@ def checked_driver(case, repetitions, output, source, addons=()):
         raise ValueError('negative repetition count')
     if case not in CASES:
         raise ValueError('unsupported workload: ' + case)
+    if case in awfy_cog.CASES:
+        if addons:
+            raise ValueError('AWFY add-on variants are not supported')
+        return awfy_cog.driver(case, repetitions, output)
     code = (cog(case, repetitions, output) if case == 'queens' else
             driver(case, repetitions, output, source))
     prefix = ''.join(f'(FileStream fileNamed: {st_string(path)}) fileIn.\n' for path in addons)
@@ -55,15 +76,23 @@ def main():
                         default=ROOT / 'build/osvm/image/Squeak6.1-23976-64bit.image')
     parser.add_argument('--addons', nargs='+', type=Path, default=[],
                         help='optional file-ins for a separately labelled Oil+add-ons variant')
-    parser.add_argument('cases', nargs='*', help='workloads; default Richards, DeltaBlue, Queens')
+    parser.add_argument('cases', nargs='*',
+                        help='richards deltablue queens (default) or bounce json havlak (AWFY upstream)')
     parser.add_argument('--trials', type=int, default=5)
-    parser.add_argument('--repetitions', type=int, default=3000)
+    parser.add_argument('--repetitions', type=int,
+                        help='passes per measurement; default 3000, or the AWFY per-case default')
     parser.add_argument('--timeout', type=int, default=180)
     args = parser.parse_args()
-    if args.trials < 3 or args.repetitions < 1:
-        parser.error('at least three trials and positive repetitions required')
-    cases = args.cases or CASES
+    if args.trials < 3:
+        parser.error('at least three trials required')
+    if args.repetitions is not None and args.repetitions < 1:
+        parser.error('positive repetitions required')
+    cases = args.cases or ('richards', 'deltablue', 'queens')
     if set(cases) - set(CASES): parser.error('unknown workload')
+    if args.addons and set(cases) & set(awfy_cog.CASES):
+        parser.error('AWFY add-on variants are not supported')
+    if set(cases) & set(awfy_cog.CASES):
+        awfy_cog.provenance()
     products = ROOT / 'build/osvm/repo/products'
     cog_vm = (args.cog_vm or vm_path(products / 'sqcogspur64linuxht')).resolve()
     oil_vm = (args.oil_vm or vm_path(products / 'sqoilspur64linuxht')).resolve()
@@ -83,12 +112,16 @@ def main():
         versions[name] = {'path': str(vm), 'sha256': sha(vm),
                           'version': result.stdout + result.stderr}
     source_hashes = {str(p): sha(p) for p in [image, *addons]}
+    counts = {case: args.repetitions or DEFAULT_REPETITIONS.get(case, 3000) for case in cases}
     report = {'metadata': {'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'],
         cwd=ROOT, text=True).strip(), 'versions': versions, 'inputHashes': source_hashes,
-        'trials': args.trials, 'repetitions': args.repetitions,
+        'trials': args.trials, 'repetitions': counts,
         'method': 'fresh processes; discarded warm-up; alternating engines and work/baseline order; checked output; median paired difference',
         'cpu': next(line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                     if line.startswith('model name'))}, 'status': 'running', 'results': []}
+    if set(cases) & set(awfy_cog.CASES):
+        report['metadata']['awfy'] = awfy_cog.provenance()
+        report['metadata']['awfyJsonWorkload'] = 'upstream fixture parse and verifier; excludes Harding JsonChecks'
     report_path = work / 'results.json'
     def save_report():
         report_path.write_text(json.dumps(report, indent=2) + '\n')
@@ -106,15 +139,16 @@ def main():
     for case in cases:
         directory = work / case
         directory.mkdir()
-        source = (ROOT / 'benchmark' / (case + '.hrd')).read_text()
-        (directory / (case + '.hrd')).write_text(source)
+        source = '' if case in awfy_cog.CASES else (ROOT / 'benchmark' / (case + '.hrd')).read_text()
+        if source:
+            (directory / (case + '.hrd')).write_text(source)
         for license_path in (ROOT / 'benchmark/licenses').iterdir():
             if license_path.is_file(): shutil.copy2(license_path, directory / license_path.name)
         output = directory / 'result.txt'
         commands = {}
         for name, (vm, file_ins) in variants.items():
             commands[name] = {}
-            for count in [0, args.repetitions]:
+            for count in [0, counts[case]]:
                 script = directory / (name + '-' + str(count) + '.st')
                 script.write_text(checked_driver(case, count, output, source, file_ins))
                 commands[name][count] = [str(vm), '-nodisplay', '-nosound', str(images[name]), str(script)]
@@ -122,10 +156,11 @@ def main():
                                                       if p.suffix in ('.st', '.hrd')}
         save_report()
         samples = {name: [] for name in variants}
+        reps = counts[case]
         for trial in range(args.trials + 1):
             for name in list(variants)[::1 if trial % 2 else -1]:
                 times = {}
-                for count in ([0, args.repetitions] if trial % 2 else [args.repetitions, 0]):
+                for count in ([0, reps] if trial % 2 else [reps, 0]):
                     answer = (92 if count else 0) if case == 'queens' else count
                     try:
                         times[count] = execute(commands[name][count], directory,
@@ -139,10 +174,10 @@ def main():
                         save_report()
                         raise
                 if trial:
-                    samples[name].append({'workMs': times[args.repetitions], 'baselineMs': times[0],
-                        'netMsPerPass': (times[args.repetitions] - times[0]) / args.repetitions})
+                    samples[name].append({'workMs': times[reps], 'baselineMs': times[0],
+                        'netMsPerPass': (times[reps] - times[0]) / reps})
         for name in variants:
-            row = {'case': case, 'engine': name, 'reps': args.repetitions,
+            row = {'case': case, 'engine': name, 'reps': reps,
                    'commands': commands[name], 'samples': samples[name]}
             for field in ['workMs', 'baselineMs', 'netMsPerPass']:
                 row['median' + field[0].upper() + field[1:]] = statistics.median(s[field] for s in samples[name])
