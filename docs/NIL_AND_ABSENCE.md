@@ -9,7 +9,7 @@ that are worth fixing regardless.
 
 Date of investigation: `main` at `5ff020b`. Counts come from the audit described
 in *Exhaustive audit of current nil usage*; the script is
-`build/lang/nil_audit.py` and its output `build/lang/nil_audit.json`.
+`scripts/audit_nil_usage.py` (use `--json PATH` to capture the raw records).
 
 ### Decision
 
@@ -343,22 +343,29 @@ break, and the violation count across `lib/`, external libraries, Bona and
 ## Exhaustive audit of current nil usage
 
 Counts from a positional scan of every `.hrd` file under `lib/`, `examples/`,
-`external/`, `benchmark/` and `tests/` (script: `build/lang/nil_audit.py`,
-output `build/lang/nil_audit.json`). Classification is syntactic: each `nil`
-occurrence is assigned to the position it occupies.
+`external/`, `benchmark/` and `tests/`, using `scripts/audit_nil_usage.py`.
+Classification is syntactic: each `nil` occurrence is assigned to the position it
+occupies.
 
-**275 occurrences across 48 files.**
+**350 occurrences across 51 files** (counts from the corrected script; the
+original run under-counted by treating `#(` in `derive: #(...)` as a comment start
+and by missing slot declarations in a class declared earlier in the file).
 
-| Position | Occurrences | Files | Legit under the proposal? |
-|---|---:|---:|---|
-| Keyword argument (`foo: nil`) | 95 | 9 | **No** — must be transformed |
-| `^ nil` (return) | 77 | 31 | **No** — caller-side protocol |
-| Slot assignment (`slot := nil`) | 57 | 13 | **Yes** — the one allowed form |
-| Local assignment (`tmp := nil`) | 24 | 9 | **No** — locals cannot be re-nilled |
-| Block result (`[ nil ]`) | 25 | 6 | **No** — but usually becomes `ifNil:` |
-| Table/declaration value (`-> nil`) | 0 | 0 | n/a (no such form exists) |
-| Comparison (`= nil`) | 1 | 1 | Replaced by `isNil` |
-| Other | 5 | 4 | case by case |
+| Position | Occurrences | Files |
+|---|---:|---:|
+| Keyword argument (`foo: nil`) | 100 | 18 |
+| `^ nil` (return) | 82 | 31 |
+| Slot assignment (`slot := nil`) | 75 | 13 |
+| Block result (`[ nil ]`) | 61 | 19 |
+| Local assignment (`tmp := nil`) | 17 | 8 |
+| Other expression use | 12 | 7 |
+| Explicit slot write (`obj::s := nil`) | 1 | 1 |
+| Global assignment (`X := nil`) | 1 | 1 |
+| Comparison (`= nil`) | 1 | 1 |
+
+Every occurrence classifies; there is no `unclassified` residue. Regenerate with
+`python3 scripts/audit_nil_usage.py`, `--by-area` for the area breakdown and
+`--detail <category>` to list the individual sites.
 
 By area:
 
@@ -807,7 +814,7 @@ be deferred without blocking anything.
 Before trusting this note:
 
 - `git log --oneline -1` — the review reflects `5ff020b`.
-- Re-run the audit: `python3 build/lang/nil_audit.py`.
+- Re-run the audit: `python3 scripts/audit_nil_usage.py`.
 - Confirm the decision items are still open or done:
   `grep -n '^Root derive\|NotFound' docs/REMOVING_NAMEABLE_NIL.md` and check
   `lib/core/` for a `NotFound.hrd`.
