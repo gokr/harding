@@ -613,6 +613,12 @@ proc compiledJsonStringify*(value: NodeValue): NodeValue =
   compiledJsonValue(buf, value, visited)
   return NodeValue(kind: vkString, strVal: buf)
 
+proc resolveCompiledClassMethod*(className, selector: string): CompiledProc =
+  ## Class-side lookup used by a generated call-site guard: the answer is the
+  ## exact registered proc for this class object, or nil. Subclass overrides are
+  ## irrelevant here because the guard pins a literal class receiver.
+  compiledClassMethods.getOrDefault(className & ">>" & selector)
+
 proc registerCompiledClassMethod*(className, selector: string, fn: CompiledProc) =
   ## Register a class-side method separately from instance methods.
   requireMutableCompiledClass(className)
@@ -1539,6 +1545,14 @@ proc compiledSlotString*(value: NodeValue): string =
 
 proc compiledSlotSymbol*(value: NodeValue): string =
   checkedCompiledSlot(value, scSymbol).symVal
+
+proc compiledIntegerDiv*(a, b: int): int {.inline.} =
+  ## Integer `//` inside a native region. A zero divisor signals the ordinary
+  ## Harding DivisionByZero error (as nt_slashslash does) instead of letting a
+  ## Nim Defect escape from generated code.
+  if b == 0:
+    return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer division by zero")).intVal
+  a div b
 
 proc reportUncaughtDefect*(message: string): int =
   ## A Nim Defect (overflow, index error, ...) escaped native code that has no

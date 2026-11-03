@@ -453,7 +453,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                          blockReg: BlockRegistry = nil,
                          knownGlobals: seq[string] = @[], mixed: bool = false,
                          inferredNumeric: Table[string, string] = initTable[string, string](),
-                         integerCandidates: var Table[string, string]): string =
+                         integerCandidates: var Table[string, string],
+                         staticClassCalls: var Table[string, string]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -541,6 +542,36 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           changed = true
         if not changed: break
 
+  # Class-side Integer regions, usable from a call site with a literal class.
+  var staticClassCalls = initTable[string, string]()
+  if not mixed:
+    var classSelectorCounts = initTable[string, int]()
+    for md in methodDefs:
+      if md.isClassMethod:
+        classSelectorCounts[md.selector] = classSelectorCounts.getOrDefault(md.selector) + 1
+    for md in methodDefs:
+      if not md.isClassMethod or classSelectorCounts.getOrDefault(md.selector) != 1: continue
+      let plan = planStaticClassCall(md.className, md.params, md.body, md.temporaries)
+      if not plan.eligible: continue
+      let emitted = emitStaticClassCall(md.className, md.selector, md.params, plan)
+      output.add(emitted.code)
+      let guardName = "guardStatic_" & mangleClass(md.className) & "_" & mangleSlot(md.selector)
+      let target = mangleClass(md.className) & "_class_" & mangleSelector(md.selector)
+      # Exact class object + unchanged class-method registration. Any override or
+      # replacement flips the guard, and the call site keeps the ordinary send.
+      # The guard compares against the registered proc, which is defined with
+      # the rest of the compiled methods later in the module.
+      output.add(fmt("proc {target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+      output.add(fmt("var {guardName}_version {{.threadvar.}}: uint64\n"))
+      output.add(fmt("var {guardName}_valid {{.threadvar.}}: bool\n"))
+      output.add(fmt("proc {guardName}(): bool {{.inline.}} =\n"))
+      output.add(fmt("  if {guardName}_version != compiledClassDispatchVersion:\n"))
+      output.add(fmt("    {guardName}_valid = resolveCompiledClassMethod(\"{md.className}\", \"{md.selector}\") == {target}\n"))
+      output.add(fmt("    {guardName}_version = compiledClassDispatchVersion\n"))
+      output.add(fmt("  {guardName}_valid\n\n"))
+      staticClassCalls[md.className & ">>" & md.selector] = emitted.nativeName
+
+
   output.add("\n# Compiled Methods\n")
   output.add("##################\n\n")
   
@@ -578,6 +609,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       genCtx.inMethod = true
       genCtx.directSendCandidates = directCandidates
       genCtx.integerSendCandidates = integerCandidates
+      genCtx.staticClassCalls = staticClassCalls
+
       genCtx.cellNames = methodCellNames
       if blockReg != nil:
         genCtx.blockRegistry = blockReg
@@ -748,7 +781,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
                   injectMainArgsVar: bool = false,
                   knownGlobals: seq[string] = @[],
                   temporaries: seq[string] = @[],
-                  integerCandidates: Table[string, string] = initTable[string, string]()): string =
+                  integerCandidates: Table[string, string] = initTable[string, string](),
+                  staticClassCalls: Table[string, string] = initTable[string, string]()): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -790,6 +824,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
   genCtx.integerSendCandidates = integerCandidates
+  genCtx.staticClassCalls = staticClassCalls
   for globalName in knownGlobals:
     if globalName notin genCtx.globals:
       genCtx.globals.add(globalName)
@@ -1008,8 +1043,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate compiled methods from user definitions after primitive operators,
   # so compiled method bodies can call nt_* helpers without forward declarations.
   var integerCandidates = initTable[string, string]()
+  var staticClassCalls = initTable[string, string]()
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
-                                knownGlobals, mixed, inferredNumeric, integerCandidates))
+                                knownGlobals, mixed, inferredNumeric, integerCandidates,
+                                staticClassCalls))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")
@@ -1059,7 +1096,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # Generate main proc for top-level statements, sharing block registry
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
                          analysis.classes, mixed, sourceFile, injectMainArgsVar,
-                         knownGlobals, mainTemporaries, integerCandidates))
+                         knownGlobals, mainTemporaries, integerCandidates,
+                         staticClassCalls))
 
   # Module initialization
   output.add("\n")

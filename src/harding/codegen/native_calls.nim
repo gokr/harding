@@ -93,7 +93,16 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
           if dependency notin dependencies: dependencies.add(dependency)
         return integerStem(owner, message.selector) & "_native(" & arguments.join(", ") & ")"
       let supported = if boolean: message.selector in ["<", "<=", ">", ">=", "=", "<>"]
-                      else: message.selector in ["+", "-", "*"]
+                      else: message.selector in ["+", "-", "*", "//"]
+      if message.arguments.len == 1 and message.selector == "//":
+        # Integer division must keep Harding's division-by-zero error rather
+        # than turning a zero divisor into a Nim DivisionByZeroDefect. The
+        # runtime helper answers exactly this, so reuse its contract.
+        let left = expression(message.receiver, available)
+        let right = expression(message.arguments[0], available)
+        if left.len > 0 and right.len > 0:
+          return "compiledIntegerDiv(" & left & ", " & right & ")"
+        return ""
       if message.arguments.len == 1 and supported:
         # Do not move literal-only operations into Nim's constant evaluator.
         if message.receiver.kind == nkLiteral and message.arguments[0].kind == nkLiteral: return ""
@@ -213,6 +222,71 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     if name notin touched:
       touched.incl(name)
       result.touchedSlots.add(name)
+
+proc referencesSelf*(node: Node): bool =
+  ## True if the body can observe its receiver (directly, through a slot-like
+  ## identifier, or inside a nested block). A receiver-free body is safe to call
+  ## through a call-site guard, because no stale entry can see a different self.
+  if node == nil: return false
+  case node.kind
+  of nkPseudoVar:
+    node.PseudoVarNode.name == "self"
+  of nkSlotAccess, nkNamedAccess: true
+  of nkMessage:
+    let message = node.MessageNode
+    if referencesSelf(message.receiver): return true
+    for argument in message.arguments:
+      if referencesSelf(argument): return true
+    false
+  of nkAssign:
+    let assignment = node.AssignNode
+    referencesSelf(assignment.expression)
+  of nkReturn:
+    referencesSelf(node.ReturnNode.expression)
+  of nkBlock:
+    let blk = node.BlockNode
+    for statement in blk.body:
+      if referencesSelf(statement): return true
+    false
+  of nkIf:
+    let branch = node.IfNode
+    referencesSelf(branch.condition) or referencesSelf(branch.thenBranch) or
+      referencesSelf(branch.elseBranch)
+  of nkWhile:
+    let loop = node.WhileNode
+    referencesSelf(loop.condition) or referencesSelf(loop.body)
+  of nkLiteral:
+    let value = node.LiteralNode.value
+    if value.kind == vkBlock and value.blockVal != nil:
+      for statement in value.blockVal.body:
+        if referencesSelf(statement): return true
+    false
+  else: false
+
+proc bodyReferencesSelf*(body: seq[Node]): bool =
+  for node in body:
+    if referencesSelf(node): return true
+  false
+
+proc planStaticClassCall*(owner: string, parameters: seq[string], body: seq[Node],
+                          temporaries: seq[string] = @[]): IntegerCallPlan =
+  ## Reuse the Integer region planner for a class-side method that provably does
+  ## not depend on the receiver at all.
+  if parameters.len == 0 or bodyReferencesSelf(body): return
+  result = planIntegerCall(owner, parameters, body,
+                           initTable[string, IntegerCallPlan](), temporaries, nil)
+
+proc emitStaticClassCall*(owner, selector: string, parameters: seq[string],
+                          plan: IntegerCallPlan): tuple[code, nativeName: string] =
+  ## The native entry takes only Integers. The call site guards the exact class
+  ## object identity and the class-method registration before using it, so a
+  ## subclass override or a replaced method keeps the ordinary send.
+  let stem = "integerClassCall_" & mangleClass(owner) & "_" & mangleSlot(selector)
+  let args = parameters.mapIt(mangleIdentifier(it))
+  result.nativeName = stem & "_native"
+  result.code = "proc " & result.nativeName & "*(" & args.join(", ") & ": int): int =\n"
+  if plan.statements.len > 0: result.code.add(plan.statements)
+  else: result.code.add("  " & plan.expression & "\n")
 
 proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
                       plan: IntegerCallPlan): tuple[code, helper: string] =

@@ -128,3 +128,41 @@ least-squares slope is therefore noise-sensitive. Real workloads gain only in
 proportion to how much hot code is pure Integer arithmetic over declared slots;
 Richards/DeltaBlue/Queens still report no change because their hot methods send
 to *other* receivers, allocate, or divide.
+
+## Receiver-free class methods, specialized at the call site
+
+`RichardsBits class>>xor16:with:` is the hot helper Richards' idle task calls
+(8.7% of samples). It cannot be a *method* region — it is entered from a dynamic
+send, so there is no place to put entry guards. It can be specialized at the
+**call site** instead:
+
+- The body must not reference `self` at all (`referencesSelf` walks slots,
+  pseudo-vars, message receivers, arguments and nested blocks). Then a stale
+  entry cannot observe a different receiver.
+- The call site must have a literal class receiver and every argument must be a
+  provable Integer expression: an Integer literal, an `nrInt` local, a declared
+  Integer slot read, or arithmetic/`//` over those.
+- The generated guard pins the exact class object's registered class method
+  (`resolveCompiledClassMethod`) against a baked-in proc, and includes the
+  slot-accessor guard for every argument slot read. Any override, replacement or
+  accessor redirection falls back to the ordinary send.
+
+Integer `//` inside a region goes through `compiledIntegerDiv`, which raises the
+ordinary Harding `DivisionByZero` error rather than a Nim `Defect`.
+
+### Measured on Richards
+
+The call site's argument is `control // 2`, and `control` is a *dynamic* slot in
+the shipped benchmark, so plain compilation still cannot prove it. With observed
+feedback narrowing `RichardsIdleTask#control` and `#count` to Integer
+(`--type-feedback ... --trust-observed-types`), the call site specializes:
+
+| Richards, release ARC, CPU 2, 30 passes | Median | Trimmed |
+|---|---:|---:|
+| Plain compile | 17.61 ms/pass | 15.77 |
+| Observed narrowing + class-site region | 14.93 ms/pass | 13.24 |
+
+**~1.18x (median 30 trials) to ~1.23x (25 trials).** Counters identical
+(`queued=69660 held=27840`) and the interpreter agrees. Without narrowing the
+call site is unchanged, so this gain belongs to the two features together — not
+to the class-site codegen alone.

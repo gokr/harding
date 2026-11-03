@@ -41,6 +41,12 @@ type
     inferredNumericSlots*: Table[string, NumericRepresentation]
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
     integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
+    ## "Class>>selector" -> native entry for a class method whose body provably
+    ## ignores its receiver; a call site guards the class object and registration.
+    staticClassCalls*: Table[string, string]
+    ## Set while generating a class-site fallback, so the ordinary send is
+    ## emitted instead of recursing into the same specialization.
+    suppressClassSite*: bool
 
 # Forward declaration
 proc genExpression*(ctx: GenContext, node: Node): string
@@ -294,6 +300,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.inMethod = ctx.inMethod
   result.directSendCandidates = ctx.directSendCandidates
   result.integerSendCandidates = ctx.integerSendCandidates
+  result.staticClassCalls = ctx.staticClassCalls
   result.inBlock = ctx.inBlock
   result.returnTarget = ctx.returnTarget
   result.blockRegistry = ctx.blockRegistry
@@ -593,6 +600,54 @@ proc conditionClause(ctx: GenContext, conditionNode: Node, fallback: string,
   if negate:
     return ("not isTruthy(" & fallback & ")", false)
   ("isTruthy(" & fallback & ")", false)
+
+proc nativeIntArgument*(ctx: GenContext, node: Node, guards: var seq[string]): string =
+  ## Emit an unboxed Integer expression for a call-site argument, or "" when the
+  ## argument is not provably an Integer. Every slot read contributes a guard for
+  ## its accessor, so a redirected accessor keeps the ordinary boxed send.
+  if node == nil: return ""
+  case node.kind
+  of nkLiteral:
+    if node.LiteralNode.value.kind == vkInt: return $node.LiteralNode.value.intVal
+  of nkIdent:
+    let name = node.IdentNode.name
+    if ctx.numericBindings.getOrDefault(name) == nrInt:
+      return mangleIdentifier(name)
+    # A slot named by an identifier (the pipeline sometimes leaves slot reads as
+    # plain identifiers) is usable only when declared Integer on this class.
+    if ctx.cls != nil and ctx.cls.name in ctx.compiledClasses and ctx.inMethod:
+      for slot in ctx.cls.getAllSlots():
+        if slot.name == name and slot.constraint == tcInt:
+          let guard = mangleClass(ctx.cls.name) & "_direct_" & mangleSlot(name) & "_guard"
+          if guard & "(self)" notin guards: guards.add(guard & "(self)")
+          return "cast[" & mangleClass(ctx.cls.name) & "](self.instVal.compiledOwner)[]." &
+                 mangleSlot(name)
+  of nkSlotAccess:
+    let slotNode = node.SlotAccessNode
+    if not slotNode.isAssignment and ctx.cls != nil and
+       ctx.cls.name in ctx.compiledClasses:
+      var name = slotNode.slotName
+      if name.len == 0:
+        for slot in ctx.cls.getAllSlots():
+          if slot.index == slotNode.slotIndex: name = slot.name
+      if name.len > 0:
+        for slot in ctx.cls.getAllSlots():
+          if slot.name == name and slot.constraint == tcInt:
+            let guard = mangleClass(ctx.cls.name) & "_direct_" & mangleSlot(name) & "_guard"
+            if guard & "(self)" notin guards: guards.add(guard & "(self)")
+            return "cast[" & mangleClass(ctx.cls.name) & "](self.instVal.compiledOwner)[]." &
+                   mangleSlot(name)
+  of nkMessage:
+    let message = node.MessageNode
+    if message.arguments.len == 1 and
+       message.selector in ["+", "-", "*", "//"]:
+      let left = nativeIntArgument(ctx, message.receiver, guards)
+      let right = nativeIntArgument(ctx, message.arguments[0], guards)
+      if left.len > 0 and right.len > 0:
+        if message.selector == "//": return "compiledIntegerDiv(" & left & ", " & right & ")"
+        return "(" & left & " " & message.selector & " " & right & ")"
+  else: discard
+  ""
 
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
@@ -951,6 +1006,43 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{node.selector}\", @[{args}])")
 
   else:
+    # Class-side Integer region: only a literal class receiver, and only when
+    # every argument is already an Integer literal or Integer-typed local. The
+    # sentinel expression re-runs the ordinary send when the guard fails, so
+    # subclass overrides and replaced methods keep their semantics.
+    var literalClass = ""
+    if node.receiver != nil and node.receiver.kind == nkIdent:
+      # Only a class constant spelling (uppercase initial) can be the receiver;
+      # a local or parameter of that shape is excluded by the compiledClasses
+      # test below.
+      let spelled = node.receiver.IdentNode.name
+      if spelled in ctx.compiledClasses:
+        literalClass = spelled
+    if not ctx.mixed and not ctx.suppressClassSite and literalClass.len > 0:
+      let className = literalClass
+      let key = className & ">>" & node.selector
+      if key in ctx.staticClassCalls and
+         node.arguments.len == node.selector.count(':'):
+        var nativeArgs: seq[string]
+        var guards: seq[string]
+        var eligible = true
+        for argument in node.arguments:
+          let native = nativeIntArgument(ctx, argument, guards)
+          if native.len == 0:
+            eligible = false
+            break
+          nativeArgs.add(native)
+        if eligible:
+          let guardName = "guardStatic_" & mangleClass(className) & "_" & mangleSlot(node.selector)
+          let call = ctx.staticClassCalls[key] & "(" & nativeArgs.join(", ") & ")"
+          ctx.suppressClassSite = true
+          let fallback = genExpression(ctx, node)
+          ctx.suppressClassSite = false
+          let condition = (@[guardName & "()"] & guards).join(" and ")
+          # Re-run the ordinary send when any guard is cold, so overrides,
+          # replaced class methods and redirected accessors keep their semantics.
+          return "(block:\n    if " & condition & ": toValue(" & call & ")\n    else: " &
+                 fallback & ")"
     if not ctx.mixed and node.arguments.len > 0 and
        node.arguments.len == node.selector.count(':') and
        node.selector in ctx.integerSendCandidates:
