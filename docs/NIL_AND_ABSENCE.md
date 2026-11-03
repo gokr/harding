@@ -40,6 +40,8 @@ in *Exhaustive audit of current nil usage*; the script is
 5. **Fix `Root`** so `Root derive:` works. **Done** — see *Fixed: Root derive:*
 6. **Close the absent-protocol gaps** rather than removing nil: `at:ifAbsent:`,
    `detect:ifNone:` exist already and should be preferred in new code.
+7. **Make integer overflow catchable** as `Overflow` under a new `ArithmeticError`,
+   mirroring Nim's `ArithmeticDefect`. **Done** — see below.
 
 ### Why "remove nameable nil" was rejected
 
@@ -692,6 +694,59 @@ while queens takes ~26s in debug even at the pre-change commit. In release the
 same case takes ~1.5s before and after the change (1.545s vs 1.577s). The parity
 harness is borderline on that case in debug and would be more robust run against a
 release binary.
+
+## Fixed: catchable arithmetic overflow and an ArithmeticError root
+
+Integer overflow signalled nothing catchable. `9223372036854775807 + 1` surfaced as
+`Error: VM error: over- or underflow` — a VM error string with no exception class,
+so `on: Error do:` could not intercept it and the process died.
+
+Added:
+
+- `ArithmeticError := Error derive` (`lib/core/ArithmeticError.hrd`), mirroring
+  Nim's `ArithmeticDefect`.
+- `Overflow := ArithmeticError derive` (`lib/core/Overflow.hrd`).
+- `DivisionByZero` reparented onto `ArithmeticError`, so one selector catches any
+  arithmetic failure.
+
+Interpreter: `handleContinuation` now converts Nim's `OverflowDefect` to the
+Harding `Overflow` signal, alongside the existing `DivByZeroDefect` conversion.
+
+Compiled path: three gaps had to be closed, and each was found only by testing the
+compiled output rather than the interpreter.
+
+1. `nt_plus`/`nt_minus`/`nt_star` performed raw integer arithmetic, so an overflow
+   escaped as an unhandled Nim `OverflowDefect` and aborted the binary. They now
+   use bounds-checked helpers that signal `Overflow`. The multiplication check must
+   precede the multiply, since an overflowing product would raise inside the check
+   itself.
+2. `ensureCompiledExceptionHierarchy` and `compiledExceptionClassValue` registered
+   `Overflow` against **both** `Error` and `ArithmeticError`. Since
+   `matchesCompiledError` walks the primary-parent chain only,
+   `on: ArithmeticError` was bypassed. Registration now gives arithmetic classes a
+   single parent.
+3. Codegen resolved only a hardcoded list of exception names
+   (`Exception, Error, Notification, DivisionByZero, MessageNotUnderstood,
+   SubscriptOutOfBounds`) to class values; everything else fell through to a
+   **symbol**, which `matchesCompiledError` rejects. The list is now
+   `ctx.exceptionClassNames`, seeded with the builtin names and extended with every
+   class in the parse tree that descends from `Exception`, so a new exception class
+   works without editing codegen.
+
+Verified at all three handler levels (`Overflow`, `ArithmeticError`, `Error`) in
+both engines, with byte-identical output between interpreter and compiled binary
+for the same script, and normal arithmetic unchanged.
+
+**Method note worth keeping:** the compiled-path defects were invisible to the
+interpreter and to unit tests. Each was found only by compiling a real script and
+running the binary. A unit-test-only check would have declared this fixed.
+
+## Naming decision: NotFound rather than KeyError
+
+`NotFound` was chosen over Nim/Python's `KeyError` because it reads better in
+Harding source and covers Library and binding lookups as well as Table keys, where
+"key error" would be narrower than the condition. Structure is what aligns with
+Nim (an `Error` subclass for access-style misses); the spelling stays Harding's.
 
 ## Still-open questions
 
