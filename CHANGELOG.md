@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Cog/Oil benchmark setup now pins upstream `9cf479e` (`VMMaker.oscog-cb.3850` for Oil), which passes the previously failing Richards/DeltaBlue/Queens checks at 300, 1,000 and 5,000 repetitions on the unchanged Squeak image and adapters. Fresh-clone setup forces revision-header filtering; local header edits are refused rather than overwritten. See `docs/OPENSMALLTALK_OIL_COMPARISON.md` for checked results and retained historical failures.
+
 ### Added
 - `scripts/bench_compare_awfy.py`: checked cross-engine timing of the AWFY ports against CPython and GNU Smalltalk, with per-run answer verification, measured (not estimated) startup subtraction, and explicit coverage reporting. GNU Smalltalk covers Bounce only; Json and Havlak are reported as uncovered rather than substituted (`docs/AWFY_COMPARISON.md`).
 - `benchmark/awfy/{json,havlak}/upstream/provenance.json`: per-file SHA-256 and upstream path for every vendored AWFY source, re-verified by `tests/test_awfy_compare.py`.

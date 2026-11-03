@@ -11,9 +11,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from bench_compare_oil import checked_driver, vm_path
 from bench_compare import execute
+from setup_benchmark_osvm import REVISION
 
 
 class OilBenchmarkTests(unittest.TestCase):
+    def test_setup_pins_full_upstream_revision(self):
+        self.assertRegex(REVISION, r'^[0-9a-f]{40}$')
+        self.assertIn(REVISION, (ROOT / 'docs/OPENSMALLTALK_OIL_COMPARISON.md').read_text())
+
     def test_wrapped_sources_keep_verification_and_never_save_image(self):
         for case in ('richards', 'deltablue', 'queens'):
             code = checked_driver(case, 5000, Path('/owned/result.txt'),

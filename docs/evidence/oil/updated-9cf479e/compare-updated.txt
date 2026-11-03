@@ -1,0 +1,8 @@
+Artifacts: /home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4
+richards   Cog           0.8335 ms/pass; total 4.715s
+richards   Oil           0.5044 ms/pass; total 3.143s
+deltablue  Cog           0.8198 ms/pass; total 4.644s
+deltablue  Oil           0.6056 ms/pass; total 3.690s
+queens     Cog           2.0878 ms/pass; total 10.834s
+queens     Oil           0.9415 ms/pass; total 5.125s
+Results: /home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/results.json

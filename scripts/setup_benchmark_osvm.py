@@ -14,7 +14,7 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION = '0310be549c0139d972c21a6e67e48803c3fa9843'
+REVISION = '9cf479ec02cee2bd86a1791573169b44bdd3633c'
 IMAGE_URL = 'https://files.squeak.org/6.1/Squeak6.1-23976-64bit/Squeak6.1-23976-64bit.zip'
 IMAGE_SHA256 = '0672833a22134810c69d7a595ad7d639ea76e49cb2ac72676a4ff7f928683410'
 FLAVORS = {'cog': 'sqcogspur64linuxht', 'oil': 'sqoilspur64linuxht'}
