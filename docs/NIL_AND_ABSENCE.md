@@ -37,7 +37,7 @@ in *Exhaustive audit of current nil usage*; the script is
    result is a bug rather than a value.
 4. **Keep both nil representations, scoped per engine**, with `isNilValue()` as the
    sole predicate. Implemented — see *Representation* below.
-5. **Fix `Root`** so `Root derive:` works. It currently exhausts memory.
+5. **Fix `Root`** so `Root derive:` works. **Done** — see *Fixed: Root derive:*
 6. **Close the absent-protocol gaps** rather than removing nil: `at:ifAbsent:`,
    `detect:ifNone:` exist already and should be preferred in new code.
 
@@ -615,6 +615,83 @@ is worth tightening first. The general fix is typed slots as `ref T` and,
 eventually, typed parameters. This proposal is a targeted reduction, not the
 whole answer — and it is a prerequisite for the typed-slot work, because it
 shrinks what that work has to reason about.
+
+## Fixed: Root derive:
+
+`Root derive: #()` exhausted memory. Root is deliberately the zero-protocol root
+("Root has zero methods - used as base for DNU wrappers/proxies",
+`initRootClass`), and it therefore inherited **no class-side methods** — the core
+class protocol (`derive:`, `new`, `derivePublic:`) is registered on Object's class
+side, not Root's.
+
+Dispatch then fell through to the class-receiver fallback that tries the
+*instance* side of `Class`/`Object` for selectors missing from a class object's own
+table. That fallback calls the method as `proc(self: Instance, args)`, but
+`classDeriveImpl` is `proc(self: Class, args)`. The receiver is an `Instance`
+wrapper whose `nimValue` is `cast[pointer](cls)`, so the pointer is reinterpreted
+as a `Class` — `nimValue` is read as `classMethods`, a `Table` — and the resulting
+memory walk runs until the process dies.
+
+Fix: after registering Object's class-side methods, Root inherits them
+(`initCoreClasses` in `src/harding/interpreter/objects.nim`, immediately after
+`registerPrimitivesOnObjectClass`). Root keeps its zero *instance* protocol, which
+is the property that matters for DNU wrappers, while gaining the class-side
+protocol needed to be a usable base.
+
+Verified: `Root derive: #()` and `Root derivePublic: #(v)` work, a Root subclass
+answers `Root`/`Object` protocol as expected, and `Root foo` still raises
+`MessageNotUnderstood` loudly. This unblocks the ProtoObject and sentinel-class
+directions noted below.
+
+The underlying unsoundness is **not** fixed: the class-receiver fallback still
+casts an `Instance` receiver to a `Class` parameter for any selector that a class
+object lacks. Root was the one class that could reach it. Making that fallback
+type-correct (or refusing it) is worth a separate look.
+
+## Fixed: the two access-lookup defects
+
+`Array at:` and `Table at:` now signal instead of answering nil, and a new
+`lib/core/NotFound.hrd` (`Error` subclass) covers keyed misses. Search-style
+lookups are unchanged: `indexOf:`, `detect:`, `findFirst:`, `findLast:` and
+`detect:ifNone:` still answer nil, because absence there is a normal result.
+
+Implemented alongside it, because the signalling was not catchable as intended:
+
+**`DivisionByZero` and `SubscriptOutOfBounds` derived from `Exception`, not
+`Error.`** Verified before the fix: `[ 1 // 0 ] on: Error do: [...]` did **not**
+catch a division by zero, while `on: Exception` and `on: DivisionByZero` did. Both
+are now `Error` subclasses, matching `MessageNotUnderstood`, `LoadError` and
+`UnhandledError`. The hierarchy is now uniform:
+
+```
+Exception := Object derive: #(message, stackTrace, signaler)
+├── Error
+│   ├── UnhandledError, LoadError, NotFound, SubscriptOutOfBounds,
+│   ├── DivisionByZero, MessageNotUnderstood, BlockCannotReturn
+└── Notification
+```
+
+This matters more than it looks: `X := Error` is the natural way to catch
+failures, and it silently missed two of the most common runtime errors.
+
+One caller relied on nil from `at:`: `Browser>>addMixin:` looked up a mixin with
+`Harding at:` and tested the result. It now uses `Harding at: aMixinName ifAbsent:
+[ nil ]`. Note `Library at:` is a separate primitive and still answers nil on a
+miss — unchanged here, and the remaining inconsistency if `at:` strictness is
+wanted everywhere.
+
+### Verification and a false alarm
+
+All focused suites pass (interpreter core 57, exception handling 46, stdlib basics
+42, stdlib collections 31, primitives 15, class model 23, slots 19, dynamic
+features 37, load/eval 11, nil conditionals 7) and Granite parity is **105/105**.
+
+The first parity run reported `benchmark_queens: timeout after 30s`. This was not
+a regression: `nimble harding` builds a **debug** binary and the harness runs it,
+while queens takes ~26s in debug even at the pre-change commit. In release the
+same case takes ~1.5s before and after the change (1.545s vs 1.577s). The parity
+harness is borderline on that case in debug and would be more robust run against a
+release binary.
 
 ## Still-open questions
 
