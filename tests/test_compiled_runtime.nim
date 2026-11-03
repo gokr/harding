@@ -464,6 +464,26 @@ suite "Compiled monomorphic send caches":
     check cachedSend(rt, receiver(), "answer", arguments()).intVal == 1
     check calls == 2
 
+  test "template caches survive loop expressions and repeated activations":
+    let rt = newRuntime()
+    let value = proxyReceiver("CacheTemplateLifetime")
+    registerCompiledMethod("CacheTemplateLifetime", "answer", defaultAllocation)
+    proc exercise(expected: int) =
+      for iteration in 0..<3:
+        check cachedSend(rt, value, "answer", @[]).intVal == expected
+        check cachedSendBound(value, value, "answer", @[]).intVal == expected
+        # Deliberately bypass version invalidation as a test seam: only a warm
+        # site can retain the old target. Production mutation must use register.
+        compiledMethodProcs["CacheTemplateLifetime>>answer"] = replacementAllocation
+        # Evict the shared resolution cache without changing the dispatch epoch.
+        # Otherwise it masks a broken site by returning the old target itself.
+        for name in 0..<8200:
+          discard hasCompiledMethodInHierarchy("CacheTemplateLifetime", "evict" & $name)
+    exercise(1)
+    exercise(1)
+    registerCompiledMethod("CacheTemplateLifetime", "answer", replacementAllocation)
+    exercise(2)
+
   test "reentrant calls may replace a cache without corrupting the outer target":
     let rt = newRuntime()
     let outer = proxyReceiver("CacheReentrantOuter")

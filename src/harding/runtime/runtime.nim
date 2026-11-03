@@ -2701,8 +2701,13 @@ template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
   ## Each expanded send site owns its cache; recursive calls may safely replace
   ## the entry because the selected target is copied before invocation.
   block:
-    var siteCache {.global, threadvar.}: CompiledSendCache
-    sendMessageCached(runtime, receiver, selector, args, siteCache)
+    # A threadvar declared inside an expression block is reset whenever that
+    # block executes (Nim 2.2 ARC/ORC). Own it in a proc scope instead: TLS still
+    # belongs to this expansion, but repeated sends retain the warmed entry.
+    proc siteCacheAddress(): ptr CompiledSendCache {.nimcall, inline.} =
+      var siteCache {.global, threadvar.}: CompiledSendCache
+      addr siteCache
+    sendMessageCached(runtime, receiver, selector, args, siteCacheAddress()[])
 
 proc sendMessageCachedBound*(ownerReceiver, receiver: NodeValue, selector: string,
                              args: seq[NodeValue],
@@ -2720,8 +2725,10 @@ template cachedSendBound*(ownerReceiver, receiver: NodeValue, selector: string,
                           args: seq[NodeValue]): NodeValue =
   ## Each expanded send site owns its cache.
   block:
-    var siteCache {.global, threadvar.}: CompiledSendCache
-    sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCache)
+    proc siteCacheAddress(): ptr CompiledSendCache {.nimcall, inline.} =
+      var siteCache {.global, threadvar.}: CompiledSendCache
+      addr siteCache
+    sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCacheAddress()[])
 
 proc frozenHostInterpreter*(host: SchedulerContext): Interpreter =
   ## Access the interpreter owned by this explicit host's main process.

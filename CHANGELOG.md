@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- Generated send-site caches now persist across loop expressions and repeated activations under Nim 2.2 ARC/ORC. Keeping the thread-local cache in a per-expansion accessor proc avoids expression-block resets; dispatch invalidation and host fallback are unchanged. Checked release trials show 1.09x Richards, 1.03x DeltaBlue and 1.18x Queens, without observed-type narrowing (`docs/GRANITE_CACHE_LIFETIME.md`).
+
 ### Added
 - Native Integer regions now include definitely initialized temporaries, comparisons, if/else and while loops, preserving native parameters and returns across self calls inside loops. Branch/zero-iteration analysis rejects unsafe unboxing; heap mutation and callbacks remain dynamic.
 - Prototype native Integer call regions keep parameters and results unboxed across pure arithmetic self-call chains. Exact receiver and transitive method-version guards preserve dynamic replacement, subclass and interpreted-host fallback; ARC/ORC regression tests exercise the boundary. Slots and recursion are not yet included; no workload speedup is claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).

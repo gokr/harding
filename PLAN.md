@@ -6,6 +6,13 @@ changelog entry, reference-manual review, and build/test validation. Update this
 checklist as work lands. Compiler fixes must conform to documented Harding
 semantics; any intended language change must be explicit and documented.
 
+## Dispatch reliability
+
+- [x] Diagnose expression-block send-cache resets and retain per-site TLS in an
+      accessor proc. ARC/ORC compiled-runtime tests pass; negative control fails
+      with the old template. Default-build paired timings improve Queens 1.18x
+      and Richards 1.09x (`docs/GRANITE_CACHE_LIFETIME.md`).
+
 ## Native call specialization
 
 - [x] Pure Integer expression/self-call regions with native parameters and returns;
