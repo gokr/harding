@@ -1763,14 +1763,20 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
        receiver.instVal.kind == ikObject and args[0].kind in {vkSymbol, vkString}:
       let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
       return getSlotValue(receiver, name)
+    # Access-style lookup: a miss signals rather than answering nil, matching the
+    # interpreter. Use at:ifAbsent: where a miss is expected.
     if args.len > 0:
       if receiver.kind == vkArray and args[0].kind == vkInt:
         let idx = args[0].intVal
         if idx >= 0 and idx < receiver.arrayVal.len:
           return receiver.arrayVal[idx]
+        return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+          "Array index out of bounds: " & $idx))
       elif receiver.kind == vkTable:
         if receiver.tableVal.hasKey(args[0]):
           return receiver.tableVal[args[0]]
+        return raiseCompiledError(compiledErrorValue("NotFound",
+          "Key not found: " & args[0].toString()))
     return NodeValue(kind: vkNil)
 
   of "at:put:":
@@ -2213,8 +2219,13 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         if storage.kind == ikArray and args[0].kind == vkInt:
           let index = args[0].intVal
           if index >= 0 and index < storage.elements.len: return storage.elements[index]
-        elif storage.kind == ikTable and storage.entries.hasKey(args[0]):
-          return storage.entries[args[0]]
+          return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+            "Array index out of bounds: " & $index))
+        elif storage.kind == ikTable:
+          if storage.entries.hasKey(args[0]):
+            return storage.entries[args[0]]
+          return raiseCompiledError(compiledErrorValue("NotFound",
+            "Key not found: " & args[0].toString()))
         return nilValue()
     of "includes:":
       if storage.kind == ikTable and storage.class.name == "Table" and args.len == 1:

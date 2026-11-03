@@ -178,7 +178,7 @@ Inspector>>renderSlotsOf: anObject atDepth: depth pathPrefix: prefix into: box [
     # Regular object - show named slots
     slotNames := anObject slotNames
     (slotNames size = 0) ifTrue: [
-        slotNames := (Harding at: (anObject className)) slotNames
+        slotNames := (Harding at: (anObject className) ifAbsent: [ nil ]) slotNames
     ]
 
     slotNames do: [:slotName |

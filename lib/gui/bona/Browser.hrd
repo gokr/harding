@@ -1182,7 +1182,7 @@ libName = "Harding" ifTrue: [
                         [ i2 < keysResult size ] whileTrue: [
                             | k |
                             k := keysResult at: i2
-                            ((Harding at: k) isClass) ifTrue: [
+                            ((Harding at: k ifAbsent: [ nil ]) isClass) ifTrue: [
                                 names add: k
                             ]
                             i2 := i2 + 1

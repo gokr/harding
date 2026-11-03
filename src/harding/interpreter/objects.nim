@@ -2221,11 +2221,20 @@ proc libraryNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return inst.toValue()
 
 proc libraryAtImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Library at: - delegate to bindings table
+  ## Library at: - delegate to bindings table. Access-style lookup: a missing
+  ## binding signals NotFound rather than answering nil, matching Table at:.
+  ## Use at:ifAbsent: where a miss is expected.
+  if args.len < 1:
+    raise newException(HardingSignalError, "Library at: requires a key")
   let bindings = getLibraryBindings(self)
-  if bindings != nil and args.len > 0:
-    return getTableValue(bindings, args[0])
-  return nilValue()
+  if bindings != nil and bindings.kind == ikTable and args[0] in bindings.entries:
+    return bindings.entries[args[0]]
+  # Instance-shaped natives have no interpreter parameter, so the VM converts
+  # this into the named Harding signal.
+  var failure = newException(HardingSignalError,
+    "Binding not found: " & args[0].toString())
+  failure.className = "NotFound"
+  raise failure
 
 proc libraryAtPutImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   ## Library at:put: - delegate to bindings table

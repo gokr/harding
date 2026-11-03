@@ -35,7 +35,7 @@ Catalog>>classNamesForLibrary: aLibraryName [
             | lib |
             lib := Library named: libraryName
             (lib isNil or: [(lib isKindOf: Library) not]) ifTrue: [
-                lib := Harding at: libraryName
+                lib := Harding at: libraryName ifAbsent: [ nil ]
                 ((lib isKindOf: Library) not) ifTrue: [
                     lib := nil
                 ]
@@ -196,7 +196,7 @@ Catalog>>classForName: aClassName currentLibrary: aLibraryName [
 
     found isNil ifTrue: [
         (Harding includesKey: aClassName) ifTrue: [
-            found := Harding at: aClassName
+            found := Harding at: aClassName ifAbsent: [ nil ]
         ]
     ]
 
@@ -209,7 +209,7 @@ Catalog>>classForName: aClassName currentLibrary: aLibraryName [
                 | key |
                 key := hKeys at: i
                 ((key asString) = (aClassName asString) and: [found isNil]) ifTrue: [
-                    found := Harding at: key
+                    found := Harding at: key ifAbsent: [ nil ]
                 ]
                 i := i + 1
             ]
@@ -330,7 +330,7 @@ Catalog>>applicationSubclasses [
 
     Harding keys do: [:key |
         | obj supers className |
-        obj := Harding at: key
+        obj := Harding at: key ifAbsent: [ nil ]
         (obj notNil and: [ obj isClass ]) ifTrue: [
             className := [ obj name asString ] on: Exception do: [ obj className asString ]
             className = "Application" ifFalse: [

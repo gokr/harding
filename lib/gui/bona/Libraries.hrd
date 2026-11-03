@@ -42,7 +42,7 @@ Library class>>syncDynamicLibraries [
     # GUI classes (all Gtk* classes loaded by the GTK bridge)
     Harding keys do: [:key |
         (key startsWith: "Gtk") ifTrue: [
-            obj := Harding at: key
+            obj := Harding at: key ifAbsent: [ nil ]
             (obj notNil and: [ obj isClass ]) ifTrue: [
                 GUILib at: key put: obj
             ]
@@ -56,7 +56,7 @@ Library class>>syncDynamicLibraries [
     [ index < bonaNames size ] whileTrue: [
         name := bonaNames at: index
         (Harding includesKey: name) ifTrue: [
-            obj := Harding at: name
+            obj := Harding at: name ifAbsent: [ nil ]
             (obj notNil and: [ obj isClass ]) ifTrue: [
                 BonaLib at: name put: obj
             ]

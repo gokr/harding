@@ -6174,6 +6174,9 @@ proc globalTableAtImpl(interp: var Interpreter, self: Instance, args: seq[NodeVa
               ""
   if key.len > 0 and key in interp.globals[]:
     return interp.globals[][key]
+  # Access-style lookup: a missing global signals NotFound, matching Table and
+  # Library at:. Use at:ifAbsent: (inherited from Table) where a miss is expected.
+  signalExceptionByName(interp, "NotFound", "Global not found: " & key)
   return nilValue()
 
 proc globalTableAtPutImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
@@ -9292,6 +9295,12 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
         releaseFrame(frame)
       frame.skipRelease = false
       signalExceptionByName(interp, "Error", failure.msg)
+      continue
+    except HardingSignalError as failure:
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      signalExceptionByName(interp, failure.className, failure.msg)
       continue
     except NotificationActionRejected as rejection:
       # An unsupported notification action is a normal Harding Error.

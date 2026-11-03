@@ -94,6 +94,12 @@ type
 
   SlotTypeError* = object of CatchableError
 
+  HardingSignalError* = object of CatchableError
+    ## Raised by an Instance-shaped native implementation that has no interpreter
+    ## parameter but must signal a Harding exception. The VM converts it to a
+    ## signal of `className` carrying the exception message.
+    className*: string
+
   Class* {.acyclic.} = ref object of RootObj
     ## Class object - defines structure and behavior for instances
     # Instance methods (methods that instances of this class will have)
