@@ -2,9 +2,10 @@
 #
 # DivisionByZero.hrd - DivisionByZero class.
 
-DivisionByZero := Error derive
+DivisionByZero := ArithmeticError derive
 # DivisionByZero models arithmetic division failures detected by the interpreter or compiler.
-# It specializes Error so numeric code can catch this case without handling every failure.
+# It specializes ArithmeticError so numeric code can catch this case, or all arithmetic
+# failures together, without handling every Error.
 # Integer and Float arithmetic paths raise this class when a zero divisor is encountered.
 # Keep number-specific recovery or formatting behavior here instead of on Error itself.
 # This class gives math-heavy code a precise signal for invalid division operations.

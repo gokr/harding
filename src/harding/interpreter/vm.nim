@@ -9275,6 +9275,14 @@ proc runASTInterpreter*(interp: var Interpreter): VMResult =
       signalExceptionByName(interp, "DivisionByZero", e.msg)
       # Continue processing - signalExceptionByName schedules the handler
       continue
+    except OverflowDefect as e:
+      if not frame.skipRelease:
+        releaseFrame(frame)
+      frame.skipRelease = false
+      # Fixed-width integers cannot represent the result; signal rather than
+      # letting this surface as an uncatchable VM error string.
+      signalExceptionByName(interp, "Overflow", e.msg)
+      continue
     except SlotTypeError as failure:
       if not frame.skipRelease:
         releaseFrame(frame)

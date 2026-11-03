@@ -1,0 +1,11 @@
+#!/usr/bin/env harding
+#
+# ArithmeticError.hrd - ArithmeticError class.
+
+ArithmeticError := Error derive
+# ArithmeticError groups failures from arithmetic that cannot produce a result
+# for the given operands.
+# It sits under Error so any arithmetic failure can be caught with one selector.
+# DivisionByZero and Overflow are its concrete subclasses.
+# Mirroring Nim's ArithmeticDefect keeps the catch structure predictable for
+# readers coming from the native side.

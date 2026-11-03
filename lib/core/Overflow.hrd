@@ -1,0 +1,11 @@
+#!/usr/bin/env harding
+#
+# Overflow.hrd - Overflow class.
+
+Overflow := ArithmeticError derive
+# Overflow reports integer arithmetic that leaves the 64-bit range.
+# Harding integers are fixed width, so a result that would exceed them cannot be
+# represented; the operation signals this class instead of wrapping silently.
+# It sits under ArithmeticError beside DivisionByZero.
+# Before this class existed the condition surfaced as an uncatchable VM error
+# string, so on: Error do: could not intercept it.
