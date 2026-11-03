@@ -151,6 +151,45 @@ doAssert apply(calc, toValue(7)).intVal == 24
                                   '-o:' + str(binary), str(host)])
                     self.checked([str(binary)])
 
+    def test_native_overflow_matches_interpreter_diagnostic(self):
+        """A native int overflow must not leak a Nim traceback.
+
+        Both compiled entry points raise the same Defect; what differs from the
+        interpreter is only how the top level reports it. Pin both to the
+        interpreter's "VM error:" diagnostic and a failing status.
+        """
+        base = ROOT / 'build/native-overflow-tests'
+        base.mkdir(parents=True, exist_ok=True)
+        source_text = '''Edge := Object derive: #(sink).
+Edge>>nativeSum: n [ ^n + 1 ].
+Edge>>boxedSum: n [ sink := n. ^sink + 1 ].
+'''
+        cases = [('nativeSum', str(2**63 - 2), 0, str(2**63 - 1) + '\n'),
+                 ('nativeSum', str(2**63 - 1), 1, None),
+                 ('boxedSum', str(2**63 - 1), 1, None)]
+        for selecter, argument, expected_rc, expected_out in cases:
+            with self.subTest(selector=selecter, argument=argument):
+                with tempfile.TemporaryDirectory(dir=base) as directory:
+                    work = Path(directory)
+                    source = work / 'overflow.hrd'
+                    source.write_text(source_text +
+                                      'Stdout writeline: (Edge new %s: %s).\n' % (selecter, argument))
+                    self.checked([str(ROOT / 'granite'), 'compile', str(source), '--dir:' + str(work)])
+                    generated = next(work.glob('*.nim'))
+                    binary = work / 'program'
+                    self.checked(['nim', 'c', '-d:release', '--mm:arc',
+                                  '--nimcache:' + str(work / 'cache'),
+                                  '-o:' + str(binary), str(generated)])
+                    run = subprocess.run([str(binary)], cwd=work, text=True, capture_output=True)
+                    self.assertEqual(run.returncode, expected_rc, run.stdout + run.stderr)
+                    if expected_out is not None:
+                        self.assertEqual(run.stdout, expected_out)
+                    else:
+                        self.assertEqual(run.stderr,
+                                         'Script error: Error: VM error: over- or underflow\n')
+                        self.assertNotIn('OverflowDefect', run.stderr)
+                        self.assertNotIn('fatal.nim', run.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

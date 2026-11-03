@@ -1540,6 +1540,13 @@ proc compiledSlotString*(value: NodeValue): string =
 proc compiledSlotSymbol*(value: NodeValue): string =
   checkedCompiledSlot(value, scSymbol).symVal
 
+proc reportUncaughtDefect*(message: string): int =
+  ## A Nim Defect (overflow, index error, ...) escaped native code that has no
+  ## Harding error to signal. The interpreter reports these as "VM error: <msg>";
+  ## match that diagnostic instead of leaking a Nim traceback and frame names.
+  stderr.write("Script error: Error: VM error: " & message & "\n")
+  return 1
+
 proc reportUncaughtError*(value: NodeValue): int =
   ## Default action and diagnostic for an error that reached the top of a
   ## compiled program: run `defaultAction`, report it, and answer a failing exit

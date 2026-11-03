@@ -818,6 +818,11 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("\n    return 0\n")
   output.add("  except CompiledHardingError as failure:\n")
   output.add("    return reportUncaughtError(failure.value)\n")
+  # A Nim Defect from native arithmetic (overflow, index error) has no Harding
+  # error value. Report it in the interpreter's diagnostic shape instead of
+  # leaking a Nim traceback; explicit Harding errors keep the path above.
+  output.add("  except Defect as failure:\n")
+  output.add("    return reportUncaughtDefect(failure.msg)\n")
 
   return output
 
