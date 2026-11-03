@@ -1,0 +1,17 @@
+      Info: using /home/gokr/.nimble/pkgs2/nim-2.2.12-1ce02ec327934128234547c648d5ee3612c21b50/bin/nim for compilation
+  Executing task testBenchmarkPorts in /home/gokr/git/harding.wt/fix-oil/harding.nimble
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 0.023s
+
+OK
+...ss.....
+----------------------------------------------------------------------
+Ran 10 tests in 10.658s
+
+OK (skipped=2)
+......
+----------------------------------------------------------------------
+Ran 6 tests in 27.223s
+
+OK
