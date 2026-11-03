@@ -637,6 +637,9 @@ proc nt_slashslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkInt and b.kind == vkInt:
     if b.intVal == 0:
       return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer division by zero"))
+    # low(int) div -1 traps at the hardware level (SIGFPE), so reject it first.
+    if b.intVal == -1 and a.intVal == low(int):
+      return overflowValue()
     return NodeValue(kind: vkInt, intVal: a.intVal div b.intVal)
 
   # Slow path: dynamic dispatch
@@ -652,6 +655,9 @@ proc nt_backslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkInt and b.kind == vkInt:
     if b.intVal == 0:
       return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer modulo by zero"))
+    # low(int) mod -1 traps at the hardware level (SIGFPE), so reject it first.
+    if b.intVal == -1 and a.intVal == low(int):
+      return overflowValue()
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch
@@ -667,6 +673,9 @@ proc nt_percent*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   if a.kind == vkInt and b.kind == vkInt:
     if b.intVal == 0:
       return raiseCompiledError(compiledErrorValue("DivisionByZero", "Integer modulo by zero"))
+    # low(int) mod -1 traps at the hardware level (SIGFPE), so reject it first.
+    if b.intVal == -1 and a.intVal == low(int):
+      return overflowValue()
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch

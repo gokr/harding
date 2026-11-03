@@ -992,6 +992,10 @@ proc intDivImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   if ok and self.kind == ikInt:
     if val == 0:
       raise newException(DivByZeroDefect, "Integer division by zero")
+    # low(int) div -1 traps at the hardware level (SIGFPE) on x86, which no Nim
+    # exception can intercept, so it must be rejected before the operation.
+    if val == -1 and self.intVal == low(int):
+      raise newException(OverflowDefect, "over- or underflow")
     return toValue(self.intVal div val)
 
 proc moduloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -1000,6 +1004,8 @@ proc moduloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   if ok and self.kind == ikInt:
     if val == 0:
       raise newException(DivByZeroDefect, "Integer modulo by zero")
+    if val == -1 and self.intVal == low(int):
+      raise newException(OverflowDefect, "over- or underflow")
     return toValue(self.intVal mod val)
 
 proc backslashModuloImpl*(self: Instance, args: seq[NodeValue]): NodeValue =

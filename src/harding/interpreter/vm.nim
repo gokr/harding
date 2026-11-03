@@ -3498,6 +3498,10 @@ proc initGlobals*(interp: var Interpreter) =
     if lhsOk and rhsOk:
       if rhsInt == 0:
         raise newException(DivByZeroDefect, "Integer modulo by zero")
+      # low(int) mod -1 traps at the hardware level (SIGFPE) on x86, which no
+      # Nim exception can intercept, so it must be rejected before the operation.
+      if rhsInt == -1 and lhsInt == low(int):
+        raise newException(OverflowDefect, "over- or underflow")
       return toValue(lhsInt mod rhsInt)
     return nilValue()
 
