@@ -285,11 +285,15 @@ Two of its suggestions do not depend on removing nil and are worth keeping:
    and lets native locals be plain Nim `var`. Recommended as a separate
    prototype (warning first, since it is a source-compatibility break).
 2. **Prefer explicit-fallback protocols** (`at:ifAbsent:`, `detect:ifNone:`) over
-   nil-returning forms in new library code. Note this is barely exercised today:
-   `ifNil:` appears 4 times and `ifNotNil:` 3 times across `lib/` and
-   `benchmark/`, and `detect:ifNone:`/`at:ifAbsent:` zero times — so there is
-   little legacy pressure either way, and no measurement yet showing these forms
-   matter for performance.
+   nil-returning forms in new library code. **Correction (measured later):** an
+   earlier revision of this note claimed these forms were barely exercised and
+   counted `at:ifAbsent:`/`detect:ifNone:` as zero. That was a counting error.
+   Current counts in `lib/`: `at:...ifAbsent:` **99** lines, `detect:...ifNone:`
+   **8**, `ifNil:` 4, `ifNotNil:` 3, against 422 `at:` and 14 `detect:` lines.
+   So the absent-protocols are already the established style for lookups, while
+   the plain nil-returning `at:`/`detect:` forms remain common enough to be the
+   main nil-return surface worth addressing. `Iterable>>detect: block ifNone:`
+   exists (`lib/core/Iterable.hrd:53`).
 
 ### Conclusion
 
