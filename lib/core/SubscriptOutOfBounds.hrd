@@ -2,7 +2,7 @@
 #
 # SubscriptOutOfBounds.hrd - SubscriptOutOfBounds class.
 
-SubscriptOutOfBounds := Exception derive
+SubscriptOutOfBounds := Error derive
 # SubscriptOutOfBounds reports invalid indexed access on arrays and related collections.
 # It is raised when code asks for an element outside the valid bounds of a sequence.
 # Collection primitives use this class to convert low-level bounds issues into Harding errors.
