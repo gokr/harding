@@ -93,3 +93,38 @@ that qualify (their hot methods touch slots, send to other receivers, or use
 division), so the boxes they pay are elsewhere. The next lever is not more
 region shapes but slot-backed regions, which is where those workloads spend
 their time.
+
+## Declared-Integer slot regions
+
+A region may now read and write the receiver's **declared Integer** slots
+directly (`self[].<field>`), so a counter-style loop becomes plain field
+arithmetic. Two properties keep this honest:
+
+- The entry guard includes the generated per-slot accessor check
+  (`<Class>_direct_<slot>_guard`), which tracks `compiledSlotAccessorVersion`
+  and compares the registered getter/setter. Redirecting an accessor therefore
+  *disables* the region and normal dispatch resumes; the region can never
+  bypass slot redirection. The check runs once per call, not per access.
+- Declared Integer storage is already a Nim `int` field, and every other
+  boundary (`setSlotValue`, generated setters, `::`, `at:put:`) still applies
+  the contract check. Inside the region the operands are int arithmetic or int
+  fields, so no value can violate the contract.
+
+Dynamic (undeclared) slots and non-Integer declared slots are untouched and stay
+boxed: the earlier dynamic-slot counter still emits zero regions.
+
+Measured against `bbd5e3f` (release ARC, CPU 2, exact stdout checked every run,
+`build/slotregion-b1qbi306/`):
+
+| Workload | Before | After | Marginal |
+|---|---:|---:|---:|
+| Declared Integer slot counter, 200k→4M | 80.6 ns/iter | 0.29 ns/iter | **278×** |
+
+Caveat: this is a microbenchmark. Its cost is near the loop's floor, so the
+ratio is far less informative than the absolute figure — the disassembly shows
+the loop survives as `add`/`jo`/`inc`/`cmp` per iteration (overflow still
+checked), but the absolute times are startup-dominated (1–2 ms total) and the
+least-squares slope is therefore noise-sensitive. Real workloads gain only in
+proportion to how much hot code is pure Integer arithmetic over declared slots;
+Richards/DeltaBlue/Queens still report no change because their hot methods send
+to *other* receivers, allocate, or divide.

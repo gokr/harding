@@ -527,7 +527,9 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         for index, md in methodDefs:
           if md.className != owner or md.isClassMethod or index in planned or
              selectorCounts.getOrDefault(md.selector) != 1: continue
-          let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries)
+          let ownerClass = if owner in classInfo: classInfo[owner] else: nil
+          let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries,
+                                     ownerClass)
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
           output.add(fmt("proc {target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
