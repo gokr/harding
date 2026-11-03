@@ -36,7 +36,17 @@ def main():
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
     if revision != REVISION:
         raise RuntimeError('Refusing to change existing checkout; expected ' + REVISION)
+    version_files = ('platforms/Cross/vm/sqSCCSVersion.h',
+                     'platforms/Cross/plugins/sqPluginsSCCSVersion.h')
+    for diff_args in (['diff'], ['diff', '--cached']):
+        subprocess.run(['git', *diff_args, '--exit-code', '--', *version_files],
+                       cwd=repo, check=True)
     subprocess.run(['./scripts/updateSCCSVersions'], cwd=repo, check=True)
+    # Force checkout through the revision smudge filter even on a fresh clone,
+    # where Git can otherwise reuse files checked out before filter setup.
+    for name in version_files:
+        (repo / name).unlink(missing_ok=True)
+    subprocess.run(['git', 'checkout', 'HEAD', '--', *version_files], cwd=repo, check=True)
     for flavor in (FLAVORS if args.flavor == 'both' else [args.flavor]):
         build = repo / 'building/linux64x64' / ('squeak.' + flavor + '.spur') / 'build'
         if (build / 'Makefile').exists():
