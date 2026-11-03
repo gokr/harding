@@ -809,6 +809,13 @@ proc initCoreClasses*(): Class =
   # These are the internal primitive selectors that can be called via standard lookup
   registerPrimitivesOnObjectClass(objectClass)
 
+  # Root is the zero-protocol root of the hierarchy, so it inherits no class-side
+  # methods. Without these, `Root derive: ...` and `Root new` fall through the
+  # class-receiver dispatch to the instance-side Class/Object fallback, which casts
+  # an Instance receiver to a Class parameter and corrupts memory.
+  for selector, classMethod in objectClass.allClassMethods:
+    addMethodToClass(rootClass, selector, classMethod, isClassMethod = true, deferRebuild = false)
+
   return objectClass
 
 # ============================================================================
