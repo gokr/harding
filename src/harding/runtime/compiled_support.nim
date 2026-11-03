@@ -326,6 +326,36 @@ proc nt_emptyTable*(): NodeValue =
 #################
 
 
+# Integer arithmetic is fixed width; a result outside the 64-bit range signals
+# Overflow rather than wrapping or escaping as an unhandled OverflowDefect.
+proc overflowValue(): NodeValue {.inline.} =
+  raiseCompiledError(compiledErrorValue("Overflow", "over- or underflow"))
+
+proc checkedIntAdd(a, b: int): NodeValue {.inline.} =
+  if b > 0 and a > high(int) - b or b < 0 and a < low(int) - b:
+    return overflowValue()
+  NodeValue(kind: vkInt, intVal: a + b)
+
+proc checkedIntSub(a, b: int): NodeValue {.inline.} =
+  if b < 0 and a > high(int) + b or b > 0 and a < low(int) + b:
+    return overflowValue()
+  NodeValue(kind: vkInt, intVal: a - b)
+
+proc checkedIntMul(a, b: int): NodeValue {.inline.} =
+  # Bounds are checked before multiplying, because an overflowing product would
+  # itself raise OverflowDefect inside this check.
+  if a > 0:
+    if b > 0:
+      if a > high(int) div b: return overflowValue()
+    elif b < 0:
+      if b < low(int) div a: return overflowValue()
+  elif a < 0:
+    if b > 0:
+      if a < low(int) div b: return overflowValue()
+    elif b < 0:
+      if a != 0 and b < high(int) div a: return overflowValue()
+  NodeValue(kind: vkInt, intVal: a * b)
+
 proc nt_plus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   ## Binary operator: +
   ## Provides fast-path type specialization with dynamic fallback
@@ -333,7 +363,7 @@ proc nt_plus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
-    return NodeValue(kind: vkInt, intVal: a.intVal + b.intVal)
+    return checkedIntAdd(a.intVal, b.intVal)
   # Fast path: both operands are floats
   if a.kind == vkFloat and b.kind == vkFloat:
     return NodeValue(kind: vkFloat, floatVal: a.floatVal + b.floatVal)
@@ -354,7 +384,7 @@ proc nt_minus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
-    return NodeValue(kind: vkInt, intVal: a.intVal - b.intVal)
+    return checkedIntSub(a.intVal, b.intVal)
   # Fast path: both operands are floats
   if a.kind == vkFloat and b.kind == vkFloat:
     return NodeValue(kind: vkFloat, floatVal: a.floatVal - b.floatVal)
@@ -375,7 +405,7 @@ proc nt_star*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Fast path: both operands are integers
   if a.kind == vkInt and b.kind == vkInt:
-    return NodeValue(kind: vkInt, intVal: a.intVal * b.intVal)
+    return checkedIntMul(a.intVal, b.intVal)
   # Fast path: both operands are floats
   if a.kind == vkFloat and b.kind == vkFloat:
     return NodeValue(kind: vkFloat, floatVal: a.floatVal * b.floatVal)

@@ -30,6 +30,7 @@ type
     blockRegistry*: BlockRegistry ## Registry for blocks to compile
     varTypes*: Table[string, VarTypeInfo]  ## Variable name -> type info
     compiledClasses*: seq[string] ## Names of classes being compiled (for native instantiation)
+    exceptionClassNames*: seq[string] ## Exception classes referenced by name, resolved to class values
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
     numericBindings*: NumericBindings ## Proven lexical native representations
@@ -46,6 +47,32 @@ proc genStatement*(ctx: GenContext, node: Node): string
 proc asBlockNode(node: Node): BlockNode
 proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blockInfo: BlockProcInfo]
 
+proc exceptionNamesUnder(classInfo: Table[string, ClassInfo]): seq[string] =
+  ## Names of every class in the parse tree that descends from Exception, plus the
+  ## exception roots themselves. Codegen must resolve these to class values rather
+  ## than to symbols, or an on:do: handler never matches the signalled instance.
+  ## Deriving the set from the hierarchy keeps new exception classes working
+  ## without editing a list here.
+  # Builtin exception classes the runtime knows even when the script does not
+  # define them (see compiledExceptionClassValue in runtime.nim). Keep this in
+  # step with that registration.
+  result = @["Exception", "Error", "Notification", "ArithmeticError",
+             "DivisionByZero", "Overflow", "NotFound", "SubscriptOutOfBounds",
+             "MessageNotUnderstood", "BlockCannotReturn", "UnhandledError",
+             "LoadError"]
+  for name, info in classInfo:
+    var current = info
+    var isException = false
+    var guard = 0
+    while current != nil and guard < 64:
+      if current.name in ["Exception"]:
+        isException = true
+        break
+      current = current.parent
+      inc guard
+    if isException and name notin result:
+      result.add(name)
+
 proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
                     classInfo: Table[string, ClassInfo] = initTable[string, ClassInfo](),
                     mixed: bool = false): GenContext =
@@ -61,6 +88,7 @@ proc newGenContext*(cls: ClassInfo = nil, compiledClasses: seq[string] = @[],
     varTypes: initTable[string, VarTypeInfo](),
     numericBindings: initTable[string, NumericRepresentation](),
     compiledClasses: compiledClasses,
+    exceptionClassNames: exceptionNamesUnder(classInfo),
     classInfo: classInfo,
     mixed: mixed
   )
@@ -348,7 +376,7 @@ proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
         return slotRead(ctx, name)
       return fmt("self.slots[{slotIdx}]")
 
-  if not ctx.mixed and name in ["Exception", "Error", "Notification", "DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds"]:
+  if not ctx.mixed and name in ctx.exceptionClassNames:
     return fmt("compiledExceptionClassValue(\"{name}\")")
 
   if name in ctx.compiledClasses and not ctx.mixed:

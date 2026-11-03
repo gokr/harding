@@ -1049,8 +1049,16 @@ proc ensureCompiledExceptionHierarchy*(): void =
   if "Exception" notin superclassLists: registerSuperclass("Exception", "")
   if "Exception" notin getSuperclasses("Error"): registerSuperclass("Error", "Exception")
   if "Exception" notin getSuperclasses("Notification"): registerSuperclass("Notification", "Exception")
-  for name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds",
-               "BlockCannotReturn"]:
+  if "Error" notin getSuperclasses("ArithmeticError"):
+    registerSuperclass("ArithmeticError", "Error")
+  # Arithmetic failures chain through ArithmeticError, so one parent keeps
+  # `on: ArithmeticError` reachable. Registering Error directly as well would
+  # make Error the primary parent and bypass ArithmeticError.
+  for name in ["DivisionByZero", "Overflow"]:
+    if "ArithmeticError" notin getSuperclasses(name):
+      registerSuperclass(name, "ArithmeticError")
+  for name in ["MessageNotUnderstood", "SubscriptOutOfBounds",
+               "BlockCannotReturn", "NotFound"]:
     if "Error" notin getSuperclasses(name): registerSuperclass(name, "Error")
 
 proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
@@ -1416,8 +1424,12 @@ proc compiledExceptionClassValue*(name: string): NodeValue =
     compiledClasses[name] = newClass(slotNames = @["message"], name = name)
   if name == "Error" or name == "Notification":
     registerSuperclass(name, "Exception")
-  elif name in ["DivisionByZero", "MessageNotUnderstood", "SubscriptOutOfBounds",
-                "BlockCannotReturn"]:
+  elif name == "ArithmeticError":
+    registerSuperclass(name, "Error")
+  elif name in ["DivisionByZero", "Overflow"]:
+    registerSuperclass(name, "ArithmeticError")
+  elif name in ["MessageNotUnderstood", "SubscriptOutOfBounds",
+                "BlockCannotReturn", "NotFound"]:
     registerSuperclass(name, "Error")
   return compiledClassValue(name)
 
