@@ -2,10 +2,10 @@
 
 ## Status
 
-Oil and stock Cog both build and boot headless on this host. **A valid long-run
-Oil benchmark comparison is blocked by workload failures.** Short smoke results
-must not be presented as a speedup: optimization thresholds and GC behavior in
-longer runs matter.
+Oil and stock Cog build and boot headless on this host. With the upstream
+2026-11-03 update, both pass all three checked workloads at 300, 1,000 and 5,000
+repetitions. The earlier wrong-receiver failures are retained below as historical
+evidence, not current failures. Image and benchmark adapters are unchanged.
 
 Oil is Clément Béra's lightweight optimizing extension of the 64-bit Spur Cogit,
 not a Maven project. The command is `mvm`, not `mvn`. Announcement:
@@ -26,13 +26,17 @@ The comparison copies the input image and never saves it. Error handling writes
 an `ERROR:` marker before quitting; process exit zero alone is not success.
 
 Pinned source: OpenSmalltalk/opensmalltalk-vm branch `Cog`, commit
-`0310be549c0139d972c21a6e67e48803c3fa9843`. Oil and stock Cog use generated
-`VMMaker.oscog-cb.3847` sources from that same tree:
+`9cf479ec02cee2bd86a1791573169b44bdd3633c` (2026-11-03). Oil uses generated
+`VMMaker.oscog-cb.3850` sources; stock Cog remains `VMMaker.oscog-cb.3847`
+from that same tree:
 
 - `building/linux64x64/squeak.oil.spur/build/mvm`
 - `building/linux64x64/squeak.cog.spur/build/mvm`
 
-The build runs `scripts/updateSCCSVersions` first. On this Ubuntu 24.04 host,
+The build runs `scripts/updateSCCSVersions` first and forces checkout of the
+version headers through its revision filter. An existing checkout at the old pin
+is deliberately refused: move `build/osvm/repo` aside before rerunning setup;
+do not overwrite an independently modified checkout. On this Ubuntu 24.04 host,
 clang 18 needs `CFLAGS='-Wno-int-conversion -Wno-implicit-function-declaration'`:
 the generated VM intentionally stores machine pointers into machine-word stack
 slots, while PseudoTTYPlugin lacks a modern `login_tty` declaration. These flags
@@ -69,9 +73,37 @@ with the existing mechanically adapted Cog benchmarks. It verifies Richards'
 92 solutions. Warm-up, work and zero-work process totals are retained. Startup
 subtraction on tiny batches can be very noisy.
 
-## Observed failures
+## Updated workload checks
 
-Same Squeak 6.1 image, no optional file-ins, clang-built VMs at the pinned source.
+At `9cf479e`, all 18 runs of the matrix below pass (both clang-built VMs,
+three workloads, three repetition counts). A separately built GCC 13 Oil VM
+also passes all three workloads at 5,000 repetitions. Clang Oil with both
+optional add-ons passes all three at 5,000 repetitions too. No VM sources,
+image contents or benchmark algorithms were patched to obtain these passes.
+
+Evidence: `docs/evidence/oil/updated-9cf479e/`, including setup output,
+`stress-results.json`, `extra-results.json` and test output. Disposable images,
+generated scripts and full process diagnostics remain under `build/osvm/`.
+
+Timing uses seven measured trials plus a discarded warm-up, 5,000 repetitions,
+fresh processes and measured zero-work subtraction. These are exploratory host
+wall times: other build/test activity overlapped parts of the run, and the host
+was not CPU-isolated. Treat ratios as indicative, not publication-quality scores;
+correctness checks are independent of that timing caveat. All warm-up and
+measured runs passed their answer checks; `comparison-results.json` retains the
+individual samples, commands, VM versions and hashes.
+
+| Workload | Cog ms/pass | Oil ms/pass | Cog/Oil |
+|---|---:|---:|---:|
+| Richards | 0.8335 | 0.5044 | 1.65x |
+| DeltaBlue | 0.8198 | 0.6056 | 1.35x |
+| Queens | 2.0878 | 0.9415 | 2.22x |
+
+## Historical failures (before the upstream update)
+
+These results used commit `0310be549c0139d972c21a6e67e48803c3fa9843`
+(`VMMaker.oscog-cb.3847`), not the current setup pin.
+Same Squeak 6.1 image, no optional file-ins, clang-built VMs at that source.
 Each row is a separate process; these are workload checks, not timed scores:
 
 | VM/workload | 300 passes | 1,000 passes | 5,000 passes |
@@ -91,13 +123,13 @@ under `build/osvm/stress-*`. The mixed pass/fail threshold is not a claim of a
 deterministic iteration at which Oil fails. Short smoke passes do not establish
 correctness under optimization or GC.
 
-The long timing run also rejects Richards before producing a score:
+The historical long timing run also rejected Richards before producing a score:
 `docs/evidence/oil/oil-compare-long.txt`, artifacts
 `docs/evidence/oil/compare-long/`. Its explicit failure is
 `MessageNotUnderstood: RichardsBits class>>adaptToNumber:andSend:`.
 The committed setup script was then exercised for both flavors
 (`docs/evidence/oil/setup-reproduced.txt`); the rebuilt Oil repeats the same
-failure in `docs/evidence/oil/compare-rebuilt/results.json` with
+failure at that pin in `docs/evidence/oil/compare-rebuilt/results.json` with
 `status: failed`.
 
 A separate GCC 13.3.0 Oil build, same source/image, was tested to distinguish a
@@ -135,24 +167,24 @@ python3 scripts/bench_compare_oil.py --repetitions 3000 --addons \
   build/osvm/image/fast-string.st build/osvm/image/closure-no-outer-context.st
 ```
 
-Both file-ins separately pass ten repetitions of each benchmark. Combined,
-Richards fails at 3,000 repetitions with the same wrong-receiver error, so the
-initial suspicion of an add-on-only issue was incorrect. Bare Oil also fails.
-No comparative score is claimed for the add-ons.
+At the old `0310be5` pin both file-ins separately passed ten repetitions of
+each benchmark, but combined Richards failed at 3,000 repetitions with the same
+wrong-receiver error as bare Oil. Those observations predate the upstream fix.
+No comparative timing score is claimed for the add-ons.
 
-## Tests and next action
+## Tooling tests and scope
 
-Four focused tests check wrapped verification, quoting/explicit file-ins,
-rejection of error output with zero exit status, and executed Cog/Oil smoke plus
-forced-error reporting. Smoke tests skip if optional VMs are absent; set
-`REQUIRE_OSVM=1` to require local builds. They are not a VM correctness suite.
-`REQUIRE_OSVM=1 nimble testBenchmarkPorts` passes all 21 tests (7 existing
-comparison-source, 10 practical-port, 4 Oil-runner tests), including local
-Cog/Oil executions after the reproduced build. This is focused tooling validation,
-not a full language-suite pass. The Harding runtime/compiler is unchanged.
+Five focused Oil tests check the documented revision pin, wrapped verification,
+quoting/explicit file-ins, rejection of error output with zero exit status, and
+executed Cog/Oil smoke plus forced-error reporting. Smoke tests skip if optional
+VMs are absent; set `REQUIRE_OSVM=1` to require local builds. They are not a VM
+correctness suite. On this worktree `REQUIRE_OSVM=1 nimble testBenchmarkPorts`
+ran 22 tests: 20 passed, two GNU Smalltalk tests skipped because its optional
+local build was absent. This includes the executed Cog/Oil tests and ARC/ORC
+native references. This is focused tooling validation, not a full language-suite
+pass. The Harding runtime/compiler is unchanged.
 
-Before publishing Oil performance: obtain an upstream fix or isolate the
-wrong-receiver failures with a confirmed optimization-disabled control; then run
-long checked batches on both VMs and the same image. Do not promote short smoke
-timings or ignore the failing repetitions. For now retain Cog, CPython, GNU
-Smalltalk and native Nim as the validated references.
+The upstream `9cf479e` update clears the historical failure matrix on the
+unchanged image and adapters. This establishes these workloads at the tested
+batch sizes, not general VM correctness. AWFY Bounce/Json/Havlak are not covered
+by the Cog/Oil adapter; no Oil score is claimed for them.

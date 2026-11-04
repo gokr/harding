@@ -14,7 +14,7 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION = '0310be549c0139d972c21a6e67e48803c3fa9843'
+REVISION = '9cf479ec02cee2bd86a1791573169b44bdd3633c'
 IMAGE_URL = 'https://files.squeak.org/6.1/Squeak6.1-23976-64bit/Squeak6.1-23976-64bit.zip'
 IMAGE_SHA256 = '0672833a22134810c69d7a595ad7d639ea76e49cb2ac72676a4ff7f928683410'
 FLAVORS = {'cog': 'sqcogspur64linuxht', 'oil': 'sqoilspur64linuxht'}
@@ -36,7 +36,17 @@ def main():
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
     if revision != REVISION:
         raise RuntimeError('Refusing to change existing checkout; expected ' + REVISION)
+    version_files = ('platforms/Cross/vm/sqSCCSVersion.h',
+                     'platforms/Cross/plugins/sqPluginsSCCSVersion.h')
+    for diff_args in (['diff'], ['diff', '--cached']):
+        subprocess.run(['git', *diff_args, '--exit-code', '--', *version_files],
+                       cwd=repo, check=True)
     subprocess.run(['./scripts/updateSCCSVersions'], cwd=repo, check=True)
+    # Force checkout through the revision smudge filter even on a fresh clone,
+    # where Git can otherwise reuse files checked out before filter setup.
+    for name in version_files:
+        (repo / name).unlink(missing_ok=True)
+    subprocess.run(['git', 'checkout', 'HEAD', '--', *version_files], cwd=repo, check=True)
     for flavor in (FLAVORS if args.flavor == 'both' else [args.flavor]):
         build = repo / 'building/linux64x64' / ('squeak.' + flavor + '.spur') / 'build'
         if (build / 'Makefile').exists():

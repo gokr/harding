@@ -1,0 +1,416 @@
+{
+  "metadata": {
+    "revision": "9f0242a55aa1833aedb7987a7fdd719abce3ad27",
+    "versions": {
+      "Cog": {
+        "path": "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+        "sha256": "d8364cc7dde86e61f75a0a88d51a9c09487392db9d570e508fef23c7aa704cdc",
+        "version": "[Production x86_64 64-bit Spur Cog VM]\n7.0-202611031356  Tue Nov  3 23:45:38 CET 2026 clang\nCoInterpreter VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  3 2026\nStackToRegisterMappingCogit VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  3 2026\nVM: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nDate: Tue Nov 3 14:56:51 2026 CommitHash: 9cf479e\nPlugins: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/ [default: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/]\n"
+      },
+      "Oil": {
+        "path": "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+        "sha256": "a4a5f5c0c3fca7eb887e245d46fd41b453257ee7c4399c762061af7a5affaad7",
+        "version": "[Production x86_64 64-bit Spur Oil VM]\n7.0-202611031356  Tue Nov  3 23:46:56 CET 2026 clang\nOilCoInterpreter * VMMaker.oscog-cb.3850 uuid: c0793afa-e978-42a5-b6e5-e4709e7d8dd7 Nov  3 2026\nProfilingCogit * VMMaker.oscog-cb.3850 uuid: c0793afa-e978-42a5-b6e5-e4709e7d8dd7 Nov  3 2026\nVM: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nDate: Tue Nov 3 14:56:51 2026 CommitHash: 9cf479e\nPlugins: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/ [default: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/]\n"
+      }
+    },
+    "inputHashes": {
+      "/home/gokr/git/harding.wt/fix-oil/build/osvm/image/Squeak6.1-23976-64bit.image": "6dd129721af23643c8a7f35550700fa628cff3cc62ec3ee107615d0fdf945fa8"
+    },
+    "trials": 7,
+    "repetitions": 5000,
+    "method": "fresh processes; discarded warm-up; alternating engines and work/baseline order; checked output; median paired difference",
+    "cpu": "Intel(R) Core(TM) Ultra 7 165U"
+  },
+  "status": "passed",
+  "results": [
+    {
+      "case": "richards",
+      "engine": "Cog",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/richards/Cog-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/richards/Cog-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 4406.93399,
+          "baselineMs": 488.427204,
+          "netMsPerPass": 0.7837013572000001
+        },
+        {
+          "workMs": 4454.259584,
+          "baselineMs": 500.03332,
+          "netMsPerPass": 0.7908452528000001
+        },
+        {
+          "workMs": 4612.364021,
+          "baselineMs": 509.848982,
+          "netMsPerPass": 0.8205030078
+        },
+        {
+          "workMs": 4714.738873,
+          "baselineMs": 547.378251,
+          "netMsPerPass": 0.8334721244000001
+        },
+        {
+          "workMs": 4849.820065,
+          "baselineMs": 543.212327,
+          "netMsPerPass": 0.8613215475999999
+        },
+        {
+          "workMs": 4760.282322,
+          "baselineMs": 516.259044,
+          "netMsPerPass": 0.8488046556
+        },
+        {
+          "workMs": 4942.694404,
+          "baselineMs": 506.445912,
+          "netMsPerPass": 0.8872496983999999
+        }
+      ],
+      "medianWorkMs": 4714.738873,
+      "medianBaselineMs": 509.848982,
+      "medianNetMsPerPass": 0.8334721244000001
+    },
+    {
+      "case": "richards",
+      "engine": "Oil",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/richards/Oil-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/richards/Oil-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 2900.941757,
+          "baselineMs": 576.022964,
+          "netMsPerPass": 0.46498375859999996
+        },
+        {
+          "workMs": 3055.796382,
+          "baselineMs": 596.143967,
+          "netMsPerPass": 0.49193048300000003
+        },
+        {
+          "workMs": 3143.156132,
+          "baselineMs": 621.278156,
+          "netMsPerPass": 0.5043755952000001
+        },
+        {
+          "workMs": 3018.521351,
+          "baselineMs": 665.035722,
+          "netMsPerPass": 0.47069712579999995
+        },
+        {
+          "workMs": 3232.394534,
+          "baselineMs": 710.617877,
+          "netMsPerPass": 0.5043553314
+        },
+        {
+          "workMs": 3651.935049,
+          "baselineMs": 696.664697,
+          "netMsPerPass": 0.5910540704
+        },
+        {
+          "workMs": 3262.244931,
+          "baselineMs": 675.878917,
+          "netMsPerPass": 0.5172732028
+        }
+      ],
+      "medianWorkMs": 3143.156132,
+      "medianBaselineMs": 665.035722,
+      "medianNetMsPerPass": 0.5043553314
+    },
+    {
+      "case": "deltablue",
+      "engine": "Cog",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/deltablue/Cog-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/deltablue/Cog-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 6083.996169,
+          "baselineMs": 680.810645,
+          "netMsPerPass": 1.0806371048
+        },
+        {
+          "workMs": 4643.831112,
+          "baselineMs": 511.798999,
+          "netMsPerPass": 0.8264064226000001
+        },
+        {
+          "workMs": 4111.705926,
+          "baselineMs": 491.538475,
+          "netMsPerPass": 0.7240334902
+        },
+        {
+          "workMs": 4762.748522,
+          "baselineMs": 663.77863,
+          "netMsPerPass": 0.8197939784
+        },
+        {
+          "workMs": 4878.03347,
+          "baselineMs": 589.351926,
+          "netMsPerPass": 0.8577363088
+        },
+        {
+          "workMs": 3830.269551,
+          "baselineMs": 458.659581,
+          "netMsPerPass": 0.674321994
+        },
+        {
+          "workMs": 3882.630842,
+          "baselineMs": 466.525493,
+          "netMsPerPass": 0.6832210698
+        }
+      ],
+      "medianWorkMs": 4643.831112,
+      "medianBaselineMs": 511.798999,
+      "medianNetMsPerPass": 0.8197939784
+    },
+    {
+      "case": "deltablue",
+      "engine": "Oil",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/deltablue/Oil-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/deltablue/Oil-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 4270.666283,
+          "baselineMs": 749.574628,
+          "netMsPerPass": 0.704218331
+        },
+        {
+          "workMs": 4252.889701,
+          "baselineMs": 751.118843,
+          "netMsPerPass": 0.7003541716
+        },
+        {
+          "workMs": 3690.063364,
+          "baselineMs": 661.90393,
+          "netMsPerPass": 0.6056318868
+        },
+        {
+          "workMs": 3775.253714,
+          "baselineMs": 645.990677,
+          "netMsPerPass": 0.6258526073999999
+        },
+        {
+          "workMs": 3507.682869,
+          "baselineMs": 712.274029,
+          "netMsPerPass": 0.559081768
+        },
+        {
+          "workMs": 3249.044778,
+          "baselineMs": 578.710567,
+          "netMsPerPass": 0.5340668422
+        },
+        {
+          "workMs": 2998.825119,
+          "baselineMs": 561.564007,
+          "netMsPerPass": 0.4874522224
+        }
+      ],
+      "medianWorkMs": 3690.063364,
+      "medianBaselineMs": 661.90393,
+      "medianNetMsPerPass": 0.6056318868
+    },
+    {
+      "case": "queens",
+      "engine": "Cog",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/queens/Cog-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/queens/Cog-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 11174.356165,
+          "baselineMs": 401.49925,
+          "netMsPerPass": 2.1545713829999995
+        },
+        {
+          "workMs": 10833.965706,
+          "baselineMs": 395.205626,
+          "netMsPerPass": 2.087752016
+        },
+        {
+          "workMs": 11578.040905,
+          "baselineMs": 389.78342,
+          "netMsPerPass": 2.237651497
+        },
+        {
+          "workMs": 12936.560193,
+          "baselineMs": 427.238204,
+          "netMsPerPass": 2.5018643978
+        },
+        {
+          "workMs": 10432.214553,
+          "baselineMs": 425.029178,
+          "netMsPerPass": 2.0014370749999997
+        },
+        {
+          "workMs": 9689.151069,
+          "baselineMs": 391.572299,
+          "netMsPerPass": 1.859515754
+        },
+        {
+          "workMs": 9444.543649,
+          "baselineMs": 365.443671,
+          "netMsPerPass": 1.8158199955999996
+        }
+      ],
+      "medianWorkMs": 10833.965706,
+      "medianBaselineMs": 395.205626,
+      "medianNetMsPerPass": 2.087752016
+    },
+    {
+      "case": "queens",
+      "engine": "Oil",
+      "reps": 5000,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/queens/Oil-0.st"
+        ],
+        "5000": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-m35s3wg4/queens/Oil-5000.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 5997.677992,
+          "baselineMs": 558.281979,
+          "netMsPerPass": 1.0878792026
+        },
+        {
+          "workMs": 5159.880885,
+          "baselineMs": 407.993549,
+          "netMsPerPass": 0.9503774671999999
+        },
+        {
+          "workMs": 5124.634827,
+          "baselineMs": 417.111517,
+          "netMsPerPass": 0.9415046619999999
+        },
+        {
+          "workMs": 5439.308834,
+          "baselineMs": 545.513858,
+          "netMsPerPass": 0.9787589952
+        },
+        {
+          "workMs": 4925.009974,
+          "baselineMs": 417.974935,
+          "netMsPerPass": 0.9014070077999999
+        },
+        {
+          "workMs": 5044.088531,
+          "baselineMs": 402.491227,
+          "netMsPerPass": 0.9283194608000002
+        },
+        {
+          "workMs": 4416.906365,
+          "baselineMs": 401.720891,
+          "netMsPerPass": 0.8030370948
+        }
+      ],
+      "medianWorkMs": 5124.634827,
+      "medianBaselineMs": 417.111517,
+      "medianNetMsPerPass": 0.9415046619999999
+    }
+  ],
+  "sourceHashes": {
+    "richards": {
+      "Oil-5000.st": "dad4e17e986406ce0b3e9db8ad5de7af6bf13049ef0f163ece875431d4d3cb94",
+      "Oil-0.st": "6f854462ae2bb254f352beb00931ca34c99e45cfbac7c14687edcd1126975691",
+      "Cog-5000.st": "dad4e17e986406ce0b3e9db8ad5de7af6bf13049ef0f163ece875431d4d3cb94",
+      "Cog-0.st": "6f854462ae2bb254f352beb00931ca34c99e45cfbac7c14687edcd1126975691",
+      "richards.hrd": "19cf984aa0564cb9f01d5e4185fcbdc0a1c7ac8b5dc601e490c4e142396a9b42"
+    },
+    "deltablue": {
+      "Oil-5000.st": "582484646abfb97286cf946fc2463edc6fd9031f040da730b82fd8b9ca14726b",
+      "Oil-0.st": "cdf998a883584e3d445254224e5cee3270f7d8153eae8fd07d77c1b62bbdd8bf",
+      "Cog-5000.st": "582484646abfb97286cf946fc2463edc6fd9031f040da730b82fd8b9ca14726b",
+      "deltablue.hrd": "e3142913a16d560f0e9dc963f42391b9b0c262ea72ed4d55430ad777edc2d150",
+      "Cog-0.st": "cdf998a883584e3d445254224e5cee3270f7d8153eae8fd07d77c1b62bbdd8bf"
+    },
+    "queens": {
+      "Oil-5000.st": "d88b406bc487652f6983173031b05b8d15a3d443dee485632574ae0c215b6504",
+      "Oil-0.st": "f03d237aded29c25508958f5376139ecb87faf9d19023e8c2080c0b93a0abe42",
+      "Cog-5000.st": "d88b406bc487652f6983173031b05b8d15a3d443dee485632574ae0c215b6504",
+      "Cog-0.st": "f03d237aded29c25508958f5376139ecb87faf9d19023e8c2080c0b93a0abe42",
+      "queens.hrd": "0c79115d4a882bf97476615a37e0a91626f3c897aea82e2fb70fd8a54140c2a4"
+    }
+  }
+}

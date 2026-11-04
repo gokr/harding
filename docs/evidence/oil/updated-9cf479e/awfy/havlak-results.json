@@ -1,0 +1,316 @@
+{
+  "metadata": {
+    "revision": "cb80c984892d6b5fe5c170519b43886d38ac398d",
+    "versions": {
+      "Cog": {
+        "path": "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+        "sha256": "d8364cc7dde86e61f75a0a88d51a9c09487392db9d570e508fef23c7aa704cdc",
+        "version": "[Production x86_64 64-bit Spur Cog VM]\n7.0-202611031356  Tue Nov  3 23:45:38 CET 2026 clang\nCoInterpreter VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  3 2026\nStackToRegisterMappingCogit VMMaker.oscog-cb.3847 uuid: 4a462fd0-e22a-411f-be1b-327540148791 Nov  3 2026\nVM: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nDate: Tue Nov 3 14:56:51 2026 CommitHash: 9cf479e\nPlugins: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/ [default: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/]\n"
+      },
+      "Oil": {
+        "path": "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+        "sha256": "a4a5f5c0c3fca7eb887e245d46fd41b453257ee7c4399c762061af7a5affaad7",
+        "version": "[Production x86_64 64-bit Spur Oil VM]\n7.0-202611031356  Tue Nov  3 23:46:56 CET 2026 clang\nOilCoInterpreter * VMMaker.oscog-cb.3850 uuid: c0793afa-e978-42a5-b6e5-e4709e7d8dd7 Nov  3 2026\nProfilingCogit * VMMaker.oscog-cb.3850 uuid: c0793afa-e978-42a5-b6e5-e4709e7d8dd7 Nov  3 2026\nVM: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nDate: Tue Nov 3 14:56:51 2026 CommitHash: 9cf479e\nPlugins: 202611031356 gokr@yoda:git/harding.wt/fix-oil/build/osvm/repo\nLinux yoda 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux\nplugin path: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/ [default: /home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/]\n"
+      }
+    },
+    "inputHashes": {
+      "/home/gokr/git/harding.wt/fix-oil/build/osvm/image/Squeak6.1-23976-64bit.image": "6dd129721af23643c8a7f35550700fa628cff3cc62ec3ee107615d0fdf945fa8"
+    },
+    "trials": 5,
+    "repetitions": {
+      "havlak": 3
+    },
+    "method": "fresh processes; discarded warm-up; alternating engines and work/baseline order; checked output; median paired difference",
+    "cpu": "Intel(R) Core(TM) Ultra 7 165U",
+    "awfy": {
+      "repository": "https://github.com/smarr/are-we-fast-yet",
+      "commit": "74306fec151070fd07157cefeacf19e7e0bcdc89",
+      "files": [
+        {
+          "path": "LICENSE.md",
+          "sha256": "d04bd9676d6569e74da03bf58582cbf46ac6fcb348757d92ee53b9e46b9bf992",
+          "upstreamPath": "LICENSE.md"
+        },
+        {
+          "path": "AUTORS.md",
+          "sha256": "42470e19ebb36817669cdd2ae2fb843858f889bfd186b30e2d0a44a7338c3aff",
+          "upstreamPath": "AUTORS.md"
+        },
+        {
+          "path": "SomLoader-Compiler.st",
+          "sha256": "462b7ab433eb1272d4f1a6958c10abf808f5caf938242c9c72a8bd78fae95e23",
+          "upstreamPath": "benchmarks/Smalltalk/SomLoader-Compiler.st"
+        },
+        {
+          "path": "Benchmark.som",
+          "sha256": "0c7759ab5cf99acbde77368d2537bc9be585fde8e601cb56c3b2de02999e6561",
+          "upstreamPath": "benchmarks/Smalltalk/Benchmark.som"
+        },
+        {
+          "path": "Bounce.som",
+          "sha256": "7439053176704759a08c95723c17d5c668708fc59ba5c1335a0c893a9cd2efb1",
+          "upstreamPath": "benchmarks/Smalltalk/Bounce.som"
+        },
+        {
+          "path": "Ball.som",
+          "sha256": "1828e34bc7db8103a33b4c19e00c0ce7f8ae503c29cff579c9c9ec8ab2535daa",
+          "upstreamPath": "benchmarks/Smalltalk/Ball.som"
+        },
+        {
+          "path": "SomRandom.som",
+          "sha256": "3e35122a426eb50d9ef047a30483869f008f04877eddf453d0e4e890b53a0cf9",
+          "upstreamPath": "benchmarks/Smalltalk/SomRandom.som"
+        },
+        {
+          "path": "DictEntry.som",
+          "sha256": "e14745b8e65cd98a26279f9997c8c62d4a94add8b8556e49b9a5338ef3bcf005",
+          "upstreamPath": "benchmarks/Smalltalk/Core/DictEntry.som"
+        },
+        {
+          "path": "DictIdEntry.som",
+          "sha256": "37c09901046e8a8c4fc8728c6df50bc99ad55235ef1526eeed0e59d08e63b923",
+          "upstreamPath": "benchmarks/Smalltalk/Core/DictIdEntry.som"
+        },
+        {
+          "path": "Pair.som",
+          "sha256": "372b752b99218980b7c24763de59af7a10f378eabb66be3ffdd4afe74c9b5c23",
+          "upstreamPath": "benchmarks/Smalltalk/Core/Pair.som"
+        },
+        {
+          "path": "SomDictionary.som",
+          "sha256": "e16e4606a9cb78174cff4ef2042582da96838e127ed86325f212cc98778f595f",
+          "upstreamPath": "benchmarks/Smalltalk/Core/SomDictionary.som"
+        },
+        {
+          "path": "SomIdentityDictionary.som",
+          "sha256": "cd7b58d94733f939d239e6a81e3e023bc80a15685a39273e0c334f2a6b8b0c1a",
+          "upstreamPath": "benchmarks/Smalltalk/Core/SomIdentityDictionary.som"
+        },
+        {
+          "path": "SomIdentitySet.som",
+          "sha256": "c0ec1617c1562700980022270094b754b9ae7b01c001a04b3d75a9f187c28234",
+          "upstreamPath": "benchmarks/Smalltalk/Core/SomIdentitySet.som"
+        },
+        {
+          "path": "SomSet.som",
+          "sha256": "3673bbea0a17badd0f59b374c6db101bd67c45693a6cb3325c8be526b835f1b1",
+          "upstreamPath": "benchmarks/Smalltalk/Core/SomSet.som"
+        },
+        {
+          "path": "Vector.som",
+          "sha256": "142ded765818b451bcf6141bbcaee67dfadaaafafc34d826ff610b4cf4a544ad",
+          "upstreamPath": "benchmarks/Smalltalk/Core/Vector.som"
+        },
+        {
+          "path": "HashIndexTable.som",
+          "sha256": "b7a1a6fad219417c40e6c3e62a43599361492a8407d8a638e5650120b7edc93e",
+          "upstreamPath": "benchmarks/Smalltalk/Json/HashIndexTable.som"
+        },
+        {
+          "path": "Json.som",
+          "sha256": "2ae221310253bb9a797d40d6f86705b035d103c38427249ccddf7cde8c408fe4",
+          "upstreamPath": "benchmarks/Smalltalk/Json/Json.som"
+        },
+        {
+          "path": "JsonArray.som",
+          "sha256": "38e5d5325ba9880ce8a9d8275102e7c87ff3e7bafb128b4541e8b93179a1bed0",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonArray.som"
+        },
+        {
+          "path": "JsonLiteral.som",
+          "sha256": "38d446526a1880078ab0e48cf3f8fe78b91e88d20b17e6a67bd36de5c38cb1cb",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonLiteral.som"
+        },
+        {
+          "path": "JsonNumber.som",
+          "sha256": "ac76ec6811bbdc6d400071ab6485ebc265e6878db478b67110d54b64f9d0e954",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonNumber.som"
+        },
+        {
+          "path": "JsonObject.som",
+          "sha256": "3a7f8cd823aeee9a24a467627bb2c80432fee2ea4cfe3d128e29478a83856160",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonObject.som"
+        },
+        {
+          "path": "JsonParser.som",
+          "sha256": "cadaa7d5081c3aafc4225312bc79b3ff368ff0fbb794ac88b89d51a883fff55e",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonParser.som"
+        },
+        {
+          "path": "JsonString.som",
+          "sha256": "ca53595fbb778c5d7e46e5c7f2f9fb8f323ba4f0dd6ccd5c4799474b5b621df7",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonString.som"
+        },
+        {
+          "path": "JsonValue.som",
+          "sha256": "685a6ca19d7191864f902f1c8c66253c0a73da7d6e7f677c0d3d45967bc8b579",
+          "upstreamPath": "benchmarks/Smalltalk/Json/JsonValue.som"
+        },
+        {
+          "path": "ParseException.som",
+          "sha256": "8ad507cd5c4a1b7ce8717608a4624b74f34b5e437df513a0227255837ccac64c",
+          "upstreamPath": "benchmarks/Smalltalk/Json/ParseException.som"
+        },
+        {
+          "path": "BasicBlock.som",
+          "sha256": "b94b41f76b9dd21fb4bbb6f2a971048e3ad33a32f9e5ca022d8eb1f8e1b199c6",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/BasicBlock.som"
+        },
+        {
+          "path": "BasicBlockEdge.som",
+          "sha256": "bf30a6284434bdd871340a273087dbc656439c7f2ca1a67e9bd70d311e60f7ec",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/BasicBlockEdge.som"
+        },
+        {
+          "path": "ControlFlowGraph.som",
+          "sha256": "cd133f9a652b6183c765b92234b4387499507097615f12b84875bf24aec00f24",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/ControlFlowGraph.som"
+        },
+        {
+          "path": "Havlak.som",
+          "sha256": "0a973f361d6f1bfb761feba7282f75215e46be53a2df40d2dc3b7188bccd42d0",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/Havlak.som"
+        },
+        {
+          "path": "HavlakLoopFinder.som",
+          "sha256": "3f1a79f3ea647fbd09c74fdea176b527e96829a92b27ba6487ce132a71e430a9",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/HavlakLoopFinder.som"
+        },
+        {
+          "path": "LoopStructureGraph.som",
+          "sha256": "e348d79ad849e36da20df4e06c493503a19e22726b6492fec562b050037d251e",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/LoopStructureGraph.som"
+        },
+        {
+          "path": "LoopTesterApp.som",
+          "sha256": "e763624afd50a8ac44358841ec89543f8a1039a466428cb97e320b724beedd29",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/LoopTesterApp.som"
+        },
+        {
+          "path": "SimpleLoop.som",
+          "sha256": "375bb6d2306555dbca3bd40e4b35495669a38956af2f0eb2afe40fdda355f871",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/SimpleLoop.som"
+        },
+        {
+          "path": "UnionFindNode.som",
+          "sha256": "96caf7580b9f7f04c051344521c59968018bdea1b617d681a467b4e8784161f8",
+          "upstreamPath": "benchmarks/Smalltalk/Havlak/UnionFindNode.som"
+        }
+      ]
+    },
+    "awfyJsonWorkload": "upstream fixture parse and verifier; excludes Harding JsonChecks"
+  },
+  "status": "passed",
+  "results": [
+    {
+      "case": "havlak",
+      "engine": "Cog",
+      "reps": 3,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/havlak/Cog-0.st"
+        ],
+        "3": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqcogspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/Cog/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/havlak/Cog-3.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 3580.856102,
+          "baselineMs": 1498.113944,
+          "netMsPerPass": 694.247386
+        },
+        {
+          "workMs": 3981.904428,
+          "baselineMs": 1410.195047,
+          "netMsPerPass": 857.2364603333332
+        },
+        {
+          "workMs": 3993.886326,
+          "baselineMs": 1429.729692,
+          "netMsPerPass": 854.718878
+        },
+        {
+          "workMs": 3296.238456,
+          "baselineMs": 1354.50933,
+          "netMsPerPass": 647.243042
+        },
+        {
+          "workMs": 3221.963337,
+          "baselineMs": 1339.199755,
+          "netMsPerPass": 627.5878606666666
+        }
+      ],
+      "medianWorkMs": 3580.856102,
+      "medianBaselineMs": 1410.195047,
+      "medianNetMsPerPass": 694.247386
+    },
+    {
+      "case": "havlak",
+      "engine": "Oil",
+      "reps": 3,
+      "commands": {
+        "0": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/havlak/Oil-0.st"
+        ],
+        "3": [
+          "/home/gokr/git/harding.wt/fix-oil/build/osvm/repo/products/sqoilspur64linuxht/lib/squeak/7.0-202611031356-64bit/squeak",
+          "-nodisplay",
+          "-nosound",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/Oil/bench.image",
+          "/home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/havlak/Oil-3.st"
+        ]
+      },
+      "samples": [
+        {
+          "workMs": 4065.6344,
+          "baselineMs": 1483.090802,
+          "netMsPerPass": 860.8478660000001
+        },
+        {
+          "workMs": 3947.107272,
+          "baselineMs": 1531.549286,
+          "netMsPerPass": 805.1859953333334
+        },
+        {
+          "workMs": 4104.528551,
+          "baselineMs": 1565.131183,
+          "netMsPerPass": 846.4657893333334
+        },
+        {
+          "workMs": 4003.5641,
+          "baselineMs": 1531.020456,
+          "netMsPerPass": 824.1812146666667
+        },
+        {
+          "workMs": 3678.11628,
+          "baselineMs": 1539.341598,
+          "netMsPerPass": 712.9248940000001
+        }
+      ],
+      "medianWorkMs": 4003.5641,
+      "medianBaselineMs": 1531.549286,
+      "medianNetMsPerPass": 824.1812146666667
+    }
+  ],
+  "sourceHashes": {
+    "havlak": {
+      "Oil-0.st": "27e2b57cb3f22c3df6281678b6b4a28b13020815a3662bfc60dc7969da916a61",
+      "Cog-3.st": "d4e2cff290ac3ff3fec83986b56b3c96f573715f35f6a3b0f37d92474f62aca9",
+      "Oil-3.st": "d4e2cff290ac3ff3fec83986b56b3c96f573715f35f6a3b0f37d92474f62aca9",
+      "Cog-0.st": "27e2b57cb3f22c3df6281678b6b4a28b13020815a3662bfc60dc7969da916a61"
+    }
+  }
+}

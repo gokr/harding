@@ -1,0 +1,4 @@
+Artifacts: /home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix
+havlak     Cog           694.2474 ms/pass; total 3.581s
+havlak     Oil           824.1812 ms/pass; total 4.004s
+Results: /home/gokr/git/harding.wt/fix-oil/build/bench-compare-oil/run-0vpty7ix/results.json

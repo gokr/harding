@@ -1,0 +1,18 @@
+pthread_setschedparam failed: Operation not permitted
+This VM uses a separate heartbeat thread to update its internal clock
+and handle events.  For best operation, this thread should run at a
+higher priority, however the VM was unable to change the priority.  The
+effect is that heavily loaded systems may experience some latency
+issues.  If this occurs, please create the appropriate configuration
+file in /etc/security/limits.d/ as shown below:
+
+cat <<END | sudo tee /etc/security/limits.d/squeak.conf
+*      hard    rtprio  2
+*      soft    rtprio  2
+END
+
+and report to the squeak mailing list whether this improves behaviour.
+
+You will need to log out and log back in for the limits to take effect.
+For more information please see
+https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/tag/r3732#linux

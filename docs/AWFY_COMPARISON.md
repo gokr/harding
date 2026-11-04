@@ -72,6 +72,42 @@ Repetition counts live in `scripts/awfy_engines.py` and differ per engine becaus
 constant factors differ by orders of magnitude; timing is always reported per
 pass, so the counts do not affect the unit.
 
+## Cog and Oil (Squeak) runs
+
+`scripts/bench_compare_oil.py` also times these three workloads on the pinned
+Cog and Oil VMs:
+
+```sh
+python3 scripts/bench_compare_oil.py bounce json havlak --trials 7
+```
+
+This is a separate adapter, because Cog cannot run the Harding ports: it loads
+AWFY upstream's own Smalltalk sources (`benchmark/awfy/smalltalk/upstream/`,
+same pinned revision, per-file SHA-256 in its `provenance.json`) through
+upstream's own SOM loader (`SomLoader-Compiler.st`). The only additions are
+image-compatibility selectors taken from upstream's `build-image-squeak.st`
+plus three replacements for Pharo-only APIs: `SomParser textStreamCls`
+(`ReadWriteStream`), a file-reading `sourceOfClassFile:`, and a
+`loadFiles:` that takes an explicit file list instead of walking with
+`FileReference`.
+
+Two consequences must be stated whenever these numbers are reported:
+
+- The workload is upstream's, not the Harding port's. Upstream Json verifies its
+own fixture (an object whose `operations` array has 156 entries); the port's
+`JsonChecks` parser assertions are not run on Cog.
+- GNU Smalltalk is not covered here either; the comparison is Cog vs Oil on the
+  same image, image adapters and repetition count.
+
+Repetition counts are per case (`bounce` 2000, `json` 200, `havlak` 1 — its
+checked full-size graph), because a single count would measure startup for one
+workload and skip too little work for another. Every timed run verifies its
+answer, and the zero-work baseline is the same program with a zero bound.
+
+`tests/test_oil_benchmarks.py` re-verifies the vendored digests, checks the
+driver contract, and (with local VMs) executes all three workloads at 0, 1 and 3
+repetitions on both VMs plus a deliberately failing verification.
+
 ## Reading the numbers
 
 Bounce is a deliberately small AWFY workload (100 balls, 50 updates). Its
