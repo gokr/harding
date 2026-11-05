@@ -79,3 +79,66 @@ suite "Shared GTK application backend":
     require error.len == 0
     check status.intVal == 1
     check gtkResourceCounts() == (0, 0, false)
+
+suite "Shared GTK application widgets":
+  test "new widget classes and callbacks are validated before the C ABI":
+    let listBox = interp.globals[]["GtkListBox"]
+    let textView = interp.globals[]["GtkTextView"]
+    let paned = interp.globals[]["GtkPaned"]
+    expect ValueError:
+      discard gtkCall(textView, "editable:", @[toValue(1)], noDispatch, initTable[string, Class]())
+    expect ValueError:
+      discard gtkCall(paned, "new", @[], noDispatch, initTable[string, Class]())
+    expect ValueError:
+      discard gtkCall(paned, "newOrientation:", @[toValue(5)], noDispatch, initTable[string, Class]())
+    let (rowBlock, blockError) = interp.doit("[:index | index]")
+    require blockError.len == 0
+    let (voidBlock, voidError) = interp.doit("[]")
+    require voidError.len == 0
+    expect ValueError:
+      discard gtkCall(listBox, "onRowSelected:", @[voidBlock], noDispatch, initTable[string, Class]())
+    expect ValueError:
+      discard gtkCall(interp.globals[]["GtkWindow"], "onCloseRequest:", @[rowBlock], noDispatch,
+                      initTable[string, Class]())
+    check gtkResourceCounts() == (0, 0, false)
+    check gtkLiveWidgets() == 0
+
+  test "the notebook widget protocol builds, updates and releases every session":
+    for iteration in 0..<3:
+      let (_, error) = interp.evalStatements("""
+        GtkApplication run: "org.hardinglang.GtkNotebookBackendTest" activate: [
+          | window paned list scroller entry body footer count save clicked closed |
+          clicked := 0. closed := 0.
+          window := GtkWindow title: "Backend notebook" width: 640 height: 480.
+          paned := GtkPaned newOrientation: 0.
+          list := GtkListBox singleSelection.
+          list onRowSelected: [:index | clicked := index + 1 ].
+          list append: (GtkLabel text: "first").
+          list append: (GtkLabel text: "second").
+          list removeAll.
+          list append: (GtkLabel text: "third").
+          list selectIndex: 0.
+          scroller := GtkScrolledWindow child: list.
+          entry := GtkEntry text: "title".
+          entry connect: "changed" do: [ clicked := clicked + 100 ].
+          body := GtkTextView editable: true.
+          body text: "hello". body text: (body text & " world").
+          paned setStartChild: scroller.
+          paned setEndChild: body.
+          window setChild: paned.
+          window onCloseRequest: [ closed := closed + 1. false ].
+          window close.
+          LastTitle := entry text.
+          LastBody := body text.
+          LastSelection := list selectedIndex.
+          LastClosed := closed.
+          VetoedTitle := entry text.
+          GtkApplication quit
+        ]
+      """)
+      require error.len == 0
+      check interp.globals[]["LastTitle"].strVal == "title"
+      check interp.globals[]["LastBody"].strVal == "hello world"
+      check interp.globals[]["LastSelection"].intVal == 0
+      check interp.globals[]["LastClosed"].intVal == 0
+      check gtkResourceCounts() == (0, 0, false)

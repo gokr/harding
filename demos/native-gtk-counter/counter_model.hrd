@@ -4,14 +4,13 @@ CounterView := Object derive: #()
 CounterModel := Object derive: #(count, view)
 
 CounterModel>>startOn: aView [
-    view := aView.
-    count := 0.
-    self refresh.
-    ^self
+    view := aView
+    count := 0
+    self refresh
 ]
 
 CounterModel>>refresh [
-    view text: ("Count: " & count printString)
+    view text: "Count: $count"
 ]
 
 CounterModel>>incrementAction [
