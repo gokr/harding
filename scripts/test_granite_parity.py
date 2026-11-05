@@ -7,6 +7,111 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("returned_cascade", r"""
+Box := Object derivePublic: #(first, second, count, label, size).
+Box>>setFirst: x [ first := x ]
+Box>>setSecond: x [ second := x ]
+Box>>bump [ count := (count ifNil: [ 0 ]) + 1 ]
+Box>>setLabel: x [ label := x ]
+Box>>setSize: x [ size := x ]
+Box class>>both [ ^self new setFirst: 1; setSecond: 2 ]
+Box class>>threeBumps [ ^self new bump; bump; bump ]
+Box class>>labelled [ ^self new setLabel: "hi"; setSize: 3 ]
+b := Box both.
+(b::first) println.
+(b::second) println.
+(b class name) println.
+c := Box threeBumps.
+(c::count) println.
+d := Box labelled.
+d::label println.
+(d::size) println.
+plain := Box new.
+plain setFirst: 7; setSecond: 8.
+(plain::first) println.
+(plain::second) println.
+""", '1\n2\nBox\n3\nhi\n3\n7\n8\n'),
+    ("dynamic_array_and_table_literals", r"""
+x := 3
+name := "bob"
+items := array{x, 1 + 2, name}
+items println.
+(items size) println.
+mixed := array{}
+(mixed size) println.
+pairs := table{"k" -> x, #sym -> name, "sum" -> (x + 4)}
+(pairs at: "k") println.
+(pairs at: #sym) println.
+(pairs at: "sum") println.
+staticArr := #(a, b)
+staticArr println.
+(x = 3) println.
+""", '#(3 3 bob)\n3\n0\n3\nbob\n7\n#(a b)\ntrue\n'),
+    ("superclass_names_are_strings", """
+Left := Object derive: #().
+Right := Object derive: #().
+Child := Left derive: #().
+Child addSuperclass: Right.
+got := Child superclassNames.
+("count " & got size printString) println.
+("first is " & (got first) & " and " & (got first class name)) println.
+("second is " & (got at: 1) & " and " & ((got at: 1) class name)) println.
+""", 'count 2\nfirst is Left and String\nsecond is Right and String\n'),
+    ("string_interpolation", r"""
+name := "bob"
+count := 7
+Point := Object derivePublic: #(x, y)
+p := Point new.
+p x: 3.
+p y: 4.
+"Hello $name, count=$count." println.
+"sum ${count + 1} done" println.
+"slot $p::x and $p::y" println.
+"escaped \$5 stays literal" println.
+"plain {braces} and a trailing $" println.
+"repeated $name and $name again" println.
+""", 'Hello bob, count=7.\nsum 8 done\nslot 3 and 4\nescaped $5 stays literal\nplain {braces} and a trailing $\nrepeated bob and bob again\n'),
+    ("string_print_vs_display", """
+text := "bob"
+text printString println.
+text displayString println.
+text asString println.
+number := 5.
+number printString println.
+number displayString println.
+items := Array new.
+items add: "x".
+items add: 1.
+items printString println.
+nested := Array new.
+nested add: items.
+nested printString println.
+entries := #{"k" -> "v"}.
+entries printString println.
+""", '"bob"\nbob\nbob\n5\n5\n#("x" 1)\n#(#("x" 1))\n#{"k" -> "v"}\n'),
+    ("block_conditional_answer", """
+Picker := Object derive: #().
+Picker>>choose: a other: b [ ^(a = b) ifTrue: [a] ifFalse: [b] ].
+(Picker new choose: 1 other: 2) println.
+(Picker new choose: 1 other: 1) println.
+cmp := [:a :b | (a = b) ifTrue: [a] ifFalse: [b] ].
+(cmp value: "left" value: "right") println.
+(cmp value: "same" value: "same") println.
+flag := true.
+blk := [:unused :ignored | flag ifTrue: [ "yes" ] ifFalse: [ "no" ] ].
+(blk value: 1 value: 2) println.
+""", "2\n1\nright\nsame\nyes\n"),
+    ("file_class_protocol", """
+path := "build/parity-file.txt".
+File write: "alpha" to: path.
+(File exists: path) println.
+File write: "beta" to: path.
+(File readAll: path) println.
+File append: "-tail" to: path.
+(File readAll: path) println.
+File delete: path.
+(File exists: path) println.
+""", "true\nbeta\nbeta-tail\nfalse\n"),
     ("base_object_allocation", """
 first := Object new.
 second := Object basicNew.
