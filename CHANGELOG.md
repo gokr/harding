@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- VS Code extension packaging now includes runtime dependencies, matches the declared grammar scope, and registers the debug adapter in the extension host.
+
 ### Changed
 - Cog/Oil benchmark setup now pins upstream `9cf479e` (`VMMaker.oscog-cb.3850` for Oil), which passes the previously failing Richards/DeltaBlue/Queens checks at 300, 1,000 and 5,000 repetitions on the unchanged Squeak image and adapters. Fresh-clone setup forces revision-header filtering; local header edits are refused rather than overwritten. See `docs/OPENSMALLTALK_OIL_COMPARISON.md` for checked results and retained historical failures.
 

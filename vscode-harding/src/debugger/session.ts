@@ -61,6 +61,8 @@ export class HardingDebugSession {
                 }
             });
 
+            this.process.on('error', reject);
+
             // Handle process output
             this.process.stdout?.on('data', (data: Buffer) => {
                 if (this.onOutput) {
