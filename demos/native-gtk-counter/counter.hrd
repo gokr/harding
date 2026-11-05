@@ -11,7 +11,7 @@ GtkApplication run: "org.hardinglang.NativeCounter" activate: [
     display := (GtkLabel title: "Count: 0") expand.
     increment := GtkButton primary: "Increment" action: [
         count := count + 1.
-        display text: ("Count: " & count printString)
+        display text: "Count: $count"
     ].
     reset := GtkButton label: "Reset" action: [
         count := 0.

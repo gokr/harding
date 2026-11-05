@@ -150,15 +150,22 @@ proc parseExpression*(parser: var Parser; parseMessages = true,
 proc parsePrimaryUnaryOnly(parser: var Parser): Node
 proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
+proc parseArrayLiteralFromParen(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
+proc parseTableLiteralBody(parser: var Parser): TableNode
 proc parsePrefixLiteral(parser: var Parser; prefix: string): Node
 proc parseStatement*(parser: var Parser; parseMessages = true): Node
 proc parsePrimitive(parser: var Parser): Node
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node
+proc cascadeFrom(parser: var Parser, expr: Node): Node
 proc parseMethodDefinition(parser: var Parser, receiver: Node): Node
 proc parseInlineJsonObject(parser: var Parser): Node
 proc parseJsonArray(parser: var Parser): Node
 proc parseSqlTemplateLiteral(parser: var Parser): Node
+proc parseDynamicArrayLiteral(parser: var Parser): Node
+proc parseDynamicTableLiteral(parser: var Parser): Node
+proc buildInterpolatedString(parser: var Parser, parts: seq[InterpolationPart]): Node
+proc parseExpression*(input: string): (Node, Parser)
 
 # Reserved pseudo-variables that cannot be used as slot names or regular identifiers
 const PseudoVariables* = ["self", "nil", "true", "false", "super"]
@@ -236,6 +243,8 @@ proc parsePrimary(parser: var Parser): Node =
 
   of tkString:
     discard parser.next()
+    if token.interpolated:
+      return parser.buildInterpolatedString(token.parts)
     return LiteralNode(value: NodeValue(kind: vkString, strVal: token.value))
 
   of tkSymbol:
@@ -587,6 +596,37 @@ proc parseBinaryOperators(parser: var Parser, left: Node,
   return expr
 
 # Parse expressions with precedence (no cascade detection)
+proc holeTail(expression: Node, tail: seq[string]): Node =
+  ## `$name::a::b` becomes the ordinary named-access chain on the value.
+  if tail.len == 0: return expression
+  var current = expression
+  for segment in tail:
+    current = NamedAccessNode(receiver: current, memberName: segment,
+                              isAssignment: false, valueExpr: nil).Node
+  current
+
+proc buildInterpolatedString(parser: var Parser, parts: seq[InterpolationPart]): Node =
+  ## Join the template's text/hole parts into one concatenation expression.
+  var tokens: seq[Node] = @[]
+  for index, part in parts:
+    if part.text.len > 0:
+      tokens.add(LiteralNode(value: NodeValue(kind: vkString, strVal: part.text)).Node)
+    if part.expr.len > 0:
+      let parsed = parseExpression(part.expr)
+      if parsed[1].hasError:
+        parser.parseError("Invalid interpolation expression: " & part.expr)
+        return nil
+      # Interpolation is for human-readable output, so it uses displayString:
+      # a string embeds as itself, not as its quoted printString literal form.
+      let shown = MessageNode(receiver: holeTail(parsed[0], part.tail),
+                              selector: "displayString", arguments: @[]).Node
+      tokens.add(shown)
+  if tokens.len == 0:
+    return LiteralNode(value: NodeValue(kind: vkString, strVal: ""))
+  result = tokens[0]
+  for index in 1..<tokens.len:
+    result = MessageNode(receiver: result, selector: "&", arguments: @[tokens[index]])
+
 proc parseExpression*(parser: var Parser; parseMessages = true,
                       binaryTokens: set[TokenKind] = BinaryOpTokens): Node =
   # Start with primary
@@ -672,6 +712,21 @@ proc parseExpression*(parser: var Parser; parseMessages = true,
     return accessedPrimary
 
 # Parse cascade messages
+proc cascadeFrom(parser: var Parser, expr: Node): Node =
+  ## Answer the cascade continued by a `;` after `expr`, or nil when there is
+  ## none. Shared by plain statements and return statements so `^obj msg; msg`
+  ## parses like the same cascade elsewhere.
+  if expr == nil or expr.kind != nkMessage:
+    return nil
+  let msg = expr.MessageNode
+  let msgWithNilReceiver = MessageNode(
+    receiver: nil,
+    selector: msg.selector,
+    arguments: msg.arguments,
+    isCascade: false
+  )
+  return parser.checkForCascade(msg.receiver, msgWithNilReceiver)
+
 proc checkForCascade(parser: var Parser, primary: Node, firstMsg: Node): Node =
   ## Check for cascade and collect all messages separated by ;
   var messages = @[firstMsg]
@@ -854,7 +909,11 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
   if not parser.expect(tkArrayStart):
     parser.parseError("Expected '#(' for array literal start")
     return nil
+  return parser.parseArrayLiteralFromParen()
 
+proc parseArrayLiteralFromParen(parser: var Parser): ArrayNode =
+  ## Body of a literal array whose opening has already been consumed. Used for
+  ## `#(...)` and for a nested `(...)` inside a literal, where `#` is optional.
   let array = ArrayNode()
   array.elements = @[]
 
@@ -871,9 +930,24 @@ proc parseArrayLiteral(parser: var Parser): ArrayNode =
       parser.parseError("Unclosed array literal - expected ')'")
       return nil
 
-    # Parse expression (element) - don't parse messages inside arrays
-    let element = parser.parseExpression(parseMessages = false,
-                                         binaryTokens = TableValueBinaryOpTokens)
+    # Parse expression (element) - don't parse messages inside arrays. A
+    # nested `(` or `{` inside a literal is a nested literal, so the `#` is
+    # optional there; `#(...)` stays valid because the lexer consumes `#(` as
+    # one token.
+    let element =
+      if parser.peek().kind == tkLParen:
+        discard parser.next()   # consume the nested opening paren
+        let nested = parser.parseArrayLiteralFromParen()
+        if nested == nil: return nil
+        nested.Node
+      elif parser.peek().kind == tkSpecial and parser.peek().value == "{":
+        discard parser.next()
+        let nested = parser.parseTableLiteralBody()
+        if nested == nil: return nil
+        nested.Node
+      else:
+        parser.parseExpression(parseMessages = false,
+                               binaryTokens = TableValueBinaryOpTokens)
     if element == nil:
       parser.parseError("Expected array element")
       return nil
@@ -897,7 +971,10 @@ proc parseTableLiteral(parser: var Parser): TableNode =
   if not parser.expect(tkTableStart):
     parser.parseError("Expected '#{' for table literal start")
     return nil
+  return parser.parseTableLiteralBody()
 
+proc parseTableLiteralBody(parser: var Parser): TableNode =
+  ## Body of a literal table whose opening has already been consumed.
   let table = TableNode()
   table.entries = @[]
 
@@ -1323,6 +1400,74 @@ proc parseJsonObjectLiteral(parser: var Parser): Node =
 
 # Parse prefix literal: Prefix{content}
 # For json{}, parses as dynamic key-value pairs with expression evaluation
+proc parseDynamicArrayLiteral(parser: var Parser): Node =
+  ## `array{a, 1 + 2}`: a `,`-separated expression list, evaluated in order.
+  ## An empty body is an empty array. The opening brace is already consumed.
+  var elements: seq[Node] = @[]
+  while true:
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      discard parser.next()
+      break
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed array{} - expected '}'")
+      return nil
+    let element = parser.parseExpression(parseMessages = true,
+                                         binaryTokens = TableValueBinaryOpTokens)
+    if element == nil:
+      parser.parseError("Expected expression inside array{}")
+      return nil
+    elements.add(element)
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      continue
+    if not parser.expect(tkComma):
+      parser.parseError("Expected ',' or '}' after array{} element")
+      return nil
+  ArrayNode(elements: elements, isConstant: false, isDynamic: true).Node
+
+proc parseDynamicTableLiteral(parser: var Parser): Node =
+  ## `table{k -> v, "key" -> expr}`: evaluated keys and values. An empty body is
+  ## an empty table. The opening brace is already consumed.
+  var entries: seq[tuple[key: Node, value: Node]] = @[]
+  while true:
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      discard parser.next()
+      break
+    if parser.peek().kind == tkEOF:
+      parser.parseError("Unclosed table{} - expected '}'")
+      return nil
+    let key = parser.parseExpression(parseMessages = true,
+                                      binaryTokens = TableValueBinaryOpTokens)
+    if key == nil:
+      parser.parseError("Expected key expression inside table{}")
+      return nil
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if not parser.expect(tkArrow):
+      parser.parseError("Expected '->' after table{} key")
+      return nil
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    let value = parser.parseExpression(parseMessages = true,
+                                        binaryTokens = TableValueBinaryOpTokens)
+    if value == nil:
+      parser.parseError("Expected value expression inside table{}")
+      return nil
+    entries.add((key, value))
+    while parser.peek().kind == tkSeparator:
+      discard parser.next()
+    if parser.peek().kind == tkSpecial and parser.peek().value == "}":
+      continue
+    if not parser.expect(tkComma):
+      parser.parseError("Expected ',' or '}' after table{} entry")
+      return nil
+  TableNode(entries: entries, isConstant: false, isDynamic: true).Node
+
 proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
   ## Parse prefix literal like json{...} or yaml{...}
   ## For json{}, generates code that builds JSON with evaluated expressions
@@ -1343,6 +1488,15 @@ proc parsePrefixLiteral(parser: var Parser; prefix: string): Node =
 
   if normalizedPrefix == "Sql":
     return parser.parseSqlTemplateLiteral()
+
+  # Dynamic counterparts of the `#(...)` / `#{...}` literals: every element and
+  # every key/value is an expression, parsed by the language, so a mistake is a
+  # parse error rather than a runtime one.
+  if normalizedPrefix == "Array":
+    return parser.parseDynamicArrayLiteral()
+
+  if normalizedPrefix == "Table":
+    return parser.parseDynamicTableLiteral()
   
   # For other prefixes, use original behavior (raw content extraction)
   var content = ""
@@ -1432,6 +1586,11 @@ proc parseStatement*(parser: var Parser; parseMessages = true): Node =
       let valueExpr = parser.parseExpression()
       let assignNode = AssignNode(variable: varName, expression: valueExpr, localIndex: -1)
       return ReturnNode(expression: assignNode)
+    # A cascade is part of the expression, so `^obj msg: 1; msg: 2` answers the
+    # cascade result just as the same cascade does in a plain statement.
+    let cascadedReturn = parser.cascadeFrom(expr)
+    if cascadedReturn != nil:
+      return ReturnNode(expression: cascadedReturn)
     return ReturnNode(expression: expr)
 
   # Parse expression
@@ -1440,19 +1599,9 @@ proc parseStatement*(parser: var Parser; parseMessages = true): Node =
     return nil
 
   # Check for cascade - extract receiver if it's a message
-  if expr of MessageNode:
-    let msg = expr.MessageNode
-    let cascadeReceiver = msg.receiver
-    # Create a new message with nil receiver for cascade detection
-    let msgWithNilReceiver = MessageNode(
-      receiver: nil,
-      selector: msg.selector,
-      arguments: msg.arguments,
-      isCascade: false
-    )
-    let cascaded = parser.checkForCascade(cascadeReceiver, msgWithNilReceiver)
-    if cascaded != nil:
-      return cascaded
+  let cascaded = parser.cascadeFrom(expr)
+  if cascaded != nil:
+    return cascaded
 
   # Check for method definition syntax: Receiver>>selector [ body ]
   if parser.peek().kind == tkMethodDef:

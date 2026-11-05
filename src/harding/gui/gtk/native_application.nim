@@ -18,7 +18,7 @@ proc registerNativeGtk*() =
     registerCompiledClass(name, proc(self: NodeValue, args: seq[NodeValue]): NodeValue = nilValue())
     gtkTypes[name] = compiledClassValue(name).classVal
   registerSuperclass("GtkWidget", "Object")
-  for name in ["GtkWindow", "GtkBox", "GtkLabel", "GtkButton"]:
+  for name in ["GtkWindow", "GtkBox", "GtkLabel", "GtkButton", "GtkToggleButton"]:
     registerSuperclass(name, "GtkWidget")
   for (owner, selector) in gtkInstanceProtocol:
     registerCompiledMethod(owner, selector, implementation(selector))

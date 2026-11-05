@@ -2107,9 +2107,10 @@ proc arraySizeImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return toValue(0)
 
 proc arrayAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Add element to array
+  ## Add element to array and answer it, as classic Smalltalk's add: does.
   if self.kind == ikArray and args.len > 0:
     self.elements.add(args[0])
+    return args[0]
   return self.toValue()
 
 proc arrayRemoveAllImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
@@ -2357,17 +2358,21 @@ proc primitiveSetNewImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
   return inst.toValue()
 
 proc primitiveSetAddImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Add element to set
+  ## Add element to set and answer it, as classic Smalltalk's add: does.
   let elements = getSetElements(self)
   if elements != nil and args.len > 0:
     elements.entries[args[0]] = toValue(true)
+    return args[0]
   return self.toValue()
 
 proc primitiveSetRemoveImpl*(self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Remove element from set
+  ## Remove element from set and answer it, as classic Smalltalk's remove: does.
   let elements = getSetElements(self)
   if elements != nil and args.len > 0:
+    let present = elements.entries.hasKey(args[0])
     elements.entries.del(args[0])
+    if present:
+      return args[0]
   return self.toValue()
 
 proc primitiveSetIncludesImpl*(self: Instance, args: seq[NodeValue]): NodeValue =

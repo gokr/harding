@@ -1,408 +1,147 @@
-# GTK Bridge and GUI Development
+# GTK support in Harding
 
-## Overview
+This is the entry point for GTK documentation. Harding has two GTK4 bridges;
+they share class names but are not interchangeable or safe to load together.
 
-The GTK bridge provides a way to create and manipulate GTK widgets from Harding code. It enables building GUI applications and development tools (like an IDE) directly in Harding.
+## Choose a path
 
-### Key Design Principles
+| Goal | API and host | Guide |
+|---|---|---|
+| Write a standalone application entirely in Harding; interpret or compile the same source | `lib/gui/Gtk.hrd`, `harding_gtk`, `granite build --gtk` | [GTK applications](GTK_APPLICATIONS.md) |
+| Develop Bona tools in its live interpreter | `lib/gui/gtk4/`, `initGtkBridge`, Bona host | [Bona bridge](#bona-bridge) below |
+| Review current coverage and the Notebook implementation plan | Both bridges, with explicit gaps | [Coverage and Notebook plan](GTK_SUPPORT.md) |
+| Install editor syntax highlighting | GtkSourceView language definition | [GtkSourceView](GTKSOURCEVIEW.md) |
+| Review Bona defects and acceptance evidence | IDE workflows and runtime integration | [Bona assessment](BONA_ASSESSMENT.md) |
 
-1. **Malleability** - GUI tools are written in Harding and can be modified at runtime
-2. **Thin Bridge** - Only a thin Nim wrapper exposes GTK to Harding
-3. **Signal Integration** - GTK signals connect to Harding blocks
-4. **Safety** - Error handling prevents GTK crashes from Harding exceptions
+The native wrapper is handwritten Nim over GTK's C ABI, not a complete generated
+GObject-introspection binding. Having a raw declaration in `ffi.nim` does not
+make that feature callable from Harding. A public feature needs registration,
+argument conversion, a matching callback ABI where applicable, ownership rules,
+and tests.
 
-### Architecture
+## Standalone applications
 
-```
-+--------------------------------------------------------+
-|                   Harding Layer                            |
-|           (All written in .harding files)                  |
-|  +------------+  +------------+  +-------------------+ |
-|  |  Widgets   |  |   IDE      |  |   Application     | |
-|  | (GTK4/...) |  |  Tools     |  |     Logic         | |
-|  +------------+  +------------+  +-------------------+ |
-+-----------------------|--------------------------------+
-                        | GTK Bridge Calls (Nim)
-+-----------------------v--------------------------------+
-|                GTK4 Bridge Layer (Nim)                   |
-|   - Widget wrappers                                    |
-|   - Signal handling                                    |
-|   - Creation factories                                 |
-+-----------------------|--------------------------------+
-                        |
-+-----------------------v--------------------------------+
-|                      GTK4 Library                        |
-+--------------------------------------------------------+
-```
+Start with [GTK applications](GTK_APPLICATIONS.md), including the runnable
+counter. Application layout, state and handlers can all be `.hrd`; reusable
+platform bindings remain Nim. Both interpreted and Granite adapters use
+`src/harding/gui/gtk/application_backend.nim` and the same Harding convenience
+methods. Applications need no app-specific Nim shell.
 
-## Bridge Architecture
+The initial protocol covers activation, windows, boxes, labels and buttons.
+It is not yet a general desktop application toolkit. In particular, entries,
+list selection and multiline editing from the Bona bridge are not available
+through this protocol. [Coverage](GTK_SUPPORT.md) distinguishes implemented
+features from planned additions.
 
-### GTK4 Bridge Layer (Nim)
+Native packages require system GTK4 and its normal transitive dependencies,
+not GtkSourceView or VTE. Source-free native execution is tested; this is
+separate from Bona Builder's planned embedded-interpreter packaging mode.
 
-The bridge consists of several components in `src/harding/gui/gtk/`:
+## Bona bridge
 
-1. **ffi.nim** - Raw GTK4 C function bindings
-2. **widget.nim** - Base widget proxy and two-table system
-3. **window.nim**, **button.nim**, **box.nim**, etc. - Widget-specific wrappers
-4. **bridge.nim** - Class registration with Harding interpreter
+Bona's interpreter bridge is registered in
+`src/harding/gui/gtk/bridge.nim`. It creates the native classes first, then
+`loadGtkWrapperFiles` adds conveniences from `lib/gui/gtk4/`. Bona loads its IDE
+tools separately from `lib/gui/bona/`. Do not load standalone `Gtk.hrd` into
+this interpreter: it defines another set of `Gtk*` classes.
 
-### Two-Table System
+### Build and dependencies
 
-The bridge uses two complementary tables to solve the GC issue:
-
-1. **`proxyTable: Table[GtkWidget, GtkWidgetProxy]`**
-   - Maps widget pointers to their proxy objects
-   - Used for signal handling and proxy lookup
-
-2. **`instanceWidgetTable: Table[int, GtkWidget]`**
-   - Maps Instance addresses (as integers) to widget pointers
-   - Ensures correct widget lookup even if Instance is copied by GC
-
-### Widget Creation Flow
-
-```
-Harding code (e.g., GtkButton newLabel: "X")
-    ↓
-Nim native method (buttonNewLabelImpl)
-    ↓
-GTK function (gtk_button_new_with_label)
-    ↓
-Create proxy and store in both tables
-    ↓
-Return Instance to Harding with isNimProxy = true
+```sh
+nimble bona
 ```
 
-## Creating Widgets from Harding
+Bona requires GTK4, GtkSourceView 5 and the **GTK4** VTE library
+(`libvte-2.91-gtk4.so.0`). The GTK3 VTE library is not a substitute. See
+[Bona assessment](BONA_ASSESSMENT.md) and
+[tools and debugging](TOOLS_AND_DEBUGGING.md) for dependency and build details.
 
-### Basic Window and Layout
+Bona's host owns application initialization and the event loop. The following
+is an example for an already initialized Bona interpreter, not a standalone
+script for ordinary `harding`:
 
 ```harding
-# Create window
+| window content button |
 window := GtkWindow new.
-window title: "My App".
-window setDefaultSize: 800 height: 600.
-
-# Create layout box
-box := GtkBox vertical.
-box setSpacing: 10.
-
-# Create button
-button := GtkButton newLabel: "Click Me".
-button clicked: [
-    Transcript showCr: "Button was clicked!"
-].
-
-# Layout children
-box append: button.
-
-# Attach box to window
-window setChild: box.
-
-# Show window
+window title: "Bona bridge example".
+window setDefaultSize: 480 height: 240.
+content := GtkBox vertical.
+content setSpacing: 12.
+button := GtkButton newLabel: "Click me".
+button clicked: [Transcript showCr: "Clicked"].
+content append: button.
+window setChild: content.
 window present
 ```
 
-### Window Icon and Desktop Integration
+### Available areas
 
-GTK4 uses icon themes rather than file paths for window icons. For proper dock and Alt-Tab switcher icons:
+The bridge registers windows, boxes, buttons, entries, labels, scrolled windows,
+split panes, list boxes, text views and buffers, source views, VTE terminals,
+keyboard helpers, GTK4 alerts and popovers. The detailed inventory and remaining
+limitations are in [GTK support](GTK_SUPPORT.md).
 
-```harding
-# In your main window setup (e.g., Launcher>>openInstance)
-window := GtkWindow new.
+Use the registered protocol and `.hrd` wrappers as the selector reference;
+raw Nim function names and previous documentation examples are not API promises.
+For example, entry text is `text` / `text:` / `placeholderText:`, list selection
+uses `onRowSelected:`, and keyboard shortcuts use `onKey:modifiers:do:`.
 
-# Set window icon from icon theme (e.g., "harding" icon)
-window iconName: "harding".
+### Callbacks and lifetime
+
+`widget.nim` maintains widget proxies and instance-to-widget lookup tables.
+Proxies retain Harding callback blocks and interpreter references. Callback
+execution goes through `invokeGtkCallbackBlock` and `evalCallbackNonFatal`:
+a failing host callback must report an error rather than terminate Bona.
+
+The generic `connect:do:` path is not an arbitrary signal marshaller. Signals
+with arguments or return values need a dedicated ABI-correct adapter. Use the
+typed helpers already provided for lists, keys, gestures and dialogs; do not
+connect a generic void callback to a signal that expects a Boolean result.
+Similarly, arbitrary `emitSignal:` calls are not a safe general-purpose signal
+emission API.
+
+Do not infer complete lifetime safety from a proxy's `destroyed` flag or the
+existence of lookup tables. Validation and cleanup differ between wrappers;
+controller, dialog and buffer ownership must be checked independently.
+[Coverage and risks](GTK_SUPPORT.md) records the audit boundary.
+
+### Text editing in Bona
+
+`GtkTextView` and `GtkSourceView` provide `text`, `text:`,
+`insertText:at:`, `selectRangeFrom:to:`, `insertTextAtSelectedEnd:` and
+`getSelectionEnd`. SourceView also provides line numbers, tab width and
+`selectedText` (selection or current line).
+
+Workspace Do It evaluates selected text or the current line and reports the
+result to Transcript. Print It inserts the result after the selection and
+selects it. These are IDE workflows, not standalone GTK application selectors.
+See the [Bona assessment](BONA_ASSESSMENT.md) for tested behavior and outstanding
+acceptance work.
+
+### Desktop integration
+
+GTK4 window icons use icon-theme names (`iconName:`), not file paths.
+Bona's host creates its GtkApplication with ID `org.harding-lang.bona`.
+`nimble install_bona` installs the binary and desktop integration. The legacy
+GTK3-only menu and icon-file paths do not establish GTK4 support.
+
+## Validation
+
+Standalone protocol, both engines, ARC/ORC and binary-only packages:
+
+```sh
+nimble testGtkApplications
+NATIVE_GTK_ATSPI=1 nimble testGtkApplications
 ```
 
-**Icon Theme Installation**
+Bona's bridge and tools have separate suites:
 
-Icons must be installed in the user's icon theme directory:
-- `~/.local/share/icons/hicolor/48x48/apps/` - Small icons
-- `~/.local/share/icons/hicolor/256x256/apps/` - Large icons
-
-After installing icons, refresh the theme cache:
-```bash
-gtk-update-icon-cache ~/.local/share/icons/hicolor
+```sh
+nim c -r --out:build/test_gui_automation tests/test_gui_automation.nim
+nim c -r --out:build/test_bona_models tests/test_bona_models.nim
 ```
 
-**For full desktop integration with Bona IDE:**
-
-The `bona` command creates a proper `GtkApplication` with application ID `org.harding-lang.bona`, which enables:
-- Proper dock icon display
-- Correct Alt-Tab switcher icon
-- Window manager identification
-
-Install desktop integration:
-```bash
-nimble install_bona
-```
-
-This installs:
-- `~/.local/share/applications/bona.desktop` - Desktop entry
-- `~/.local/share/icons/hicolor/256x256/apps/harding.png` - Application icon
-- Updates icon theme cache automatically
-
-After installation:
-- Launch Bona from the applications menu
-- Icon appears correctly in dock and Alt-Tab switcher
-- Window is identified as "Bonadventure IDE"
-
-**GTK3 Compatibility (File-based Icons)**
-
-For GTK3, window icons can be set directly from file paths:
-```harding
-# GTK3 only - set icon from file path
-window iconFromFile: "/path/to/icon.png".
-```
-
-Note: GTK4 does not support `gtk_window_set_icon_from_file`. Use icon themes instead.
-
-### Signal Handling
-
-Connect GTK signals to Harding blocks:
-
-```harding
-# Simple signal (no arguments)
-button clicked: [
-    Transcript showCr: "Clicked!"
-].
-
-# Motion signal (passes x, y coordinates)
-canvas connectMotion: [ :x :y |
-    Transcript showCr: "Position: ", x asString, " ", y asString
-].
-
-# Key press signal
-entry connectKeyPressed: [ :keyval :keycode :mods |
-    (keyval = 65293) "Enter key"
-        ifTrue: [ self submit ]
-        ifFalse: [ false ]  "Don't consume other keys"
-].
-```
-
-### Common Widgets
-
-| Widget | Creation | Key Methods |
-|--------|----------|-------------|
-| Window | `GtkWindow new` | `title:`, `setDefaultSize:height:`, `setChild:`, `present`, `setWmClass:` |
-| Button | `GtkButton newLabel:` | `label:`, `clicked:` |
-| Box | `GtkBox vertical` / `horizontal` | `append:`, `prepend:`, `remove:`, `setSpacing:` |
-| Label | `GtkLabel newLabel:` | `label:`, `markup:` |
-| Entry | `GtkEntry new` | `text:`, `text`, `connectTextChanged:` |
-| TextView | `GtkTextView new` | `text:`, `text`, `editable:`, `monospace:`, `insertText:at:`, `selectRangeFrom:to:`, `insertTextAtSelectedEnd:` |
-| SourceView | `GtkSourceView new` | Inherits TextView methods, `showLineNumbers:`, `setTabWidth:`, `selectedText` |
-| ScrolledWindow | `GtkScrolledWindow new` | `setChild:` |
-
-### TextView and SourceView Text Manipulation
-
-TextView and SourceView provide methods for text manipulation:
-
-```harding
-# Get all text
-sourceView text
-
-# Set all text
-sourceView text: "Hello, World!"
-
-# Insert text at a specific position
-sourceView insertText: "injected" at: 5
-
-# Select a range of text (positions are character offsets)
-sourceView selectRangeFrom: 0 to: 10
-
-# Get selected text or current line
-sourceView selectedText
-
-# Insert text after the selection (for Print It)
-resultPos := sourceView insertTextAtSelectedEnd: resultString
-
-# Get selection end position (or cursor position if no selection)
-endPos := sourceView getSelectionEnd
-```
-
-#### SourceView-Specific Features
-
-```harding
-sourceView := GtkSourceView new.
-
-# Configure the editor
-sourceView showLineNumbers: true.
-sourceView setTabWidth: 2.
-
-# Get selected text (or current line if nothing selected)
-code := sourceView selectedText.
-```
-
-## IDE Tools
-
-### Workspace - Code Editor and Evaluation
-
-The Workspace (`lib/gui/bona/Workspace.hrd`) provides a source code editor with interactive evaluation:
-
-```harding
-# Create a workspace
-Workspace open
-```
-
-#### Do It (Ctrl+D)
-
-Evaluate the selected code or current line and print result to Transcript:
-
-```harding
-self doItSelection
-```
-
-**Behavior:**
-- Evaluates selected text, or current line if no selection
-- Prints result to Transcript
-- No changes to editor content
-
-#### Print It (Ctrl+P)
-
-Evaluate and insert result in the editor:
-
-```harding
-self printItSelection
-```
-
-**Behavior:**
-- Evaluates selected text, or current line if no selection
-- **Inserts result after the selection** (Smalltalk-style)
-- **Automatically selects the inserted text** so you can press Delete to remove it
-- No output to Transcript (clean editor-focused workflow)
-
-**Example:**
-1. Select: `3 + 4`
-2. Press Ctrl+P or click "Print It"
-3. Result: `7` appears after the selection and is selected
-4. Press Delete to remove the result
-
-## Memory Management and Lifecycle
-
-### Widget Lifecycle
-
-GTK widgets are reference-counted via GObject. The bridge tracks destruction state:
-
-```nim
-type
-  GtkWidgetProxy* = ref object
-    widget*: gtk4.Widget
-    interp*: ptr Interpreter
-    signalHandlers*: Table[string, seq[SignalHandler]]
-    destroyed*: bool
-```
-
-When a GTK widget is destroyed:
-1. `destroyed` flag is set to true
-2. Signal handlers are cleared
-3. Methods check `destroyed` flag before operating
-
-### Rules
-
-1. **GTK owns widget lifetime** via GObject refcount
-2. **Harding proxy tracks destroyed state**
-3. **Methods validate** before operating
-4. **Explicit destroy available** for manual cleanup
-5. **Closing window** destroys child widgets automatically
-
-## Error Handling
-
-Signal handlers use safe evaluation via the stackless VM. GTK callbacks construct a block message send (`value`, `value:`, and so on) and evaluate it through `evalWithVMCleanContext`, so the callback runs in an isolated activation context instead of reusing whatever interpreter stack was active when GTK re-entered.
-
-```nim
-# Signal handlers evaluate blocks through the stackless VM
-let msgNode = newBlockCallbackMessage(blockNode, args)
-discard evalWithVMCleanContext(interp[], msgNode)
-```
-
-Signal connections are tracked per widget and per signal name, so multiple Harding handlers can be attached to the same GTK signal without registering duplicate native signal hooks.
-
-**Implication**: Harding exceptions in signal handlers will not crash the GTK event loop, and callback execution does not inherit unrelated activation-stack state from the interrupted Harding evaluation.
-
-## Current Status
-
-### Implemented (Core)
-
-- Basic widget wrappers (Window, Button, Box, Label, Entry)
-- TextView with buffer
-- ScrolledWindow
-- Base signal handling with safe evaluation
-- Two-table system for GC safety
-- Basic layout containers
-- Window icon support (`iconName:`, `setWmClass:`)
-- Desktop integration via GtkApplication (GTK4)
-- System Browser (four-pane class/method browser)
-- Inspector (object slot/property viewer)
-- BrowserPane (reusable list component)
-
-### In Progress
-
-- TreeView for hierarchical data
-- HeaderBar
-- Menu system
-
-### Planned
-
-- Debugger (stack frame inspection)
-- Enhanced Browser (method source viewing, editing, saving)
-
-## Future Extensions
-
-### Typed Signal Handlers
-
-Provide typed helpers for common signal patterns:
-
-```harding
-# Motion - passes x, y
-connectMotion: [:x :y | ...]
-
-# Key press - passes keyval, keycode, modifiers
-connectKeyPressed: [:keyval :keycode :mods | ...]
-
-# TreeView row activated
-connectRowActivated: [:path | ...]
-```
-
-### Glade/XML UI Support (Optional)
-
-Load UI definitions from Glade XML files:
-
-```harding
-builder := GtkBuilder new.
-builder addFromFile: 'ui/app.glade'.
-window := builder getObject: 'mainWindow'.
-```
-
-This is optional - primary workflow remains code-based construction for maximum malleability.
-
-## Debugging Tips
-
-1. **Check proxy table** - Add debug prints to see if widgets are being stored/looked up
-2. **Instance addresses** - Compare Instance addresses between creation and use
-3. **Signal connection** - Verify `gSignalConnect` returns non-zero handler ID
-4. **GTK warnings** - Watch for `Gtk-CRITICAL` warnings about invalid widgets
-5. **Safe evaluation** - Check stderr for signal handler errors
-
-## Common Issues
-
-### "proxy is nil"
-- Proxy not stored in `proxyTable` during creation
-- Widget pointer type mismatch (need `cast[GtkWidget]`)
-
-### Widget not visible
-- Missing `gtkWidgetShow()` call
-- Widget not added to parent container
-
-### Signal not firing
-- Block not captured correctly
-- Signal name mismatch (GTK4 signal names)
-
-### Window doesn't exit on close
-- Need to connect "destroy" signal or use `connectDestroy`
-
-## For More Information
-
-- [MANUAL.md](MANUAL.md) - Core language manual
-- [FUTURE.md](FUTURE.md) - GUI IDE plans
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - VM internals
-- [VSCODE.md](VSCODE.md) - VSCode extension
+A test that skips for a missing display is not GUI acceptance. Direct signal
+emission and model tests do not replace real event-loop and accessibility
+interaction. Record exact commands and results, including skipped cases;
+do not infer whole-Bona acceptance from the standalone counter suite.

@@ -1,0 +1,458 @@
+# Harding Notebook - a complete GTK4 application written in Harding
+# Build: ./granite build --gtk demos/notebook/notebook.hrd -o:build/notebook/notebook
+# Run:   ./harding_gtk demos/notebook/notebook.hrd
+# Model/persistence only, in either engine: --self-test
+#
+# Storage path: --data <path>, else notebook-data.json in the working directory
+# Nothing is written until Save is pressed
+
+Note := Object derivePublic: #(id, title, body, category, pinned, archived)
+Note class>>id: anId title: aTitle body: aBody category: aCategory [
+    ^self new setId: anId title: aTitle body: aBody category: aCategory
+]
+Note>>initialize [
+    id := ""
+    title := "Untitled"
+    body := ""
+    category := "General"
+    pinned := false
+    archived := false
+]
+Note>>setId: anId title: aTitle body: aBody category: aCategory [
+    id := anId. title := aTitle. body := aBody. category := aCategory
+]
+Note>>isPinned [ ^pinned ]
+Note>>isArchived [ ^archived ]
+Note>>matches: query [
+    | q |
+    q := query trim lowercase
+    q isEmpty ifTrue: [ ^true ]
+    ((title lowercase includesSubString: q) or: [body lowercase includesSubString: q]) ifTrue: [ ^true ]
+    ^category lowercase includesSubString: q
+]
+Note>>displayTitle [
+    (title trim isEmpty) ifTrue: [ ^"(untitled)" ]
+    ^title
+]
+Note>>toTable [
+    ^table{"id" -> id, "title" -> title, "body" -> body, "category" -> category,
+       "pinned" -> pinned, "archived" -> archived}
+]
+Note class>>fromTable: row [
+    | note |
+    note := self id: (row at: "id") title: (row at: "title") body: (row at: "body")
+                 category: (row at: "category")
+    note
+        pinned: (row at: "pinned");
+        archived: (row at: "archived")
+    ^note
+]
+
+Notebook := Object derive: #(notes, nextId, lastDeleted)
+Notebook class>>version [ ^1 ]
+Notebook>>initialize [
+    notes := Array new
+    nextId := 1
+]
+Notebook>>notes [ ^notes ]
+Notebook>>size [ ^notes size ]
+Notebook>>noteWithId: anId [
+    ^notes detect: [:note | note::id = anId ] ifNone: [ nil ]
+]
+Notebook>>addNote [
+    | note |
+    note := Note id: "n-$(nextId)" title: "Untitled" body: ""
+                 category: "General"
+    nextId := nextId + 1
+    notes add: note
+    ^note
+]
+Notebook>>addNote: aNote [ ^notes add: aNote ]
+Notebook>>removeNoteWithId: anId [
+    | index found |
+    index := notes indexOf: (notes detect: [:note | note::id = anId ] ifNone: [ nil ])
+    index isNil ifTrue: [ ^nil ]
+    found := notes removeAt: index
+    lastDeleted := found
+    ^found
+]
+Notebook>>undoDelete [
+    | restored |
+    restored := lastDeleted
+    lastDeleted := nil
+    restored isNil ifFalse: [ notes add: restored ]
+    ^restored
+]
+Notebook>>visibleNotes: query showArchived: showArchived [
+    | result |
+    result := Array new
+    notes do: [:note |
+        (note isArchived = showArchived and: [ note matches: query ]) ifTrue: [
+            result add: note
+        ]
+    ]
+    # Pinned notes first, then by title
+    ^result sorted: [:a :b |
+        a isPinned = b isPinned
+            ifTrue: [ a title < b title ]
+            ifFalse: [ a isPinned ]
+    ]
+]
+Notebook>>categories [
+    | seen |
+    seen := Set new
+    notes do: [:note | seen add: note::category ]
+    ^seen asArray sorted
+]
+Notebook>>toJson [
+    ^json{"version": Notebook version, "nextId": nextId,
+           "notes": (notes collect: [:note | note toTable ])}
+]
+Notebook class>>fromJson: text [
+    | data rows notebook |
+    data := Json parse: text
+    data isNil ifTrue: [ Error signal: "Notebook data is not valid JSON" ]
+    (data at: "version") = Notebook version ifFalse: [
+        Error signal: "Unsupported notebook version"
+    ]
+    notebook := self new
+    notebook nextId: (data at: "nextId")
+    rows := data at: "notes"
+    rows do: [:row | notebook addNote: (Note fromTable: row) ]
+    ^notebook
+]
+Notebook>>nextId: value [ nextId := value ]
+Notebook>>nextId [ ^nextId ]
+Notebook>>saveTo: path [
+    File write: self toJson to: path
+    ^self
+]
+Notebook class>>load: path [
+    (File exists: path) ifFalse: [ ^self new ]
+    ^self fromJson: (File readAll: path)
+]
+Notebook class>>selfTest [
+    | nb first second third loaded path titles |
+    nb := self new
+    first := nb addNote
+    first title: "Zebra". first body: "stripe lines". first category: "Animals"
+    second := nb addNote
+    second title: "Apple". second body: "fruit". second category: "Food"
+    second pinned: true
+    third := nb addNote
+    third title: "Archive me". third archived: true
+    path := "build/notebook-selftest.json"
+
+    nb size println
+    (nb visibleNotes: "" showArchived: false) size println
+    (nb visibleNotes: "STRIPE" showArchived: false) size println
+    (nb visibleNotes: "" showArchived: true) size println
+    titles := ""
+    (nb visibleNotes: "" showArchived: false) do: [:note |
+        titles := titles & "$(note::title),"
+    ]
+    titles println
+    nb categories println
+    nb removeNoteWithId: "n-2"
+    nb size println
+    (nb undoDelete id) println
+    nb size println
+    nb saveTo: path
+    loaded := self load: path
+    loaded size println
+    (loaded noteWithId: "n-1") title println
+    (loaded noteWithId: "n-3") isArchived println
+    ((Json parse: (File readAll: path)) at: "version") println
+    File delete: path
+    "notebook model self test passed" println
+]
+
+# ---------------------------------------------------------------------------
+# Application: layout, state and actions are Harding
+# ---------------------------------------------------------------------------
+
+NotebookApp := Object derive: #(notebook, window, list, search, titleEntry, bodyView,
+    status, countLabel, archiveState, archivedToggle, selectedId, dataPath, showArchived, updating)
+
+NotebookApp class>>dataPath [
+    | args index |
+    args := System arguments
+    index := 0
+    [index < (args size)] whileTrue: [
+        (args at: index) = "--data" ifTrue: [
+            (index + 1 < (args size)) ifTrue: [ ^args at: index + 1 ]
+            ^"notebook-data.json"
+        ]
+        index := index + 1
+    ]
+    ^"notebook-data.json"
+]
+
+NotebookApp>>initialize: path [
+    notebook := Notebook load: path
+    dataPath := path
+    selectedId := nil
+    showArchived := false
+    updating := false
+    notebook size = 0 ifTrue: [
+        | welcome |
+        welcome := notebook addNote
+        welcome::title := "Welcome to Harding Notebook"
+        welcome::body := "Every line of this application is Harding source."
+        welcome::category := "Getting started"
+    ]
+]
+
+NotebookApp>>current [ selectedId isNil ifTrue: [ ^nil ]. ^notebook noteWithId: selectedId ]
+NotebookApp>>query [ ^search isNil ifTrue: [ "" ] ifFalse: [ search text ] ]
+
+NotebookApp>>buildWindow [
+    | content toolbar paned sidebar searchRow listScroller editor bodyScroller footer |
+    window := GtkWindow title: "Harding Notebook" width: 980 height: 660
+    content := GtkBox column: 0
+
+    toolbar := (GtkBox row: 6) padding: 10
+    toolbar
+        add: (GtkButton icon: "document-new-symbolic" label: "New" action: [ self newNote ]);
+        add: (GtkButton icon: "edit-copy-symbolic" label: "Duplicate" action: [ self duplicateNote ]);
+        add: (GtkButton icon: "user-trash-symbolic" label: "Delete" action: [ self deleteNote ]);
+        add: (GtkButton icon: "edit-undo-symbolic" label: "Undo" action: [ self undoDelete ]);
+        add: (GtkButton icon: "view-pin-symbolic" label: "Pin" action: [ self togglePin ]);
+        add: (self archiveToggle);
+        add: (GtkButton icon: "document-save-symbolic" label: "Save" action: [ self save ])
+    countLabel := GtkLabel muted: "0 notes"
+    toolbar
+        add: ((GtkBox row: 0) wide);
+        add: countLabel
+
+    paned := GtkPaned horizontal: 0
+    paned
+        resizeStart: false;
+        position: 320
+
+    sidebar := GtkBox column: 6
+    search := (GtkEntry placeholder: "Search title, body and category") tooltip:
+        "Search title, body and category"
+    search onChanged: [ self refreshList ]
+    searchRow := (GtkBox row: 0) padding: 8
+    searchRow add: search wide
+    list := GtkListBox singleSelection
+    list onRowSelected: [:index | self selectIndex: index ]
+    listScroller := GtkScrolledWindow child: list
+    listScroller tall
+    sidebar
+        add: searchRow;
+        add: listScroller
+    paned start: sidebar
+
+    editor := (GtkBox column: 8) padding: 12
+    titleEntry := (GtkEntry placeholder: "Note title") wide top
+    titleEntry onChanged: [ self titleChanged ]
+    bodyView := (GtkTextView editable: true) wrapping: true
+    bodyView onChanged: [ self bodyChanged ]
+    bodyScroller := GtkScrolledWindow child: bodyView
+    bodyScroller tall
+    status := (GtkLabel muted: "Ready") selectable
+    archiveState := GtkLabel muted: ""
+    footer := GtkBox row: 8
+    footer
+        add: status wide;
+        add: archiveState
+    editor
+        add: titleEntry;
+        add: bodyScroller;
+        add: footer
+    paned end: editor
+
+    content
+        add: toolbar;
+        add: paned
+    window child: content
+    window onCloseRequest: [ self requestClose ]
+]
+
+NotebookApp>>setStatus: text [ status isNil ifFalse: [ status text: text ] ]
+
+NotebookApp>>archiveToggle [
+    | button |
+    button := GtkToggleButton icon: "package-x-generic-symbolic"
+        tip: "Show archived notes" action: [ self archivedToggled ]
+    archivedToggle := button
+    ^button
+]
+
+NotebookApp>>refreshList [
+    | notes index currentIndex |
+    notes := notebook visibleNotes: self query showArchived: showArchived
+    list removeAll
+    index := 0
+    currentIndex := -1
+    notes do: [:note |
+        | text |
+        text := note displayTitle
+        note isPinned ifTrue: [ text := "* $text" ]
+        list append: (GtkLabel text: text)
+        note::id = selectedId ifTrue: [ currentIndex := index ]
+        index := index + 1
+    ]
+    countLabel text: "$(notes size) of $(notebook size) notes"
+    currentIndex >= 0 ifTrue: [ list selectIndex: currentIndex ]
+]
+
+# Programmatic text updates emit the same change signals a user edit does, so
+# they are guarded: otherwise the handler writes the stale editor back.
+
+NotebookApp>>loadEditorFrom: note [
+    updating := true
+    titleEntry text: note::title
+    bodyView text: note::body
+    updating := false
+]
+NotebookApp>>clearEditor [
+    updating := true
+    titleEntry text: ""
+    bodyView text: ""
+    updating := false
+]
+NotebookApp>>syncFromEditor [
+    | note |
+    updating ifTrue: [ ^nil ]
+    note := self current
+    note isNil ifTrue: [ ^nil ]
+    note::title := titleEntry text
+    note::body := bodyView text
+]
+NotebookApp>>titleChanged [ self syncFromEditor ]
+NotebookApp>>bodyChanged [ self syncFromEditor ]
+
+NotebookApp>>selectIndex: index [
+    | notes note |
+    index < 0 ifTrue: [ ^nil ]
+    notes := notebook visibleNotes: self query showArchived: showArchived
+    index >= notes size ifTrue: [ ^nil ]
+    note := notes at: index
+    selectedId := note::id
+    self loadEditorFrom: note
+    archiveState text: (note isArchived ifTrue: [ "archived" ] ifFalse: [ "" ])
+    self setStatus: "Editing $(note displayTitle)"
+]
+
+NotebookApp>>newNote [
+    | note |
+    note := notebook addNote
+    selectedId := note::id
+    self clearEditor
+    self refreshList
+    self setStatus: "New note"
+    titleEntry focus
+]
+NotebookApp>>duplicateNote [
+    | note copy |
+    note := self current
+    note isNil ifTrue: [ ^self setStatus: "Select a note to duplicate" ]
+    copy := notebook addNote
+    copy::title := "$(note displayTitle) copy"
+    copy::body := note::body
+    copy::category := note::category
+    selectedId := copy::id
+    self refreshList
+    self setStatus: "Duplicated"
+]
+NotebookApp>>deleteNote [
+    | note |
+    note := self current
+    note isNil ifTrue: [ ^self setStatus: "Select a note to delete" ]
+    notebook removeNoteWithId: note::id
+    selectedId := nil
+    self clearEditor
+    self refreshList
+    self setStatus: "Deleted $(note displayTitle) - Undo restores it"
+]
+NotebookApp>>undoDelete [
+    | restored |
+    restored := notebook undoDelete
+    restored isNil ifTrue: [ ^self setStatus: "Nothing to restore" ]
+    selectedId := restored::id
+    self refreshList
+    self setStatus: "Restored $(restored displayTitle)"
+]
+NotebookApp>>togglePin [
+    | note |
+    note := self current
+    note isNil ifTrue: [ ^self setStatus: "Select a note to pin" ]
+    note::pinned := note isPinned not
+    self refreshList
+    self setStatus: (note isPinned ifTrue: [ "Pinned" ] ifFalse: [ "Unpinned" ])
+]
+NotebookApp>>archivedToggled [
+    showArchived := archivedToggle state
+    selectedId := nil
+    self clearEditor
+    self refreshList
+    self setStatus: (showArchived ifTrue: [ "Showing archived notes" ] ifFalse: [ "Showing active notes" ])
+]
+NotebookApp>>save [
+    File write: notebook toJson to: dataPath
+    self setStatus: "Saved $(notebook size) notes to $dataPath"
+]
+NotebookApp>>present [ window present ]
+NotebookApp>>requestClose [ self save. ^true ]
+
+NotebookApp>>guiSelfTest [
+    | firstId welcomeTitle |
+    self buildWindow
+    self refreshList
+    notebook size = 1 ifFalse: [ Error signal: "welcome note missing" ]
+    welcomeTitle := (notebook noteWithId: "n-1") title
+    # Real GTK row-selected signal: selecting a row loads it into the editor
+    list selectIndex: 0
+    titleEntry text = welcomeTitle ifFalse: [ Error signal: "row selection did not load the note" ]
+    (bodyView text size > 0) ifFalse: [ Error signal: "row selection did not load the body" ]
+    selectedId isNil ifTrue: [ Error signal: "row selection did not record the id" ]
+
+    self newNote
+    titleEntry text: "Second note"
+    bodyView text: "body text"
+    self current title = "Second note" ifFalse: [ Error signal: "title not synced" ]
+    self current body = "body text" ifFalse: [ Error signal: "body not synced" ]
+    firstId := self current id
+
+    search text: "second"
+    self refreshList
+    self current id = firstId ifFalse: [ Error signal: "selection lost after search" ]
+    search text: ""
+    self refreshList
+
+    self togglePin
+    self current isPinned ifTrue: [ "pinned ok" println ] ifFalse: [ Error signal: "pin failed" ]
+    archiveState text = "" ifFalse: [ Error signal: "unexpected archive marker" ]
+
+    self save
+    (File exists: dataPath) println
+    reloaded := Notebook load: dataPath
+    reloaded size = 2 ifFalse: [ Error signal: "reload size wrong" ]
+    (reloaded noteWithId: firstId) title = "Second note" ifFalse: [ Error signal: "reload title wrong" ]
+    File delete: dataPath
+    window close
+    GtkApplication quit
+    "notebook gui self test passed" println
+]
+
+args := System arguments
+(args includes: "--self-test") ifTrue: [
+    (args includes: "--gui-test") ifTrue: [
+        GtkApplication run: "org.hardinglang.Notebook" activate: [
+            NotebookApp new
+                initialize: NotebookApp dataPath;
+                guiSelfTest
+        ]
+    ] ifFalse: [ Notebook selfTest ]
+] ifFalse: [
+    GtkApplication run: "org.hardinglang.Notebook" activate: [
+        NotebookApp new
+            initialize: NotebookApp dataPath;
+            buildWindow;
+            refreshList;
+            present
+    ]
+]

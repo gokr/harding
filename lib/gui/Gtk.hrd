@@ -1,48 +1,123 @@
 # GTK4 application library. Loaded by granite --gtk or harding_gtk.
 # Low-level selectors are supplied by the same GTK backend in both engines.
+
 GtkApplication := Object derive: #()
 GtkWidget := Object derive: #()
 GtkWindow := GtkWidget derive: #()
 GtkBox := GtkWidget derive: #()
 GtkLabel := GtkWidget derive: #()
 GtkButton := GtkWidget derive: #()
+GtkToggleButton := GtkWidget derive: #()
+GtkEntry := GtkWidget derive: #()
+GtkTextView := GtkWidget derive: #()
+GtkScrolledWindow := GtkWidget derive: #()
+GtkPaned := GtkWidget derive: #()
+GtkListBox := GtkWidget derive: #()
+
+# Widget base
 
 GtkWidget>>padding: pixels [
-    self marginTop: pixels.
-    self marginBottom: pixels.
-    self marginStart: pixels.
-    self marginEnd: pixels.
-    ^self
+    self
+        marginTop: pixels;
+        marginBottom: pixels;
+        marginStart: pixels;
+        marginEnd: pixels
 ]
-GtkWidget>>expand [ self setHexpand: true. self setVexpand: true. ^self ]
-GtkWidget>>style: name [ self addCssClass: name. ^self ]
+GtkWidget>>expand [ self setHexpand: true; setVexpand: true ]
+GtkWidget>>style: name [ ^self addCssClass: name ]
+GtkWidget>>visible: flag [ ^self setVisible: flag ]
+GtkWidget>>sensitive: flag [ ^self setSensitive: flag ]
+GtkWidget>>tooltip: text [ ^self setTooltipText: text ]
+GtkWidget>>focus [ ^self grabFocus ]
+GtkWidget>>wide [ ^self setHexpand: true ]
+GtkWidget>>tall [ ^self setVexpand: true ]
+GtkWidget>>top [ ^self valign: 1 ]
+GtkWidget>>middle [ ^self valign: 3 ]
+
+# Window
 
 GtkWindow class>>title: title width: width height: height [
-    | window |
-    window := self new.
-    window title: title.
-    window setDefaultSize: width height: height.
-    ^window
+    ^self new title: title; setDefaultSize: width height: height
 ]
-GtkWindow>>child: widget [ self setChild: widget. ^self ]
+GtkWindow>>child: widget [ ^self setChild: widget ]
+
+# Box
 
 GtkBox class>>column: spacing [ ^self newOrientation: 1 spacing: spacing ]
 GtkBox class>>row: spacing [ ^self newOrientation: 0 spacing: spacing ]
-GtkBox>>add: widget [ self append: widget. ^self ]
-GtkBox>>equalWidth [ self homogeneous: true. ^self ]
+GtkBox>>add: widget [ ^self append: widget ]
+GtkBox>>equalWidth [ ^self homogeneous: true ]
 
-GtkLabel class>>text: text [ | label | label := self new. label text: text. ^label ]
+# Label
+
+GtkLabel class>>text: text [ ^self new text: text ]
 GtkLabel class>>heading: text [ ^(self text: text) style: "title-2" ]
 GtkLabel class>>title: text [ ^(self text: text) style: "title-1" ]
 GtkLabel class>>muted: text [ ^(self text: text) style: "dim-label" ]
+GtkLabel>>selectable [ ^self selectable: true ]
+
+# Button
 
 GtkButton class>>label: text action: block [
-    | button |
-    button := self new.
-    button label: text.
-    button connect: "clicked" do: block.
-    ^button
+    ^self new label: text; connect: "clicked" do: block
 ]
 GtkButton class>>primary: text action: block [
     ^(self label: text action: block) style: "suggested-action"
 ]
+GtkButton class>>flat: text action: block [
+    ^(self label: text action: block) style: "flat"
+]
+GtkButton class>>icon: iconName label: text action: block [
+    ^(self label: text action: block) icon: iconName
+]
+GtkButton>>icon: iconName [
+    iconName isNil ifFalse: [ self iconName: iconName ]
+]
+
+# Toggle button: GTK owns the state, the tooltip says what the icon means.
+
+GtkToggleButton class>>icon: iconName tip: text action: block [
+    ^self new iconName: iconName; tooltip: text; connect: "toggled" do: block
+]
+GtkToggleButton>>state [ ^self active ]
+GtkToggleButton class>>icon: iconName label: text action: block [
+    ^self new label: text; iconName: iconName; tooltip: text; connect: "toggled" do: block
+]
+
+# Entry
+
+GtkEntry class>>text: text [ ^self new text: text ]
+GtkEntry class>>placeholder: text [ ^self new placeholderText: text ]
+GtkEntry>>onChanged: block [ ^self connect: "changed" do: block ]
+
+# Text view
+
+GtkTextView class>>editable: flag [ ^self new editable: flag ]
+GtkTextView>>wrapping: flag [ ^self wrapMode: (flag ifTrue: [ 1 ] ifFalse: [ 0 ]) ]
+GtkTextView>>onChanged: block [ ^self onBufferChanged: block ]
+
+# Scrolled window
+
+GtkScrolledWindow class>>child: widget [ ^self new setChild: widget ]
+GtkScrolledWindow>>child: widget [ ^self setChild: widget ]
+
+# Paned
+
+GtkPaned class>>horizontal: spacing [ ^self newOrientation: 0 ]
+GtkPaned class>>vertical: spacing [ ^self newOrientation: 1 ]
+GtkPaned>>start: widget [ ^self setStartChild: widget ]
+GtkPaned>>end: widget [ ^self setEndChild: widget ]
+GtkPaned>>position: pixels [ ^self setPosition: pixels ]
+GtkPaned>>resizeStart: flag [ ^self resizeStartChild: flag ]
+GtkPaned>>resizeEnd: flag [ ^self resizeEndChild: flag ]
+
+# List box
+
+GtkListBox class>>singleSelection [
+    | list |
+    list := self new
+    list setSelectionMode: 1
+    ^list
+]
+GtkListBox>>selectIndex: index [ ^self selectRowAtIndex: index ]
+GtkListBox>>selectedIndex [ ^self selectedRowIndex ]

@@ -6,6 +6,51 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `demos/notebook`: a complete GTK4 application in Harding source — searchable note list, split title/body editor, new/duplicate/delete/undo-delete/pin/archive, versioned JSON persistence with explicit save, and in-app `--self-test`/`--gui-test` that run in both `harding_gtk` and `granite build --gtk` (`demos/notebook/README.md`).
+- Shared GTK application protocol gained `GtkEntry`, `GtkTextView`, `GtkScrolledWindow`, `GtkPaned` and `GtkListBox`, with `clicked`/`changed`/`row-selected`/`close-request` callbacks, widget visibility/sensitivity/focus/tooltip, `removeAll`, and list children wrapped in real `GtkListBoxRow`s. Callback arity is validated at connection time (`docs/GTK_APPLICATIONS.md`).
+- `GtkButton icon:label:action:` composes a 16px icon with its caption, and `GtkToggleButton` exposes GTK's own pressed state (`state`) so a toggling control is observable to accessibility tooling. Sizing conveniences split `expand` into `wide`, `tall`, `top` and `middle`, because `expand` sets both axes and stretched a one-line title entry to full height.
+- Compiled `File` class-side protocol (`write:to:`, `append:to:`, `readAll:`, `exists:`, `delete:`), so a Granite-compiled program can persist data without an interpreter. Whole-file semantics match `lib/standard/File.hrd`.
+- String interpolation, Nim-style: `"Hi $name"`, `"$name::slot"`, `${expr}` or
+  `$(expr)`, `\$` for a literal dollar. Double-quoted strings interpolate at
+  parse time; triple-quoted strings stay raw, with `String>>interpolate:` as the
+  opt-in pass against a binding Table. One shared implementation
+  (`src/harding/core/interpolation.nim`) serves both engines.
+- `array{...}` and `table{...}`: dynamic counterparts of the static `#(...)` and
+  `#{...}` literals. Their bodies are `,`-separated expressions parsed by the
+  language, so mistakes are parse errors rather than runtime ones. Nested
+  literals inside `#(...)` / `#{...}` no longer need their own `#`, and the
+  explicit `#` stays valid.
+- `displayString` in both engines: `printString` is the literal form (a string
+  quotes itself, collections quote their elements) and `displayString` is the
+  human-facing form. Interpolation uses `displayString`.
+- `Array>>remove:`, `Array>>remove:ifAbsent:` and `Array>>removeAllSuchThat:` in
+  both engines: classic Smalltalk vocabulary for removing one occurrence by `=`
+  and every occurrence by a predicate.
+- `docs/GRANITE_STDLIB_COMPILATION.md`: the plan for whole-stdlib compilation,
+  with the three-implementation problem, measured `--mixed` trade-off and staged
+  closure approach; linked from `PLAN.md` section 6.
+
+### Changed
+- Consolidated GTK documentation around `docs/GTK.md`, distinguishing Bona's interpreter bridge from the shared standalone interpreted/Granite protocol. `docs/GTK_SUPPORT.md` records current coverage, FFI/lifecycle risks and the staged Harding Notebook showcase plan; removed obsolete GTK overview claims and marked the original Nim-shell demo as superseded for application authoring.
+
+### Fixed
+- `Array add:`, `Set add:`, `Bag add:` and `Set remove:` answer the added or
+  removed element in both engines, matching classic Smalltalk and the documented
+  contract. Array, Set and compiled `Bag` previously answered the collection, and
+  compiled `Bag` disagreed with the interpreter.
+- Compiled `indexOf:` scans arrays with `=` and answers the element's index, as
+  `Array>>indexOf:` does; it previously handled only strings and answered nil for
+  every array, including one containing the very object searched for.
+- A cascade after `^` now parses, so `^self new title: t; setDefaultSize: w height: h`
+  returns the cascade's value like the same cascade in a plain statement. The
+  cascade check ran only on the non-return path of statement parsing.
+- Compiled engine mismatches with the interpreter: `println`/`print` now use
+  `toString` (they called `printString` for collections), `superclassNames`
+  answers strings on both the instance and class paths, and `class` answers the
+  built-in class for value receivers such as strings and integers.
+- A compiled block whose final statement is an if-expression (`[:a :b | (a = b) ifTrue: [a] ifFalse: [b]]`) answered nil under Granite, because the branches were emitted as discarded statements, and a block with assignment branches or a non-local return failed to compile. Such blocks now return the branch value; covered by the `block_conditional_answer` parity case.
+
 ### Fixed
 - VS Code extension packaging now includes runtime dependencies, matches the declared grammar scope, and registers the debug adapter in the extension host.
 

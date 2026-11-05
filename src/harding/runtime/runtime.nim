@@ -3,6 +3,7 @@ import ../interpreter/objects
 import ../core/log_support
 import ../core/string_conversion
 import ../core/types
+import ../core/interpolation
 import ../core/scheduler
 import ../interpreter/vm
 
@@ -240,6 +241,49 @@ proc compiledBaseClassValue*(name: string): NodeValue =
   if "Root" notin getSuperclasses("Object"): registerSuperclass("Object", "Root")
   if "Root" notin getSuperclasses("Mixin"): registerSuperclass("Mixin", "Root")
   return compiledClassValue(name)
+
+proc compiledFileClassValue*(): NodeValue =
+  ## Canonical File receiver for whole-file operations, matching lib/standard/File.hrd.
+  if "File" notin compiledClasses:
+    compiledClasses["File"] = newClass(name = "File")
+    registerSuperclass("File", "Object")
+  return compiledClassValue("File")
+
+proc compiledFileCall(selector: string,
+                      args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  ## Whole-file semantics match the stdlib: write replaces, append extends, and
+  ## the content is answered. Missing paths read as empty text.
+  proc textOf(value: NodeValue): string =
+    if value.kind == vkString: value.strVal else: value.toString()
+  if args.len == 0:
+    return
+  let path = textOf(args[0])
+  case selector
+  of "readAll:":
+    result.handled = true
+    result.value = toValue(if fileExists(path): readFile(path) else: "")
+  of "exists:":
+    result.handled = true
+    result.value = toValue(fileExists(path))
+  of "delete:":
+    result.handled = true
+    if fileExists(path): removeFile(path)
+    result.value = toValue(true)
+  of "write:to:", "append:to:":
+    if args.len < 2:
+      return
+    result.handled = true
+    let content = textOf(args[0])
+    let target = textOf(args[1])
+    if selector == "write:to:":
+      writeFile(target, content)
+    else:
+      var stream = open(target, fmAppend)
+      stream.write(content)
+      stream.close()
+    result.value = toValue(content)
+  else:
+    discard
 
 proc compiledSystemClassValue*(): NodeValue =
   ## Canonical System receiver for native process-level services.
@@ -1145,6 +1189,18 @@ proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
     guard.version = compiledClassDispatchVersion
   guard.valid
 
+proc builtInClassName(receiver: NodeValue): string =
+  ## Class name for a value-form receiver (string, int, bool, nil, symbol).
+  ## Class-side receivers and proxies are handled before this is called.
+  case receiver.kind
+  of vkInt: "Integer"
+  of vkFloat: "Float"
+  of vkString: "String"
+  of vkSymbol: "Symbol"
+  of vkBool: (if receiver.boolVal: "True" else: "False")
+  of vkNil: "UndefinedObject"
+  else: ""
+
 proc getReceiverClassName*(receiver: NodeValue): string =
   ## Resolve runtime class name for compiled Nim proxy instances
   if receiver.kind != vkInstance or receiver.instVal == nil or not receiver.instVal.isNimProxy:
@@ -1643,8 +1699,18 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
         return toValue(receiver.symVal != other.symVal)
     return compiledMissingMessage(receiver, selector)
   of "class":
-    if args.len == 0 and receiverClassName.len > 0:
-      return compiledClassValue(receiverClassName)
+    if args.len == 0:
+      if receiverClassName.len > 0:
+        return compiledClassValue(receiverClassName)
+      # Plain value receivers answer their built-in class, as the interpreter's
+      # Object>>class does for wrapped primitives.
+      let builtIn = builtInClassName(receiver)
+      if builtIn.len > 0:
+        if builtIn notin compiledClasses:
+          compiledClasses[builtIn] = newClass(name = builtIn)
+          if builtIn notin ["Root", "Object", "Mixin"]:
+            registerSuperclass(builtIn, "Object")
+        return compiledClassValue(builtIn)
     return compiledMissingMessage(receiver, selector)
   of "className":
     if args.len == 0 and receiverClassName.len > 0:
@@ -1652,9 +1718,11 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
     return compiledMissingMessage(receiver, selector)
   of "superclassNames":
     if args.len == 0 and receiverClassName.len > 0:
+      # Names, as strings: the interpreter's primitiveSuperclassNamesImpl
+      # answers toValue(name).
       var names: seq[NodeValue] = @[]
       for parent in getSuperclasses(receiverClassName):
-        names.add(toValue(parent))
+        names.add(NodeValue(kind: vkString, strVal: parent))
       return compiledArray(names)
     return compiledMissingMessage(receiver, selector)
   of "isKindOf:":
@@ -1726,7 +1794,45 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
   of "toString", "asString":
     return NodeValue(kind: vkString, strVal: receiver.toString())
   of "printString":
-    return NodeValue(kind: vkString, strVal: receiver.toString())
+    # Literal form: strings quote themselves and collections quote their
+    # elements, matching String>>printString / Array>>printString.
+    return NodeValue(kind: vkString, strVal: receiver.formatLiteral())
+  of "displayString":
+    # Human-facing form: a string shows its characters, matching
+    # String>>displayString; everything else falls back to printString.
+    if receiver.kind == vkString:
+      return NodeValue(kind: vkString, strVal: receiver.strVal)
+    return NodeValue(kind: vkString, strVal: receiver.formatLiteral())
+  of "interpolate:":
+    ## `$name`, `$name::slot`, `${expr}`/`$(expr)` and `\$` over a Table of
+    ## bindings, sharing one implementation with the interpreter.
+    let bindings = if args.len > 0: args[0] else: nilValue()
+    proc resolve(name: string, tail: seq[string], found: var bool): string =
+      var present = false
+      var bound = nilValue()
+      if bindings.kind == vkInstance and bindings.instVal != nil and
+         bindings.instVal.kind == ikTable:
+        for key, value in bindings.instVal.entries.pairs:
+          let keyText =
+            if key.kind == vkString: key.strVal
+            elif key.kind == vkSymbol: key.symVal
+            else: ""
+          if keyText == name:
+            present = true
+            bound = value
+            break
+      if present:
+        for segment in tail:
+          if bound.kind != vkInstance or bound.instVal == nil or bound.instVal.class == nil:
+            present = false
+            break
+          if bound.instVal.class.getSlotIndex(segment) < 0:
+            present = false
+            break
+          bound = getSlotValue(bound, segment)
+      found = present
+      if present: bound.toString() else: ""
+    return toValue(interpolateText(receiver.toString(), resolve))
   of "+", "plus":
     if receiver.kind == vkInt and args.len > 0 and args[0].kind == vkInt:
       return NodeValue(kind: vkInt, intVal: receiver.intVal + args[0].intVal)
@@ -1923,6 +2029,13 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
   of "indexOf:":
     if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
       return NodeValue(kind: vkInt, intVal: receiver.strVal.find(args[0].strVal))
+    if receiver.kind == vkArray and args.len > 0:
+      # Matches Array>>indexOf:: scan with `=`, answering nil on a miss.
+      for index, element in receiver.arrayVal:
+        if compiledIdentityEqual(element, args[0]) or
+           isTruthy(sendMessage(runtime, element, "=", @[args[0]])):
+          return NodeValue(kind: vkInt, intVal: index)
+      return NodeValue(kind: vkNil)
     return NodeValue(kind: vkNil)
 
   of "includesSubString:":
@@ -2165,7 +2278,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           storage.elements.add(args[0])
         else:
           storage.entries[args[0]] = args[0]
-        return receiver
+        return args[0]
     of "at:put:":
       if args.len == 2:
         if storage.kind == ikTable:
@@ -2279,6 +2392,39 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
             swap(elements[j], elements[j - 1])
             dec j
         return compiledArray(elements)
+    of "remove:", "remove:ifAbsent:":
+      # Set: remove the key, answering the element. Array: remove one occurrence
+      # matched by `=`, answering it (classic Smalltalk's remove:).
+      if args.len == 1 and storage.class.name == "Set":
+        if storage.entries.hasKey(args[0]):
+          storage.entries.del(args[0])
+          return args[0]
+        if args.len == 2:
+          return sendMessage(runtime, args[1], "value", @[])
+        return nilValue()
+      if storage.kind == ikArray and args.len >= 1:
+        var index = -1
+        for i, element in storage.elements:
+          if compiledIdentityEqual(element, args[0]) or
+             isTruthy(sendMessage(runtime, element, "=", @[args[0]])):
+            index = i
+            break
+        if index < 0:
+          if args.len == 2:
+            return sendMessage(runtime, args[1], "value", @[])
+          return nilValue()
+        let removed = storage.elements[index]
+        storage.elements.delete(index)
+        return removed
+    of "removeAllSuchThat:":
+      # Remove every element satisfying the predicate; answer the receiver.
+      if storage.kind == ikArray and args.len == 1:
+        var kept: seq[NodeValue] = @[]
+        for element in storage.elements:
+          if not isTruthy(sendMessage(runtime, args[0], "value:", @[element])):
+            kept.add(element)
+        storage.elements = kept
+        return receiver
     of "removeAt:":
       if storage.kind == ikArray and args.len == 1 and args[0].kind == vkInt:
         let index = args[0].intVal
@@ -2293,11 +2439,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         let removed = storage.elements[index]
         storage.elements.delete(index)
         return removed
-      return nilValue()
-    of "remove:":
-      if args.len == 1 and storage.class.name == "Set":
-        if storage.entries.hasKey(args[0]): storage.entries.del(args[0])
-        return receiver
       return nilValue()
     of "union:", "intersection:", "difference:":
       if args.len == 1 and storage.class.name == "Set":
@@ -2611,12 +2752,16 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         if not hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector):
           var names: seq[NodeValue] = @[]
           for parent in getSuperclasses(receiver.classVal.name):
-            names.add(toValue(parent))
+            names.add(NodeValue(kind: vkString, strVal: parent))
           return compiledArray(names)
       else: discard
     if receiver.classVal.name == "System" and selector == "arguments" and args.len == 0 and
        not hasCompiledClassMethodInHierarchy("System", selector):
       return compiledSystemArguments()
+    if receiver.classVal.name == "File" and
+       not hasCompiledClassMethodInHierarchy("File", selector):
+      let answer = compiledFileCall(selector, args)
+      if answer.handled: return answer.value
     if receiver.classVal.name == "Json" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Json", selector):
       case selector

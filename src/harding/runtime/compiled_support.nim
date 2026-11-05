@@ -49,19 +49,14 @@ proc stringArg*(args: seq[NodeValue], index: int): string =
 # I/O helper functions
 
 proc nt_println*(value: NodeValue): NodeValue =
-  ## Print value with newline
-  echo (if value.kind == vkInstance and value.instVal != nil and
-           value.instVal.kind in {ikArray, ikTable}:
-          sendMessage(currentRuntime[], value, "printString", @[]).strVal
-        else: value.toString())
+  ## Print value with newline. Uses toString, which is what the interpreter's
+  ## Object>>println prints, so both engines print identical text.
+  echo value.toString()
   return value
 
 proc nt_print*(value: NodeValue): NodeValue =
-  ## Print value without newline
-  stdout.write(if value.kind == vkInstance and value.instVal != nil and
-                  value.instVal.kind in {ikArray, ikTable}:
-                 sendMessage(currentRuntime[], value, "printString", @[]).strVal
-               else: value.toString())
+  ## Print value without newline, matching the interpreter's Object>>print.
+  stdout.write(value.toString())
   return value
 
 proc nt_asString*(value: NodeValue): NodeValue =

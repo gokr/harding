@@ -391,6 +391,7 @@ task testGtkApplications, "Validate pure Harding GTK4 applications in both engin
   exec "nim c -r --out:build/test_gtk_native_backend tests/test_gtk_native_backend.nim"
   exec "nim c -r --mm:orc --out:build/test_gtk_native_backend_orc tests/test_gtk_native_backend.nim"
   exec "python3 -m unittest discover -s tests -p test_pure_gtk_application.py"
+  exec "python3 -m unittest discover -s tests -p test_notebook_application.py"
 
 task testNativeGtkDemo, "Validate native GTK shell and Granite-compiled counter (display required)":
   exec "nim c -p:external -o:granite src/harding/compiler/granite.nim"

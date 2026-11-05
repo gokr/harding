@@ -22,12 +22,40 @@ remain active. `retry` also cleans handler-local scopes before restarting.
 |------|---------|-------------|
 | Integer | `42`, `-10` | Signed integers |
 | Float | `3.14`, `-0.5` | Floating point numbers |
-| String | `"hello"`, `"""multi\nline"""` | Double-quoted or triple-quoted |
+| String | `"hello"`, `"""multi\nline"""` | Double-quoted (interpolates) or triple-quoted (raw) |
 | Symbol | `#symbol`, `#at:put:`, `#"""multi\nline"""` | Used as selectors, keys |
-| Array | `#(1, 2, 3)`, `#("a", "b")` | Sequences of values |
-| Table | `#{"key" -> "value"}` | Key-value mappings (Harding syntax) |
+| Array literal | `#(1, 2, 3)`, `#("a", "b")` | Static: literal elements only |
+| Table literal | `#{"key" -> "value"}` | Static: literal keys and values |
+| Array | `array{x, 1 + 2}` | Dynamic: `,`-separated expressions |
+| Table | `table{"k" -> x}` | Dynamic: evaluated keys and values |
 | JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |
 | JSON Array | `json{"items": [1, 2, 3]}` | Arrays use JSON [] syntax inside json{} |
+
+## String Interpolation
+
+Double-quoted strings interpolate at parse time; triple-quoted strings stay raw.
+
+```harding
+name := "bob"
+count := 7
+"Hello $name"                 # Hello bob
+"count=$count."               # count=7.   (the "." is literal text)
+"sum ${count + 1}"            # sum 8
+"sum $(count + 1)"            # sum 8      (same, parenthesised)
+"slot $point::x"              # a named member, no extra braces
+"cost \$5"                    # cost $5    (escaped dollar)
+```
+
+A hole uses `displayString`, so a string embeds unquoted. `printString` remains
+the literal form and quotes it. A raw triple-quoted string can be interpolated
+later against a binding table:
+
+```harding
+template := """Hi $name"""
+bindings := #{}.
+bindings::name := "bob"
+template interpolate: bindings   # Hi bob
+```
 
 ## JSON
 

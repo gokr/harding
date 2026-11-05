@@ -305,10 +305,12 @@ See `docs/QUICKREF.md` for full syntax reference and `docs/MANUAL.md` for the co
 ```harding
 # Comments use hash
 "Strings use double quotes"
-"String with #{interpolation}"
+"String with $interpolation"          # Also ${expr} / $(expr), \$ for a dollar
 #mySymbol                          # Symbols
 #(1, 2, 3)                         # Arrays (0-based indexing; commas required)
 #{"name" -> "Alice"}               # Tables
+array{x, 1 + 2}                    # Array of evaluated expressions
+table{"k" -> x}                    # Table of evaluated key/values
 json{...}                          # Prefix literal syntax for JSON strings
 true false nil                     # Booleans and nil
 42  3.14  0xFF                     # Numbers

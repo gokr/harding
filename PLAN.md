@@ -711,6 +711,10 @@ Effort is relative to this codebase, not a schedule commitment.
    syntactic/native-registry enforcement: aliases, dynamic perform/evaluate,
    VM mutation and direct Nim field/table writes are not proven safe, so it is not
    the complete full-deliverable contract.
+   Whole-stdlib compilation is scoped separately in
+   [GRANITE_STDLIB_COMPILATION.md](docs/GRANITE_STDLIB_COMPILATION.md), which
+   records the three-implementation problem, the measured `--mixed` trade-off and
+   a staged closure plan.
    Not complete: dependency analysis is syntactic, counterpart dependencies are
    declared, dynamic selectors/evaluation are not proven closed, conformance covers
    listed protocols rather than every method, and full-deliverable enforcement,
