@@ -34,7 +34,7 @@ export class HardingDebugConfigurationProvider implements vscode.DebugConfigurat
             }
         }
 
-        if (!config.program) {
+        if (config.request !== 'attach' && !config.program) {
             return vscode.window.showInformationMessage('Cannot find a Harding program to debug').then(_ => {
                 return undefined;
             });
@@ -94,12 +94,13 @@ export class HardingDebugAdapter extends LoggingDebugSession {
     ): Promise<void> {
         const config = vscode.workspace.getConfiguration('harding');
         const port = args.debuggerPort || config.get<number>('debugger.port', 9877);
-        const hardingHome = args.hardingHome || config.get<string>('home', args.cwd || '${workspaceFolder}');
+        const cwd = args.cwd || vscode.workspace.getWorkspaceFolder(vscode.Uri.file(args.program))?.uri.fsPath || require('path').dirname(args.program);
+        const hardingHome = args.hardingHome || config.get<string>('home') || cwd;
 
         this.session = new HardingDebugSession(
             args.program,
             args.args || [],
-            args.cwd || '${workspaceFolder}',
+            cwd,
             hardingHome,
             port
         );

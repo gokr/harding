@@ -52,6 +52,10 @@ code --install-extension vscode-harding/vscode-harding-0.4.0.vsix
 3. Select `vscode-harding/vscode-harding-0.4.0.vsix`
 4. Reload VSCode when prompted
 
+## Activation and troubleshooting
+
+VS Code associates `.hrd` files with Harding and loads the syntax grammar without starting the language server. Opening a Harding file activates the extension; the commands also activate it directly. If commands are missing, inspect View → Output → **Log (Extension Host)** for activation errors. The language server is a separate executable and must be on PATH or configured with `harding.languageServer.path`.
+
 ## Features
 
 ### Syntax Highlighting

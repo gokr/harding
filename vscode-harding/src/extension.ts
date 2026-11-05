@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
-import { HardingDebugConfigurationProvider } from './dap/adapter';
+import { HardingDebugAdapter, HardingDebugConfigurationProvider } from './dap/adapter';
 
 let client: LanguageClient | undefined;
 
@@ -11,11 +11,12 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.debug.registerDebugConfigurationProvider('harding', provider)
     );
 
-    // Start Language Server
-    startLanguageServer(context);
+    context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('harding', {
+        createDebugAdapterDescriptor: () => new vscode.DebugAdapterInlineImplementation(new HardingDebugAdapter())
+    }));
 
-    // Register commands
     registerCommands(context);
+    startLanguageServer(context);
 }
 
 function startLanguageServer(context: vscode.ExtensionContext) {
@@ -48,7 +49,9 @@ function startLanguageServer(context: vscode.ExtensionContext) {
     );
 
     // Start the client and add to subscriptions
-    client.start();
+    void client.start().catch(error => {
+        console.error('Harding language server failed to start:', error);
+    });
     context.subscriptions.push(client);
 }
 

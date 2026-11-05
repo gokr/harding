@@ -5,6 +5,7 @@
   "version": "0.4.0",
   "publisher": "harding-lang",
   "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/gokr/harding.git" },
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -21,7 +22,9 @@
   ],
   "activationEvents": [
     "onLanguage:harding",
-    "onDebugResolve:harding"
+    "onDebugResolve:harding",
+    "onCommand:harding.runFile",
+    "onCommand:harding.debugFile"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -35,17 +38,13 @@
         "extensions": [
           ".hrd"
         ],
-        "configuration": "./language-configuration.json",
-        "icon": {
-          "light": "./images/harding-icon.svg",
-          "dark": "./images/harding-icon.svg"
-        }
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
         "language": "harding",
-        "scopeName": "source.harding",
+        "scopeName": "source.hrd",
         "path": "./syntaxes/harding.tmLanguage.json"
       }
     ],
@@ -74,8 +73,6 @@
       {
         "type": "harding",
         "label": "Harding Debug",
-        "program": "./out/dap/adapter.js",
-        "runtime": "node",
         "configurationAttributes": {
           "launch": {
             "required": [
@@ -184,9 +181,10 @@
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
     "typescript": "^5.0.0",
-    "@vscode/debugadapter": "^1.60.0",
-    "@vscode/debugprotocol": "^1.60.0",
-    "vscode-languageclient": "^9.0.0"
+    "@vscode/debugprotocol": "^1.60.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@vscode/debugadapter": "^1.60.0",
+    "vscode-languageclient": "^9.0.0"
+  }
 }
