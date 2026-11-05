@@ -20,10 +20,13 @@ These are the active, maintained documents:
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM/runtime architecture details | Contributors |
 | [BOOTSTRAP.md](BOOTSTRAP.md) | Bootstrap architecture and stdlib loading | Contributors |
 | [COMPILATION_PIPELINE.md](COMPILATION_PIPELINE.md) | Granite compiler pipeline | Contributors |
+| [GRANITE_STDLIB_COMPILATION.md](GRANITE_STDLIB_COMPILATION.md) | Plan: compile the stdlib with Granite (whole-stdlib coverage) | Contributors |
 | [ROADMAP.md](ROADMAP.md) | Active development priorities | Contributors |
 | [PERFORMANCE.md](PERFORMANCE.md) | Performance workflow and current priorities | Contributors |
 | [VSCODE.md](VSCODE.md) | VSCode extension usage | VSCode users |
-| [GTK.md](GTK.md) | GTK bridge and GUI development | GUI developers |
+| [GTK.md](GTK.md) | GTK documentation entry point and Bona bridge | GUI developers |
+| [GTK_APPLICATIONS.md](GTK_APPLICATIONS.md) | Standalone Harding GTK4 applications, interpreted and native | Application developers |
+| [GTK_SUPPORT.md](GTK_SUPPORT.md) | GTK coverage audit and Harding Notebook implementation plan | Contributors |
 | [GTKSOURCEVIEW.md](GTKSOURCEVIEW.md) | GtkSourceView syntax highlighting | GNOME/GtkSourceView users |
 | [FUTURE.md](FUTURE.md) | Longer-term plans and directions | Contributors |
 

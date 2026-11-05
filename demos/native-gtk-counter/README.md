@@ -85,6 +85,7 @@ wrappers are not compiled. The shared Granite support library still imports VM
 modules for mixed-mode support; this proof avoids interpreter execution but does
 not claim the executable contains no interpreter-related machine code.
 
-Next: make a checked native counterpart for the required existing GTK protocol,
-move UI construction into Harding, and retain this binary-only package test as
-the acceptance contract. Do not introduce compiler-only selectors.
+The shared backend used by `counter.hrd` above supersedes the need for this
+app-specific shell. Further reusable widget coverage and the Harding Notebook
+showcase are tracked in [GTK support](../../docs/GTK_SUPPORT.md). Retain this
+original proof as a separate regression, not as the application-authoring path.
