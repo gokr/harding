@@ -403,6 +403,9 @@ proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
   if name == "Json" and not ctx.mixed:
     return "compiledJsonClassValue()"
 
+  if name == "File" and not ctx.mixed:
+    return "compiledFileClassValue()"
+
   # Check if it's a known global (class or global variable)
   if name in ctx.globals:
     # Globals are stored in a globals table
@@ -1239,8 +1242,15 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Use pre-computed constant value if available
     if arr.isConstant and arr.elements.len > 0:
       return genNodeValueLiteral(arr.cachedValue)
-    # Standard code generation
-    let elems = arr.elements.mapIt(genExpression(ctx, it)).join(", ")
+    # A bare identifier inside an array literal is a symbol, never a variable
+    # read: `#(name)` is `#(#name)`, matching the interpreter. A parenthesised
+    # element `#((name))` is an ordinary expression.
+    let elems = arr.elements.mapIt(
+      if not arr.isDynamic and it != nil and it.kind == nkIdent and
+         it.IdentNode.name notin ["true", "false", "nil"]:
+        "NodeValue(kind: vkSymbol, symVal: \"" & escapeNimString(it.IdentNode.name) & "\")"
+      else:
+        genExpression(ctx, it)).join(", ")
     return fmt("compiledArray(@[{elems}])")
 
   of nkTable:
@@ -1248,7 +1258,8 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Use pre-computed constant value if available
     if tbl.isConstant and tbl.entries.len > 0:
       return genNodeValueLiteral(tbl.cachedValue)
-    # Standard code generation
+    # Table keys are ordinary expressions in both engines (unlike array
+    # elements): `#{x -> 1}` uses the value of x as the key.
     var entries: seq[string] = @[]
     for (key, val) in tbl.entries:
       let keyCode = genExpression(ctx, key)
@@ -1639,6 +1650,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
       return "discard " & exprCode
     return ""
 
+proc hasBranchValue(ifNode: IfNode): bool
+
 proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = @[],
                    hasNonLocalReturn: bool = false, envStructName: string = "",
                    targetMethodId: int = 0): string =
@@ -1708,6 +1721,15 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
                        "NodeValue(kind: vkNil)"
       let target = if targetMethodId != 0: "hardingHome" else: "nil"
       output.add(fmt("  return raiseNonLocalReturn({target}, {exprCode})\n"))
+    elif i == blkNode.body.len - 1 and stmt.kind == nkIf and
+         not (hasReturnNode(stmt.IfNode.thenBranch) or hasReturnNode(stmt.IfNode.elseBranch)) and
+         not hasBranchValue(stmt.IfNode):
+      # An if-expression whose branches are plain statements is the block's
+      # answer: emit its branches as values, not as discarded statements (which
+      # made every such block answer nil). A branch that assigns answers the
+      # assigned value under `ifTrue:`, whose value the block must return, so
+      # those take the statement path below and answer nil.
+      output.add("  return " & indentBlock(genExpression(bodyCtx, stmt), 2) & "\n")
     elif i == blkNode.body.len - 1 and stmt.kind in {nkIf, nkWhile}:
       let stmtCode = genStatement(bodyCtx, stmt)
       if stmtCode.len > 0:
@@ -1738,6 +1760,19 @@ proc genBlockBody*(ctx: GenContext, blkNode: BlockNode, captures: seq[string] = 
 
   return output
 
+
+proc hasBranchValue(ifNode: IfNode): bool =
+  ## True when either branch is a bare assignment, which `ifTrue:` answers with
+  ## the assigned value instead of the expression.
+  for branch in [ifNode.thenBranch, ifNode.elseBranch]:
+    var statements: seq[Node] = @[]
+    if branch != nil:
+      if branch.kind == nkBlock: statements = branch.BlockNode.body
+      else: statements = @[branch]
+    for stmt in statements:
+      if stmt != nil and stmt.kind == nkAssign:
+        return true
+  return false
 
 proc asBlockNode(node: Node): BlockNode =
   ## Get BlockNode from either nkBlock or nkLiteral(vkBlock)

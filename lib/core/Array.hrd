@@ -156,6 +156,30 @@ Array>>copyFrom: startIndex to: endIndex [
     ^ result
 ]
 
+Array>>remove: anObject [
+    # Remove one occurrence, matched by `=`, and answer it (nil on a miss).
+    ^self remove: anObject ifAbsent: [ nil ]
+]
+
+Array>>removeAllSuchThat: block [
+    # Remove every element satisfying the block; answers the receiver.
+    | kept |
+    kept := Array new
+    self do: [:each | (block value: each) ifFalse: [ kept add: each ] ]
+    self removeAll
+    self addAll: kept
+    ^self
+]
+
+Array>>remove: anObject ifAbsent: absentBlock [
+    # Remove one occurrence, matched by `=`, and answer it. When nothing matches,
+    # answer the block's value. Classic Smalltalk-80 Collection vocabulary.
+    | index |
+    index := self indexOf: anObject
+    index isNil ifTrue: [ ^absentBlock value ]
+    ^self removeAt: index
+]
+
 Array>>removeFirst [
     # Remove and return the first element
     ^ self removeAt: 0

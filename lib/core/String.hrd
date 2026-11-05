@@ -79,6 +79,20 @@ String>><< other <primitive primitiveStringAppend: other>
 # String printing.
 #====================================================================.
 
+String>>interpolate: bindings [
+  # Interpolate $name / $name::slot / ${expression-as-name} in an existing
+  # string against a Table of bindings. Triple-quoted literals stay raw; this is
+  # the opt-in pass over their text. `\$` stays a literal dollar and unknown
+  # names are left untouched. It takes an explicit binding table because a
+  # dynamically built string cannot see the caller's locals.
+  ^ <primitive primitiveStringInterpolate: bindings>
+]
+
+String>>displayString [
+  # A string shows its characters, not its quoted literal form.
+  ^ self
+]
+
 String>>printString [
   # Return the string quoted with double quotes
   ^ "\"" & self & "\""

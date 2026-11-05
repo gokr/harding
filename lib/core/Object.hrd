@@ -240,6 +240,12 @@ Object>>= other [
 
 Object>>== other <primitive primitiveEquals: other>
 
+Object>>displayString [
+  # Human-facing representation: defaults to printString, but classes whose
+  # printString is a literal form (String quotes itself) override this.
+  ^ self printString
+]
+
 Object>>printString [
   # Return a string representation of this object
   (self isClass) ifTrue: [

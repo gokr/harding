@@ -1,6 +1,7 @@
 import ../core/type_feedback
 import std/[tables, strutils, math, strformat, os, random, algorithm, json, options]
 import ../core/types
+import ../core/interpolation
 import ../core/process
 import ../core/log_support
 import ../core/string_conversion
@@ -3126,6 +3127,65 @@ proc initGlobals*(interp: var Interpreter) =
       return toValue("")
     return toValue($source[idx])
 
+  proc stringTextOf(value: NodeValue): string =
+    case value.kind
+    of vkString: value.strVal
+    of vkSymbol: value.symVal
+    of vkInstance:
+      if value.instVal != nil and value.instVal.kind == ikString: value.instVal.strVal
+      else: ""
+    else: ""
+
+  proc displayTextOf(value: NodeValue): string =
+    ## Human-facing form: strings show their characters, everything else its
+    ## printString, matching String>>displayString / Object>>displayString.
+    if value.kind == vkString or
+       (value.kind == vkInstance and value.instVal != nil and value.instVal.kind == ikString):
+      return stringTextOf(value)
+    value.toString()
+
+  proc lookupBinding(tableValue: NodeValue, name: string): (bool, NodeValue) =
+    var entries: seq[tuple[key: NodeValue, value: NodeValue]] = @[]
+    if tableValue.kind == vkTable:
+      for key, val in tableValue.tableVal.pairs: entries.add((key, val))
+    elif tableValue.kind == vkInstance and tableValue.instVal != nil and
+         tableValue.instVal.kind == ikTable:
+      for key, val in tableValue.instVal.entries.pairs: entries.add((key, val))
+    for (key, val) in entries:
+      let keyText = if key.kind == vkString: key.strVal
+                    elif key.kind == vkSymbol: key.symVal
+                    else: ""
+      if keyText == name:
+        return (true, val)
+    return (false, nilValue())
+
+  proc slotValueNamed(value: NodeValue, name: string): (bool, NodeValue) =
+    if value.kind != vkInstance or value.instVal == nil or value.instVal.class == nil:
+      return (false, nilValue())
+    let slots = value.instVal.class.allSlotNames
+    for index, slotName in slots:
+      if slotName == name and index < value.instVal.slots.len:
+        return (true, value.instVal.slots[index])
+    return (false, nilValue())
+
+  proc primitiveStringInterpolateValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    ## `$name`, `$name::slot`, `${expression}` and `\\$` over a Table of
+    ## bindings. Unknown names stay untouched; `::slot` reads a named slot.
+    let bindings = if args.len > 0: args[0] else: nilValue()
+    proc resolve(name: string, tail: seq[string], found: var bool): string =
+      var (present, bound) = lookupBinding(bindings, name)
+      if present:
+        for segment in tail:
+          let (slotFound, slotValue) = slotValueNamed(bound, segment)
+          if slotFound:
+            bound = slotValue
+          else:
+            present = false
+            break
+      found = present
+      if present: displayTextOf(bound) else: ""
+    return toValue(interpolateText(stringTextOf(self), resolve))
+
   proc primitiveStringAsIntegerValueImpl(self: NodeValue, argsUnused: seq[NodeValue]): NodeValue =
     discard argsUnused
     var source = ""
@@ -3743,6 +3803,11 @@ proc initGlobals*(interp: var Interpreter) =
   stringAtMethod.setNativeValueImpl(primitiveStringAtValueImpl)
   stringCls.methods["primitiveStringAt:"] = stringAtMethod
   stringCls.allMethods["primitiveStringAt:"] = stringAtMethod
+
+  let stringInterpolateMethod = createCoreMethod("primitiveStringInterpolate:")
+  stringInterpolateMethod.setNativeValueImpl(primitiveStringInterpolateValueImpl)
+  stringCls.methods["primitiveStringInterpolate:"] = stringInterpolateMethod
+  stringCls.allMethods["primitiveStringInterpolate:"] = stringInterpolateMethod
 
   let stringSplitMethod = createCoreMethod("primitiveSplit:")
   stringSplitMethod.setNativeImpl(instStringSplitImpl)
@@ -7398,8 +7463,9 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
       # Push element evaluation frames in reverse order
       for i in countdown(arr.elements.len - 1, 0):
         let elem = arr.elements[i]
-        # Handle special cases for array literals (symbols, keywords)
-        if elem.kind == nkIdent:
+        # Handle special cases for array literals (symbols, keywords). A
+        # dynamic array{} element is an ordinary expression instead.
+        if elem.kind == nkIdent and not arr.isDynamic:
           let ident = cast[IdentNode](elem)
           case ident.name
           of "true":

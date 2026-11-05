@@ -456,11 +456,13 @@ type
     elements*: seq[Node]
     cachedValue*: NodeValue  # Pre-computed value if isConstant is true
     isConstant*: bool        # True if all elements are compile-time constants
+    isDynamic*: bool         # True for array{...}: elements are expressions
 
   TableNode* = ref object of Node
     entries*: seq[tuple[key: Node, value: Node]]
     cachedValue*: NodeValue  # Pre-computed value if isConstant is true
     isConstant*: bool        # True if all keys/values are compile-time constants
+    isDynamic*: bool         # True for table{...}: keys/values are expressions
 
   PrimitiveNode* = ref object of Node
     tag*: string                    # Raw tag content like "primitive" or "primitive name=\"clone\""

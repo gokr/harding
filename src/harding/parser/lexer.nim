@@ -64,9 +64,15 @@ type
     tkIntDiv, tkMod, tkLtEq, tkGtEq, tkNotEq, tkShiftLeft  # Multi-character binary operators: // \\ <= >= ~= <<
     tkAmpersand, tkPipe  # & for concatenation, | for logical OR
     tkMethodDef  # >> for method definitions
+  InterpolationPart* = object
+    text*: string          ## literal text before the hole (or the tail)
+    expr*: string          ## hole source; "" for the final text-only part
+    tail*: seq[string]     ## `::segment` chain applied to the hole expression
   Token* = object
     kind*: TokenKind
     value*: string
+    interpolated*: bool    ## value is a template; parts describe it
+    parts*: seq[InterpolationPart]
     line*, col*: int
   LexState* = enum
     lsNormal, lsComment, lsString, lsSymbol, lsChar, lsNimCode
@@ -174,10 +180,18 @@ proc parseNumber(lexer: var Lexer): Token =
   else:
     return Token(kind: tkInt, value: value, line: startLine, col: startCol)
 # Parse string (double quotes, including triple-quoted multiline strings)
+proc holeAt(lexer: Lexer, position: int): bool =
+  ## True when the character at `position` starts a `$` hole: an identifier, or
+  ## a `${...}` / `$(...)` expression hole.
+  if position >= lexer.input.len: return false
+  let c = lexer.input[position]
+  return c in {'{', '('} or c.isAlpha or c == '_'
+
 proc parseString(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
   var value = ""
+  var parts: seq[InterpolationPart] = @[]
 
   let quoteChar = lexer.peek()
   if quoteChar != '"' and quoteChar != '\'':
@@ -214,6 +228,10 @@ proc parseString(lexer: var Lexer): Token =
     let c = lexer.peek()
     if c == quoteChar:
       discard lexer.next()
+      if parts.len > 0:
+        parts.add(InterpolationPart(text: value, expr: "", tail: @[]))
+        return Token(kind: tkString, value: "", interpolated: true, parts: parts,
+                     line: startLine, col: startCol)
       return Token(kind: tkString, value: value, line: startLine, col: startCol)
     elif c == '\\':
       discard lexer.next()
@@ -225,9 +243,49 @@ proc parseString(lexer: var Lexer): Token =
       of '\\': value.add('\\')
       of '\'': value.add('\'')
       of '"': value.add('"')
+      of '$': value.add('$')   # \$ keeps a literal dollar
       else:
         value.add('\\')
         value.add(esc)
+    elif c == '$' and lexer.holeAt(lexer.pos + 1):
+      # Nim-style hole: $name, $name::slot, $name::a::b, or ${expression}.
+      discard lexer.next()
+      if lexer.peek() == '{' or lexer.peek() == '(':
+        let opener = lexer.peek()
+        let closer = if opener == '{': '}' else: ')'
+        discard lexer.next()
+        var depth = 1
+        var expr = ""
+        while lexer.pos < lexer.input.len and depth > 0:
+          let inner = lexer.peek()
+          if inner == opener: inc depth
+          elif inner == closer: dec depth
+          if depth > 0:
+            expr.add(lexer.next())
+          else:
+            discard lexer.next()
+        if depth > 0:
+          return Token(kind: tkError, value: "Unterminated $" & $opener & "... in string", line: startLine, col: startCol)
+        parts.add(InterpolationPart(text: value, expr: expr.strip(), tail: @[]))
+        value = ""
+      else:
+        var name = ""
+        while lexer.pos < lexer.input.len and
+              (lexer.peek().isAlphaNum or lexer.peek() == '_'):
+          name.add(lexer.next())
+        var chain: seq[string] = @[]
+        while lexer.pos + 1 < lexer.input.len and lexer.input[lexer.pos] == ':' and
+              lexer.input[lexer.pos + 1] == ':':
+          discard lexer.next()
+          discard lexer.next()
+          var segment = ""
+          while lexer.pos < lexer.input.len and
+                (lexer.peek().isAlphaNum or lexer.peek() == '_'):
+            segment.add(lexer.next())
+          if segment.len == 0: break
+          chain.add(segment)
+        parts.add(InterpolationPart(text: value, expr: name, tail: chain))
+        value = ""
     else:
       value.add(lexer.next())
 
