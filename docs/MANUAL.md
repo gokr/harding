@@ -109,10 +109,51 @@ For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](T
   multi
   line
 """               # Triple-quoted multiline symbol
-#(1, 2, 3)            # Array
-#{"key" -> "value"} # Table (dictionary)
+#(1, 2, 3)            # Array literal (static)
+#{"key" -> "value"} # Table literal (static)
+array{x, 1 + 2}     # Array of evaluated expressions
+table{"k" -> x}     # Table of evaluated keys and values
 json{"x": 10}       # JSON literal (returns JSON string)
 ```
+
+### Static Literals
+
+`#(...)` and `#{...}` are static literals: their contents are fixed at parse
+time and nothing inside them is evaluated at runtime.
+
+```smalltalk
+#(1, 2, name)          # a bare identifier is a symbol: #(1 2 #name)
+#((a, b), (c, d))      # a nested literal needs no extra "#"
+#(#(a, b))             # the explicit form is equally valid
+#{"kind" -> #circle}   # literal table
+```
+
+A bare identifier inside `#(...)` always means its symbol, never a variable —
+that is what allows `Object derive: #(name, age)` to declare slots by name. To
+embed a value, use `array{...}`.
+
+Each evaluation of a literal answers a **fresh** object. Unlike classic
+Smalltalk, a literal is never shared between executions of the same code, so
+mutating one never affects another.
+
+### Dynamic Literals
+
+`array{...}` and `table{...}` are the dynamic counterparts. Their bodies are
+comma-separated expressions, parsed by the language, so a mistake is a parse
+error rather than a runtime one.
+
+```smalltalk
+x := 3.
+name := "bob".
+array{x, 1 + 2, name}            # #(3 3 bob)
+table{"id" -> x, #name -> name}  # evaluated keys and values
+array{}                          # empty array
+table{}                          # empty table
+```
+
+Use `#(...)` when the contents are data you are describing, and `array{...}` when
+they are values you are computing. `json{...}` is separate again: its keys are
+names and its result is a JSON string.
 
 ### Comments
 
@@ -201,12 +242,14 @@ for differences from Smalltalk-80.
 
 `granite build --gtk app.hrd` compiles widget creation, layout and actions from
 Harding using `lib/gui/Gtk.hrd`; no per-application Nim source is needed. The
-standalone `harding_gtk` interpreter runs the same library protocol. Initial
-coverage is application activation, windows, row/column boxes, labels and buttons
-with zero-argument action blocks. GTK4 is a runtime system dependency; native
-packages do not load `.hrd` source or start an interpreter. `--mixed` and freeze
-manifests are not yet supported together with `--gtk`. See
-[GTK applications](GTK_APPLICATIONS.md) for examples, builds and acceptance tests.
+standalone `harding_gtk` interpreter runs the same library protocol: activation,
+windows, boxes, labels, buttons, entries, text views, scrolled windows, split
+panes and list boxes, with typed `clicked`/`changed`/`row-selected`/`close-request`
+callbacks. GTK4 is a runtime system dependency; native packages do not load
+`.hrd` source or start an interpreter. `--mixed` and freeze manifests are not yet
+supported together with `--gtk`. `demos/notebook` is a complete application in
+this protocol. See [GTK applications](GTK_APPLICATIONS.md) for builds and
+[GTK support](GTK_SUPPORT.md) for coverage and remaining work.
 
 ### Checked frozen compilation (experimental)
 
@@ -386,7 +429,7 @@ Harding supports triple-quoted string literals using `"""..."""`.
 text := """
   Hello
   He said "welcome"
-  Literal #{name}
+  Raw $name stays literal
   Backslash-n: \n
 """
 ```
@@ -724,8 +767,21 @@ The core and process libraries provide these mixins in `lib/core/Comparable.hrd`
 | `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:`, `clampTo:max:` |
 | `Equatable` | `compareTo:` | `=`, `~=` |
 | `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:`, `anySatisfy:`, `allSatisfy:`, `noneSatisfy:`, `count:`, `sum` |
-| `Printable` | `printOn:` | `printString`, `print`, `printCr`, `displayString` |
+| `Printable` | `printOn:` | `printString`, `print`, `printCr` |
+| `Displayable` | `displayOn:` | `displayString` |
 | `Synchronizable` | — | `critical:`, `acquire`, `release` |
+
+**Printing versus display.** Two protocols describe an object in text, and every
+class answers both:
+
+- `printString` / `printOn:` is the *literal* form: what you would type to
+  reconstruct the object. A string quotes itself (`"bob"`), and a collection
+  quotes its elements (`#("x" 1)`).
+- `displayString` / `displayOn:` is the *human-facing* form. `Object` answers
+  `printString`, and `String` overrides it to answer its characters (`bob`).
+
+String interpolation uses `displayString`, so `"Hi $name"` embeds `bob`, not
+`"bob"`. Both engines answer these identically.
 
 **Combining Comparable and Equatable**: Use both mixins together when you need both ordering and equality. Comparable provides ordering operators (`<`, `>`, etc.) while Equatable provides equality operators (`=`, `~=`). Both require `compareTo:` to be implemented.
 

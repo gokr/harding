@@ -135,7 +135,7 @@ TodoRepository>>findTodoById: id [
 TodoRepository>>createFromRequest: body [
     | id record |
     id := self nextId
-    record := #{
+    record := table{
         "id" -> id,
         "title" -> (body at: "title"),
         "completed" -> false,
@@ -301,7 +301,7 @@ TodoApiApp>>handleDeleteTodo: req [
 ]
 
 TodoApiApp>>schemaRef: schemaName [
-    ^ #{"$ref" -> ("#/components/schemas/" & schemaName)}
+    ^ table{"$ref" -> ("#/components/schemas/" & schemaName)}
 ]
 
 TodoApiApp>>openApiDocument [
@@ -495,8 +495,8 @@ TodoApiApp>>openApiDocument [
                 }
             }
         },
-        "components" -> #{
-            "schemas" -> #{
+        "components" -> table{
+            "schemas" -> table{
                 "Todo" -> Todo openApiSchema,
                 "ErrorResponse" -> ErrorResponse openApiSchema,
                 "CreateTodoRequest" -> CreateTodoRequest openApiSchema,
