@@ -292,13 +292,22 @@ suite "Exception Handling":
     for source in [
       "1 + ([2] on: Error do: [:ex | 0])",
       "1 + ([10 // 0] on: DivisionByZero do: [:ex | 2])",
-      "1 + ([Error signal: \"test\"] on: Error do: [:ex | 2])",
-      "#(1, ([2] on: Error do: [:ex | 0])) at: 1"
+      "1 + ([Error signal: \"test\"] on: Error do: [:ex | 2])"
     ]:
       let (value, err) = interp.doit(source)
       require(err.len == 0)
       require(value.kind == vkInt)
-      check(value.intVal == (if source.startsWith("#("): 2 else: 3))
+      check(value.intVal == 3)
+    # An array literal holds literal elements only (docs/QUICKREF.md), so the
+    # pending-receiver variant assigns into an array instead of embedding a
+    # message send in one.
+    let (filled, fillErr) = interp.doit("""
+      a := #(1, nil).
+      a at: 1 put: ([2] on: Error do: [:ex | 0]).
+      a at: 1
+    """)
+    require(fillErr.len == 0)
+    check(filled.intVal == 2)
 
   test "retry preserves pending receiver operands":
     let (value, err) = interp.doit("""
