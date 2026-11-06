@@ -1,214 +1,147 @@
 # Compiling the standard library with Granite
 
-Status: **plan, not implemented.** Tracked as the next Granite work item. The
-design this extends is [PLAN.md](../PLAN.md) section 6 ("Frozen stdlib and the
-engine boundary"); this document scopes the one part that section leaves open —
-whole-stdlib compilation — and records why it is the right next step.
+Status: **library method bodies compile; declared primitives remain the only
+hand-written leaf.** The design this extends is [PLAN.md](../PLAN.md) section 6
+("Frozen stdlib and the engine boundary").
 
 ## The problem
 
-A Granite-compiled program has three implementations of collection and value
-behaviour, and they must agree by hand:
+A Granite-compiled program used to have three implementations of collection and
+value behaviour, which had to agree by hand: the Harding standard library
+(`lib/**/*.hrd`), the interpreter's primitives, and a builtin table of
+`of "selector"` arms in `src/harding/runtime/runtime.nim`.
 
-| Implementation | Where | Coverage |
-|---|---|---|
-| Harding standard library | `lib/**/*.hrd` | 395 methods |
-| Interpreter primitives | `src/harding/interpreter/` | 136 of those declared `<primitive>` |
-| Compiled runtime builtins | `src/harding/runtime/runtime.nim` | 169 `of "selector"` arms |
-
-Granite parses **only the input file**. It loads the stdlib into an interpreter
-to obtain an accurate class model for analysis, then discards those method
-bodies: generated output contains procs for the methods the user wrote and none
-for `Array>>sum`, `Array>>count:` or `SequenceableCollection>>after:`.
-
-The consequence is that any selector the runtime does not hand-implement is a
-`MessageNotUnderstood` in compiled code — while the identical program works
-interpreted:
+Any selector the runtime did not hand-implement was a `MessageNotUnderstood` in
+compiled code while the identical program worked interpreted:
 
 ```
 ./harding  prog.hrd   ->  sum: 6
 ./granite build prog.hrd && ./prog   ->  MessageNotUnderstood: sum
 ```
 
-Every engine divergence found while building `demos/notebook` came from this
-structure, not from any single mistake:
-
-- `add:` answered the collection in two implementations and the element in a
-  third;
-- `printString` quoted a string in one engine and not the other;
-- `indexOf:` handled strings only, answering nil for every array;
-- `println` routed through `printString` compiled and `toString` interpreted;
-- `superclassNames` answered symbols on one path and strings on another.
-
-Each was fixed by hand, in one or more places. The next one will appear the same
-way. Parity tests catch these after the fact; they cannot prevent them, because
-the duplication is structural.
+Every engine divergence found while building `demos/notebook` came from that
+structure, not from a single mistake — `add:` answering differently in three
+places, `printString` quoting in one engine and not the other, `indexOf:`
+answering nil for arrays, `println` routing through `printString` compiled and
+`toString` interpreted, `superclassNames` answering symbols on one path and
+strings on another. Each was patched by hand; the next one appeared the same
+way, because the duplication was structural.
 
 ## Goal
 
-**One source of truth.** A Granite-compiled program should execute the same
-`lib/**/*.hrd` method bodies the interpreter executes, so that "compiled" changes
-*how* a method runs, never *what* it answers. Concretely: after this work, no
-selector may exist in `lib/` that is missing from a compiled program, and the
-hand-written builtin table in `runtime.nim` becomes an optimisation, never a
-definition.
+**One source of truth.** A Granite-compiled program executes the same
+`lib/**/*.hrd` method bodies the interpreter executes, so "compiled" changes
+*how* a method runs, never *what* it answers.
+
+## What is implemented
+
+Granite loads the stdlib into an interpreter, then walks the interpreter's own
+**source index** to find every class and side a library file defines. There is
+no maintainer's list of classes to compile: adding a class to `lib/` adds it to
+the compilation set.
+
+For each library definition the ordinary method pipeline runs. The class model
+is shared with application classes, so a library method gets the same block
+capture, non-local return, slot access and integer-region treatment as one the
+user wrote. Two properties follow:
+
+- **A library method the program overrides wins.** Application definitions
+  replace lifted bodies in the generated registry, so the ordinary override
+  rule is the only rule.
+- **A primitive stays a leaf.** A `<primitive selector>` declaration compiles
+  literally: the emitted body is a call to the Nim implementation registered for
+  that selector. `src/harding/compiler/primitive_abi.nim` is the entire table.
+  Nothing else in the compiler names a selector, and a primitive that has no
+  entry is reported as a compile-time gap rather than silently dropped or
+  re-implemented.
+
+Storage is deliberately separate from methods. Classes the runtime represents
+natively (immediates, `String`, `Array`, `Table`, `Set`, `Block`, `Object`) keep
+that representation and its allocator; other library classes get an ordinary
+generated layout from their live slot list, so `Bag`, `SortedCollection`,
+`Interval`, `Library`, `FileStream`, `TestCase` and friends compile as real
+objects.
+
+Many collection and string selector implementations have been removed from
+`runtime.nim`. The runtime still contains selector-specific fallback paths and
+codegen still contains specialized sends; their final audit is unfinished.
+Zero reported gaps establishes declaration coverage for the loaded core/standard
+library, not semantic completeness or the absence of every duplicate path.
 
 ## Non-goals
 
 - Not shipping a compiled Bona, image persistence or live redefinition policies.
   Those stay with PLAN.md section 6.
-- Not deleting the native builtins. They stay as fast paths, guarded by
-  conformance against the compiled stdlib (see "Counterparts" below).
+- Not deleting the representation primitives. They are the declared leaf of a
+  `<primitive>` method, not a second definition of a Harding method.
 - Not changing language semantics. Any semantic difference uncovered on the way
   is a defect to report, not a decision to make inside this work.
 
-## Current coverage, and why "just bind the classes" is not enough
+## Coverage
 
-`--mixed` already reaches stdlib code, by keeping an interpreter alive and
-routing unknown sends to it. Measured on a trivial program:
-
-| Build | Startup | Stdlib coverage |
-|---|---|---|
-| `granite build` | ~3 ms | 169 selectors |
-| `granite build --mixed` | ~2.15 s | 100% |
-
-`--mixed` boots an interpreter and loads the stdlib on every run. That is
-acceptable for a development build and not acceptable as the definition of
-"compiled", which is why it is not the answer.
-
-Binding a chosen set of classes (Array, Table, Set, …) is also not the answer: it
-reproduces the same partial-duplication problem class by class, and leaves the
-next unbound class with exactly today's behaviour. The gap must be closed by
-*compiling the dependency closure*, which is why PLAN.md section 6 already says
-freezing is meaningful only as a closure, not per file.
-
-## Approach
-
-Compile the stdlib method bodies into the program, using the machinery that
-already exists for user classes.
-
-Granite already loads the stdlib into an interpreter and has, for every stdlib
-class, the `BlockNode`s that `loadStdlib` parsed. Emitting those bodies through
-the existing code generator gives each stdlib method a native proc, a
-`registerCompiledMethod` entry and an interpreted-to-compiled shim — exactly what
-a user class gets today:
+`granite compile` reports a line per unresolved definition on stderr:
 
 ```
-proc Class_4172726179_nt_sum*(self: NodeValue, args: seq[NodeValue]): NodeValue
-registerCompiledMethod("Array", "sum", Class_4172726179_nt_sum)
-proc shim_Class_4172729299_nt_sum*(interp: var Interpreter, self: Instance, ...)
+stdlib gap: <Class>>>selector (<primitive name>)
 ```
 
-What makes this feasible rather than a rewrite:
+The current tree reports **zero** gaps on a hello-world compile: every method a
+library file defines either compiles from source or resolves to a declared
+primitive. `tests/test_stdlib_compilation.nim` asserts exactly that invariant
+through the compiler's own `stdlibMethodDefinitions`, so a new library method
+that cannot be compiled fails the suite instead of becoming the next silent
+divergence.
 
-- **The ASTs already exist.** `loadStdlib` parses `lib/**/*.hrd` at compile time.
-  No new parser path is needed; the work is lifting `Class.methods` /
-  `Class.classMethods` bodies into the compilation unit.
-- **The codegen already handles the language.** The bodies are ordinary Harding;
-  the generator already compiles closures, cascades, `::`, non-local returns and
-  primitives for user code.
-- **The boundary already exists.** Shims, live method guards, deoptimisation and
-  the value-based host send are implemented and tested (`PLAN.md` §6 steps 1-3,
-  `tests/test_engine_boundary.nim`).
-- **Primitives already resolve.** A `<primitive primitiveX>` declaration must
-  continue to reach the interpreter/native implementation rather than being
-  compiled as an empty body; the existing primitive registration is the hook.
+Method and class counts are not a coverage contract: they depend on the loaded
+library inventory. Discovery currently covers `lib/core/` and `lib/standard/`,
+not every optional library under `lib/`.
 
-The delta is a *dependency closure and ordering* problem more than a codegen
-problem, which is the honest risk assessment: the generator is proven, the
-scheduling of stdlib compilation is not.
+## Boundary
+
+Three rules keep the source of truth single:
+
+1. **A definition in `lib/` is a method.** It compiles.
+2. **A `<primitive selector>` declaration is a leaf.** It emits a call to the Nim
+   proc named in `primitive_abi.nim`. A selector missing from that table is a
+   gap, not an invitation to write a second implementation.
+3. **No second implementation of a Harding body.** This is the target invariant.
+   The remaining runtime fallbacks and codegen fast paths still need auditing
+   against it. Dispatch, native storage and explicit primitive leaves remain.
+
+`--mixed` remains the development fallback and is unaffected: it boots an
+interpreter and routes unknown sends to it.
 
 ## Staged plan
 
-Each stage must leave the tree green: `nimble test`, the parity runner and
-`tests/test_engine_boundary.nim` under ARC and ORC. Stages are ordered so the
-riskiest dependency work is validated early with a small closure.
+The work landed in four steps, each validated by the parity runner:
 
-### Stage 1 — compile one closed slice
+1. **Integer slice** — ten source-backed Integer methods (`factorial`, `gcd:`,
+   `lcm:`, ...) compiled through the ordinary pipeline, with no replacement
+   allocator. This proved the mechanism and exposed two structural blockers:
+   codegen skipped methods whose owner had no generated object type, and runtime
+   dispatch skipped compiled registrations for immediate values.
+2. **Value slice** — Float, Boolean/True/False, UndefinedObject, String and
+   Symbol, with live superclass edges emitted separately from allocation so
+   inherited Boolean methods resolve on immediates.
+3. **Collection slice** — Array, Table, Set, Iterable, Comparable, Number,
+   Equatable, Bag, SortedCollection, Interval. Bag and SortedCollection get
+   generated layouts from their live slot lists; the parity cases no longer
+   inline library source into the application.
+4. **Discovery and closure** — class discovery moved from a maintainer's list to
+   the interpreter's source index; class-side aliases the VM publishes on the
+   metaclass are lifted too. Host selectors have gained primitive declarations,
+   but a complete VM-only-selector audit remains outstanding.
 
-Pick the smallest closure that is still meaningful and compile it for real:
-`Object`, `Boolean`/`True`/`False`, `UndefinedObject`, `Integer`, `String`.
-These have few dependencies and many primitives, so they exercise the "primitive
-body must stay a primitive" path.
+## Open
 
-Deliverable: a program using `Integer>>factorial`-style stdlib methods that has
-no native-only builtin for them, passing parity. Keep the existing native
-builtins in place; they should now be *redundant* rather than *load-bearing*.
-
-### Stage 2 — dependency closure and ordering
-
-Compile `Iterable`, `Array`, `Table`, `Set`, `Bag`, `SortedCollection` together
-with their parents. This is where the real questions live:
-
-- **Method body references** to classes not yet compiled must resolve to shims,
-  not to a missing method. Reuse the existing dynamic-send path.
-- **Mixins** (`Iterable`, `Comparable`, `Equatable`, `Printable`) are not modelled
-  by native class creation (recorded in PLAN.md §6 step 4). Either teach the
-  compiled class model to flatten mixin methods into participants, or compile
-  mixin methods per participating class. Decide here, with tests.
-- **`copyEmpty`/species** and other `self class`-dependent methods must work
-  compiled; this is a live check on class identity across the boundary.
-
-Deliverable: `stdlib_bag` and `stdlib_sorted_collection` parity cases pass
-*without* inlining the stdlib source in the test. That inlining is today's
-workaround and its removal is the acceptance signal for this stage.
-
-### Stage 3 — counterparts become optimisations, and are checked
-
-Keep the native implementations of hot selectors (`at:`, `add:`, `size`,
-arithmetic) but make them *checked counterparts*: each one must have an executed
-conformance case against the compiled-from-source version, in the discipline
-`examples/manifest.json` and `scripts/check_frozen.py` already establish. A
-counterpart without a passing case fails the build.
-
-This is where the divergence class dies: `printString`, `add:` and `indexOf:`
-today are three unchecked copies; after this stage they are one definition plus
-checked fast paths.
-
-### Stage 4 — startup, size and the `--mixed` decision
-
-Measure and record: binary size, startup time, and the parity suite runtime
-before and after. Then decide `--mixed`'s future:
-
-- keep it as a development mode with the source-replay bootstrap it has, or
-  retire it once plain `granite build` covers the stdlib.
-
-Either way, record the decision here with the measurements.
-
-### Stage 5 — remove the workarounds
-
-- Delete the "inline the stdlib source into the parity case" hack from
-  `scripts/test_granite_parity.py` (`stdlib_bag`, `stdlib_sorted_collection`).
-- Reduce the builtin table in `runtime.nim` to selectors that genuinely need
-  native representation, each with a conformance case.
-- Update `docs/GRANITE_STATUS.md`, this document and `PLAN.md` §6 step 5.
-
-## Risks
-
-| Risk | Assessment | Mitigation |
-|---|---|---|
-| Compile time grows with the stdlib closure | Real. The stdlib is ~400 methods; Nim compile is the dominant cost today (~13 s for a trivial program after codegen changes). | Measure per stage; compile only the reachable closure, not every class. |
-| Binary size | Real, same cause. | Stage 4 measures it; closure-only compilation keeps it bounded. |
-| Two class models (interpreter's and the compiled one) drift | The existing risk, unchanged. | Class identity checks in `bindNativeInstanceTo` already refuse mismatched layouts. |
-| Primitive declarations compile as empty bodies | Highest technical risk: it would silently change behaviour. | Stage 1 covers primitive-heavy classes first, with parity cases. |
-| Mixins not modelled natively | Known open item in PLAN.md §6. | Stage 2 must decide and test it before collections depend on it. |
-| Cache interaction | The per-site cache caches negative resolutions; a newly compiled stdlib method must invalidate them. | Existing `compiledClassDispatchVersion` machinery; add a regression that compiles after a cache warm. |
-
-## Acceptance criteria
-
-1. A compiled program reaches **every** public stdlib method; a generated
-   inventory check compares the selectors in `lib/**/*.hrd` against the compiled
-   program's registered methods and fails on any gap.
-2. The parity runner passes with no stdlib source inlined into any case.
-3. `tests/test_engine_boundary.nim` passes under ARC and ORC.
-4. Startup for a trivial compiled program stays within ~2x of today's ~3 ms.
-5. `docs/GRANITE_STATUS.md` records measured before/after numbers, and no claim of
-   completeness is made beyond what the inventory check proves.
-
-## What this does not fix
-
-Delegation alone would not fix engine divergence; only a single definition does.
-Equally, this work will not find every divergence by itself — it removes the
-*cause*. The parity suite remains the detector, and any divergence it surfaces
-during this work is a bug to report under the interpreter/language gate, not
-something to resolve by adjusting expectations.
+- **Counterpart conformance.** Specialized helpers such as `nt_plus` and the
+  integer-region inlining are fast paths over the same primitive the compiled
+  method calls, so agreement is structural rather than tested per helper. A
+  differential test over the fast path and the compiled body would close it.
+- **Interpreter-side duplication.** `src/harding/interpreter/vm.nim` still
+  implements some value primitives (`primitivePlusValueImpl` and friends) that
+  `src/harding/core/value_primitives.nim` also provides. Collapsing them is the
+  same boundary applied to the interpreter, not a compiled-code concern.
+- **`--mixed` and frozen builds** keep their previous path: they still rely on
+  the host. Bringing the same closure to a checked frozen build is the remaining
+  checklist item for image-style packaging.

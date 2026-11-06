@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Granite native non-frozen builds lift source-indexed core/standard library methods through the ordinary method pipeline and resolve declared primitives through `primitive_abi.nim`. Collection and string duplicate implementations have been reduced; remaining selector fallbacks and full parity validation are still under review.
 - `demos/notebook`: a complete GTK4 application in Harding source — searchable note list, split title/body editor, new/duplicate/delete/undo-delete/pin/archive, versioned JSON persistence with explicit save, and in-app `--self-test`/`--gui-test` that run in both `harding_gtk` and `granite build --gtk` (`demos/notebook/README.md`).
 - Shared GTK application protocol gained `GtkEntry`, `GtkTextView`, `GtkScrolledWindow`, `GtkPaned` and `GtkListBox`, with `clicked`/`changed`/`row-selected`/`close-request` callbacks, widget visibility/sensitivity/focus/tooltip, `removeAll`, and list children wrapped in real `GtkListBoxRow`s. Callback arity is validated at connection time (`docs/GTK_APPLICATIONS.md`).
 - `GtkButton icon:label:action:` composes a 16px icon with its caption, and `GtkToggleButton` exposes GTK's own pressed state (`state`) so a toggling control is observable to accessibility tooling. Sizing conveniences split `expand` into `wide`, `tall`, `top` and `middle`, because `expand` sets both axes and stretched a one-line title entry to full height.

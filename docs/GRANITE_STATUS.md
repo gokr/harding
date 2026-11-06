@@ -4,6 +4,36 @@ Merged into `main`. The sections below record the work done on the
 `granite-completeness` branch, which is now part of main; the branch name is kept
 only in the historical text.
 
+## Source-backed stdlib compilation
+
+Native non-frozen builds lift methods discovered from the interpreter's source
+index for `lib/core/` and `lib/standard/` through the ordinary method/closure
+pipeline. Declared primitives resolve through `primitive_abi.nim`; unresolved
+declarations are reported as `stdlib gap` diagnostics. The focused inventory
+test reports zero gaps for the loaded library. Optional libraries, mixed mode
+and frozen builds are not covered by that claim.
+
+Validation: `test_stdlib_compilation` (6), `test_compiler_basic` (99),
+`test_compiled_runtime` (45), `test_engine_boundary` (36), and
+`test_compiled_value_dispatch` (1) pass under both ARC and ORC (187 tests per
+memory manager). Logs are `build/test_*_{arc,orc}_validated.log`.
+The parity sweep passed 116 cases with one build timeout; that case,
+`numeric_specialization`, passed on an isolated rerun in 11 seconds. All 117
+cases therefore passed across the sweep and rerun, not in one uninterrupted
+run. Logs: `build/parity-final.log` and
+`build/numeric-specialization-rerun.log`.
+
+Failures found during the sweep included recursive exception primitive dispatch
+and missing block registrations after range/collection sends stopped being
+inlined. Focused parity reruns pass for exception delegation, notifications,
+cleanup, iteration captures, range captures, JSON configuration and collections.
+
+Outstanding: audit remaining runtime selector fallbacks and codegen
+specializations; check host primitive
+semantics and VM-only registrations; correct any remaining coverage gaps. Zero
+inventory gaps alone does not establish the overall objective. See
+[the plan](GRANITE_STDLIB_COMPILATION.md).
+
 ## First profile-guided runtime slice
 
 Release gprof profiles show repeated hierarchy lookup and temporary allocation

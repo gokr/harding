@@ -467,12 +467,23 @@ arbitrary error resumption solely in the interpreter.
 
 ## 6. Frozen stdlib and the engine boundary
 
-Status: **partial implementation, not complete mixed-mode compilation.**
-Instance/class shims, live method guards, value/slot/block/super host dispatch,
-explicit embedded hosts, checked frozen source composition and limited native
-sealing have executed regressions. Remaining language/protocol choices and
-control-transfer defects are listed below. The historical baseline records the
-original measurements, not the current implementation.
+Status: **source-backed stdlib compilation implemented; mixed-mode and checked
+frozen builds remain.** Instance/class shims, live method guards,
+value/slot/block/super host dispatch, explicit embedded hosts, checked frozen
+source composition and limited native sealing have executed regressions.
+
+Native non-frozen builds now compile every method `lib/**/*.hrd` defines through
+the ordinary method pipeline, discovered from the interpreter's source index.
+Declared primitives resolve to Nim procs in
+`src/harding/compiler/primitive_abi.nim`. Unresolved declarations are reported as
+`stdlib gap` diagnostics, currently zero for the loaded core/standard inventory.
+The remaining runtime selector fallbacks and codegen specializations still need
+a final audit; full parity and ARC/ORC validation are in progress. See
+[docs/GRANITE_STDLIB_COMPILATION.md](docs/GRANITE_STDLIB_COMPILATION.md).
+
+Remaining language/protocol choices and control-transfer defects are listed
+below. The historical baseline records the original measurements, not the current
+implementation.
 
 ### Two deliverable modes
 
@@ -494,15 +505,17 @@ Frozen classes come in three tiers:
 
 | Tier | Mechanism | Intended use |
 |---|---|---|
-| Generic | `.hrd` source compiled to Nim codegen | Default; broadest stdlib coverage |
-| Counterpart | Hand-written Nim implementation of the same semantics | Collections, Integer, String — where representation control pays |
+| Generic | `.hrd` source compiled to Nim codegen | The default for every library class |
+| Native representation | Runtime type plus compiled methods | Immediates, `String`, `Array`, `Table`, `Set`, `Block` |
 | Sealed | No runtime redefinition permitted | Full-compilation deliverables |
 
-Counterpart classes accept two sources of truth. That is already true of the
-existing `nt_*` helpers, but it must be made *checkable*: a frozen class whose
-counterpart has no executed conformance case against the interpreter path fails
-the build. Reuse the `examples/manifest.json` discipline (unlisted/stale entries
-fail) and the existing parity runner.
+The **Generic** tier is now the rule rather than an option: a class needs native
+representation only when its value is not an object, and even those classes
+compile their Harding methods instead of reimplementing them. The `nt_*` helpers
+that remain are fast paths over the same primitive the compiled method calls, so
+agreement is structural; making it *checkable* per helper is the outstanding
+conformance task. Reuse the `examples/manifest.json` discipline (unlisted/stale
+entries fail) and the existing parity runner.
 
 Freezing is meaningful only as a **dependency closure**, not per file. Freezing
 `SortedCollection` alone gains little because it calls Array, Iterable and
@@ -714,7 +727,10 @@ Effort is relative to this codebase, not a schedule commitment.
    Whole-stdlib compilation is scoped separately in
    [GRANITE_STDLIB_COMPILATION.md](docs/GRANITE_STDLIB_COMPILATION.md), which
    records the three-implementation problem, the measured `--mixed` trade-off and
-   a staged closure plan.
+   a staged closure plan. Native non-frozen builds now lift 42 Harding-defined
+   methods from Integer, Float, Boolean/True/False, UndefinedObject and String
+   into normal codegen, preserving live superclass edges without replacing storage;
+   primitives retain native implementations and application overrides take precedence.
    Not complete: dependency analysis is syntactic, counterpart dependencies are
    declared, dynamic selectors/evaluation are not proven closed, conformance covers
    listed protocols rather than every method, and full-deliverable enforcement,
