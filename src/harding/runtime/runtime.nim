@@ -178,6 +178,14 @@ type
     version: uint64
     target: CompiledProc
     negative: bool  ## A resolved "no compiled method" answer, so it is not re-resolved.
+    ## Second entry for the same site. Real sites alternate between a small set
+    ## of receiver classes (a boolean conditional site sees True and False), and
+    ## a single-entry cache misses on every other send there. The alternate is
+    ## replaced when it does not match, so the hot set stays resident without an
+    ## unbounded cache.
+    altClassName: string
+    altTarget: CompiledProc
+    altNegative: bool
 
 type
   SpecializationProbe* = object
@@ -2586,19 +2594,37 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
   let className = if proxyClassName.len > 0: proxyClassName
                   else: builtInClassName(receiver)
   if className.len > 0:
-    if cache.version == compiledClassDispatchVersion and cache.className == className and
-       cache.selector == selector and (cache.target != nil or cache.negative):
-      if cache.target != nil:
-        let target = cache.target
-        let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
-                    receiver.instVal.class
-                  elif receiver.kind == vkClass: receiver.classVal
-                  else: nil
-        probeCompiledDispatch(receiver, cls, selector, target, args)
-        return target(receiver, args)
-      # Cached negative: no compiled method exists, so go straight to the builtin
-      # chain instead of resolving the same pair again inside `sendMessage`.
-      return dispatchBuiltin(runtime, receiver, selector, args, className)
+    let currentVersion = compiledClassDispatchVersion
+    # A site sends one selector, but a cache may be reused across selectors (a
+    # direct caller can pass its own). Entries are keyed by receiver class only,
+    # so a different selector must invalidate them rather than reuse a target.
+    if cache.version != currentVersion or cache.selector != selector:
+      cache = CompiledSendCache(version: currentVersion, selector: selector)
+    if cache.version == currentVersion:
+      # Either slot may hold this receiver class. Check the primary first: it is
+      # the one most sites keep warm.
+      if cache.className == className and (cache.target != nil or cache.negative):
+        if cache.target != nil:
+          let target = cache.target
+          let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
+                      receiver.instVal.class
+                    elif receiver.kind == vkClass: receiver.classVal
+                    else: nil
+          probeCompiledDispatch(receiver, cls, selector, target, args)
+          return target(receiver, args)
+        # Cached negative: no compiled method exists, so go straight to the builtin
+        # chain instead of resolving the same pair again inside `sendMessage`.
+        return dispatchBuiltin(runtime, receiver, selector, args, className)
+      if cache.altClassName == className and (cache.altTarget != nil or cache.altNegative):
+        if cache.altTarget != nil:
+          let target = cache.altTarget
+          let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
+                      receiver.instVal.class
+                    elif receiver.kind == vkClass: receiver.classVal
+                    else: nil
+          probeCompiledDispatch(receiver, cls, selector, target, args)
+          return target(receiver, args)
+        return dispatchBuiltin(runtime, receiver, selector, args, className)
     let target = resolveCompiledMethod(className, selector)
     if target != nil:
       let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
@@ -2606,8 +2632,23 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                 elif receiver.kind == vkClass: receiver.classVal
                 else: nil
       probeCompiledDispatch(receiver, cls, selector, target, args)
-      cache = CompiledSendCache(className: className, selector: selector,
-                                version: compiledClassDispatchVersion, target: target)
+      # Fill the free slot first, otherwise the alternate: alternating classes
+      # then occupy both slots instead of evicting each other forever.
+      if cache.className.len == 0:
+        cache.className = className
+        cache.target = target
+        cache.negative = false
+      elif cache.className == className:
+        cache.target = target
+        cache.negative = false
+      elif cache.altClassName.len == 0 or cache.altClassName == className:
+        cache.altClassName = className
+        cache.altTarget = target
+        cache.altNegative = false
+      else:
+        cache.altClassName = className
+        cache.altTarget = target
+        cache.altNegative = false
       return target(receiver, args)
     # A negative answer only says "no compiled method". `sendMessage` still runs
     # ordered steps before its builtin chain — `perform:` conveys a selector
@@ -2616,8 +2657,20 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     # for selectors none of those handle. Everything else falls through to the
     # generic path, which re-resolves but stays correct.
     if selector in negativeCacheSafeSelectors:
-      cache = CompiledSendCache(className: className, selector: selector,
-                                version: compiledClassDispatchVersion, negative: true)
+      if cache.className.len == 0:
+        cache.className = className
+        cache.negative = true
+      elif cache.className == className:
+        cache.negative = true
+        cache.target = nil
+      elif cache.altClassName.len == 0 or cache.altClassName == className:
+        cache.altClassName = className
+        cache.altNegative = true
+        cache.altTarget = nil
+      else:
+        cache.altClassName = className
+        cache.altNegative = true
+        cache.altTarget = nil
       return dispatchBuiltin(runtime, receiver, selector, args, className)
   return sendMessage(runtime, receiver, selector, args)
   return sendMessage(runtime, receiver, selector, args)

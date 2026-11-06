@@ -591,11 +591,20 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
 
     let methodCellNames = scopeCaptureCellNames(body, params & md.temporaries)
+    # A parameter is only read: bind it as a cursor so ARC neither copies the
+    # value into the parameter nor destroys it on return. `args` outlives the
+    # call, so the borrow is valid. A parameter that is assigned or captured as a
+    # shared cell keeps an owned binding.
+    var assignedVars = initHashSet[string]()
+    for stmt in body:
+      collectAssignedVars(stmt, assignedVars)
     for i, paramName in params:
       let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
       let identifier = mangleIdentifier(paramName)
       if paramName in methodCellNames:
         output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
+      elif paramName notin assignedVars:
+        output.add(fmt("  var {identifier} {{.cursor.}} = {paramValue}\n"))
       else:
         output.add(fmt("  var {identifier} = {paramValue}\n"))
     

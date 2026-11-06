@@ -1,5 +1,39 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Borrowed parameters and two-way send caches
+
+Two follow-ups after the dispatch slice, both general (neither adds a Harding
+method implementation):
+
+1. **Read-only parameters are borrowed.** A method parameter that the body never
+   assigns and that is not captured as a shared cell is emitted with
+   `{.cursor.}`, so ARC does not copy the value on entry or destroy it on return.
+   `args` outlives the call, so the borrow is valid. Assigned and captured
+   parameters keep owned bindings.
+2. **Per-site caches hold two receiver classes.** `CompiledSendCache` keeps an
+   alternate `(class, target, negative)` slot. A one-entry cache misses on every
+   other send at a site that alternates receiver classes (`True`/`False` at a
+   conditional site, notably). A different selector clears the entries rather
+   than reusing a target; `tests/test_compiled_runtime.nim` covers that
+   regression.
+
+### Measurements
+
+Measured with `build/pinned_compare.py`, which pins the benchmark process to CPU
+2 and alternates before/after order; this host's unpinned run-to-run spread
+reached ±10%, which was wide enough to hide or invent effects. Medians below are
+from 15 trials per case; the same comparison drew the opposite sign for
+DeltaBlue in one earlier round, so that case is reported as neutral.
+
+| Slice | Richards | DeltaBlue | Queens |
+|---|---:|---:|---:|
+| Borrowed parameters | −1.6% | −1.9% | −7.8% |
+| Two-way send cache | −2.1% | neutral | −5.0% |
+
+The Queens gains agree across repeated runs; Richards is small but consistent;
+DeltaBlue is inside noise for the second slice. These are local paired
+observations, not portable guarantees.
+
 ## Generated-send caching and the inline host guard
 
 After the memo, generated code still called the uncached entry points:
