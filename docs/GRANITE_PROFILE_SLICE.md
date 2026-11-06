@@ -1,5 +1,127 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Generated-send caching and the inline host guard
+
+After the memo, generated code still called the uncached entry points:
+`guardedSend_*` fallbacks and inline sends emitted `sendMessageBound`, which
+re-resolves on every send (10.9M calls on Queens) and re-enters the hosting
+path.
+
+1. `genSend` and the inline class-message path in `codegen/expression.nim`, and
+   the `guardedSend_*` fallback in `codegen/module.nim`, now emit
+   `cachedSendBound`. Dispatch order is unchanged — the per-site cache still
+   defers to live resolution, replacement and version bumps.
+2. `hostedBuiltinDeferred` tests `hostRoutingActive()` (one inlined registry
+   length check) before building an argument buffer. A pure-native program no
+   longer constructs a buffer per operator; when a host is bound, the previous
+   per-receiver lookup runs unchanged, and the check is repeated per call.
+
+Neither change adds a Harding method implementation: they select the existing
+compiled body or declared primitive.
+
+### Measurements
+
+Paired release ARC trials, 30 verified passes, one warmup discarded, median
+wall time per pass, no startup subtraction. Cumulative across the four slices
+(each measured against the binary it replaced):
+
+| Workload | Baseline | + guard | + closure fix | + memo | + cached sends |
+|---|---:|---:|---:|---:|---:|
+| Richards | 36.09 | 32.38 | 30.45 | 29.16 | **21.57** |
+| DeltaBlue | 32.51 | 30.63 | 27.06 | 26.07 | **22.17** |
+| Queens | 107.82 | 95.47 | 81.94 | 74.95 | **51.22** |
+
+Last slice: −21.5% / −5.7% / −24.4% (Richards/DeltaBlue/Queens), 7/7 pairs each.
+Cumulative against the baseline: −40% / −32% / −52%.
+
+Correctness: `scripts/test_granite_parity.py` passes **117/117** on the final
+binary (`build/cachedsend-parity.log`); engine-boundary (39) and
+compiled-runtime (45) tests pass under ARC and ORC. Host not isolated or
+CPU-pinned; these are local paired observations.
+
+Remaining hot spots on Queens: the benchmark body itself (~23%), the compiled
+`True/False` methods reached through `nt_pipe`/`nt_not` (~13% combined), and
+`sendMessage`/resolution (~11%). Further gains need type-directed unboxing of
+locals and wider send specialization, not more resolution caching.
+
+## Allocation-free resolution and memoized lookup
+
+Re-profiling at `a1bbea0` after the unbound-send guard showed
+`resolveCompiledMethod` still allocating a closure environment on **every**
+entry, 16,591,692 times on Queens, all discarded on cache hits: the nested
+`walkCompiledHierarchy` closure captured `selector`.
+
+Two changes, both preserving lookup order and version invalidation:
+
+1. The cache-miss hierarchy walk is a separate top-level proc
+   (`compiledMethodOwner`). A nested proc is not captured any more, so a hit
+   allocates nothing.
+2. A 16-entry thread-local direct-mapped memo keyed on the class/selector pair,
+   indexed by string lengths and confirmed by string equality (no hashing on the
+   hit path), is checked before the interned-ID table. Both are cleared by the
+   same `compiledClassDispatchVersion` bump that already guarded the cache.
+
+A collision only costs a cache miss because the hit test compares both strings;
+`tests/test_engine_boundary.nim` covers an intentional collision and a live
+method replacement after the memo is warm.
+
+### Measurements
+
+Paired release ARC trials, 30 verified passes per run, one warmup discarded;
+median process wall time per pass, no startup subtraction. Two separate paired
+runs, each against the binary it replaced:
+
+| Workload | After guard | + closure fix | After memo |
+|---|---:|---:|---:|
+| Richards | 36.09 ms | 30.45 ms | 29.16 ms |
+| DeltaBlue | 32.51 ms | 27.06 ms | 26.07 ms |
+| Queens | 107.82 ms | 81.94 ms | 74.95 ms |
+
+Versus the immediately preceding binary, the closure fix gave ~4.9%/8.0%/9.7%
+and the memo ~0.3%/4.4%/8.6% (Richards/DeltaBlue/Queens; Richards is within
+noise, 5/7 pairs improved). An earlier memo comparison was discarded because
+correctness-test compilation ran concurrently and inflated the baseline to
+41.03/30.18/112.64 ms; only the re-measured clean run is reported here.
+
+Profiled calls over 30 Queens passes: `nimNewObj` inside resolution disappears,
+string hashing falls from 48.8M to 17.5M, and `getOrDefault` (33.2M calls) leaves
+the flat profile. The remaining largest entries are the benchmark body
+(`canPlaceRow:column:after:`), the generic `sendMessage` and argument
+allocation. Host was not isolated or CPU-pinned.
+
+Validation: engine-boundary tests (39, ARC and ORC), compiled-runtime tests (45,
+ARC and ORC), and the focused parity suite. No full-suite claim.
+
+## Generic unbound-send guard (current stdlib pipeline)
+
+Baseline `a1bbea0`, retained `build/granite-profiles/run-d6ig3mm_`; candidate
+`build/granite-profiles/run-xacgaeta`. `sendMessage` now checks the live
+`boundCompiledClasses` registry before entering `boundInterpretedSend`. When a
+host is bound, the existing live interpreter method lookup is unchanged; the
+check is repeated on every send. No Harding method or primitive is reimplemented.
+
+Seven alternating paired release ARC trials, 30 verified passes each, one
+warmup discarded; median process wall time per pass, no startup subtraction:
+
+| Workload | Baseline ms | Candidate ms | Median reduction | Improved pairs |
+|---|---:|---:|---:|---:|
+| Richards | 36.094 | 32.383 | 10.3% | 7/7 |
+| DeltaBlue | 32.505 | 30.627 | 5.8% | 7/7 |
+| Queens | 107.818 | 95.468 | 11.5% | 7/7 |
+
+The host was not isolated or CPU-pinned; results are a local paired observation,
+not a portable speedup guarantee. Raw trials and checked outputs are in the
+candidate `results.json` and timing files. The candidate's post-change Queens
+`-pg` profile still verifies 92. The baseline reports 16,715,044 calls to
+`boundInterpretedSend`; the candidate reports none on this pure-native workload.
+The profiled build overlapped correctness compilation, so sampled percentages are
+not used as timing evidence. Engine-boundary tests (37, including the new
+bind/detach regression) and compiled-runtime tests (45) pass under both ARC and
+ORC; logs are `build/hostguard-boundary-{arc,orc}.log` and
+`build/hostguard-runtime-{arc,orc}.log`. Four focused interpreter/native
+parity cases also pass (`build/hostguard-parity.log`); no full-suite result is
+claimed.
+
 Baseline runtime revision: `732716d`. Scope: a single runtime optimization;
 no benchmark-specific specialization or language-semantic changes.
 

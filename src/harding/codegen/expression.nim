@@ -476,7 +476,7 @@ proc genSend(ctx: GenContext, receiverCode, selector: string,
     return fmt("sendMessageHybrid({receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
   if ctx.inMethod:
     let owner = genSymbolAccess(ctx, "self")
-    return fmt("sendMessageBound({owner}, {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
+    return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
   return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
 
 proc isReusableOperand(code: string): bool =
@@ -872,7 +872,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     else:
       if ctx.inMethod:
         let owner = genSymbolAccess(ctx, "self")
-        return fmt("sendMessageBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
+        return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
 
   else:

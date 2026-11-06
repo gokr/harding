@@ -34,6 +34,14 @@ semantics and VM-only registrations; correct any remaining coverage gaps. Zero
 inventory gaps alone does not establish the overall objective. See
 [the plan](GRANITE_STDLIB_COMPILATION.md).
 
+## Current-revision performance baseline
+
+Release ARC profiles and verified Richards, DeltaBlue, Queens, AWFY JSON and
+Notebook model runs at `a1bbea0` are recorded in
+[the baseline](GRANITE_BASELINE_A1BBEA0.md). Dispatch, argument allocation and
+value copying warrant a bounded experiment; existing numbers do not establish a
+speedup or complete method-path audit.
+
 ## First profile-guided runtime slice
 
 Release gprof profiles show repeated hierarchy lookup and temporary allocation

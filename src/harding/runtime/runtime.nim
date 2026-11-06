@@ -878,6 +878,12 @@ proc boundGlobalWrite*(ownerReceiver: NodeValue, name: string,
   result.value = evalBoundNode(interp, message)
   result.handled = true
 
+proc hostRoutingActive*(): bool {.inline.} =
+  ## True when any compiled class has an interpreter host bound. Generated code
+  ## tests this before building an argument buffer, so a pure-native program
+  ## never enters the hosting path. Re-checked per call: a host can bind later.
+  boundCompiledClasses.len != 0
+
 proc hostedBuiltinInterpreter(ownerReceiver, receiver: NodeValue,
                               selector: string): Interpreter {.inline.} =
   ## Select the host without constructing an argument buffer.
@@ -910,12 +916,13 @@ template hostedBuiltinDeferred*(ownerReceiver, receiver: NodeValue, selector: st
   ## Generated callers bind evaluated operands before this entry. Only buffer
   ## construction is deferred; the interpreted call still owns a normal seq.
   block:
-    let hostReceiver {.cursor.} = receiver
-    var hostInterpreter = hostedBuiltinInterpreter(ownerReceiver, hostReceiver, selector)
     var hostAnswer: tuple[handled: bool, value: NodeValue]
-    if hostInterpreter != nil:
-      hostAnswer.value = sendMessageInterpreted(hostInterpreter, hostReceiver, selector, args)
-      hostAnswer.handled = true
+    if hostRoutingActive():
+      let hostReceiver {.cursor.} = receiver
+      var hostInterpreter = hostedBuiltinInterpreter(ownerReceiver, hostReceiver, selector)
+      if hostInterpreter != nil:
+        hostAnswer.value = sendMessageInterpreted(hostInterpreter, hostReceiver, selector, args)
+        hostAnswer.handled = true
     hostAnswer
 
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
@@ -1148,10 +1155,33 @@ proc findCompiledMethod*(className: string, selector: string): proc(self: NodeVa
     return compiledMethodProcs[key]
   return nil
 
+proc compiledMethodOwner(className, selector: string): string =
+  ## Cache-miss hierarchy walk. A separate top-level proc, not a nested one:
+  ## a nested proc would capture `selector` and heap-allocate a closure
+  ## environment on every resolution, including cache hits.
+  walkCompiledHierarchy(className,
+    proc(name: string): bool = findCompiledMethod(name, selector) != nil)
+
+const ResolutionMemoSlots = 16
+
+type
+  ResolutionMemoEntry = object
+    version: uint64
+    valid: bool
+    className: string
+    selector: string
+    target: CompiledProc
+
 var
   resolvedMethodVersion {.threadvar.}: uint64
   dispatchNames {.threadvar.}: Table[string, uint32]
   resolvedMethods {.threadvar.}: Table[uint64, CompiledProc]
+  resolutionMemo {.threadvar.}: array[ResolutionMemoSlots, ResolutionMemoEntry]
+
+proc memoSlot*(className, selector: string): int {.inline.} =
+  ## Cheap index from string lengths. Equality decides the hit, so a collision
+  ## only costs a miss; the hot path performs no hashing.
+  ((className.len * 31) + selector.len) and (ResolutionMemoSlots - 1)
 
 proc internDispatchName(name: string): uint32 {.inline.} =
   result = dispatchNames.getOrDefault(name)
@@ -1162,6 +1192,12 @@ proc internDispatchName(name: string): uint32 {.inline.} =
 proc resolveCompiledMethod(className, selector: string): CompiledProc =
   ## Cache native resolution only; live interpreter lookup remains at send entry.
   ## IDs belong to this thread's cache epoch, not to Classes or persisted code.
+  let slot = memoSlot(className, selector)
+  if resolutionMemo[slot].valid and
+     resolutionMemo[slot].version == compiledClassDispatchVersion and
+     resolutionMemo[slot].className == className and
+     resolutionMemo[slot].selector == selector:
+    return resolutionMemo[slot].target
   if resolvedMethodVersion != compiledClassDispatchVersion:
     resolvedMethods.clear()
     resolvedMethodVersion = compiledClassDispatchVersion
@@ -1174,13 +1210,16 @@ proc resolveCompiledMethod(className, selector: string): CompiledProc =
   let selectorId = internDispatchName(selector)
   let key = (uint64(classId) shl 32) or uint64(selectorId)
   resolvedMethods.withValue(key, target):
+    resolutionMemo[slot] = ResolutionMemoEntry(version: compiledClassDispatchVersion,
+      valid: true, className: className, selector: selector, target: target[])
     return target[]  # A cached nil is a resolved negative answer, not a miss.
-  let owner = walkCompiledHierarchy(className,
-    proc(name: string): bool = findCompiledMethod(name, selector) != nil)
+  let owner = compiledMethodOwner(className, selector)
   result = if owner.len > 0: findCompiledMethod(owner, selector) else: nil
   if resolvedMethods.len >= 4096:
     resolvedMethods.clear()
   resolvedMethods[key] = result
+  resolutionMemo[slot] = ResolutionMemoEntry(version: compiledClassDispatchVersion,
+    valid: true, className: className, selector: selector, target: result)
 
 proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
                             selector: string, target: CompiledProc,
@@ -2181,7 +2220,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
 
-  if selector notin ["==", "~="]:
+  if boundCompiledClasses.len != 0 and selector notin ["==", "~="]:
     let interpreted = boundInterpretedSend(receiver, selector, args)
     if interpreted.handled: return interpreted.value
 

@@ -514,7 +514,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("    return {read}(receiver)\n"))
       else:
         output.add(fmt("    return {choice.target}(receiver, @[])\n"))
-      output.add(fmt("  sendMessageBound(owner, receiver, \"{selector}\", @[])\n\n"))
+      output.add(fmt("  cachedSendBound(owner, receiver, \"{selector}\", @[])\n\n"))
 
   if not mixed:
     # Plan independently of source order, adding pure self-call chains only after

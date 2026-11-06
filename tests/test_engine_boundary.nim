@@ -31,6 +31,9 @@ proc missingInside(self: NodeValue, args: seq[NodeValue]): NodeValue =
   inc nativeNilCalls
   sendMessage(nil, toValue(1), "missingInCompiledBody", @[])
 
+proc memoFirstProbe(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(1)
+proc memoSecondProbe(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(2)
+
 proc roundTripShim(interp: var Interpreter, self: Instance,
                    args: seq[NodeValue]): NodeValue {.nimcall.} =
   sendMessageInterpreted(interp, NodeValue(kind: vkInstance, instVal: self),
@@ -606,6 +609,57 @@ suite "Interpreted to compiled dispatch":
 
     check not bindCompiledMethodShim(interp, "AbsentClass", "known", cast[pointer](doubleShim))
     check not bindCompiledMethodShim(interp, "Present", "absent", cast[pointer](doubleShim))
+
+  test "generic sends observe binding and detachment after unbound calls":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let cls = defineClass(interp, "LateGenericBinding", "double:")
+    registerCompiledMethod("LateGenericBinding", "double:",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(42))
+    let instance = newInstance(cls)
+    instance.isNimProxy = true
+    let receiver = NodeValue(kind: vkInstance, instVal: instance)
+    check sendMessage(nil, receiver, "double:", @[toValue(21)]).intVal == 42
+    check bindCompiledMethodShim(interp, "LateGenericBinding", "double:", cast[pointer](doubleShim))
+    let (_, err) = interp.evalStatements("LateGenericBinding>>double: n [ ^ n + 1 ]")
+    require err.len == 0
+    check sendMessage(nil, receiver, "double:", @[toValue(21)]).intVal == 22
+    unbindCompiledMethodsFrom(interp)
+    check sendMessage(nil, receiver, "double:", @[toValue(21)]).intVal == 42
+
+  test "resolution memo cannot serve a stale target after replacement":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    let cls = defineClass(interp, "MemoTargetProbe", "double:")
+    registerCompiledMethod("MemoTargetProbe", "double:",
+      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(42))
+    check bindCompiledMethodShim(interp, "MemoTargetProbe", "double:", cast[pointer](doubleShim))
+    let instance = newInstance(cls)
+    instance.isNimProxy = true
+    let receiver = NodeValue(kind: vkInstance, instVal: instance)
+    # Warm the memo through repeated sends to the same class/selector pair.
+    for i in 0 ..< 3:
+      check sendMessage(nil, receiver, "double:", @[toValue(21)]).intVal == 42
+    let (_, err) = interp.evalStatements("MemoTargetProbe>>double: n [ ^ n + 1 ]")
+    require err.len == 0
+    check sendMessage(nil, receiver, "double:", @[toValue(21)]).intVal == 22
+
+  test "resolution memo distinguishes colliding key lengths":
+    var interp = newTestInterpreter()
+    defer: unbindCompiledMethodsFrom(interp)
+    # Same length sums land in one memo slot, so equality must decide the hit.
+    for (name, selector) in [("MemoA", "ab"), ("MemoB", "cd")]:
+      discard defineClass(interp, name, selector)
+    registerCompiledMethod("MemoA", "ab", memoFirstProbe)
+    registerCompiledMethod("MemoB", "cd", memoSecondProbe)
+    let first = newInstance(interp.globals[]["MemoA"].classVal)
+    first.isNimProxy = true
+    let second = newInstance(interp.globals[]["MemoB"].classVal)
+    second.isNimProxy = true
+    check memoSlot("MemoA", "ab") == memoSlot("MemoB", "cd")
+    for i in 0 ..< 3:
+      check sendMessage(nil, NodeValue(kind: vkInstance, instVal: first), "ab", @[]).intVal == 1
+      check sendMessage(nil, NodeValue(kind: vkInstance, instVal: second), "cd", @[]).intVal == 2
 
   test "warm compiled cache falls back after interpreted replacement":
     var interp = newTestInterpreter()
