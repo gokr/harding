@@ -26,6 +26,7 @@ proc mangleSelector*(selector: string): string =
   result = result.replace("@", "at")
   result = result.replace("|", "pipe")
   result = result.replace("%", "percent")
+  result = result.replace("&", "amp")
   # Add nt_ prefix
   result = "nt_" & result
 

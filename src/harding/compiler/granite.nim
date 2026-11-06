@@ -20,6 +20,7 @@ import ../compiler/slot_inference
 import ../compiler/slot_diagnostics
 import ../core/type_feedback
 import ../compiler/symbols
+import ../compiler/stdlib_compilation
 import ../compiler/frozen_manifest
 import ../core/scheduler
 import ../interpreter/vm
@@ -370,6 +371,22 @@ proc compileFile(config: Config): bool =
                       else: 
                         config.hardingHome / "lib" / "core" / "Bootstrap.hrd"
   loadStdlib(interp, bootstrapFile)
+  # Library classes are discovered from the source index the loader populated, so
+  # no maintainer's list decides what is compiled.
+  let libraryClassNames = if not config.mixed and config.frozenManifest.len == 0:
+                         libraryClasses(interp)
+                       else: @[]
+  var libraryGaps: seq[string]
+  let libraryMethods = stdlibMethodDefinitions(interp, libraryClassNames, libraryGaps)
+  for name in libraryGaps:
+    stderr.writeLine("stdlib gap: " & name)
+  let librarySuperclasses = if libraryMethods.len > 0:
+                             stdlibSuperclassEdges(interp, libraryClassNames)
+                           else: @[]
+
+  let libraryStorage = if libraryMethods.len > 0:
+                         stdlibStorageDefinitions(interp, libraryClassNames)
+                       else: @[]
 
   let source = readFile(config.inputFile)
   let tokens = lex(source)
@@ -611,7 +628,10 @@ proc compileFile(config: Config): bool =
                           scriptTemporaries = script.temporaries,
                           inferredNumeric = numericCandidates,
                           prebuiltClasses = (if config.trustObservedTypes: classModel.classes
-                                             else: initTable[string, ClassInfo]()))
+                                             else: initTable[string, ClassInfo]()),
+                          libraryMethods = libraryMethods,
+                          librarySuperclasses = librarySuperclasses,
+                          libraryStorage = libraryStorage)
 
   createDir(outputDir)
   writeFile(outputPath, nimCode)

@@ -370,12 +370,19 @@ proc addMethodToClass*(cls: Class, selector: string, meth: BlockNode, isClassMet
   if meth.primitiveSelector.len > 0:
     let primSelector = meth.primitiveSelector
     let methodTable = if isClassMethod: cls.allClassMethods else: cls.allMethods
+    var primMethod: BlockNode = nil
     if primSelector in methodTable:
-      let primMethod = methodTable[primSelector]
-      if primMethod.nativeImpl != nil:
-        meth.nativeImpl = primMethod.nativeImpl
-        meth.nativeValueImpl = primMethod.nativeValueImpl
-        meth.hasInterpreterParam = primMethod.hasInterpreterParam
+      primMethod = methodTable[primSelector]
+    elif selector in methodTable and methodTable[selector].nativeImpl != nil:
+      # The declaration names a primitive the host implements under the
+      # method's own selector (a host service, not a re-declaration), so that
+      # implementation is this primitive's. Granite resolves the same name in
+      # its own primitive table.
+      primMethod = methodTable[selector]
+    if primMethod != nil and primMethod.nativeImpl != nil:
+      meth.nativeImpl = primMethod.nativeImpl
+      meth.nativeValueImpl = primMethod.nativeValueImpl
+      meth.hasInterpreterParam = primMethod.hasInterpreterParam
 
   if isClassMethod:
     cls.classMethods[selector] = meth

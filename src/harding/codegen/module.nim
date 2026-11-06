@@ -6,6 +6,7 @@ import ../compiler/context
 import ../compiler/analyzer
 import ../compiler/symbols
 import ../compiler/types
+import ../compiler/primitive_abi
 import ./methods
 import ./expression
 import ./numeric
@@ -34,6 +35,7 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
   let sourceRoot = parentDir(parentDir(parentDir(currentSourcePath())))
   let importRoot = relativePath(sourceRoot, absolutePath(ctx.outputDir)).replace('\\', '/')
   output.add(fmt("import {importRoot}/harding/runtime/compiled_support\n\n"))
+  output.add(fmt("import {importRoot}/harding/runtime/primitive_impls\n\n"))
   if ctx.gtkApplication:
     output.add(fmt("import {importRoot}/harding/gui/gtk/native_application\n\n"))
 
@@ -433,7 +435,7 @@ proc collectDeclarativePrimitives*(nodes: seq[Node], unsupported: var seq[string
          stmt.ReturnNode.expression.kind == nkPrimitiveCall:
         tag = stmt.ReturnNode.expression.PrimitiveCallNode.selector
         break
-    if tag.len > 0:
+    if tag.len > 0 and tag notin nativePrimitiveBindings():
       unsupported.add(md.className & ">>" & md.selector & " (" & tag & ")")
 
 proc unsupportedPrimitiveMessage*(names: seq[string]): string =
@@ -581,10 +583,6 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     let params = md.params
     let body = md.body
     
-    # Skip if class not in compiled classes
-    if clsName notin compiledClasses:
-      continue
-    
     let mangledClass = mangleClass(clsName)
     let mangledSelector = mangleSelector(selector)
     let sidePrefix = if md.isClassMethod: "class_" else: ""
@@ -684,7 +682,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     
     # Add registration call
     let registrationProc = if md.isClassMethod: "registerCompiledClassMethod" else: "registerCompiledMethod"
-    registrationCode.add(fmt("  {registrationProc}(\"{clsName}\", \"{selector}\", {procName})\n"))
+    registrationCode.add(fmt("  {registrationProc}(\"{escapeNimString(clsName)}\", \"{escapeNimString(selector)}\", {procName})\n"))
     # Interpreted-to-compiled shim. Class and selector are baked in so the
     # interpreter can reach this body without inspecting the running activation.
     let shimName = fmt("shim_{mangledClass}_{sidePrefix}{mangledSelector}")
@@ -695,7 +693,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add(fmt("  ## Interpreted-to-compiled entry point for {clsName}>>{selector}\n"))
     output.add("  initRuntime()\n")
     output.add(fmt("  {procName}({receiverValue}, args)\n\n"))
-    shimBindingCode.add(fmt("  discard bindCompiledMethodShim(interp, \"{clsName}\", \"{selector}\", cast[pointer]({shimName}), isClassMethod = {classSide})\n"))
+    shimBindingCode.add(fmt("  discard bindCompiledMethodShim(interp, \"{escapeNimString(clsName)}\", \"{escapeNimString(selector)}\", cast[pointer]({shimName}), isClassMethod = {classSide})\n"))
   
   # Generate slot accessor registrations for all compiled classes
   var slotRegCode = ""
@@ -707,8 +705,18 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   output.add("# Method Registration\n")
   output.add("#####################\n\n")
   output.add("proc registerCompiledMethods*() =\n")
+  # Every class that owns a compiled method must exist in the compiled registry,
+  # including library classes whose storage the runtime represents natively. A
+  # registration for an unknown class would bind to nothing and dispatch would
+  # then miss a method that plainly exists.
+  var registered = initHashSet[string]()
+  for className in compiledClasses: registered.incl(className)
+  for md in methodDefs:
+    if md.className notin registered:
+      registered.incl(md.className)
+      output.add(fmt("  registerCompiledSlotNames(\"{escapeNimString(md.className)}\", @[])\n"))
   for className in compiledClasses:
-    output.add(fmt("  registerCompiledSlotNames(\"{className}\", @[])\n"))
+    output.add(fmt("  registerCompiledSlotNames(\"{escapeNimString(className)}\", @[])\n"))
   if registrationCode.len > 0 or slotRegCode.len > 0:
     output.add(registrationCode)
     output.add(slotRegCode)
@@ -844,6 +852,10 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   output.add("  registerCompiledMethods()\n")
   output.add("  registerSuperclassHierarchy()\n")
   for className in compiledClasses:
+    # Only a class with a generated layout has an allocator to register; a
+    # library class the runtime represents natively keeps that representation.
+    if className notin classInfo:
+      continue
     let nativeClass = mangleClass(className)
     output.add(fmt("  registerCompiledClass(\"{className}\", allocate{nativeClass})\n"))
   output.add("\n")
@@ -914,7 +926,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 injectMainArgsVar: bool = false,
                 scriptTemporaries: seq[string] = @[],
                 inferredNumeric: Table[string, string] = initTable[string, string](),
-                prebuiltClasses: Table[string, ClassInfo] = initTable[string, ClassInfo]()): string =
+                prebuiltClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                libraryMethods: seq[Node] = @[],
+                librarySuperclasses: seq[(string, string)] = @[],
+                libraryStorage: seq[Node] = @[]): string =
   ## Generate complete Nim module from parsed nodes
   ## mixed: if true, embed interpreter for fallback on unsupported features
   ## sourceFile: path to source .hrd file for class registration in interpreter
@@ -941,6 +956,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   if hardingBlocks.compileBlock != nil:
     defsSourceNodes = hardingBlocks.compileBlock.body & defsSourceNodes
 
+  defsSourceNodes = libraryStorage & defsSourceNodes
   let (classDefs, _) = extractClassAndMethodDefs(defsSourceNodes)
   let (_, executableMainNodes) = extractClassAndMethodDefs(mainBodyNodes)
 
@@ -974,9 +990,33 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:
     compiledClassNames.add(cls.name)
+  # Library classes that own a lifted method are compiled classes too: their
+  # name must resolve to a class value (`isKindOf: Set`), and their registration
+  # needs a class object to bind to. Storage stays native for the classes the
+  # runtime represents itself.
+  for definition in libraryMethods:
+    if definition.kind != nkMessage: continue
+    let receiver = definition.MessageNode.receiver
+    if receiver != nil and receiver.kind == nkIdent and
+       receiver.IdentNode.name notin compiledClassNames:
+      compiledClassNames.add(receiver.IdentNode.name)
 
   # Extract method definitions from class and compile blocks
-  let methodDefs = extractMethodDefs(classDefs)
+  # Application definitions replace library bodies, including extensions of
+  # built-in classes. Keep native allocation separate from method ownership.
+  let applicationMethods = extractMethodDefs(classDefs)
+  var methodDefs = extractMethodDefs(libraryMethods)
+  for applicationMethod in applicationMethods:
+    var retained: typeof(methodDefs)
+    for libraryMethod in methodDefs:
+      if libraryMethod.className != applicationMethod.className or
+         libraryMethod.selector != applicationMethod.selector or
+         libraryMethod.isClassMethod != applicationMethod.isClassMethod:
+        retained.add(libraryMethod)
+    methodDefs = retained
+    methodDefs.add(applicationMethod)
+  for index in 0..<methodDefs.len:
+    methodDefs[index].methodId = 1000 + index
 
   # Create the shared block registry early so method bodies and main() both
   # register blocks into the same registry (unique names, shared procedures).
@@ -1037,6 +1077,8 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Generate superclass hierarchy registration
   var superclassCalls = ""
+  for (child, parent) in librarySuperclasses:
+    superclassCalls.add(fmt("  registerSuperclass(\"{child}\", \"{parent}\")\n"))
 
   # Static inheritance from class analysis (derive:, deriveWithAccessors:)
   for cls in analysis.classes.values:

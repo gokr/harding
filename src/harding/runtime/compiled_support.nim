@@ -2,8 +2,9 @@
 import std/tables
 import ../core/types
 import ./runtime
+import ../core/value_primitives
 
-export types, runtime
+export types, runtime, value_primitives
 
 # Runtime helpers for primitives
 
@@ -61,9 +62,7 @@ proc nt_print*(value: NodeValue): NodeValue =
 
 proc nt_asString*(value: NodeValue): NodeValue =
   ## Convert value to string
-  if value.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, value, "asString", @[])
-  return NodeValue(kind: vkString, strVal: value.toString())
+  sendMessage(nil, value, "asString", @[])
 
 proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
   ## String concatenation
@@ -167,51 +166,27 @@ proc nt_table_size*(tbl: NodeValue): NodeValue =
 
 proc nt_abs*(n: NodeValue): NodeValue =
   ## Absolute value
-  if n.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, n, "abs", @[])
-  if n.kind == vkInt:
-    return NodeValue(kind: vkInt, intVal: abs(n.intVal))
-  if n.kind == vkFloat:
-    return NodeValue(kind: vkFloat, floatVal: abs(n.floatVal))
-  return NodeValue(kind: vkNil)
+  sendMessage(nil, n, "abs", @[])
 
 proc nt_even*(n: NodeValue): NodeValue =
   ## Is even
-  if n.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, n, "even", @[])
-  if n.kind == vkInt:
-    return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 == 0)
-  return NodeValue(kind: vkNil)
+  sendMessage(nil, n, "even", @[])
 
 proc nt_odd*(n: NodeValue): NodeValue =
   ## Is odd
-  if n.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, n, "odd", @[])
-  if n.kind == vkInt:
-    return NodeValue(kind: vkBool, boolVal: n.intVal mod 2 != 0)
-  return NodeValue(kind: vkNil)
+  sendMessage(nil, n, "odd", @[])
 
 proc nt_negated*(n: NodeValue): NodeValue =
   ## Negated value
-  if n.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, n, "negated", @[])
-  if n.kind == vkInt:
-    return NodeValue(kind: vkInt, intVal: -n.intVal)
-  if n.kind == vkFloat:
-    return NodeValue(kind: vkFloat, floatVal: -n.floatVal)
-  return NodeValue(kind: vkNil)
+  sendMessage(nil, n, "negated", @[])
 
 proc nt_pipe*(a, b: NodeValue): NodeValue =
   ## Eager Boolean disjunction. Both operands have already been evaluated;
   ## non-Boolean receivers keep ordinary dispatch and its existing behavior.
-  if a.kind == vkBool and b.kind == vkBool:
-    return NodeValue(kind: vkBool, boolVal: a.boolVal or b.boolVal)
   sendMessage(nil, a, "|", @[b])
 
 proc nt_not*(value: NodeValue): NodeValue =
   ## Boolean negation; user-defined objects keep their normal method lookup.
-  if value.kind == vkBool:
-    return NodeValue(kind: vkBool, boolVal: not value.boolVal)
   sendMessage(nil, value, "not", @[])
 
 # Global variable support
@@ -333,20 +308,20 @@ proc nt_emptyTable*(): NodeValue =
 
 # Integer arithmetic is fixed width; a result outside the 64-bit range signals
 # Overflow rather than wrapping or escaping as an unhandled OverflowDefect.
-proc overflowValue(): NodeValue {.inline.} =
+proc overflowValue*(): NodeValue {.inline.} =
   raiseCompiledError(compiledErrorValue("Overflow", "over- or underflow"))
 
-proc checkedIntAdd(a, b: int): NodeValue {.inline.} =
+proc checkedIntAdd*(a, b: int): NodeValue {.inline.} =
   if b > 0 and a > high(int) - b or b < 0 and a < low(int) - b:
     return overflowValue()
   NodeValue(kind: vkInt, intVal: a + b)
 
-proc checkedIntSub(a, b: int): NodeValue {.inline.} =
+proc checkedIntSub*(a, b: int): NodeValue {.inline.} =
   if b < 0 and a > high(int) + b or b > 0 and a < low(int) + b:
     return overflowValue()
   NodeValue(kind: vkInt, intVal: a - b)
 
-proc checkedIntMul(a, b: int): NodeValue {.inline.} =
+proc checkedIntMul*(a, b: int): NodeValue {.inline.} =
   # Bounds are checked before multiplying, because an overflowing product would
   # itself raise OverflowDefect inside this check.
   if a > 0:

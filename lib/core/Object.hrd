@@ -418,9 +418,54 @@ Object>>~= other [
   ^ (self = other) not
 ]
 
-Object>>== other <primitive primitiveEquals: other>
 
 Object>>~~ other [
   # Not identity - true if different objects
   ^ (self == other) not
 ]
+
+# Reflection and configuration implemented by the host under these very
+# selectors. Declaring them here keeps lib/ the source of truth: Granite compiles
+# the declaration and calls the host implementation, exactly as for any other
+# primitive.
+
+
+
+
+
+
+Object>>selector: aSymbol put: aBlock <primitive primitiveSelectorPut: aSymbol put: aBlock>
+
+Object>>jsonExclude: selectors <primitive primitiveJsonExclude: selectors>
+
+Object>>jsonOnly: selectors <primitive primitiveJsonOnly: selectors>
+
+Object>>jsonRename: mapping <primitive primitiveJsonRename: mapping>
+
+Object>>jsonOmitNil: flag <primitive primitiveJsonOmitNil: flag>
+
+Object>>jsonOmitEmpty: flag <primitive primitiveJsonOmitEmpty: flag>
+
+Object>>jsonFormat: format <primitive primitiveJsonFormat: format>
+
+Object>>jsonFieldOrder: fields <primitive primitiveJsonFieldOrder: fields>
+
+Object>>jsonReset <primitive primitiveJsonReset>
+
+Object>>jsonSpec <primitive primitiveJsonSpec>
+
+Object>>eval: source <primitive primitiveEval: source>
+
+Object>>evaluate: source <primitive primitiveEvaluate: source>
+
+Object>>slotAt: index <primitive primitiveSlotAt: index>
+
+Object>>slotAt: index put: value <primitive primitiveSlotAtPut: index put: value>
+
+Object class>>classSelector: aSymbol put: aBlock <primitive primitiveClassSelectorPut: aSymbol put: aBlock>
+
+Object>>isClass <primitive primitiveIsClass>
+
+Object>>print <primitive primitivePrint>
+
+Object>>println <primitive primitivePrintln>

@@ -439,8 +439,7 @@ proc generateBlockProcSignature*(info: BlockProcInfo): string =
 const inlineControlSelectors = [
   "ifTrue:", "ifFalse:", "ifTrue:ifFalse:",
   "whileTrue:", "whileFalse:",
-  "timesRepeat:", "to:by:do:",
-  "do:", "collect:", "select:"
+  "timesRepeat:"
 ]
 
 proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[string] = @[],
@@ -465,11 +464,11 @@ proc collectBlocks*(registry: BlockRegistry, node: Node, knownGlobals: seq[strin
 
   of nkMessage:
     let msg = node.MessageNode
-    let isInlineControl = msg.selector in inlineControlSelectors and
-      (msg.selector notin ["do:", "collect:", "select:"] or
-       (msg.arguments.len > 0 and msg.arguments[0].kind == nkBlock and
-        msg.arguments[0].BlockNode.parameters.len == 1 and
-        msg.receiver != nil and msg.receiver.kind == nkArray))
+    # Collection iteration (`do:`, `collect:`, `select:`, `detect:`, ...) is an
+    # ordinary send to a compiled library method, so its block argument must be
+    # registered like any other. Only selectors codegen actually expands inline
+    # skip registration here.
+    let isInlineControl = msg.selector in inlineControlSelectors
 
     if isInlineControl:
       # For inline control flow, skip registration of literal block arguments

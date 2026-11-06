@@ -97,7 +97,7 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
     of nkMessage:
       let message = node.MessageNode
       let inlineControl = message.selector in ["ifTrue:", "ifFalse:", "ifTrue:ifFalse:",
-        "whileTrue:", "whileFalse:", "timesRepeat:", "to:by:do:", "do:", "collect:", "select:"]
+        "whileTrue:", "whileFalse:", "timesRepeat:"]
       inspect(message.receiver, initialized, inlineControl and not hasReturnNode(message.receiver))
       for argument in message.arguments:
         inspect(argument, initialized, inlineControl and not hasReturnNode(argument))

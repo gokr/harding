@@ -199,6 +199,10 @@ var specializationProbeEnabled {.threadvar.}: bool
 var specializationProbe {.threadvar.}: SpecializationProbe
 
 var compiledClassMethods = initTable[string, CompiledProc]()
+
+proc hasCompiledClassMethodKey*(key: string): bool =
+  ## Read-only probe used by tests and diagnostics.
+  compiledClassMethods.hasKey(key)
 var compiledAllocators = initTable[string, CompiledProc]()
 var compiledClasses = initTable[string, Class]()
 var compiledClassDispatchVersion*: uint64 = 1
@@ -446,6 +450,10 @@ proc compiledJsonKey(buf: var string, key: NodeValue) =
     raise newException(ValueError, "Unsupported JSON table key: " & key.toString())
 
 var compiledSlotNames = initTable[string, seq[string]]()
+
+proc compiledSlotNamesFor*(name: string): seq[string] =
+  ## Slot layout a compiled class registered, for reflection.
+  compiledSlotNames.getOrDefault(name)
 
 proc registerCompiledSlotNames*(name: string, slots: seq[string]) =
   ## Preserve parser-defined parent-first layout independently of accessor permissions.
@@ -1189,7 +1197,7 @@ proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
     guard.version = compiledClassDispatchVersion
   guard.valid
 
-proc builtInClassName(receiver: NodeValue): string =
+proc builtInClassName*(receiver: NodeValue): string =
   ## Class name for a value-form receiver (string, int, bool, nil, symbol).
   ## Class-side receivers and proxies are handled before this is called.
   case receiver.kind
@@ -1199,6 +1207,7 @@ proc builtInClassName(receiver: NodeValue): string =
   of vkSymbol: "Symbol"
   of vkBool: (if receiver.boolVal: "True" else: "False")
   of vkNil: "UndefinedObject"
+  of vkBlock: "Block"
   else: ""
 
 proc getReceiverClassName*(receiver: NodeValue): string =
@@ -1385,6 +1394,29 @@ proc canDirectAllocate*(className: string,
     return false
   return not hasCompiledClassMethodInHierarchy(className, "new")
 
+proc compiledAllocatorFor*(name: string): CompiledProc =
+  ## The allocator a class registered, if any. Granite compiles
+  ## `Object class>>basicNew` once for every class, so the primitive resolves the
+  ## receiver's own allocator instead of capturing one at compile time.
+  compiledAllocators.getOrDefault(name)
+
+proc defaultAllocate*(className: string): NodeValue =
+  ## Allocation for classes the runtime represents natively.
+  if className == "Array": return compiledArray(@[])
+  if className in ["Table", "Set"]:
+    let created = compiledTable(initTable[NodeValue, NodeValue]())
+    created.instVal.class = ensureCompiledClass(className)
+    return created
+  NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+    class: ensureCompiledClass(className), isNimProxy: true))
+
+proc newCompiledInstance*(className: string): NodeValue =
+  ## `basicNew` for a receiver class: its own allocator, else the representation
+  ## default. No `initialize` runs; that is `new`'s job.
+  let allocator = compiledAllocatorFor(className)
+  if allocator != nil: allocator(NodeValue(kind: vkNil), @[])
+  else: defaultAllocate(className)
+
 proc compiledNewInstance*(className: string, allocator: CompiledProc): NodeValue =
   ## Native `new` for a class with no class-side override: allocate, then run a
   ## compiled `initialize` when the class hierarchy defines one, matching
@@ -1406,6 +1438,11 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
       if selector == "basicNew":
         return compiledAllocators[name](receiver, @[])
       return compiledNewInstance(name, compiledAllocators[name])
+    if name in ["Array", "Table", "Set"]:
+      if name == "Array": return compiledArray(@[])
+      let created = compiledTable(initTable[NodeValue, NodeValue]())
+      created.instVal.class = ensureCompiledClass(name)
+      return created
     if name == "Object":
       let created = NodeValue(kind: vkInstance,
         instVal: Instance(kind: ikObject, class: receiver.classVal, isNimProxy: true))
@@ -1701,6 +1738,7 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
   of "class":
     if args.len == 0:
       if receiverClassName.len > 0:
+        discard ensureCompiledClass(receiverClassName)
         return compiledClassValue(receiverClassName)
       # Plain value receivers answer their built-in class, as the interpreter's
       # Object>>class does for wrapped primitives.
@@ -1750,34 +1788,6 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
     if receiver.kind == vkClass and receiver.classVal != nil:
       return NodeValue(kind: vkBool, boolVal: hasCompiledClassMethodInHierarchy(receiver.classVal.name, querySelector))
     return NodeValue(kind: vkBool, boolVal: false)
-
-  of "from:to:":
-    var source: string
-    if receiver.kind == vkString:
-      source = receiver.strVal
-    elif receiver.kind == vkSymbol:
-      source = receiver.symVal
-    elif receiver.kind == vkInstance and receiver.instVal != nil and
-         receiver.instVal.kind == ikString:
-      source = receiver.instVal.strVal
-    else:
-      return compiledMissingMessage(receiver, selector)
-    if args.len < 2:
-      return toValue("")
-    let (validFrom, fromIndex) = args[0].tryGetInt()
-    let (validTo, toIndex) = args[1].tryGetInt()
-    if validFrom and validTo and fromIndex >= 0 and
-       toIndex < source.len and fromIndex <= toIndex:
-      return toValue(source[fromIndex..toIndex])
-    return toValue("")
-
-  of "asInteger", "asFloat", "asNumber":
-    if receiver.kind == vkString and args.len == 0:
-      case selector
-      of "asInteger": return stringAsInteger(receiver.strVal)
-      of "asFloat": return stringAsFloat(receiver.strVal)
-      else: return stringAsNumber(receiver.strVal)
-    return compiledMissingMessage(receiver, selector)
 
   of "isNil":
     return toValue(isNilValue(receiver))
@@ -2011,166 +2021,6 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       return compiledArray(keys)
     return NodeValue(kind: vkNil)
 
-  of "uppercase":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.toUpperAscii())
-    return NodeValue(kind: vkNil)
-
-  of "lowercase":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.toLowerAscii())
-    return NodeValue(kind: vkNil)
-
-  of "trim":
-    if receiver.kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.strip())
-    return NodeValue(kind: vkNil)
-
-  of "indexOf:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      return NodeValue(kind: vkInt, intVal: receiver.strVal.find(args[0].strVal))
-    if receiver.kind == vkArray and args.len > 0:
-      # Matches Array>>indexOf:: scan with `=`, answering nil on a miss.
-      for index, element in receiver.arrayVal:
-        if compiledIdentityEqual(element, args[0]) or
-           isTruthy(sendMessage(runtime, element, "=", @[args[0]])):
-          return NodeValue(kind: vkInt, intVal: index)
-      return NodeValue(kind: vkNil)
-    return NodeValue(kind: vkNil)
-
-  of "includesSubString:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      return NodeValue(kind: vkBool, boolVal: receiver.strVal.contains(args[0].strVal))
-    return NodeValue(kind: vkNil)
-
-  of "replace:with:":
-    if receiver.kind == vkString and args.len >= 2 and args[0].kind == vkString and args[1].kind == vkString:
-      return NodeValue(kind: vkString, strVal: receiver.strVal.replace(args[0].strVal, args[1].strVal))
-    return NodeValue(kind: vkNil)
-
-  of "split:":
-    if receiver.kind == vkString and args.len > 0 and args[0].kind == vkString:
-      var parts: seq[NodeValue] = @[]
-      for part in receiver.strVal.split(args[0].strVal):
-        parts.add(NodeValue(kind: vkString, strVal: part))
-      return compiledArray(parts)
-    return NodeValue(kind: vkNil)
-
-  of "max:":
-    if args.len > 0:
-      if receiver.kind == vkInt and args[0].kind == vkInt:
-        return NodeValue(kind: vkInt, intVal: max(receiver.intVal, args[0].intVal))
-      if receiver.kind == vkFloat and args[0].kind == vkFloat:
-        return NodeValue(kind: vkFloat, floatVal: max(receiver.floatVal, args[0].floatVal))
-    return NodeValue(kind: vkNil)
-
-  of "min:":
-    if args.len > 0:
-      if receiver.kind == vkInt and args[0].kind == vkInt:
-        return NodeValue(kind: vkInt, intVal: min(receiver.intVal, args[0].intVal))
-      if receiver.kind == vkFloat and args[0].kind == vkFloat:
-        return NodeValue(kind: vkFloat, floatVal: min(receiver.floatVal, args[0].floatVal))
-    return NodeValue(kind: vkNil)
-
-  of "between:and:":
-    if args.len >= 2 and receiver.kind == vkInt and args[0].kind == vkInt and args[1].kind == vkInt:
-      return NodeValue(kind: vkBool, boolVal: receiver.intVal >= args[0].intVal and receiver.intVal <= args[1].intVal)
-    return NodeValue(kind: vkNil)
-
-  of "withIndexDo:":
-    if receiver.kind == vkArray and args.len == 1:
-      let size = receiver.arrayVal.len
-      for index in 0..<size:
-        discard sendMessage(runtime, args[0], "value:value:",
-                            @[receiver.arrayVal[index], toValue(index)])
-      return receiver
-    return compiledMissingMessage(receiver, selector)
-
-  of "do:":
-    if receiver.kind == vkArray and args.len > 0:
-      for item in receiver.arrayVal:
-        discard sendMessage(runtime, args[0], "value:", @[item])
-      return receiver
-    return NodeValue(kind: vkNil)
-
-  of "isEmpty", "notEmpty":
-    var size = -1
-    case receiver.kind
-    of vkArray: size = receiver.arrayVal.len
-    of vkTable: size = receiver.tableVal.len
-    of vkString: size = receiver.strVal.len
-    else: discard
-    if size >= 0:
-      return toValue(if selector == "isEmpty": size == 0 else: size > 0)
-    return compiledMissingMessage(receiver, selector)
-
-  of "collect:", "select:", "reject:", "detect:", "detect:ifNone:",
-     "anySatisfy:", "allSatisfy:", "noneSatisfy:":
-    let arity = if selector == "detect:ifNone:": 2 else: 1
-    if receiver.kind != vkArray or args.len != arity:
-      return compiledMissingMessage(receiver, selector)
-    var elements: seq[NodeValue]
-    for item in receiver.arrayVal:
-      let answer = sendMessage(runtime, args[0], "value:", @[item])
-      let matched = if selector == "collect:": false else: isTruthy(answer)
-      case selector
-      of "collect:": elements.add(answer)
-      of "select:":
-        if matched: elements.add(item)
-      of "reject:":
-        if not matched: elements.add(item)
-      of "detect:", "detect:ifNone:":
-        if matched: return item
-      of "anySatisfy:":
-        if matched: return toValue(true)
-      of "allSatisfy:":
-        if not matched: return toValue(false)
-      of "noneSatisfy:":
-        if matched: return toValue(false)
-      else: discard
-    case selector
-    of "collect:", "select:", "reject:":
-      return compiledArray(elements)
-    of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
-    of "detect:": return nilValue()
-    of "anySatisfy:": return toValue(false)
-    else: return toValue(true)
-
-  of "inject:into:":
-    if receiver.kind == vkArray and args.len >= 2:
-      var acc = args[0]
-      for item in receiver.arrayVal:
-        acc = sendMessage(runtime, args[1], "value:value:", @[acc, item])
-      return acc
-    return NodeValue(kind: vkNil)
-
-  of "to:by:do:":
-    if receiver.kind == vkInt and args.len == 3 and
-       args[0].kind == vkInt and args[1].kind == vkInt:
-      var current = receiver.intVal
-      let stop = args[0].intVal
-      let step = args[1].intVal
-      if step > 0:
-        while current <= stop:
-          discard sendMessage(runtime, args[2], "value:", @[toValue(current)])
-          current = current + step
-      else:
-        while current >= stop:
-          discard sendMessage(runtime, args[2], "value:", @[toValue(current)])
-          current = current + step
-      return receiver
-    return compiledMissingMessage(receiver, selector)
-
-  of "to:do:":
-    if receiver.kind == vkInt and args.len >= 2 and args[0].kind == vkInt:
-      let startNum = receiver.intVal
-      let endNum = args[0].intVal
-      if startNum <= endNum:
-        for i in startNum..endNum:
-          discard sendMessage(runtime, args[1], "value:", @[NodeValue(kind: vkInt, intVal: i)])
-      return receiver
-    return NodeValue(kind: vkNil)
-
   of "ifNil:", "ifNotNil:", "ifNil:ifNotNil:", "ifNotNil:ifNil:":
     let arity = if selector in ["ifNil:", "ifNotNil:"]: 1 else: 2
     if args.len != arity:
@@ -2194,49 +2044,6 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
         return sendMessage(runtime, args[1], "value", @[])
       return sendMessage(runtime, args[0], "value:", @[receiver])
 
-  of "ifTrue:":
-    if args.len > 0 and isTruthy(receiver):
-      return sendMessage(runtime, args[0], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "ifFalse:":
-    if args.len > 0 and not isTruthy(receiver):
-      return sendMessage(runtime, args[0], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "ifTrue:ifFalse:":
-    if args.len >= 2:
-      if isTruthy(receiver):
-        return sendMessage(runtime, args[0], "value", @[])
-      return sendMessage(runtime, args[1], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "ifFalse:ifTrue:":
-    # The interpreter accepts either argument order; native only had
-    # ifTrue:ifFalse:, so a boolean sent ifFalse:ifTrue: raised
-    # MessageNotUnderstood in compiled code.
-    if args.len >= 2:
-      if isTruthy(receiver):
-        return sendMessage(runtime, args[1], "value", @[])
-      return sendMessage(runtime, args[0], "value", @[])
-    return NodeValue(kind: vkNil)
-
-  of "and:":
-    if receiver.kind == vkBool and args.len > 0:
-      if not receiver.boolVal:
-        return NodeValue(kind: vkBool, boolVal: false)
-      let rhs = sendMessage(runtime, args[0], "value", @[])
-      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
-    return NodeValue(kind: vkNil)
-
-  of "or:":
-    if receiver.kind == vkBool and args.len > 0:
-      if receiver.boolVal:
-        return NodeValue(kind: vkBool, boolVal: true)
-      let rhs = sendMessage(runtime, args[0], "value", @[])
-      return NodeValue(kind: vkBool, boolVal: isTruthy(rhs))
-    return NodeValue(kind: vkNil)
-
   of "&":
     if args.len > 0:
       let aStr = receiver.toString()
@@ -2244,20 +2051,130 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       return NodeValue(kind: vkString, strVal: aStr & bStr)
     return receiver
 
-  of "|":
-    if receiver.kind == vkBool and args.len > 0 and args[0].kind == vkBool:
-      return NodeValue(kind: vkBool, boolVal: receiver.boolVal or args[0].boolVal)
-    return NodeValue(kind: vkNil)
-
-  of "not":
-    if receiver.kind == vkBool:
-      return NodeValue(kind: vkBool, boolVal: not receiver.boolVal)
-    return NodeValue(kind: vkNil)
   else:
     if receiverClassName.len > 0:
       return dispatchCompiledMethodFromClass(receiver, receiverClassName, selector, args)
     return compiledMissingMessage(receiver, selector)
 
+
+const blockValueSelectors = ["value", "value:", "value:value:", "value:value:value:",
+  "value:value:value:value:"]
+
+proc compiledOnDo*(protectedBlock: NodeValue, handlerClass: NodeValue,
+                   handlerBlock: NodeValue): NodeValue =
+  ## Run `protectedBlock` with a handler for `handlerClass`. A notification
+  ## handler runs synchronously without unwinding the protected block.
+  let notificationHandler = NotificationHandlerEntry(
+    exceptionClass: handlerClass, handlerBlock: handlerBlock)
+  activeNotificationHandlers.add(notificationHandler)
+  defer:
+    discard activeNotificationHandlers.pop()
+  if handlerClass.kind == vkClass and handlerClass.classVal != nil and
+     isNotificationClass(handlerClass.classVal.name):
+    # Notifications do not unwind: the protected block keeps running and a
+    # synchronous handler call supplies the value of the signal expression.
+    return sendMessage(nil, protectedBlock, "value", @[])
+  while true:
+    try:
+      return sendMessage(nil, protectedBlock, "value", @[])
+    except CompiledHardingError as failure:
+      if not matchesCompiledError(failure.value, handlerClass):
+        raise
+      var retryRequested = false
+      activeErrorHandlers.add(failure.value.instVal)
+      notificationHandler.running = true
+      try:
+        try:
+          return sendMessage(nil, handlerBlock, "value:", @[failure.value])
+        except HandlerRetry as action:
+          if action.exceptionInstance != failure.value.instVal:
+            raise
+          retryRequested = true
+      finally:
+        discard activeErrorHandlers.pop()
+        notificationHandler.running = false
+      if not retryRequested:
+        raise
+
+
+proc compiledEnsure*(protectedBlock: NodeValue, cleanupBlock: NodeValue): NodeValue =
+  ## Run the protected block, then the cleanup exactly once, whether the body
+  ## completes, fails, or leaves through a non-local return. The cleanup result is
+  ## discarded and the body's result is preserved.
+  try:
+    return sendMessage(nil, protectedBlock, "value", @[])
+  finally:
+    discard sendMessage(nil, cleanupBlock, "value", @[])
+
+proc invokeBlockValue*(closure: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## Run a block's body. A compiled block runs its generated proc; an interpreted
+  ## block runs on the VM that owns it, translating control transfers the same way
+  ## method sends are translated. `Block>>value` and friends are declared as
+  ## primitives that call this, so the protocol has one implementation.
+  if closure.kind != vkBlock or closure.blockVal == nil:
+    return compiledMissingMessage(closure, "value")
+  if closure.blockVal.nativeImpl != nil:
+    return invokeCompiledBlock(closure.blockVal, args)
+  var host = interpretedBlockHost(closure.blockVal)
+  if host != nil:
+    return sendMessageInterpreted(host, closure, "value", args)
+  compiledMissingMessage(closure, "value")
+
+proc exceptionProtocol*(receiver: NodeValue, selector: string,
+                        args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+  ## The built-in exception protocol for a compiled exception instance.
+  ## `Exception>>signal`, `>>pass` and `>>retry` are declared as primitives that
+  ## call this; re-sending the selector from inside them would re-enter the
+  ## compiled method that reached the primitive.
+  if receiver.kind != vkInstance or receiver.instVal == nil or
+     receiver.instVal.class == nil or
+     not isCompiledExceptionClass(receiver.instVal.class.name):
+    return (false, NodeValue(kind: vkNil))
+  let notification = isNotificationClass(receiver.instVal.class.name)
+  if notification:
+    case selector
+    of "message":
+      return (true, NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver)))
+    of "signal":
+      let dispatch = dispatchCompiledNotification(nil, receiver, -1)
+      if dispatch.handled:
+        return (true, dispatch.value)
+      discard sendMessage(nil, receiver, "defaultAction", @[])
+      return (true, NodeValue(kind: vkNil))
+    of "pass":
+      if receiver.instVal notin activeNotifications:
+        return (true, raiseCompiledError(compiledErrorValue("Error",
+          "Exception action requires an active handler")))
+      raise (ref NotificationPass)(notification: receiver)
+    of "retry":
+      return (true, raiseCompiledError(compiledErrorValue("Error",
+        "Notification does not support " & selector)))
+    else:
+      discard
+  case selector
+  of "defaultAction":
+    echo "Exception: " & compiledExceptionMessage(receiver)
+    return (true, receiver)
+  of "message":
+    return (true, NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver)))
+  of "message:":
+    if args.len >= 1:
+      return (true, compiledSetExceptionMessage(receiver, args[0].toString()))
+    return (true, receiver)
+  of "printString":
+    return (true, NodeValue(kind: vkString,
+      strVal: receiver.instVal.class.name & ": " & compiledExceptionMessage(receiver)))
+  of "signal":
+    return (true, raiseCompiledError(receiver))
+  of "retry", "pass":
+    if receiver.instVal notin activeErrorHandlers:
+      return (true, raiseCompiledError(compiledErrorValue("Error",
+        "Exception action requires an active handler")))
+    if selector == "retry":
+      raise (ref HandlerRetry)(exceptionInstance: receiver.instVal)
+    return (true, raiseCompiledError(receiver))
+  else:
+    return (false, NodeValue(kind: vkNil))
 
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
                   selector: string, args: seq[NodeValue]): NodeValue =
@@ -2271,6 +2188,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
   if receiver.kind == vkInstance and receiver.instVal != nil and
      receiver.instVal.kind in {ikArray, ikTable}:
     let storage = receiver.instVal
+    let sourceMethod = resolveCompiledMethod(storage.class.name, selector)
+    if sourceMethod != nil:
+      return sourceMethod(receiver, args)
     case selector
     of "add:":
       if args.len == 1:
@@ -2300,20 +2220,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       if storage.kind == ikArray:
         return NodeValue(kind: vkInt, intVal: storage.elements.len)
       return NodeValue(kind: vkInt, intVal: storage.entries.len)
-    of "isEmpty":
-      return toValue(if storage.kind == ikArray: storage.elements.len == 0
-                     else: storage.entries.len == 0)
-    of "notEmpty":
-      return toValue(if storage.kind == ikArray: storage.elements.len > 0
-                     else: storage.entries.len > 0)
-    of "first":
-      if storage.kind == ikArray and storage.elements.len > 0:
-        return storage.elements[0]
-      return nilValue()
-    of "last":
-      if storage.kind == ikArray and storage.elements.len > 0:
-        return storage.elements[^1]
-      return nilValue()
     of "isKindOf:":
       if args.len == 1:
         let target = if args[0].kind == vkClass: args[0].classVal.name
@@ -2326,105 +2232,16 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       var elements: seq[NodeValue]
       for value in storage.entries.values: elements.add(value)
       return compiledArray(elements)
-    of "addAll:":
-      if args.len == 1:
-        for element in compiledSequence(args[0]):
-          if storage.kind == ikArray: storage.elements.add(element)
-          else: storage.entries[element] = element
-        return args[0]
-    of "occurrencesOf:":
-      if args.len == 1:
-        var total = 0
-        for value in compiledSequence(receiver):
-          if isTruthy(sendMessage(runtime, value, "=", @[args[0]])): inc total
-        return toValue(total)
-    of "findFirst:", "findLast:":
-      if args.len == 1 and storage.kind == ikArray:
-        let count = storage.elements.len
-        for offset in 0..<count:
-          let index = if selector == "findFirst:": offset else: count - 1 - offset
-          if isTruthy(sendMessage(runtime, args[0], "value:", @[storage.elements[index]])):
-            return toValue(index)
-        return nilValue()
-    of "reverseDo:":
-      if args.len == 1 and storage.kind == ikArray:
-        for index in countdown(storage.elements.len - 1, 0):
-          discard sendMessage(runtime, args[0], "value:", @[storage.elements[index]])
-        return receiver
-    of "includesAll:":
-      if args.len == 1:
-        for wanted in compiledSequence(args[0]):
-          var found = false
-          for value in compiledSequence(receiver):
-            if isTruthy(sendMessage(runtime, value, "=", @[wanted])):
-              found = true
-              break
-          if not found: return toValue(false)
-        return toValue(true)
     of "removeAll":
       if storage.kind == ikArray:
         storage.elements.setLen(0)
         return receiver
-    of "sorted", "sorted:":
-      if storage.kind == ikArray and (selector == "sorted" or args.len == 1):
-        var elements = storage.elements
-        for i in 1..<elements.len:
-          var j = i
-          while j > 0:
-            let left = elements[j]
-            let right = elements[j - 1]
-            let before = if selector == "sorted:":
-                           sendMessage(runtime, args[0], "value:value:", @[left, right])
-                         elif left.kind == vkInt and right.kind == vkInt:
-                           toValue(left.intVal < right.intVal)
-                         elif left.kind == vkFloat and right.kind == vkFloat:
-                           toValue(left.floatVal < right.floatVal)
-                         elif left.kind in {vkInt, vkFloat} and right.kind in {vkInt, vkFloat}:
-                           toValue((if left.kind == vkInt: float(left.intVal) else: left.floatVal) <
-                                   (if right.kind == vkInt: float(right.intVal) else: right.floatVal))
-                         elif left.kind == vkString and right.kind == vkString:
-                           toValue(left.strVal < right.strVal)
-                         elif left.kind == vkBool and right.kind == vkBool:
-                           toValue(left.boolVal < right.boolVal)
-                         else:
-                           sendMessage(runtime, left, "<", @[right])
-            if not isTruthy(before): break
-            swap(elements[j], elements[j - 1])
-            dec j
-        return compiledArray(elements)
-    of "remove:", "remove:ifAbsent:":
-      # Set: remove the key, answering the element. Array: remove one occurrence
-      # matched by `=`, answering it (classic Smalltalk's remove:).
+    of "remove:":
       if args.len == 1 and storage.class.name == "Set":
         if storage.entries.hasKey(args[0]):
           storage.entries.del(args[0])
           return args[0]
-        if args.len == 2:
-          return sendMessage(runtime, args[1], "value", @[])
         return nilValue()
-      if storage.kind == ikArray and args.len >= 1:
-        var index = -1
-        for i, element in storage.elements:
-          if compiledIdentityEqual(element, args[0]) or
-             isTruthy(sendMessage(runtime, element, "=", @[args[0]])):
-            index = i
-            break
-        if index < 0:
-          if args.len == 2:
-            return sendMessage(runtime, args[1], "value", @[])
-          return nilValue()
-        let removed = storage.elements[index]
-        storage.elements.delete(index)
-        return removed
-    of "removeAllSuchThat:":
-      # Remove every element satisfying the predicate; answer the receiver.
-      if storage.kind == ikArray and args.len == 1:
-        var kept: seq[NodeValue] = @[]
-        for element in storage.elements:
-          if not isTruthy(sendMessage(runtime, args[0], "value:", @[element])):
-            kept.add(element)
-        storage.elements = kept
-        return receiver
     of "removeAt:":
       if storage.kind == ikArray and args.len == 1 and args[0].kind == vkInt:
         let index = args[0].intVal
@@ -2433,13 +2250,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           storage.elements.delete(index)
           return removed
         return nilValue()
-    of "removeLast", "removeFirst":
-      if storage.kind == ikArray and storage.elements.len > 0:
-        let index = if selector == "removeLast": storage.elements.len - 1 else: 0
-        let removed = storage.elements[index]
-        storage.elements.delete(index)
-        return removed
-      return nilValue()
     of "union:", "intersection:", "difference:":
       if args.len == 1 and storage.class.name == "Set":
         var entries = initTable[NodeValue, NodeValue]()
@@ -2463,22 +2273,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         if storage.entries.hasKey(args[0]):
           storage.entries.del(args[0])
         return receiver
-    of "values":
-      if storage.kind == ikTable and storage.class.name == "Table":
-        var elements: seq[NodeValue]
-        for value in storage.entries.values: elements.add(value)
-        return compiledArray(elements)
     of "keys":
       if storage.kind == ikTable and storage.class.name == "Table":
         var elements: seq[NodeValue]
         for key in storage.entries.keys: elements.add(key)
         return compiledArray(elements)
-    of "associations":
-      if storage.kind == ikTable and storage.class.name == "Table":
-        var pairs: seq[NodeValue]
-        for key, value in storage.entries:
-          pairs.add(compiledArray(@[key, value]))
-        return compiledArray(pairs)
     of "at:":
       if args.len == 1:
         if storage.kind == ikArray and args[0].kind == vkInt:
@@ -2501,45 +2300,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     of "includesKey:":
       if storage.kind == ikTable and args.len == 1:
         return toValue(storage.entries.hasKey(args[0]))
-    of "do:", "keysAndValuesDo:", "collect:", "select:", "reject:",
-       "detect:", "detect:ifNone:", "inject:into:", "anySatisfy:",
-       "allSatisfy:", "noneSatisfy:":
-      if storage.kind == ikTable and storage.class.name == "Table":
-        var collected: seq[NodeValue]
-        var selected = initTable[NodeValue, NodeValue]()
-        var accumulator = if selector == "inject:into:" and args.len == 2: args[0] else: nilValue()
-        let callback = if selector == "inject:into:" and args.len == 2: args[1]
-                       elif args.len > 0: args[0] else: nilValue()
-        for key, value in storage.entries:
-          let answer = if selector == "inject:into:":
-                         sendMessage(runtime, callback, "value:value:value:", @[accumulator, key, value])
-                       else:
-                         sendMessage(runtime, callback, "value:value:", @[key, value])
-          case selector
-          of "do:", "keysAndValuesDo:": discard
-          of "collect:": collected.add(answer)
-          of "inject:into:": accumulator = answer
-          of "select:":
-            if isTruthy(answer): selected[key] = value
-          of "reject:":
-            if not isTruthy(answer): selected[key] = value
-          of "detect:", "detect:ifNone:":
-            if isTruthy(answer): return value
-          of "anySatisfy:":
-            if isTruthy(answer): return toValue(true)
-          of "allSatisfy:", "noneSatisfy:":
-            if isTruthy(answer) == (selector == "noneSatisfy:"):
-              return toValue(false)
-          else: discard
-        case selector
-        of "do:", "keysAndValuesDo:": return receiver
-        of "collect:": return compiledArray(collected)
-        of "select:", "reject:": return compiledTable(selected)
-        of "inject:into:": return accumulator
-        of "detect:ifNone:": return sendMessage(runtime, args[1], "value", @[])
-        of "detect:": return nilValue()
-        of "anySatisfy:": return toValue(false)
-        else: return toValue(true)
     of "clone", "copy":
       if storage.kind == ikArray:
         return compiledArray(storage.elements)
@@ -2549,21 +2309,6 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
         let same = compiledIdentityEqual(receiver, args[0])
         return toValue(if selector == "==": same else: not same)
     else: discard
-    if storage.kind == ikTable and storage.class.name == "Set" and
-       selector in ["do:", "collect:", "select:", "reject:", "detect:",
-                    "detect:ifNone:", "inject:into:", "anySatisfy:",
-                    "allSatisfy:", "noneSatisfy:"]:
-      var elements: seq[NodeValue]
-      for value in storage.entries.values: elements.add(value)
-      let answer = sendMessage(runtime, compiledArray(elements), selector, args)
-      if selector == "do:": return receiver
-      if selector in ["collect:", "select:", "reject:"]:
-        var entries = initTable[NodeValue, NodeValue]()
-        for value in compiledArrayElements(answer): entries[value] = value
-        let collected = compiledTable(entries)
-        collected.instVal.class = storage.class
-        return collected
-      return answer
     # Read-only operations use an ephemeral value view, never a mutable owner.
     let view = if storage.kind == ikArray:
                  NodeValue(kind: vkArray, arrayVal: storage.elements)
@@ -2579,48 +2324,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     return NodeValue(kind: vkBool, boolVal: if selector == "==": same else: not same)
 
   if receiver.kind == vkBlock and selector == "ensure:" and args.len == 1:
-    # Run the protected block, then the cleanup exactly once, whether the body
-    # completes, fails, or leaves through a non-local return. The cleanup result
-    # is discarded and the body's result is preserved.
-    try:
-      return sendMessage(runtime, receiver, "value", @[])
-    finally:
-      discard sendMessage(runtime, args[0], "value", @[])
+    return compiledEnsure(receiver, args[0])
 
   if receiver.kind == vkBlock and selector == "on:do:" and args.len == 2:
-    let handlerClass = args[0]
-    let notificationHandler = NotificationHandlerEntry(
-      exceptionClass: handlerClass, handlerBlock: args[1])
-    activeNotificationHandlers.add(notificationHandler)
-    defer:
-      discard activeNotificationHandlers.pop()
-    if handlerClass.kind == vkClass and handlerClass.classVal != nil and
-       isNotificationClass(handlerClass.classVal.name):
-      # Notifications do not unwind: the protected block keeps running and a
-      # synchronous handler call supplies the value of the signal expression.
-      return sendMessage(runtime, receiver, "value", @[])
-    while true:
-      try:
-        return sendMessage(runtime, receiver, "value", @[])
-      except CompiledHardingError as failure:
-        if not matchesCompiledError(failure.value, args[0]):
-          raise
-        var retryRequested = false
-        activeErrorHandlers.add(failure.value.instVal)
-        notificationHandler.running = true
-        try:
-          try:
-            return sendMessage(runtime, args[1], "value:", @[failure.value])
-          except HandlerRetry as action:
-            if action.exceptionInstance != failure.value.instVal:
-              raise
-            retryRequested = true
-        finally:
-          discard activeErrorHandlers.pop()
-          notificationHandler.running = false
-        if not retryRequested:
-          raise
-
+    return compiledOnDo(receiver, args[0], args[1])
   if receiver.kind == vkClass and selector == "signal:" and args.len == 1 and
      receiver.classVal != nil and isCompiledExceptionClass(receiver.classVal.name):
     let notification = compiledErrorValue(receiver.classVal.name, args[0].toString())
@@ -2638,66 +2345,16 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     # User-defined exception methods take precedence over the built-in protocol.
     if hasCompiledMethodInHierarchy(receiver.instVal.class.name, selector):
       return dispatchCompiledMethodFromClass(receiver, receiver.instVal.class.name, selector, args)
-    if isNotificationClass(receiver.instVal.class.name):
-      case selector
-      of "message":
-        return NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver))
-      of "signal":
-        let dispatch = dispatchCompiledNotification(runtime, receiver, -1)
-        if dispatch.handled:
-          return dispatch.value
-        discard sendMessage(runtime, receiver, "defaultAction", @[])
-        return NodeValue(kind: vkNil)
-      of "pass":
-        if receiver.instVal notin activeNotifications:
-          return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
-        raise (ref NotificationPass)(notification: receiver)
-      of "retry":
-        return raiseCompiledError(compiledErrorValue("Error",
-          "Notification does not support " & selector))
-      else:
-        discard
-
-    case selector
-    of "defaultAction":
-      echo "Exception: " & compiledExceptionMessage(receiver)
-      return receiver
-    of "message":
-      return NodeValue(kind: vkString, strVal: compiledExceptionMessage(receiver))
-    of "message:":
-      if args.len >= 1:
-        return compiledSetExceptionMessage(receiver, args[0].toString())
-      return receiver
-    of "printString":
-      return NodeValue(kind: vkString,
-        strVal: receiver.instVal.class.name & ": " & compiledExceptionMessage(receiver))
-    of "signal":
-      return raiseCompiledError(receiver)
-    of "retry", "pass":
-      if receiver.instVal notin activeErrorHandlers:
-        return raiseCompiledError(compiledErrorValue("Error", "Exception action requires an active handler"))
-      if selector == "retry":
-        raise (ref HandlerRetry)(exceptionInstance: receiver.instVal)
-      if selector == "pass":
-        return raiseCompiledError(receiver)
-    else:
-      discard
+    # One definition of the built-in exception protocol, shared with the
+    # `Exception>>signal`, `>>pass` and `>>retry` primitives.
+    let protocolResult = exceptionProtocol(receiver, selector, args)
+    if protocolResult.handled:
+      return protocolResult.value
 
   # Block evaluation: value, value:, value:value:, value:value:value:
   if receiver.kind == vkBlock and receiver.blockVal != nil and
-     receiver.blockVal.nativeImpl != nil:
-    if selector in ["value", "value:", "value:value:", "value:value:value:", "value:value:value:value:"]:
-      return invokeCompiledBlock(receiver.blockVal, args)
-
-  # An interpreted block handed to compiled code runs on the VM that owns it.
-  # Control transfers inside it follow the same translation as method sends
-  # (errors reach interpreted handlers; returns keep their VM home).
-  if receiver.kind == vkBlock and receiver.blockVal != nil and
-     receiver.blockVal.nativeImpl == nil and
-     selector in ["value", "value:", "value:value:", "value:value:value:", "value:value:value:value:"]:
-    var host = interpretedBlockHost(receiver.blockVal)
-    if host != nil:
-      return sendMessageInterpreted(host, receiver, selector, args)
+     selector in blockValueSelectors:
+    return invokeBlockValue(receiver, args)
 
   # A dynamic send reads its selector from an argument, so the builtin table
   # cannot run it: the `perform:` builtins sit after the class-side and compiled
@@ -2792,7 +2449,9 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkBool, boolVal: found)
     return dispatchCompiledClassMethod(receiver, receiver.classVal.name, selector, args)
 
-  let receiverClassName = getReceiverClassName(receiver)
+  let proxyClassName = getReceiverClassName(receiver)
+  let receiverClassName = if proxyClassName.len > 0: proxyClassName
+                          else: builtInClassName(receiver)
   if receiverClassName.len > 0:
     # Resolve once and call the target directly. Going through
     # `hasCompiledMethodInHierarchy` + `dispatchCompiledMethodFromClass` resolved
@@ -2884,7 +2543,9 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     let interpreted = boundInterpretedSend(receiver, selector, args)
     if interpreted.handled:
       return interpreted.value
-  let className = getReceiverClassName(receiver)
+  let proxyClassName = getReceiverClassName(receiver)
+  let className = if proxyClassName.len > 0: proxyClassName
+                  else: builtInClassName(receiver)
   if className.len > 0:
     if cache.version == compiledClassDispatchVersion and cache.className == className and
        cache.selector == selector and (cache.target != nil or cache.negative):

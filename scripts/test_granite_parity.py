@@ -7,6 +7,39 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("compiled_stdlib_values", r"""
+(true perform: #asString) println.
+(false perform: #asString) println.
+(true perform: #ifFalse:ifTrue: with: [11] with: [22]) println.
+(false perform: #ifFalse:ifTrue: with: [11] with: [22]) println.
+(true perform: #and: with: [33]) println.
+(false perform: #or: with: [44]) println.
+(nil perform: #printString) println.
+("hi" perform: #printString) println.
+("hi" perform: #displayString) println.
+("" perform: #isEmpty) println.
+("text" perform: #notEmpty) println.
+("42" perform: #asNumber) println.
+("2.5" perform: #asNumber) println.
+("bad" perform: #asNumber) println.
+(-2.5 perform: #abs) println.
+(2.5 perform: #negated) println.
+""", 'true\nfalse\n22\n11\n33\n44\nnil\n"hi"\nhi\ntrue\ntrue\n42\n2.5\nnil\n2.5\n-2.5\n'),
+    ("compiled_stdlib_integer", r"""
+(6 factorial) println.
+(0 factorial) println.
+(48 gcd: 18) println.
+(-12 lcm: 18) println.
+(7 odd) println.
+(8 even) println.
+(7 perform: #factorial) println.
+(3 + 4) println.
+""", '720\n1\n6\n36\ntrue\ntrue\n5040\n7\n'),
+    ("compiled_stdlib_override", """
+Integer>>factorial [ ^123 ].
+(6 factorial) println.
+(6 perform: #factorial) println.
+""", '123\n123\n'),
     ("returned_cascade", r"""
 Box := Object derivePublic: #(first, second, count, label, size).
 Box>>setFirst: x [ first := x ]
@@ -1463,7 +1496,7 @@ h probe println.
 
 
 CASES.append(("stdlib_bag",
-              (ROOT / "lib/core/Bag.hrd").read_text() + """
+              """
 b := Bag new.
 (b add: 3) println.
 b add: 1. b add: 3. b add: 2. b add: 3.
@@ -1506,7 +1539,7 @@ alias asArray println.
 """, "3\n5\n3\n0\ntrue\nfalse\n#(3 1 3 2 3)\n#(6 2 6 4 6)\n#(3 3 2 3)\n#(1)\n12\n12\n3\ntrue\ntrue\ntrue\n3\n42\nfalse\ntrue\n3\n4\n2\nnil\n4\n#(1 1 2)\n3\ntrue\nfalse\nBag\ntrue\n0\ntrue\n#(7)\n"))
 
 CASES.append(("stdlib_sorted_collection",
-              (ROOT / "lib/standard/SortedCollection.hrd").read_text() + """
+              """
 sc := SortedCollection new.
 (sc add: 3) println.
 sc add: 1. sc add: 2. sc add: 2.

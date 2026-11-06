@@ -3,6 +3,7 @@ import ../core/types
 import ../compiler/context
 import ../compiler/types
 import ../compiler/symbols
+import ../compiler/primitive_abi
 import ./blocks
 import ./numeric
 
@@ -669,7 +670,11 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
   # Check for native class instantiation: "ClassName new" where ClassName is compiled
   if node.selector == "new" and node.receiver != nil and node.receiver.kind == nkIdent:
     let className = node.receiver.IdentNode.name
-    if className in ctx.compiledClasses and not ctx.isLocal(className):
+    # A library class whose storage the runtime owns keeps allocation on the
+    # runtime path; only classes with a generated layout get a guarded allocator.
+    let hasGeneratedLayout = className in ctx.classInfo
+    if className in ctx.compiledClasses and hasGeneratedLayout and
+       not ctx.isLocal(className):
       # In mixed mode, use interpreter to create instances (ensures interpreter can call methods)
       if ctx.mixed:
         return fmt("sendMessageHybrid(hybridInterpreter.globals[\"{className}\"], \"new\", @[])")
@@ -760,145 +765,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       code.add("    nilValue())")
       return code
 
-  of "do:":
-    # Inline do: only for a literal Array receiver; other receivers keep
-    # ordinary dispatch so Table/Set species and callback arity stay correct.
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
-       node.receiver != nil and node.receiver.kind == nkArray and
-       not hasReturnNode(node.arguments[0]):
-      let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len == 1:
-        let elemName = bodyBlock.parameters[0]
-        # Create a new context with the loop variable as a local
-        let doCtx = inlineBlockContext(ctx, bodyBlock)
-        doCtx.locals.add(elemName)
-        var code = "(block:\n"
-        code.add("    let hardingDoReceiver = " & receiverCode & "\n")
-        code.add("    for hardingDoIdx, hardingElem in compiledArrayElements(hardingDoReceiver):\n")
-        code.add("      " & bindingDeclaration(doCtx, elemName, "hardingElem") & "\n")
-        code.add(indentBlock(genLocalDeclarations(doCtx, bodyBlock.temporaries), 6))
-        for stmt in bodyBlock.body:
-          let stmtCode = genStatement(doCtx, stmt)
-          code.add(indentBlock(stmtCode, 6))
-        code.add("    hardingDoReceiver)")
-        return code
-
-  of "collect:":
-    # Inline collect: only for a literal Array receiver; other receivers keep
-    # ordinary dispatch so result species stays correct.
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
-       node.receiver != nil and node.receiver.kind == nkArray and
-       not hasReturnNode(node.arguments[0]):
-      let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len == 1:
-        let elemName = bodyBlock.parameters[0]
-        # Create a new context with the loop variable as a local
-        let collectCtx = inlineBlockContext(ctx, bodyBlock)
-        collectCtx.locals.add(elemName)
-        var code = "(block:\n"
-        code.add("    var hardingCollectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingCollectIdx, hardingElem in " & "compiledArrayElements(" & receiverCode & "):\n")
-        code.add("      " & bindingDeclaration(collectCtx, elemName, "hardingElem") & "\n")
-        code.add(indentBlock(genLocalDeclarations(collectCtx, bodyBlock.temporaries), 6))
-        # Generate all statements except the last one
-        for i in 0..<bodyBlock.body.len-1:
-          let stmtCode = genStatement(collectCtx, bodyBlock.body[i])
-          code.add(indentBlock(stmtCode, 6))
-        # The last statement's value is what we collect
-        if bodyBlock.body.len > 0:
-          let lastStmt = bodyBlock.body[^1]
-          let valueCode = genExpression(collectCtx, lastStmt)
-          code.add("      hardingCollectResult.add(" & valueCode & ")\n")
-        code.add("    compiledArray(hardingCollectResult))")
-        return code
-
-  of "select:":
-    # Inline select: only for a literal Array receiver; other receivers keep
-    # ordinary dispatch so result species stays correct.
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
-       node.receiver != nil and node.receiver.kind == nkArray and
-       not hasReturnNode(node.arguments[0]):
-      let bodyBlock = node.arguments[0].BlockNode
-      if bodyBlock.parameters.len == 1:
-        let elemName = bodyBlock.parameters[0]
-        # Create a new context with the loop variable as a local
-        let selectCtx = inlineBlockContext(ctx, bodyBlock)
-        selectCtx.locals.add(elemName)
-        var code = "(block:\n"
-        code.add("    var hardingSelectResult: seq[NodeValue] = @[]\n")
-        code.add("    for hardingSelectIdx, hardingElem in " & "compiledArrayElements(" & receiverCode & "):\n")
-        code.add("      " & bindingDeclaration(selectCtx, elemName, "hardingElem") & "\n")
-        code.add(indentBlock(genLocalDeclarations(selectCtx, bodyBlock.temporaries), 6))
-        for i in 0..<max(0, bodyBlock.body.len - 1):
-          code.add(indentBlock(genStatement(selectCtx, bodyBlock.body[i]), 6))
-        let condCode = if bodyBlock.body.len > 0:
-                         genExpression(selectCtx, bodyBlock.body[^1])
-                       else:
-                         "nilValue()"
-        code.add("      if isTruthy(" & condCode & "):\n")
-        code.add("        hardingSelectResult.add(hardingElem)\n")
-        code.add("    compiledArray(hardingSelectResult))")
-        return code
-
-  of "timesRepeat:":
-    # Inline timesRepeat when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 1 and node.arguments[0].kind == nkBlock and
-       not hasReturnNode(node.arguments[0]):
-      let bodyBlock = node.arguments[0].BlockNode
-      var code = "(block:\n"
-      code.add("    let count = compiledLoopInt(" & receiverCode & ")\n")
-      code.add("    for timesRepeatI in 0..<count:\n")
-      code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock), 6))
-      code.add("    nilValue())")
-      return code
-
-  of "to:by:do:":
-    # Inline to:by:do: when body is a literal block (expression context - needs value)
-    if node.arguments.len >= 3 and node.arguments[2].kind == nkBlock and
-       not hasReturnNode(node.arguments[2]):
-      let endVal = genExpression(ctx, node.arguments[0])
-      let stepVal = genExpression(ctx, node.arguments[1])
-      let bodyBlock = node.arguments[2].BlockNode
-      var loopCtx = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
-      loopCtx.inMethod = ctx.inMethod
-      loopCtx.directSendCandidates = ctx.directSendCandidates
-      loopCtx.integerSendCandidates = ctx.integerSendCandidates
-      loopCtx.inBlock = ctx.inBlock
-      loopCtx.returnTarget = ctx.returnTarget
-      loopCtx.locals = ctx.locals
-      loopCtx.parameters = ctx.parameters
-      loopCtx.globals = ctx.globals
-      loopCtx.cellNames = ctx.cellNames
-      loopCtx.blockRegistry = ctx.blockRegistry
-      loopCtx.varTypes = ctx.varTypes
-      loopCtx.numericBindings = ctx.numericBindings
-      for parameter in bodyBlock.parameters:
-        loopCtx.locals.add(parameter)
-      var iterationSetup = ""
-      if bodyBlock.parameters.len > 0:
-        iterationSetup.add(bindingDeclaration(loopCtx, bodyBlock.parameters[0],
-          "NodeValue(kind: vkInt, intVal: current)") & "\n")
-      iterationSetup.add(genLocalDeclarations(loopCtx, bodyBlock.temporaries))
-      var code = "(block:\n"
-      code.add("    var current = compiledLoopInt(" & receiverCode & ")\n")
-      code.add("    let endNum = compiledLoopInt(" & endVal & ")\n")
-      code.add("    let step = compiledLoopInt(" & stepVal & ")\n")
-      code.add("    if step > 0:\n")
-      code.add("      while current <= endNum:\n")
-      code.add(indentBlock(iterationSetup, 8))
-      for stmt in bodyBlock.body:
-        let stmtCode = genStatement(loopCtx, stmt)
-        code.add(indentBlock(stmtCode, 8))
-      code.add("        current += step\n")
-      code.add("    else:\n")
-      code.add("      while current >= endNum:\n")
-      code.add(indentBlock(iterationSetup, 8))
-      for stmt in bodyBlock.body:
-        let stmtCode = genStatement(loopCtx, stmt)
-        code.add(indentBlock(stmtCode, 8))
-      code.add("        current += step\n")
-      code.add("    nilValue())")
-      return code
+  else: discard
 
   if not ctx.mixed:
     if node.selector == "|" and node.arguments.len == 1:
@@ -945,21 +812,21 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     return receiverCode
 
   of "println", "writeLine:", "writeline:":
-    # Print with newline - generates a statement, not an expression
-    # This is a limitation - we need statement context for echo
+    # Object>>println and Object>>writeLine: are library methods; `writeline:`
+    # is FileStream's own and must reach it. Printing is only the receiver's
+    # own protocol here, so an explicit argument keeps the ordinary send.
     if node.arguments.len >= 1:
-      let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("nt_println({argCode})")
-    else:
-      return fmt("nt_println({receiverCode})")
+      return genSend(ctx, receiverCode, node.selector,
+                     node.arguments.mapIt(genExpression(ctx, it)))
+    return fmt("nt_println({receiverCode})")
 
-  of "print", "write:":
-    # Print without newline
+  of "print":
+    # Object>>print prints without a newline. `write:` is not an alias: it is
+    # FileStream's and String's own selector and keeps ordinary dispatch.
     if node.arguments.len >= 1:
-      let argCode = genExpression(ctx, node.arguments[0])
-      return fmt("nt_print({argCode})")
-    else:
-      return fmt("nt_print({receiverCode})")
+      return genSend(ctx, receiverCode, node.selector,
+                     node.arguments.mapIt(genExpression(ctx, it)))
+    return fmt("nt_print({receiverCode})")
 
   of "asString":
     return genHostedBuiltin(ctx, receiverCode, "asString", "nt_asString")
@@ -1325,6 +1192,9 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Primitive calls need runtime support
     let primCall = node.PrimitiveCallNode
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
+    let bindings = nativePrimitiveBindings()
+    if primCall.selector in bindings:
+      return fmt("{bindings[primCall.selector].nimProc}(self, @[{args}])")
     return fmt("callPrimitive(\"{escapeNimString(primCall.selector)}\", @[{args}])")
 
   of nkSlotAccess:
@@ -1641,6 +1511,9 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Primitive call as statement
     let primCall = node.PrimitiveCallNode
     let args = primCall.arguments.mapIt(genExpression(ctx, it)).join(", ")
+    let bindings = nativePrimitiveBindings()
+    if primCall.selector in bindings:
+      return "discard " & bindings[primCall.selector].nimProc & "(self, @[" & args & "])"
     return "discard callPrimitive(\"" & escapeNimString(primCall.selector) & "\", @[" & args & "])"
 
   else:

@@ -126,3 +126,12 @@ Library>>removeKey: key ifAbsent: block [
 #====================================================================.
 
 Library>>bindings <primitive primitiveLibraryBindings>
+
+#====================================================================.
+# Library loading.
+#
+# A compiled Library owns its bindings; loading reads source, which is a host
+# service rather than something compiled code can perform on its own.
+#====================================================================.
+
+Library>>load: path <primitive primitiveLibraryLoad: path>

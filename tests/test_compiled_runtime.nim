@@ -61,18 +61,29 @@ suite "Compiled reference collections":
     check compiledIdentityEqual(nt_at_k(cloned, toValue(0)), child)
     check not compiledIdentityEqual(cloned, array)
 
-  test "removeAll retains receiver identity and sorted copies retain source order":
+  test "removeAll retains receiver identity across aliases":
+    ## A shape-changing primitive keeps collection identity. `sorted` is a
+    ## Harding method compiled from Array.hrd, not a runtime builtin, so it is
+    ## exercised by the parity suite rather than against a bare runtime.
     let array = compiledArray(@[toValue(3), toValue(1), toValue(2)])
     let alias = array
-    let sorted = sendMessage(nil, array, "sorted", @[])
-    check compiledArrayElements(sorted) == @[toValue(1), toValue(2), toValue(3)]
-    check compiledArrayElements(array) == @[toValue(3), toValue(1), toValue(2)]
     check compiledIdentityEqual(sendMessage(nil, array, "removeAll", @[]), array)
     check compiledArrayElements(alias).len == 0
-    check compiledArrayElements(sorted).len == 3
     discard sendMessage(nil, array, "removeAll", @[])
     discard sendMessage(nil, array, "add:", @[toValue(7)])
     check compiledArrayElements(alias) == @[toValue(7)]
+
+  test "a library method is not silently implemented by the runtime":
+    ## The point of compiling the library: without the compiled method, a bare
+    ## runtime must say it does not understand rather than answer a second,
+    ## hand-written version.
+    let array = compiledArray(@[toValue(3), toValue(1)])
+    var raised = false
+    try:
+      discard sendMessage(nil, array, "sorted", @[])
+    except CompiledHardingError:
+      raised = true
+    check raised
 
   test "cycles fail without poisoning later JSON writes":
     let array = compiledArray(@[])
@@ -196,15 +207,15 @@ suite "Compiled runtime nil predicates":
     check not sendMessage(rt, receiver, "notNil", @[]).boolVal
 
 suite "Compiled numeric string conversion":
-  test "parsing preserves kinds and failures do not become zero":
+  test "primitive conversions preserve kinds and refuse junk":
+    ## `String>>asNumber` is a Harding method selected by compiled registration;
+    ## the primitives it delegates to are these.
+    check primitiveAsInteger(toValue("42"), @[]).intVal == 42
+    check primitiveAsFloat(toValue("3.5"), @[]).floatVal == 3.5
+    for value in [toValue("bad"), toValue("12tail")]:
+      check isNilValue(primitiveAsInteger(value, @[]))
+      check isNilValue(primitiveAsFloat(value, @[]))
     let rt = newRuntime()
-    check sendMessage(rt, toValue("42"), "asInteger", @[]).intVal == 42
-    check sendMessage(rt, toValue("42"), "asNumber", @[]).kind == vkInt
-    check sendMessage(rt, toValue("3.5"), "asFloat", @[]).floatVal == 3.5
-    check sendMessage(rt, toValue("3.5"), "asNumber", @[]).kind == vkFloat
-    for selector in ["asInteger", "asFloat", "asNumber"]:
-      check isNilValue(sendMessage(rt, toValue("bad"), selector, @[]))
-      check isNilValue(sendMessage(rt, toValue("12tail"), selector, @[]))
     let cls = newClass(name = "NumericConversionOverride")
     let receiver = newInstance(cls)
     receiver.isNimProxy = true
