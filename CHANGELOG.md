@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Nimony migration assessment covering potential benefits, compatibility risks and a staged validation plan (`docs/NIMONY_ASSESSMENT.md`).
 - Granite native non-frozen builds lift source-indexed core/standard library methods through the ordinary method pipeline and resolve declared primitives through `primitive_abi.nim`. Collection and string duplicate implementations have been reduced; remaining selector fallbacks and full parity validation are still under review.
 - `demos/notebook`: a complete GTK4 application in Harding source — searchable note list, split title/body editor, new/duplicate/delete/undo-delete/pin/archive, versioned JSON persistence with explicit save, and in-app `--self-test`/`--gui-test` that run in both `harding_gtk` and `granite build --gtk` (`demos/notebook/README.md`).
 - Shared GTK application protocol gained `GtkEntry`, `GtkTextView`, `GtkScrolledWindow`, `GtkPaned` and `GtkListBox`, with `clicked`/`changed`/`row-selected`/`close-request` callbacks, widget visibility/sensitivity/focus/tooltip, `removeAll`, and list children wrapped in real `GtkListBoxRow`s. Callback arity is validated at connection time (`docs/GTK_APPLICATIONS.md`).
