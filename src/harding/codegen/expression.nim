@@ -1343,7 +1343,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         runtimeCode.add("  discard sendMessage(currentRuntime[], " & genExpression(ctx, ifNode.elseBranch) & ", \"value\", @[])\n")
       return runtimeCode
 
-    var code = "if isTruthy(" & condCode & "):\n"
+    let clause = conditionClause(ctx, ifNode.condition, condCode)
+    var code = "if " & clause.code & ":\n"
 
     let thenBlock = asBlockNode(ifNode.thenBranch)
     if thenBlock != nil:
@@ -1395,7 +1396,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           else:
             condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                        else: "NodeValue(kind: vkBool, boolVal: true)"
-          var code = "while isTruthy(" & condCode & "):\n"
+          let clause = conditionClause(ctx, msg.receiver, condCode)
+          var code = "while " & clause.code & ":\n"
           code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
           return code
 
@@ -1415,7 +1417,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
           else:
             condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                        else: "NodeValue(kind: vkBool, boolVal: false)"
-          var code = "while not isTruthy(" & condCode & "):\n"
+          let clause = conditionClause(ctx, msg.receiver, condCode, negate = true)
+          var code = "while " & clause.code & ":\n"
           code.add(indentBlock(inlineBlockStatements(ctx, bodyBlock)))
           return code
 
@@ -1425,7 +1428,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if thenBlock != nil:
           let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                          else: "NodeValue(kind: vkBool, boolVal: true)"
-          var code = "if isTruthy(" & condCode & "):\n"
+          let clause = conditionClause(ctx, msg.receiver, condCode)
+          var code = "if " & clause.code & ":\n"
           if thenBlock.body.len == 0:
             code.add("  discard\n")
           else:
@@ -1438,7 +1442,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if thenBlock != nil:
           let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                          else: "NodeValue(kind: vkBool, boolVal: false)"
-          var code = "if not isTruthy(" & condCode & "):\n"
+          let clause = conditionClause(ctx, msg.receiver, condCode, negate = true)
+          var code = "if " & clause.code & ":\n"
           if thenBlock.body.len == 0:
             code.add("  discard\n")
           else:
@@ -1454,7 +1459,8 @@ proc genStatement*(ctx: GenContext, node: Node): string =
         if thenBlock != nil and elseBlock != nil:
           let condCode = if msg.receiver != nil: genExpression(ctx, msg.receiver)
                          else: "NodeValue(kind: vkBool, boolVal: true)"
-          var code = "if isTruthy(" & condCode & "):\n"
+          let clause = conditionClause(ctx, msg.receiver, condCode)
+          var code = "if " & clause.code & ":\n"
           if thenBlock.body.len == 0:
             code.add("  discard\n")
           else:

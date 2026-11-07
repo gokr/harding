@@ -575,7 +575,7 @@ suite "Compiler: Engine binding shims":
     ctx.parameters = @["next"]
     let operand = MessageNode(receiver: IdentNode(name: "next"), selector: "value")
     let code = genMessage(ctx, MessageNode(receiver: operand, selector: "+", arguments: @[Node(operand)]))
-    check code.count("cachedSendBound(self, next, \"value\", @[])") == 2
+    check code.count("cachedSendBound(self, next, \"value\", [])") == 2
     check code.contains("nt_plus(hardingBuiltinReceiver, hardingBuiltinArg0)")
     let receiverBinding = code.find("let hardingBuiltinReceiver =")
     let argumentBinding = code.find("let hardingBuiltinArg0 =")
@@ -592,7 +592,7 @@ suite "Compiler: Boolean helper generation":
     ctx.parameters = @["next"]
     let operand = MessageNode(receiver: IdentNode(name: "next"), selector: "value")
     let code = genMessage(ctx, MessageNode(receiver: operand, selector: "|", arguments: @[Node(operand)]))
-    check code.count("cachedSendBound(self, next, \"value\", @[])") == 2
+    check code.count("cachedSendBound(self, next, \"value\", [])") == 2
     check code.contains("nt_pipe(hardingBuiltinReceiver, hardingBuiltinArg0)")
     check code.find("let hardingBuiltinArg0 =") < code.find("let builtin = hostedBuiltinDeferred(")
     check code.contains("\"|\", @[hardingBuiltinArg0])")
@@ -665,7 +665,7 @@ suite "Compiler: Guarded unary receiver sends":
     check code.contains("canDirectCompiledSend(receiver")
     check code.count(helper & "(self, target)") == 2
     check code.contains("return " & mangleClass("Target") & "_nt_answer(receiver, @[])")
-    check code.contains("sendMessageBound(owner, receiver, \"answer\", @[])")
+    check code.contains("cachedSendBound(owner, receiver, \"answer\", [])")
 
   test "selectors differing only in case keep distinct helper names":
     # Nim identifiers are style-insensitive; the generated names must not collide.
@@ -690,7 +690,7 @@ suite "Compiler: Guarded unary receiver sends":
     require not syntax.hasError
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "ambiguous_unary")
-    check code.contains("cachedSendBound(self, target, \"answer\", @[])")
+    check code.contains("cachedSendBound(self, target, \"answer\", [])")
     let mixedCode = genModule(ctx, nodes, "mixed_unary", mixed = true)
     check not mixedCode.contains("canDirectCompiledSend(receiver")
 
@@ -712,7 +712,7 @@ suite "Compiler: Conservative numeric representations":
     check code.contains("var total = 0")
     check code.contains("var k = 0")
     check code.contains("intVal: (total + k)")
-    check code.contains("var limit = (if args.len > 0: args[0]")
+    check code.contains("var limit {.cursor.} = (if args.len > 0: args[0]")
     check not code.contains("var total = NodeValue")
 
   test "mixed-mode methods retain boxed temporaries":
@@ -751,6 +751,34 @@ suite "Compiler: Conservative numeric representations":
     let code = genModule(ctx, nodes, "native_numbers")
     check code.contains("intVal: (total + i)")
     check not code.contains("nt_plus(total")
+
+  test "dependent numeric locals unbox only while dependencies stay proven":
+    let (nodes, syntax) = parse("a := 2. b := a. c := b + a. c println.")
+    require not syntax.hasError
+    let bindings = analyzeNumericBindings(nodes, @[])
+    check bindings.getOrDefault("a") == nrInt
+    check bindings.getOrDefault("b") == nrInt
+    check bindings.getOrDefault("c") == nrInt
+    let (unsafe, _) = parse("a := 2. b := a. a := 1.5. b println.")
+    let rejected = analyzeNumericBindings(unsafe, @[])
+    check "a" notin rejected
+    check "b" notin rejected
+
+  test "literal loop blocks use native proven conditions":
+    let (nodes, syntax) = parse("a := 0. b := a. [b < 4] whileTrue: [b := b + 1]. [b > 0] whileFalse: [b := b + 1].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "native_loop_condition")
+    check code.contains("while (b < 4):")
+    check code.contains("while not ((b > 0)):")
+    let (conditional, _) = parse("a := 2. b := a. (b > 0) ifTrue: [b := b + 1].")
+    var ifCompiler = newCompiler()
+    let ifCode = genModule(ifCompiler, conditional, "native_if_condition")
+    check ifCode.contains("if (b > 0):")
+    let (dynamicNodes, _) = parse("a := 0. [a < 4] whileTrue: [a := 1.5].")
+    var dynamicCompiler = newCompiler()
+    let dynamicCode = genModule(dynamicCompiler, dynamicNodes, "dynamic_loop_condition")
+    check dynamicCode.contains("while isTruthy(")
 
   test "type changes and dependencies fall back to dynamic":
     let (nodes, _) = parse("a := 1. b := 2. a := 1.5. b := b + a.")
@@ -966,7 +994,7 @@ suite "Compiler: reachable emitter surface":
     check code.contains("let hardingCascadeReceiver = ")
     check code.contains("discard cachedSend(currentRuntime[], hardingCascadeReceiver, \"printString\"")
     # The final segment's value is the cascade's value, so it is not discarded.
-    check code.contains("cachedSend(currentRuntime[], hardingCascadeReceiver, \"printString\", @[]))")
+    check code.contains("cachedSend(currentRuntime[], hardingCascadeReceiver, \"printString\", []))")
 
   test "every operator selector the emitter can name has a runtime helper":
     ## Codegen reaches runtime helpers through `mangleSelector`, except for

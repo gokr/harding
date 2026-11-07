@@ -708,6 +708,15 @@ suite "Compiled missing messages":
       discard sendSuperMessage(receiver, "MissingSuperTest", "absent", @[])
 
 suite "Compiled exception classification cache":
+  test "non-protocol selectors retain inherited compiled exception methods":
+    let receiver = proxyReceiver("ExceptionUnrelatedSelectorChild")
+    registerSuperclass("ExceptionUnrelatedSelectorChild", "ExceptionUnrelatedSelectorParent")
+    registerSuperclass("ExceptionUnrelatedSelectorParent", "Exception")
+    registerCompiledMethod("ExceptionUnrelatedSelectorParent", "ordinaryAnswer", defaultAllocation)
+    check sendMessage(nil, receiver, "ordinaryAnswer", []).intVal == 1
+    registerCompiledMethod("ExceptionUnrelatedSelectorParent", "ordinaryAnswer", replacementAllocation)
+    check sendMessage(nil, receiver, "ordinaryAnswer", []).intVal == 2
+
   test "late Exception parent invalidates a cached non-exception answer":
     let rt = newRuntime()
     let name = "LateExceptionProbe"

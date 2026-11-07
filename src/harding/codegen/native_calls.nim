@@ -36,7 +36,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   ## Integer arguments, definitely initialized Integer locals, structured
   ## branches/loops with an explicit final return, and direct access to declared
   ## Integer slots of the receiver class. No escaping blocks, recursion,
-  ## parameter assignment, division, non-local returns or dynamic slots.
+  ## division, non-local returns or dynamic slots.
   if parameters.len == 0 or body.len == 0 or body[^1].kind != nkReturn: return
   proc slotNameOf(node: Node): string =
     let slotNode = node.SlotAccessNode
@@ -145,7 +145,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         let value = expression(assignment.expression, available)
         if value.len == 0:
           return false
-        if assignment.variable in temporaries:
+        if assignment.variable in temporaries or assignment.variable in parameters:
           code.add(indent & mangleIdentifier(assignment.variable) & " = " & value & "\n")
           available.incl(assignment.variable)
         elif nativeIntegerSlot(cls, assignment.variable):
@@ -211,6 +211,8 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   if body.len > 1:
     for name in temporaries:
       code = "  var " & mangleIdentifier(name) & ": int\n" & code
+    for name in parameters:
+      code = "  var " & mangleIdentifier(name) & " = hardingNativeArg_" & mangleIdentifier(name) & "\n" & code
     result.statements = code & "  return " & answer & "\n"
   result.eligible = true
   result.arity = parameters.len
@@ -282,7 +284,7 @@ proc emitStaticClassCall*(owner, selector: string, parameters: seq[string],
   ## object identity and the class-method registration before using it, so a
   ## subclass override or a replaced method keeps the ordinary send.
   let stem = "integerClassCall_" & mangleClass(owner) & "_" & mangleSlot(selector)
-  let args = parameters.mapIt(mangleIdentifier(it))
+  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
   result.nativeName = stem & "_native"
   result.code = "proc " & result.nativeName & "*(" & args.join(", ") & ": int): int =\n"
   if plan.statements.len > 0: result.code.add(plan.statements)
@@ -293,7 +295,7 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   ## Arguments arrive evaluated before any guard. The entire pure call chain
   ## stays in int signatures; boxing happens only at this dynamic boundary.
   let stem = integerStem(owner, selector)
-  let args = parameters.mapIt(mangleIdentifier(it))
+  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
   let boundary = parameters.mapIt("argument_" & mangleIdentifier(it))
   let usesSelf = plan.slotReads.len > 0 or plan.slotWrites.len > 0
   result.helper = stem

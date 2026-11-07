@@ -7,6 +7,26 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("integer_parameter_mutation", """
+ParamMath := Object derive: #().
+ParamMath>>advance: n [ n := n + 1. ^n ].
+ParamMath>>sumDown: n [ | total | total := 0. [n > 0] whileTrue: [total := total + n. n := n - 1]. ^total ].
+p := ParamMath new.
+(p advance: 5) println.
+(p sumDown: 5) println.
+(p advance: 1.5) println.
+""", '6\n15\n2.5\n'),
+    ("numeric_dependent_locals", """
+NumericDeps := Object derive: #().
+NumericDeps>>answer [ | a b c | a := 2. b := a. c := b + a. ^c ].
+NumericDeps>>changing [ | a b | a := 2. b := a. a := 1.5. ^b ].
+NumericDeps>>loop [ | a b | a := 0. b := a. [b < 4] whileTrue: [b := b + 1]. [b = 0] whileFalse: [b := b - 1]. ^b ].
+NumericDeps>>branch [ | a b | a := 2. b := a. (b > 0) ifTrue: [b := b + 1]. (b < 0) ifFalse: [b := b + 1]. ^b ].
+(NumericDeps new answer) println.
+(NumericDeps new changing) println.
+(NumericDeps new loop) println.
+(NumericDeps new branch) println.
+""", '4\n2\n0\n4\n'),
     ("compiled_stdlib_values", r"""
 (true perform: #asString) println.
 (false perform: #asString) println.

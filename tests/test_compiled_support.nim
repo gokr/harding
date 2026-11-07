@@ -112,6 +112,10 @@ suite "Compiled shared support":
     check invokeCompiledBlock(one.blockVal, @[toValue(7)]).intVal == 7
     check invokeCompiledBlock(two.blockVal, @[toValue(7), toValue(8)]).intVal == 15
     check invokeCompiledBlock(three.blockVal, @[toValue(7), toValue(8), toValue(9)]).intVal == 24
+    check invokeBlockValue(one, [toValue(7)]).intVal == 7
+    check invokeBlockValue(two, [toValue(7), toValue(8)]).intVal == 15
+    check invokeBlockValue(three, [toValue(7), toValue(8), toValue(9)]).intVal == 24
+    check two.blockVal.compiledInvoker(two.blockVal, @[toValue(7), toValue(8)]).intVal == 15
 
   test "compiled block invocation rejects mismatched and unsupported arities before casting":
     let plain = createBlock0(answer, 0)
@@ -119,6 +123,8 @@ suite "Compiled shared support":
     check plain.blockVal.compiledInvoker(plain.blockVal, @[]).intVal == 42
     expect ValueError:
       discard invokeCompiledBlock(plain.blockVal, @[toValue(1)])
+    expect ValueError:
+      discard invokeBlockValue(plain, [toValue(1)])
     expect ValueError:
       discard sendMessage(nil, plain, "value:", @[toValue(1)])
     let unsupported = createBlock(cast[pointer](answer), 4)

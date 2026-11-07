@@ -40,7 +40,8 @@ proc numericKind*(node: Node, bindings: NumericBindings): NumericRepresentation 
 
 proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
                              localNames: seq[string] = @[]): NumericBindings =
-  ## Find directly initialized lexical numeric candidates. Every assignment must
+  ## Find lexical numeric candidates initialized from literals or earlier candidates.
+  ## Every assignment must
   ## retain its numeric kind and every read must follow definite initialization.
   ## Any lexical shadowing excludes the name throughout this conservative pass.
   ## A nonempty localNames list restricts candidates before dependency analysis.
@@ -51,7 +52,7 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
       let name = assignment.variable
       if name.len > 0 and name[0] in {'a'..'z'} and name notin captured and
          name notin candidates and (localNames.len == 0 or name in localNames):
-        let kind = numericKind(assignment.expression, initTable[string, NumericRepresentation]())
+        let kind = numericKind(assignment.expression, candidates)
         if kind in {nrInt, nrFloat}:
           candidates[name] = kind
 

@@ -1561,7 +1561,8 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
     return dispatchCompiledClassMethod(receiver, startClass, selector, args)
   return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
 
-proc invokeCompiledBlock*(blk: BlockNode, args: seq[NodeValue]): NodeValue
+proc invokeCompiledBlock*(blk: BlockNode, args: openArray[NodeValue]): NodeValue
+proc invokeCompiledBlockOwned*(blk: BlockNode, args: seq[NodeValue]): NodeValue {.nimcall.}
 
 proc evalBlock*(runtime: Runtime, blk: BlockNode,
                 args: seq[NodeValue] = @[]): NodeValue =
@@ -1586,7 +1587,7 @@ proc getBlockEnvPtr*(blk: BlockNode): pointer =
     return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
   return nil
 
-proc invokeCompiledBlock*(blk: BlockNode, args: seq[NodeValue]): NodeValue =
+proc invokeCompiledBlock*(blk: BlockNode, args: openArray[NodeValue]): NodeValue =
   ## Shared native block ABI for the native runtime and VM callback boundary.
   if blk == nil or blk.nativeImpl == nil:
     raise newException(ValueError, "Compiled block has no native implementation")
@@ -1609,6 +1610,10 @@ proc invokeCompiledBlock*(blk: BlockNode, args: seq[NodeValue]): NodeValue =
     return cast[BlockProc3](blk.nativeImpl)(args[0], args[1], args[2])
   else:
     raise newException(ValueError, "Compiled block calls support at most three arguments")
+
+proc invokeCompiledBlockOwned*(blk: BlockNode, args: seq[NodeValue]): NodeValue {.nimcall.} =
+  ## VM callback ABI uses an owned sequence; native sends can borrow instead.
+  invokeCompiledBlock(blk, args)
 
 proc compiledExceptionClassValue*(name: string): NodeValue =
   ## Built-in exception class receiver for pure compiled programs.
@@ -2185,7 +2190,7 @@ proc invokeBlockValue*(closure: NodeValue, args: openArray[NodeValue]): NodeValu
   if closure.kind != vkBlock or closure.blockVal == nil:
     return compiledMissingMessage(closure, "value")
   if closure.blockVal.nativeImpl != nil:
-    return invokeCompiledBlock(closure.blockVal, @args)
+    return invokeCompiledBlock(closure.blockVal, args)
   var host = interpretedBlockHost(closure.blockVal)
   if host != nil:
     return sendMessageInterpreted(host, closure, "value", @args)
@@ -2411,7 +2416,8 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return NodeValue(kind: vkNil)
     return raiseCompiledError(notification)
 
-  if receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil and
+  if selector in ["message", "message:", "printString", "signal", "pass", "retry", "defaultAction"] and
+     receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil and
      isCompiledExceptionClass(receiver.instVal.class.name):
     # User-defined exception methods take precedence over the built-in protocol.
     if hasCompiledMethodInHierarchy(receiver.instVal.class.name, selector):

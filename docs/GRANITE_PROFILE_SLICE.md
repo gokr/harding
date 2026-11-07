@@ -1,5 +1,72 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Integer parameter mutation in guarded regions
+
+The native Integer-region planner now accepts reassignment of Integer method
+parameters when every assignment remains inside the supported, callback-free
+Integer subset. Parameters are copied into native locals within the guarded
+region; the existing class, method, slot and argument-kind guards still select
+the ordinary compiled body for other receivers or kinds. Tests cover mutation,
+loops, incompatible Float fallback and planner refusal for unsupported writes.
+
+The pinned 15-pair comparison `build/native-param-pinned.log`, baseline
+`run-w6v1trxl`, candidate `run-v7umwx0z`, found Richards 2.0% faster,
+DeltaBlue 0.5% slower and Queens 1.69% slower by median pair. This noisy result
+does not establish a benchmark gain; the change widens eligible regions only.
+Inspecting the retained generated Nim found **zero** instance-side
+`integerCall_*_native` regions in all three benchmark programs in either build.
+Thus these workloads do not execute the new parameter-mutation path; a targeted
+microbenchmark and broader, sound eligibility analysis are still needed.
+
+## Exception-protocol classification guard
+
+Generic sends to instances now check whether the selector can belong to the
+built-in exception protocol before querying exception-class ancestry. Every
+selector that protocol handles still follows the original path, including user
+method overrides; unrelated selectors use ordinary compiled lookup. This avoids
+ancestry lookups without duplicating a Harding method. Runtime tests (46) and
+engine-boundary tests (39) pass under ARC/ORC.
+
+Paired release ARC, 30 passes, 15 trials pinned to CPU 2: Richards 17.165→17.037
+ms/pass (median pair 1.84% less time, 12/15 pairs), DeltaBlue 18.835→18.060
+(3.98%, 15/15), Queens 40.515→37.857 (5.65%, 15/15). Logs and samples:
+`build/exception-guard-pinned.log`, `build/pinned-paired.json`, baseline
+`run-buj91ln3`, candidate `run-w6v1trxl`. A later attempt to combine the
+exception cache's two hash lookups into one regressed Queens in pinned trials
+(`build/exception-single-pinned.log`) and was discarded. Host load is
+uncontrolled; these are local observations, not portable guarantees.
+
+## Dependent numeric locals
+
+The numeric-binding pass now recognizes a local initialized from an earlier
+proven numeric local or arithmetic expression. The existing definite-initialization,
+assignment-kind and closure/shadow checks still apply; removing a source candidate
+also removes its dependents. Parameters and slots are not inferred by this change.
+Focused compiler tests pass under ARC and ORC and the executed
+`numeric_dependent_locals` and `numeric_method_locals` parity cases pass.
+
+Five unpinned alternating release ARC trials against `run-urxplov2`
+(`build/granite-profiles/run-n6s9i7wl`) produced Richards 20.14→19.34,
+DeltaBlue 20.22→20.84 and Queens 44.73→43.99 ms/pass. These mixed, noisy
+results do not establish a performance improvement. More representative
+candidate-count and isolated timing evidence is needed.
+
+The later combined inference/block change uses native Boolean conditions in
+statement-position literal `whileTrue:`/`whileFalse:` and `ifTrue:` branches
+when numeric operands are already proven. Literal blocks were already inlined;
+this avoids boxing their proven conditions, not an additional closure. Native
+compiled-block invocation also borrows the existing argument array; VM callbacks
+retain the owned-sequence adapter and arity checks. Focused block lifetime tests
+pass under ARC/ORC. The separate compiled-support suite still has the two baseline
+failures noted below; the block invocation/arity tests in it pass. Regressions also
+cover statement-position `ifTrue:`/`ifFalse:` conditions and native block arities
+1–3, including the VM's sequence callback adapter.
+
+A pinned 11-trial comparison of the combined change against `run-urxplov2`
+(`build/inference-block-pinned.log`) found Richards 0.20% faster, DeltaBlue
+0.20% slower and Queens 0.67% slower by median pair: no demonstrable gain on
+these workloads. The unpinned profile artifacts are `run-buj91ln3`.
+
 ## Zero-copy argument ABI
 
 Compiled methods read their arguments and never retain them, so `CompiledProc`

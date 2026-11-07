@@ -6,7 +6,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Granite's conservative numeric-local analysis recognizes locals initialized from earlier proven numeric locals, while retaining dynamic fallback when a dependency changes type. Proven numeric conditions in statement-position literal control blocks use native Boolean expressions. Guarded native Integer regions can now handle reassignment of Integer parameters within their supported subset.
+- Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
+
 ### Performance
+- Granite skips exception-ancestry lookup for selectors outside the built-in exception protocol; pinned local ARC pairs measured 1.84%/3.98%/5.65% less time on Richards/DeltaBlue/Queens (`docs/GRANITE_PROFILE_SLICE.md`).
 - Generated code now uses the per-site send cache for inline and guarded sends (`cachedSendBound`), and the inline operator path tests for a bound host before building an argument buffer. Paired local ARC runs: Richards 29.16→21.57, DeltaBlue 26.07→22.17, Queens 74.95→51.22 ms/pass (−21.5%/−5.7%/−24.4%); cumulative since the baseline is −40%/−32%/−52%. Granite parity 117/117, boundary and runtime tests pass under ARC/ORC (`docs/GRANITE_PROFILE_SLICE.md`).
 - Granite method resolution no longer allocates a closure environment on every cache hit, and checks a bounded 16-entry string-equality memo before the interned-ID table. Paired local ARC runs improved DeltaBlue ~4.4% and Queens ~8.6% over the previous binary (Richards within noise); combined with the earlier send guard, Queens went from 107.8 to 75.0 ms/pass. Lookup order and version invalidation are unchanged (`docs/GRANITE_PROFILE_SLICE.md`).
 - Avoid the bound-interpreter send path when no host is bound; a live registry check preserves binding and replacement behavior. Paired local ARC benchmarks show ~5.8–11.5% lower median time across Richards, DeltaBlue and Queens (`docs/GRANITE_PROFILE_SLICE.md`).
