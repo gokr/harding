@@ -183,13 +183,45 @@ proc nt_negated*(n: NodeValue): NodeValue =
   ## Negated value
   sendMessage(nil, n, "negated", emptyNodeArgs)
 
+var
+  booleanDispatchVersion {.threadvar.}: uint64
+  truePipeTarget {.threadvar.}: CompiledProc
+  falsePipeTarget {.threadvar.}: CompiledProc
+  trueNotTarget {.threadvar.}: CompiledProc
+  falseNotTarget {.threadvar.}: CompiledProc
+
+proc booleanTargets() {.inline.} =
+  ## Resolve the compiled True/False bodies once per registration version, so a
+  ## replaced method is picked up on the next send. findCompiledMethod reads the
+  ## same registry generic dispatch resolves against: this selects the existing
+  ## definition instead of restating it.
+  if booleanDispatchVersion != compiledClassDispatchVersion:
+    truePipeTarget = findCompiledMethod("True", "|")
+    falsePipeTarget = findCompiledMethod("False", "|")
+    trueNotTarget = findCompiledMethod("True", "not")
+    falseNotTarget = findCompiledMethod("False", "not")
+    booleanDispatchVersion = compiledClassDispatchVersion
+
 proc nt_pipe*(a, b: NodeValue): NodeValue =
-  ## Eager Boolean disjunction. Both operands have already been evaluated;
-  ## non-Boolean receivers keep ordinary dispatch and its existing behavior.
+  ## Eager Boolean disjunction. Both operands have already been evaluated. A
+  ## Boolean receiver calls its compiled `|` body directly; anything else, and
+  ## any program with an interpreter host bound (where an interpreted
+  ## replacement would win), keeps ordinary dispatch.
+  if a.kind == vkBool and not hostRoutingActive():
+    booleanTargets()
+    let target = if a.boolVal: truePipeTarget else: falsePipeTarget
+    if target != nil:
+      return target(a, [b])
   sendMessage(nil, a, "|", [b])
 
 proc nt_not*(value: NodeValue): NodeValue =
-  ## Boolean negation; user-defined objects keep their normal method lookup.
+  ## Boolean negation through the compiled True/False body, with the same
+  ## fallback rules as nt_pipe.
+  if value.kind == vkBool and not hostRoutingActive():
+    booleanTargets()
+    let target = if value.boolVal: trueNotTarget else: falseNotTarget
+    if target != nil:
+      return target(value, emptyNodeArgs)
   sendMessage(nil, value, "not", emptyNodeArgs)
 
 # Global variable support

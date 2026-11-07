@@ -1,5 +1,46 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Quiet-host profile and scalar connective leaves
+
+Re-profiling on an otherwise idle host (load ~0.8, versus the 5–6 load most of
+this document's numbers were taken under) changed the picture twice.
+
+**First, the resolution cache needs no more work.** gprof attributes 6.5M
+`walkCompiledHierarchy` calls to `sendMessageCached`, which looks like the cache
+failing on nearly every send. Instrumenting the real binary disproved that:
+3 verified Queens passes produced **216,712 cache hits, 11 misses and 19
+hierarchy walks**. The gprof arc was an artifact (the resolver is inlined, so its
+callee count is attributed to the caller and inflated). Lesson recorded: gprof
+call-graph arcs are not call counts when the callee is inlined — measure the
+counter, not the arc.
+
+**Second, the real remaining dispatch cost is calling `sendMessage` at all.**
+Queens still enters generic dispatch 10.9M times per profile (30 passes),
+roughly 362k per pass and ~5x its 72k cached sends. The callers are scalar
+leaves: `nt_pipe` 4.9M and `nt_not` 2.9M — 7.8M of the 10.9M — each paying the
+full generic path (host check, class-name computation, resolution) to run a
+compiled `True`/`False` body that is already registered.
+
+`nt_pipe`/`nt_not` now resolve the compiled `True>>|`, `False>>|`, `True>>not`
+and `False>>not` bodies once per `compiledClassDispatchVersion` and call them
+directly for Boolean receivers. Nothing is reimplemented: `findCompiledMethod`
+returns the registered proc, so a replaced method is picked up on the next send.
+Non-Boolean receivers keep ordinary dispatch, and a bound interpreter host keeps
+the original path because an interpreted replacement must win there.
+
+Pinned alternating pairs, 15 trials, 30 verified passes per run, idle host
+(`build/bool-quiet-pinned.log`, baseline `run-wkvh_nlc`, candidate `run-2hcd5dgl`):
+
+| Workload | Before | After | Result |
+|---|---:|---:|---|
+| Richards | 29.624 | 28.073 | 3.01% less time, 12/15 pairs |
+| DeltaBlue | 27.289 | 26.749 | 0.51% noisier/neutral, 7/15 |
+| Queens | 38.095 | 35.927 | **6.27% less time, 14/15** |
+
+An earlier attempt at this same change measured as noise under load 5–6 and was
+reverted rather than kept unproven. Runtime (47) and engine-boundary (39) suites
+pass under ARC and ORC.
+
 ## Integer parameter mutation in guarded regions
 
 The native Integer-region planner now accepts reassignment of Integer method
