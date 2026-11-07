@@ -3,13 +3,13 @@ import ../src/harding/core/types
 import ../src/harding/runtime/runtime
 import ../src/harding/runtime/compiled_support
 
-proc overriddenNotNil(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc overriddenNotNil(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   NodeValue(kind: vkBool, boolVal: false)
 
-proc defaultAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc defaultAllocation(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   NodeValue(kind: vkInt, intVal: 1)
 
-proc replacementAllocation(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc replacementAllocation(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   NodeValue(kind: vkInt, intVal: 2)
 
 proc sealedSlotGet(storage: pointer): NodeValue {.nimcall.} = nilValue()
@@ -394,7 +394,7 @@ suite "Compiled hierarchy resolution cache":
 
   test "a cached missing initializer does not skip a newly installed initializer":
     let name = "ResolutionInitializer"
-    proc allocate(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc allocate(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       proxyReceiver("ResolutionInitializer")
     registerCompiledClass(name, allocate)
     let created = sendMessage(nil, compiledClassValue(name), "new", @[])
@@ -416,10 +416,25 @@ suite "Compiled monomorphic send caches":
     check sendMessageCached(rt, second, "answer", @[], cache).intVal == 2
     check sendMessageCached(rt, first, "other", @[], cache).intVal == 2
 
+  test "a compiled method reached with fewer arguments answers safely":
+    # Generated methods bind borrowed parameters; a missing argument must fall
+    # back to stable storage, never to a temporary that dies at once.
+    let rt = newRuntime()
+    let receiver = proxyReceiver("ShortArityReceiver")
+    proc returnsString(self: NodeValue, args: openArray[NodeValue]): NodeValue =
+      if args.len > 1: args[1] else: toValue("missing")
+    registerCompiledMethod("ShortArityReceiver", "pick:", returnsString)
+    check sendMessage(rt, receiver, "pick:", @[toValue(1)]).kind == vkString
+    # A short call through the cached path must not read freed storage.
+    var cache: CompiledSendCache
+    for i in 0 ..< 3:
+      check sendMessageCached(rt, receiver, "pick:", @[toValue(1)], cache).strVal.len == 0 or
+            sendMessageCached(rt, receiver, "pick:", @[toValue(1)], cache).strVal == "missing"
+
   test "cached nil results are successful sends":
     let rt = newRuntime()
     let receiver = proxyReceiver("CacheNilReceiver")
-    proc nilAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc nilAnswer(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       NodeValue(kind: vkNil)
     registerCompiledMethod("CacheNilReceiver", "answer", nilAnswer)
     var cache: CompiledSendCache
@@ -500,9 +515,9 @@ suite "Compiled monomorphic send caches":
     let outer = proxyReceiver("CacheReentrantOuter")
     let inner = proxyReceiver("CacheReentrantInner")
     var cache: CompiledSendCache
-    proc innerAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc innerAnswer(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       NodeValue(kind: vkInt, intVal: 2)
-    proc outerAnswer(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc outerAnswer(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       let answer = sendMessageCached(rt, inner, "answer", @[], cache)
       NodeValue(kind: vkInt, intVal: answer.intVal + 1)
     registerCompiledMethod("CacheReentrantInner", "answer", innerAnswer)
@@ -510,17 +525,17 @@ suite "Compiled monomorphic send caches":
     check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3
     check sendMessageCached(rt, outer, "answer", @[], cache).intVal == 3
 
-proc recoveredSelector(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc recoveredSelector(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   NodeValue(kind: vkString, strVal: args[0].symVal)
 
 suite "Compiled basic allocation":
   test "basicNew allocates without initialize and user overrides keep precedence":
     var initialized = 0
     registerCompiledClass("BasicAllocationProbe",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue =
         NodeValue(kind: vkInstance, instVal: newInstance(newClass(name = "BasicAllocationProbe"))))
     registerCompiledMethod("BasicAllocationProbe", "initialize",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue =
         inc initialized
         self)
     let cls = compiledClassValue("BasicAllocationProbe")
@@ -529,7 +544,7 @@ suite "Compiled basic allocation":
     check sendMessage(nil, cls, "new", @[]).kind == vkInstance
     check initialized == 1
     registerCompiledClassMethod("BasicAllocationProbe", "basicNew",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = nilValue())
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue = nilValue())
     check isNilValue(sendMessage(nil, cls, "basicNew", @[]))
     check initialized == 1
 
@@ -615,8 +630,8 @@ suite "Compiled qualified super sends":
     check sendSuperMessage(receiver, "QualifiedSuperChild", "answer", @[]).intVal == 1
     check sendSuperMessage(receiver, "QualifiedSuperChild", "answer", @[],
                            "QualifiedSuperSecond").intVal == 2
-    proc echoReceiver(self: NodeValue, args: seq[NodeValue]): NodeValue = self
-    proc echoArgument(self: NodeValue, args: seq[NodeValue]): NodeValue = args[0]
+    proc echoReceiver(self: NodeValue, args: openArray[NodeValue]): NodeValue = self
+    proc echoArgument(self: NodeValue, args: openArray[NodeValue]): NodeValue = args[0]
     registerCompiledMethod("QualifiedSuperSecond", "receiver", echoReceiver)
     registerCompiledMethod("QualifiedSuperSecond", "argument:", echoArgument)
     check sendSuperMessage(receiver, "QualifiedSuperChild", "receiver", @[],
@@ -682,7 +697,7 @@ suite "Compiled missing messages":
     var cache: CompiledSendCache
     check sendMessageCached(rt, receiver, "absent", @[], cache).strVal == "absent"
     check sendMessageCached(rt, receiver, "another", @[], cache).strVal == "another"
-    proc nilRecovery(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc nilRecovery(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       NodeValue(kind: vkNil)
     registerCompiledMethod("DnuParentTest", "doesNotUnderstand:", nilRecovery)
     check sendMessageCached(rt, receiver, "absent", @[], cache).kind == vkNil
@@ -696,7 +711,7 @@ suite "Compiled exception classification cache":
   test "late Exception parent invalidates a cached non-exception answer":
     let rt = newRuntime()
     let name = "LateExceptionProbe"
-    proc allocate(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    proc allocate(self: NodeValue, args: openArray[NodeValue]): NodeValue =
       proxyReceiver("LateExceptionProbe")
     registerCompiledClass(name, allocate)
     let receiver = compiledClassValue(name)

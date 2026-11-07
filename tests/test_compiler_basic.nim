@@ -640,13 +640,13 @@ suite "Compiler: Method return convention":
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "implicit_returns")
     check code.contains("discard NodeValue(kind: vkInt, intVal: 42)\n  return self")
-    check code.contains("proc " & mangleClass("ReturnRules") & "_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+    check code.contains("proc " & mangleClass("ReturnRules") & "_nt_empty*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n  return self")
 
   test "class-side fallthrough also answers its receiver":
     let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules class>>empty [].")
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "class_return")
-    check code.contains("proc " & mangleClass("ReturnRules") & "_class_nt_empty*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n  return self")
+    check code.contains("proc " & mangleClass("ReturnRules") & "_class_nt_empty*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n  return self")
 
   test "explicit return is not followed by an implicit return":
     let (nodes, _) = parse("ReturnRules := Object derive: #(). ReturnRules>>explicit [^ 42].")

@@ -23,16 +23,16 @@ proc greetShim(interp: var Interpreter, self: Instance,
 
 var nativeNilCalls = 0
 
-proc nilOnce(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc nilOnce(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   inc nativeNilCalls
   nilValue()
 
-proc missingInside(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc missingInside(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   inc nativeNilCalls
   sendMessage(nil, toValue(1), "missingInCompiledBody", @[])
 
-proc memoFirstProbe(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(1)
-proc memoSecondProbe(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(2)
+proc memoFirstProbe(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(1)
+proc memoSecondProbe(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(2)
 
 proc roundTripShim(interp: var Interpreter, self: Instance,
                    args: seq[NodeValue]): NodeValue {.nimcall.} =
@@ -127,7 +127,7 @@ suite "Class-side engine boundary":
     """)
     require err.len == 0
     registerCompiledClassMethod("ClassShimGuard", "double:",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(args[0].intVal * 2))
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(args[0].intVal * 2))
     check bindCompiledMethodShim(interp, "ClassShimGuard", "double:",
                                 cast[pointer](classDoubleShim), isClassMethod = true)
     let parent = interp.globals[]["ClassShimGuard"]
@@ -615,7 +615,7 @@ suite "Interpreted to compiled dispatch":
     defer: unbindCompiledMethodsFrom(interp)
     let cls = defineClass(interp, "LateGenericBinding", "double:")
     registerCompiledMethod("LateGenericBinding", "double:",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(42))
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(42))
     let instance = newInstance(cls)
     instance.isNimProxy = true
     let receiver = NodeValue(kind: vkInstance, instVal: instance)
@@ -632,7 +632,7 @@ suite "Interpreted to compiled dispatch":
     defer: unbindCompiledMethodsFrom(interp)
     let cls = defineClass(interp, "MemoTargetProbe", "double:")
     registerCompiledMethod("MemoTargetProbe", "double:",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(42))
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(42))
     check bindCompiledMethodShim(interp, "MemoTargetProbe", "double:", cast[pointer](doubleShim))
     let instance = newInstance(cls)
     instance.isNimProxy = true
@@ -666,7 +666,7 @@ suite "Interpreted to compiled dispatch":
     defer: unbindCompiledMethodsFrom(interp)
     let cls = defineClass(interp, "GuardProbe", "double:")
     registerCompiledMethod("GuardProbe", "double:",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue =
         toValue(args[0].intVal * 2))
     check bindCompiledMethodShim(interp, "GuardProbe", "double:", cast[pointer](doubleShim))
     let instance = newInstance(cls)
@@ -686,7 +686,7 @@ suite "Interpreted to compiled dispatch":
     defer: unbindCompiledMethodsFrom(interp)
     discard defineClass(interp, "GuardParent", "double:")
     registerCompiledMethod("GuardParent", "double:",
-      proc(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(42))
+      proc(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(42))
     check bindCompiledMethodShim(interp, "GuardParent", "double:", cast[pointer](doubleShim))
     let (_, err) = interp.evalStatements("GuardChild := GuardParent derive: #(). GuardChild>>double: n [ ^ nil ]")
     require err.len == 0

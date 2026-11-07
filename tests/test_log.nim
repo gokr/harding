@@ -12,7 +12,7 @@ method log(logger: CaptureLogger, level: logging.Level, args: varargs[string, `$
   if message in ["application-message", "compiled-message", "42", "hidden", "visible"]:
     logger.messages.add($level & ":" & message)
 
-proc overriddenLog(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc overriddenLog(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   NodeValue(kind: vkInt, intVal: 77)
 
 var interp = newInterpreter()

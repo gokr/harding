@@ -1,5 +1,40 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Zero-copy argument ABI
+
+Compiled methods read their arguments and never retain them, so `CompiledProc`
+takes `args: openArray[NodeValue]`. A generated call site passes a stack array
+(`[a, b]` or the shared empty `emptyNodeArgs`), and the helpers in
+`compiled_support` do the same, so a send allocates no argument sequence. The
+interpreter boundary and genuinely cold helpers (JSON specs, file calls,
+logging) still take an owned `seq`; the conversion happens only at those leaves.
+Registration overloads keep the seq form working for hand-written callers, and
+those pay one sequence each.
+
+A borrowed parameter must never bind to a temporary: `var p {.cursor.} =
+(if args.len > 0: args[i] else: <temp>)` dangled as soon as the temporary's
+storage died. The fallback is now the module-level `hardingMissingArg`, and
+both branches are stable locations for exactly the call's lifetime. Calling a
+compiled method with too few arguments is covered by a regression.
+
+### Measurements
+
+Queens, 30 verified passes: `newSeqPayload` fell from 11.06M to 0.31M and
+`rawAlloc` from 15.4M to 7.6M calls. Pinned alternating pairs, 15 trials:
+Richards 3.7% faster, DeltaBlue 5.0% faster, Queens 9.5% faster (Queens 15/15
+pairs). Granite parity is 117/117 on this tree; engine-boundary (39) and
+compiled-runtime (46) pass under ARC and ORC.
+
+Two pre-existing `test_compiled_support` failures reproduce at `a1bbea0`, so
+they are not from this work.
+
+## Reading the numbers in this document
+
+Percentages are **time** changes: `-5%` means the work completed in 5% less
+time, i.e. it was 5% faster. Nothing in this file reports a negative percentage
+as an improvement in throughput. Paired comparisons count how many before/after
+trials got faster, which is the sanity check on the median.
+
 ## Borrowed parameters and two-way send caches
 
 Two follow-ups after the dispatch slice, both general (neither adds a Harding
@@ -27,8 +62,8 @@ DeltaBlue in one earlier round, so that case is reported as neutral.
 
 | Slice | Richards | DeltaBlue | Queens |
 |---|---:|---:|---:|
-| Borrowed parameters | −1.6% | −1.9% | −7.8% |
-| Two-way send cache | −2.1% | neutral | −5.0% |
+| Borrowed parameters | 1.6% faster | 1.9% faster | 7.8% faster |
+| Two-way send cache | 2.1% faster | neutral | 5.0% faster |
 
 The Queens gains agree across repeated runs; Richards is small but consistent;
 DeltaBlue is inside noise for the second slice. These are local paired
@@ -65,8 +100,8 @@ wall time per pass, no startup subtraction. Cumulative across the four slices
 | DeltaBlue | 32.51 | 30.63 | 27.06 | 26.07 | **22.17** |
 | Queens | 107.82 | 95.47 | 81.94 | 74.95 | **51.22** |
 
-Last slice: −21.5% / −5.7% / −24.4% (Richards/DeltaBlue/Queens), 7/7 pairs each.
-Cumulative against the baseline: −40% / −32% / −52%.
+Last slice: 21.5% / 5.7% / 24.4% faster (Richards/DeltaBlue/Queens), 7/7 pairs each.
+Cumulative against the baseline: 40% / 32% / 52% faster.
 
 Correctness: `scripts/test_granite_parity.py` passes **117/117** on the final
 binary (`build/cachedsend-parity.log`); engine-boundary (39) and

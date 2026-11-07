@@ -35,6 +35,9 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
   let sourceRoot = parentDir(parentDir(parentDir(currentSourcePath())))
   let importRoot = relativePath(sourceRoot, absolutePath(ctx.outputDir)).replace('\\', '/')
   output.add(fmt("import {importRoot}/harding/runtime/compiled_support\n\n"))
+  output.add("## Stable storage for a missing method argument, so a borrowed\n")
+  output.add("## parameter never binds to a temporary.\n")
+  output.add("var hardingMissingArg* {.used.} = NodeValue(kind: vkNil)\n\n")
   output.add(fmt("import {importRoot}/harding/runtime/primitive_impls\n\n"))
   if ctx.gtkApplication:
     output.add(fmt("import {importRoot}/harding/gui/gtk/native_application\n\n"))
@@ -235,11 +238,11 @@ proc genSlotAccessors*(cls: ClassInfo): string =
 
   for slotName in cls.getterSlots:
     let mangledSlot = mangleSlot(slotName)
-    output.add(fmt("proc methodGet_{clsName}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc methodGet_{clsName}_{mangledSlot}(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
     output.add(fmt("  {clsName}_direct_{mangledSlot}_read(self)\n\n"))
   for slotName in cls.setterSlots:
     let mangledSlot = mangleSlot(slotName)
-    output.add(fmt("proc methodSet_{clsName}_{mangledSlot}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc methodSet_{clsName}_{mangledSlot}(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
     output.add(fmt("  discard {clsName}_direct_{mangledSlot}_write(self, args[0])\n"))
     output.add("  self\n\n")
 
@@ -503,7 +506,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       let helper = "guardedSend_" & mangleClass(choice.owner) & "_" & mangleSlot(selector)
       directCandidates[selector] = helper
       if choice.slot.len == 0:
-        output.add(fmt("proc {choice.target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+        output.add(fmt("proc {choice.target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
       output.add(fmt("var {helper}_class {{.threadvar.}}: Class\n"))
       output.add(fmt("var {helper}_guard {{.threadvar.}}: CompiledDirectGuard\n"))
       output.add(fmt("proc {helper}(owner, receiver: NodeValue): NodeValue {{.inline.}} =\n"))
@@ -514,7 +517,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("    return {read}(receiver)\n"))
       else:
         output.add(fmt("    return {choice.target}(receiver, @[])\n"))
-      output.add(fmt("  cachedSendBound(owner, receiver, \"{selector}\", @[])\n\n"))
+      output.add(fmt("  cachedSendBound(owner, receiver, \"{selector}\", [])\n\n"))
 
   if not mixed:
     # Plan independently of source order, adding pure self-call chains only after
@@ -535,7 +538,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                                      ownerClass)
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
-          output.add(fmt("proc {target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+          output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
           let emitted = emitIntegerCall(owner, md.selector, md.params, plan)
           output.add(emitted.code)
           integerCandidates[md.selector] = emitted.helper
@@ -563,7 +566,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       # replacement flips the guard, and the call site keeps the ordinary send.
       # The guard compares against the registered proc, which is defined with
       # the rest of the compiled methods later in the module.
-      output.add(fmt("proc {target}*(self: NodeValue, args: seq[NodeValue]): NodeValue\n"))
+      output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
       output.add(fmt("var {guardName}_version {{.threadvar.}}: uint64\n"))
       output.add(fmt("var {guardName}_valid {{.threadvar.}}: bool\n"))
       output.add(fmt("proc {guardName}(): bool {{.inline.}} =\n"))
@@ -588,7 +591,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     let sidePrefix = if md.isClassMethod: "class_" else: ""
     let procName = fmt("{mangledClass}_{sidePrefix}{mangledSelector}")
     
-    output.add(fmt("proc {procName}*(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc {procName}*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
 
     let methodCellNames = scopeCaptureCellNames(body, params & md.temporaries)
     # A parameter is only read: bind it as a cursor so ARC neither copies the
@@ -604,7 +607,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       if paramName in methodCellNames:
         output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
       elif paramName notin assignedVars:
-        output.add(fmt("  var {identifier} {{.cursor.}} = {paramValue}\n"))
+        # A cursor must never bind to a temporary: that dangles as soon as the
+        # expression's storage dies. Both branches below are stable locations --
+        # `args[i]` is the caller's array and the fallback is a module-level
+        # value -- so the borrow is valid for exactly the call's lifetime.
+        let guarded = fmt("(if args.len > {i}: args[{i}] else: hardingMissingArg)")
+        output.add(fmt("  var {identifier} {{.cursor.}} = {guarded}\n"))
       else:
         output.add(fmt("  var {identifier} = {paramValue}\n"))
     
@@ -1070,7 +1078,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
     let nativeClass = mangleClass(cls.name)
-    output.add(fmt("proc allocate{nativeClass}(self: NodeValue, args: seq[NodeValue]): NodeValue =\n"))
+    output.add(fmt("proc allocate{nativeClass}(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
     output.add(fmt("  new{nativeClass}().toValue()\n\n"))
     output.add(fmt("var allocationVersion_{nativeClass} {{.threadvar.}}: uint64\n"))
     output.add(fmt("var directAllocation_{nativeClass} {{.threadvar.}}: bool\n"))

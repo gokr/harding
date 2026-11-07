@@ -328,4 +328,4 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
                    (if usesSelf: "cast[" & mangleClass(owner) & "](receiver.instVal.compiledOwner)" & (if boundary.len > 0: ", " else: "") else: "") &
                    boundary.mapIt(it & ".intVal").join(", ") & ")"
   result.code.add("    return toValue(" & nativeCall & ")\n")
-  result.code.add("  sendMessageBound(owner, receiver, \"" & selector & "\", @[" & boundary.join(", ") & "])\n\n")
+  result.code.add("  sendMessageBound(owner, receiver, \"" & selector & "\", [" & boundary.join(", ") & "])\n\n")

@@ -2,8 +2,8 @@ import std/unittest
 import ../src/harding/core/types
 import ../src/harding/runtime/runtime
 
-proc first(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(11)
-proc second(self: NodeValue, args: seq[NodeValue]): NodeValue = toValue(22)
+proc first(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(11)
+proc second(self: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(22)
 
 suite "Compiled value method dispatch":
   test "immediate registrations and replacements reach generic and cached sends":

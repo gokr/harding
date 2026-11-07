@@ -476,8 +476,8 @@ proc genSend(ctx: GenContext, receiverCode, selector: string,
     return fmt("sendMessageHybrid({receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
   if ctx.inMethod:
     let owner = genSymbolAccess(ctx, "self")
-    return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
-  return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(selector)}\", @[{args}])")
+    return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(selector)}\", [{args}])")
+  return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(selector)}\", [{args}])")
 
 proc isReusableOperand(code: string): bool =
   ## True when re-reading the operand has no observable effect: a plain local or
@@ -872,7 +872,7 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     else:
       if ctx.inMethod:
         let owner = genSymbolAccess(ctx, "self")
-        return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
+        return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", [{args}])")
       return fmt("{msgProc}(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
 
   else:
@@ -931,8 +931,8 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       let owner = genSymbolAccess(ctx, "self")
       # Method bodies are where hot sends live, so they get a per-site cache too;
       # the helper keeps the owner-based host routing for VM-owned receivers.
-      return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
-    return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", @[{args}])")
+      return fmt("cachedSendBound({owner}, {receiverCode}, \"{escapeNimString(node.selector)}\", [{args}])")
+    return fmt("cachedSend(currentRuntime[], {receiverCode}, \"{escapeNimString(node.selector)}\", [{args}])")
 
 proc blockOwnerLocals*(ctx: GenContext): seq[string] =
   ## Parameters and locals declared in the enclosing method. These shadow

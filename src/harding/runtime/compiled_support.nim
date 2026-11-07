@@ -47,6 +47,9 @@ proc stringArg*(args: seq[NodeValue], index: int): string =
   ## Get string argument
   return requireArg(args, index, vkString).strVal
 
+var emptyNodeArgs*: array[0, NodeValue]
+  ## Zero arguments without building a sequence.
+
 # I/O helper functions
 
 proc nt_println*(value: NodeValue): NodeValue =
@@ -62,12 +65,12 @@ proc nt_print*(value: NodeValue): NodeValue =
 
 proc nt_asString*(value: NodeValue): NodeValue =
   ## Convert value to string
-  sendMessage(nil, value, "asString", @[])
+  sendMessage(nil, value, "asString", emptyNodeArgs)
 
 proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
   ## String concatenation
   if a.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, a, "&", @[b])
+    return sendMessage(nil, a, "&", [b])
   let aStr = a.toString()
   let bStr = b.toString()
   return NodeValue(kind: vkString, strVal: aStr & bStr)
@@ -78,7 +81,7 @@ proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
   ## Collection access: receiver at: key
   ## Works for both Arrays (0-based indexing) and Tables
   if receiver.kind == vkInstance:
-    return sendMessage(nil, receiver, "at:", @[key])
+    return sendMessage(nil, receiver, "at:", [key])
   # Strings index by byte and answer the empty string past the end, matching the
   # interpreter's primitiveStringAtValueImpl. Before this branch they fell
   # through to nil, so compiled string parsing could not read a character.
@@ -102,7 +105,7 @@ proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeV
   ## Collection assignment: receiver at: key put: value
   ## Works for both Arrays (0-based indexing) and Tables
   if receiver.kind == vkInstance:
-    return sendMessage(nil, receiver, "at:put:", @[key, value])
+    return sendMessage(nil, receiver, "at:put:", [key, value])
   if receiver.kind == vkArray and key.kind == vkInt:
     let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
@@ -124,7 +127,7 @@ proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeV
 proc nt_size*(value: NodeValue): NodeValue =
   ## Collection or string size
   if value.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, value, "size", @[])
+    return sendMessage(nil, value, "size", emptyNodeArgs)
   if value.kind == vkArray:
     return NodeValue(kind: vkInt, intVal: value.arrayVal.len)
   if value.kind == vkTable:
@@ -136,7 +139,7 @@ proc nt_size*(value: NodeValue): NodeValue =
 proc nt_last*(arr: NodeValue): NodeValue =
   ## Array last element
   if arr.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, arr, "last", @[])
+    return sendMessage(nil, arr, "last", emptyNodeArgs)
   if arr.kind == vkArray and arr.arrayVal.len > 0:
     return arr.arrayVal[^1]
   return NodeValue(kind: vkNil)
@@ -146,7 +149,7 @@ proc nt_last*(arr: NodeValue): NodeValue =
 proc nt_table_keys*(tbl: NodeValue): NodeValue =
   ## Table keys
   if tbl.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, tbl, "keys", @[])
+    return sendMessage(nil, tbl, "keys", emptyNodeArgs)
   if tbl.kind == vkTable:
     var keys: seq[NodeValue] = @[]
     for key in tbl.tableVal.keys:
@@ -157,7 +160,7 @@ proc nt_table_keys*(tbl: NodeValue): NodeValue =
 proc nt_table_size*(tbl: NodeValue): NodeValue =
   ## Table size
   if tbl.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, tbl, "size", @[])
+    return sendMessage(nil, tbl, "size", emptyNodeArgs)
   if tbl.kind == vkTable:
     return NodeValue(kind: vkInt, intVal: tbl.tableVal.len)
   return NodeValue(kind: vkNil)
@@ -166,28 +169,28 @@ proc nt_table_size*(tbl: NodeValue): NodeValue =
 
 proc nt_abs*(n: NodeValue): NodeValue =
   ## Absolute value
-  sendMessage(nil, n, "abs", @[])
+  sendMessage(nil, n, "abs", emptyNodeArgs)
 
 proc nt_even*(n: NodeValue): NodeValue =
   ## Is even
-  sendMessage(nil, n, "even", @[])
+  sendMessage(nil, n, "even", emptyNodeArgs)
 
 proc nt_odd*(n: NodeValue): NodeValue =
   ## Is odd
-  sendMessage(nil, n, "odd", @[])
+  sendMessage(nil, n, "odd", emptyNodeArgs)
 
 proc nt_negated*(n: NodeValue): NodeValue =
   ## Negated value
-  sendMessage(nil, n, "negated", @[])
+  sendMessage(nil, n, "negated", emptyNodeArgs)
 
 proc nt_pipe*(a, b: NodeValue): NodeValue =
   ## Eager Boolean disjunction. Both operands have already been evaluated;
   ## non-Boolean receivers keep ordinary dispatch and its existing behavior.
-  sendMessage(nil, a, "|", @[b])
+  sendMessage(nil, a, "|", [b])
 
 proc nt_not*(value: NodeValue): NodeValue =
   ## Boolean negation; user-defined objects keep their normal method lookup.
-  sendMessage(nil, value, "not", @[])
+  sendMessage(nil, value, "not", emptyNodeArgs)
 
 # Global variable support
 
@@ -354,7 +357,7 @@ proc nt_plus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkFloat, floatVal: a.floatVal + float(b.intVal))
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "+", @[b])
+  return sendMessage(currentRuntime[], a, "+", [b])
 
 
 proc nt_minus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -375,7 +378,7 @@ proc nt_minus*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkFloat, floatVal: a.floatVal - float(b.intVal))
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "-", @[b])
+  return sendMessage(currentRuntime[], a, "-", [b])
 
 
 proc nt_star*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -396,7 +399,7 @@ proc nt_star*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkFloat, floatVal: a.floatVal * float(b.intVal))
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "*", @[b])
+  return sendMessage(currentRuntime[], a, "*", [b])
 
 
 proc nt_slash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -425,7 +428,7 @@ proc nt_slash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkFloat, floatVal: a.floatVal / float(b.intVal))
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "/", @[b])
+  return sendMessage(currentRuntime[], a, "/", [b])
 
 
 # Comparison Operators
@@ -459,7 +462,7 @@ proc nt_lt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkBool, boolVal: af < bf)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "<", @[b])
+  return sendMessage(currentRuntime[], a, "<", [b])
 
 
 proc nt_lteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -489,7 +492,7 @@ proc nt_lteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkBool, boolVal: af <= bf)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "<=", @[b])
+  return sendMessage(currentRuntime[], a, "<=", [b])
 
 
 proc nt_gt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -519,7 +522,7 @@ proc nt_gt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkBool, boolVal: af > bf)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, ">", @[b])
+  return sendMessage(currentRuntime[], a, ">", [b])
 
 
 proc nt_gteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -549,7 +552,7 @@ proc nt_gteq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkBool, boolVal: af >= bf)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, ">=", @[b])
+  return sendMessage(currentRuntime[], a, ">=", [b])
 
 
 proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -579,7 +582,7 @@ proc nt_eq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
   # No kind-mismatch shortcut here: a user-defined `=` must still receive the
   # send (EqCustom>>= answers "custom" even against an Integer or nil), and the
   # builtin chain decides mismatched kinds after compiled resolution fails.
-  return sendMessage(currentRuntime[], a, "=", @[b])
+  return sendMessage(currentRuntime[], a, "=", [b])
 
 
 proc nt_ltgt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -600,7 +603,7 @@ proc nt_ltgt*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
 
   # Anything else (instances, nil, arrays) keeps dispatch, which is what the VM
   # does: `<>` is defined only for Integer, Float, String and Symbol.
-  return sendMessage(currentRuntime[], a, "<>", @[b])
+  return sendMessage(currentRuntime[], a, "<>", [b])
 
 
 proc nt_eqeq*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -631,7 +634,7 @@ proc nt_slashslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkInt, intVal: a.intVal div b.intVal)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "//", @[b])
+  return sendMessage(currentRuntime[], a, "//", [b])
 
 
 proc nt_backslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -649,7 +652,7 @@ proc nt_backslash*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "\\", @[b])
+  return sendMessage(currentRuntime[], a, "\\", [b])
 
 
 proc nt_percent*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
@@ -667,6 +670,6 @@ proc nt_percent*(a: NodeValue, b: NodeValue): NodeValue {.cdecl, exportc.} =
     return NodeValue(kind: vkInt, intVal: a.intVal mod b.intVal)
 
   # Slow path: dynamic dispatch
-  return sendMessage(currentRuntime[], a, "%", @[b])
+  return sendMessage(currentRuntime[], a, "%", [b])
 
 

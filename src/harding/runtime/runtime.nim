@@ -56,7 +56,7 @@ proc ensureCompiledExceptionHierarchy*(): void
 proc matchesCompiledError(value: NodeValue, handlerClass: NodeValue): bool
 proc compiledMissingMessage(receiver: NodeValue, selector: string): NodeValue
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
-                  selector: string, args: seq[NodeValue]): NodeValue
+                  selector: string, args: openArray[NodeValue]): NodeValue
 
 type
   NotificationPass = object of CatchableError
@@ -165,10 +165,13 @@ const negativeCacheSafeSelectors = ["=", "<>", "==", "~=", "<", "<=", ">", ">=",
   "ifTrue:", "ifFalse:", "ifTrue:ifFalse:", "ifFalse:ifTrue:", "and:", "or:", "value", "value:",
   "println", "print", "keys"]
 
-var compiledMethodProcs*: Table[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue] =
-  initTable[string, proc(self: NodeValue, args: seq[NodeValue]): NodeValue]()
 type
-  CompiledProc = proc(self: NodeValue, args: seq[NodeValue]): NodeValue
+  ## Compiled methods read their arguments and never retain them, so the ABI
+  ## borrows them. A generated call site passes a stack array and allocates no
+  ## sequence per send; interpreter shims and legacy registrations pass a seq,
+  ## which converts implicitly.
+  CompiledProc* = proc(self: NodeValue, args: openArray[NodeValue]): NodeValue
+
   CompiledDirectGuard* = object
     version: uint64
     valid: bool
@@ -186,6 +189,9 @@ type
     altClassName: string
     altTarget: CompiledProc
     altNegative: bool
+
+var compiledMethodProcs*: Table[string, CompiledProc] =
+  initTable[string, CompiledProc]()
 
 type
   SpecializationProbe* = object
@@ -229,6 +235,7 @@ proc registerCompiledClass*(name: string, allocator: CompiledProc) =
   ## Register a class receiver and its native allocator.
   requireMutableCompiledClass(name)
   compiledAllocators[name] = allocator
+
   inc compiledClassDispatchVersion
   if name notin compiledClasses:
     compiledClasses[name] = newClass(name = name)
@@ -719,11 +726,29 @@ proc registerSlotAccessor*(className: string, slotName: string,
     classSlotSetters[(id, slotName)] = setter
 
 proc registerCompiledMethod*(className: string, selector: string,
-                              fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
+                              fn: CompiledProc) =
   requireMutableCompiledClass(className)
   let key = className & ">>" & selector
   compiledMethodProcs[key] = fn
   inc compiledClassDispatchVersion
+
+proc registerCompiledMethod*(className: string, selector: string,
+                              fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
+  ## Overload for hand-written registrations (tests, GTK bridge, primitives) that
+  ## kept the seq signature. Generated code registers the borrowed form instead;
+  ## this adapter pays one sequence only on those legacy paths.
+  let owned = fn
+  registerCompiledMethod(className, selector,
+    proc(self: NodeValue, args: openArray[NodeValue]): NodeValue =
+      owned(self, @args))
+
+proc registerCompiledClassMethod*(className, selector: string,
+                                  fn: proc(self: NodeValue, args: seq[NodeValue]): NodeValue) =
+  ## Same adapter for class-side registrations.
+  let owned = fn
+  registerCompiledClassMethod(className, selector,
+    proc(self: NodeValue, args: openArray[NodeValue]): NodeValue =
+      owned(self, @args))
 
 # Interpreted-to-compiled dispatch
 ################################
@@ -934,15 +959,15 @@ template hostedBuiltinDeferred*(ownerReceiver, receiver: NodeValue, selector: st
     hostAnswer
 
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
-                       args: seq[NodeValue]): NodeValue =
+                       args: openArray[NodeValue]): NodeValue =
   ## Ordinary sends from bound code use live host lookup for VM-owned receivers.
-  let hosted = hostedBuiltin(ownerReceiver, receiver, selector, args)
+  let hosted = hostedBuiltin(ownerReceiver, receiver, selector, @args)
   if hosted.handled:
     return hosted.value
   let owner = boundClassFor(ownerReceiver)
   if owner != nil and receiver.kind == vkClass:
     var interp = boundCompiledClasses[owner].interpreter
-    return sendMessageInterpreted(interp, receiver, selector, args)
+    return sendMessageInterpreted(interp, receiver, selector, @args)
   initRuntime()
   result = sendMessage(currentRuntime[], receiver, selector, args)
 
@@ -1156,7 +1181,7 @@ proc ensureCompiledExceptionHierarchy*(): void =
                "BlockCannotReturn", "NotFound"]:
     if "Error" notin getSuperclasses(name): registerSuperclass(name, "Error")
 
-proc findCompiledMethod*(className: string, selector: string): proc(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc findCompiledMethod*(className: string, selector: string): CompiledProc =
   ## Look up a compiled method by class name and selector
   let key = className & ">>" & selector
   if key in compiledMethodProcs:
@@ -1405,11 +1430,11 @@ proc compiledNamedAccess*(receiver: NodeValue, name: string,
   return nilValue()
 
 proc dispatchCompiledMethodFromClass*(receiver: NodeValue, className: string,
-                                      selector: string, args: seq[NodeValue]): NodeValue =
+                                      selector: string, args: openArray[NodeValue]): NodeValue =
   ## Dispatch compiled method by walking class -> superclass graph in declaration
   ## order, so multiple parents follow the interpreter's lookup order.
   if className == getReceiverClassName(receiver):
-    let interpreted = boundInterpretedSend(receiver, selector, args)
+    let interpreted = boundInterpretedSend(receiver, selector, @args)
     if interpreted.handled:
       return interpreted.value
   let target = resolveCompiledMethod(className, selector)
@@ -1434,8 +1459,7 @@ proc implementsPerform(receiver: NodeValue, receiverClassName, selector: string)
   return receiverClassName.len > 0 and
          hasCompiledMethodInHierarchy(receiverClassName, selector)
 
-proc canDirectAllocate*(className: string,
-                        allocator: proc(self: NodeValue, args: seq[NodeValue]): NodeValue): bool =
+proc canDirectAllocate*(className: string, allocator: CompiledProc): bool =
   ## Guard the default allocation path against method and allocator replacement.
   if className notin compiledAllocators or compiledAllocators[className] != allocator:
     return false
@@ -1474,7 +1498,7 @@ proc compiledNewInstance*(className: string, allocator: CompiledProc): NodeValue
   return created
 
 proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
-                                 args: seq[NodeValue]): NodeValue =
+                                 args: openArray[NodeValue]): NodeValue =
   let owner = walkCompiledHierarchy(startClass,
     proc(name: string): bool = name & ">>" & selector in compiledClassMethods)
   if owner.len > 0:
@@ -1751,7 +1775,7 @@ proc compiledIdentityEqual*(a, b: NodeValue): bool =
   return identityEqual(a, b)
 
 proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
-                     args: seq[NodeValue], receiverClassName: string): NodeValue =
+                     args: openArray[NodeValue], receiverClassName: string): NodeValue =
   ## The builtin selector chain, after compiled resolution has already been
   ## attempted. Split out so a caller that knows the resolution outcome does not
   ## have to repeat it.
@@ -2153,7 +2177,7 @@ proc compiledEnsure*(protectedBlock: NodeValue, cleanupBlock: NodeValue): NodeVa
   finally:
     discard sendMessage(nil, cleanupBlock, "value", @[])
 
-proc invokeBlockValue*(closure: NodeValue, args: seq[NodeValue]): NodeValue =
+proc invokeBlockValue*(closure: NodeValue, args: openArray[NodeValue]): NodeValue =
   ## Run a block's body. A compiled block runs its generated proc; an interpreted
   ## block runs on the VM that owns it, translating control transfers the same way
   ## method sends are translated. `Block>>value` and friends are declared as
@@ -2161,14 +2185,14 @@ proc invokeBlockValue*(closure: NodeValue, args: seq[NodeValue]): NodeValue =
   if closure.kind != vkBlock or closure.blockVal == nil:
     return compiledMissingMessage(closure, "value")
   if closure.blockVal.nativeImpl != nil:
-    return invokeCompiledBlock(closure.blockVal, args)
+    return invokeCompiledBlock(closure.blockVal, @args)
   var host = interpretedBlockHost(closure.blockVal)
   if host != nil:
-    return sendMessageInterpreted(host, closure, "value", args)
+    return sendMessageInterpreted(host, closure, "value", @args)
   compiledMissingMessage(closure, "value")
 
 proc exceptionProtocol*(receiver: NodeValue, selector: string,
-                        args: seq[NodeValue]): tuple[handled: bool, value: NodeValue] =
+                        args: openArray[NodeValue]): tuple[handled: bool, value: NodeValue] =
   ## The built-in exception protocol for a compiled exception instance.
   ## `Exception>>signal`, `>>pass` and `>>retry` are declared as primitives that
   ## call this; re-sending the selector from inside them would re-enter the
@@ -2224,12 +2248,12 @@ proc exceptionProtocol*(receiver: NodeValue, selector: string,
     return (false, NodeValue(kind: vkNil))
 
 proc sendMessage*(runtime: Runtime, receiver: NodeValue,
-                  selector: string, args: seq[NodeValue]): NodeValue =
+                  selector: string, args: openArray[NodeValue]): NodeValue =
   ## Send a message to a receiver (dynamic dispatch)
   ## This is the slow path fallback for compiled code
 
   if boundCompiledClasses.len != 0 and selector notin ["==", "~="]:
-    let interpreted = boundInterpretedSend(receiver, selector, args)
+    let interpreted = boundInterpretedSend(receiver, selector, @args)
     if interpreted.handled: return interpreted.value
 
   if receiver.kind == vkInstance and receiver.instVal != nil and
@@ -2417,7 +2441,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     of vkSymbol: conveyedSelector = args[0].symVal
     of vkString: conveyedSelector = args[0].strVal
     else: discard
-    return sendMessage(runtime, receiver, conveyedSelector, args[1..^1])
+    return sendMessage(runtime, receiver, conveyedSelector, args.toOpenArray(1, args.high))
 
   if receiver.kind == vkClass and receiver.classVal != nil:
     if selector in ["jsonExclude:", "jsonOnly:", "jsonRename:", "jsonOmitNil:",
@@ -2425,15 +2449,15 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
        not hasCompiledClassMethodInHierarchy(receiver.classVal.name, selector):
       let cls = receiver.classVal
       case selector
-      of "jsonExclude:": return classJsonExcludeImpl(cls, args)
-      of "jsonOnly:": return classJsonOnlyImpl(cls, args)
-      of "jsonRename:": return classJsonRenameImpl(cls, args)
-      of "jsonOmitNil:": return classJsonOmitNilImpl(cls, args)
-      of "jsonOmitEmpty:": return classJsonOmitEmptyImpl(cls, args)
-      of "jsonFormat:": return classJsonFormatImpl(cls, args)
-      of "jsonFieldOrder:": return classJsonFieldOrderImpl(cls, args)
-      of "jsonReset": return classJsonResetImpl(cls, args)
-      else: return classJsonSpecImpl(cls, args)
+      of "jsonExclude:": return classJsonExcludeImpl(cls, @args)
+      of "jsonOnly:": return classJsonOnlyImpl(cls, @args)
+      of "jsonRename:": return classJsonRenameImpl(cls, @args)
+      of "jsonOmitNil:": return classJsonOmitNilImpl(cls, @args)
+      of "jsonOmitEmpty:": return classJsonOmitEmptyImpl(cls, @args)
+      of "jsonFormat:": return classJsonFormatImpl(cls, @args)
+      of "jsonFieldOrder:": return classJsonFieldOrderImpl(cls, @args)
+      of "jsonReset": return classJsonResetImpl(cls, @args)
+      else: return classJsonSpecImpl(cls, @args)
     if selector == "addSuperclass:" and args.len >= 1:
       # Register another parent at runtime, matching the interpreter. Generated
       # modules also emit these statically; this path covers ids whose parent is
@@ -2464,7 +2488,7 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
       return compiledSystemArguments()
     if receiver.classVal.name == "File" and
        not hasCompiledClassMethodInHierarchy("File", selector):
-      let answer = compiledFileCall(selector, args)
+      let answer = compiledFileCall(selector, @args)
       if answer.handled: return answer.value
     if receiver.classVal.name == "Json" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Json", selector):
@@ -2476,11 +2500,11 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
     if receiver.classVal.name == "Log" and args.len == 1 and
        not hasCompiledClassMethodInHierarchy("Log", selector):
       case selector
-      of "debug:": return writeHardingLog(logging.lvlDebug, args[0])
-      of "info:": return writeHardingLog(logging.lvlInfo, args[0])
-      of "warn:": return writeHardingLog(logging.lvlWarn, args[0])
-      of "error:": return writeHardingLog(logging.lvlError, args[0])
-      of "fatal:": return writeHardingLog(logging.lvlFatal, args[0])
+      of "debug:": return writeHardingLog(logging.lvlDebug, @args[0])
+      of "info:": return writeHardingLog(logging.lvlInfo, @args[0])
+      of "warn:": return writeHardingLog(logging.lvlWarn, @args[0])
+      of "error:": return writeHardingLog(logging.lvlError, @args[0])
+      of "fatal:": return writeHardingLog(logging.lvlFatal, @args[0])
       else: discard
     if selector == "respondsTo:" and args.len >= 1:
       var querySelector = ""
@@ -2539,7 +2563,7 @@ proc entrySpecializationProbe*() =
   addQuitProc(reportSpecializationProbe)
 
 proc probeCompiledDispatch(receiver: NodeValue, cls: Class, selector: string,
-                           target: CompiledProc, args: seq[NodeValue]) {.inline.} =
+                           target: CompiledProc, args: openArray[NodeValue]) {.inline.} =
   ## Count how much of this dispatch a native-parameter/return specialization
   ## could convert: unique inherited resolution plus Integer-only arguments.
   if not specializationProbeEnabled or cls == nil:
@@ -2578,7 +2602,7 @@ proc probeCompiledDispatch(receiver: NodeValue, cls: Class, selector: string,
       inc specializationProbe.noAggregateArgs
 
 proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
-                        args: seq[NodeValue], cache: var CompiledSendCache): NodeValue =
+                        args: openArray[NodeValue], cache: var CompiledSendCache): NodeValue =
   ## Positive monomorphic cache for registered instance methods only. Builtins,
   ## class-side sends and exception protocols retain the generic runtime path.
   if selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
@@ -2587,7 +2611,7 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
   # rather than entering it to discover that. Rechecked per send: a callback may
   # bind or detach an interpreter between sends.
   if boundCompiledClasses.len != 0:
-    let interpreted = boundInterpretedSend(receiver, selector, args)
+    let interpreted = boundInterpretedSend(receiver, selector, @args)
     if interpreted.handled:
       return interpreted.value
   let proxyClassName = getReceiverClassName(receiver)
@@ -2614,7 +2638,7 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
           return target(receiver, args)
         # Cached negative: no compiled method exists, so go straight to the builtin
         # chain instead of resolving the same pair again inside `sendMessage`.
-        return dispatchBuiltin(runtime, receiver, selector, args, className)
+        return dispatchBuiltin(runtime, receiver, selector, @args, className)
       if cache.altClassName == className and (cache.altTarget != nil or cache.altNegative):
         if cache.altTarget != nil:
           let target = cache.altTarget
@@ -2624,7 +2648,7 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
                     else: nil
           probeCompiledDispatch(receiver, cls, selector, target, args)
           return target(receiver, args)
-        return dispatchBuiltin(runtime, receiver, selector, args, className)
+        return dispatchBuiltin(runtime, receiver, selector, @args, className)
     let target = resolveCompiledMethod(className, selector)
     if target != nil:
       let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
@@ -2671,12 +2695,11 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
         cache.altClassName = className
         cache.altNegative = true
         cache.altTarget = nil
-      return dispatchBuiltin(runtime, receiver, selector, args, className)
-  return sendMessage(runtime, receiver, selector, args)
+      return dispatchBuiltin(runtime, receiver, selector, @args, className)
   return sendMessage(runtime, receiver, selector, args)
 
 template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
-                     args: seq[NodeValue]): NodeValue =
+                     args: openArray[NodeValue]): NodeValue =
   ## Each expanded send site owns its cache; recursive calls may safely replace
   ## the entry because the selected target is copied before invocation.
   block:
@@ -2689,19 +2712,19 @@ template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
     sendMessageCached(runtime, receiver, selector, args, siteCacheAddress()[])
 
 proc sendMessageCachedBound*(ownerReceiver, receiver: NodeValue, selector: string,
-                             args: seq[NodeValue],
+                             args: openArray[NodeValue],
                              cache: var CompiledSendCache): NodeValue =
   ## Sends from inside a compiled method: keep the calling method's host routing
   ## for VM-owned receivers, then use the per-site cache instead of resolving the
   ## class/selector pair again on every send.
   if boundCompiledClasses.len != 0:
-    let hosted = hostedBuiltin(ownerReceiver, receiver, selector, args)
+    let hosted = hostedBuiltin(ownerReceiver, receiver, selector, @args)
     if hosted.handled:
       return hosted.value
   sendMessageCached(nil, receiver, selector, args, cache)
 
 template cachedSendBound*(ownerReceiver, receiver: NodeValue, selector: string,
-                          args: seq[NodeValue]): NodeValue =
+                          args: openArray[NodeValue]): NodeValue =
   ## Each expanded send site owns its cache.
   block:
     proc siteCacheAddress(): ptr CompiledSendCache {.nimcall, inline.} =

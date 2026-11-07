@@ -29,10 +29,10 @@ proc recordIndexed(element, index: NodeValue): NodeValue {.cdecl.} =
   indexedIndices.add(index.intVal)
   nilValue()
 
-proc helperOverride(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc helperOverride(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   toValue("override")
 
-proc nilHelperOverride(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc nilHelperOverride(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   nilValue()
 
 suite "Compiled shared support":

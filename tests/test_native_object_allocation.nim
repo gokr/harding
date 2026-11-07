@@ -3,7 +3,7 @@ import ../src/harding/core/types
 import ../src/harding/runtime/runtime
 
 var initializations = 0
-proc initialize(self: NodeValue, args: seq[NodeValue]): NodeValue =
+proc initialize(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   inc initializations
   self
 
