@@ -422,7 +422,11 @@ proc compileFile(config: Config): bool =
         echo "Type feedback error: ", failure.msg
         return false
     for key, slot in inferenceReport(staticOnly, observed)["slots"]:
-      if slot["evidence"].getStr == "static+observations":
+      # Conclusive module evidence alone is enough for the *guarded* numeric
+      # path: the emitted guard re-checks the live field kind and falls back to
+      # the dynamic send when it does not match, so a later Float, nil or
+      # reflection write stays correct. Observations only add corroboration.
+      if slot["evidence"].getStr in ["static+observations", "static"]:
         let kind = slot["effectiveCandidate"].getStr
         if kind in ["skInt", "skFloat"]: numericCandidates[key] = kind
 

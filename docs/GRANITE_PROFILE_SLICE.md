@@ -1,5 +1,31 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Static slot evidence reaches the guarded native path
+
+The guarded numeric path was only enabled for `static+observations`, so a
+program compiled without a feedback run got no guarded native slot arithmetic at
+all — even when module analysis was conclusive. It now also accepts `static`
+evidence. This is safe for this path specifically because it is *guarded*: the
+emitted code re-checks the live field kind and falls back to the dynamic send,
+so a later Float, nil or reflective write stays correct. It does not narrow
+storage; `--trust-observed-types` remains the opt-in that changes the field type.
+
+Measured effect on generated code: DeltaBlue goes from 0 to 12 guarded native
+slot paths (`DBVariable#value`, `DBStrength#rank`, `DBVariable#mark`, ...).
+Queens and Richards gain none, because their arithmetic operates on a
+**parameter** (`r`) and an **accessor send** (`current row`) rather than a direct
+slot read, and because `initial:Nil` observations currently disqualify every narrowed slot
+(`QueenPlacement#column` carries 2,056 nil initializations beside 81,696 Integer
+reads). That rule is the next thing to fix: an `initialize` method that assigns
+the slot before any read is not evidence of a nil-typed field.
+
+Pinned 15-trial comparison against `run-2hcd5dgl` (`build/static-unbox-pinned.log`)
+was taken with the host at load ~5.5 and is therefore not a usable result:
+Richards 3.10%, DeltaBlue 0.58%, Queens 0.54% by median pair, but with 10/15,
+9/15 and 8/15 improving pairs the Directional signal is weak. Re-measurement on
+an idle host is required before claiming a benchmark gain. Granite parity is
+119/119 on this tree.
+
 ## Quiet-host profile and scalar connective leaves
 
 Re-profiling on an otherwise idle host (load ~0.8, versus the 5–6 load most of
