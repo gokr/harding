@@ -86,7 +86,7 @@ HttpRequest>>contentType [
 
 HttpRequest>>respondRedirect: url [
   self respond: 302
-       headers: #{"Location" -> url}
+       headers: table{"Location" -> url}
        body: ""
 ]
 

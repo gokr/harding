@@ -152,7 +152,30 @@ proc parseBlock*(parser: var Parser): BlockNode
 proc parseArrayLiteral(parser: var Parser): ArrayNode
 proc parseArrayLiteralFromParen(parser: var Parser): ArrayNode
 proc parseTableLiteral(parser: var Parser): TableNode
-proc parseTableLiteralBody(parser: var Parser): TableNode
+proc isLiteralTableValue*(node: Node): bool =
+  ## Values allowed inside a `#{...}` literal: literals, `true`/`false`/`nil`,
+  ## and arrays/tables of the same. A `#{}` is a static literal, so a variable,
+  ## message send or block is rejected instead of silently evaluated at runtime;
+  ## `table{...}` is the dynamic form for those.
+  if node == nil: return true
+  case node.kind
+  of nkLiteral: true
+  of nkPseudoVar: node.PseudoVarNode.name in ["true", "false", "nil"]
+  of nkArray:
+    for element in node.ArrayNode.elements:
+      if not isLiteralTableValue(element): return false
+    true
+  of nkTable:
+    for entry in node.TableNode.entries:
+      if not isLiteralTableValue(entry.key) or not isLiteralTableValue(entry.value):
+        return false
+    true
+  of nkIdent:
+    # Bare elements are rendered as symbols by the array path, so keep them.
+    true
+  else: false
+
+proc parseTableLiteralBody(parser: var Parser, symbolKeys: bool = false): TableNode
 proc parsePrefixLiteral(parser: var Parser; prefix: string): Node
 proc parseStatement*(parser: var Parser; parseMessages = true): Node
 proc parsePrimitive(parser: var Parser): Node
@@ -971,9 +994,9 @@ proc parseTableLiteral(parser: var Parser): TableNode =
   if not parser.expect(tkTableStart):
     parser.parseError("Expected '#{' for table literal start")
     return nil
-  return parser.parseTableLiteralBody()
+  return parser.parseTableLiteralBody(symbolKeys = true)
 
-proc parseTableLiteralBody(parser: var Parser): TableNode =
+proc parseTableLiteralBody(parser: var Parser, symbolKeys: bool = false): TableNode =
   ## Body of a literal table whose opening has already been consumed.
   let table = TableNode()
   table.entries = @[]
@@ -991,8 +1014,24 @@ proc parseTableLiteralBody(parser: var Parser): TableNode =
       parser.parseError("Unclosed table literal - expected '}'")
       return nil
 
-    # Parse key
-    let key = parser.parseExpression()
+    # Parse key. Inside a `#{...}` literal a bare identifier is ALWAYS a Symbol,
+    # never a variable read: `#{x -> 5}` has key `#x`, and `#{a, b -> Integer}`
+    # is `#a`, `#b -> Integer`. Pseudo-variables keep their value meaning, and
+    # any other key form (string, number, parenthesized expression) still
+    # evaluates, so `#{"k" -> v}` and `#{(f x) -> v}` are unchanged. The
+    # `table{...}` dynamic form keeps evaluating its keys.
+    var key: Node = nil
+    if symbolKeys and parser.peek().kind == tkIdent and
+       parser.peek().value notin PseudoVariables:
+      let ident = parser.next()
+      key = Node(LiteralNode(value: NodeValue(kind: vkSymbol, symVal: ident.value)))
+      # A key with no `->` is the shorthand `key -> nil` (an untyped entry).
+      if parser.peek().kind != tkArrow:
+        table.entries.add((key, Node(LiteralNode(value: nilValue()))))
+        discard parser.expect(tkComma)
+        continue
+    else:
+      key = parser.parseExpression()
     if key == nil:
       parser.parseError("Expected table key")
       return nil
@@ -1004,11 +1043,20 @@ proc parseTableLiteralBody(parser: var Parser): TableNode =
 
     # Parse value with full message syntax, but stop before entry separators.
     # This gives -> lower precedence than message sends inside the value.
-    let value = parser.parseExpression(parseMessages = true,
+    var value = parser.parseExpression(parseMessages = true,
                                        binaryTokens = TableValueBinaryOpTokens)
     if value == nil:
       parser.parseError("Expected table value after '->'")
       return nil
+    if symbolKeys:
+      if not isLiteralTableValue(value):
+        parser.parseError("Table literal values must be literal; use table{...} " &
+                          "for evaluated keys and values")
+        return nil
+      # Match the array literal: a bare identifier is a Symbol, never a read.
+      if value.kind == nkIdent and value.IdentNode.name notin PseudoVariables:
+        value = Node(LiteralNode(value: NodeValue(kind: vkSymbol,
+                                                  symVal: value.IdentNode.name)))
 
     table.entries.add((key, value))
 

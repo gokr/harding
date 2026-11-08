@@ -121,7 +121,7 @@ suite "Json Object Serialization":
     let (results, err) = interp.evalStatements("""
       Invoice := Object derivePublic: #(id, lines).
       Invoice>>jsonRepresentation [
-        ^ #{
+        ^ table{
           "id" -> id,
           "lineCount" -> lines size
         }
@@ -140,7 +140,7 @@ suite "Json Object Serialization":
     let (_, err) = interp.evalStatements("""
       Node := Object derivePublic: #(next).
       Node>>jsonRepresentation [
-        ^ #{"next" -> next}
+        ^ table{"next" -> next}
       ].
       node := Node new.
       node::next := node.
@@ -153,7 +153,7 @@ suite "Json Object Serialization":
       BadKey := Object derivePublic: #(id).
       key := BadKey new.
       key::id := 1.
-      payload := #{key -> "value"}.
+      payload := table{key -> "value"}.
       Result := Json stringify: payload.
     """)
     check err.contains("Unsupported JSON table key")

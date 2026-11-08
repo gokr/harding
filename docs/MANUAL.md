@@ -126,11 +126,19 @@ time and nothing inside them is evaluated at runtime.
 #((a, b), (c, d))      # a nested literal needs no extra "#"
 #(#(a, b))             # the explicit form is equally valid
 #{"kind" -> #circle}   # literal table
+#{name -> String}      # typed slot: the bare key is #name
+#{a, b -> Integer, c}  # `c` alone is shorthand for `c -> nil`
 ```
 
-A bare identifier inside `#(...)` always means its symbol, never a variable —
-that is what allows `Object derive: #(name, age)` to declare slots by name. To
-embed a value, use `array{...}`.
+A bare identifier inside `#(...)` or `#{...}` always means its symbol, never a
+variable — in key *and* value position. That is what allows
+`Object derive: #(name, age)` to declare slots by name, and
+`derive: #{#x -> Integer}` to declare a slot's type. So `#{x -> 5}` has key
+`#x`, not the value of a variable `x`.
+
+A `#{...}` value must be a literal, `true`/`false`/`nil`, or a nested literal;
+anything else is a parse error. Use `table{...}` to evaluate keys and values,
+and `array{...}` to embed values in an array.
 
 Each evaluation of a literal answers a **fresh** object. Unlike classic
 Smalltalk, a literal is never shared between executions of the same code, so

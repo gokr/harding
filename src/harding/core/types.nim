@@ -1134,6 +1134,14 @@ proc needsBindingName*(cls: Class): bool =
     return false
   cls.name.len == 0 or cls.name == "Anonymous" or cls.name.endsWith("+Derived")
 
+var classesByName {.threadvar.}: Table[string, Class]
+
+proc classNamed*(name: string): Class =
+  ## The live class bound to `name`, for resolving a slot's declared class
+  ## without the interpreter that defined it. Identity is process-global, so the
+  ## newest class of a name wins (see renameClass).
+  classesByName.getOrDefault(name)
+
 proc renameClass*(cls: Class, name: string) =
   ## Give a class its binding name and re-register it with its parents.
   ##
@@ -1145,6 +1153,7 @@ proc renameClass*(cls: Class, name: string) =
   if cls == nil:
     return
   cls.name = name
+  classesByName[name] = cls
   for parent in cls.superclasses:
     registerSubclass(parent, cls)
 

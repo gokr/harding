@@ -1401,7 +1401,26 @@ proc applyDeclaredSlotDefaults(cls: Class, declaration: NodeValue) =
       of vkFloat: contract.kind = scFloat
       of vkBool: contract.kind = scBoolean
       of vkString: contract.kind = scString
-      of vkSymbol: contract.kind = scSymbol
+      of vkSymbol:
+        # `#{#x -> Integer}` declares the slot's type. A symbol naming a
+        # primitive type is a type hint, not a symbol default; other symbols
+        # keep their existing meaning.
+        case value.symVal
+        of "Integer": contract.kind = scInteger; initial = toValue(0)
+        of "Float": contract.kind = scFloat; initial = toValue(0.0)
+        of "Boolean": contract.kind = scBoolean; initial = toValue(false)
+        of "String": contract.kind = scString; initial = toValue("")
+        of "Symbol":
+          contract.kind = scSymbol
+          initial = NodeValue(kind: vkSymbol, symVal: "")
+        else:
+          # `#{#fruit -> Banana}` names a class: constrain the slot to it.
+          let hinted = classNamed(value.symVal)
+          if hinted != nil:
+            contract = SlotContract(kind: scObject, objectType: hinted)
+            initial = nilValue()
+          else:
+            contract.kind = scSymbol
       else: raise newException(SlotTypeError, "Slot declaration requires a class, primitive default or nil")
     cls.slotContracts[name] = contract
     cls.setSlotDefault(name, initial)

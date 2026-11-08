@@ -10,6 +10,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `derive:` accepts a typed slot table: `Object derive: #{#x -> Integer, #y -> Float, #z -> nil}`. Declared primitive slots become native Nim fields with guarded arithmetic; `nil` leaves a slot dynamic.
 
 ### Changed
+- `#{...}` is enforced as a pure static literal: a bare identifier in key or value position is its symbol, a lone key means `key -> nil`, and a non-literal value is a parse error. `table{...}` and `array{...}` remain the dynamic forms. A symbol naming a primitive or a class in a slot table declares the slot's type.
 - Granite's conservative numeric-local analysis recognizes locals initialized from earlier proven numeric locals, while retaining dynamic fallback when a dependency changes type. Proven numeric conditions in statement-position literal control blocks use native Boolean expressions. Guarded native Integer regions can now handle reassignment of Integer parameters within their supported subset.
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 

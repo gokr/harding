@@ -266,8 +266,14 @@ proc applySlotDeclarations(node: Node, cls: ClassInfo) =
       slot.constraint = tcNone
       slot.objectClass = ""
       slot.defaultValue = ""
-      if entry.value.kind == nkIdent:
-        let declared = entry.value.IdentNode.name
+      # A hint may be an identifier (`Integer`) or the symbol the `#{...}`
+      # literal now produces for one; both name the same type.
+      let declared = if entry.value.kind == nkIdent: entry.value.IdentNode.name
+                     elif entry.value.kind == nkLiteral and
+                          entry.value.LiteralNode.value.kind == vkSymbol:
+                       entry.value.LiteralNode.value.symVal
+                     else: ""
+      if declared.len > 0:
         slot.constraint = parseTypeHint(declared)
         if slot.constraint == tcNone or slot.constraint in {tcObject, tcBlock, tcArray, tcTable}:
           slot.constraint = tcObject
@@ -278,7 +284,7 @@ proc applySlotDeclarations(node: Node, cls: ClassInfo) =
           slot.constraint = tcBool
           slot.defaultValue = entry.value.PseudoVarNode.name
         else: discard
-      elif entry.value.kind == nkLiteral:
+      elif entry.value.kind == nkLiteral and entry.value.LiteralNode.value.kind != vkSymbol:
         let value = entry.value.LiteralNode.value
         slot.constraint = constraintForNode(value.kind)
         case value.kind

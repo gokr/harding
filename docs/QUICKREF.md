@@ -25,7 +25,8 @@ remain active. `retry` also cleans handler-local scopes before restarting.
 | String | `"hello"`, `"""multi\nline"""` | Double-quoted (interpolates) or triple-quoted (raw) |
 | Symbol | `#symbol`, `#at:put:`, `#"""multi\nline"""` | Used as selectors, keys |
 | Array literal | `#(1, 2, 3)`, `#("a", "b")` | Static: literal elements only |
-| Table literal | `#{"key" -> "value"}` | Static: literal keys and values |
+| Table literal | `#{"key" -> "value"}`, `#{a, b -> Integer}` | Static: literal keys and values; a bare key/value is its symbol, and a lone key means `key -> nil` |
+| Typed slots | `Object derive: #{#x -> Integer, #y -> Float, #z -> nil}` | `nil` (or a lone key) leaves a slot dynamic |
 | Array | `array{x, 1 + 2}` | Dynamic: `,`-separated expressions |
 | Table | `table{"k" -> x}` | Dynamic: evaluated keys and values |
 | JSON | `json{"x": 10, "y": 20}` | JSON literal (returns JSON string) |

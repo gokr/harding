@@ -126,12 +126,22 @@ suite "Table Literals with Newlines":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal == 2)
 
-  test "table literal value can be a unary message without parentheses":
-    let result = interp.evalStatements("""
+  test "table literal rejects evaluated values and keeps the dynamic form":
+    # `#{...}` is a static literal: a message send in value position is a parse
+    # error rather than a silent runtime evaluation.
+    let rejected = interp.evalStatements("""
       Friend := Object derive.
       Friend selector: #name put: [ ^"Alice" ].
       myFriend := Friend new.
       T := #{ "his name" -> myFriend name }.
+    """)
+    check(rejected[1].len > 0)
+    # The dynamic `table{...}` form evaluates its keys and values.
+    let result = interp.evalStatements("""
+      Friend := Object derive.
+      Friend selector: #name put: [ ^"Alice" ].
+      myFriend := Friend new.
+      T := table{ "his name" -> myFriend name }.
       Result := T at: "his name"
     """)
     check(result[1].len == 0)
@@ -141,7 +151,7 @@ suite "Table Literals with Newlines":
   test "table literal newline entries do not require trailing commas":
     let result = interp.evalStatements("""
       T := #{
-        "count" -> #(1, 2, 3) size
+        "count" -> #(1, 2, 3)
         "age" -> 42
       }.
       Result := T size
@@ -250,7 +260,7 @@ suite "Constant Literal Optimization":
   test "table with non-constant values is not cached":
     let code = """
     X := 1.
-    Tbl := #{"key" -> X}.
+    Tbl := table{"key" -> X}.
     """
     let (result, err) = interp.doit(code)
     check(err.len == 0)
