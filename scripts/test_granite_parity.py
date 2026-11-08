@@ -4,9 +4,53 @@ import argparse
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("source_derived_nil_condition", """
+Object>>= other [ ^self == other ].
+Object>>isNil [ ^self = nil ].
+Object>>notNil [ ^self isNil not ].
+NilProjection := Object derive: #().
+NilProjection>>check: value [
+  | answer |
+  answer := 0.
+  value notNil ifTrue: [answer := 1].
+  ^answer
+].
+NilOverride := Object derive: #().
+NilOverride>>notNil [ ^false ].
+p := NilProjection new.
+(p check: p) println.
+(p check: nil) println.
+(p check: NilOverride new) println.
+""", '1\n0\n0\n'),
+    ("source_derived_boolean_condition", """
+True>>| other [ ^other ].
+False>>| other [ ^true ].
+BooleanProjection := Object derive: #().
+BooleanProjection>>check: n [
+  | answer |
+  answer := 2.
+  ((n = 0) | (n > 1)) ifTrue: [answer := 1].
+  ^answer
+].
+p := BooleanProjection new.
+(p check: 0) println.
+(p check: 1) println.
+(p check: 2) println.
+BooleanProjection>>eager: n [
+  | answer |
+  answer := false.
+  ((n = 0) | (self effect)) ifTrue: [answer := true].
+  ^answer
+].
+BooleanProjection>>effect [ Calls := Calls + 1. ^false ].
+Calls := 0.
+(p eager: 0) println.
+Calls println.
+""", '2\n1\n1\nfalse\n1\n'),
     ("numeric_getter_result_region", """
 RegionPoint := Object derivePublic: #{height -> Integer, width -> Integer}.
 RegionUser := Object derive: #().
@@ -1727,6 +1771,12 @@ def main():
     artifact_root = ROOT / "build" / "parity"
     artifact_root.mkdir(parents=True, exist_ok=True)
     build_dir = Path(tempfile.mkdtemp(prefix="run-", dir=artifact_root))
+    # Keep the engine binaries fixed throughout a long sweep even if a
+    # developer rebuilds the root executables while it runs.
+    engines = {}
+    for engine in ("harding", "granite"):
+        engines[engine] = build_dir / engine
+        shutil.copy2(ROOT / engine, engines[engine])
     selected = [case for case in CASES if not options.cases or case[0] in options.cases]
     unknown = set(options.cases) - {case[0] for case in CASES}
     if unknown:
@@ -1741,9 +1791,9 @@ def main():
         try:
             expected_error = expected.get("error") if isinstance(expected, dict) else None
             interpreted = None if expected is None else run(
-                [str(ROOT / "harding"), str(source_file)], options.timeout,
+                [str(engines["harding"]), str(source_file)], options.timeout,
                 case_dir / "interpreted.log", expected_error=expected_error)
-            run([str(ROOT / "granite"), "build", str(source_file),
+            run([str(engines["granite"]), "build", str(source_file),
                  f"-d:{case_dir}", f"-o:{binary}"], options.build_timeout,
                 case_dir / "build.log")
             if expected is None:

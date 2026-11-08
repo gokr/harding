@@ -585,6 +585,101 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       staticClassCalls[md.className & ">>" & md.selector] = emitted.nativeName
 
 
+  var booleanCalls: Table[string, BooleanCall]
+  if not mixed:
+    for selector in ["|"]:
+      var trueExpr, falseExpr: string
+      var trueTarget, falseTarget: string
+      var trueCount, falseCount: int
+      for md in methodDefs:
+        if md.isClassMethod or md.selector != selector: continue
+        if md.className == "True": inc trueCount
+        elif md.className == "False": inc falseCount
+        else: continue
+        if md.params.len != 1 or md.temporaries.len != 0: continue
+        let expression = booleanReturnExpression(md.body, md.params[0])
+        let target = mangleClass(md.className) & "_" & mangleSelector(selector)
+        if md.className == "True":
+          trueExpr = expression
+          trueTarget = target
+        else:
+          falseExpr = expression
+          falseTarget = target
+      if trueCount != 1 or falseCount != 1 or trueExpr.len == 0 or falseExpr.len == 0: continue
+      let native = "nativeBoolean_" & mangleSlot(selector)
+      let guard = native & "_guard"
+      booleanCalls[selector] = BooleanCall(native: native, guard: guard)
+      output.add(fmt("proc {trueTarget}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
+      output.add(fmt("proc {falseTarget}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
+      output.add(fmt("proc {native}(left, right: bool): bool {{.inline.}} =\n"))
+      output.add(fmt("  if left: {trueExpr} else: {falseExpr}\n"))
+      output.add(fmt("var {guard}_version {{.threadvar.}}: uint64\n"))
+      output.add(fmt("var {guard}_valid {{.threadvar.}}: bool\n"))
+      output.add(fmt("proc {guard}(): bool {{.inline.}} =\n"))
+      output.add(fmt("  if {guard}_version != compiledClassDispatchVersion:\n"))
+      output.add(fmt("    {guard}_valid = findCompiledMethod(\"True\", \"{selector}\") == {trueTarget} and findCompiledMethod(\"False\", \"{selector}\") == {falseTarget}\n"))
+      output.add(fmt("    {guard}_version = compiledClassDispatchVersion\n"))
+      output.add(fmt("  {guard}_valid\n\n"))
+
+  var nilConditions: Table[string, string]
+  if not mixed:
+    var bodies: Table[string, BlockNode]
+    var negations: Table[string, string]
+    for md in methodDefs:
+      if md.isClassMethod: continue
+      if md.className == "Object" and md.selector in ["isNil", "notNil", "="]:
+        bodies[md.selector] = BlockNode(parameters: md.params,
+          temporaries: md.temporaries, body: md.body)
+      if md.className in ["True", "False"] and md.selector == "not" and
+         md.params.len == 0 and md.temporaries.len == 0:
+        negations[md.className] = booleanReturnExpression(md.body, "")
+    for selector in ["isNil", "notNil"]:
+      if negations.getOrDefault("True").len == 0 or negations.getOrDefault("False").len == 0:
+        continue
+      let plan = nilPredicateExpression(selector, bodies,
+        negations.getOrDefault("True"), negations.getOrDefault("False"))
+      if plan.expression.len == 0: continue
+      let helper = "nativeNilCondition_" & mangleSlot(selector)
+      nilConditions[selector] = helper
+      for dependency in plan.dependencies:
+        let target = mangleClass("Object") & "_" & mangleSelector(dependency)
+        let signature = fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n")
+        if not output.contains(signature): output.add(signature)
+      let trueNot = mangleClass("True") & "_" & mangleSelector("not")
+      let falseNot = mangleClass("False") & "_" & mangleSelector("not")
+      for target in [trueNot, falseNot]:
+        let signature = fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n")
+        if not output.contains(signature): output.add(signature)
+      output.add(fmt("var {helper}_version {{.threadvar.}}: uint64\n"))
+      output.add(fmt("var {helper}_negations {{.threadvar.}}: bool\n"))
+      for name in compiledClasses:
+        let expected = helper & "_" & mangleClass(name) & "_class"
+        output.add(fmt("var {expected} {{.threadvar.}}: Class\n"))
+        for dependency in plan.dependencies:
+          let guard = helper & "_" & mangleClass(name) & "_" & mangleSlot(dependency)
+          output.add(fmt("var {guard} {{.threadvar.}}: CompiledDirectGuard\n"))
+      output.add(fmt("proc {helper}(owner, receiver: NodeValue): bool {{.inline.}} =\n"))
+      output.add("  if not hostRoutingActive():\n")
+      output.add(fmt("    if {helper}_version != compiledClassDispatchVersion:\n"))
+      output.add(fmt("      {helper}_negations = findCompiledMethod(\"True\", \"not\") == {trueNot} and findCompiledMethod(\"False\", \"not\") == {falseNot}\n"))
+      for name in compiledClasses:
+        let expected = helper & "_" & mangleClass(name) & "_class"
+        output.add(fmt("      {expected} = compiledClassValue(\"{name}\").classVal\n"))
+      output.add(fmt("      {helper}_version = compiledClassDispatchVersion\n"))
+      output.add(fmt("    if {helper}_negations and receiver.kind == vkInstance and receiver.instVal != nil and receiver.instVal.class != nil:\n"))
+      output.add("      case receiver.instVal.class.name\n")
+      for name in compiledClasses:
+        var checks: seq[string]
+        for dependency in plan.dependencies:
+          let guard = helper & "_" & mangleClass(name) & "_" & mangleSlot(dependency)
+          let target = mangleClass("Object") & "_" & mangleSelector(dependency)
+          let expected = helper & "_" & mangleClass(name) & "_class"
+          checks.add(fmt("canDirectCompiledSend(receiver, {expected}, \"{dependency}\", {target}, {guard})"))
+        output.add(fmt("      of \"{name}\":\n"))
+        output.add("        if " & checks.join(" and ") & ": return " & plan.expression & "\n")
+      output.add("      else: discard\n")
+      output.add(fmt("  isTruthy(cachedSendBound(owner, receiver, \"{selector}\", []))\n\n"))
+
   output.add("\n# Compiled Methods\n")
   output.add("##################\n\n")
   
@@ -666,6 +761,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.inMethod = true
         genCtx.directSendCandidates = directCandidates
         genCtx.numericGetters = numericGetters
+        genCtx.booleanCalls = booleanCalls
+        genCtx.nilConditions = nilConditions
         genCtx.integerSendCandidates = integerCandidates
         genCtx.staticClassCalls = staticClassCalls
 

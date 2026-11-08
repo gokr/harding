@@ -25,6 +25,40 @@ exercise compiled-procedure replacement and slot-accessor replacement directly
 under ARC and ORC; they do not establish that these Harding replacement cases
 work. No language change is proposed to accommodate them.
 
+A third disagreement surfaced while testing nil-predicate specialization: with
+`Object>>notNil [^self isNil not]`, a subclass overriding only `isNil` returns
+`true` from `isNil` but still answers `true` from the inherited `notNil` in the
+interpreter. The compiled engine answers `false`, which is what the source
+says. Self-send dispatch itself is correct (`describe` calling `self tag` honors
+a subclass override), so the fault is specific to the nil-predicate fast path.
+
+Root cause, in `src/harding/interpreter/vm.nim` around the `isNil`/`notNil`
+primitive cases: the fast path answers directly from `isNilValue(receiver)` when
+the *queried* selector resolves to `Object`. `Object>>notNil` is
+`self isNil not`, so answering `notNil` without dispatch skips the `isNil`
+override entirely. A class that overrides only `=` has the same problem for both
+predicates. The guard must consider the whole method chain it replaces
+(`isNil`, `notNil`, `=`), not just the selector being sent.
+
+Reproduction (interpreter prints `true`, compiled prints `false`):
+
+```harding
+Child := Object derive: #().
+Child>>isNil [ ^true ].
+c := Child new.
+(c isNil) println.
+(c notNil) println.
+```
+
+An attempted fix that checked the three selectors on every call was reverted: an
+ARC-pinned A/B on a tight `notNil`/`isNil` loop measured about **65% interpreter
+overhead**, because the extra resolution per call costs more than the fast path
+saves. Memoizing the answer per class (by class version, then by resolved method
+identity) did not recover it. A correct fix needs a cheap invalidation signal and
+validation against the interpreter benchmark suite, so it is left open rather
+than shipped as a hot-path regression. The parity case exercises a direct
+`notNil` override instead, which both engines agree on.
+
 ## Source-backed stdlib compilation
 
 Native non-frozen builds lift methods discovered from the interpreter's source

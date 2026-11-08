@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = '''
 DirectCounter := Object derivePublic: #{#count -> 0, #other -> 2, #step -> 0.5, #flag -> false, #text -> "ok"}.
 DirectCounter>>bump [ count := count + 1. ^count ].
+DirectCounter>>present: target [ | answer | answer := 0. target notNil ifTrue: [answer := 1]. ^answer ].
 DirectCounter>>compute [ ^(count + other) * 3 ].
 DirectCounter>>withLocal [ | amount | amount := 3. ^count + amount ].
 DirectCounter>>fraction [ step := step + 0.5. ^step ].
@@ -46,6 +47,8 @@ class DirectSlots(unittest.TestCase):
             self.assertIn('compiledSlotAccessorVersion', generated)
             self.assertIn(cls + '(self.instVal.compiledOwner)[].hardingUser636F756E74 + 1', generated)
             self.assertIn('_numericGuard(hardingGetterReceiver)', generated)
+            self.assertIn('proc nativeBoolean_', generated)
+            self.assertIn('let hardingBooleanRight =', generated)
             self.assertIn('getSlotValue(self, "count")', generated)
             self.assertIn('setSlotValue(self, "count", value)', generated)
             host = work / 'host.nim'
@@ -58,6 +61,33 @@ registerCompiledMethods()
 registerSuperclassHierarchy()
 let native = newClass_446972656374436F756E746572().toValue()
 doAssert sendMessage(nil, native, "bump", @[]).intVal == 1
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 1
+doAssert sendMessage(nil, native, "present:", @[nilValue()]).intVal == 0
+proc pretendNil(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(true)
+let savedIsNil = findCompiledMethod("Object", "isNil")
+registerCompiledMethod("Object", "isNil", pretendNil)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 0
+registerCompiledMethod("Object", "isNil", savedIsNil)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 1
+let savedEquality = findCompiledMethod("Object", "=")
+registerCompiledMethod("Object", "=", pretendNil)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 0
+registerCompiledMethod("Object", "=", savedEquality)
+let savedNot = findCompiledMethod("False", "not")
+proc falseNot(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(false)
+registerCompiledMethod("False", "not", falseNot)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 0
+registerCompiledMethod("False", "not", savedNot)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 1
+let savedNotNil = findCompiledMethod("Object", "notNil")
+registerCompiledMethod("Object", "notNil", falseNot)
+doAssert sendMessage(nil, native, "present:", @[native]).intVal == 0
+registerCompiledMethod("Object", "notNil", savedNotNil)
+let savedChildIsNil = findCompiledMethod("DirectChild", "isNil")
+registerCompiledMethod("DirectChild", "isNil", pretendNil)
+let predicateChild = newClass_4469726563744368696C64().toValue()
+doAssert sendMessage(nil, native, "present:", @[predicateChild]).intVal == 0
+if savedChildIsNil != nil: registerCompiledMethod("DirectChild", "isNil", savedChildIsNil)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 9
 doAssert sendMessage(nil, native, "withLocal", @[]).intVal == 4
 doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == 9
@@ -67,6 +97,12 @@ let savedPipe = findCompiledMethod("True", "|")
 registerCompiledMethod("True", "|", pipeFalse)
 doAssert not sendMessage(nil, native, "connectiveRegion:target:", @[toValue(1), native]).boolVal
 if savedPipe != nil: registerCompiledMethod("True", "|", savedPipe)
+doAssert sendMessage(nil, native, "connectiveRegion:target:", @[toValue(1), native]).boolVal
+proc pipeTrue(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(true)
+let savedFalsePipe = findCompiledMethod("False", "|")
+registerCompiledMethod("False", "|", pipeTrue)
+doAssert sendMessage(nil, native, "connectiveRegion:target:", @[toValue(10), native]).boolVal
+registerCompiledMethod("False", "|", savedFalsePipe)
 doAssert sendMessage(nil, native, "fraction", @[]).floatVal == 1.0
 doAssert sendMessage(nil, native, "less", @[]).boolVal
 discard sendMessage(nil, native, "flag:", @[toValue(true)])
@@ -123,6 +159,7 @@ loadStdlib(interp)
 let (_, setupError) = interp.evalStatements("""
 DirectCounter := Object derivePublic: #{#count -> 0, #other -> 2, #step -> 0.5, #flag -> false, #text -> "ok"}.
 DirectCounter>>bump [ ^nil ].
+DirectCounter>>present: target [ ^nil ].
 DirectCounter>>compute [ ^nil ].
 DirectCounter>>fraction [ ^nil ].
 DirectCounter>>less [ ^nil ].
@@ -150,6 +187,9 @@ doAssert difference.intVal == 9
 let (regionAnswer, regionError) = interp.doit("VmCounter region: 10 target: VmCounter")
 doAssert regionError.len == 0, regionError
 doAssert regionAnswer.intVal == 9
+let (presence, presenceError) = interp.doit("VmCounter present: VmCounter")
+doAssert presenceError.len == 0, presenceError
+doAssert presence.intVal == 1
 let (_, sideEffectError) = interp.evalStatements("Calls := 0")
 doAssert sideEffectError.len == 0
 let (assigned, assignError) = interp.doit("VmCounter once: [Calls := Calls + 1. 8]")

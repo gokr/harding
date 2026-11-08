@@ -1,5 +1,122 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Source-derived nil condition chains
+
+The compiler expands pure `Object>>notNil`/`isNil` self-call chains from their
+loaded ASTs, through source-defined equality to identity comparison and
+source-defined Boolean negation. This is not an unconditional nil-pointer test:
+every expanded receiver method and both Boolean negation bodies must still match
+the compiled source registrations. Exact native receivers are checked; changed
+methods, class-specific overrides, VM-owned objects and bound hosts fall back.
+The receiver expression is evaluated once by the generated condition helper.
+
+Expected class identities are cached per registration version. The first
+prototype repeatedly called `compiledClassValue` inside dependency guards and
+left hash lookups prominent in the profile; caching identities removed that
+self-inflicted cost without dropping dependency validation. It still generates
+an exact-class case split, so this remains a guarded region, not yet a typed
+whole-loop receiver.
+
+Release ARC, 30 verified passes, 21 pinned pairs, baseline `run-hpbdni50`, final
+candidate `run-vrg6psq3`, `build/nn-final-pinned.log`: Queens **46.69% faster
+(21/21)**, Richards **15.31% faster (19/21)**, DeltaBlue 0.60% faster (13/21,
+inconclusive). Profiled cached-send calls in Queens fall from 6,563,344 to
+1,661,584; native nil guards, typed getter guards, boxed object lifetime and
+allocation remain. Short gprof samples cannot precisely rank closely sized costs.
+
+### Startup check and longer repetitions
+
+The 30-pass run measured Granite zero-work medians of 1.97–2.60 ms, under 0.5%
+of total run time. CPython zero-work medians were 10.16–15.61 ms (3–9%). Thus
+startup did not explain Granite's gap; it made the raw ratio look slightly better
+than the startup-subtracted ratio.
+
+Absolute per-pass times swung by up to 2.5x between runs (`run-js2aedg2` Queens
+16.97 ms/pass versus `run-vk3mupyc` 43.16 ms/pass), and CPython swung with it
+(13.17 versus 28.21). That is host load and clock variation, not program
+behaviour. Paired ratios were far more stable: repeated runs of one candidate
+agreed at 2.22x/2.24x and at 1.03x/1.16x. Report ratios, not absolute times.
+
+Ratios are Granite net time divided by CPython net time, so lower is better.
+"Previous" is `run-hpbdni50` (Boolean specialization only); "Final" is
+`run-vrg6psq3`. Each row is one independent 300-pass run except where noted.
+
+| Candidate | Richards | DeltaBlue | Queens |
+|---|---:|---:|---:|
+| Previous, 100 passes (`run-nth6r55k`) | 4.23x | 3.13x | 2.22x |
+| Previous (`run-55saao3s`) | 4.05x | 3.24x | 2.24x |
+| Nil, before identity caching (`run-cp39fiwz`) | 3.95x | 3.46x | 1.74x |
+| Final, CPU 2 (`run-js2aedg2`) | 3.49x | 3.33x | **1.03x** |
+| Final, CPU 13 (`run-vk3mupyc`) | 4.04x | 3.28x | **1.16x** |
+
+Queens is now roughly **1.0-1.2x** CPython's time across two independent runs of
+the same binary. Individual Queens pairs ranged 0.78-1.61x, so this is parity
+within measurement noise, not a demonstrated win. Richards (~3.5-4.0x) and
+DeltaBlue (~3.2-3.5x) are largely unchanged and remain the real gap.
+
+Longer runs removed startup contamination but not CPU contention; on this shared
+host no ratio should be treated as portable. Artifacts: `run-nth6r55k`,
+`run-55saao3s`, `run-cp39fiwz`, `run-js2aedg2`, `run-vk3mupyc` under
+`build/python-pinned/`.
+
+## Source-derived Boolean conditions and the CPython gap
+
+Native Boolean projections are derived from the loaded `True` and `False`
+Harding method ASTs. A single literal/argument return can be compiled as a native
+Boolean body; arbitrary sends, side effects, temporaries and multi-statement
+methods are not accepted. The current selector is `|`. No Boolean truth table is
+reimplemented in the runtime. Both receiver-class method registrations are
+version-checked before entry, and interpreter-bound execution retains ordinary
+dispatch. A changed source definition changes the native body; runtime method
+replacement disables it until the original registrations are restored.
+
+Only a condition composed of proven numeric comparisons and these pure Boolean
+calls qualifies. Both operands are bound eagerly, left to right. It therefore
+cannot introduce Nim short-circuit behavior, hide side effects in arbitrary
+operands, or speculate past a callback. Queens' guarded region now carries its
+numeric differences through comparisons and connective calls as native values.
+
+Release ARC, 30 checked passes, 21 pinned alternating before/after pairs:
+`run-k7uq6tkw` versus `run-hpbdni50`, `build/bn-pinned.log`:
+Queens **15.44% faster (18/21)**; Richards 0.46% slower (8/21), DeltaBlue 0.78%
+faster (12/21), with no conclusive gain for those two workloads.
+
+The Queens profile no longer shows executed `nt_pipe` calls; `nt_not` remains
+at 2,922,480 calls through `Object>>notNil`, with zero sampled self time in this
+short profile.
+Remaining costs include strings/class-name extraction, boxed copies, cached sends,
+`Object>>notNil`/identity equality, linked-object access and allocation. Short
+sampling profiles are approximate; inlined call-graph arcs are not exact counts.
+Richards and DeltaBlue still show substantial copy/destroy/allocation costs and
+object/collection sends rather than a dominant arithmetic kernel.
+
+### Matched CPython comparison
+
+`python3 scripts/bench_compare_python_pinned.py <retained-run> --trials 15`
+compares retained, hash-verified Granite binaries to the mechanically translated
+Python versions of the same algorithm. Typed slot declarations are accepted by
+the Python adapter, retaining slot names, ordering and workload checks. This is
+not the upstream AWFY Python program and not a claim of complete language parity.
+Both engines run 30 passes, with answer checks, CPU 2 affinity, one discarded
+warmup, alternating engine order and alternating work/zero-work order. Raw
+process time includes startup; net time subtracts the measured zero-work run.
+
+Artifacts: `build/python-pinned/run-g85jdu4f/results.json`,
+`build/bn-cpython.log`; CPython 3.12 (see the exact version in the artifact).
+
+| Workload | Granite raw ms/pass | CPython raw | Paired time ratio | Granite net | CPython net | Net ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| Richards | 17.449 | 4.572 | 3.84x | 17.361 | 4.105 | 4.22x |
+| DeltaBlue | 19.705 | 6.512 | 3.02x | 19.636 | 5.982 | 3.24x |
+| Queens | 23.410 | 11.165 | **2.10x** | 23.326 | 10.863 | **2.16x** |
+
+Ratios are medians of paired ratios, not ratios of the marginal medians. Host
+load is uncontrolled, so these are local observations rather than portable
+scores. The previous ~3–4x Queens gap has narrowed materially, but CPython
+parity is not reached. The next large opportunity is typed nullable receiver
+flow across `notNil`/`previous` and recursive call boundaries, with guards at
+region boundaries rather than replacing Harding methods with native shortcuts.
+
 ## Unobserved result write-backs are omitted
 
 A method-wide identifier-read count is compared with reads rewritten inside a

@@ -803,6 +803,30 @@ suite "Compiler: Conservative numeric representations":
       let code = genModule(compiler, nodes, "numeric_region_refused")
       check not code.contains("let " & mangleIdentifier("hardingRegion_difference") & " =")
 
+  test "native Boolean projections use the actual method bodies":
+    let (nodes, syntax) = parse("True>>| other [^false]. False>>| other [^other]. User := Object derive: #(). User>>check: n [ | answer | answer := 2. ((n = 0) | (n > 1)) ifTrue: [answer := 1]. ^answer ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "boolean_body_projection")
+    check code.contains("if left: false else: right")
+    check code.contains("findCompiledMethod(\"True\", \"|\") ==")
+    check code.contains("let hardingBooleanRight =")
+    let mixed = genModule(compiler, nodes, "boolean_body_mixed", mixed = true)
+    check not mixed.contains("proc nativeBoolean_")
+
+  test "nil predicates specialize source chains with guarded receiver dispatch":
+    let source = "Object>>= other [^self == other]. Object>>isNil [^self = nil]. Object>>notNil [^self isNil not]. True>>not [^false]. False>>not [^true]. User := Object derive: #(). User>>check: value [ | answer | answer := 0. value notNil ifTrue: [answer := 1]. ^answer ]."
+    let (nodes, syntax) = parse(source)
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "nil_condition_chain")
+    check code.contains("proc nativeNilCondition_")
+    check code.contains("compiledIdentityEqual(receiver, NodeValue(kind: vkNil))")
+    check code.contains("canDirectCompiledSend(receiver,")
+    check code.contains("isTruthy(cachedSendBound(owner, receiver, \"notNil\", []))")
+    let mixed = genModule(compiler, nodes, "nil_condition_mixed", mixed = true)
+    check not mixed.contains("proc nativeNilCondition_")
+
   test "assigned and captured parameters do not specialize":
     for source in [
       "Counter := Object derive: #(). Counter>>advance: n [n := n + 1. ^n].",

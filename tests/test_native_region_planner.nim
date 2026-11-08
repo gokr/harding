@@ -9,6 +9,34 @@ proc plan(source: string, temporaries: seq[string]): IntegerCallPlan =
   doAssert not syntax.hasError
   planIntegerCall("Planner", @["n"], nodes, initTable[string, IntegerCallPlan](), temporaries)
 
+suite "Source-derived Boolean return plans":
+  test "literal returns and argument projections are derived from the body":
+    check booleanReturnExpression(@[Node(ReturnNode(expression: PseudoVarNode(name: "true")))], "other") == "true"
+    check booleanReturnExpression(@[Node(ReturnNode(expression: PseudoVarNode(name: "false")))], "other") == "false"
+    check booleanReturnExpression(@[Node(ReturnNode(expression: IdentNode(name: "other")))], "other") == "right"
+    check booleanReturnExpression(@[Node(ReturnNode(expression: IdentNode(name: "self")))], "other") == ""
+    check booleanReturnExpression(@[Node(ReturnNode(expression: LiteralNode(value: toValue(4))))], "other") == ""
+    check booleanReturnExpression(@[Node(AssignNode(variable: "x", expression: IdentNode(name: "other"))), Node(ReturnNode(expression: IdentNode(name: "other")))], "other") == ""
+
+suite "Source-derived nil predicates":
+  test "pure self chains expand and retain their dependencies":
+    let selfNode = Node(PseudoVarNode(name: "self"))
+    let nilNode = Node(PseudoVarNode(name: "nil"))
+    var bodies: Table[string, BlockNode]
+    bodies["="] = BlockNode(parameters: @["other"], body: @[Node(ReturnNode(expression:
+      MessageNode(receiver: selfNode, selector: "==", arguments: @[Node(IdentNode(name: "other"))])))])
+    bodies["isNil"] = BlockNode(body: @[Node(ReturnNode(expression:
+      MessageNode(receiver: selfNode, selector: "=", arguments: @[nilNode])))])
+    bodies["notNil"] = BlockNode(body: @[Node(ReturnNode(expression:
+      MessageNode(receiver: MessageNode(receiver: selfNode, selector: "isNil"), selector: "not")))])
+    let projection = nilPredicateExpression("notNil", bodies, "false", "true")
+    check projection.expression.contains("compiledIdentityEqual(receiver, NodeValue(kind: vkNil))")
+    for dependency in ["notNil", "isNil", "="]:
+      check dependency in projection.dependencies
+    check nilPredicateExpression("notNil", bodies, "", "").expression == ""
+    bodies["isNil"].body.add(Node(ReturnNode(expression: nilNode)))
+    check nilPredicateExpression("isNil", bodies, "false", "true").expression == ""
+
 suite "Native region definite initialization":
   test "both branches initialize a local":
     let p = plan("n > 0 ifTrue: [x := n] ifFalse: [x := 0 - n]. ^x", @["x"])

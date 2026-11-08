@@ -22,6 +22,9 @@ type
   NumericGetter* = object
     owner*, slot*, guard*: string
 
+  BooleanCall* = object
+    native*, guard*: string
+
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
@@ -45,6 +48,8 @@ type
     ## speed and never correctness.
     inferredNumericSlots*: Table[string, NumericRepresentation]
     numericGetters*: Table[string, NumericGetter]
+    booleanCalls*: Table[string, BooleanCall]
+    nilConditions*: Table[string, string]
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
     integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
     ## "Class>>selector" -> native entry for a class method whose body provably
@@ -307,6 +312,8 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.inMethod = ctx.inMethod
   result.directSendCandidates = ctx.directSendCandidates
   result.numericGetters = ctx.numericGetters
+  result.booleanCalls = ctx.booleanCalls
+  result.nilConditions = ctx.nilConditions
   result.integerSendCandidates = ctx.integerSendCandidates
   result.staticClassCalls = ctx.staticClassCalls
   result.inBlock = ctx.inBlock
@@ -602,10 +609,37 @@ proc nativeBoolCondition(ctx: GenContext, node: Node): string =
   ## overhead once the kind is known, so skip both. Returns "" when unsure, and
   ## the caller keeps the generic isTruthy path.
   if node == nil or ctx.mixed: return ""
-  if numericKind(node, ctx.numericBindings) != nrBool: return ""
-  let native = nativeNumericExpression(ctx, node)
-  if native.len == 0 or native == "()": return ""
-  native
+  if numericKind(node, ctx.numericBindings) == nrBool:
+    return nativeNumericExpression(ctx, node)
+  var guards: seq[string]
+  proc booleanExpression(expression: Node): string =
+    if expression == nil: return ""
+    if numericKind(expression, ctx.numericBindings) == nrBool:
+      return nativeNumericExpression(ctx, expression)
+    if expression.kind == nkPseudoVar and expression.PseudoVarNode.name in ["true", "false"]:
+      return expression.PseudoVarNode.name
+    if expression.kind == nkLiteral and expression.LiteralNode.value.kind == vkBool:
+      return $expression.LiteralNode.value.boolVal
+    if expression.kind != nkMessage: return ""
+    let message = expression.MessageNode
+    if message.selector notin ctx.booleanCalls or message.arguments.len != 1: return ""
+    let left = booleanExpression(message.receiver)
+    let right = booleanExpression(message.arguments[0])
+    if left.len == 0 or right.len == 0: return ""
+    let plan = ctx.booleanCalls[message.selector]
+    if plan.guard notin guards: guards.add(plan.guard)
+    # Bind both operands before invoking the source-derived native body. Nim's
+    # short-circuit operators must not change Harding's eager argument order.
+    return "(block:\n    let hardingBooleanLeft = " & left.replace("\n", "\n    ") &
+      "\n    let hardingBooleanRight = " & right.replace("\n", "\n    ") &
+      "\n    " & plan.native & "(hardingBooleanLeft, hardingBooleanRight))"
+  let native = booleanExpression(node)
+  if native.len == 0 or guards.len == 0: return ""
+  let fallback = genExpression(ctx, node)
+  let checks = guards.mapIt(it & "()")
+  return "(block:\n    if not hostRoutingActive() and " & checks.join(" and ") &
+    ":\n" & indentBlock(native, 6).strip(leading = false, trailing = true) &
+    "\n    else:\n" & indentBlock("isTruthy(" & fallback & ")", 6).strip(leading = false, trailing = true) & ")"
 
 proc conditionBody(node: Node): Node =
   ## Conditions arrive wrapped in the block that supplies them; a single-statement
@@ -624,7 +658,15 @@ proc conditionClause(ctx: GenContext, conditionNode: Node, fallback: string,
                       negate = false): tuple[code: string, native: bool] =
   ## Prefer an unboxed boolean condition; otherwise keep isTruthy semantics,
   ## which also preserves the "conditional requires Boolean" error.
-  let nativeCond = nativeBoolCondition(ctx, conditionBody(conditionNode))
+  let condition = conditionBody(conditionNode)
+  if condition != nil and condition.kind == nkMessage:
+    let message = condition.MessageNode
+    if message.arguments.len == 0 and message.selector in ctx.nilConditions and not ctx.mixed:
+      let receiver = genExpression(ctx, message.receiver)
+      let owner = if ctx.inMethod: "self" else: "nilValue()"
+      let code = ctx.nilConditions[message.selector] & "(" & owner & ", " & receiver & ")"
+      return ((if negate: "not (" & code & ")" else: code), true)
+  let nativeCond = nativeBoolCondition(ctx, condition)
   if nativeCond.len > 0:
     return ((if negate: "not (" & nativeCond & ")" else: nativeCond), true)
   if negate:

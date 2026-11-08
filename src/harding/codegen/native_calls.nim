@@ -278,6 +278,65 @@ proc planStaticClassCall*(owner: string, parameters: seq[string], body: seq[Node
   result = planIntegerCall(owner, parameters, body,
                            initTable[string, IntegerCallPlan](), temporaries, nil)
 
+proc booleanReturnExpression*(body: seq[Node], parameter: string): string =
+  ## A pure Boolean-return projection. Only literal returns or the Boolean
+  ## argument are accepted; no callbacks, slots, primitives or extra statements.
+  if body.len != 1 or body[0].kind != nkReturn: return ""
+  let value = body[0].ReturnNode.expression
+  if value == nil: return ""
+  if value.kind == nkIdent and value.IdentNode.name == parameter: return "right"
+  if value.kind == nkPseudoVar and value.PseudoVarNode.name in ["true", "false"]:
+    return value.PseudoVarNode.name
+  if value.kind == nkLiteral and value.LiteralNode.value.kind == vkBool:
+    return $value.LiteralNode.value.boolVal
+
+proc nilPredicateExpression*(selector: string, bodies: Table[string, BlockNode],
+                             trueNot, falseNot: string): tuple[expression: string, dependencies: seq[string]] =
+  ## Expand a pure self-send chain from source, ending at identity equality and
+  ## source-derived Boolean negation. The caller guards every expanded method.
+  var dependencies: seq[string]
+  proc expand(node: Node, environment: Table[string, Node], depth: int): tuple[code: string, boolean: bool] =
+    if node == nil or depth > 8: return
+    case node.kind
+    of nkIdent:
+      if node.IdentNode.name in environment:
+        return expand(environment[node.IdentNode.name], initTable[string, Node](), depth + 1)
+    of nkPseudoVar:
+      case node.PseudoVarNode.name
+      of "self": return ("receiver", false)
+      of "nil": return ("NodeValue(kind: vkNil)", false)
+      else: discard
+    of nkLiteral:
+      if node.LiteralNode.value.kind == vkNil: return ("NodeValue(kind: vkNil)", false)
+    of nkMessage:
+      let message = node.MessageNode
+      let receiver = expand(message.receiver, environment, depth + 1)
+      if receiver.code.len == 0: return
+      if message.selector == "==" and message.arguments.len == 1:
+        let other = expand(message.arguments[0], environment, depth + 1)
+        if other.code.len > 0 and not receiver.boolean and not other.boolean:
+          return ("compiledIdentityEqual(" & receiver.code & ", " & other.code & ")", true)
+      if message.selector == "not" and message.arguments.len == 0 and receiver.boolean and
+         trueNot.len > 0 and falseNot.len > 0:
+        return ("(if " & receiver.code & ": " & trueNot & " else: " & falseNot & ")", true)
+      if receiver.code != "receiver" or receiver.boolean or message.selector notin bodies: return
+      let body = bodies[message.selector]
+      if body.temporaries.len != 0 or body.body.len != 1 or body.body[0].kind != nkReturn or
+         body.parameters.len != message.arguments.len: return
+      var arguments: Table[string, Node]
+      for index, name in body.parameters:
+        let argument = message.arguments[index]
+        # Only nil constants are passed through self-call chains here.
+        if argument.kind != nkPseudoVar or argument.PseudoVarNode.name != "nil": return
+        arguments[name] = argument
+      if message.selector notin dependencies: dependencies.add(message.selector)
+      return expand(body.body[0].ReturnNode.expression, arguments, depth + 1)
+    else: discard
+  let entry = MessageNode(receiver: PseudoVarNode(name: "self"), selector: selector)
+  let planned = expand(entry, initTable[string, Node](), 0)
+  if planned.boolean:
+    result = (planned.code, dependencies)
+
 proc emitStaticClassCall*(owner, selector: string, parameters: seq[string],
                           plan: IntegerCallPlan): tuple[code, nativeName: string] =
   ## The native entry takes only Integers. The call site guards the exact class
