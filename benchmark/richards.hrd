@@ -21,7 +21,7 @@ RichardsBits class>>xor16: left with: right [
     ^value
 ].
 
-RichardsPacket := Object derivePublic: #(link, identity, kind, datum, data).
+RichardsPacket := Object derivePublic: #{#link -> nil, #identity -> Integer, #kind -> Integer, #datum -> Integer, #data -> nil}.
 RichardsPacket>>setupLink: aLink identity: anIdentity kind: aKind [
     link := aLink. identity := anIdentity. kind := aKind.
     datum := 0. data := Array new: 4 withAll: 0.
@@ -37,7 +37,7 @@ RichardsPacket>>addTo: queue [
     ^queue
 ].
 
-RichardsTaskControlBlock := Object derivePublic: #(link, identity, priority, queue, task, state).
+RichardsTaskControlBlock := Object derivePublic: #{#link -> nil, #identity -> Integer, #priority -> Integer, #queue -> nil, #task -> nil, #state -> nil}.
 RichardsTaskControlBlock>>setupLink: aLink identity: anIdentity priority: aPriority queue: aQueue task: aTask [
     link := aLink. identity := anIdentity. priority := aPriority.
     queue := aQueue. task := aTask.
@@ -72,7 +72,7 @@ RichardsTaskControlBlock>>checkPriorityAdd: oldTask packet: packet [
 
 RichardsTask := Object derive: #(scheduler).
 RichardsTask>>scheduler: aScheduler [scheduler := aScheduler. ^self].
-RichardsIdleTask := RichardsTask derive: #(control, count).
+RichardsIdleTask := RichardsTask derive: #{#control -> nil, #count -> Integer}.
 RichardsIdleTask>>setupControl: value count: iterations [control := value. count := iterations. ^self].
 RichardsIdleTask>>run: packet [
     count := count - 1.

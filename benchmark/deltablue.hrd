@@ -28,7 +28,7 @@ DBCollection>>remove: element [
     ]
 ].
 
-DBStrength := Object derivePublic: #(rank, label).
+DBStrength := Object derivePublic: #{#rank -> Integer, #label -> nil}.
 DBStrength>>rank: aRank label: aLabel [rank := aRank. label := aLabel. ^self].
 DBStrength class>>stronger: left than: right [^left rank < right rank].
 DBStrength class>>weaker: left than: right [^left rank > right rank].
@@ -56,7 +56,7 @@ DBNormal := DBStrength new rank: 4 label: "normal".
 DBWeakDefault := DBStrength new rank: 5 label: "weakDefault".
 DBWeakest := DBStrength new rank: 6 label: "weakest".
 
-DBVariable := Object derivePublic: #(value, constraints, determinedBy, mark, walkStrength, stay, name).
+DBVariable := Object derivePublic: #{#value -> nil, #constraints -> nil, #determinedBy -> nil, #mark -> Integer, #walkStrength -> nil, #stay -> nil, #name -> nil}.
 DBVariable>>named: aName value: initialValue [
     name := aName. value := initialValue. constraints := DBCollection new.
     determinedBy := nil. mark := 0. walkStrength := DBWeakest. stay := true.
@@ -125,7 +125,7 @@ DBEditConstraint := DBUnaryConstraint derive: #().
 DBEditConstraint>>isInput [^true].
 DBEditConstraint>>execute [].
 
-DBBinaryConstraint := DBConstraint derive: #(v1, v2, direction).
+DBBinaryConstraint := DBConstraint derive: #{#v1 -> nil, #v2 -> nil, #direction -> Integer}.
 DBBinaryConstraint>>between: first and: second strength: aStrength planner: aPlanner [
     self setupStrength: aStrength planner: aPlanner.
     v1 := first. v2 := second. direction := 0. self addConstraint. ^self
@@ -207,7 +207,7 @@ DBPlan>>execute [
     index := 0.
     [index < steps size] whileTrue: [(steps at: index) execute. index := index + 1]
 ].
-DBPlanner := Object derive: #(currentMark, variables, ownedConstraints).
+DBPlanner := Object derive: #{#currentMark -> Integer, #variables -> nil, #ownedConstraints -> nil}.
 DBPlanner>>initialize [currentMark := 0. variables := Array new. ownedConstraints := Array new].
 DBPlanner>>variableNamed: aName value: initialValue [
     | variable |

@@ -3,7 +3,7 @@
 # Each legal placement allocates a node linked to earlier rows. This exercises
 # recursion, allocation, slot access, and dynamic sends, not just integer loops.
 
-QueenPlacement := Object derivePublic: #(row, column, previous).
+QueenPlacement := Object derivePublic: #{#row -> Integer, #column -> Integer, #previous -> nil}.
 QueenPlacement>>initializeRow: r column: c previous: p [
   row := r.
   column := c.
