@@ -74,9 +74,12 @@ Artifacts: `build/demo_native_timing.py` and
 
 Numeric parameter variants now offer a bridge: a checked public entry calls a
 body with native `int` parameters; other argument kinds retain the dynamic body.
-Queens' `r`/`c` can become native, but `current row` still returns a boxed getter
-result. Receiver-type propagation and typed getter results must connect those
-regions before the hot loop can resemble this kernel.
+Queens' `r`/`c` can become native. Typed getter fusion now reads `current row`
+as a native field behind guards, and a local region pass carries that result
+through the next numeric conditional. Outer bindings remain synchronized as
+boxed values for later statements. Recursive call signatures and whole-loop
+receiver specialization still need work before the entire hot loop can resemble
+this kernel.
 
 Nim generics can express reusable typed bodies and typed macros can transform
 resolved Nim syntax. Neither supplies Harding receiver evidence, dispatch-version

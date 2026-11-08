@@ -765,6 +765,26 @@ suite "Compiler: Conservative numeric representations":
     check code.contains("_direct_coordinate_guard(receiver)")
     check code.contains("cachedSendBound(self, hardingGetterReceiver, \"coordinate\", [])")
 
+  test "getter results stay native through a guarded branch condition":
+    let (nodes, syntax) = parse("Position := Object derivePublic: #{coordinate -> Integer}. User := Object derive: #(). User>>check: n point: point [ | difference answer | answer := false. [false] whileTrue: [difference := n - point coordinate. difference = 0 ifTrue: [answer := true]]. ^answer ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "numeric_region")
+    let alias = mangleIdentifier("hardingRegion_difference")
+    check code.contains("let " & alias & " = (n - ")
+    check code.contains("if (" & alias & " == 0):")
+    check code.contains("difference = NodeValue(kind: vkInt, intVal: " & alias)
+
+  test "getter result regions refuse computed receivers and captured results":
+    for prefix in ["difference := n - (point next) coordinate.",
+                   "callback := [difference]. difference := n - point coordinate."]:
+      let source = "Position := Object derivePublic: #{coordinate -> Integer}. User := Object derive: #(). User>>check: n point: point [ | difference answer callback | answer := false. [false] whileTrue: [" & prefix & " difference = 0 ifTrue: [answer := true]]. ^answer ]."
+      let (nodes, syntax) = parse(source)
+      require not syntax.hasError
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "numeric_region_refused")
+      check not code.contains("let " & mangleIdentifier("hardingRegion_difference") & " =")
+
   test "assigned and captured parameters do not specialize":
     for source in [
       "Counter := Object derive: #(). Counter>>advance: n [n := n + 1. ^n].",

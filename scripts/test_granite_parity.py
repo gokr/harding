@@ -7,6 +7,47 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("numeric_getter_result_region", """
+RegionPoint := Object derivePublic: #{height -> Integer, width -> Integer}.
+RegionUser := Object derive: #().
+RegionUser>>check: n point: point [
+  | i difference delta answer |
+  i := 0. answer := false.
+  [i < 2] whileTrue: [
+    difference := n - point height.
+    delta := n - point width.
+    ((delta = 0) | (delta = difference) | (delta = (0 - difference)))
+      ifTrue: [answer := true].
+    i := i + 1
+  ].
+  ^array{answer, difference, delta}
+].
+RegionFallback := Object derive: #().
+RegionFallback>>doesNotUnderstand: selector [ ^2.5 ].
+u := RegionUser new.
+p := RegionPoint new height: 4.
+p width: 4.
+(u check: 10 point: p) println.
+(u check: 10 point: RegionFallback new) println.
+RegionUser>>switch: n first: first second: second [
+  | point difference i |
+  point := first. i := 0.
+  [i < 2] whileTrue: [
+    difference := n - point height.
+    difference > 0 ifTrue: [difference := difference + 1].
+    point := second.
+    i := i + 1
+  ].
+  ^difference
+].
+(u switch: 10 first: p second: RegionFallback new) println.
+RegionEffect := Object derivePublic: #(calls).
+RegionEffect>>initialize [ calls := 0 ].
+RegionEffect>>doesNotUnderstand: selector [ calls := calls + 1. ^2.5 ].
+e := RegionEffect new.
+(u check: 10 point: e) println.
+(e calls) println.
+""", '#(true 6 6)\n#(true 7.5 7.5)\n8.5\n#(true 7.5 7.5)\n4\n'),
     ("numeric_getter_arithmetic", """
 TypedGetter := Object derivePublic: #{number -> Integer}.
 GetterUser := Object derivePublic: #(calls).

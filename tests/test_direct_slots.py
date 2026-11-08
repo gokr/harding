@@ -15,6 +15,8 @@ DirectCounter>>less [ ^count < other ].
 DirectCounter>>block [ ^[count := count + 1. count] ].
 DirectCounter>>once: action [ ^count := action value ].
 DirectCounter>>subtract: n target: target [ ^n - target count ].
+DirectCounter>>region: n target: target [ | difference i answer | i := 0. answer := false. [i < 2] whileTrue: [difference := n - target count. difference = 0 ifTrue: [answer := true]. i := i + 1]. ^difference ].
+DirectCounter>>connectiveRegion: n target: target [ | difference i answer | i := 0. answer := false. [i < 1] whileTrue: [difference := n - target count. ((difference = 0) | (difference = 0)) ifTrue: [answer := true]. i := i + 1]. ^answer ].
 DirectChild := DirectCounter derivePublic: #(padding).
 DirectChild>>setup [ padding := 99. ^self ].
 '''
@@ -51,6 +53,7 @@ class DirectSlots(unittest.TestCase):
                 'src/harding/core/types', 'src/harding/core/scheduler',
                 'src/harding/interpreter/vm', 'src/harding/runtime/runtime'])
             host.write_text('import std/tables\n' + imports + '\nimport ./direct\n' + '''
+initRuntime()
 registerCompiledMethods()
 registerSuperclassHierarchy()
 let native = newClass_446972656374436F756E746572().toValue()
@@ -58,6 +61,12 @@ doAssert sendMessage(nil, native, "bump", @[]).intVal == 1
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 9
 doAssert sendMessage(nil, native, "withLocal", @[]).intVal == 4
 doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == 9
+doAssert sendMessage(nil, native, "region:target:", @[toValue(10), native]).intVal == 9
+proc pipeFalse(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(false)
+let savedPipe = findCompiledMethod("True", "|")
+registerCompiledMethod("True", "|", pipeFalse)
+doAssert not sendMessage(nil, native, "connectiveRegion:target:", @[toValue(1), native]).boolVal
+if savedPipe != nil: registerCompiledMethod("True", "|", savedPipe)
 doAssert sendMessage(nil, native, "fraction", @[]).floatVal == 1.0
 doAssert sendMessage(nil, native, "less", @[]).boolVal
 discard sendMessage(nil, native, "flag:", @[toValue(true)])
@@ -80,14 +89,24 @@ let originalSet = slotSetters["DirectCounter::count"]
 registerSlotAccessor("DirectCounter", "count", replacementGet, replacementSet)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 96
 doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == -20
+doAssert sendMessage(nil, native, "region:target:", @[toValue(10), native]).intVal == -20
 registerSlotAccessor("DirectCounter", "count", originalGet, originalSet)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 12
 proc replacementCount(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(2.5)
 let savedCount = findCompiledMethod("DirectCounter", "count")
 registerCompiledMethod("DirectCounter", "count", replacementCount)
 doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).floatVal == 7.5
+doAssert sendMessage(nil, native, "region:target:", @[toValue(10), native]).floatVal == 7.5
 registerCompiledMethod("DirectCounter", "count", savedCount)
 doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == 8
+var replacedCalls = 0
+proc restoreCount(receiver: NodeValue, args: openArray[NodeValue]): NodeValue =
+  inc replacedCalls
+  registerCompiledMethod("DirectCounter", "count", savedCount)
+  toValue(2.5)
+registerCompiledMethod("DirectCounter", "count", restoreCount)
+doAssert sendMessage(nil, native, "region:target:", @[toValue(10), native]).intVal == 8
+doAssert replacedCalls == 1
 var missingRejected = false
 try:
   discard sendMessage(nil, native, "subtract:target:", @[])
@@ -110,6 +129,7 @@ DirectCounter>>less [ ^nil ].
 DirectCounter>>block [ ^nil ].
 DirectCounter>>once: action [ ^nil ].
 DirectCounter>>subtract: n target: target [ ^nil ].
+DirectCounter>>region: n target: target [ ^nil ].
 VmCounter := DirectCounter new.
 """)
 doAssert setupError.len == 0, setupError
@@ -127,6 +147,9 @@ doAssert preserved.intVal == 9
 let (difference, differenceError) = interp.doit("VmCounter subtract: 10 target: VmCounter")
 doAssert differenceError.len == 0, differenceError
 doAssert difference.intVal == 9
+let (regionAnswer, regionError) = interp.doit("VmCounter region: 10 target: VmCounter")
+doAssert regionError.len == 0, regionError
+doAssert regionAnswer.intVal == 9
 let (_, sideEffectError) = interp.evalStatements("Calls := 0")
 doAssert sideEffectError.len == 0
 let (assigned, assignError) = interp.doit("VmCounter once: [Calls := Calls + 1. 8]")

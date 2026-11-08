@@ -58,6 +58,7 @@ proc genExpression*(ctx: GenContext, node: Node): string
 proc genStatement*(ctx: GenContext, node: Node): string
 proc asBlockNode(node: Node): BlockNode
 proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blockInfo: BlockProcInfo]
+proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string
 
 proc exceptionNamesUnder(classInfo: Table[string, ClassInfo]): seq[string] =
   ## Names of every class in the parse tree that descends from Exception, plus the
@@ -325,6 +326,8 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
       result.cellNames.add(name)
 
 proc inlineBlockStatements(ctx: GenContext, blk: BlockNode): string =
+  let region = nativeGetterRegion(ctx, blk)
+  if region.len > 0: return region
   let bodyCtx = inlineBlockContext(ctx, blk)
   result = "block:\n"
   result.add(indentBlock(genLocalDeclarations(bodyCtx, blk.temporaries)))
@@ -1058,6 +1061,116 @@ proc numericGetterArithmetic(ctx: GenContext, node: Node): string =
       "    if not hostRoutingActive() and " & info.guard & "(hardingGetterReceiver):\n" &
       "      NodeValue(kind: " & kind & ", " & tag & ": (" & left & " " & op & " " & right & "))\n" &
       "    else:\n" & indentBlock(fallback, 6).strip(leading = false, trailing = true) & ")"
+
+proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
+  ## Specialize a pure assignment prefix and its following conditional. Guards
+  ## run before the prefix; no callback can invalidate them within that prefix.
+  ## Preserve boxed outer bindings and leave the rest of the block unchanged.
+  if ctx.mixed or blk == nil or blk.temporaries.len > 0 or
+     blk.parameters.len > 0 or ctx.numericGetters.len == 0: return ""
+  var names: seq[string]
+  var guards: seq[string]
+  var prefix = ""
+  var bindings = ctx.numericBindings
+  var aliases: Table[string, string]
+  var receivers: seq[string]
+  proc numeric(node: Node): string =
+    if node == nil: return ""
+    case node.kind
+    of nkIdent:
+      let name = node.IdentNode.name
+      if name in aliases: return mangleIdentifier(aliases[name])
+      if ctx.numericBindings.getOrDefault(name) == nrInt:
+        return mangleIdentifier(name)
+    of nkLiteral:
+      if node.LiteralNode.value.kind == vkInt: return $node.LiteralNode.value.intVal
+    of nkMessage:
+      let msg = node.MessageNode
+      if msg.arguments.len == 0 and msg.selector in ctx.numericGetters and
+         msg.receiver != nil and msg.receiver.kind == nkIdent:
+        let receiver = msg.receiver.IdentNode.name
+        if not ctx.isLocal(receiver) or receiver in ctx.cellNames or
+           receiver in aliases or receiver in ctx.numericBindings: return ""
+        if receiver notin receivers: receivers.add(receiver)
+        let info = ctx.numericGetters[msg.selector]
+        let value = bindingTarget(ctx, receiver)
+        let guard = info.guard & "(" & value & ")"
+        if guard notin guards: guards.add(guard)
+        return mangleClass(info.owner) & "(" & value &
+          ".instVal.compiledOwner)[]." & mangleSlot(info.slot)
+      if msg.arguments.len == 1 and msg.selector in ["+", "-", "*"]:
+        # Keep literal-only arithmetic out of Nim's constant evaluator.
+        if msg.receiver.kind == nkLiteral and msg.arguments[0].kind == nkLiteral: return ""
+        let left = numeric(msg.receiver)
+        let right = numeric(msg.arguments[0])
+        if left.len > 0 and right.len > 0:
+          return "(" & left & " " & msg.selector & " " & right & ")"
+    else: discard
+    return ""
+  for statement in blk.body:
+    if statement.kind != nkAssign: break
+    let assignment = statement.AssignNode
+    let name = assignment.variable
+    if not ctx.isLocal(name) or name in ctx.parameters or name in ctx.cellNames or
+       name in ctx.numericBindings or name in names or name in receivers: break
+    let value = numeric(assignment.expression)
+    if value.len == 0 or name in receivers: break
+    let alias = "hardingRegion_" & mangleIdentifier(name)
+    if ctx.isLocal(alias) or alias in ctx.globals or alias in ctx.cellNames:
+      return ""
+    aliases[name] = alias
+    bindings[alias] = nrInt
+    names.add(name)
+    prefix.add("let " & mangleIdentifier(alias) & " = " & value & "\n")
+    prefix.add(bindingTarget(ctx, name) & " = NodeValue(kind: vkInt, intVal: " & mangleIdentifier(alias) & ")\n")
+  let count = names.len
+  if count == 0 or guards.len == 0 or count >= blk.body.len or
+     blk.body[count].kind != nkIf: return ""
+  # Only pure numeric comparisons/connectives may consume the new native
+  # results. Branch bodies use the original boxed bindings, synchronized below.
+  proc rewrite(node: Node): Node =
+    if node == nil: return nil
+    case node.kind
+    of nkIdent:
+      let name = node.IdentNode.name
+      if name in aliases: return IdentNode(name: aliases[name], localIndex: -1)
+      if ctx.numericBindings.getOrDefault(name) == nrInt: return node
+    of nkLiteral:
+      if node.LiteralNode.value.kind in {vkInt, vkBool}: return node
+    of nkMessage:
+      let msg = node.MessageNode
+      if msg.arguments.len != 1 or
+         msg.selector notin ["+", "-", "*", "=", "<", "<=", ">", ">=", "|"]: return nil
+      let left = rewrite(msg.receiver)
+      let right = rewrite(msg.arguments[0])
+      if left != nil and right != nil:
+        return MessageNode(receiver: left, selector: msg.selector, arguments: @[right])
+    else: discard
+    return nil
+  let conditional = blk.body[count].IfNode
+  let condition = rewrite(conditional.condition)
+  if condition == nil: return ""
+  let nativeCtx = inlineBlockContext(ctx, blk)
+  nativeCtx.numericBindings = bindings
+  for name in aliases.values: nativeCtx.locals.add(name)
+  var optimized = prefix
+  # Branches can assign the outer variables; only the condition uses aliases.
+  let conditionCode = genExpression(nativeCtx, condition)
+  let clause = conditionClause(nativeCtx, condition, conditionCode)
+  optimized.add("if " & clause.code & ":\n")
+  let yes = asBlockNode(conditional.thenBranch)
+  if yes == nil or hasReturnNode(yes): return ""
+  optimized.add(indentBlock(inlineBlockStatements(ctx, yes)))
+  if conditional.elseBranch != nil:
+    let no = asBlockNode(conditional.elseBranch)
+    if no == nil or hasReturnNode(no): return ""
+    optimized.add("else:\n" & indentBlock(inlineBlockStatements(ctx, no)))
+  var fallback = ""
+  for i in 0..count: fallback.add(genStatement(ctx, blk.body[i]) & "\n")
+  result = "block:\n  if not hostRoutingActive() and " & guards.join(" and ") & ":\n" &
+    indentBlock(optimized, 4) & "  else:\n" & indentBlock(fallback, 4)
+  for i in count + 1 ..< blk.body.len:
+    result.add(indentBlock(genStatement(ctx, blk.body[i])))
 
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator

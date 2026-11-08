@@ -1,5 +1,63 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Getter results remain native through the following conditional
+
+The next region pass recognizes a pure assignment prefix of an inlined block
+followed by a numeric conditional. Guards validate the generated typed getters
+before the prefix runs. Getter receivers must be uncaptured lexical bindings,
+not arbitrary expressions. No callbacks occur between these checks and field
+reads. Each difference is computed into a native `let`, which the conditional
+uses directly instead of redispatching arithmetic and equality on `NodeValue`s.
+
+Outer boxed locals are synchronized after each assignment, preserving values
+visible to branch bodies, subsequent statements and later iterations. The region
+does not speculate through callbacks, escaping captures, arbitrary receiver
+expressions or block-local scopes. Guard failure executes the original prefix
+and conditional; no operation is replayed after partially running a fast path.
+Boolean `|` remains a Harding send, preserving eager evaluation and replacement.
+
+For Queens, the generated fast branch now has the shape (names shortened):
+
+```nim
+if not hostRoutingActive() and rowGuard(current) and columnGuard(current):
+  let nativeDistance = r - Placement(current.instVal.compiledOwner)[].row
+  distance = NodeValue(kind: vkInt, intVal: nativeDistance)
+  let nativeDelta = c - Placement(current.instVal.compiledOwner)[].column
+  delta = NodeValue(kind: vkInt, intVal: nativeDelta)
+  # Comparisons use nativeDelta/nativeDistance, not the boxed outer locals.
+  # Boolean connectives and branch bodies keep their ordinary code generation.
+else:
+  # Original assignments and conditional.
+```
+
+Pinned alternating pairs, 30 verified passes, 21 trials:
+`run-85rqp6ga` versus `run-hqcxtf39`, `build/region-pinned.log`:
+
+| Workload | Before median ms/pass | After | Median pair result |
+|---|---:|---:|---|
+| Richards | 21.626 | 21.909 | 0.97% faster, 12/21 (inconclusive) |
+| DeltaBlue | 23.370 | 23.132 | 0.15% faster, 12/21 (inconclusive) |
+| Queens | 33.630 | 28.226 | **16.55% faster, 19/21** |
+
+The final build (`run-yzy8gufu`, `build/region-final-pinned.log`, 21 pairs)
+measured Queens 32.664→27.438 ms/pass, **16.17% faster (21/21 pairs)**;
+Richards 0.25% slower (8/21) and DeltaBlue 0.29% slower (9/21), both within
+local noise. No improvement is claimed for those two workloads.
+
+Percentages are medians of pairwise reductions, not ratios of marginal medians.
+The profile's executed `nt_minus` count falls from 2,450,880 to 0, and `nt_eq`
+from 10,275,150 to 2,922,510. The remaining cost includes `notNil`, Boolean sends,
+layout/method/accessor checks, and allocation. Profile artifacts are retained in
+the candidate run; percentages from short gprof samples remain approximate.
+
+Focused validation: compiler 109, runtime 47, boundary 39 and stdlib compilation
+6 pass under ARC/ORC. Direct-slot integration covers changed numeric kinds,
+method/accessor replacement, Boolean replacement and a getter restoring its own
+registration between iterations under both managers. Result-region parity tests
+also cover receiver changes, branch writes, outer-result visibility and fallback
+side effects. The broad sweep passes 123/123 (`build/region-full-parity.log`);
+subsequent conservative eligibility checks were covered by the focused suites.
+
 ## Native parameter variants and typed getter arithmetic
 
 Numeric uses propose Integer parameter candidates. A separate validation pass
