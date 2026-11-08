@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Granite `build` and `run` accept repeatable `--nim-option:<argument>` flags to forward individual arguments to Nim.
 - `derive:` accepts a typed slot table: `Object derive: #{#x -> Integer, #y -> Float, #z -> nil}`. Declared primitive slots become native Nim fields with guarded arithmetic; `nil` leaves a slot dynamic.
 
 ### Changed

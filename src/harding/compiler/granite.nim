@@ -158,6 +158,7 @@ type
     sealFrozen: bool
     typeFeedback: string
     trustObservedTypes: bool
+    nimOptions: seq[string]
     inferenceReport: string
     strictSlots: bool
     maxStackDepth: int
@@ -204,6 +205,8 @@ proc showUsage() =
   echo "                           narrowing storage even when static analysis cannot prove it"
   echo "                           (requires --type-feedback; the program is then specialized"
   echo "                           to the observed types)"
+  echo "  --nim-option:<flag>   Extra argument passed to `nim c` (repeatable), e.g."
+  echo "                           --nim-option:-d:danger --nim-option:--panics:on"
   echo "  --inference-report:<file> Write advisory static/observed slot candidates"
   echo "  --strict-slots        Treat declared numeric slot store conflicts as errors"
   echo "  --mixed               Enable mixed mode (embed interpreter for fallback)"
@@ -282,6 +285,11 @@ proc parseArgs(argsToParse: seq[string] = @[]): Config =
         result.typeFeedback = p.val
       of "trust-observed-types":
         result.trustObservedTypes = true
+      of "nim-option":
+        if p.val.len == 0:
+          echo "Error: --nim-option requires an argument"
+          quit(1)
+        result.nimOptions.add(p.val)
       of "inference-report":
         result.inferenceReport = p.val
       of "strict-slots":
@@ -667,7 +675,11 @@ proc buildFile(config: Config): bool =
   let nimFile = outputDir / moduleName & ".nim"
   let binaryName = computeBinaryName(config)
   let releaseFlag = if config.release: " -d:release" else: ""
-  let cmd = "nim c" & releaseFlag & " -o:" & quoteShell(binaryName) & " " & quoteShell(nimFile)
+  var extra = ""
+  for option in config.nimOptions:
+    extra.add(" " & quoteShell(option))
+  let cmd = "nim c" & releaseFlag & extra & " -o:" &
+            quoteShell(binaryName) & " " & quoteShell(nimFile)
 
   echo "Building: ", cmd
   let exitCode = execShellCmd(cmd)
