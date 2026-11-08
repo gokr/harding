@@ -150,13 +150,41 @@ proc extractDeriveChain*(node: Node): (string, string, string) =
                    nil
   
   if typeArg != nil and typeArg.kind == nkTable:
-    var names: seq[string]
+    # `#{#x -> Integer, #y -> Float}` is the spelling the parser accepts for a
+    # typed slot list: table keys are symbols or strings, so `derive:` accepts
+    # them, and the value is the type hint. Render it as the combined
+    # "name:Type" form parseTypeList already understands. A value that is not a
+    # simple hint renders as no hint, leaving that slot dynamic.
+    proc hintText(node: Node): string =
+      if node == nil: return ""
+      case node.kind
+      of nkIdent: node.IdentNode.name
+      of nkPseudoVar: node.PseudoVarNode.name
+      of nkLiteral:
+        let value = node.LiteralNode.value
+        case value.kind
+        of vkInt: $value.intVal
+        of vkFloat: $value.floatVal
+        of vkBool: (if value.boolVal: "true" else: "false")
+        of vkString: "\"" & value.strVal & "\""
+        of vkSymbol: value.symVal
+        else: ""
+      else: ""
+    var parts: seq[string] = @[]
     for entry in typeArg.TableNode.entries:
-      if entry.key.kind == nkLiteral:
-        let key = entry.key.LiteralNode.value
-        if key.kind == vkString: names.add(key.strVal)
-        elif key.kind == vkSymbol: names.add(key.symVal)
-    return (className, parent, "#(" & names.join(" ") & ")")
+      if entry.key.kind != nkLiteral: continue
+      let key = entry.key.LiteralNode.value
+      let name = if key.kind == vkString: key.strVal
+                 elif key.kind == vkSymbol: key.symVal
+                 else: ""
+      if name.len == 0 or ' ' in name or ':' in name: continue
+      let hint = hintText(entry.value)
+      # A whitespace-bearing hint would not survive the tokenizer below.
+      if hint.len > 0 and ' ' notin hint:
+        parts.add(name & ":" & hint)
+      else:
+        parts.add(name)
+    return (className, parent, "#(" & parts.join(" ") & ")")
 
   var typeList = ""
   if typeArg != nil:

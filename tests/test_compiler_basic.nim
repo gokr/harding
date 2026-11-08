@@ -292,6 +292,32 @@ suite "Compiler: Analyzer":
     check "Point" in result.classes
     check "Point3D" in result.classes
 
+  test "typed slot table supplies constraints and keeps untyped slots dynamic":
+    let source = "Point := Object derivePublic: #{#x -> Integer, #y -> Float, #name -> String, #link -> Point, #flag -> true, #start -> 0, #plain -> nil}."
+    let (nodes, syntax) = parse(source)
+    require not syntax.hasError
+    let analysis = buildClassGraph(nodes)
+    require "Point" in analysis.classes
+    let cls = analysis.classes["Point"]
+    check cls.getSlotDef("x").constraint == tcInt
+    check cls.getSlotDef("y").constraint == tcFloat
+    check cls.getSlotDef("name").constraint == tcString
+    check cls.getSlotDef("link").constraint == tcObject
+    check cls.getSlotDef("link").objectClass == "Point"
+    check cls.getSlotDef("flag").constraint == tcBool
+    # A literal hint declares the type and the default value together.
+    check cls.getSlotDef("start").constraint == tcInt
+    check cls.getSlotDef("start").defaultValue == "0"
+    # `nil` stays explicitly dynamic rather than guessing a type.
+    check cls.getSlotDef("plain").constraint == tcNone
+
+  test "typed slot table matches an untyped list for slot order and names":
+    let (typed, _) = parse("P := Object derive: #{#a -> Integer, #b -> Integer}.")
+    let (plain, _) = parse("P := Object derive: #(a, b).")
+    let typedCls = buildClassGraph(typed).classes["P"]
+    let plainCls = buildClassGraph(plain).classes["P"]
+    check typedCls.getAllSlots().mapIt(it.name) == plainCls.getAllSlots().mapIt(it.name)
+
   test "parses type list":
     let slots = parseTypeList("#(x:, Int, y:, Float, name)")
     check slots.len == 3
