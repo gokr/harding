@@ -14,6 +14,7 @@ DirectCounter>>fraction [ step := step + 0.5. ^step ].
 DirectCounter>>less [ ^count < other ].
 DirectCounter>>block [ ^[count := count + 1. count] ].
 DirectCounter>>once: action [ ^count := action value ].
+DirectCounter>>subtract: n target: target [ ^n - target count ].
 DirectChild := DirectCounter derivePublic: #(padding).
 DirectChild>>setup [ padding := 99. ^self ].
 '''
@@ -42,6 +43,7 @@ class DirectSlots(unittest.TestCase):
             self.assertIn('nativeSlots == nil', generated)
             self.assertIn('compiledSlotAccessorVersion', generated)
             self.assertIn(cls + '(self.instVal.compiledOwner)[].hardingUser636F756E74 + 1', generated)
+            self.assertIn('_numericGuard(hardingGetterReceiver)', generated)
             self.assertIn('getSlotValue(self, "count")', generated)
             self.assertIn('setSlotValue(self, "count", value)', generated)
             host = work / 'host.nim'
@@ -55,6 +57,7 @@ let native = newClass_446972656374436F756E746572().toValue()
 doAssert sendMessage(nil, native, "bump", @[]).intVal == 1
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 9
 doAssert sendMessage(nil, native, "withLocal", @[]).intVal == 4
+doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == 9
 doAssert sendMessage(nil, native, "fraction", @[]).floatVal == 1.0
 doAssert sendMessage(nil, native, "less", @[]).boolVal
 discard sendMessage(nil, native, "flag:", @[toValue(true)])
@@ -65,6 +68,7 @@ let child = newClass_4469726563744368696C64().toValue()
 doAssert sendMessage(nil, child, "setup", @[]).kind == vkInstance
 doAssert sendMessage(nil, child, "bump", @[]).intVal == 1
 doAssert getSlotValue(child, "padding").intVal == 99
+doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), child]).intVal == 9
 let closure = sendMessage(nil, native, "block", @[])
 doAssert sendMessage(nil, closure, "value", @[]).intVal == 2
 
@@ -75,8 +79,21 @@ let originalGet = slotGetters["DirectCounter::count"]
 let originalSet = slotSetters["DirectCounter::count"]
 registerSlotAccessor("DirectCounter", "count", replacementGet, replacementSet)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 96
+doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == -20
 registerSlotAccessor("DirectCounter", "count", originalGet, originalSet)
 doAssert sendMessage(nil, native, "compute", @[]).intVal == 12
+proc replacementCount(receiver: NodeValue, args: openArray[NodeValue]): NodeValue = toValue(2.5)
+let savedCount = findCompiledMethod("DirectCounter", "count")
+registerCompiledMethod("DirectCounter", "count", replacementCount)
+doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).floatVal == 7.5
+registerCompiledMethod("DirectCounter", "count", savedCount)
+doAssert sendMessage(nil, native, "subtract:target:", @[toValue(10), native]).intVal == 8
+var missingRejected = false
+try:
+  discard sendMessage(nil, native, "subtract:target:", @[])
+except CompiledHardingError:
+  missingRejected = true
+doAssert missingRejected
 
 # VM-owned storage must never be cast to a compiled layout; declared writes are
 # checked, while an undeclared VM class can still supply dynamic values.
@@ -92,6 +109,7 @@ DirectCounter>>fraction [ ^nil ].
 DirectCounter>>less [ ^nil ].
 DirectCounter>>block [ ^nil ].
 DirectCounter>>once: action [ ^nil ].
+DirectCounter>>subtract: n target: target [ ^nil ].
 VmCounter := DirectCounter new.
 """)
 doAssert setupError.len == 0, setupError
@@ -106,6 +124,9 @@ doAssert rejectedWrite.intVal == 23
 let (preserved, preservedError) = interp.doit("VmCounter compute")
 doAssert preservedError.len == 0, preservedError
 doAssert preserved.intVal == 9
+let (difference, differenceError) = interp.doit("VmCounter subtract: 10 target: VmCounter")
+doAssert differenceError.len == 0, differenceError
+doAssert difference.intVal == 9
 let (_, sideEffectError) = interp.evalStatements("Calls := 0")
 doAssert sideEffectError.len == 0
 let (assigned, assignError) = interp.doit("VmCounter once: [Calls := Calls + 1. 8]")

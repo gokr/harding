@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Native sum-of-squares demo with the generated Nim kernel and isolated comparison (`docs/GRANITE_NATIVE_KERNEL_DEMO.md`).
 - Granite `build` and `run` accept repeatable `--nim-option:<argument>` flags to forward individual arguments to Nim.
 - `derive:` accepts a typed slot table: `Object derive: #{#x -> Integer, #y -> Float, #z -> nil}`. Declared primitive slots become native Nim fields with guarded arithmetic; `nil` leaves a slot dynamic.
 
@@ -16,6 +17,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Granite emits checked native-Integer parameter variants and fuses typed getter arithmetic with native operands, retaining dynamic fallbacks for other argument kinds, receiver layouts and replaced accessors/methods.
 - Numeric binding analysis follows inlined branches, loops and literal control blocks, so a counter assigned inside an inlined `ifFalse:` becomes a native Nim `int`. Pinned 21-trial pairs: Queens 2.70% less time (21/21), DeltaBlue neutral, Richards 0.99% more time (4/21) where native values are re-boxed for dynamic sends.
 - Benchmarks declare Integer slots in `derive:` so the guarded native slot arithmetic can be measured against an untyped baseline.
 - Granite skips exception-ancestry lookup for selectors outside the built-in exception protocol; pinned local ARC pairs measured 1.84%/3.98%/5.65% less time on Richards/DeltaBlue/Queens (`docs/GRANITE_PROFILE_SLICE.md`).

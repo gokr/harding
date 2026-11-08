@@ -1,5 +1,56 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Native parameter variants and typed getter arithmetic
+
+Numeric uses propose Integer parameter candidates. A separate validation pass
+rejects assignments, captures, escaping blocks and shadowing. These candidates
+are not proofs: the public compiled entry checks argument kinds and that no
+interpreter host is active, then calls an additional body with native `int`
+parameters. Non-Integer calls keep the original generated body. Both bodies
+come from the same Harding AST, not hand-written method implementations.
+
+Unique generated Integer getters can feed native arithmetic without boxing the
+field first. A receiver/method guard plus the slot-accessor guard preserve
+layout safety, inheritance fallback and replacement invalidation. Receiver and
+operand evaluation order is retained and the receiver expression runs once,
+including when a guard fails. The result is still boxed; propagation through
+that result and through recursive calls is not implemented by this slice.
+Tests cover Float/custom-object fallback, captured/assigned parameters,
+receiver side effects, inherited layout fallback, missing arguments, runtime
+compiled-method and slot-accessor replacement, and interpreter-bound calls.
+Compiler tests (107), compiled runtime (47), engine boundary (39), stdlib
+compilation (6) and value dispatch (1) pass under ARC and ORC; the direct-slot
+integration host also runs under both memory managers. The full Granite parity
+sweep passes **122/122** (`build/getter-full-parity.log`); this is not a claim
+that every repository test suite passes.
+
+Generated numeric parameter bodies increase from zero to 8/9/10 in
+Richards/DeltaBlue/Queens. Generated Nim grows by about 12/12/17 KB respectively;
+this is bounded body duplication, not a combinatorial set of type signatures.
+
+The first parameter-only experiment regressed Queens by 3.91% (2/15 improving
+pairs). Connecting the getter then made the combined slice 8.21% faster on Queens
+(12/15 pairs); Richards 1.23% faster (11/15), DeltaBlue 0.89% faster (8/15), with
+the latter two not strong evidence. Baseline `run-mgrjc_rh`, combined candidate
+`run-d9220rir`, 30 verified passes, pinned alternating 15 trials,
+`build/getter-pinned.log`. Final-tree remeasurement against the same baseline
+(`run-85rqp6ga`, `build/getter-final-pinned.log`, 15 pairs) found Queens 8.56%
+faster (11/15), Richards 0.71% faster (9/15), DeltaBlue 0.33% faster (9/15).
+A second, 21-pair comparison (`build/getter-final-pinned21.log`) found Queens
+8.43% faster (16/21), Richards 0.08% faster (11/21), DeltaBlue 0.53% slower
+(9/21). Only Queens provides a substantial signal; the other two remain
+inconclusive. Marginal before/after medians are 35.728/32.596 ms per pass for
+Queens; the reported percentage is the median of pairwise time reductions.
+
+The Queens gprof flat-profile call count for `nt_minus` fell from 7,352,640 in
+the typed-slot baseline to 2,450,880 in the combined candidate. `nt_eq` remains
+about 10.3M calls: `distance` and `delta` still cross a boxed result boundary.
+Sampling percentages and inlined call-graph arcs are not exact operation counts.
+
+A fully native numeric kernel is demonstrated in
+[GRANITE_NATIVE_KERNEL_DEMO.md](GRANITE_NATIVE_KERNEL_DEMO.md), including the
+verbatim generated Nim and an isolated comparison against idiomatic Nim.
+
 ## Inlined-branch locals become native Nim
 
 Numeric binding analysis only discovered assignments written directly in a
@@ -55,10 +106,11 @@ Measured effect on generated code: DeltaBlue goes from 0 to 12 guarded native
 slot paths (`DBVariable#value`, `DBStrength#rank`, `DBVariable#mark`, ...).
 Queens and Richards gain none, because their arithmetic operates on a
 **parameter** (`r`) and an **accessor send** (`current row`) rather than a direct
-slot read, and because `initial:Nil` observations currently disqualify every narrowed slot
-(`QueenPlacement#column` carries 2,056 nil initializations beside 81,696 Integer
-reads). That rule is the next thing to fix: an `initialize` method that assigns
-the slot before any read is not evidence of a nil-typed field.
+slot read. An earlier diagnosis incorrectly blamed `initial:Nil` for blocking
+narrowing. `reconcile` only considers `write:` events: allocation-time nil is
+not a conflicting write. `QueenPlacement#column`'s 2,056 nil initializations do
+not by themselves reject its Integer candidate. Actual nil reads, initialization
+order and nullable storage still need consideration before narrowing storage.
 
 Pinned 15-trial comparison against `run-2hcd5dgl` (`build/static-unbox-pinned.log`)
 was taken with the host at load ~5.5 and is therefore not a usable result:

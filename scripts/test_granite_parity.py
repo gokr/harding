@@ -7,6 +7,40 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("numeric_getter_arithmetic", """
+TypedGetter := Object derivePublic: #{number -> Integer}.
+GetterUser := Object derivePublic: #(calls).
+GetterUser>>initialize [calls := 0].
+GetterUser>>pick: target [calls := calls + 1. ^target].
+GetterUser>>subtract: n from: target [ ^n - (self pick: target) number ].
+GetterUser>>reverse: n from: target [ ^(self pick: target) number - n ].
+OtherGetter := Object derive: #().
+OtherGetter>>doesNotUnderstand: selector [ ^2.5 ].
+t := TypedGetter new number: 4.
+u := GetterUser new.
+(u subtract: 10 from: t) println.
+(u reverse: 10 from: t) println.
+(u calls) println.
+(u subtract: 10 from: OtherGetter new) println.
+(u calls) println.
+""", '6\n-6\n2\n7.5\n3\n'),
+    ("numeric_parameter_fallbacks", """
+ParamSpec := Object derive: #().
+ParamSpec>>advance: n [ | answer | answer := n + 1. ^answer ].
+ParamSpec>>describe: n [ ^(n + 1) asString ].
+ParamSpec>>capture: n [ ^[n + 1] ].
+ParamOperand := Object derive: #().
+ParamOperand>>+ other [ ^99 ].
+p := ParamSpec new.
+(p advance: 5) println.
+(p advance: 1.5) println.
+(p describe: 5) println.
+((p capture: 5) value) println.
+(p advance: ParamOperand new) println.
+""", '6\n2.5\n6\n6\n99\n'),
+    ("native_sum_squares_demo",
+     (ROOT / "examples/compilation/native_sum_squares.hrd").read_text(),
+     '333383335000\n'),
     ("integer_parameter_mutation", """
 ParamMath := Object derive: #().
 ParamMath>>advance: n [ n := n + 1. ^n ].

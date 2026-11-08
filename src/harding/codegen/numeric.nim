@@ -1,6 +1,7 @@
 import std/[tables, sets]
 import ../core/types
 import ./blocks
+import ../compiler/slot_inference
 
 type
   NumericRepresentation* = enum
@@ -38,14 +39,34 @@ proc numericKind*(node: Node, bindings: NumericBindings): NumericRepresentation 
     discard
   return nrDynamic
 
+proc numericParameterCandidates*(body: seq[Node], parameters: seq[string],
+                                 excluded: seq[string]): NumericBindings =
+  ## Numeric use suggests an Integer specialization, not a type proof. Callers
+  ## must check the actual argument kinds before entering the specialized body.
+  proc inspect(node: Node, candidates: var NumericBindings) =
+    if node == nil: return
+    if node.kind == nkMessage:
+      let message = node.MessageNode
+      if message.arguments.len == 1 and
+         message.selector in ["+", "-", "*", "<", "<=", ">", ">=", "="]:
+        for operand in @[message.receiver] & message.arguments:
+          if operand != nil and operand.kind == nkIdent:
+            let name = operand.IdentNode.name
+            if name in parameters and name notin excluded:
+              candidates[name] = nrInt
+    for child in nodeChildren(node): inspect(child, candidates)
+  for node in body: inspect(node, result)
+
 proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
-                             localNames: seq[string] = @[]): NumericBindings =
+                             localNames: seq[string] = @[],
+                             entryBindings: NumericBindings = default(NumericBindings)): NumericBindings =
   ## Find lexical numeric candidates initialized from literals or earlier candidates.
   ## Every assignment must
   ## retain its numeric kind and every read must follow definite initialization.
   ## Any lexical shadowing excludes the name throughout this conservative pass.
   ## A nonempty localNames list restricts candidates before dependency analysis.
-  var candidates = initTable[string, NumericRepresentation]()
+  ## entryBindings are numeric parameters proven by the caller's entry guard.
+  var candidates = entryBindings
 
   # Discovery follows the same regions the emitter inlines: branches, loops and
   # literal control blocks are emitted into the enclosing Nim scope, so an
@@ -197,6 +218,7 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
   while true:
     rejected.clear()
     var initialized = initHashSet[string]()
+    for name in entryBindings.keys: initialized.incl(name)
     for node in body:
       inspect(node, initialized)
     var removed = false

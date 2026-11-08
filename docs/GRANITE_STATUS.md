@@ -4,6 +4,27 @@ Merged into `main`. The sections below record the work done on the
 `granite-completeness` branch, which is now part of main; the branch name is kept
 only in the historical text.
 
+## Type-specialization regression findings
+
+While testing numeric getter fusion, two method-replacement cases failed before
+reaching the optimization being tested:
+
+- A top-level `TypedGetter selector: #number put: [^2.5]` after earlier getter
+  calls is extracted during compilation, so those earlier calls already see the
+  replacement. The interpreter sees the old getter until the replacement executes.
+  Minimal shape: define a public `number` slot, print `object number`, replace
+  `number` at top level, then print it again.
+- Moving that replacement into a called method avoids early extraction, but
+  invoking the replaced getter fails in the compiled block bridge with
+  `Wrong number of arguments to block: expected 0, got 3`.
+
+These are reported compiler/runtime defects, not accepted language differences.
+Logs: `build/parity/run-back9_tj/numeric_getter_arithmetic/` and
+`build/parity/run-u6dlm088/numeric_getter_arithmetic/`. Current getter-fusion tests
+exercise compiled-procedure replacement and slot-accessor replacement directly
+under ARC and ORC; they do not establish that these Harding replacement cases
+work. No language change is proposed to accommodate them.
+
 ## Source-backed stdlib compilation
 
 Native non-frozen builds lift methods discovered from the interpreter's source

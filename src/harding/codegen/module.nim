@@ -484,6 +484,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     return output
   
   var directCandidates = initTable[string, string]()
+  var numericGetters: Table[string, NumericGetter]
   if not mixed:
     var targets = initTable[string, seq[tuple[owner, target, slot: string]]]()
     for md in methodDefs:
@@ -518,6 +519,13 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       else:
         output.add(fmt("    return {choice.target}(receiver, @[])\n"))
       output.add(fmt("  cachedSendBound(owner, receiver, \"{selector}\", [])\n\n"))
+      if choice.slot.len > 0 and classInfo[choice.owner].getSlotDef(choice.slot).constraint == tcInt:
+        let guard = helper & "_numericGuard"
+        numericGetters[selector] = NumericGetter(owner: choice.owner, slot: choice.slot, guard: guard)
+        let slotGuard = mangleClass(choice.owner) & "_direct_" & mangleSlot(choice.slot) & "_guard"
+        output.add(fmt("proc {guard}(receiver: NodeValue): bool {{.inline.}} =\n"))
+        output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+        output.add(fmt("  canDirectCompiledSend(receiver, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver)\n\n"))
 
   if not mixed:
     # Plan independently of source order, adding pure self-call chains only after
@@ -591,111 +599,147 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     let sidePrefix = if md.isClassMethod: "class_" else: ""
     let procName = fmt("{mangledClass}_{sidePrefix}{mangledSelector}")
     
-    output.add(fmt("proc {procName}*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
-
     let methodCellNames = scopeCaptureCellNames(body, params & md.temporaries)
-    # A parameter is only read: bind it as a cursor so ARC neither copies the
-    # value into the parameter nor destroys it on return. `args` outlives the
-    # call, so the borrow is valid. A parameter that is assigned or captured as a
-    # shared cell keeps an owned binding.
-    var assignedVars = initHashSet[string]()
-    for stmt in body:
-      collectAssignedVars(stmt, assignedVars)
-    for i, paramName in params:
-      let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
-      let identifier = mangleIdentifier(paramName)
-      if paramName in methodCellNames:
-        output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
-      elif paramName notin assignedVars:
-        # A cursor must never bind to a temporary: that dangles as soon as the
-        # expression's storage dies. Both branches below are stable locations --
-        # `args[i]` is the caller's array and the fallback is a module-level
-        # value -- so the borrow is valid for exactly the call's lifetime.
-        let guarded = fmt("(if args.len > {i}: args[{i}] else: hardingMissingArg)")
-        output.add(fmt("  var {identifier} {{.cursor.}} = {guarded}\n"))
+    var parameterKinds: NumericBindings
+    if not mixed and params.len > 0:
+      var assigned = initHashSet[string]()
+      for statement in body: collectAssignedVars(statement, assigned)
+      let proposed = numericParameterCandidates(body, params,
+        methodCellNames & assigned.toSeq)
+      let validated = analyzeNumericBindings(body, methodCellNames & assigned.toSeq,
+        md.temporaries & params, proposed)
+      for name in params:
+        if name in proposed and name in validated:
+          parameterKinds[name] = validated[name]
+
+    let nativeName = procName & "_numeric"
+    for variant in 0..(if parameterKinds.len > 0: 1 else: 0):
+      let specialized = parameterKinds.len > 0 and variant == 0
+      if specialized:
+        var signature: seq[string]
+        for name in params:
+          if name in parameterKinds:
+            signature.add("hardingNative_" & mangleIdentifier(name) & ": int")
+        output.add(fmt("proc {nativeName}(self: NodeValue, args: openArray[NodeValue], ") &
+          signature.join(", ") & "): NodeValue =\n")
       else:
-        output.add(fmt("  var {identifier} = {paramValue}\n"))
-    
-    if body.len > 0:
-      var genCtx = newGenContext(nil, compiledClasses, classInfo)
-      for globalName in knownGlobals:
-        if globalName notin genCtx.globals:
-          genCtx.globals.add(globalName)
-      genCtx.inMethod = true
-      genCtx.directSendCandidates = directCandidates
-      genCtx.integerSendCandidates = integerCandidates
-      genCtx.staticClassCalls = staticClassCalls
+        output.add(fmt("proc {procName}*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
+        if parameterKinds.len > 0:
+          var checks = @["not hostRoutingActive()"]
+          var nativeArgs: seq[string]
+          for index, name in params:
+            if name in parameterKinds:
+              checks.add(fmt("args.len > {index} and args[{index}].kind == vkInt"))
+              nativeArgs.add(fmt("args[{index}].intVal"))
+          output.add("  if " & checks.join(" and ") & ":\n")
+          output.add("    return " & nativeName & "(self, args, " & nativeArgs.join(", ") & ")\n")
 
-      genCtx.cellNames = methodCellNames
-      if blockReg != nil:
-        genCtx.blockRegistry = blockReg
-      
-      if clsName in classInfo:
-        genCtx.cls = classInfo[clsName]
-        # Only numeric candidates for *this* class; guards make them safe.
-        for slotName in classInfo[clsName].getAllSlots().mapIt(it.name):
-          let key = clsName & "#" & slotName
-          if key in inferredNumeric:
-            case inferredNumeric[key]
-            of "skInt": genCtx.inferredNumericSlots[slotName] = nrInt
-            of "skFloat": genCtx.inferredNumericSlots[slotName] = nrFloat
-            else: discard
-      
-      genCtx.globals.add("self")
-      genCtx.setVariableType("self", clsName, true)
-      for paramName in params:
-        genCtx.parameters.add(paramName)
-
-      if not mixed and md.temporaries.len > 0:
-        genCtx.numericBindings = analyzeNumericBindings(body, methodCellNames & params,
-                                                       md.temporaries)
-      output.add(indentBlock(genLocalDeclarations(genCtx, md.temporaries)))
-
-      # If any nested block performs a non-local return (^), the method
-      # boundary must catch NonLocalReturnException and return its value.
-      var needsNLRWrapper = false
+      # A parameter is only read: bind it as a cursor so ARC neither copies the
+      # value into the parameter nor destroys it on return. `args` outlives the
+      # call, so the borrow is valid. A parameter that is assigned or captured as a
+      # shared cell keeps an owned binding.
+      var assignedVars = initHashSet[string]()
       for stmt in body:
-        if hasBlocksWithNonLocalReturn(stmt):
-          needsNLRWrapper = true
-          break
-      var hasHomeBlocks = false
-      if blockReg != nil:
-        for info in blockReg.blocks:
-          if info.ownerMethodId == md.methodId:
-            hasHomeBlocks = true
+        collectAssignedVars(stmt, assignedVars)
+      for i, paramName in params:
+        let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
+        let identifier = mangleIdentifier(paramName)
+        if specialized and paramName in parameterKinds:
+          output.add(fmt("  var {identifier} = hardingNative_{identifier}\n"))
+        elif paramName in methodCellNames:
+          output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
+        elif paramName notin assignedVars:
+          # A cursor must never bind to a temporary: that dangles as soon as the
+          # expression's storage dies. Both branches below are stable locations --
+          # `args[i]` is the caller's array and the fallback is a module-level
+          # value -- so the borrow is valid for exactly the call's lifetime.
+          let guarded = fmt("(if args.len > {i}: args[{i}] else: hardingMissingArg)")
+          output.add(fmt("  var {identifier} {{.cursor.}} = {guarded}\n"))
+        else:
+          output.add(fmt("  var {identifier} = {paramValue}\n"))
+    
+      if body.len > 0:
+        var genCtx = newGenContext(nil, compiledClasses, classInfo)
+        for globalName in knownGlobals:
+          if globalName notin genCtx.globals:
+            genCtx.globals.add(globalName)
+        genCtx.inMethod = true
+        genCtx.directSendCandidates = directCandidates
+        genCtx.numericGetters = numericGetters
+        genCtx.integerSendCandidates = integerCandidates
+        genCtx.staticClassCalls = staticClassCalls
+
+        genCtx.cellNames = methodCellNames
+        if blockReg != nil:
+          genCtx.blockRegistry = blockReg
+      
+        if clsName in classInfo:
+          genCtx.cls = classInfo[clsName]
+          # Only numeric candidates for *this* class; guards make them safe.
+          for slotName in classInfo[clsName].getAllSlots().mapIt(it.name):
+            let key = clsName & "#" & slotName
+            if key in inferredNumeric:
+              case inferredNumeric[key]
+              of "skInt": genCtx.inferredNumericSlots[slotName] = nrInt
+              of "skFloat": genCtx.inferredNumericSlots[slotName] = nrFloat
+              else: discard
+      
+        genCtx.globals.add("self")
+        genCtx.setVariableType("self", clsName, true)
+        for paramName in params:
+          genCtx.parameters.add(paramName)
+
+        if not mixed and (specialized or md.temporaries.len > 0):
+          genCtx.numericBindings = analyzeNumericBindings(body, methodCellNames &
+            (if specialized: @[] else: params), md.temporaries & params,
+            (if specialized: parameterKinds else: default(NumericBindings)))
+        output.add(indentBlock(genLocalDeclarations(genCtx, md.temporaries)))
+
+        # If any nested block performs a non-local return (^), the method
+        # boundary must catch NonLocalReturnException and return its value.
+        var needsNLRWrapper = false
+        for stmt in body:
+          if hasBlocksWithNonLocalReturn(stmt):
+            needsNLRWrapper = true
             break
-      if hasHomeBlocks:
-        output.add("  let hardingHome = CompiledReturnTarget(active: true)\n")
-        output.add("  try:\n")
+        var hasHomeBlocks = false
+        if blockReg != nil:
+          for info in blockReg.blocks:
+            if info.ownerMethodId == md.methodId:
+              hasHomeBlocks = true
+              break
+        if hasHomeBlocks:
+          output.add("  let hardingHome = CompiledReturnTarget(active: true)\n")
+          output.add("  try:\n")
       
-      for stmt in body:
-        let stmtCode = genStatement(genCtx, stmt)
-        if stmtCode.len > 0:
-          for line in stmtCode.splitLines():
-            if hasHomeBlocks:
-              output.add("    " & line)
-            else:
-              output.add("  " & line)
-            output.add("\n")
+        for stmt in body:
+          let stmtCode = genStatement(genCtx, stmt)
+          if stmtCode.len > 0:
+            for line in stmtCode.splitLines():
+              if hasHomeBlocks:
+                output.add("    " & line)
+              else:
+                output.add("  " & line)
+              output.add("\n")
 
-      # Explicit returns are emitted by genStatement; falling through answers self.
-      if body[^1].kind != nkReturn:
-        output.add(if hasHomeBlocks: "    return self\n" else: "  return self\n")
+        # Explicit returns are emitted by genStatement; falling through answers self.
+        if body[^1].kind != nkReturn:
+          output.add(if hasHomeBlocks: "    return self\n" else: "  return self\n")
       
-      if needsNLRWrapper:
-        # Only consume non-local returns that target this method; let
-        # returns aimed at outer methods continue unwinding.
-        output.add("  except NonLocalReturnException as nlr:\n")
-        output.add("    if nlr.target == hardingHome:\n")
-        output.add("      return nlr.value\n")
-        output.add("    raise\n")
-      if hasHomeBlocks:
-        output.add("  finally:\n")
-        output.add("    hardingHome.active = false\n")
-    else:
-      output.add("  return self\n")
+        if needsNLRWrapper:
+          # Only consume non-local returns that target this method; let
+          # returns aimed at outer methods continue unwinding.
+          output.add("  except NonLocalReturnException as nlr:\n")
+          output.add("    if nlr.target == hardingHome:\n")
+          output.add("      return nlr.value\n")
+          output.add("    raise\n")
+        if hasHomeBlocks:
+          output.add("  finally:\n")
+          output.add("    hardingHome.active = false\n")
+      else:
+        output.add("  return self\n")
     
-    output.add("\n\n")
+      output.add("\n\n")
     
     # Add registration call
     let registrationProc = if md.isClassMethod: "registerCompiledClassMethod" else: "registerCompiledMethod"

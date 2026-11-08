@@ -51,7 +51,9 @@ kernel. It uses the existing class-side Integer-region planner; no macro or
 hand-written Harding method replacement is required.
 
 The complete generated module is **not** fully unboxed: it includes library
-registration, startup, a dynamic method body and a guarded call boundary. If
+registration, startup, a dynamic method body and a guarded call boundary.
+The test uses a result within signed 64-bit range; it does not establish overflow
+parity for arbitrary limits. If
 the class/method registration no longer matches, the call uses ordinary dispatch.
 Printing also remains a Harding operation. This is an example of a contiguous
 native region, not a claim that all Harding programs already compile this way.

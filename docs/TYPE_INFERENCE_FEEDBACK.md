@@ -1,7 +1,26 @@
 # Type inference and interpreter feedback
 
-Status: implemented as **advisory evidence**. Nothing here narrows storage,
-rewrites source, or changes a program's answer.
+Status: collection and reports provide **advisory evidence** by default.
+Guarded code generation can consume numeric candidates without narrowing storage.
+The explicit `--trust-observed-types` option described below can narrow storage;
+source rewriting and automatic sibling metadata discovery are not implemented.
+
+## Development and deployment direction
+
+Keep programmer-declared slot contracts separate from inferred/observed hints.
+The former remain checked language contracts. The latter should be revisable
+metadata in sibling files, so Bona can analyze a dynamically written program
+and collect evidence during tests without making exploratory interpreter writes
+fail. The existing explicit JSON feedback path is the foundation; automatic
+sibling-file discovery and parameter/block observation collection are not yet
+implemented.
+
+Safe compilation must check speculative assumptions and retain dynamic fallback.
+A future explicitly trusted deployment mode can assume validated hints, but that
+must not silently imply immutable methods, accessor registrations or receiver
+layouts. Those are separate assumptions. Observations are evidence, not a proof
+that a type can never change; missing, conflicting and stale evidence must remain
+visible to the developer.
 
 ## Static candidates
 

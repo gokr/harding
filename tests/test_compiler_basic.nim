@@ -742,6 +742,47 @@ suite "Compiler: Conservative numeric representations":
     check code.contains("var limit {.cursor.} = (if args.len > 0: args[0]")
     check not code.contains("var total = NodeValue")
 
+  test "numeric parameter variants keep an entry guard and boxed fallback":
+    let (nodes, syntax) = parse("Counter := Object derive: #(). Counter>>advance: n [ | answer | answer := n + 1. ^answer ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "numeric_parameter")
+    check code.contains("hardingNative_n: int")
+    check code.contains("not hostRoutingActive() and args.len > 0 and args[0].kind == vkInt")
+    check code.contains("answer = (n + 1)")
+    check code.contains("var n {.cursor.}")
+    let mixed = genModule(compiler, nodes, "numeric_parameter_mixed", mixed = true)
+    check not mixed.contains("hardingNative_n: int")
+
+  test "typed getters fuse with native parameters behind layout and method guards":
+    let (nodes, syntax) = parse("Position := Object derivePublic: #{coordinate -> Integer}. User := Object derive: #(). User>>distance: n to: point [ ^n - point coordinate ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "numeric_getter")
+    check code.contains("_numericGuard(hardingGetterReceiver)")
+    check code.contains("hardingGetterOperand - " & mangleClass("Position") & "(hardingGetterReceiver.instVal.compiledOwner)[].coordinate")
+    check code.contains("canDirectCompiledSend(receiver,")
+    check code.contains("_direct_coordinate_guard(receiver)")
+    check code.contains("cachedSendBound(self, hardingGetterReceiver, \"coordinate\", [])")
+
+  test "assigned and captured parameters do not specialize":
+    for source in [
+      "Counter := Object derive: #(). Counter>>advance: n [n := n + 1. ^n].",
+      "Counter := Object derive: #(). Counter>>advance: n [ ^[n + 1] ]."]:
+      let (nodes, _) = parse(source)
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "numeric_parameter_excluded")
+      check not code.contains("hardingNative_n: int): NodeValue")
+
+  test "parameter specialization cannot treat a receiver slot as a native local":
+    let (nodes, syntax) = parse("Counter := Object derive: #(amount). Counter>>advance: n [amount := 0. ^n + amount].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "numeric_parameter_slot")
+    check code.contains("hardingNative_n: int")
+    check not code.contains("var amount = 0")
+    check not code.contains("intVal: (n + amount)")
+
   test "mixed-mode methods retain boxed temporaries":
     let (nodes, _) = parse("Counter := Object derive: #(). Counter>>probe [ | k | k := 0. k := k + 1. ^ k ].")
     var ctx = newCompiler()

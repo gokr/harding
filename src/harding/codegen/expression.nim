@@ -19,6 +19,9 @@ type
     className*: string     ## Class name (e.g., "Person", "Array", etc.)
     isNativeClass*: bool   ## Whether this is a native compiled class
 
+  NumericGetter* = object
+    owner*, slot*, guard*: string
+
   GenContext* = ref object
     cls*: ClassInfo
     inBlock*: bool
@@ -40,6 +43,7 @@ type
     ## native arithmetic. Storage is never narrowed, so a wrong candidate costs
     ## speed and never correctness.
     inferredNumericSlots*: Table[string, NumericRepresentation]
+    numericGetters*: Table[string, NumericGetter]
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
     integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
     ## "Class>>selector" -> native entry for a class method whose body provably
@@ -300,6 +304,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result = newGenContext(ctx.cls, ctx.compiledClasses, ctx.classInfo, ctx.mixed)
   result.inMethod = ctx.inMethod
   result.directSendCandidates = ctx.directSendCandidates
+  result.numericGetters = ctx.numericGetters
   result.integerSendCandidates = ctx.integerSendCandidates
   result.staticClassCalls = ctx.staticClassCalls
   result.inBlock = ctx.inBlock
@@ -369,7 +374,10 @@ proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
 
   # Check if it's a parameter
   if name in ctx.parameters:
-    return bindingTarget(ctx, name)
+    case ctx.numericBindings.getOrDefault(name, nrDynamic)
+    of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {mangleIdentifier(name)})")
+    of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {mangleIdentifier(name)})")
+    else: return bindingTarget(ctx, name)
 
   # Check if it's a local variable
   if name in ctx.locals:
@@ -1013,8 +1021,49 @@ proc numericSlotNames(ctx: GenContext, node: Node): seq[string] =
       for name in numericSlotNames(ctx, arg):
         if name notin result: result.add(name)
 
+proc numericGetterArithmetic(ctx: GenContext, node: Node): string =
+  ## Fuse a guarded Integer getter into arithmetic on a native numeric operand.
+  ## The receiver expression is evaluated once; a replaced method or accessor
+  ## takes the ordinary send without repeating receiver side effects.
+  if ctx.mixed or node == nil or node.kind != nkMessage: return ""
+  let message = node.MessageNode
+  if message.arguments.len != 1 or
+     message.selector notin ["+", "-", "*", "<", "<=", ">", ">=", "="]: return ""
+  for getterOnLeft in [true, false]:
+    let getterNode = if getterOnLeft: message.receiver else: message.arguments[0]
+    let other = if getterOnLeft: message.arguments[0] else: message.receiver
+    if getterNode == nil or getterNode.kind != nkMessage or other == nil or
+       other.kind notin {nkIdent, nkLiteral} or
+       numericKind(other, ctx.numericBindings) != nrInt: continue
+    let getter = getterNode.MessageNode
+    if getter.arguments.len != 0 or getter.selector notin ctx.numericGetters: continue
+    let info = ctx.numericGetters[getter.selector]
+    let receiver = genExpression(ctx, getter.receiver)
+    let nativeOther = "hardingGetterOperand"
+    let field = mangleClass(info.owner) & "(hardingGetterReceiver.instVal.compiledOwner)[]." & mangleSlot(info.slot)
+    let left = if getterOnLeft: field else: nativeOther
+    let right = if getterOnLeft: nativeOther else: field
+    let op = if message.selector == "=": "==" else: message.selector
+    let kind = if message.selector in ["+", "-", "*"]: "vkInt" else: "vkBool"
+    let tag = if kind == "vkInt": "intVal" else: "boolVal"
+    let getterValue = genSend(ctx, "hardingGetterReceiver", getter.selector, @[])
+    let boxedOther = "NodeValue(kind: vkInt, intVal: hardingGetterOperand)"
+    let fallbackLeft = if getterOnLeft: getterValue else: boxedOther
+    let fallbackRight = if getterOnLeft: boxedOther else: getterValue
+    let fallback = genHostedBuiltin(ctx, fallbackLeft, message.selector,
+                                    mangleSelector(message.selector), @[fallbackRight])
+    let operandBinding = "    let hardingGetterOperand = " & nativeNumericExpression(ctx, other) & "\n"
+    let receiverBinding = "    let hardingGetterReceiver = " & receiver & "\n"
+    return "(block:\n" & (if getterOnLeft: receiverBinding & operandBinding else: operandBinding & receiverBinding) &
+      "    if not hostRoutingActive() and " & info.guard & "(hardingGetterReceiver):\n" &
+      "      NodeValue(kind: " & kind & ", " & tag & ": (" & left & " " & op & " " & right & "))\n" &
+      "    else:\n" & indentBlock(fallback, 6).strip(leading = false, trailing = true) & ")"
+
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
+
+  let getterArithmetic = numericGetterArithmetic(ctx, node)
+  if getterArithmetic.len > 0: return getterArithmetic
 
   if node == nil:
     return "NodeValue(kind: vkNil)"
