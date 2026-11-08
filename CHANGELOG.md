@@ -15,6 +15,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Numeric binding analysis follows inlined branches, loops and literal control blocks, so a counter assigned inside an inlined `ifFalse:` becomes a native Nim `int`. Pinned 21-trial pairs: Queens 2.70% less time (21/21), DeltaBlue neutral, Richards 0.99% more time (4/21) where native values are re-boxed for dynamic sends.
 - Benchmarks declare Integer slots in `derive:` so the guarded native slot arithmetic can be measured against an untyped baseline.
 - Granite skips exception-ancestry lookup for selectors outside the built-in exception protocol; pinned local ARC pairs measured 1.84%/3.98%/5.65% less time on Richards/DeltaBlue/Queens (`docs/GRANITE_PROFILE_SLICE.md`).
 - Generated code now uses the per-site send cache for inline and guarded sends (`cachedSendBound`), and the inline operator path tests for a bound host before building an argument buffer. Paired local ARC runs: Richards 29.16→21.57, DeltaBlue 26.07→22.17, Queens 74.95→51.22 ms/pass (−21.5%/−5.7%/−24.4%); cumulative since the baseline is −40%/−32%/−52%. Granite parity 117/117, boundary and runtime tests pass under ARC/ORC (`docs/GRANITE_PROFILE_SLICE.md`).

@@ -46,8 +46,15 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
   ## Any lexical shadowing excludes the name throughout this conservative pass.
   ## A nonempty localNames list restricts candidates before dependency analysis.
   var candidates = initTable[string, NumericRepresentation]()
-  for node in body:
-    if node != nil and node.kind == nkAssign:
+
+  # Discovery follows the same regions the emitter inlines: branches, loops and
+  # literal control blocks are emitted into the enclosing Nim scope, so an
+  # assignment written there initializes the same local. A block that can escape
+  # (`[...]` passed anywhere else) is a closure and is not entered.
+  proc discover(node: Node, inlined: bool) =
+    if node == nil: return
+    case node.kind
+    of nkAssign:
       let assignment = node.AssignNode
       let name = assignment.variable
       if name.len > 0 and name[0] in {'a'..'z'} and name notin captured and
@@ -55,6 +62,46 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
         let kind = numericKind(assignment.expression, candidates)
         if kind in {nrInt, nrFloat}:
           candidates[name] = kind
+      discover(assignment.expression, inlined)
+    of nkIf:
+      discover(node.IfNode.condition, inlined)
+      discover(node.IfNode.thenBranch, inlined or not hasReturnNode(node.IfNode.thenBranch))
+      discover(node.IfNode.elseBranch, inlined or not hasReturnNode(node.IfNode.elseBranch))
+    of nkWhile:
+      discover(node.WhileNode.condition, inlined or not hasReturnNode(node.WhileNode.condition))
+      discover(node.WhileNode.body, inlined or not hasReturnNode(node.WhileNode.body))
+    of nkMessage:
+      let message = node.MessageNode
+      let inlineControl = message.selector in ["ifTrue:", "ifFalse:", "ifTrue:ifFalse:",
+        "whileTrue:", "whileFalse:", "timesRepeat:"]
+      discover(message.receiver, inlineControl and not hasReturnNode(message.receiver))
+      for argument in message.arguments:
+        discover(argument, inlineControl and not hasReturnNode(argument))
+    of nkBlock:
+      if inlined:
+        for statement in node.BlockNode.body: discover(statement, true)
+    of nkLiteral:
+      if node.LiteralNode.value.kind == vkBlock and inlined:
+        let inlineBlockNode = node.LiteralNode.value.blockVal
+        if inlineBlockNode != nil:
+          for statement in inlineBlockNode.body: discover(statement, true)
+    of nkReturn:
+      discover(node.ReturnNode.expression, inlined)
+    of nkArray:
+      for element in node.ArrayNode.elements: discover(element, inlined)
+    of nkTable:
+      for entry in node.TableNode.entries:
+        discover(entry[0], inlined)
+        discover(entry[1], inlined)
+    of nkNamedAccess:
+      discover(node.NamedAccessNode.receiver, inlined)
+      discover(node.NamedAccessNode.valueExpr, inlined)
+    of nkSlotAccess:
+      discover(node.SlotAccessNode.valueExpr, inlined)
+    else: discard
+
+  for node in body:
+    discover(node, false)
 
   var rejected = initHashSet[string]()
   proc inspect(node: Node, initialized: var HashSet[string], inlineBlock = false) =
@@ -128,8 +175,21 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
         inspect(argument, initialized)
     of nkLiteral:
       if node.LiteralNode.value.kind == vkBlock:
-        for name in candidates.keys:
-          rejected.incl(name)
+        # An inline control block arrives as a block-valued literal (the parser
+        # wraps `[...]` arguments this way), and its statements are emitted into
+        # the enclosing Nim scope, so its assignments are as definite as the
+        # surrounding ones. Anything else is a closure that can outlive the call:
+        # no candidate is definite across it.
+        let inlineBlockNode = node.LiteralNode.value.blockVal
+        if inlineBlock and inlineBlockNode != nil:
+          for name in inlineBlockNode.parameters & inlineBlockNode.temporaries:
+            rejected.incl(name)
+          var blockInitialized = initialized
+          for statement in inlineBlockNode.body:
+            inspect(statement, blockInitialized)
+        else:
+          for name in candidates.keys:
+            rejected.incl(name)
     else:
       discard
 

@@ -737,7 +737,8 @@ suite "Compiler: Conservative numeric representations":
     let code = genModule(ctx, nodes, "numeric_method")
     check code.contains("var total = 0")
     check code.contains("var k = 0")
-    check code.contains("intVal: (total + k)")
+    check code.contains("total = (total + k)")
+    check not code.contains("intVal: (total")
     check code.contains("var limit {.cursor.} = (if args.len > 0: args[0]")
     check not code.contains("var total = NodeValue")
 
@@ -775,7 +776,8 @@ suite "Compiler: Conservative numeric representations":
     check bindings.getOrDefault("i") == nrInt
     var ctx = newCompiler()
     let code = genModule(ctx, nodes, "native_numbers")
-    check code.contains("intVal: (total + i)")
+    check code.contains("total = (total + i)")
+    check not code.contains("intVal: (total")
     check not code.contains("nt_plus(total")
 
   test "dependent numeric locals unbox only while dependencies stay proven":

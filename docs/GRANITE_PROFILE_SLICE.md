@@ -1,5 +1,46 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Inlined-branch locals become native Nim
+
+Numeric binding analysis only discovered assignments written directly in a
+method body, and only tracked them through `nkBlock` regions. Inline control
+blocks arrive from the parser as **block-valued literals** (`nkLiteral` with
+`vkBlock`), and that branch rejected every candidate unconditionally - so a
+loop counter assigned inside an inlined `ifFalse:` was never even considered.
+Discovery now follows the same regions the emitter inlines (branches, loops,
+literal control blocks without non-local returns) and treats only genuinely
+escaping closures as opaque.
+
+Native locals also no longer box a value they immediately unbox: when target and
+expression are both proven numeric, the emitted assignment is the plain Nim
+expression. Queens' hot method changed from a boxed counter assigned through
+`(NodeValue(kind: vkInt, intVal: 0)).intVal` and a `while isTruthy(...)` test to:
+
+```nim
+var column = 0
+while (column < 8):
+  column = (column + 1)
+```
+
+`total` in the same method stays dynamic, correctly: it sums a recursive send
+whose result is not proven numeric.
+
+Pinned alternating pairs, 21 trials, idle host (`build/inline-numeric-pinned2.log`,
+baseline `run-2vho6bzq`, candidate `run-mgrjc_rh`):
+
+| Workload | Before | After | Result |
+|---|---:|---:|---|
+| Richards | 17.144 | 17.363 | 0.99% more time, 4/21 pairs |
+| DeltaBlue | 18.973 | 19.077 | 0.19% (noise), 9/21 |
+| Queens | 37.020 | 36.137 | **2.70% less time, 21/21** |
+
+Queens is a consistent gain. Richards is a small consistent regression: its hot
+paths pass native values into dynamic sends, so each such use now constructs a
+`NodeValue` where it previously passed an already-boxed local. Recorded rather
+than hidden; unboxing method parameters is what removes that cost.
+
+Compiler (103), runtime (47) and engine-boundary (39) suites pass under ARC and ORC.
+
 ## Static slot evidence reaches the guarded native path
 
 The guarded numeric path was only enabled for `static+observations`, so a

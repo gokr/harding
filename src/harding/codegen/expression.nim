@@ -570,6 +570,19 @@ proc nativeNumericExpression(ctx: GenContext, node: Node): string =
   else:
     return ""
 
+proc nativeAssignmentValue(ctx: GenContext, name: string, expr: Node,
+                            exprCode: string): string =
+  ## A native local must not be assigned a boxed value it immediately unboxes.
+  ## When the target and the expression are both proven numeric, emit the plain
+  ## Nim expression; otherwise keep the boxed form and its unboxing.
+  let target = ctx.numericBindings.getOrDefault(name, nrDynamic)
+  if target in {nrInt, nrFloat} and
+     numericKind(expr, ctx.numericBindings) == target:
+    let native = nativeNumericExpression(ctx, expr)
+    if native.len > 0:
+      return native
+  bindingAssignmentValue(ctx, name, exprCode)
+
 proc nativeBoolCondition(ctx: GenContext, node: Node): string =
   ## A raw `bool` expression when the condition is provably Boolean. Boxing a
   ## bool into a NodeValue and calling isTruthy on every loop iteration is pure
@@ -1085,7 +1098,7 @@ proc genExpression*(ctx: GenContext, node: Node): string =
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
+      return fmt("{bindingTarget(ctx, varName)} = {nativeAssignmentValue(ctx, varName, assign.expression, exprCode)}")
 
     # A Harding global (typically a top-level uppercase variable) assigns the
     # shared binding so main, methods and blocks all observe the same value.
@@ -1263,7 +1276,7 @@ proc genStatement*(ctx: GenContext, node: Node): string =
 
     # Check if it's a local variable (reassignment)
     if ctx.isLocal(varName):
-      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
+      return fmt("{bindingTarget(ctx, varName)} = {nativeAssignmentValue(ctx, varName, assign.expression, exprCode)}")
 
     # A Harding global assigns the shared binding; in statement position the
     # returned value is discarded.
@@ -1717,7 +1730,7 @@ proc genTopLevelStatement*(ctx: GenContext, node: Node): string =
 
     # Reassignment of an existing script-local variable
     if varName in ctx.locals:
-      return fmt("{bindingTarget(ctx, varName)} = {bindingAssignmentValue(ctx, varName, exprCode)}")
+      return fmt("{bindingTarget(ctx, varName)} = {nativeAssignmentValue(ctx, varName, assign.expression, exprCode)}")
 
     # New top-level variable: a local of main, visible to blocks nested in main.
     ctx.locals.add(varName)
