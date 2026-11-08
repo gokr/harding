@@ -1,5 +1,35 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Unobserved result write-backs are omitted
+
+A method-wide identifier-read count is compared with reads rewritten inside a
+native getter region. If all reads of a result occur in that prefix/condition,
+its native value need not be copied back to the outer boxed local. Captured
+bindings are already excluded; missing scope information retains the store.
+Any read in a branch, subsequent statement, return, nested closure or other
+region conservatively retains it. This is a limited liveness proof, not general
+dead-store elimination across control flow.
+
+Generated-code comparison shows exactly two deleted assignments in Queens:
+`distance = NodeValue(...)` and `delta = NodeValue(...)`. Richards and DeltaBlue
+have byte-identical generated Nim before and after this change.
+
+Pinned 21-pair trials against `run-yzy8gufu`, candidate `run-k7uq6tkw`:
+`build/live-pinned.log` found Queens 1.99% faster (15/21),
+`build/live-pinned2.log` found 2.89% faster (16/21). Richards was within noise;
+DeltaBlue measured 2.24% and 0.76% slower despite identical generated code.
+Consequently this is evidence of a smaller Queens gain, with no performance
+claim for the other workloads. Marginal Queens medians in the second run were
+35.904→35.609 ms/pass; percentages are median paired reductions.
+
+Focused suites pass under ARC and ORC: compiler (111), runtime (47), boundary
+(39), stdlib compilation (6), and slot inference. All three generated benchmark
+programs also run 30 answer-checked passes under release ORC. Executed region
+regressions preserve branch, loop-condition and returned-result observations;
+direct-slot integration exercises both managers. The broad parity sweep passes
+123/123 (`build/live-full-parity.log`), with the subsequently expanded
+loop-condition case also passing separately under ARC and ORC.
+
 ## Getter results remain native through the following conditional
 
 The next region pass recognizes a pure assignment prefix of an inlined block

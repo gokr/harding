@@ -47,7 +47,18 @@ RegionEffect>>doesNotUnderstand: selector [ calls := calls + 1. ^2.5 ].
 e := RegionEffect new.
 (u check: 10 point: e) println.
 (e calls) println.
-""", '#(true 6 6)\n#(true 7.5 7.5)\n8.5\n#(true 7.5 7.5)\n4\n'),
+RegionUser>>conditionRead: n point: point [
+  | difference i |
+  difference := 1. i := 0.
+  [difference > 0] whileTrue: [
+    difference := n - point height.
+    difference = 0 ifTrue: [i := i + 1].
+    i := i + 1
+  ].
+  ^array{difference, i}
+].
+(u conditionRead: 4 point: p) println.
+""", '#(true 6 6)\n#(true 7.5 7.5)\n8.5\n#(true 7.5 7.5)\n4\n#(0 2)\n'),
     ("numeric_getter_arithmetic", """
 TypedGetter := Object derivePublic: #{number -> Integer}.
 GetterUser := Object derivePublic: #(calls).

@@ -773,7 +773,25 @@ suite "Compiler: Conservative numeric representations":
     let alias = mangleIdentifier("hardingRegion_difference")
     check code.contains("let " & alias & " = (n - ")
     check code.contains("if (" & alias & " == 0):")
-    check code.contains("difference = NodeValue(kind: vkInt, intVal: " & alias)
+    check not code.contains("difference = NodeValue(kind: vkInt, intVal: " & alias)
+
+  test "getter result writebacks remain when observable after the region":
+    for extraRead in ["^difference", "^array{answer, difference}"]:
+      let (nodes, syntax) = parse("Position := Object derivePublic: #{coordinate -> Integer}. User := Object derive: #(). User>>check: n point: point [ | difference answer | answer := false. [false] whileTrue: [difference := n - point coordinate. difference = 0 ifTrue: [answer := true]]. " & extraRead & " ].")
+      require not syntax.hasError
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "numeric_region_live")
+      check code.contains("difference = NodeValue(kind: vkInt, intVal: " & mangleIdentifier("hardingRegion_difference"))
+
+  test "getter result writebacks remain for branch and loop condition reads":
+    for control in [
+      "[false] whileTrue: [difference := n - point coordinate. difference = 0 ifTrue: [answer := difference]]",
+      "[difference > 0] whileTrue: [difference := n - point coordinate. difference = 0 ifTrue: [answer := true]]"]:
+      let (nodes, syntax) = parse("Position := Object derivePublic: #{coordinate -> Integer}. User := Object derive: #(). User>>check: n point: point [ | difference answer | answer := false. " & control & ". ^answer ].")
+      require not syntax.hasError
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "numeric_region_live_branch")
+      check code.contains("difference = NodeValue(kind: vkInt, intVal: " & mangleIdentifier("hardingRegion_difference"))
 
   test "getter result regions refuse computed receivers and captured results":
     for prefix in ["difference := n - (point next) coordinate.",

@@ -38,6 +38,7 @@ type
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
     numericBindings*: NumericBindings ## Proven lexical native representations
+    methodReadCounts*: Table[string, int]
     suppressSlotArithmetic: bool
     ## Advisory inference results: slot name -> kind, used only to emit *guarded*
     ## native arithmetic. Storage is never narrowed, so a wrong candidate costs
@@ -313,6 +314,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.blockRegistry = ctx.blockRegistry
   result.varTypes = ctx.varTypes
   result.numericBindings = ctx.numericBindings
+  result.methodReadCounts = ctx.methodReadCounts
   result.globals = ctx.globals
   result.cellNames = ctx.cellNames
   for name in ctx.locals:
@@ -1070,7 +1072,7 @@ proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
      blk.parameters.len > 0 or ctx.numericGetters.len == 0: return ""
   var names: seq[string]
   var guards: seq[string]
-  var prefix = ""
+  var prefix: seq[string]
   var bindings = ctx.numericBindings
   var aliases: Table[string, string]
   var receivers: seq[string]
@@ -1122,7 +1124,6 @@ proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
     bindings[alias] = nrInt
     names.add(name)
     prefix.add("let " & mangleIdentifier(alias) & " = " & value & "\n")
-    prefix.add(bindingTarget(ctx, name) & " = NodeValue(kind: vkInt, intVal: " & mangleIdentifier(alias) & ")\n")
   let count = names.len
   if count == 0 or guards.len == 0 or count >= blk.body.len or
      blk.body[count].kind != nkIf: return ""
@@ -1153,7 +1154,20 @@ proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
   let nativeCtx = inlineBlockContext(ctx, blk)
   nativeCtx.numericBindings = bindings
   for name in aliases.values: nativeCtx.locals.add(name)
-  var optimized = prefix
+  var coveredNodes: seq[Node]
+  for i in 0..<count:
+    coveredNodes.add(blk.body[i].AssignNode.expression)
+  coveredNodes.add(conditional.condition)
+  let coveredReads = identifierReadCounts(coveredNodes)
+  var optimized = ""
+  for index, name in names:
+    optimized.add(prefix[index])
+    # A read outside the rewritten prefix/condition may observe the outer
+    # binding, including on later iterations. Unknown scope counts keep stores.
+    if name notin ctx.methodReadCounts or
+       ctx.methodReadCounts[name] != coveredReads.getOrDefault(name):
+      optimized.add(bindingTarget(ctx, name) & " = NodeValue(kind: vkInt, intVal: " &
+        mangleIdentifier(aliases[name]) & ")\n")
   # Branches can assign the outer variables; only the condition uses aliases.
   let conditionCode = genExpression(nativeCtx, condition)
   let clause = conditionClause(nativeCtx, condition, conditionCode)

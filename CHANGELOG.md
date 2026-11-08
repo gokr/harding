@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Native getter regions omit boxed result write-backs when every read is inside the rewritten region, retaining stores for externally observed locals.
 - Granite keeps guarded typed-getter results native through following numeric branch conditions. Outer locals and dynamic fallbacks remain intact; pinned local Queens pairs measured 16.55% less time (19/21 improving pairs).
 - Granite emits checked native-Integer parameter variants and fuses typed getter arithmetic with native operands, retaining dynamic fallbacks for other argument kinds, receiver layouts and replaced accessors/methods.
 - Numeric binding analysis follows inlined branches, loops and literal control blocks, so a counter assigned inside an inlined `ifFalse:` becomes a native Nim `int`. Pinned 21-trial pairs: Queens 2.70% less time (21/21), DeltaBlue neutral, Richards 0.99% more time (4/21) where native values are re-boxed for dynamic sends.

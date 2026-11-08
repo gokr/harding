@@ -39,6 +39,17 @@ proc numericKind*(node: Node, bindings: NumericBindings): NumericRepresentation 
     discard
   return nrDynamic
 
+proc identifierReadCounts*(body: seq[Node]): Table[string, int] =
+  ## Count lexical reads, including nested blocks. Assignment targets are not
+  ## reads; their expressions are visited by nodeChildren.
+  proc visit(node: Node, counts: var Table[string, int]) =
+    if node == nil: return
+    if node.kind == nkIdent:
+      let name = node.IdentNode.name
+      counts[name] = counts.getOrDefault(name) + 1
+    for child in nodeChildren(node): visit(child, counts)
+  for node in body: visit(node, result)
+
 proc numericParameterCandidates*(body: seq[Node], parameters: seq[string],
                                  excluded: seq[string]): NumericBindings =
   ## Numeric use suggests an Integer specialization, not a type proof. Callers

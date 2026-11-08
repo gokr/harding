@@ -670,6 +670,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.staticClassCalls = staticClassCalls
 
         genCtx.cellNames = methodCellNames
+        genCtx.methodReadCounts = identifierReadCounts(body)
         if blockReg != nil:
           genCtx.blockRegistry = blockReg
       
