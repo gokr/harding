@@ -79,6 +79,19 @@ class PracticalBenchmarkPorts(unittest.TestCase):
         node = pyport.Parser('2 + 3 * 4').expr()
         self.assertEqual(eval(pyport.Generator([], []).expr(node)), 20)
 
+    def test_python_slot_tables_preserve_class_identity_and_order(self):
+        source = 'Point := Object derivePublic: #{#row -> Integer, column -> Integer, previous}. '
+        program = pyport.definitions(source)
+        namespace = {}
+        exec(program, namespace)
+        point = namespace['Point']()
+        self.assertEqual(list(point.__dict__), ['_slot_row', '_slot_column', '_slot_previous'])
+        for bad in ['P := Object derive: #{x -> Unknown}.',
+                    'P := Object derive: #{x -> Integer',
+                    'P := Object derive: #{x -> Integer y -> Integer}.']:
+            with self.subTest(source=bad), self.assertRaises(ValueError):
+                pyport.definitions(bad)
+
     def test_invalid_and_unsupported_input_fails_instead_of_hanging(self):
         for source in ('P := Object derive: #(x', 'P := Object derive: #(). P>>m [| unterminated',
                        'P := Object derive: #(). P>>m [x := @].'):

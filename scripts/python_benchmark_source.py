@@ -213,12 +213,33 @@ def definitions(source):
         else:
             tokens.pop(':=')
             if tokens.pos + 1 < len(tokens.tokens) and tokens.tokens[tokens.pos + 1] in ['derive:', 'derivePublic:']:
-                parent, derive = tokens.pop(), tokens.pop(); tokens.pop('#'); tokens.pop('(')
+                parent, derive = tokens.pop(), tokens.pop(); tokens.pop('#')
+                opening = tokens.pop()
+                if opening not in ['(', '{']:
+                    raise ValueError('unsupported slot declaration: ' + opening)
                 slots = []
-                while tokens.peek() != ')':
-                    if tokens.peek() == ',': tokens.pop()
-                    else: slots.append(tokens.pop())
-                tokens.pop(')')
+                if opening == '(':
+                    while tokens.peek() != ')':
+                        if tokens.peek() == ',': tokens.pop()
+                        else: slots.append(tokens.pop())
+                    tokens.pop(')')
+                else:
+                    # Declared primitive slot types affect representation, not
+                    # this mechanically translated benchmark's algorithm.
+                    while tokens.peek() != '}':
+                        if tokens.peek() == '#': tokens.pop()
+                        slot_name = tokens.pop()
+                        if not re.fullmatch(r'[A-Za-z_]\w*', slot_name):
+                            raise ValueError('unsupported slot key: ' + slot_name)
+                        slots.append(slot_name)
+                        if tokens.peek() == '-':
+                            tokens.pop('-'); tokens.pop('>')
+                            hint = tokens.pop()
+                            if hint not in ['Integer', 'Float', 'Boolean', 'String', 'nil']:
+                                raise ValueError('unsupported slot hint: ' + hint)
+                        if tokens.peek() == ',': tokens.pop()
+                        elif tokens.peek() != '}': raise ValueError('missing slot comma')
+                    tokens.pop('}')
                 classes[name] = (parent, slots, derive == 'derivePublic:')
             else:
                 expr = tokens.expr(); globals_.append((name, expr))
