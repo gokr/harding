@@ -1,0 +1,16 @@
+# The numeric kernel compiles to a Nim procedure with an int parameter,
+# int locals and an int result. The Harding entry retains dynamic dispatch.
+SumSquares := Object derive: #().
+
+SumSquares class>>sumTo: limit [
+  | index total |
+  index := 1.
+  total := 0.
+  [index <= limit] whileTrue: [
+    total := total + (index * index).
+    index := index + 1
+  ].
+  ^total
+].
+
+(SumSquares sumTo: 10000) println.
