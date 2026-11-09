@@ -20,7 +20,7 @@ type
     isNativeClass*: bool   ## Whether this is a native compiled class
 
   NumericGetter* = object
-    owner*, slot*, guard*: string
+    owner*, slot*, guard*, referenceGuard*: string
 
   ObjectGetter* = object
     owner*, slot*, guard*, className*: string
@@ -1120,6 +1120,38 @@ proc numericGetterArithmetic(ctx: GenContext, node: Node): string =
   let message = node.MessageNode
   if message.arguments.len != 1 or
      message.selector notin ["+", "-", "*", "<", "<=", ">", ">=", "="]: return ""
+  # Two entry-guarded object parameters can supply native Integer operands.
+  # Restrict receivers to immutable parameters: no callback may run between
+  # method/layout validation and the field reads.
+  let leftNode = message.receiver
+  let rightNode = message.arguments[0]
+  if leftNode != nil and leftNode.kind == nkMessage and rightNode.kind == nkMessage:
+    let leftGetter = leftNode.MessageNode
+    let rightGetter = rightNode.MessageNode
+    if leftGetter.arguments.len == 0 and rightGetter.arguments.len == 0 and
+       leftGetter.selector in ctx.numericGetters and rightGetter.selector in ctx.numericGetters and
+       leftGetter.receiver != nil and leftGetter.receiver.kind == nkIdent and
+       rightGetter.receiver != nil and rightGetter.receiver.kind == nkIdent and
+       leftGetter.receiver.IdentNode.name in ctx.objectBindings and
+       rightGetter.receiver.IdentNode.name in ctx.objectBindings:
+      let leftInfo = ctx.numericGetters[leftGetter.selector]
+      let rightInfo = ctx.numericGetters[rightGetter.selector]
+      if leftInfo.referenceGuard.len > 0 and rightInfo.referenceGuard.len > 0:
+        let leftReceiver = mangleIdentifier(leftGetter.receiver.IdentNode.name)
+        let rightReceiver = mangleIdentifier(rightGetter.receiver.IdentNode.name)
+        let leftField = mangleClass(leftInfo.owner) & "(" & leftReceiver & ".compiledOwner)[]." & mangleSlot(leftInfo.slot)
+        let rightField = mangleClass(rightInfo.owner) & "(" & rightReceiver & ".compiledOwner)[]." & mangleSlot(rightInfo.slot)
+        let op = if message.selector == "=": "==" else: message.selector
+        let kind = if message.selector in ["+", "-", "*"]: "vkInt" else: "vkBool"
+        let tag = if kind == "vkInt": "intVal" else: "boolVal"
+        let fallbackLeft = genSend(ctx, genSymbolAccess(ctx, leftGetter.receiver.IdentNode.name), leftGetter.selector, @[])
+        let fallbackRight = genSend(ctx, genSymbolAccess(ctx, rightGetter.receiver.IdentNode.name), rightGetter.selector, @[])
+        let fallback = genHostedBuiltin(ctx, fallbackLeft, message.selector,
+          mangleSelector(message.selector), @[fallbackRight])
+        return "(block:\n    if not hostRoutingActive() and " & leftInfo.referenceGuard & "(" & leftReceiver & ") and " &
+          rightInfo.referenceGuard & "(" & rightReceiver & "):\n      NodeValue(kind: " & kind & ", " & tag & ": (" &
+          leftField & " " & op & " " & rightField & "))\n    else:\n" &
+          indentBlock(fallback, 6).strip(leading = false, trailing = true) & ")"
   for getterOnLeft in [true, false]:
     let getterNode = if getterOnLeft: message.receiver else: message.arguments[0]
     let other = if getterOnLeft: message.arguments[0] else: message.receiver

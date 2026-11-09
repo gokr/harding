@@ -1,5 +1,41 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Getter-pair arithmetic and class-side reference parameters
+
+Reference inference now applies to class-side methods using getter receivers,
+without mistaking their metaclass receiver for an instance-slot owner. Two
+immutable entry-guarded reference parameters can supply native Integer getter
+operands. Both getter method identities and native storage accessors are checked
+before field reads; any failure runs ordinary getter sends left to right.
+No arbitrary receiver expressions or callbacks are moved across the guards.
+
+This reaches DeltaBlue's `DBStrength class>>stronger:than:` and `weaker:than:`:
+
+```nim
+# Shape with names shortened; result retains the dynamic method ABI.
+if rankReferenceGuard(left) and rankReferenceGuard(right):
+  NodeValue(kind: vkBool, boolVal:
+    Strength(left.compiledOwner)[].rank < Strength(right.compiledOwner)[].rank)
+else:
+  # Existing dynamic getter sends and comparison.
+```
+
+DeltaBlue's reference parameter count grows from seven to eleven, with two native
+getter-pair expressions in generated code. The repeated-result boxing has gone
+inside these expressions, but entry guards, class-method dispatch and the boxed
+result remain. Pinned 21-pair measurement versus `run-bvdxlsjj`, candidate
+`run-moqha29e` (`build/gp-pinned.log`) is neutral: Richards 0.12% slower (10/21),
+DeltaBlue 0.29% slower (8/21), Queens 0.28% faster (12/21). No speedup is claimed.
+
+Executed integration under ARC/ORC covers native operands, subclass fallback,
+Float-returning getter replacement, two side effects in left-to-right fallback
+order, accessor replacement and interpreter-bound class-side calls. The new
+getter-pair parity case also covers custom receivers and nil. Compiler (120),
+runtime (48), boundary (39), stdlib (6) and slot-inference (32) suites pass under
+both managers. Broad parity passes 129/129 (`build/gp-full-parity.log`). Generated
+benchmark programs verify 30 release-ORC passes each. This is not a full
+repository-suite claim.
+
 ## Getter receiver evidence and direct reference reads
 
 A unique generated getter now proposes its receiver class for a method parameter,

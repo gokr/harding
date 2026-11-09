@@ -743,9 +743,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           parameterKinds[name] = validated[name]
 
     var objectParameters: Table[string, string]
-    if not mixed and not md.isClassMethod and clsName in classInfo:
+    if not mixed and clsName in classInfo:
+      let receiverClass = if md.isClassMethod: nil else: classInfo[clsName]
       objectParameters = objectParameterCandidates(body, params, md.temporaries,
-        methodCellNames, classInfo[clsName], getterReceiverHints)
+        methodCellNames, receiverClass, getterReceiverHints)
       # Keep one variant per method; numeric and reference parameter seeds must
       # not assign two representations to the same lexical binding.
       for name in parameterKinds.keys:
@@ -764,6 +765,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       output.add(fmt("  if canDirectCompiledSend(receiver, {helper}_class, \"{getter}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver):\n"))
       output.add(fmt("    return {directRead}\n"))
       output.add(fmt("  cachedSendBound(owner, compiledObjectSlotValue(receiver), \"{getter}\", [])\n\n"))
+      if getter in numericGetters:
+        let referenceGuard = referenceCall & "_numericGuard"
+        numericGetters[getter].referenceGuard = referenceGuard
+        output.add(fmt("proc {referenceGuard}(receiver: Instance): bool {{.inline.}} =\n"))
+        output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+        output.add(fmt("  canDirectCompiledSend(receiver, {helper}_class, \"{getter}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver)\n\n"))
     let hasSpecialization = parameterKinds.len > 0 or objectParameters.len > 0
     let nativeName = procName & "_numeric"
     for variant in 0..(if hasSpecialization: 1 else: 0):

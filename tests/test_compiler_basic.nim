@@ -376,6 +376,17 @@ suite "Compiler: Analyzer":
       let code = genModule(compiler, nodes, "reference_getter_excluded")
       check not code.contains("hardingNative_candidate: Instance")
 
+  test "class-side getter pairs compare native fields behind reference guards":
+    let (nodes, syntax) = parse("Element := Object derivePublic: #{measure -> Integer}. Comparator := Object derive: #(). Comparator class>>less: left than: right [^left measure < right measure].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "class_getter_pair")
+    check code.contains("hardingNative_left: Instance, hardingNative_right: Instance")
+    check code.contains("_reference_numericGuard(left)")
+    check code.contains("_reference_numericGuard(right)")
+    check code.contains("(left.compiledOwner)[].measure < " & mangleClass("Element") & "(right.compiledOwner)[].measure")
+    check code.contains("cachedSendBound(self, compiledObjectSlotValue(left), \"measure\", [])")
+
   test "typed slot table matches an untyped list for slot order and names":
     let (typed, _) = parse("P := Object derive: #{#a -> Integer, #b -> Integer}.")
     let (plain, _) = parse("P := Object derive: #(a, b).")

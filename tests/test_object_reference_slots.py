@@ -13,6 +13,8 @@ RefHolder>>store: candidate [ item := candidate. ^candidate ].
 RefHolder>>storeInline: candidate [ true ifTrue: [item := candidate]. ^candidate ].
 RefHolder>>readCandidate: candidate [ item := candidate. ^candidate number ].
 RefHolder>>readOnly: candidate [ ^candidate number ].
+RefHolder class>>less: left than: right [ ^left number < right number ].
+RefHolder class>>difference: left from: right [ ^left number - right number ].
 RefHolder>>copyFrom: source [ item := source item. ^item ].
 RefHolder>>storeAfter: action value: candidate [ action value. item := candidate. ^item ].
 RefHolder>>conditional: candidate [ candidate = 7 ifTrue: [^123]. item := candidate. ^item ].
@@ -94,6 +96,9 @@ doAssert getSlotValue(source, "calls").intVal == 1
 let child = newCHILD().toValue()
 discard setSlotValue(child, "number", toValue(99))
 doAssert sendMessage(nil, holder, "readOnly:", [child]).intVal == 99
+let holderClass = compiledClassValue("RefHolder")
+doAssert sendMessage(nil, holderClass, "less:than:", [initial, child]).boolVal
+doAssert sendMessage(nil, holderClass, "difference:from:", [child, initial]).intVal == 57
 discard sendMessage(nil, holder, "item:", [child])
 doAssert sendMessage(nil, holder, "item", []).instVal == child.instVal
 doAssert getSlotValue(getSlotValue(holder, "item"), "number").intVal == 99
@@ -146,11 +151,28 @@ registerCompiledMethod("RefItem", "number", wrongGetter)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 9
 registerCompiledMethod("RefItem", "number", numberMethod)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 42
+var numberCalls = 0
+proc floatingNumber(receiver: NodeValue, args: openArray[NodeValue]): NodeValue =
+  inc numberCalls
+  toValue(2.5)
+registerCompiledMethod("RefItem", "number", floatingNumber)
+doAssert sendMessage(nil, holderClass, "difference:from:", [initial, initial]).floatVal == 0.0
+doAssert numberCalls == 2
+proc orderedNumber(receiver: NodeValue, args: openArray[NodeValue]): NodeValue =
+  inc numberCalls
+  toValue(float(numberCalls) + 0.5)
+numberCalls = 0
+registerCompiledMethod("RefItem", "number", orderedNumber)
+doAssert sendMessage(nil, holderClass, "difference:from:", [initial, initial]).floatVal == -1.0
+doAssert numberCalls == 2
+registerCompiledMethod("RefItem", "number", numberMethod)
+doAssert sendMessage(nil, holderClass, "difference:from:", [initial, initial]).intVal == 0
 proc wrongNumber(storage: pointer): NodeValue {.nimcall.} = toValue(3)
 let numberGetter = slotGetters["RefItem::number"]
 let numberSetter = slotSetters["RefItem::number"]
 registerSlotAccessor("RefItem", "number", wrongNumber, numberSetter)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 3
+doAssert sendMessage(nil, holderClass, "difference:from:", [initial, initial]).intVal == 0
 registerSlotAccessor("RefItem", "number", numberGetter, numberSetter)
 # A callback can replace the slot setter after the argument guard has run.
 var setterCalls = 0
@@ -203,6 +225,9 @@ doAssert copiedViaMethod.instVal == vmItem.instVal
 let (readViaMethod, readOnlyError) = interp.doit("NativeHolder readOnly: VmItem")
 doAssert readOnlyError.len == 0, readOnlyError
 doAssert readViaMethod.intVal == 17
+let (pairViaHost, pairHostError) = interp.doit("RefHolder difference: VmItem from: VmItem")
+doAssert pairHostError.len == 0, pairHostError
+doAssert pairViaHost.intVal == 0
 echo "ok"
 '''
             for label, name in [('HOLDERCHILD', 'RefHolderChild'), ('HOLDER', 'RefHolder'),

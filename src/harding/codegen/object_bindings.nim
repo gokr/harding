@@ -9,7 +9,6 @@ proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
   ## representations, not proofs.
   ## Entry guards must establish the argument's class (or nil). Mutation,
   ## captures, lexical shadowing and conflicting slot contracts exclude a name.
-  if cls == nil: return
   var candidates: Table[string, string]
   var rejected = excluded.toHashSet()
   proc visit(node: Node) =
@@ -27,7 +26,7 @@ proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
       let access = node.SlotAccessNode
       if access.isAssignment:
         slotName = access.slotName
-        if slotName.len == 0:
+        if slotName.len == 0 and cls != nil:
           for slot in cls.getAllSlots():
             if slot.index == access.slotIndex: slotName = slot.name
         value = access.valueExpr
@@ -51,7 +50,7 @@ proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
         for name in literal.blockVal.parameters & literal.blockVal.temporaries:
           rejected.incl(name)
     else: discard
-    if slotName.len > 0 and value != nil and value.kind == nkIdent:
+    if cls != nil and slotName.len > 0 and value != nil and value.kind == nkIdent:
       let name = value.IdentNode.name
       let slot = cls.getSlotDef(slotName)
       if name in parameters and slot.constraint == tcObject and slot.objectClass.len > 0:

@@ -8,6 +8,23 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("reference_getter_pair_arithmetic", """
+PairElement := Object derivePublic: #{measure -> Integer}.
+PairChild := PairElement derivePublic: #(extra).
+PairCompare := Object derive: #().
+PairCompare class>>less: left than: right [ ^left measure < right measure ].
+PairCompare class>>difference: left from: right [ ^left measure - right measure ].
+PairOther := Object derive: #().
+PairOther>>doesNotUnderstand: selector [ ^2.5 ].
+a := PairElement new measure: 7.
+b := PairElement new measure: 9.
+c := PairChild new measure: 11.
+(PairCompare less: a than: b) println.
+(PairCompare difference: b from: a) println.
+(PairCompare difference: c from: a) println.
+(PairCompare difference: PairOther new from: a) println.
+[PairCompare difference: nil from: a] on: Error do: [:e | "nil fallback" println].
+""", 'true\n2\n4\n-4.5\nnil fallback\n'),
     ("reference_getter_receiver", """
 GetterElement := Object derivePublic: #{measure -> Integer}.
 GetterChild := GetterElement derivePublic: #(extra).
