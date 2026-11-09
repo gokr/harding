@@ -201,43 +201,98 @@ appears to work and the value is missing later.
 `of "at:put:"` branches. Array growth stays the job of `add:`, which is
 explicit. This removes the silent-drop and the engine divergence at once.
 
-## D6 — operator symbol literals: truncated, or read as comments
+## D6 — the `#` comment rule collides with symbol literals
 
-**Evidence.** Two rules interact. The lexer's `#` branch
-(`src/harding/parser/lexer.nim`) treats `#` followed by any of
-`= - * / . | & @ !` as a **line comment** (that is how the `#====` separators
-work), and `parseSymbol` accepts only an identifier, a `#"..."` string, or
-exactly **one** non-alphanumeric character. Measured:
+**Evidence.** The lexer's `#` branch (`src/harding/parser/lexer.nim`) treats `#`
+followed by any of `= - * / . | & @ !` as a **line comment**, on top of `#`
+followed by whitespace. Separately, `parseSymbol` accepts only an identifier, a
+`#"..."` string, or exactly **one** non-alphanumeric character. Together:
 
 | literal | result |
 |---|---|
 | `#<`, `#>`, `#+`, `#%`, `#~` | correct |
-| `#<=` | parse error (`#<` then `=` dangling) |
-| `#>=`, `#~=`, `#<<`, `#>>` | parse error |
+| `#<=`, `#>=`, `#~=`, `#<<`, `#>>` | parse error (`#<` then `=` dangling) |
 | `#=`, `#-`, `#*`, `#/`, `#&`, `#\|`, `#@` | parse error — lexed as a comment, so the line has no expression |
-| `#//` | parse error (comment) |
-| `#"<="`, `#"=="`, `#"-"` | correct ✔ (string-symbol escape hatch) |
+| `#"<="`, `#"=="`, `#"-"` | correct (string-symbol escape hatch) |
 
-**Why it matters.** `perform: #<` works but `perform: #<=` cannot be written;
-reflection over comparison methods is impossible without the escape hatch. The
-comment collision is the worse half: `#-` silently swallows the rest of the
-line, so a table literal or array containing it loses everything after it
-instead of reporting a bad symbol.
+**Why it matters.** `perform: #<` works but `perform: #<=` cannot be written, so
+reflection over comparison methods needs the escape hatch. The comment collision
+is the worse half: `#-` silently swallows the rest of the line, so an array or
+table containing it loses everything after it instead of reporting a bad symbol.
 
-**Fix.** Two changes in the lexer, in this order:
+**Fix: one rule instead of two.** `#` starts a comment **only when followed by
+whitespace or another `#`**; in every other case it starts a symbol or a
+literal. That is one condition, matching what `QUICKREF.md` already claims
+("Hash `#` + whitespace = comment"). Concretely, in the lexer's `#` branch:
 
-1. `parseSymbol` keeps consuming an operator run: after the first character,
-   take further characters from `~ < > = | & + - * / \ @ %` and stop at
-   punctuation the grammar needs (`.`, `)`, `,`, `;`, `[`, `]`, `{`, `}`,
-   whitespace, `:`). `#<=` then lexes as one symbol.
-2. Only treat `#` as a comment when the run is **two or more** comment
-   characters and is not a valid operator, or simply require the comment forms
-   actually used in the tree (`#=`, `#!`, and `#` followed by whitespace).
-   Keeping `#====` working while making `#-` a symbol needs the operator set to
-   win: `-` alone is a valid operator, `--`/`==` runs are not, so length decides.
+1. line 1 + `!` → shebang, unchanged;
+2. `#(` / `#{` → array / table literal, unchanged;
+3. `##` → documentation comment token (see below);
+4. `#` followed by whitespace or end of line → line comment;
+5. otherwise → `parseSymbol`, which also keeps consuming an operator run
+   (`~ < > = | & + - * / \ @ %`) after the first character, so `#<=` lexes as
+   one symbol.
 
-Either way, keep the `#"..."` form working as the general escape hatch and
-add the `#<=`-style literals to `QUICKREF.md` once they exist.
+The special-character list disappears, so `#====` is no longer a comment.
+
+**Reserve `##` for documentation comments.** `##` is currently unclaimed: no
+tracked `.hrd` uses it, and `##trailing doc` today lexes as `#`+symbol then a
+stray identifier (*Message not understood: trailing*).
+
+In Nim `##` is not a general comment, it is a **documentation comment**: a token
+that belongs to the syntax tree, legal `only at certain places` and collected by
+`nim doc`/`jsondoc`. Verified against the bundled manual
+(`toolchains/nim-2.2.12/doc/manual.md`, "Comments"), and by experiment: a `##`
+block **preceding** a declaration is collected, while `##` trailing a statement
+is legal but **not** collected.
+
+Adopting the same meaning gives each form one job:
+
+```harding
+## Half-open interval; `to:` is exclusive. Documented for the Browser and LSP.
+Interval>>size [
+  ^ stop - start
+]
+
+Seconds perDay [
+  ^ 24 * 60 * 60   # ordinary comment, never collected
+]
+```
+
+- `#` + whitespace — ordinary comment, prose, ignored by tooling.
+- `##` — documentation for the following method (or class), the form a future
+  Browser hover or LSP `hover` should surface.
+
+Keeping the distinction means ordinary comments stay free-form and the
+collectable form stays deliberate, exactly as in Nim. Whether trailing `##`
+is *collected* should follow Nim too: no. It stays a legal comment, so a reader
+is never punished for it, but documentation belongs above the definition.
+
+**Migration is mechanical.** The only source form that breaks is the separator
+line. `#====` becomes `# =====`, which already satisfies rule 4, so no special
+case is needed anywhere.
+
+Tracked occurrences needing the change: 112 lines across 15 files — 12 under
+`lib/core` (96 × `#====….`, and the `#---` kind), 1 `lib/standard`, 1
+`examples/integrations`, 1 `docs/research/proposal-examples`. The majority are
+the 68-character `#====…====.` rule; some end in a period, so insert a space
+rather than rewriting the line:
+
+```bash
+# git ls-files '*.hrd' | xargs sed -i -E 's/^#([=-])/# \1/'
+```
+
+That turns `#====.` into `# ====.`, marker intact. Shebang lines (`#!/`) are
+unaffected, and so are the 80 tracked `.hrd` files that carry one.
+
+If a `#!` shebang is ever wanted on a line other than line 1, rule 1 covers only
+line 1, so `#!/x` later in a file would still parse as a symbol — that is
+already true today and is not a regression.
+
+Because `##`-before-a-definition is a new capability rather than a fix, it can
+land as a separate commit: the comment-rule simplification above does not depend
+on it, and the lexer only needs to recognise `##` as its own token when doc
+collection exists.
 
 Note `(#(a, b) at: 0) class` answers `nil` in the interpreter but `Symbol` in
 Granite — that is D7, not a lexer problem.

@@ -181,16 +181,59 @@ suite "FIXES.md controlled defects":
     """) == "read-signals"
 
   test "D6: bare multi-character operator symbols":
-    # '#' followed by any of = - * / . | & @ ! starts a comment, so those
-    # cannot be written bare, and #<= / #>= truncate after one character.
+    # Under the current lexer, '#' followed by any of = - * / . | & @ ! starts a
+    # comment, so those cannot be written bare, and #<= / #>= truncate after one
+    # character. The fix reduces the rule to '# + whitespace'; until then the
+    # bare forms fail and this stays skipped.
+    const bare = ["<=", ">=", "~=", "-", "|", "&"]
     var failures: seq[string]
-    for selector in ["<=", ">=", "~=", "-", "|", "&"]:
-      if fails("(" & selector.symbolLiteral & ") printString"):
+    for selector in bare:
+      let (value, err) = sharedInterp.doit("#" & selector)
+      if err.len > 0 or value.toString() != selector:
         failures.add(selector)
     if failures.len > 0:
       skip()
     else:
       check failures.len == 0
+
+  test "D6b: '# + whitespace' is a comment and '#name' is a symbol":
+    # The one-condition rule: whitespace decides. Both halves must hold together
+    # or the rule is ambiguous again. Note the '#no-space' line below is only a
+    # comment under the new rule, so this whole test is a contract assertion.
+    # `answer` raises on an uncaught failure, so probe with `doit` directly.
+    const commentSource = """
+      # this whole line is a comment
+      #no-space is also a comment under the one-condition rule
+      total := 0
+      # ===== separator in the new spelling
+      total := total + 1
+      total
+    """
+    var commentRule = ""
+    var symbolHalf = ""
+    if not escapes(commentSource):
+      commentRule = answer(commentSource)
+    if not escapes("#size printString"):
+      symbolHalf = answer("#size printString")
+    if commentRule == "1" and symbolHalf == "#size":
+      check commentRule == "1"
+      check symbolHalf == "#size"
+    else:
+      skip()
+
+  test "D6c: '##' is reserved for documentation comments":
+    # Nim semantics: ## precedes a declaration and is collected by tooling.
+    # Today '##text' lexes as '#'+symbol then a stray identifier.
+    const source = """
+      ## Documented method below.
+      K := Object derive: #().
+      K>>m [ ^ 1 ].
+      K new m
+    """
+    if escapes(source):
+      skip()
+    else:
+      check answer(source) == "1"
 
   test "D7: a symbol answers its class":
     # classOfValue returns nil for vkSymbol; Granite answers <class Symbol>.

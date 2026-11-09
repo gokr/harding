@@ -158,11 +158,28 @@ names and its result is a JSON string.
 ### Comments
 
 ```smalltalk
-# This is a comment
-#==== Section header
+# An ordinary comment. Runs to end of line.
+# ===== Section header
+
+##
+Documentation for the method below, collected by tooling.
+##
+Interval>>size [
+  ^ stop - start   # a trailing ordinary comment
+]
 ```
 
-**Note**: Hash `#` followed by whitespace or special characters marks a comment. Double quotes are for strings, not comments.
+The rule is one condition: `#` starts a comment when it is followed by
+whitespace (or sits at end of line), and starts a symbol or literal otherwise.
+So `#size` is the symbol `#size` while `# size` is a comment.
+
+`##` begins a **documentation comment**, following Nim: it is a token belonging
+to the syntax tree, attached to the declaration that follows it, and the form a
+Browser hover or LSP `hover` should surface. It is not collected from a
+trailing position. Use `#` + whitespace for ordinary prose and `##` for
+documentation you intend tooling to read.
+
+Double quotes are strings, not comments.
 
 ### Symbol Literals
 

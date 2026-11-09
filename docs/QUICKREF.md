@@ -145,10 +145,11 @@ Invoice>>jsonRepresentation [
 
 ```smalltalk
 # Single line comment
-#==== Section header
+# ===== Section header
+## Documentation for the method below
 ```
 
-Note: Hash `#` + whitespace = comment. Double quotes are strings, not comments.
+Note: Hash `#` + whitespace = comment; `#size` is a symbol. `##` starts a documentation comment.
 
 ### Multiline Strings
 
