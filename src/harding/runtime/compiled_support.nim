@@ -266,11 +266,7 @@ proc createBlock*(procPtr: pointer, paramCount: int, envPtr: pointer = nil): Nod
   blk.nativeImpl = procPtr
   blk.compiledInvoker = invokeCompiledBlockOwned
   blk.parameters = newSeq[string](paramCount)
-  # Store env pointer in capturedEnv as a hack using a known key
-  if envPtr != nil:
-    blk.capturedEnv = initTable[string, MutableCell]()
-    blk.capturedEnv["__env_ptr__"] = MutableCell(value: NodeValue(kind: vkInt, intVal: cast[int](envPtr)))
-    blk.capturedEnvInitialized = true
+  blk.nativeEnvPtr = envPtr
   return NodeValue(kind: vkBlock, blockVal: blk)
 
 # Template versions that handle the cast internally
@@ -305,10 +301,7 @@ template createBlockWithEnv*[T](procPtr: pointer, paramCount: int, env: T): Node
     let ownedEnv = env
     var blockValue = createBlock(procPtr, paramCount)
     blockValue.blockVal.compiledEnv = ownedEnv
-    blockValue.blockVal.capturedEnv = initTable[string, MutableCell]()
-    blockValue.blockVal.capturedEnv["__env_ptr__"] = MutableCell(
-      value: NodeValue(kind: vkInt, intVal: cast[int](cast[pointer](ownedEnv))))
-    blockValue.blockVal.capturedEnvInitialized = true
+    blockValue.blockVal.nativeEnvPtr = cast[pointer](ownedEnv)
     blockValue
 
 

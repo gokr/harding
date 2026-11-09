@@ -382,6 +382,10 @@ type
     containsNestedBlocks*: bool           # true if body contains nkBlock nodes (needs closure capture)
     capturedEnv*: Table[string, MutableCell]  # captured variables from outer scope
     capturedEnvInitialized*: bool         # flag to track if capturedEnv has been initialized
+    ## Environment pointer for compiled blocks. Kept beside the managed
+    ## `compiledEnv` owner instead of smuggled through `capturedEnv`, which made
+    ## every block creation allocate a table and a cell.
+    nativeEnvPtr*: pointer
     homeActivation*: Activation           # for non-local returns: method that created this block
 
   # Activation records for method execution (defined after BlockNode)

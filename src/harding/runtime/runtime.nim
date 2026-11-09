@@ -1601,10 +1601,8 @@ type
   BlockEnvProc3* = proc(env: pointer, a, b, c: NodeValue): NodeValue {.cdecl.}
 
 proc getBlockEnvPtr*(blk: BlockNode): pointer =
-  ## Retrieve the environment pointer from a block
-  if blk.capturedEnvInitialized and "__env_ptr__" in blk.capturedEnv:
-    return cast[pointer](blk.capturedEnv["__env_ptr__"].value.intVal)
-  return nil
+  ## Retrieve the compiled environment pointer from a block.
+  blk.nativeEnvPtr
 
 proc invokeCompiledBlock*(blk: BlockNode, args: openArray[NodeValue]): NodeValue =
   ## Shared native block ABI for the native runtime and VM callback boundary.

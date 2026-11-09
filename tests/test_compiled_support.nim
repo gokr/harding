@@ -1,4 +1,4 @@
-import std/unittest
+import std/[tables, unittest]
 import ../src/harding/runtime/compiled_support
 
 proc answer(): NodeValue {.cdecl.} =
@@ -104,6 +104,14 @@ suite "Compiled shared support":
     check sendMessage(rt, captured, "value", @[]).intVal == 1
     check sendMessage(rt, captured, "value", @[]).intVal == 2
     check rt.evalBlock(captured.blockVal).intVal == 3
+    # The environment pointer is a plain field, not smuggled through the captured
+    # variable table: that table is only for interpreter-visible captures.
+    check captured.blockVal.nativeEnvPtr != nil
+    check getBlockEnvPtr(captured.blockVal) == captured.blockVal.nativeEnvPtr
+    check not captured.blockVal.capturedEnvInitialized
+    check captured.blockVal.capturedEnv.len == 0
+    check plain.blockVal.nativeEnvPtr == nil
+    check getBlockEnvPtr(plain.blockVal) == nil
 
   test "environment-free block ABI supports one to three arguments":
     let one = createBlock1(identityArg, 1)

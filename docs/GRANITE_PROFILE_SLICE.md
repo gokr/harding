@@ -1,5 +1,38 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Compiled block environments without heap tables
+
+Capture-created blocks stored their native environment pointer by smuggling an
+integer into `capturedEnv["__env_ptr__"]` and setting `capturedEnvInitialized`.
+Every block creation therefore allocated a `Table` and a `MutableCell` just to
+carry one pointer, and told the interpreter that the block had initialized
+captured variables it does not have. The pointer now lives in its own
+`nativeEnvPtr` field next to the managed `compiledEnv` owner.
+
+`getBlockEnvPtr` reads the field, so the native block ABI (`invokeCompiledBlock`,
+`createBlockWithEnv`) is unchanged, and interpreter capture behavior is now
+distinct from compiled environment plumbing: `capturedEnvInitialized` stays false
+for compiled-only environments. `createBlockWithEnv` still stores the managed
+environment in `compiledEnv`, so ARC/ORC ownership is unchanged.
+
+This removes a table allocation from every block creation. Richards, whose
+`scheduler schedule` loop creates a block per iteration, is the clearest
+beneficiary; Queens and DeltaBlue create far fewer blocks.
+
+Pinned alternating pairs against `run-z7ezo7hx`, candidate `run-m5_7zya_`, both
+measured on an idle host (an earlier attempt ran during a parity sweep and was
+discarded as load-contaminated):
+
+| Workload | 21 pairs | 31 pairs |
+|---|---:|---:|
+| Richards | **13.99% faster (21/21)** | **13.35% faster (31/31)** |
+| DeltaBlue | 4.15% faster (20/21) | 3.82% faster (31/31) |
+| Queens | 0.82% faster (12/21) | 0.07% faster (16/31) |
+
+`build/envptr-clean-pinned*.log`. Richards and DeltaBlue improve in every pair;
+Queens creates few blocks and is unchanged. Broad parity on this tree passes
+129/129 (`build/envptr-parity-final.log`).
+
 ## Identity-keyed send caches for native receivers
 
 Send caches were keyed by receiver class *name*: every hit resolved the class
