@@ -440,6 +440,31 @@ suite "Compiled monomorphic send caches":
     check sendMessageCached(rt, second, "answer", @[], cache).intVal == 2
     check sendMessageCached(rt, first, "other", @[], cache).intVal == 2
 
+  test "pointer-keyed entries do not confuse same-named class identities":
+    # The fast path keys instance receivers by class identity. Two Class objects
+    # with the same name must still resolve and answer by the registered method.
+    let rt = newRuntime()
+    registerCompiledMethod("CachePointerName", "answer", defaultAllocation)
+    let first = proxyReceiver("CachePointerName")
+    let otherClass = newClass(name = "CachePointerName")
+    let second = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+      class: otherClass, isNimProxy: true))
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
+    check cache.classPtr == first.instVal.class
+    check sendMessageCached(rt, second, "answer", @[], cache).intVal == 1
+    check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
+    check first.instVal.class.name == "CachePointerName"
+
+  test "class-side receivers keep the name-keyed cache path":
+    let rt = newRuntime()
+    registerCompiledClass("CacheClassSide", defaultAllocation)
+    registerCompiledClassMethod("CacheClassSide", "answer", defaultAllocation)
+    var cache: CompiledSendCache
+    check sendMessageCached(rt, compiledClassValue("CacheClassSide"), "answer", @[], cache).intVal == 1
+    check sendMessageCached(rt, compiledClassValue("CacheClassSide"), "answer", @[], cache).intVal == 1
+    check cache.classPtr == nil
+
   test "a compiled method reached with fewer arguments answers safely":
     # Generated methods bind borrowed parameters; a missing argument must fall
     # back to stable storage, never to a temporary that dies at once.

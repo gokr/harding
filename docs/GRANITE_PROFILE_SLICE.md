@@ -1,5 +1,25 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Identity-keyed send caches for native receivers
+
+Send caches were keyed by receiver class *name*: every hit resolved the class
+name and then compared two strings. Method resolution itself is name-based, and
+the registration version already invalidates entries on any install or
+replacement, so an instance receiver can be keyed by its class identity instead.
+A hit then compares one pointer and calls the cached target; the cached negative
+path reuses the identity's name for the builtin chain.
+
+Class-side, builtin-value and unbound native receivers keep the name-keyed path,
+so selector semantics for `perform:`, the exception protocol and late binding are
+unchanged. Two distinct Class objects with the same name still share resolution
+(a pointer miss falls through to the name entry, which answers the same target).
+
+Pinned alternating pairs against `run-moqha29e`, candidate `run-z7ezo7hx`:
+**DeltaBlue 3.45% faster (26/31)**, Queens 0.87% faster (18/31), Richards 0.33%
+faster (17/31); 21-pair run agreed at 3.85%/2.22%/0.05% (`build/dispatch-ptr-pinned*.log`).
+Only DeltaBlue is outside local noise; the other two are unchanged rather than
+regressed.
+
 ## Getter-pair arithmetic and class-side reference parameters
 
 Reference inference now applies to class-side methods using getter receivers,

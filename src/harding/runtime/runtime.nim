@@ -181,6 +181,11 @@ type
     version: uint64
     target: CompiledProc
     negative: bool  ## A resolved "no compiled method" answer, so it is not re-resolved.
+    ## Instance receivers are keyed by class identity instead of name: the version
+    ## guard already invalidates every entry on registration or replacement, so a
+    ## hit needs neither a class-name string nor a method-table lookup.
+    classPtr*: Class
+    altClassPtr*: Class
     ## Second entry for the same site. Real sites alternate between a small set
     ## of receiver classes (a boolean conditional site sees True and False), and
     ## a single-entry cache misses on every other send there. The alternate is
@@ -2663,11 +2668,28 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     let interpreted = boundInterpretedSend(receiver, selector, @args)
     if interpreted.handled:
       return interpreted.value
+  let currentVersion = compiledClassDispatchVersion
+  if receiver.kind == vkInstance and receiver.instVal != nil and
+     receiver.instVal.isNimProxy and receiver.instVal.class != nil:
+    let cls = receiver.instVal.class
+    if cache.version != currentVersion or cache.selector != selector:
+      cache = CompiledSendCache(version: currentVersion, selector: selector)
+    if cache.classPtr == cls and (cache.target != nil or cache.negative):
+      if cache.target != nil:
+        let target = cache.target
+        probeCompiledDispatch(receiver, cls, selector, target, args)
+        return target(receiver, args)
+      return dispatchBuiltin(runtime, receiver, selector, @args, cls.name)
+    if cache.altClassPtr == cls and (cache.altTarget != nil or cache.altNegative):
+      if cache.altTarget != nil:
+        let target = cache.altTarget
+        probeCompiledDispatch(receiver, cls, selector, target, args)
+        return target(receiver, args)
+      return dispatchBuiltin(runtime, receiver, selector, @args, cls.name)
   let proxyClassName = getReceiverClassName(receiver)
   let className = if proxyClassName.len > 0: proxyClassName
                   else: builtInClassName(receiver)
   if className.len > 0:
-    let currentVersion = compiledClassDispatchVersion
     # A site sends one selector, but a cache may be reused across selectors (a
     # direct caller can pass its own). Entries are keyed by receiver class only,
     # so a different selector must invalidate them rather than reuse a target.
@@ -2709,17 +2731,21 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
       # then occupy both slots instead of evicting each other forever.
       if cache.className.len == 0:
         cache.className = className
+        cache.classPtr = cls
         cache.target = target
         cache.negative = false
       elif cache.className == className:
+        cache.classPtr = cls
         cache.target = target
         cache.negative = false
       elif cache.altClassName.len == 0 or cache.altClassName == className:
         cache.altClassName = className
+        cache.altClassPtr = cls
         cache.altTarget = target
         cache.altNegative = false
       else:
         cache.altClassName = className
+        cache.altClassPtr = cls
         cache.altTarget = target
         cache.altNegative = false
       return target(receiver, args)
@@ -2730,18 +2756,25 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     # for selectors none of those handle. Everything else falls through to the
     # generic path, which re-resolves but stays correct.
     if selector in negativeCacheSafeSelectors:
+      let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
+                  receiver.instVal.class
+                else: nil
       if cache.className.len == 0:
         cache.className = className
+        cache.classPtr = cls
         cache.negative = true
       elif cache.className == className:
+        cache.classPtr = cls
         cache.negative = true
         cache.target = nil
       elif cache.altClassName.len == 0 or cache.altClassName == className:
         cache.altClassName = className
+        cache.altClassPtr = cls
         cache.altNegative = true
         cache.altTarget = nil
       else:
         cache.altClassName = className
+        cache.altClassPtr = cls
         cache.altNegative = true
         cache.altTarget = nil
       return dispatchBuiltin(runtime, receiver, selector, @args, className)

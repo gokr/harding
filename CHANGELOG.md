@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Compiled send caches key native instance receivers by class identity instead of class name, skipping a name lookup and string comparison on every hit; class-side and value receivers keep the name-keyed path. DeltaBlue measured 3.45% less time in pinned local pairs.
 - Class-side methods can specialize getter receiver parameters and compare or combine native Integer getter pairs behind method/layout guards; replacements and mixed-host calls retain dynamic execution.
 - Unique generated getters provide checked receiver-type evidence for reference parameters; reference reads avoid boxing their receiver on the fast path, with lazily generated helpers and ordinary fallback for overrides or incompatible layouts.
 - Granite specializes method parameters proposed by object-slot contracts and fuses compatible reference getter/store boundaries, retaining runtime guards and original fallback execution.
