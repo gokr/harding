@@ -56,7 +56,7 @@ DBNormal := DBStrength new rank: 4 label: "normal".
 DBWeakDefault := DBStrength new rank: 5 label: "weakDefault".
 DBWeakest := DBStrength new rank: 6 label: "weakest".
 
-DBVariable := Object derivePublic: #{#value -> nil, #constraints -> nil, #determinedBy -> nil, #mark -> Integer, #walkStrength -> nil, #stay -> nil, #name -> nil}.
+DBVariable := Object derivePublic: #{#value -> nil, #constraints -> DBCollection, #determinedBy -> nil, #mark -> Integer, #walkStrength -> DBStrength, #stay -> nil, #name -> nil}.
 DBVariable>>named: aName value: initialValue [
     name := aName. value := initialValue. constraints := DBCollection new.
     determinedBy := nil. mark := 0. walkStrength := DBWeakest. stay := true.
@@ -69,7 +69,7 @@ DBVariable>>removeConstraint: constraint [
 ].
 DBVariable>>dispose [constraints := nil. determinedBy := nil].
 
-DBConstraint := Object derive: #(strength, planner).
+DBConstraint := Object derive: #{strength -> DBStrength, planner}.
 DBConstraint>>strength [^strength].
 DBConstraint>>setupStrength: aStrength planner: aPlanner [
     strength := aStrength. planner := aPlanner. planner track: self. ^self
@@ -97,7 +97,7 @@ DBConstraint>>destroyConstraint [
 DBConstraint>>isInput [^false].
 DBConstraint>>dispose [planner := nil].
 
-DBUnaryConstraint := DBConstraint derive: #(myOutput, satisfied).
+DBUnaryConstraint := DBConstraint derive: #{myOutput -> DBVariable, satisfied}.
 DBUnaryConstraint>>on: variable strength: aStrength planner: aPlanner [
     self setupStrength: aStrength planner: aPlanner.
     myOutput := variable. satisfied := false. self addConstraint. ^self
@@ -125,7 +125,7 @@ DBEditConstraint := DBUnaryConstraint derive: #().
 DBEditConstraint>>isInput [^true].
 DBEditConstraint>>execute [].
 
-DBBinaryConstraint := DBConstraint derive: #{#v1 -> nil, #v2 -> nil, #direction -> Integer}.
+DBBinaryConstraint := DBConstraint derive: #{#v1 -> DBVariable, #v2 -> DBVariable, #direction -> Integer}.
 DBBinaryConstraint>>between: first and: second strength: aStrength planner: aPlanner [
     self setupStrength: aStrength planner: aPlanner.
     v1 := first. v2 := second. direction := 0. self addConstraint. ^self
@@ -172,7 +172,7 @@ DBBinaryConstraint>>removeFromGraph [
 DBBinaryConstraint>>dispose [super dispose. v1 := nil. v2 := nil].
 DBEqualityConstraint := DBBinaryConstraint derive: #().
 DBEqualityConstraint>>execute [self output value: self input value].
-DBScaleConstraint := DBBinaryConstraint derive: #(scale, offset).
+DBScaleConstraint := DBBinaryConstraint derive: #{scale -> DBVariable, offset -> DBVariable}.
 DBScaleConstraint>>from: source to: destination scale: scaleVariable offset: offsetVariable strength: aStrength planner: aPlanner [
     scale := scaleVariable. offset := offsetVariable. direction := 0.
     self between: source and: destination strength: aStrength planner: aPlanner. ^self
@@ -197,7 +197,7 @@ DBScaleConstraint>>recalculate [
 ].
 DBScaleConstraint>>dispose [super dispose. scale := nil. offset := nil].
 
-DBPlan := Object derive: #(steps).
+DBPlan := Object derive: #{steps -> DBCollection}.
 DBPlan>>initialize [steps := DBCollection new].
 DBPlan>>addConstraint: constraint [steps add: constraint].
 DBPlan>>size [^steps size].

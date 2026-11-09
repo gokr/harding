@@ -37,7 +37,7 @@ RichardsPacket>>addTo: queue [
     ^queue
 ].
 
-RichardsTaskControlBlock := Object derivePublic: #{#link -> nil, #identity -> Integer, #priority -> Integer, #queue -> nil, #task -> nil, #state -> nil}.
+RichardsTaskControlBlock := Object derivePublic: #{#link -> nil, #identity -> Integer, #priority -> Integer, #queue -> RichardsPacket, #task -> nil, #state -> nil}.
 RichardsTaskControlBlock>>setupLink: aLink identity: anIdentity priority: aPriority queue: aQueue task: aTask [
     link := aLink. identity := anIdentity. priority := aPriority.
     queue := aQueue. task := aTask.
@@ -84,7 +84,7 @@ RichardsIdleTask>>run: packet [
         ^scheduler release: 5
     ]
 ].
-RichardsDeviceTask := RichardsTask derive: #(pending).
+RichardsDeviceTask := RichardsTask derive: #{pending -> RichardsPacket}.
 RichardsDeviceTask>>setup [pending := nil. ^self].
 RichardsDeviceTask>>run: packet [
     | work |
@@ -108,7 +108,7 @@ RichardsWorkerTask>>run: packet [
     ].
     ^scheduler queue: packet
 ].
-RichardsHandlerTask := RichardsTask derive: #(workIn, deviceIn).
+RichardsHandlerTask := RichardsTask derive: #{workIn -> RichardsPacket, deviceIn -> RichardsPacket}.
 RichardsHandlerTask>>setup [workIn := nil. deviceIn := nil. ^self].
 RichardsHandlerTask>>run: packet [
     | count work |
@@ -132,7 +132,7 @@ RichardsHandlerTask>>run: packet [
     ^scheduler suspendCurrent
 ].
 
-RichardsScheduler := Object derivePublic: #(queueCount, holdCount, blocks, list, currentTcb, currentId).
+RichardsScheduler := Object derivePublic: #{queueCount, holdCount, blocks, list -> RichardsTaskControlBlock, currentTcb -> RichardsTaskControlBlock, currentId}.
 RichardsScheduler>>initialize [
     queueCount := 0. holdCount := 0.
     blocks := Array new: 6 withAll: nil.
