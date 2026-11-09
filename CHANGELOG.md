@@ -17,6 +17,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Granite derives Integer method parameters that only enable a native temporary (for example `a := left` then `a // 2`) and keeps `//` in the Integer representation through the checked division helper. Richards measured 13.01% less time in pinned local pairs.
 - Granite specializes source-derived nil predicate chains behind exact-receiver and method-version guards; cached class identities remove repeated registry lookups inside those guards.
 - Granite derives guarded native Boolean condition bodies from Harding source, preserving eager operands and runtime replacement. Queens measured 15.44% less time in pinned local pairs; matched raw timings are now ~2.10x CPython time (`docs/GRANITE_PROFILE_SLICE.md`).
 - Native getter regions omit boxed result write-backs when every read is inside the rewritten region, retaining stores for externally observed locals.

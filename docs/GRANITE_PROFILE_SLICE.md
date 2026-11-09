@@ -1,5 +1,67 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Where the remaining gap is, measured against hand-written Nim
+
+`scripts/bench_compare_native_nim.py` runs Granite, the mechanically translated
+CPython, and the hand-written Nim port under `benchmark/native/` on identical
+work. Per pass, 300 passes, release ARC, pinned:
+
+| Workload | Granite | CPython | Native Nim | Granite/Native | CPython/Native |
+|---|---:|---:|---:|---:|---:|
+| Richards | 13.171 ms | 4.269 ms | 0.165 ms | 79.68x | 25.83x |
+| DeltaBlue | 19.624 ms | 7.211 ms | 0.163 ms | 120.74x | 44.37x |
+
+Native Nim is ~80-120x faster than the generated program, so Granite is roughly
+3-4x further from idiomatic Nim than CPython is. Queens is the exception and is
+already near CPython; these two workloads are the remaining gap.
+
+The native port's representation is the difference:
+
+```nim
+Packet = ref object          # our generated RichardsPacket fields:
+  link: Packet               #   link: NodeValue   <- boxed ref
+  identity, kind, datum: int #   datum/identity/kind: int
+  data: array[4, int]        #   data: NodeValue   <- boxed Array
+```
+
+Typed scalar slots already narrow to `int`. What stays boxed is everything that
+holds a reference: typed object slots (`#next -> Node` still emits `NodeValue`),
+arrays, and tables. Those are the values Richards and DeltaBlue move per
+iteration, so their cost is dominated by `NodeValue` copy/destroy, allocation and
+container dispatch rather than arithmetic.
+
+## Derived parameters for native regions
+
+`numericParameterCandidates` only proposed a parameter when an operator used it
+directly. Richards' `xor16:with:` writes `a := left` and then divides `a`, so
+`left` never met an operator and the whole method stayed boxed. Two additions:
+
+- `enablingParameters` seeds each parameter as Integer and keeps it when some
+  temporary becomes provably numeric that otherwise was not. Seeding is
+  speculative; the existing entry guard still checks the runtime argument kind
+  and falls back to the dynamic body for anything else.
+- `//` now keeps the Integer representation. It is Harding integer division and
+  still routes through `compiledIntegerDiv`, which signals DivisionByZero exactly
+  as `nt_slashslash` does, so a zero divisor is a Harding error rather than a Nim
+  Defect. `/` stays dynamic because it may produce a Float.
+
+`xor16:with:` now generates as `proc (...hardingNative_left: int,
+hardingNative_right: int)` with every local as `int`.
+
+Pinned ARC, 30 verified passes, 21 pairs against `run-vrg6psq3`, candidate
+`run-juuf3_tj`: Richards **13.01% faster (21/21)**; Queens 0.54% slower (6/21)
+and DeltaBlue 0.98% slower (8/21), both within local noise and unchanged in
+generated code beyond parameter selection.
+
+Two mistakes worth recording, both caught by measuring: the first version
+replaced the positional candidates instead of adding to them, which dropped
+Queens from 10 native bodies to 2 and doubled its runtime; the second passed the
+parameter-exclusion list where the captured-name list belongs, so every temporary
+was excluded and nothing specialized. A pre-existing compiled/interpreter
+difference also surfaced: `//` on a Float returns `nil` when compiled while the
+interpreter raises MessageNotUnderstood. That reproduces at the previous commit
+and is unrelated to this change.
+
 ## Source-derived nil condition chains
 
 The compiler expands pure `Object>>notNil`/`isNil` self-call chains from their

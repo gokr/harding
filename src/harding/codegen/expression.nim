@@ -582,6 +582,11 @@ proc nativeNumericExpression(ctx: GenContext, node: Node): string =
     let message = node.MessageNode
     let left = nativeNumericExpression(ctx, message.receiver)
     let right = nativeNumericExpression(ctx, message.arguments[0])
+    if left.len == 0 or right.len == 0: return ""
+    # Harding `//` raises DivisionByZero rather than a Nim defect, so it keeps the
+    # runtime helper even on native Integers.
+    if message.selector == "//":
+      return fmt("compiledIntegerDiv({left}, {right})")
     let op = case message.selector
              of "=", "==": "=="
              of "~=": "!="

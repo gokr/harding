@@ -935,9 +935,21 @@ suite "Compiler: Conservative numeric representations":
     let (unknown, _) = parse("x := 1. Object new use: [x := 2].")
     check "x" notin analyzeNumericBindings(unknown, @[])
 
-  test "division remains on the existing runtime path":
-    let (nodes, _) = parse("x := 1. x := x // 0.")
-    check "x" notin analyzeNumericBindings(nodes, @[])
+  test "integer division unboxes but keeps its division-by-zero signal":
+    # `//` keeps the Integer representation, so a loop counter or accumulator
+    # built from it stays native. The emitted expression must still route
+    # through the checked helper, which signals DivisionByZero exactly as the
+    # dynamic path does, rather than letting a Nim Defect escape.
+    let (nodes, _) = parse("x := 8. x := x // 2.")
+    let bindings = analyzeNumericBindings(nodes, @[])
+    check bindings.getOrDefault("x") == nrInt
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "integer_division")
+    check code.contains("compiledIntegerDiv(")
+    check not code.contains("(x // 2)")
+    # `/` may produce a Float, so it must stay dynamic.
+    let (floatNodes, _) = parse("x := 8. x := x / 2.")
+    check "x" notin analyzeNumericBindings(floatNodes, @[])
 
   test "literal arithmetic is not folded into compile-time overflow":
     let (nodes, _) = parse("9223372036854775807 + 1")

@@ -699,8 +699,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     if not mixed and params.len > 0:
       var assigned = initHashSet[string]()
       for statement in body: collectAssignedVars(statement, assigned)
-      let proposed = numericParameterCandidates(body, params,
+      var proposed = numericParameterCandidates(body, params,
         methodCellNames & assigned.toSeq)
+      proposed = enablingParameters(body, params,
+        methodCellNames, md.temporaries, proposed)
       let validated = analyzeNumericBindings(body, methodCellNames & assigned.toSeq,
         md.temporaries & params, proposed)
       for name in params:

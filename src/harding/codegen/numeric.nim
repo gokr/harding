@@ -33,6 +33,11 @@ proc numericKind*(node: Node, bindings: NumericBindings): NumericRepresentation 
       if left in {nrInt, nrFloat} and left == right:
         if message.selector in ["+", "-", "*"]:
           return left
+        # `//` is Harding integer division: it keeps the Integer representation
+        # and its division-by-zero signal (the emitter routes it through the
+        # checked helper). `/` stays dynamic because it may produce a Float.
+        if message.selector == "//" and left == nrInt:
+          return nrInt
         if message.selector in ["<", "<=", ">", ">=", "=", "==", "~="]:
           return nrBool
   else:
@@ -240,3 +245,25 @@ proc analyzeNumericBindings*(body: seq[Node], captured: seq[string],
     if not removed:
       break
   return candidates
+
+proc enablingParameters*(body: seq[Node], parameters: seq[string],
+                         excluded: seq[string], temporaries: seq[string],
+                         proposed: NumericBindings): NumericBindings =
+  ## Keep a parameter only when seeding it as Integer makes some local provably
+  ## numeric that otherwise was not. `a := left` followed by `a - (a // 2) * 2`
+  ## is the shape this catches: `left` never meets an operator itself, so the
+  ## positional scan misses it, yet seeding it turns the whole loop native.
+  ## The caller's entry guard still checks the runtime argument kind.
+  result = proposed
+  let baseline = analyzeNumericBindings(body, excluded, temporaries)
+  for name in parameters:
+    if name in excluded or name notin proposed and name.len == 0: continue
+    let kind = proposed.getOrDefault(name, nrInt)
+    if kind == nrDynamic: continue
+    var seed = initTable[string, NumericRepresentation]()
+    seed[name] = kind
+    let seeded = analyzeNumericBindings(body, excluded, temporaries, seed)
+    for local in seeded.keys:
+      if local notin baseline and local in temporaries:
+        result[name] = kind
+        break
