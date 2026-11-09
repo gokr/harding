@@ -32,11 +32,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `docs/GRANITE_STDLIB_COMPILATION.md`: the plan for whole-stdlib compilation,
   with the three-implementation problem, measured `--mixed` trade-off and staged
   closure approach; linked from `PLAN.md` section 6.
+- `docs/HARDING_VS_SMALLTALK80.md`: language and standard-library comparison against classic Smalltalk-80, and `docs/FIXES.md`: the defects that comparison confirmed, small alignment fixes that do not conflict with existing Harding decisions, and an explicit list of what is deliberately deferred.
 
 ### Changed
 - Consolidated GTK documentation around `docs/GTK.md`, distinguishing Bona's interpreter bridge from the shared standalone interpreted/Granite protocol. `docs/GTK_SUPPORT.md` records current coverage, FFI/lifecycle risks and the staged Harding Notebook showcase plan; removed obsolete GTK overview claims and marked the original Nim-shell demo as superseded for application authoring.
 
 ### Fixed
+- The language-comparison documents claimed `2 * 3 max: 4` was a precedence divergence from Smalltalk-80. Keyword messages bind loosest in both languages, so it parses as `(2 * 3) max: 4` and answers `6` in each; `docs/LANGUAGE_COMPARISON.md`, `docs/AI_HARNESS_INTEGRATION.md` and `docs/MANUAL.md` now agree. The same review corrected two stale claims in that document: integer overflow signals a catchable `Overflow`, and method-list reflection does exist under method-oriented names.
 - `Array add:`, `Set add:`, `Bag add:` and `Set remove:` answer the added or
   removed element in both engines, matching classic Smalltalk and the documented
   contract. Array, Set and compiled `Bag` previously answered the collection, and

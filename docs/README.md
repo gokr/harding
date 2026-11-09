@@ -11,6 +11,8 @@ These are the active, maintained documents:
 | [MANUAL.md](MANUAL.md) | Complete language and runtime reference | All users |
 | [QUICKREF.md](QUICKREF.md) | Syntax and common idioms cheat sheet | Daily reference |
 | [LANGUAGE_COMPARISON.md](LANGUAGE_COMPARISON.md) | Language-design review against Smalltalk-80, Python, Ruby and Go; distinctive features, simplifications and known shortcomings | Users and contributors |
+| [HARDING_VS_SMALLTALK80.md](HARDING_VS_SMALLTALK80.md) | What the language and stdlib have and lack compared with classic Smalltalk-80 | Users and contributors |
+| [FIXES.md](FIXES.md) | Confirmed defects from that review, cheap Smalltalk-alignment fixes, and what is deliberately deferred | Contributors |
 | [AI_HARNESS_INTEGRATION.md](AI_HARNESS_INTEGRATION.md) | What Harding offers LLM/agent harnesses, why source beats AST generation, and the gaps to close | Contributors |
 | [NIL_AND_ABSENCE.md](NIL_AND_ABSENCE.md) | Findings on nil/absence: why removing nameable nil was rejected, measured nil-usage audit, decided fixes (lookup signals, `isNil` primitive, `Root`) | Contributors |
 | [MUMMYX.md](MUMMYX.md) | Optional HTTP server integration | Users and contributors |
