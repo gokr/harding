@@ -1,5 +1,34 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Value receivers in the per-site send cache
+
+The per-site cache only covered native instances: its entries were keyed by a
+`Class` pointer. A profile of the current build showed what that left behind.
+Instrumenting `sendMessageCached` counted 1.15M identity hits against 1.11M misses
+out of 22.7M sends, and every miss was a **non-instance** receiver: nil (409k),
+Boolean (320k), Block (304k), Table (65k), plus small counts elsewhere. Those
+sends re-derived a class name through `builtInClassName` and compared it as a
+string on every single send.
+
+Value receivers now carry their identity in the same entry: the `ValueKind`, plus
+the Boolean flag, because `True` and `False` are distinct classes. The instance
+path is untouched and stays a single pointer comparison, so the shape of the hot
+instance check did not change. An explicit `valueEntry` flag marks value entries,
+so an empty or instance slot can never match an Integer receiver (`vkInt` is zero,
+so a kind field alone cannot express "no entry" -- the first version had exactly
+that defect and it was caught before measuring).
+
+Pinned alternating pairs against `run-m5_7zya_`, candidate `run-mads5ie2`, idle
+host: **Richards 4.34% faster (31/31)**, Queens **3.24% faster (25/31)**, DeltaBlue
+**1.52% faster (22/31)** (`build/vk7-pinned.log`). Earlier 21- and 31-pair runs of
+the same shape agreed at Richards 3.47%/4.32%, Queens 3.35%/2.60%, DeltaBlue
+neutral-to-1.04%. Broad parity 129/129.
+
+An earlier attempt keyed *all* receivers through one 16-byte composite key. It
+regressed DeltaBlue by 2.60% (3/21) because it made the instance path wider and
+more expensive. Keeping the instance check as a bare pointer compare, with a
+separate value branch, is what produced the gain.
+
 ## Compiled block environments without heap tables
 
 Capture-created blocks stored their native environment pointer by smuggling an

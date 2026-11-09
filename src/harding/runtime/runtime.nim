@@ -186,6 +186,17 @@ type
     ## hit needs neither a class-name string nor a method-table lookup.
     classPtr*: Class
     altClassPtr*: Class
+    ## A value receiver (Integer, nil, Boolean, Block, Array, Table, ...) has no
+    ## class pointer to compare, so its slot records the value kind instead, plus
+    ## the Boolean flag because True and False are separate classes. The entry-kind
+    ## flags keep an instance entry from ever matching a value receiver (vkInt is
+    ## zero, so a kind field alone cannot express "no entry").
+    valueEntry*: bool
+    altValueEntry*: bool
+    valueKind*: ValueKind
+    altValueKind*: ValueKind
+    boolVal*: bool
+    altBoolVal*: bool
     ## Second entry for the same site. Real sites alternate between a small set
     ## of receiver classes (a boolean conditional site sees True and False), and
     ## a single-entry cache misses on every other send there. The alternate is
@@ -2684,6 +2695,25 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
         probeCompiledDispatch(receiver, cls, selector, target, args)
         return target(receiver, args)
       return dispatchBuiltin(runtime, receiver, selector, @args, cls.name)
+  elif receiver.kind != vkInstance and receiver.kind != vkClass:
+    # Value receivers have no class pointer, so their kind is their class
+    # identity. A hit compares one enum and one flag; without this path every send
+    # to nil, a Boolean, a Block or a collection re-derived a class name.
+    let flag = receiver.kind == vkBool and receiver.boolVal
+    if cache.valueEntry and cache.valueKind == receiver.kind and cache.boolVal == flag and
+       (cache.target != nil or cache.negative):
+      if cache.target != nil:
+        let target = cache.target
+        probeCompiledDispatch(receiver, nil, selector, target, args)
+        return target(receiver, args)
+      return dispatchBuiltin(runtime, receiver, selector, @args, cache.className)
+    if cache.altValueEntry and cache.altValueKind == receiver.kind and
+       cache.altBoolVal == flag and (cache.altTarget != nil or cache.altNegative):
+      if cache.altTarget != nil:
+        let target = cache.altTarget
+        probeCompiledDispatch(receiver, nil, selector, target, args)
+        return target(receiver, args)
+      return dispatchBuiltin(runtime, receiver, selector, @args, cache.altClassName)
   let proxyClassName = getReceiverClassName(receiver)
   let className = if proxyClassName.len > 0: proxyClassName
                   else: builtInClassName(receiver)
@@ -2727,23 +2757,36 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
       probeCompiledDispatch(receiver, cls, selector, target, args)
       # Fill the free slot first, otherwise the alternate: alternating classes
       # then occupy both slots instead of evicting each other forever.
+      let isValue = cls == nil
+      let flag = isValue and receiver.kind == vkBool and receiver.boolVal
+      let samePrimary = cache.className == className and cache.classPtr == cls and
+        (not isValue or (cache.valueEntry and cache.valueKind == receiver.kind and
+                         cache.boolVal == flag))
       if cache.className.len == 0:
         cache.className = className
         cache.classPtr = cls
+        cache.valueEntry = isValue
+        cache.valueKind = receiver.kind
+        cache.boolVal = flag
         cache.target = target
         cache.negative = false
-      elif cache.className == className:
-        cache.classPtr = cls
+      elif samePrimary:
         cache.target = target
         cache.negative = false
       elif cache.altClassName.len == 0 or cache.altClassName == className:
         cache.altClassName = className
         cache.altClassPtr = cls
+        cache.altValueEntry = isValue
+        cache.altValueKind = receiver.kind
+        cache.altBoolVal = flag
         cache.altTarget = target
         cache.altNegative = false
       else:
         cache.altClassName = className
         cache.altClassPtr = cls
+        cache.altValueEntry = isValue
+        cache.altValueKind = receiver.kind
+        cache.altBoolVal = flag
         cache.altTarget = target
         cache.altNegative = false
       return target(receiver, args)
@@ -2757,22 +2800,35 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
       let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
                   receiver.instVal.class
                 else: nil
+      let isValue = cls == nil
+      let flag = isValue and receiver.kind == vkBool and receiver.boolVal
+      let samePrimary = cache.className == className and cache.classPtr == cls and
+        (not isValue or (cache.valueEntry and cache.valueKind == receiver.kind and
+                         cache.boolVal == flag))
       if cache.className.len == 0:
         cache.className = className
         cache.classPtr = cls
+        cache.valueEntry = isValue
+        cache.valueKind = receiver.kind
+        cache.boolVal = flag
         cache.negative = true
-      elif cache.className == className:
-        cache.classPtr = cls
+      elif samePrimary:
         cache.negative = true
         cache.target = nil
       elif cache.altClassName.len == 0 or cache.altClassName == className:
         cache.altClassName = className
         cache.altClassPtr = cls
+        cache.altValueEntry = isValue
+        cache.altValueKind = receiver.kind
+        cache.altBoolVal = flag
         cache.altNegative = true
         cache.altTarget = nil
       else:
         cache.altClassName = className
         cache.altClassPtr = cls
+        cache.altValueEntry = isValue
+        cache.altValueKind = receiver.kind
+        cache.altBoolVal = flag
         cache.altNegative = true
         cache.altTarget = nil
       return dispatchBuiltin(runtime, receiver, selector, @args, className)

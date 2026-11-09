@@ -456,6 +456,41 @@ suite "Compiled monomorphic send caches":
     check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
     check first.instVal.class.name == "CachePointerName"
 
+  test "value receivers never share a cached target across kinds":
+    # True and False are separate classes, and every value kind is its own class,
+    # so a value-keyed entry must never answer another kind's method.
+    let rt = newRuntime()
+    let trueValue = NodeValue(kind: vkBool, boolVal: true)
+    let falseValue = NodeValue(kind: vkBool, boolVal: false)
+    var cache: CompiledSendCache
+    # Boolean values answer through the builtin chain in both orders.
+    check sendMessageCached(rt, trueValue, "=", @[falseValue], cache).boolVal == false
+    check sendMessageCached(rt, falseValue, "=", @[trueValue], cache).boolVal == false
+    check sendMessageCached(rt, trueValue, "=", @[trueValue], cache).boolVal == true
+    check sendMessageCached(rt, falseValue, "=", @[falseValue], cache).boolVal == true
+    # Integer and nil are different classes; neither may use the other's answer.
+    let one = NodeValue(kind: vkInt, intVal: 1)
+    let nilValue1 = NodeValue(kind: vkNil)
+    check sendMessageCached(rt, one, "isNil", @[], cache).boolVal == false
+    check sendMessageCached(rt, nilValue1, "isNil", @[], cache).boolVal == true
+    check sendMessageCached(rt, one, "isNil", @[], cache).boolVal == false
+    check sendMessageCached(rt, nilValue1, "isNil", @[], cache).boolVal == true
+    # A cached compiled method for one instance class must not answer another.
+    registerCompiledMethod("ValueKeyAlpha", "answer", defaultAllocation)
+    let alpha = proxyReceiver("ValueKeyAlpha")
+    check sendMessageCached(rt, alpha, "answer", @[], cache).intVal == 1
+    check sendMessageCached(rt, one, "isNil", @[], cache).boolVal == false
+    check sendMessageCached(rt, alpha, "answer", @[], cache).intVal == 1
+
+  test "a selector change never reuses a value entry":
+    let rt = newRuntime()
+    let one = NodeValue(kind: vkInt, intVal: 1)
+    var cache: CompiledSendCache
+    # Same receiver, different selector: the entry must be rebuilt, not reused.
+    check sendMessageCached(rt, one, "isNil", @[], cache).boolVal == false
+    check sendMessageCached(rt, one, "=", @[one], cache).boolVal == true
+    check sendMessageCached(rt, one, "isNil", @[], cache).boolVal == false
+
   test "class-side receivers keep the name-keyed cache path":
     let rt = newRuntime()
     registerCompiledClass("CacheClassSide", defaultAllocation)
