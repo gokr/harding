@@ -1,10 +1,77 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Compact owning storage for declared object slots
+
+Declared object contracts now generate an `Instance` field rather than a
+`NodeValue`. On this host that is an 8-byte owning reference instead of a
+32-byte variant. A checked write retains the original instance (including its
+`compiledOwner`); reads reuse it without creating another wrapper. Nil is stored
+as an empty reference, and invalid writes are rejected before replacing storage.
+Generated subclasses and interpreted instances remain accepted by the existing
+class contract. This changes storage, not interpreter behavior or slot semantics.
+
+This is deliberately not yet `link: Packet`. Each generated class currently has
+an independent layout rooted at `HardingObject`, so Harding subclasses cannot
+safely be cast to their parent's generated Nim type. Retaining `Instance` avoids
+that invalid cast while narrowing the storage. Typed method signatures and direct
+native-owner references require a further guarded representation/ABI step.
+
+Object contracts were added to already-defined class references in the two
+benchmarks. Forward/self references are not added: interpreter resolution of
+symbolic class declarations currently needs an already-bound class. Arrays and
+genuinely dynamic slots remain unchanged. Measured native object sizes:
+
+| Class | Before bytes | After bytes |
+|---|---:|---:|
+| RichardsTaskControlBlock | 176 | 152 |
+| RichardsDeviceTask | 96 | 72 |
+| RichardsHandlerTask | 128 | 80 |
+| RichardsScheduler | 224 | 176 |
+| DBVariable | 232 | 184 |
+| DBConstraint | 96 | 72 |
+| DBBinaryConstraint | 168 | 96 |
+| DBScaleConstraint | 232 | 112 |
+| DBPlan | 64 | 40 |
+
+Artifacts: `build/object-layout-sizes.log`. Both size builds use identical typed
+benchmark source. Old compiler `run-juuf3_tj/granite` produced the retained
+`build/object-storage-baseline` binaries; the candidate is `run-vpkcd3hp`.
+The first compact-storage candidate (`run-vu_nb6jm`) was near neutral. Its longer
+profile showed repeated hierarchy traversal on contract writes. The final helper
+accepts nil/exact-class references directly and retains the old checked hierarchy
+path for other cases, including subclasses.
+
+Pinned alternating 21 pairs, 30 verified passes (`build/object-ref-final-pinned.log`):
+Richards **11.01% faster (19/21)** versus the old compiler on the *same typed
+source*. DeltaBlue and Queens are neutral. A separate end-to-end comparison with
+the previously untyped benchmarks (`build/object-ref-end-to-end.log`) is neutral
+for all three: Richards 0.47% slower, DeltaBlue 0.34% slower, Queens 0.39% slower
+by median pair. Added contract checks offset storage savings, so no end-to-end
+benchmark speedup is claimed for this slice.
+
+Executed native/VM bridge tests cover ownership after the creating scope ends,
+identity, alias mutation, nil, subclasses, inherited slots, rejection without
+mutation, method and direct slot access, accessor replacement and a bound host
+under ARC/ORC. Runtime arguments and getter results still cross `NodeValue`
+boundaries; narrower field storage alone cannot remove those costs.
+Focused compiler/runtime/boundary/stdlib/slot-inference suites pass under ARC/ORC;
+all three generated benchmarks verify 30 release-ORC passes. The new compact-slot
+case also passes both-engine parity and executes under ORC. The broad sweep
+passes 125/125 (`build/object-storage-parity.log`) on the initial compact-storage
+candidate; the later exact-class helper fast path passes the focused suites and
+new compact-slot regression. This is not a full repository-suite claim.
+
+The final checked native comparison (`build/native-compare/run-5u_cbj5v`, seven
+pairs, 300 passes) measures Richards 16.403/5.513/0.210 ms per pass for
+Granite/CPython/native Nim and DeltaBlue 19.213/5.809/0.149 ms. Paired native time
+ratios are 74.00x and 127.18x respectively. These remain representation-reference
+comparisons, not proof of semantics-equivalent native speedups.
+
 ## Where the remaining gap is, measured against hand-written Nim
 
 `scripts/bench_compare_native_nim.py` runs Granite, the mechanically translated
-CPython, and the hand-written Nim port under `benchmark/native/` on identical
-work. Per pass, 300 passes, release ARC, pinned:
+CPython, and the hand-written Nim port under `benchmark/native/` on matched
+workloads. Per pass, 300 passes, release ARC, pinned (historical measurements):
 
 | Workload | Granite | CPython | Native Nim | Granite/Native | CPython/Native |
 |---|---:|---:|---:|---:|---:|
@@ -15,7 +82,7 @@ Native Nim is ~80-120x faster than the generated program, so Granite is roughly
 3-4x further from idiomatic Nim than CPython is. Queens is the exception and is
 already near CPython; these two workloads are the remaining gap.
 
-The native port's representation is the difference:
+The native port's representation is an important difference:
 
 ```nim
 Packet = ref object          # our generated RichardsPacket fields:
@@ -24,11 +91,21 @@ Packet = ref object          # our generated RichardsPacket fields:
   data: array[4, int]        #   data: NodeValue   <- boxed Array
 ```
 
-Typed scalar slots already narrow to `int`. What stays boxed is everything that
-holds a reference: typed object slots (`#next -> Node` still emits `NodeValue`),
-arrays, and tables. Those are the values Richards and DeltaBlue move per
-iteration, so their cost is dominated by `NodeValue` copy/destroy, allocation and
-container dispatch rather than arithmetic.
+At that revision only scalar slots narrowed to native fields. Object references,
+arrays and tables still used `NodeValue`. The compact-storage slice above now
+narrows declared object fields, but not their method arguments/results.
+
+These native ports are representation references, **not semantic-parity oracles**:
+Richards embeds task variants and fixed arrays and avoids scheduler back-reference
+cycles; DeltaBlue uses Float64 values and integer strength ranks. The large timing
+gap cannot be attributed entirely to boxing. The comparison runner now checks all
+stdout/stderr, verifies retained source/binary hashes and writes each run into a
+separate directory; earlier runs did not enforce those output checks externally.
+A checked 300-pass/7-pair run (`build/native-compare/run-5a5tf4rl/results.json`)
+reports Granite/native paired time ratios 89.09x (Richards) and 131.28x (DeltaBlue)
+for the initial compact-storage candidate. Absolute native timing is especially
+sensitive to startup and host variation. Use these as structural references, not
+as a measured upper bound on a semantics-preserving compiler improvement.
 
 ## Derived parameters for native regions
 

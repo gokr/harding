@@ -46,12 +46,15 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
 
 
 proc nativeSlotType(slot: SlotDef): string =
-  ## Native Nim type for a declared primitive slot; "" keeps NodeValue.
+  ## Native storage for declared slots; object contracts retain an owning
+  ## Instance reference so subclasses and VM-owned instances share the boundary.
   case slot.constraint
   of tcInt: "int"
   of tcFloat: "float64"
   of tcBool: "bool"
   of tcString, tcSymbol: "string"
+  of tcObject:
+    if slot.objectClass.len > 0: "Instance" else: ""
   else: ""
 
 proc boxExpression(slot: SlotDef, source: string): string =
@@ -62,6 +65,8 @@ proc boxExpression(slot: SlotDef, source: string): string =
   of tcBool: fmt("NodeValue(kind: vkBool, boolVal: {source})")
   of tcString: fmt("NodeValue(kind: vkString, strVal: {source})")
   of tcSymbol: fmt("NodeValue(kind: vkSymbol, symVal: {source})")
+  of tcObject:
+    if slot.objectClass.len > 0: fmt("compiledObjectSlotValue({source})") else: source
   else: source
 
 proc unboxExpression(slot: SlotDef, source: string): string =
@@ -74,7 +79,7 @@ proc unboxExpression(slot: SlotDef, source: string): string =
   of tcString: fmt("compiledSlotString({source})")
   of tcSymbol: fmt("compiledSlotSymbol({source})")
   of tcObject:
-    if slot.objectClass.len > 0: fmt("checkedCompiledSlot({source}, scObject, \"{slot.objectClass}\")")
+    if slot.objectClass.len > 0: fmt("compiledSlotObject({source}, \"{slot.objectClass}\")")
     else: source
   else: source
 
@@ -137,6 +142,8 @@ proc genClassConstants*(cls: ClassInfo): string =
         of tcFloat: "0.0"
         of tcBool: "false"
         of tcString, tcSymbol: "\"\""
+        of tcObject:
+          if slot.objectClass.len > 0: "nil" else: "NodeValue(kind: vkNil)"
         else: "NodeValue(kind: vkNil)"
       output.add(fmt("  result.{mangleSlot(slot.name)} = {zero}\n"))
   output.add("\n")

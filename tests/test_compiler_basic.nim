@@ -311,6 +311,17 @@ suite "Compiler: Analyzer":
     # `nil` stays explicitly dynamic rather than guessing a type.
     check cls.getSlotDef("plain").constraint == tcNone
 
+  test "declared object slots use owning references with checked boundaries":
+    let (nodes, syntax) = parse("Element := Object derive: #(). Holder := Object derivePublic: #{item -> Element, dynamic -> nil}.")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "object_reference_storage")
+    check code.contains("item*: Instance")
+    check code.contains("dynamic*: NodeValue")
+    check code.contains("result.item = nil")
+    check code.contains("compiledObjectSlotValue(self[].item)")
+    check code.contains("compiledSlotObject(value, \"Element\")")
+
   test "typed slot table matches an untyped list for slot order and names":
     let (typed, _) = parse("P := Object derive: #{#a -> Integer, #b -> Integer}.")
     let (plain, _) = parse("P := Object derive: #(a, b).")

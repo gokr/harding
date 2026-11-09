@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Native-reference benchmark runs retain separate artifacts, verify retained inputs, and check every engine's output and stderr; Python benchmark translation accepts known object-slot contracts.
 - Native sum-of-squares demo with the generated Nim kernel and isolated comparison (`docs/GRANITE_NATIVE_KERNEL_DEMO.md`).
 - Granite `build` and `run` accept repeatable `--nim-option:<argument>` flags to forward individual arguments to Nim.
 - `derive:` accepts a typed slot table: `Object derive: #{#x -> Integer, #y -> Float, #z -> nil}`. Declared primitive slots become native Nim fields with guarded arithmetic; `nil` leaves a slot dynamic.
@@ -17,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Declared object slots use compact owning references in generated layouts, preserving checked writes, nil, subclass identity and interpreter/native bridges. Benchmarks add known object-slot contracts; no end-to-end timing gain is claimed for this groundwork.
 - Granite derives Integer method parameters that only enable a native temporary (for example `a := left` then `a // 2`) and keeps `//` in the Integer representation through the checked division helper. Richards measured 13.01% less time in pinned local pairs.
 - Granite specializes source-derived nil predicate chains behind exact-receiver and method-version guards; cached class identities remove repeated registry lookups inside those guards.
 - Granite derives guarded native Boolean condition bodies from Harding source, preserving eager operands and runtime replacement. Queens measured 15.44% less time in pinned local pairs; matched raw timings are now ~2.10x CPython time (`docs/GRANITE_PROFILE_SLICE.md`).

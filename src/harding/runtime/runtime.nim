@@ -1700,6 +1700,23 @@ proc checkedCompiledSlot*(value: NodeValue, kind: SlotContractKind,
     return raiseCompiledError(compiledErrorValue("Error", checked.error))
   checked.value
 
+proc compiledSlotObject*(value: NodeValue, className: string): Instance =
+  ## Retain the checked Instance itself, not a raw owner pointer. This supports
+  ## subclasses with independent native layouts and VM-owned instances alike.
+  if isNilValue(value): return nil
+  # Compiled conformance is name-based; the exact-class case needs no ancestry
+  # traversal. Other classes retain checkedCompiledSlot's hierarchy contract.
+  if value.kind == vkInstance and value.instVal != nil and value.instVal.class != nil and
+     value.instVal.class.name == className:
+    return value.instVal
+  checkedCompiledSlot(value, scObject, className).instVal
+
+proc compiledObjectSlotValue*(value: Instance): NodeValue =
+  ## Nil storage represents Harding nil; reading a non-nil reference reuses the
+  ## original wrapper, preserving identity and its strong compiledOwner.
+  if value == nil: return NodeValue(kind: vkNil)
+  NodeValue(kind: vkInstance, instVal: value)
+
 proc compiledSlotInt*(value: NodeValue): int =
   checkedCompiledSlot(value, scInteger).intVal
 

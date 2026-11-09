@@ -8,6 +8,24 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("object_reference_slot_storage", """
+RefValue := Object derivePublic: #{number -> Integer}.
+RefSubclass := RefValue derivePublic: #(padding).
+RefContainer := Object derivePublic: #{item -> RefValue}.
+holder := RefContainer new.
+(holder item isNil) println.
+item := RefSubclass new.
+item number: 42.
+holder item: item.
+(holder item == item) println.
+(holder item number) println.
+item number: 99.
+(holder item number) println.
+[holder item: 7] on: Error do: [:e | "rejected" println].
+(holder item == item) println.
+holder::item := nil.
+(holder item isNil) println.
+""", 'true\ntrue\n42\n99\nrejected\ntrue\ntrue\n'),
     ("source_derived_nil_condition", """
 Object>>= other [ ^self == other ].
 Object>>isNil [ ^self = nil ].
