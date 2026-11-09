@@ -224,7 +224,7 @@ def definitions(source):
                         else: slots.append(tokens.pop())
                     tokens.pop(')')
                 else:
-                    # Declared primitive slot types affect representation, not
+                    # Declared slot types affect representation, not
                     # this mechanically translated benchmark's algorithm.
                     while tokens.peek() != '}':
                         if tokens.peek() == '#': tokens.pop()
@@ -235,7 +235,7 @@ def definitions(source):
                         if tokens.peek() == '-':
                             tokens.pop('-'); tokens.pop('>')
                             hint = tokens.pop()
-                            if hint not in ['Integer', 'Float', 'Boolean', 'String', 'nil']:
+                            if hint not in ['Integer', 'Float', 'Boolean', 'String', 'nil', name] and hint not in classes:
                                 raise ValueError('unsupported slot hint: ' + hint)
                         if tokens.peek() == ',': tokens.pop()
                         elif tokens.peek() != '}': raise ValueError('missing slot comma')

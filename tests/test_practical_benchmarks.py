@@ -86,6 +86,9 @@ class PracticalBenchmarkPorts(unittest.TestCase):
         exec(program, namespace)
         point = namespace['Point']()
         self.assertEqual(list(point.__dict__), ['_slot_row', '_slot_column', '_slot_previous'])
+        typed_refs = pyport.definitions('Point := Object derive: #(). Holder := Object derivePublic: #{value -> Point}.')
+        exec(typed_refs, namespace)
+        self.assertIsNone(namespace['Holder']()._slot_value)
         for bad in ['P := Object derive: #{x -> Unknown}.',
                     'P := Object derive: #{x -> Integer',
                     'P := Object derive: #{x -> Integer y -> Integer}.']:
