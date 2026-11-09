@@ -1,5 +1,57 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Reference parameters and getter-to-store fusion
+
+Slot-contract writes propose object parameter types. A method's additional native
+variant accepts owning `Instance` parameters after a non-signaling entry guard
+checks actual class conformance or nil. Failed guards run the original body:
+a method can handle an incompatible argument before ever writing a slot, so the
+guard must not raise. Assigned parameters, captured bindings, shadowing and
+conflicting contracts are excluded. Numeric and reference parameters share one
+variant rather than multiplying combinations.
+
+A matching parameter can flow directly into a native reference field. The store
+still checks receiver layout, slot accessor identity, host routing and the
+registration version captured at method entry. Callbacks can replace methods or
+accessors between entry and store; a changed epoch or accessor takes the checked
+ordinary store. Other operations and returns box only at their existing ABI
+boundaries; this is not yet a wholly reference-typed method ABI.
+
+Compatible generated object getters can also feed a reference field directly:
+
+```nim
+let sourceReceiver = evaluateReceiverOnce()
+if getterMethodAndLayoutGuard(sourceReceiver) and destinationLayoutGuard(self):
+  let reference = Source(sourceReceiver.instVal.compiledOwner)[].item
+  Destination(self.instVal.compiledOwner)[].item = reference
+  compiledObjectSlotValue(reference)  # assignment result only
+else:
+  # Ordinary getter and checked store; no receiver re-evaluation.
+```
+
+The getter-result path is guarded at the actual read, not inferred unconditionally
+from its selector: a replacement returning an incompatible value still executes
+and raises at the original checked store. Nil, subclasses and VM-backed storage
+retain their normal semantics.
+
+Generated benchmark inspection: Richards gains one `Instance` parameter,
+DeltaBlue six, Queens none. No compatible getter-to-store fusion appears in these
+benchmark sources yet; the executed reference integration test covers it.
+Pinned 21-pair comparisons against `run-vpkcd3hp`, candidate `run-7ec4jixy`:
+Richards 1.30% slower, then 0.23% slower; DeltaBlue 0.06%/0.22% faster;
+Queens 0.13% faster/0.17% slower (`build/object-abi-pinned*.log`). No benchmark
+speedup is claimed. This widens connected native reference regions but reaches
+only a small fraction of the measured graph traffic so far.
+
+The initial full sweep passes 126/126 (`build/object-abi-full-parity.log`); the
+new parameter/getter parity case passes separately. Compiler 116, runtime 47,
+boundary 39, stdlib 6 and slot-inference 32 pass under ARC/ORC. Executed reference
+integration also verifies missing arguments, incompatible-argument early handling,
+mutation/capture exclusions, subclass receiver fallback, receiver side effects,
+method/accessor replacement after warmup and callback-time setter replacement.
+Final conservative numeric-binding exclusions and the expanded bound-host tests
+pass the focused compiler/reference suites under both memory managers.
+
 ## Compact owning storage for declared object slots
 
 Declared object contracts now generate an `Instance` field rather than a

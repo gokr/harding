@@ -22,6 +22,9 @@ type
   NumericGetter* = object
     owner*, slot*, guard*: string
 
+  ObjectGetter* = object
+    owner*, slot*, guard*, className*: string
+
   BooleanCall* = object
     native*, guard*: string
 
@@ -41,6 +44,8 @@ type
     classInfo*: Table[string, ClassInfo]   ## Class name -> ClassInfo with slot info
     mixed*: bool                  ## Whether mixed mode is enabled (fallback to interpreter)
     numericBindings*: NumericBindings ## Proven lexical native representations
+    objectBindings*: Table[string, string] ## Entry-guarded Instance parameters
+    objectGetters*: Table[string, ObjectGetter]
     methodReadCounts*: Table[string, int]
     suppressSlotArithmetic: bool
     ## Advisory inference results: slot name -> kind, used only to emit *guarded*
@@ -141,6 +146,25 @@ proc slotWrite(ctx: GenContext, name, value: string): string =
   if not ctx.mixed and ctx.cls != nil and ctx.cls.name in ctx.compiledClasses:
     return directSlotPrefix(ctx, name) & "_write(self, " & value & ")"
   fmt("setSlotValue(self, \"{name}\", {value})")
+
+proc objectSlotWrite(ctx: GenContext, name: string, value: Node): string =
+  ## A guarded Instance parameter may be stored directly only while the slot's
+  ## accessor and physical native layout remain unchanged. Host callbacks and
+  ## later registry changes must still use the checked dynamic boundary.
+  if ctx.mixed or ctx.cls == nil or ctx.cls.name notin ctx.compiledClasses or
+     value == nil or value.kind != nkIdent: return ""
+  let parameter = value.IdentNode.name
+  if parameter notin ctx.objectBindings: return ""
+  let slot = ctx.cls.getSlotDef(name)
+  if slot.constraint != tcObject or slot.objectClass != ctx.objectBindings[parameter]: return ""
+  let prefix = directSlotPrefix(ctx, name)
+  let clsName = mangleClass(ctx.cls.name)
+  let field = mangleSlot(name)
+  let native = mangleIdentifier(parameter)
+  let boxed = "compiledObjectSlotValue(" & native & ")"
+  return "(block:\n    if not hostRoutingActive() and compiledClassDispatchVersion == hardingObjectEntryVersion and " & prefix & "_guard(self):\n" &
+    "      " & clsName & "(self.instVal.compiledOwner)[]." & field & " = " & native &
+    "\n      " & boxed & "\n    else:\n      " & slotWrite(ctx, name, boxed) & ")"
 
 proc getSlotIndex*(ctx: GenContext, name: string): int =
   ## Get slot index for name, returns -1 if not a slot
@@ -312,6 +336,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.inMethod = ctx.inMethod
   result.directSendCandidates = ctx.directSendCandidates
   result.numericGetters = ctx.numericGetters
+  result.objectGetters = ctx.objectGetters
   result.booleanCalls = ctx.booleanCalls
   result.nilConditions = ctx.nilConditions
   result.integerSendCandidates = ctx.integerSendCandidates
@@ -321,6 +346,9 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.blockRegistry = ctx.blockRegistry
   result.varTypes = ctx.varTypes
   result.numericBindings = ctx.numericBindings
+  for name, className in ctx.objectBindings:
+    if name notin blk.temporaries and name notin blk.parameters:
+      result.objectBindings[name] = className
   result.methodReadCounts = ctx.methodReadCounts
   result.globals = ctx.globals
   result.cellNames = ctx.cellNames
@@ -386,6 +414,8 @@ proc genUnboundSymbolAccess(ctx: GenContext, name: string): string =
 
   # Check if it's a parameter
   if name in ctx.parameters:
+    if name in ctx.objectBindings:
+      return fmt("compiledObjectSlotValue({mangleIdentifier(name)})")
     case ctx.numericBindings.getOrDefault(name, nrDynamic)
     of nrInt: return fmt("NodeValue(kind: vkInt, intVal: {mangleIdentifier(name)})")
     of nrFloat: return fmt("NodeValue(kind: vkFloat, floatVal: {mangleIdentifier(name)})")
@@ -1142,7 +1172,8 @@ proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
            receiver in aliases or receiver in ctx.numericBindings: return ""
         if receiver notin receivers: receivers.add(receiver)
         let info = ctx.numericGetters[msg.selector]
-        let value = bindingTarget(ctx, receiver)
+        let value = if receiver in ctx.objectBindings: genSymbolAccess(ctx, receiver)
+                    else: bindingTarget(ctx, receiver)
         let guard = info.guard & "(" & value & ")"
         if guard notin guards: guards.add(guard)
         return mangleClass(info.owner) & "(" & value &
@@ -1233,6 +1264,27 @@ proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string =
   for i in count + 1 ..< blk.body.len:
     result.add(indentBlock(genStatement(ctx, blk.body[i])))
 
+proc objectGetterStore(ctx: GenContext, name: string, value: Node): string =
+  ## Fuse a declared reference getter into a compatible reference slot store.
+  ## Guard failure uses the ordinary getter/setter exactly once, without forcing
+  ## the declared result type on a replaced getter.
+  if ctx.mixed or ctx.cls == nil or ctx.cls.name notin ctx.compiledClasses or
+     value == nil or value.kind != nkMessage: return ""
+  let getter = value.MessageNode
+  if getter.arguments.len != 0 or getter.selector notin ctx.objectGetters: return ""
+  let info = ctx.objectGetters[getter.selector]
+  let slot = ctx.cls.getSlotDef(name)
+  if slot.constraint != tcObject or slot.objectClass != info.className: return ""
+  let receiver = genExpression(ctx, getter.receiver)
+  let targetGuard = directSlotPrefix(ctx, name) & "_guard(self)"
+  let sourceField = mangleClass(info.owner) & "(hardingReferenceReceiver.instVal.compiledOwner)[]." & mangleSlot(info.slot)
+  let targetField = mangleClass(ctx.cls.name) & "(self.instVal.compiledOwner)[]." & mangleSlot(name)
+  let fallback = slotWrite(ctx, name, genSend(ctx, "hardingReferenceReceiver", getter.selector, @[]))
+  return "(block:\n    let hardingReferenceReceiver = " & receiver.replace("\n", "\n    ") &
+    "\n    if not hostRoutingActive() and " & info.guard & "(hardingReferenceReceiver) and " & targetGuard & ":\n" &
+    "      let hardingReferenceValue = " & sourceField & "\n      " & targetField & " = hardingReferenceValue\n" &
+    "      compiledObjectSlotValue(hardingReferenceValue)\n    else:\n" & indentBlock(fallback, 6).strip(leading = false, trailing = true) & ")"
+
 proc genExpression*(ctx: GenContext, node: Node): string =
   ## Dispatch to appropriate expression generator
 
@@ -1316,6 +1368,10 @@ proc genExpression*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
+        let getterStore = objectGetterStore(ctx, varName, assign.expression)
+        if getterStore.len > 0: return getterStore
+        let native = objectSlotWrite(ctx, varName, assign.expression)
+        if native.len > 0: return native
         return slotWrite(ctx, varName, exprCode)
       let idx = ctx.getSlotIndex(varName)
       return fmt("(proc(): NodeValue = self.slots[{idx}] = {exprCode}; return {exprCode})()")
@@ -1443,6 +1499,10 @@ proc genExpression*(ctx: GenContext, node: Node): string =
           break
       if origSlotName.len > 0:
         if slotNode.isAssignment and slotNode.valueExpr != nil:
+          let getterStore = objectGetterStore(ctx, origSlotName, slotNode.valueExpr)
+          if getterStore.len > 0: return getterStore
+          let native = objectSlotWrite(ctx, origSlotName, slotNode.valueExpr)
+          if native.len > 0: return native
           let valCode = genExpression(ctx, slotNode.valueExpr)
           return slotWrite(ctx, origSlotName, valCode)
         else:
@@ -1493,6 +1553,10 @@ proc genStatement*(ctx: GenContext, node: Node): string =
     # Check if variable is a slot
     if ctx.isSlot(varName) and not ctx.isLocal(varName):
       if ctx.inMethod and ctx.cls != nil:
+        let getterStore = objectGetterStore(ctx, varName, assign.expression)
+        if getterStore.len > 0: return "discard " & getterStore
+        let native = objectSlotWrite(ctx, varName, assign.expression)
+        if native.len > 0: return "discard " & native
         return "discard " & slotWrite(ctx, varName, exprCode)
       let idx = ctx.getSlotIndex(varName)
       return fmt"self.slots[{idx}] = {exprCode}"

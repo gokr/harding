@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Granite specializes method parameters proposed by object-slot contracts and fuses compatible reference getter/store boundaries, retaining runtime guards and original fallback execution.
 - Declared object slots use compact owning references in generated layouts, preserving checked writes, nil, subclass identity and interpreter/native bridges. Benchmarks add known object-slot contracts; no end-to-end timing gain is claimed for this groundwork.
 - Granite derives Integer method parameters that only enable a native temporary (for example `a := left` then `a // 2`) and keeps `//` in the Integer representation through the checked division helper. Richards measured 13.01% less time in pinned local pairs.
 - Granite specializes source-derived nil predicate chains behind exact-receiver and method-version guards; cached class identities remove repeated registry lookups inside those guards.

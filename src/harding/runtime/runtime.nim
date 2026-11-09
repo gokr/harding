@@ -1700,6 +1700,18 @@ proc checkedCompiledSlot*(value: NodeValue, kind: SlotContractKind,
     return raiseCompiledError(compiledErrorValue("Error", checked.error))
   checked.value
 
+proc compiledObjectArgumentMatches*(value: NodeValue, className: string): bool =
+  ## Non-signaling speculation guard: failure must run the ordinary method body,
+  ## which may handle the value before reaching a checked slot write.
+  if isNilValue(value): return true
+  if value.kind != vkInstance or value.instVal == nil or value.instVal.class == nil:
+    return false
+  if value.instVal.class.name == className: return true
+  if className in compiledClasses and slotObjectMatches(value.instVal.class, compiledClasses[className]):
+    return true
+  walkCompiledHierarchy(value.instVal.class.name,
+    proc(name: string): bool = name == className).len > 0
+
 proc compiledSlotObject*(value: NodeValue, className: string): Instance =
   ## Retain the checked Instance itself, not a raw owner pointer. This supports
   ## subclasses with independent native layouts and VM-owned instances alike.

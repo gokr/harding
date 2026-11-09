@@ -10,6 +10,7 @@ import ../compiler/primitive_abi
 import ./methods
 import ./expression
 import ./numeric
+import ./object_bindings
 import ./native_calls
 import ./blocks
 
@@ -492,6 +493,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   
   var directCandidates = initTable[string, string]()
   var numericGetters: Table[string, NumericGetter]
+  var objectGetters: Table[string, ObjectGetter]
   if not mixed:
     var targets = initTable[string, seq[tuple[owner, target, slot: string]]]()
     for md in methodDefs:
@@ -533,6 +535,17 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("proc {guard}(receiver: NodeValue): bool {{.inline.}} =\n"))
         output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
         output.add(fmt("  canDirectCompiledSend(receiver, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver)\n\n"))
+
+      if choice.slot.len > 0:
+        let slot = classInfo[choice.owner].getSlotDef(choice.slot)
+        if slot.constraint == tcObject and slot.objectClass.len > 0:
+          let guard = helper & "_objectGuard"
+          objectGetters[selector] = ObjectGetter(owner: choice.owner, slot: choice.slot,
+            guard: guard, className: slot.objectClass)
+          let slotGuard = mangleClass(choice.owner) & "_direct_" & mangleSlot(choice.slot) & "_guard"
+          output.add(fmt("proc {guard}(receiver: NodeValue): bool {{.inline.}} =\n"))
+          output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+          output.add(fmt("  canDirectCompiledSend(receiver, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver)\n\n"))
 
   if not mixed:
     # Plan independently of source order, adding pure self-call chains only after
@@ -716,25 +729,42 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         if name in proposed and name in validated:
           parameterKinds[name] = validated[name]
 
+    var objectParameters: Table[string, string]
+    if not mixed and not md.isClassMethod and clsName in classInfo:
+      objectParameters = objectParameterCandidates(body, params, md.temporaries,
+        methodCellNames, classInfo[clsName])
+      # Keep one variant per method; numeric and reference parameter seeds must
+      # not assign two representations to the same lexical binding.
+      for name in parameterKinds.keys:
+        objectParameters.del(name)
+    let hasSpecialization = parameterKinds.len > 0 or objectParameters.len > 0
     let nativeName = procName & "_numeric"
-    for variant in 0..(if parameterKinds.len > 0: 1 else: 0):
-      let specialized = parameterKinds.len > 0 and variant == 0
+    for variant in 0..(if hasSpecialization: 1 else: 0):
+      let specialized = hasSpecialization and variant == 0
       if specialized:
         var signature: seq[string]
         for name in params:
           if name in parameterKinds:
             signature.add("hardingNative_" & mangleIdentifier(name) & ": int")
+          elif name in objectParameters:
+            signature.add("hardingNative_" & mangleIdentifier(name) & ": Instance")
         output.add(fmt("proc {nativeName}(self: NodeValue, args: openArray[NodeValue], ") &
           signature.join(", ") & "): NodeValue =\n")
+        if objectParameters.len > 0:
+          output.add("  let hardingObjectEntryVersion = compiledClassDispatchVersion\n")
       else:
         output.add(fmt("proc {procName}*(self: NodeValue, args: openArray[NodeValue]): NodeValue =\n"))
-        if parameterKinds.len > 0:
+        if hasSpecialization:
           var checks = @["not hostRoutingActive()"]
           var nativeArgs: seq[string]
           for index, name in params:
             if name in parameterKinds:
               checks.add(fmt("args.len > {index} and args[{index}].kind == vkInt"))
               nativeArgs.add(fmt("args[{index}].intVal"))
+            elif name in objectParameters:
+              let expected = objectParameters[name]
+              checks.add(fmt("args.len > {index} and compiledObjectArgumentMatches(args[{index}], \"{expected}\")"))
+              nativeArgs.add(fmt("(if isNilValue(args[{index}]): nil else: args[{index}].instVal)"))
           output.add("  if " & checks.join(" and ") & ":\n")
           output.add("    return " & nativeName & "(self, args, " & nativeArgs.join(", ") & ")\n")
 
@@ -748,7 +778,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       for i, paramName in params:
         let paramValue = fmt("(if args.len > {i}: args[{i}] else: NodeValue(kind: vkNil))")
         let identifier = mangleIdentifier(paramName)
-        if specialized and paramName in parameterKinds:
+        if specialized and (paramName in parameterKinds or paramName in objectParameters):
           output.add(fmt("  var {identifier} = hardingNative_{identifier}\n"))
         elif paramName in methodCellNames:
           output.add(fmt("  var {identifier} = MutableCell(value: {paramValue})\n"))
@@ -770,12 +800,14 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.inMethod = true
         genCtx.directSendCandidates = directCandidates
         genCtx.numericGetters = numericGetters
+        genCtx.objectGetters = objectGetters
         genCtx.booleanCalls = booleanCalls
         genCtx.nilConditions = nilConditions
         genCtx.integerSendCandidates = integerCandidates
         genCtx.staticClassCalls = staticClassCalls
 
         genCtx.cellNames = methodCellNames
+        if specialized: genCtx.objectBindings = objectParameters
         genCtx.methodReadCounts = identifierReadCounts(body)
         if blockReg != nil:
           genCtx.blockRegistry = blockReg
@@ -797,8 +829,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           genCtx.parameters.add(paramName)
 
         if not mixed and (specialized or md.temporaries.len > 0):
+          var boxedParameters: seq[string]
+          for name in params:
+            if not specialized or name notin parameterKinds:
+              boxedParameters.add(name)
           genCtx.numericBindings = analyzeNumericBindings(body, methodCellNames &
-            (if specialized: @[] else: params), md.temporaries & params,
+            boxedParameters, md.temporaries & params,
             (if specialized: parameterKinds else: default(NumericBindings)))
         output.add(indentBlock(genLocalDeclarations(genCtx, md.temporaries)))
 

@@ -8,6 +8,27 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("object_reference_parameter_and_getter", """
+ObjectElement := Object derivePublic: #{number -> Integer}.
+ObjectSubElement := ObjectElement derivePublic: #(extra).
+ObjectBox := Object derivePublic: #{payload -> ObjectElement}.
+ObjectBox>>store: candidate [ payload := candidate. ^candidate ].
+ObjectBox>>copyFrom: source [ payload := source payload. ^payload ].
+ObjectBox>>conditional: candidate [ candidate = 7 ifTrue: [^123]. payload := candidate. ^payload ].
+ObjectBox>>mutating: candidate [ candidate := nil. payload := candidate. ^payload ].
+a := ObjectBox new.
+b := ObjectBox new.
+element := ObjectSubElement new number: 42.
+(a store: element) == element ifTrue: ["same" println].
+(b copyFrom: a) == element ifTrue: ["copied" println].
+(b payload number) println.
+(a conditional: 7) println.
+[a store: 8] on: Error do: [:error | "rejected" println].
+(a payload == element) println.
+(a store: nil) isNil println.
+(b copyFrom: a) isNil println.
+(a mutating: element) isNil println.
+""", 'same\ncopied\n42\n123\nrejected\ntrue\ntrue\ntrue\ntrue\n'),
     ("object_reference_slot_storage", """
 RefValue := Object derivePublic: #{number -> Integer}.
 RefSubclass := RefValue derivePublic: #(padding).

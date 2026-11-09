@@ -322,6 +322,32 @@ suite "Compiler: Analyzer":
     check code.contains("compiledObjectSlotValue(self[].item)")
     check code.contains("compiledSlotObject(value, \"Element\")")
 
+  test "object parameters and getter stores cross reference boundaries without boxing":
+    let (nodes, syntax) = parse("Element := Object derive: #(). Holder := Object derivePublic: #{item -> Element}. Holder>>store: candidate [item := candidate. ^candidate]. Holder>>copy: source [item := source item. ^item].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "object_reference_abi")
+    check code.contains("hardingNative_candidate: Instance")
+    check code.contains("compiledObjectArgumentMatches(args[0], \"Element\")")
+    check code.contains("compiledClassDispatchVersion == hardingObjectEntryVersion")
+    check code.contains("[].item = candidate")
+    check code.contains("let hardingReferenceValue = " & mangleClass("Holder") & "(hardingReferenceReceiver.instVal.compiledOwner)[].item")
+    check code.contains("[].item = hardingReferenceValue")
+    let mixed = genModule(compiler, nodes, "object_reference_abi_mixed", mixed = true)
+    check not mixed.contains("hardingNative_candidate: Instance")
+
+  test "object parameter inference rejects captures mutation shadowing and conflicting contracts":
+    for body in ["candidate := nil. item := candidate. ^candidate",
+                 "callback := [candidate]. item := candidate. ^callback",
+                 "[true] whileTrue: [ | candidate | candidate := nil. item := candidate]. ^self",
+                 "item := candidate. other := candidate. ^self"]:
+      let source = "Element := Object derive: #(). Other := Object derive: #(). Holder := Object derivePublic: #{item -> Element, other -> Other}. Holder>>store: candidate [ | callback | " & body & "]."
+      let (nodes, syntax) = parse(source)
+      require not syntax.hasError
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "object_parameter_excluded")
+      check not code.contains("hardingNative_candidate: Instance")
+
   test "typed slot table matches an untyped list for slot order and names":
     let (typed, _) = parse("P := Object derive: #{#a -> Integer, #b -> Integer}.")
     let (plain, _) = parse("P := Object derive: #(a, b).")
