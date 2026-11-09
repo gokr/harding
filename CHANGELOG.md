@@ -32,6 +32,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - `docs/GRANITE_STDLIB_COMPILATION.md`: the plan for whole-stdlib compilation,
   with the three-implementation problem, measured `--mixed` trade-off and staged
   closure approach; linked from `PLAN.md` section 6.
+- `tests/test_smalltalk_alignment.nim`: regressions for the defects and
+  guards recorded in `docs/FIXES.md`, part of `testCore`. Open defects assert
+  their intended contract and report SKIPPED until fixed, so a test does not
+  need editing when the fix lands; a source scan reports any stdlib selector
+  defined twice in one file.
 - `docs/HARDING_VS_SMALLTALK80.md`: language and standard-library comparison against classic Smalltalk-80, and `docs/FIXES.md`: the defects that comparison confirmed, small alignment fixes that do not conflict with existing Harding decisions, and an explicit list of what is deliberately deferred.
 
 ### Changed

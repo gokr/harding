@@ -170,6 +170,7 @@ tests/test_extend.nim
 tests/test_cascade.nim
 tests/test_float_operations.nim
 tests/test_class_model.nim
+tests/test_smalltalk_alignment.nim
 tests/test_load_and_eval.nim
 """
 
