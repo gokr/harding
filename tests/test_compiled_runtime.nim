@@ -46,6 +46,30 @@ suite "Native registry sealing":
     registerCompiledClass("UnsealedRegistryNeighbor", replacementAllocation)
     check sendMessage(nil, compiledClassValue("UnsealedRegistryNeighbor"), "new", @[]).intVal == 2
 
+suite "Reference and boxed direct guards":
+  test "both boundaries reject invalid receivers and observe method replacement":
+    discard ensureCompiledClass("ReferenceGuardProbe")
+    let cls = compiledClassValue("ReferenceGuardProbe").classVal
+    let instance = newInstance(cls)
+    instance.isNimProxy = true
+    let boxed = NodeValue(kind: vkInstance, instVal: instance)
+    registerCompiledMethod(cls.name, "answer", defaultAllocation)
+    var referenceGuard, boxedGuard: CompiledDirectGuard
+    check canDirectCompiledSend(instance, cls, "answer", defaultAllocation, referenceGuard)
+    check canDirectCompiledSend(boxed, cls, "answer", defaultAllocation, boxedGuard)
+    check not canDirectCompiledSend(Instance(nil), cls, "answer", defaultAllocation, referenceGuard)
+    check not canDirectCompiledSend(toValue(3), cls, "answer", defaultAllocation, boxedGuard)
+    instance.nativeSlots = NativeSlotStorage()
+    check not canDirectCompiledSend(instance, cls, "answer", defaultAllocation, referenceGuard)
+    check not canDirectCompiledSend(boxed, cls, "answer", defaultAllocation, boxedGuard)
+    instance.nativeSlots = nil
+    registerCompiledMethod(cls.name, "answer", replacementAllocation)
+    check not canDirectCompiledSend(instance, cls, "answer", defaultAllocation, referenceGuard)
+    check not canDirectCompiledSend(boxed, cls, "answer", defaultAllocation, boxedGuard)
+    registerCompiledMethod(cls.name, "answer", defaultAllocation)
+    check canDirectCompiledSend(instance, cls, "answer", defaultAllocation, referenceGuard)
+    check canDirectCompiledSend(boxed, cls, "answer", defaultAllocation, boxedGuard)
+
 suite "Compiled reference collections":
   test "aliases share storage and clones copy only the container":
     let rt = newRuntime()

@@ -1254,11 +1254,25 @@ proc resolveCompiledMethod(className, selector: string): CompiledProc =
   resolutionMemo[slot] = ResolutionMemoEntry(version: compiledClassDispatchVersion,
     valid: true, className: className, selector: selector, target: result)
 
-proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
+proc canDirectCompiledSend*(receiver: Instance, expectedClass: Class,
                             selector: string, target: CompiledProc,
                             guard: var CompiledDirectGuard): bool {.inline.} =
   ## An exact native receiver and unchanged method permit a baked-in call.
   ## Bound hosts retain live interpreted lookup, regardless of cache warmth.
+  if boundCompiledClasses.len != 0 or expectedClass == nil or
+     receiver == nil or receiver.kind != ikObject or not receiver.isNimProxy or
+     receiver.nativeSlots != nil or receiver.class != expectedClass:
+    return false
+  if guard.version != compiledClassDispatchVersion:
+    guard.valid = resolveCompiledMethod(expectedClass.name, selector) == target
+    guard.version = compiledClassDispatchVersion
+  guard.valid
+
+proc canDirectCompiledSend*(receiver: NodeValue, expectedClass: Class,
+                            selector: string, target: CompiledProc,
+                            guard: var CompiledDirectGuard): bool {.inline.} =
+  ## Boxed entry retains its own inline checks so existing generated hot paths
+  ## need not cross an additional reference-ABI helper.
   if boundCompiledClasses.len != 0 or expectedClass == nil or
      receiver.kind != vkInstance or receiver.instVal == nil or
      receiver.instVal.kind != ikObject or not receiver.instVal.isNimProxy or

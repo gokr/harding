@@ -12,6 +12,7 @@ RefHolder := Object derivePublic: #{item -> RefItem, dynamic -> nil}.
 RefHolder>>store: candidate [ item := candidate. ^candidate ].
 RefHolder>>storeInline: candidate [ true ifTrue: [item := candidate]. ^candidate ].
 RefHolder>>readCandidate: candidate [ item := candidate. ^candidate number ].
+RefHolder>>readOnly: candidate [ ^candidate number ].
 RefHolder>>copyFrom: source [ item := source item. ^item ].
 RefHolder>>storeAfter: action value: candidate [ action value. item := candidate. ^item ].
 RefHolder>>conditional: candidate [ candidate = 7 ifTrue: [^123]. item := candidate. ^item ].
@@ -46,6 +47,9 @@ class ObjectReferences(unittest.TestCase):
             self.assertIn('hardingNative_candidate: Instance', generated)
             self.assertIn('let hardingReferenceValue =', generated)
             self.assertIn('compiledObjectArgumentMatches', generated)
+            self.assertIn('receiver: Instance): NodeValue', generated)
+            self.assertIn('_referenceGuard(receiver)', generated)
+            self.assertIn('(receiver.compiledOwner)[].number', generated)
             imports = '\n'.join('import "' + str(ROOT / path) + '"' for path in [
                 'src/harding/core/types', 'src/harding/core/scheduler',
                 'src/harding/interpreter/vm', 'src/harding/runtime/runtime',
@@ -75,6 +79,7 @@ doAssert isNilValue(sendMessage(nil, holder, "store:", []))
 doAssert holderNative.item == nil
 discard sendMessage(nil, holder, "store:", [initial])
 doAssert sendMessage(nil, holder, "readCandidate:", [initial]).intVal == 42
+doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 42
 doAssert sendMessage(nil, holder, "conditional:", [toValue(7)]).intVal == 123
 let copy = newHOLDER().toValue()
 doAssert sendMessage(nil, copy, "copyFrom:", [holder]).instVal == initial.instVal
@@ -88,6 +93,7 @@ doAssert sendMessage(nil, copy, "copyOnce:", [source]).instVal == initial.instVa
 doAssert getSlotValue(source, "calls").intVal == 1
 let child = newCHILD().toValue()
 discard setSlotValue(child, "number", toValue(99))
+doAssert sendMessage(nil, holder, "readOnly:", [child]).intVal == 99
 discard sendMessage(nil, holder, "item:", [child])
 doAssert sendMessage(nil, holder, "item", []).instVal == child.instVal
 doAssert getSlotValue(getSlotValue(holder, "item"), "number").intVal == 99
@@ -135,6 +141,17 @@ except CompiledHardingError:
   rejected = true
 doAssert rejected
 registerCompiledMethod("RefHolder", "item", originalMethod)
+let numberMethod = findCompiledMethod("RefItem", "number")
+registerCompiledMethod("RefItem", "number", wrongGetter)
+doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 9
+registerCompiledMethod("RefItem", "number", numberMethod)
+doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 42
+proc wrongNumber(storage: pointer): NodeValue {.nimcall.} = toValue(3)
+let numberGetter = slotGetters["RefItem::number"]
+let numberSetter = slotSetters["RefItem::number"]
+registerSlotAccessor("RefItem", "number", wrongNumber, numberSetter)
+doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 3
+registerSlotAccessor("RefItem", "number", numberGetter, numberSetter)
 # A callback can replace the slot setter after the argument guard has run.
 var setterCalls = 0
 proc observingSet(storage: pointer, value: NodeValue): NodeValue {.nimcall.} =
@@ -183,6 +200,9 @@ doAssert storedViaMethod.instVal == vmItem.instVal
 let (copiedViaMethod, copyError) = interp.doit("NativeHolder copyFrom: NativeHolder")
 doAssert copyError.len == 0, copyError
 doAssert copiedViaMethod.instVal == vmItem.instVal
+let (readViaMethod, readOnlyError) = interp.doit("NativeHolder readOnly: VmItem")
+doAssert readOnlyError.len == 0, readOnlyError
+doAssert readViaMethod.intVal == 17
 echo "ok"
 '''
             for label, name in [('HOLDERCHILD', 'RefHolderChild'), ('HOLDER', 'RefHolder'),

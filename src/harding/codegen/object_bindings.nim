@@ -3,8 +3,10 @@ import ../core/types
 import ../compiler/[context, types, slot_inference]
 
 proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
-                                excluded: seq[string], cls: ClassInfo): Table[string, string] =
-  ## Declared object-slot writes suggest parameter representations, not proofs.
+                                excluded: seq[string], cls: ClassInfo,
+                                receiverHints: Table[string, string] = default(Table[string, string])): Table[string, string] =
+  ## Declared object-slot writes and unique getter receivers suggest parameter
+  ## representations, not proofs.
   ## Entry guards must establish the argument's class (or nil). Mutation,
   ## captures, lexical shadowing and conflicting slot contracts exclude a name.
   if cls == nil: return
@@ -29,6 +31,17 @@ proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
           for slot in cls.getAllSlots():
             if slot.index == access.slotIndex: slotName = slot.name
         value = access.valueExpr
+    of nkMessage:
+      let message = node.MessageNode
+      if message.arguments.len == 0 and message.selector in receiverHints and
+         message.receiver != nil and message.receiver.kind == nkIdent:
+        let name = message.receiver.IdentNode.name
+        let expected = receiverHints[message.selector]
+        if name in parameters:
+          if name in candidates and candidates[name] != expected:
+            rejected.incl(name)
+          else:
+            candidates[name] = expected
     of nkBlock:
       for name in node.BlockNode.parameters & node.BlockNode.temporaries:
         rejected.incl(name)
@@ -50,3 +63,17 @@ proc objectParameterCandidates*(body: seq[Node], parameters, temporaries,
   for node in body: visit(node)
   for name, className in candidates:
     if name notin rejected: result[name] = className
+
+proc referenceGetterUses*(body: seq[Node], parameters: Table[string, string],
+                          receiverHints: Table[string, string]): HashSet[string] =
+  ## Emit reference helpers only where a specialized binding can reach them.
+  proc visit(node: Node, uses: var HashSet[string]) =
+    if node == nil: return
+    if node.kind == nkMessage:
+      let message = node.MessageNode
+      if message.arguments.len == 0 and message.selector in receiverHints and
+         message.receiver != nil and message.receiver.kind == nkIdent and
+         message.receiver.IdentNode.name in parameters:
+        uses.incl(message.selector)
+    for child in nodeChildren(node): visit(child, uses)
+  for node in body: visit(node, result)

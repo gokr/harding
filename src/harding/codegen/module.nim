@@ -233,6 +233,11 @@ proc genSlotAccessors*(cls: ClassInfo): string =
     output.add(fmt("    {prefix}_valid = slotGetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotGet_{clsName}_{field} and slotSetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotSet_{clsName}_{field}\n"))
     output.add(fmt("    {prefix}_version = compiledSlotAccessorVersion\n"))
     output.add(fmt("  {prefix}_valid and self.kind == vkInstance and self.instVal != nil and self.instVal.kind == ikObject and self.instVal.isNimProxy and self.instVal.nativeSlots == nil and self.instVal.compiledOwner != nil and self.instVal.compiledOwner of {clsName} and self.instVal.nimValue == cast[pointer](self.instVal.compiledOwner) and self.instVal.class != nil and self.instVal.class.name == \"{cls.name}\"\n\n"))
+    output.add(fmt("proc {prefix}_referenceGuard(self: Instance): bool {{.inline.}} =\n"))
+    output.add(fmt("  if {prefix}_version != compiledSlotAccessorVersion:\n"))
+    output.add(fmt("    {prefix}_valid = slotGetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotGet_{clsName}_{field} and slotSetters.getOrDefault(\"{cls.name}::{slot.name}\") == slotSet_{clsName}_{field}\n"))
+    output.add(fmt("    {prefix}_version = compiledSlotAccessorVersion\n"))
+    output.add(fmt("  {prefix}_valid and self != nil and self.kind == ikObject and self.isNimProxy and self.nativeSlots == nil and self.compiledOwner != nil and self.compiledOwner of {clsName} and self.nimValue == cast[pointer](self.compiledOwner) and self.class != nil and self.class.name == \"{cls.name}\"\n\n"))
     output.add(fmt("proc {prefix}_read(self: NodeValue): NodeValue {{.inline.}} =\n"))
     let directRead = boxExpression(slot, fmt("{clsName}(self.instVal.compiledOwner)[].{field}"))
     output.add(fmt("  if {prefix}_guard(self): return {directRead}\n"))
@@ -494,6 +499,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
   var directCandidates = initTable[string, string]()
   var numericGetters: Table[string, NumericGetter]
   var objectGetters: Table[string, ObjectGetter]
+  var getterReceiverHints: Table[string, string]
+  var referenceGetterCalls: Table[string, string]
+  var referenceTargets: Table[string, tuple[owner, target, slot, helper: string]]
+  var emittedReferenceHelpers: HashSet[string]
   if not mixed:
     var targets = initTable[string, seq[tuple[owner, target, slot: string]]]()
     for md in methodDefs:
@@ -537,6 +546,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         output.add(fmt("  canDirectCompiledSend(receiver, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver)\n\n"))
 
       if choice.slot.len > 0:
+        getterReceiverHints[selector] = choice.owner
+        let referenceCall = helper & "_reference"
+        referenceGetterCalls[selector] = referenceCall
+        referenceTargets[selector] = (choice.owner, choice.target, choice.slot, helper)
         let slot = classInfo[choice.owner].getSlotDef(choice.slot)
         if slot.constraint == tcObject and slot.objectClass.len > 0:
           let guard = helper & "_objectGuard"
@@ -732,11 +745,25 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     var objectParameters: Table[string, string]
     if not mixed and not md.isClassMethod and clsName in classInfo:
       objectParameters = objectParameterCandidates(body, params, md.temporaries,
-        methodCellNames, classInfo[clsName])
+        methodCellNames, classInfo[clsName], getterReceiverHints)
       # Keep one variant per method; numeric and reference parameter seeds must
       # not assign two representations to the same lexical binding.
       for name in parameterKinds.keys:
         objectParameters.del(name)
+    for getter in referenceGetterUses(body, objectParameters, getterReceiverHints):
+      if getter in emittedReferenceHelpers: continue
+      emittedReferenceHelpers.incl(getter)
+      let choice = referenceTargets[getter]
+      let helper = choice.helper
+      let referenceCall = referenceGetterCalls[getter]
+      let slotGuard = mangleClass(choice.owner) & "_direct_" & mangleSlot(choice.slot) & "_referenceGuard"
+      let directRead = boxExpression(classInfo[choice.owner].getSlotDef(choice.slot),
+        mangleClass(choice.owner) & "(receiver.compiledOwner)[]." & mangleSlot(choice.slot))
+      output.add(fmt("proc {referenceCall}(owner: NodeValue, receiver: Instance): NodeValue {{.inline.}} =\n"))
+      output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+      output.add(fmt("  if canDirectCompiledSend(receiver, {helper}_class, \"{getter}\", {choice.target}, {helper}_guard) and {slotGuard}(receiver):\n"))
+      output.add(fmt("    return {directRead}\n"))
+      output.add(fmt("  cachedSendBound(owner, compiledObjectSlotValue(receiver), \"{getter}\", [])\n\n"))
     let hasSpecialization = parameterKinds.len > 0 or objectParameters.len > 0
     let nativeName = procName & "_numeric"
     for variant in 0..(if hasSpecialization: 1 else: 0):
@@ -801,6 +828,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.directSendCandidates = directCandidates
         genCtx.numericGetters = numericGetters
         genCtx.objectGetters = objectGetters
+        genCtx.referenceGetterCalls = referenceGetterCalls
         genCtx.booleanCalls = booleanCalls
         genCtx.nilConditions = nilConditions
         genCtx.integerSendCandidates = integerCandidates

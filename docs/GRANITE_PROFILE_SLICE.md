@@ -1,5 +1,41 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Getter receiver evidence and direct reference reads
+
+A unique generated getter now proposes its receiver class for a method parameter,
+in addition to evidence from declared-slot writes. This remains speculative:
+non-signaling argument guards check actual conformance, and nil or unmatched
+receivers use the existing dispatch/fallback at the read. Getter results still
+retain their dynamic `NodeValue` ABI; a runtime replacement is not forced into
+the declared field type.
+
+The additional entry takes an owning `Instance`. A reference getter helper checks
+method identity and native layout directly on that reference, then reads the
+field without first constructing a boxed receiver. A boxed receiver is constructed
+only on fallback. Helpers are emitted lazily for getters actually reached by
+specialized bindings, rather than generating wrappers for every slot. The boxed
+method/slot guards keep their original hot-path structure; reference overloads
+have equivalent checks and share version invalidation.
+
+Inspection of the retained final candidate `run-bvdxlsjj`: Richards grows from
+one to three reference parameters and emits two reference helpers; DeltaBlue
+six to seven and two helpers; Queens has none. These still cover only a small
+part of graph traversal. The first broad implementation regressed Richards and
+DeltaBlue by ~3–4% in local pinned tests. Lazy helper emission and preserving boxed
+checks reduced the final comparison to Richards 0.56% slower (6/21), DeltaBlue
+0.00% slower (11/21), Queens 0.14% slower (10/21) against `run-7ec4jixy`
+(`build/receiver-final-pinned.log`). No execution-time improvement is claimed.
+This keeps the inference foundation without claiming broader native execution
+than the generated code actually reaches.
+
+The initial broad sweep passes 128/128 (`build/rg-full-parity.log`). Later lazy
+helper emission and preservation of boxed guards pass focused compiler (119),
+runtime (48), boundary (39), stdlib (6), slot-inference (32), and executed native
+reference/direct-slot integration under ARC and ORC. Generated benchmark programs
+verify 30 release-ORC passes each. The new reference-getter parity case also
+passes separately, including its ORC execution. This is not a full repository-suite
+claim.
+
 ## Reference parameters and getter-to-store fusion
 
 Slot-contract writes propose object parameter types. A method's additional native

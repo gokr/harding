@@ -8,6 +8,21 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("reference_getter_receiver", """
+GetterElement := Object derivePublic: #{measure -> Integer}.
+GetterChild := GetterElement derivePublic: #(extra).
+GetterReader := Object derive: #().
+GetterReader>>read: value [ ^value measure ].
+GetterOther := Object derive: #().
+GetterOther>>doesNotUnderstand: selector [ ^2.5 ].
+r := GetterReader new.
+e := GetterElement new measure: 42.
+c := GetterChild new measure: 99.
+(r read: e) println.
+(r read: c) println.
+(r read: GetterOther new) println.
+[r read: nil] on: Error do: [:e | "nil fallback" println].
+""", '42\n99\n2.5\nnil fallback\n'),
     ("object_reference_parameter_and_getter", """
 ObjectElement := Object derivePublic: #{number -> Integer}.
 ObjectSubElement := ObjectElement derivePublic: #(extra).

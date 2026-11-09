@@ -46,6 +46,7 @@ type
     numericBindings*: NumericBindings ## Proven lexical native representations
     objectBindings*: Table[string, string] ## Entry-guarded Instance parameters
     objectGetters*: Table[string, ObjectGetter]
+    referenceGetterCalls*: Table[string, string]
     methodReadCounts*: Table[string, int]
     suppressSlotArithmetic: bool
     ## Advisory inference results: slot name -> kind, used only to emit *guarded*
@@ -337,6 +338,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.directSendCandidates = ctx.directSendCandidates
   result.numericGetters = ctx.numericGetters
   result.objectGetters = ctx.objectGetters
+  result.referenceGetterCalls = ctx.referenceGetterCalls
   result.booleanCalls = ctx.booleanCalls
   result.nilConditions = ctx.nilConditions
   result.integerSendCandidates = ctx.integerSendCandidates
@@ -758,6 +760,13 @@ proc nativeIntArgument*(ctx: GenContext, node: Node, guards: var seq[string]): s
 
 proc genMessage*(ctx: GenContext, node: MessageNode): string =
   ## Generate code for message send
+
+  if not ctx.mixed and node.arguments.len == 0 and node.receiver != nil and
+     node.receiver.kind == nkIdent and node.receiver.IdentNode.name in ctx.objectBindings and
+     node.selector in ctx.referenceGetterCalls:
+    let receiver = mangleIdentifier(node.receiver.IdentNode.name)
+    let owner = genSymbolAccess(ctx, "self")
+    return ctx.referenceGetterCalls[node.selector] & "(" & owner & ", " & receiver & ")"
 
   # Generate receiver
   var receiverCode: string

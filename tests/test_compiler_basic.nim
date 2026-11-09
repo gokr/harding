@@ -348,6 +348,34 @@ suite "Compiler: Analyzer":
       let code = genModule(compiler, nodes, "object_parameter_excluded")
       check not code.contains("hardingNative_candidate: Instance")
 
+  test "getter receiver evidence proposes checked reference parameters":
+    let (nodes, syntax) = parse("Element := Object derivePublic: #{measure -> Integer}. User := Object derive: #(). User>>read: candidate [ ^candidate measure ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "getter_receiver_parameter")
+    check code.contains("hardingNative_candidate: Instance")
+    check code.contains("compiledObjectArgumentMatches(args[0], \"Element\")")
+    check code.contains("receiver: Instance): NodeValue")
+    check code.contains("_referenceGuard(receiver)")
+    check code.contains("(receiver.compiledOwner)[].measure")
+    check code.contains("_reference(self, candidate)")
+
+  test "unused getters do not emit reference call wrappers":
+    let (nodes, syntax) = parse("Element := Object derivePublic: #{measure -> Integer, unused -> Integer}. User := Object derive: #(). User>>read: candidate [ ^candidate measure ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "lazy_reference_getters")
+    check code.contains("guardedSend_" & mangleClass("Element") & "_measure_reference(owner")
+    check not code.contains("_unused_reference(owner")
+
+  test "getter receiver evidence excludes mutated or captured parameters":
+    for body in ["candidate := nil. ^candidate measure", "^[candidate measure]"]:
+      let (nodes, syntax) = parse("Element := Object derivePublic: #{measure -> Integer}. User := Object derive: #(). User>>read: candidate [" & body & "].")
+      require not syntax.hasError
+      var compiler = newCompiler()
+      let code = genModule(compiler, nodes, "reference_getter_excluded")
+      check not code.contains("hardingNative_candidate: Instance")
+
   test "typed slot table matches an untyped list for slot order and names":
     let (typed, _) = parse("P := Object derive: #{#a -> Integer, #b -> Integer}.")
     let (plain, _) = parse("P := Object derive: #(a, b).")
