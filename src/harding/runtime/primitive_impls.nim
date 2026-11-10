@@ -64,7 +64,9 @@ proc primitiveArrayAt*(self: NodeValue, args: seq[NodeValue]): NodeValue =
     "Array index out of bounds: " & $index))
 
 proc primitiveArrayAtPut*(self: NodeValue, args: seq[NodeValue]): NodeValue =
-  if args.len < 2: return self
+  if args.len < 2:
+    return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+      "Array at:put: requires an index and a value"))
   let (ok, index) = args[0].tryGetInt()
   if not ok or index < 0:
     return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
@@ -74,11 +76,10 @@ proc primitiveArrayAtPut*(self: NodeValue, args: seq[NodeValue]): NodeValue =
     if index < storage.elements.len:
       storage.elements[index] = args[1]
       return args[1]
-    if index == storage.elements.len:
-      storage.elements.add(args[1])
-      return args[1]
     return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
       "Array index out of bounds: " & $index))
+  if self.kind == vkArray:
+    return nt_at_kput_k(self, args[0], args[1])
   self
 
 proc primitiveArrayAdd*(self: NodeValue, args: seq[NodeValue]): NodeValue =
@@ -408,6 +409,24 @@ proc primitiveIsKindOf*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   let owner = walkCompiledHierarchy(classOfValue(self),
     proc(name: string): bool = name == target)
   toValue(owner.len > 0)
+
+proc methodNames(self: NodeValue, classSide, inherited: bool): NodeValue =
+  var names: seq[NodeValue]
+  for name in compiledMethodNames(classOfValue(self), classSide, inherited):
+    names.add(toSymbol(name))
+  compiledArray(names)
+
+proc primitiveMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, false, true)
+
+proc primitiveDefinedMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, false, false)
+
+proc primitiveClassMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, true, true)
+
+proc primitiveDefinedClassMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, true, false)
 
 proc primitiveRespondsTo*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   if args.len == 0: return toValue(false)

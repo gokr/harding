@@ -584,6 +584,7 @@ var
   integerClass*: Class = nil
   floatClass*: Class = nil
   stringClass*: Class = nil
+  symbolClassCache*: Class = nil                 # Symbol class, filled once the Symbol global exists
   bufferClass*: Class = nil
   arrayClass*: Class = nil
   tableClass*: Class = nil
@@ -952,7 +953,7 @@ proc classOfValue*(val: NodeValue): Class =
   of vkClass:
     return val.classVal
   of vkSymbol:
-    return nil
+    return symbolClassCache
 
 proc toValue*(arr: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkArray, arrayVal: arr)

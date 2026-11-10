@@ -171,20 +171,24 @@ proc primitiveStringFromToValueImpl*(self: NodeValue, args: seq[NodeValue]): Nod
   return toValue("")
 
 proc primitiveStringIndexOfValueImpl*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## Answer the 0-based index of the first occurrence, or nil on a miss.
   if args.len == 0:
-    return toValue(-1)
+    return nilValue()
 
   var source = ""
   if not tryExtractString(self, source):
-    return toValue(-1)
+    return nilValue()
 
   var needle = ""
   if not tryExtractString(args[0], needle):
-    return toValue(-1)
+    return nilValue()
   if needle.len == 0:
-    return toValue(-1)
+    return nilValue()
 
-  return toValue(source.find(needle))
+  let found = source.find(needle)
+  if found < 0:
+    return nilValue()
+  return toValue(found)
 
 proc primitiveStringIncludesSubStringValueImpl*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   if args.len == 0:
