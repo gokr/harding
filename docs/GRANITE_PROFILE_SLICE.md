@@ -1,5 +1,45 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Current standing, measured at `0426caa`
+
+Pinned alternating pairs, ARC, CPU 2, 30 verified passes per process, all engines
+answer-checked on every run (`build/python-pinned/run-vryuk9ug`):
+
+| Workload | Granite | CPython | Granite / CPython |
+|---|---:|---:|---:|
+| Richards | 11.93 ms/pass | 5.31 ms/pass | 2.24x |
+| DeltaBlue | 18.86 ms/pass | 7.28 ms/pass | 2.60x |
+| Queens | 12.79 ms/pass | 12.54 ms/pass | **1.00x** |
+
+Queens is at parity with CPython. Richards and DeltaBlue remain roughly 2.2–2.6x
+CPython *time*, i.e. CPython is that much faster on this shared host.
+
+Against the hand-written Nim ports (`build/native-compare/run-3s9mlgu5`, 7 pairs):
+Granite/Native **64.89x** (Richards) and **108.78x** (DeltaBlue), CPython/Native
+26.70x and 38.41x. Those native ports are representation references, not
+semantic-parity oracles (see the caveat further down), and the ratio moves with
+native-port timing noise, so treat the trend, not the exact multiplier.
+
+Cumulative for this session, pinned 21 pairs, session-start binaries
+(`run-juuf3_tj`, rev `b55903f5`) against current (`run-fows0306`):
+
+| Workload | Before | After | Faster by | Improving pairs |
+|---|---:|---:|---:|---:|
+| Richards | 14.20 ms | 11.70 ms | **17.56%** | 21/21 |
+| DeltaBlue | 19.63 ms | 18.11 ms | 7.17% | 21/21 |
+| Queens | 13.30 ms | 12.79 ms | 4.05% | 20/21 |
+
+`build/final-cumulative.log`. Per-run medians recorded inside individual
+`results.json` files are **not** comparable across runs: they were taken at
+different times under different host load. Only the pinned alternating pairs are
+used for any claim here.
+
+Where the remaining gap actually sits: Richards and DeltaBlue still pay for
+boxed `NodeValue` cross-method boundaries that inference has not reached, and for
+dynamic sends whose receivers are polymorphic in ways these shapes do not
+exercise. The Boolean-return slice took an 80% win on a shape this corpus does not
+contain, which is exactly why it did not move these three numbers.
+
 ## Native Boolean method results
 
 The first return-representation slice. The Integer region planner already derived

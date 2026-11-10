@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Current standing at `0426caa`, pinned and answer-checked against CPython: Queens at parity (1.00x CPython time), Richards 2.24x, DeltaBlue 2.60x. Cumulatively this session, pinned pairs show Richards 17.56% faster, DeltaBlue 7.17%, Queens 4.05%.
 - Source-derived Boolean methods can return an unboxed `bool` into conditions and loops behind method and slot-accessor guards, with the ordinary truthiness fallback for replaced methods. A literal-bound comparison loop measured 80.65% faster in pinned local pairs; a dynamic-bound control is unchanged.
 - Granite residual dynamic sends use a four-entry unrolled PIC with bounded overflow resolution and registration invalidation. Literal-selector sites omit repeated selector comparisons; dynamic selectors, class-side lookup and mixed-host fallbacks remain checked. Controlled 3–6-class cyclic sites measured faster by 19–28%; application benchmarks are near neutral.
 - The compiled send cache covers value receivers (nil, Boolean, Block, collections) by kind instead of re-deriving a class name per send; the instance path remains a single class-pointer comparison. Richards measured 4.34% less time in pinned local pairs (31/31), Queens 3.24%, DeltaBlue 1.52%.
