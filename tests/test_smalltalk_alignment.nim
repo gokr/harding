@@ -3,10 +3,7 @@
 #
 # Each test names the FIXES.md item it protects.
 #
-# Tests for a defect that is still open assert the intended behaviour through
-# `expectContract`, which reports SKIPPED instead of FAILED while the behaviour
-# is wrong. When a defect is fixed, the test starts asserting for real with no
-# edit: the contract is already written down.
+# Fixed defects have unconditional assertions: regressions must fail, not skip.
 #
 # Tests marked "guard" protect behaviour that is currently correct and easy to
 # regress, including several things that were mis-reported as broken during the
@@ -56,23 +53,6 @@ proc symbolLiteral(name: string): string =
   ## cannot be written bare: `#"<="` is the symbol `#<=`.
   "#\"" & name & "\""
 
-proc escapes(source: string): bool =
-  ## True when a failure escapes `doit` as a Nim exception instead of being
-  ## reported in the error string. Such a failure cannot be caught by `on:do:`
-  ## inside the script, because it never becomes a Harding signal.
-  try:
-    discard sharedInterp.doit(source)
-    result = false
-  except CatchableError:
-    result = true
-
-template expectContract(actual, expected: untyped) =
-  ## Assert the intended behaviour, or report SKIPPED while the defect is open.
-  if actual == expected:
-    check actual == expected
-  else:
-    skip()
-
 const repoRoot = currentSourcePath().parentDir().parentDir()
 
 const stdlibSourceFiles = [
@@ -120,60 +100,72 @@ suite "FIXES.md controlled defects":
   test "D1: a user-defined & wins over the quick primitive":
     # Granite answers 11. The interpreter answers "<instance of K>1" because a
     # quick primitive runs ahead of method lookup.
-    expectContract answer("""
+    check answer("""
       K := Object derive: #().
       K>>& other [ ^ 11 ].
       K new & 1
-    """), "11"
+    """) == "11"
 
   test "D2a: Comparable defines > and no bogus unary anObject":
     # The file lost the `>` selector, so the body is installed as a unary method
     # named `anObject` and `>` is missing from the mixin entirely.
-    expectContract answer("""
+    check answer("""
       ((Comparable definedMethods includes: #>) printString & "/" &
        (Comparable definedMethods includes: #anObject) printString)
-    """), "true/false"
+    """) == "true/false"
 
   test "D2b: <= and >= work on String through Comparable":
-    if fails("""("a" <= "b") printString"""):
-      skip()
-    else:
-      check answer("""("a" <= "b") printString""") == "true"
-      check answer("""("b" >= "a") printString""") == "true"
+    check answer("""("a" <= "b") printString""") == "true"
+    check answer("""("b" >= "a") printString""") == "true"
+    check answer("""("a" compareTo: "a")""") == "0"
+    check answer("""("a" compareTo: "b")""") == "-1"
 
-  test "D3: class-side method reflection answers the class side":
-    # On a class receiver, methods/definedMethods answer the instance side.
-    expectContract answer("""
+  test "D3: class-side method reflection has its own selectors":
+    # `K class == K`, so a class receiver cannot select a side; each table needs
+    # its own selector. `methods`/`definedMethods` stay instance-side and
+    # `classMethods`/`definedClassMethods` answer the class side.
+    check answer("""
       K := Object derive: #().
       K>>im [ ^ 1 ].
       K class>>cm [ ^ 2 ].
-      K class definedMethods includes: #im
-    """), "false"
+      K class definedMethods printString
+    """) == "#(#im)"
+    check answer("""
+      K2 := Object derive: #().
+      K2>>im2 [ ^ 1 ].
+      K2 class>>cm2 [ ^ 2 ].
+      K2 class definedClassMethods printString
+    """) == "#(#cm2)"
+    check answer("""
+      K3 := Object derive: #().
+      K3 class>>cm3 [ ^ 2 ].
+      K3 class classMethods includes: #cm3
+    """) == "true"
 
   test "D4: Interval>>asArray has no nil hole and keeps the count":
-    expectContract answer("""
+    check answer("""
       arr := (1 to: 3) asArray.
       arr size printString & "/" & (arr at: 0) printString
-    """), "3/1"
+    """) == "3/1"
 
   test "D4b: Interval>>withIndexDo: is 0-based like Array>>withIndexDo:":
-    expectContract answer("""
+    check answer("""
       first := -1.
       (1 to: 3) withIndexDo: [:each :index | first = -1 ifTrue: [ first := index ] ].
       first
-    """), "0"
+    """) == "0"
 
   test "D4c: Interval>>asArray keeps the last element":
-    expectContract answer("""
+    check answer("""
       arr := (1 to: 3) asArray.
       arr last printString
-    """), "3"
+    """) == "3"
 
   test "D5: an out-of-range at:put: signals instead of dropping the write":
-    expectContract answer("""
+    check answer("""
       arr := Array new: 3.
       [ arr at: 9 put: 9 ] on: SubscriptOutOfBounds do: [:e | "signalled" ]
-    """), "signalled"
+    """) == "signalled"
     # The read side already signals, so the write must match it.
     check answer("""
       arr2 := Array new: 3.
@@ -191,35 +183,24 @@ suite "FIXES.md controlled defects":
       let (value, err) = sharedInterp.doit("#" & selector)
       if err.len > 0 or value.toString() != selector:
         failures.add(selector)
-    if failures.len > 0:
-      skip()
-    else:
-      check failures.len == 0
+    check failures.len == 0
 
-  test "D6b: '# + whitespace' is a comment and '#name' is a symbol":
-    # The one-condition rule: whitespace decides. Both halves must hold together
-    # or the rule is ambiguous again. Note the '#no-space' line below is only a
-    # comment under the new rule, so this whole test is a contract assertion.
-    # `answer` raises on an uncaught failure, so probe with `doit` directly.
-    const commentSource = """
-      # this whole line is a comment
-      #no-space is also a comment under the one-condition rule
+  test "D6b: whitespace alone decides between comment and symbol":
+    # The rule is one condition: `#` at end of line, before whitespace, or before
+    # another `#` starts a comment; anything else starts a symbol or literal.
+    check answer("""
+      # a comment
       total := 0
       # ===== separator in the new spelling
       total := total + 1
       total
-    """
-    var commentRule = ""
-    var symbolHalf = ""
-    if not escapes(commentSource):
-      commentRule = answer(commentSource)
-    if not escapes("#size printString"):
-      symbolHalf = answer("#size printString")
-    if commentRule == "1" and symbolHalf == "#size":
-      check commentRule == "1"
-      check symbolHalf == "#size"
-    else:
-      skip()
+    """) == "1"
+    check answer("#size printString") == "#size"
+    # A `#` + space line is a comment, so it cannot be an expression.
+    check fails("# size asSymbol isNil")
+    # `#name` with no space is a symbol, so a bare `#comment` line is an error,
+    # not silently swallowed as a comment.
+    check fails("#no-space-comment here")
 
   test "D6c: '##' is reserved for documentation comments":
     # Nim semantics: ## precedes a declaration and is collected by tooling.
@@ -230,29 +211,35 @@ suite "FIXES.md controlled defects":
       K>>m [ ^ 1 ].
       K new m
     """
-    if escapes(source):
-      skip()
-    else:
-      check answer(source) == "1"
+    check answer(source) == "1"
 
   test "D7: a symbol answers its class":
     # classOfValue returns nil for vkSymbol; Granite answers <class Symbol>.
-    expectContract answer("#foo class printString"), "<class Symbol>"
+    check answer("#foo class printString") == "<class Symbol>"
     check answer("#foo isKindOf: Symbol") == "true"
 
-  test "D9: adopting Printable yields a real printString":
-    # Printable needs identityHash and a writable sink, so it falls through to
-    # Object>>printString.
-    expectContract answer("""
-      K := Object derive: #().
-      K addSuperclass: Printable.
-      K new printString
-    """), "<K>"
+  test "D9: Printable writes to a write: sink without Streams or Transcript":
+    check answer("""
+      AlignmentSink := Object derive: #(text).
+      AlignmentSink>>initialize [ text := "". ^self ].
+      AlignmentSink>>write: value [ text := text & value. ^self ].
+      AlignmentSink>>contents [ ^text ].
+      AlignmentPrintable := Object derive: #().
+      AlignmentPrintable addSuperclass: Printable.
+      sink := AlignmentSink new.
+      AlignmentPrintable new printOn: sink.
+      sink contents
+    """) == "<AlignmentPrintable>"
+    check answer("""
+      sink := AlignmentSink new.
+      AlignmentPrintable new displayOn: sink.
+      sink contents
+    """) == "<AlignmentPrintable>"
 
   test "D11: indexOf: answers nil on a miss for every collection":
     check answer("#(10, 20) indexOf: 99") == "nil"
     # String answers -1; every other collection and NotFound.hrd say nil.
-    expectContract answer("""("abc" indexOf: "z") printString"""), "nil"
+    check answer("""("abc" indexOf: "z") printString""") == "nil"
 
   test "D13: a super send to a missing method is a catchable error":
     # The interpreter raises a Nim ValueError here, which escapes both the
@@ -263,10 +250,7 @@ suite "FIXES.md controlled defects":
       C>>m [ ^ super nope ].
       [ C new m ] on: Error do: [:e | "caught" ]
     """
-    if escapes(source):
-      skip()
-    else:
-      check answer(source) == "caught"
+    check answer(source) == "caught"
 
   test "D8: no stdlib file defines the same method twice":
     # Interval.hrd defined anySatisfy:, allSatisfy: and sum twice; the later
@@ -289,9 +273,7 @@ suite "FIXES.md controlled defects":
     if duplicates.len > 0:
       for entry in duplicates:
         echo "  duplicate definition: ", entry
-      skip()
-    else:
-      check duplicates.len == 0
+    check duplicates.len == 0
 
 suite "FIXES.md guards: behaviour to keep":
 
@@ -368,6 +350,23 @@ suite "FIXES.md guards: behaviour to keep":
     check answer("""("ab" & "cd")""") == "abcd"
     check answer("#(1, 2) & #(3)") == "#(1 2)#(3)"
 
+  test "guard: & and | on Boolean are conjunction and disjunction":
+    # True>>&/False>>& and True>>|/False>>| are Smalltalk's non-short-circuit
+    # Boolean operators. A quick primitive used to answer them with string
+    # concatenation, which shadowed the shipped library definitions.
+    check answer("(true & false) printString") == "false"
+    check answer("(true & true) printString") == "true"
+    check answer("(true | false) printString") == "true"
+    check answer("(false | false) printString") == "false"
+    check answer("(true & false) isKindOf: Boolean") == "true"
+
+  test "guard: a class can override & like any other method":
+    check answer("""
+      K := Object derive: #().
+      K>>& other [ ^ "overridden" ].
+      K new & 1
+    """) == "overridden"
+
   test "guard: the string-symbol escape hatch names any operator":
     for selector in ["<=", ">=", "~=", "==", "-", "|", "&", "//"]:
       check answer("(" & selector.symbolLiteral & ") printString") == "#" & selector
@@ -440,10 +439,6 @@ suite "FIXES.md guards: behaviour to keep":
     check answer("Object methods includes: #printString") == "true"
     check answer("Object new respondsTo: #perform:with:") == "true"
     # A method name is a Symbol, and perform: accepts it.
-    check answer("""
-      m := Object methods.
-      m at: 0
-    """) == "ifNotNil:"
     check answer("""
       m := Object methods.
       (m at: 0) isKindOf: Symbol

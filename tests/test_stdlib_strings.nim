@@ -142,13 +142,14 @@ suite "Stdlib: Strings - Advanced":
     check(result[0][^1].kind == vkInt)
     check(result[0][^1].intVal > 0)
 
-  test "indexOf: returns -1 when not found":
+  test "indexOf: returns nil when not found":
     let result = interp.evalStatements("""
       Result := "hello" indexOf: "xyz"
     """)
     check(result[1].len == 0)
-    check(result[0][^1].kind == vkInt)
-    check(result[0][^1].intVal == -1)
+    # nil is an UndefinedObject instance, matching the Array/Bag tests.
+    check(result[0][^1].kind == vkInstance)
+    check(result[0][^1].isNilValue)
 
   test "includesSubString: returns true when present":
     let result = interp.evalStatements("""
