@@ -3,10 +3,13 @@
 # Comparable.hrd - Ordering comparison mixin.
 #
 # Provides sort-order comparison methods. For equality, use Equatable mixin.
-# Comparable requires implementing compareTo: which returns:
-#   - negative if self < anObject
-#   - zero if self = anObject
-#   - positive if self > anObject
+#
+# An adopter must supply `<` (and `=`, which Object already answers by identity).
+# Everything else here derives from those two, exactly as Smalltalk's Magnitude
+# derives `<=`, `>`, `>=`, `between:and:`, `min:` and `max:` from `<`.
+#
+# `<` is deliberately NOT defined here: if it were, an adopter that forgot to
+# supply its own would recurse through `compareTo:` back into this definition.
 
 Comparable := Mixin derive
 # Comparable is a mixin that defines ordering-oriented protocol for classes with total or partial order.
@@ -17,18 +20,18 @@ Comparable := Mixin derive
 # Classes may include this mixin alongside others through ordered multiple inheritance.
 
 Comparable>>compareTo: anObject [
-  ^ self identityHash - anObject identityHash
-]
-
-Comparable>>< anObject [
-  ^ (self compareTo: anObject) < 0
+  # Derived from the two selectors every adopter must supply: `=` and `<`.
+  # Adopters with a cheaper or more precise ordering may override this.
+  (self = anObject) ifTrue: [ ^ 0 ].
+  (self < anObject) ifTrue: [ ^ -1 ].
+  ^ 1
 ]
 
 Comparable>><= anObject [
   ^ (self compareTo: anObject) <= 0
 ]
 
-Comparable>> anObject [
+Comparable>>> anObject [
   ^ (self compareTo: anObject) > 0
 ]
 

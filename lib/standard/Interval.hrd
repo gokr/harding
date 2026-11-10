@@ -180,26 +180,6 @@ Interval>>count: aBlock [
     ^count
 ]
 
-Interval>>anySatisfy: aBlock [
-    # Return true if any element satisfies aBlock
-    self do: [:each | (aBlock value: each) ifTrue: [ ^true ]]
-    ^false
-]
-
-Interval>>allSatisfy: aBlock [
-    # Return true if all elements satisfy aBlock
-    self do: [:each | (aBlock value: each) ifFalse: [ ^false ]]
-    ^true
-]
-
-Interval>>sum [
-    # Sum of all elements
-    | total |
-    total := 0
-    self do: [:each | total := total + each]
-    ^total
-]
-
 Interval>>max [
     # Maximum value (largest by magnitude respecting step direction)
     step >= 0 ifTrue: [ ^stop ]
@@ -215,15 +195,15 @@ Interval>>min [
 Interval>>asArray [
     # Convert to Array
     | result |
-    result := Array new: self size
-    self withIndexDo: [:each :index | result at: index put: each]
+    result := Array new
+    self do: [:each | result add: each]
     ^result
 ]
 
 Interval>>withIndexDo: aBlock [
-    # Iterate with 1-based index
+    # Iterate with a 0-based index, matching Array>>withIndexDo:
     | index current |
-    index := 1
+    index := 0
     current := start
     step > 0
         ifTrue: [

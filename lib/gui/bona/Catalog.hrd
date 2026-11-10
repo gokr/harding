@@ -302,8 +302,8 @@ Catalog>>editableHeaderFromMethodHeader: aHeader fallback: aFallback [
     | sep |
     aHeader isNil ifTrue: [ ^ aFallback ]
 
-    sep := aHeader indexOf: ">>"
-    sep >= 0 ifFalse: [ ^ aHeader ]
+    sep := aHeader indexOf: ">>".
+    sep isNil ifTrue: [ ^ aHeader ]
     ^ (aHeader from: (sep + 2) to: (aHeader size - 1)) trim
 ]
 

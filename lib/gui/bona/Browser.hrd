@@ -1472,49 +1472,8 @@ Browser>>confirmDeleteClass: aClassName [
 ]
 
 Browser>>deleteClass: aClassName [
-    | classObj result |
-    
-    classObj := self classForName: aClassName
-    classObj isNil ifTrue: [
-        Transcript showCr: ("Class not found: " & aClassName)
-        ^ self
-    ]
-    
-    result := [ classObj become: Object ]
-        on: Exception
-        do: [:ex | "ERROR: " & ex printString ]
-    
-    (result isKindOf: String) ifTrue: [
-        result startsWith: "ERROR:" ifTrue: [
-            Transcript showCr: ("Failed to delete class: " & result)
-            ^ self
-        ]
-    ]
-    
-    self currentLibrary notNil ifTrue: [
-        | lib libKeys i |
-        lib := Library named: self currentLibrary
-        lib notNil ifTrue: [
-            libKeys := lib keys
-            libKeys isNil ifFalse: [
-                i := 0
-                [ i < libKeys size ] whileTrue: [
-                    | key |
-                    key := libKeys at: i
-                    ((lib at: key) = classObj) ifTrue: [
-                        lib at: key put: Object
-                    ]
-                    i := i + 1
-                ]
-            ]
-        ]
-    ]
-    
-    Transcript showCr: ("Deleted class: " & aClassName)
-    
-    self currentClass: nil
-    self updateSourceView: "Class deleted. Select another class."
-    self populateClassesFor: self currentLibrary
+    Transcript showCr: ("Class deletion is not supported: " & aClassName).
+    ^ self
 ]
 
 Browser>>generateClassDefinition: className parent: parentName slots: slotsArray [

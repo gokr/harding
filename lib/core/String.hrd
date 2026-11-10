@@ -5,17 +5,17 @@
 #
 # Note: String class is built-in, we just add methods to it here.
 
-#====================================================================.
+# ====================================================================.
 # String class methods (factory methods).
-#====================================================================.
+# ====================================================================.
 
 String class>>withCapacity: capacity <primitive primitiveStringWithCapacity: capacity>
   # Create a new String with pre-allocated capacity for efficient appending
   # Usage: buffer := String withCapacity: 1024
 
-#====================================================================.
+# ====================================================================.
 # String primitives.
-#====================================================================.
+# ====================================================================.
 
 String>>& other <primitive primitiveConcat: other>
   # Concatenate strings with the preferred operator - returns NEW string
@@ -24,13 +24,13 @@ String>>size <primitive primitiveStringSize>
   # Return string length
 
 String>>at: index <primitive primitiveStringAt: index>
-  # Return character at index (0-based or 1-based depending on convention)
+  # Return the one-character string at a 0-based index
 
 String>>from: start to: end <primitive primitiveFromTo: start to: end>
   # Return substring from start to end (inclusive)
 
 String>>indexOf: substring <primitive primitiveIndexOf: substring>
-  # Return index of substring (0 if not found)
+  # Return the 0-based index of substring, or nil if not found
 
 String>>< other <primitive primitiveLessThan: other>
   # Lexicographic comparison
@@ -75,9 +75,9 @@ String>><< other <primitive primitiveStringAppend: other>
   # Usage: buffer << "text" << " more text"
   # For functional concatenation use & instead
 
-#====================================================================.
+# ====================================================================.
 # String printing.
-#====================================================================.
+# ====================================================================.
 
 String>>interpolate: bindings [
   # Interpolate $name / $name::slot / ${expression-as-name} in an existing
@@ -103,9 +103,9 @@ String>>asString [
   ^ self
 ]
 
-#====================================================================.
+# ====================================================================.
 # String convenience methods.
-#====================================================================.
+# ====================================================================.
 
 String>>isEmpty [
   # Check if string is empty
