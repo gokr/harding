@@ -176,7 +176,13 @@ proc runScript*(filename: string, ctx: DoitContext = nil, dumpAst = false, maxSt
 
   # Auto-wrap script source in a block for execution
   # This enables temporary variable declarations like | counter total |
-  let wrappedSource = "[" & source & "]"
+  var scriptSource = source
+  if scriptSource.startsWith("#!"):
+    let lineEnd = scriptSource.find('\n')
+    let headerEnd = if lineEnd < 0: scriptSource.len else: lineEnd
+    for index in 0..<headerEnd:
+      scriptSource[index] = ' '
+  let wrappedSource = "[" & scriptSource & "]"
 
   # Handle AST dumping if requested
   if dumpAst:

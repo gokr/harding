@@ -4,9 +4,9 @@
 # Symbols are unique, immutable identifiers that can be compared by identity.
 #
 
-#====================================================================.
+# ====================================================================.
 # Symbol class - Immutable interned string.
-#====================================================================.
+# ====================================================================.
 
 Symbol := String derive
 # Symbol models interned identifiers used as stable names for selectors, keys, and protocol terms.

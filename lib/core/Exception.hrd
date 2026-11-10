@@ -3,9 +3,9 @@
 # Exception.nt - Exception handling for Harding.
 # Provides Smalltalk-style on:do: exception handling.
 
-#====================================================================.
+# ====================================================================.
 # Exception hierarchy.
-#====================================================================.
+# ====================================================================.
 
 Exception := Object derive: #(message, stackTrace, signaler)
 # Exception is the non-resumable root of Harding's exception hierarchy.
