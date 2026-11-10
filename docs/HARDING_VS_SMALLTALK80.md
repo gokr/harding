@@ -4,6 +4,13 @@ Companion document: [`FIXES.md`](FIXES.md) records the defects found here with
 concrete, Harding-consistent fixes. This document is the comparison summary;
 that one is the work list.
 
+## Implementation follow-up
+
+The D1–D13 defects and parenthesized cascades have implementation updates; see
+[FIXES.md](FIXES.md#current-implementation-status) for the current status, safe
+Browser-deletion refusal, and validation scope. The observations below preserve
+the original review baseline, not a claim that every defect remains present.
+
 ## Scope and status
 
 A review of Harding "the language" plus the current standard library against the
@@ -56,8 +63,7 @@ P1 := Object derive: #().
 P1>>who [ ^ "p1" ].
 P2 := Object derive: #().
 P2>>who [ ^ "p2" ].
-C := Object derive: #().
-C addSuperclass: P1.
+C := P1 derive: #().
 C addSuperclass: P2.
 C>>who [ ^ super who & "/" & super<P2> who ]      # "p1/p2"
 ```

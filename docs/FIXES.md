@@ -3,6 +3,46 @@
 Companion document: [`HARDING_VS_SMALLTALK80.md`](HARDING_VS_SMALLTALK80.md)
 describes the comparison this list came out of.
 
+## Current implementation status
+
+The D1–D13 findings below preserve the original reproductions and proposals.
+The working implementation now has these outcomes:
+
+| Item | Outcome |
+|---|---|
+| D1 | Ordinary `&` dispatch in the interpreter and compiled helper; overrides win. Boolean `&` reaches the shipped conjunction methods, not string conversion. |
+| D2 | Restored `>`; `compareTo:` derives from the adopter's `<` and `=`. The mixin no longer defines `<` recursively. |
+| D3 | Added `classMethods` and `definedClassMethods` in both engines. Existing instance-side queries remain unchanged: `K class == K`, so the proposed receiver-based distinction was impossible. |
+| D4, D8 | Interval conversion appends all values; indexed enumeration starts at zero; duplicate definitions removed. |
+| D5 | Out-of-range array writes signal `SubscriptOutOfBounds`, including writes at `size`; growth uses `add:`. |
+| D6 | Whitespace/EOL starts an ordinary comment; `##` preserves documentation text in lexer tokens and is ignored during evaluation. Operator symbols consume the whole operator. Separators migrated. CLI shebangs remain valid despite script wrapping. Documentation attachment/hover generation remains future work. |
+| D7 | Symbol values resolve to the shared Symbol class cache. |
+| D9 | Printable uses `write:` sinks and plain string formatting; no `writeStream`, `identityHash`, `String cr` or core Transcript dependency. It does not introduce a String sink or Streams. |
+| D10 | Browser deletion explicitly refuses without mutating bindings, selection or source. Real class deletion remains unimplemented; the unsafe partial removal primitive was discarded. |
+| D11 | Shared String search primitive returns nil on a miss; Catalog checks nil before slicing. |
+| D12 | Compiled class sends fall back to Class/Object instance protocol, without requiring Class to have a registered superclass edge. |
+| D13 | Missing super methods signal catchable MessageNotUnderstood; instance- and class-side error parity is covered. |
+| Cascades | Parenthesized expressions now use the same cascade continuation as statements. The receiver is evaluated once; the final message supplies the value (`yourself` returns the receiver). Intermediate cascade results are discarded, so a cascade used as an argument cannot leave extra operands on the VM stack. |
+
+Fixed defects have unconditional assertions, not skip-on-failure tests.
+Coverage is in `test_smalltalk_alignment`, `test_comment_syntax`, `test_cascade`,
+`test_alignment_runtime`, `test_bona_models` and the `alignment_*` /
+`parenthesized_cascade` differential cases in `scripts/test_granite_parity.py`.
+Validation logs are under `build/fixes/`; only explicitly listed suites are
+evidence of passing tests.
+
+Known pre-existing failure, reproduced on a clean `HEAD` archive and therefore not
+caused by this work: `tests/test_compiled_support.nim` fails its
+`Boolean helpers` and `indexed iteration` tests because the *tests* call
+`nt_not`/`withIndexDo:` on receivers whose methods are not registered in that
+harness. Recorded here so a later reader neither attributes it to these fixes nor
+assumes it is a runtime regression.
+
+A1–A5/C1–C2 remain separate work. Streams are still deferred, so `Printable` takes
+an injected `write:` sink rather than growing a String sink. Image-level class
+deletion is likewise not silently added: Browser refusal is the implemented
+behaviour, not a stub to be completed later without design.
+
 ## How this list is organized
 
 - **Defects (D\*)** — behaviour that is wrong on its own terms: it contradicts
@@ -27,9 +67,8 @@ Guiding constraints applied throughout:
 - Naming: Harding says **methods**, named by Symbols. New protocol uses the
   existing vocabulary rather than reintroducing "selector" as a concept.
 
-Every defect below has a regression test in
-`tests/test_smalltalk_alignment.nim` unless it is marked
-**(no test yet)** with the reason.
+See the coverage map above; the original evidence below is historical, not a
+claim that the implementation still has each defect.
 
 ## D1 — `&` is answered ahead of dispatch, so it cannot be overridden
 
@@ -434,19 +473,15 @@ engines keep agreeing.
 
 ## Regression coverage
 
-`tests/test_smalltalk_alignment.nim` pins every item above and the guards
-around them, and is part of `nimble testCore`. It contains three kinds of test:
+`tests/test_smalltalk_alignment.nim` now fails on a regression rather than
+turning it into SKIPPED. Parser/comment regressions live in
+`tests/test_comment_syntax.nim`, parenthesized cascades in `test_cascade`, and
+Browser deletion refusal in `test_bona_models`. The method-headline scan finds
+no duplicate definitions in its listed standard-library files.
 
-- **defect tests (D\*)** — assert the intended behaviour and call `skip()` while
-the defect is open, so the suite reports them as `SKIPPED` with the contract
-already written down. Fixing the defect makes them pass with no edit to the test.
-- **guard tests** — must stay green; they cover behaviour that is correct today
-and easy to regress, including the three things that were mis-reported during
-this review (`super` in class methods, mixin adoption, `Set>>clone`).
-- **D8's source scan** — reads the `.hrd` files listed in `stdlibSourceFiles`
-and reports any selector defined twice in one file. It currently reports the
-three `Interval.hrd` duplicates and nothing else, which is a useful positive
-control that the scan is precise rather than noisy.
+Interpreter/Granite parity cases cover class protocol, class-side reflection,
+custom/Boolean `&`, String ordering/search, bounds errors, interval conversion,
+Printable sinks, missing super methods, comments/symbols and nested cascades.
 
 ## A1 — `hash` and `identityHash`
 

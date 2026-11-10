@@ -33,9 +33,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   with the three-implementation problem, measured `--mixed` trade-off and staged
   closure approach; linked from `PLAN.md` section 6.
 - `tests/test_smalltalk_alignment.nim`: regressions for the defects and
-  guards recorded in `docs/FIXES.md`, part of `testCore`. Open defects assert
-  their intended contract and report SKIPPED until fixed, so a test does not
-  need editing when the fix lands; a source scan reports any stdlib selector
+  guards recorded in `docs/FIXES.md`, part of `testCore`. Fixed defects use
+  unconditional assertions so regressions fail; a source scan reports any stdlib selector
   defined twice in one file.
 - `docs/HARDING_VS_SMALLTALK80.md`: language and standard-library comparison against classic Smalltalk-80, and `docs/FIXES.md`: the defects that comparison confirmed, small alignment fixes that do not conflict with existing Harding decisions, and an explicit list of what is deliberately deferred.
 
@@ -43,11 +42,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Consolidated GTK documentation around `docs/GTK.md`, distinguishing Bona's interpreter bridge from the shared standalone interpreted/Granite protocol. `docs/GTK_SUPPORT.md` records current coverage, FFI/lifecycle risks and the staged Harding Notebook showcase plan; removed obsolete GTK overview claims and marked the original Nim-shell demo as superseded for application authoring.
 
 ### Fixed
+- Parenthesized cascades parse through the statement cascade continuation, preserving receiver identity and the final message result; focused parser/runtime tests and native parity cover nesting and `yourself`.
+- Smalltalk-alignment defects: `&` honors overrides (including Boolean conjunction), Comparable ordering no longer depends on a missing hash method, interval conversion/indexing and duplicate definitions are corrected, array writes signal on invalid indices instead of dropping/appending them, Symbol class reflection works, String search misses answer nil, and missing super methods are catchable.
+- Class-side reflection has explicit `classMethods`/`definedClassMethods` queries in both engines; compiled class values answer Object/Class protocol. Printable uses existing `write:` sinks without Streams or Transcript, and Browser class deletion explicitly refuses rather than calling missing `become:` or altering library bindings.
 - `docs/FIXES.md` D6 now proposes a single `#` rule — `#` plus whitespace is
   a comment, anything else starts a symbol or literal — with `##` reserved for
   documentation comments as in Nim, replacing the lexer's special-character
   list. The separator-line migration (`#====` to `# =====`) is 112 lines in 15
-  files; the rule itself is not implemented yet.
+  files. The lexer rule is implemented, operator symbols are preserved, and `##`
+  text is retained in lexer tokens (documentation attachment is deferred). CLI
+  shebang handling preserves source lines when scripts are wrapped.
 - The language-comparison documents claimed `2 * 3 max: 4` was a precedence divergence from Smalltalk-80. Keyword messages bind loosest in both languages, so it parses as `(2 * 3) max: 4` and answers `6` in each; `docs/LANGUAGE_COMPARISON.md`, `docs/AI_HARNESS_INTEGRATION.md` and `docs/MANUAL.md` now agree. The same review corrected two stale claims in that document: integer overflow signals a catchable `Overflow`, and method-list reflection does exist under method-oriented names.
 - `Array add:`, `Set add:`, `Bag add:` and `Set remove:` answer the added or
   removed element in both engines, matching classic Smalltalk and the documented
