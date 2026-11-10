@@ -311,6 +311,11 @@ template createBlockWithEnv*[T](procPtr: pointer, paramCount: int, env: T): Node
 type
   HardingObject* {.inheritable.} = object of RootObj
     className*: string
+    ## The Harding class object for this native instance. Lives on the shared
+    ## base so a generated class can derive from its generated parent type
+    ## without redeclaring (Nim forbids a field name appearing at two levels of
+    ## one inheritance chain) and without a per-class layout exception.
+    classRef*: Class
   HardingObjectRef* = ref HardingObject
 
 

@@ -1,5 +1,73 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Mirrored Harding type hierarchy
+
+The enabling change for typed object storage. Generated classes previously derived
+from the shared `HardingObject` base regardless of their Harding parent, so the
+Nim types carried no store. Everything a subclass needed was duplicated into its
+own object and reachable only through `Instance`/`NodeValue`.
+
+They now mirror the language hierarchy:
+
+```nim
+type
+  Class_56656869636C65Obj* {.inheritable.} = object of HardingObject   # Vehicle
+    wheels*: int
+    owner*: NodeValue
+  Class_436172Obj* {.inheritable.} = object of Class_56656869636C65Obj  # Car
+    doors*: NodeValue
+  Class_547275636BObj* {.inheritable.} = object of Class_436172Obj      # Truck
+    capacity*: NodeValue
+```
+
+Three things had to change together, and each was a real defect otherwise:
+
+- **Parents are emitted before children.** `classes` is a name-keyed table with no
+  ordering guarantee, so DeltaBlue failed with an undeclared parent type until
+  emission was sorted by inheritance depth (ties by name, for reproducible output).
+- **Inherited slots are declared once.** Each class now emits only its own slots;
+  redeclaring inherited ones duplicates storage and shadows the parent field.
+  Constructors still initialise every visible slot, matching interpreter allocation.
+- **`classRef` moved to the shared base.** Nim rejects a field name at two levels
+  of one inheritance chain, and every class previously declared its own `classRef`.
+
+Inheritance is derived from `ClassInfo.parent` rather than a name table. Harding
+allows duplicate class names under different owners, so a name-keyed lookup could
+let a template/helper class reparent an application class and change its layout
+silently.
+
+Performance: **neutral**, as expected — mirroring the hierarchy removes no boxing
+by itself. Pinned alternating pairs against `run-fows0306`: Richards -0.70%
+(7/21), DeltaBlue -0.26% (10/21), Queens +0.32% (12/21); all inside noise. It
+makes the next step sound rather than fast.
+
+Validation: a three-level chain (Vehicle -> Car -> Truck) is executed under ARC and
+ORC with a parent-typed slot holding each concrete subclass, dispatch still
+following the concrete class, and one shared inherited storage location. Compiler
+124, runtime 57, boundary 39, planner 13 pass under both memory managers; trusted
+feedback and the Boolean/Integer integration tests pass. Broad parity runs on this
+tree.
+
+### What is still needed before typed object fields
+
+Two constraints remain, both verified rather than assumed, and both recorded here
+so the next slice does not rediscover them:
+
+1. **Nilability.** Real slots mix nil and instances: Richards does
+   `queue := packet link` (nil-terminated links), `pending := nil`, then
+   `pending := packet`. A non-nil typed ref cannot represent that, so narrowing
+   must cover `ref X` fields and prove every write compatible, or leave the slot
+   boxed.
+2. **Heterogeneity.** Even a hierarchy-typed field is a claim that no unrelated
+   class is ever stored. The benchmarks' `nil`-declared slots (`#link -> nil`,
+   `#state -> nil`) need whole-module write evidence, which the existing
+   `inferSlots`/observations machinery can supply for primitives but not yet for
+   object classes.
+
+Remaining boxing after this change is unchanged: 623/623 Richards entry points and
+662/662 DeltaBlue still take `openArray[NodeValue]` and return `NodeValue`, and
+68/69 slot fields are still `NodeValue`.
+
 ## Native Integer method results
 
 The second return-representation slice, and the more broadly useful one. An

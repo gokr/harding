@@ -1,4 +1,4 @@
-import std/[strutils, tables, os, strformat, sequtils, sets]
+import std/[strutils, tables, os, strformat, sequtils, sets, algorithm]
 import ../core/types
 import ../parser/parser
 import ../parser/lexer
@@ -87,29 +87,38 @@ proc unboxExpression(slot: SlotDef, source: string): string =
 proc genClassConstants*(cls: ClassInfo): string =
   ## Generate native Nim type for Harding class with slot accessors
   let clsName = mangleClass(cls.name)
-  let slots = cls.getAllSlots()
-  
-  # Keep generated native objects rooted at HardingObject.
-  # Language-level inheritance is handled by runtime method dispatch tables.
-  let parentName = "HardingObject"
-  
+
+  # Mirror the Harding hierarchy in the Nim type hierarchy, so a typed reference
+  # to a parent class can later hold any subclass instance. Without this, a
+  # narrowed object slot could only ever hold the exact declared class.
+  #
+  # Only the parent chain is walked. Harding allows duplicate class names under
+  # different owners, so keying inheritance off a name table could let a
+  # template/helper class of the same name reparent an application class and
+  # silently change its layout.
+  let parentName = if cls.parent != nil: mangleClass(cls.parent.name) & "Obj"
+                   else: "HardingObject"
+
+  # Inherited slots already exist on the parent object, so only this class's own
+  # slots are declared here. Redeclaring them would duplicate storage and shadow
+  # the parent field of the same name.
+  var ownSlots: seq[SlotDef]
+  for slot in cls.slots:
+    if not slot.isInherited:
+      ownSlots.add(slot)
+
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
-  
-  # Generate Nim object type with slots as fields
-  # TODO: Eventually when we generate native methods directly, we can remove
-  # classRef and toValue() - methods will be called directly instead of via sendMessage
+
   output.add("type\n")
   output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
-  output.add(fmt("    classRef*: Class  ## Store class reference for toValue() (temporary - see above)\n"))
-  
-  # Slot fields - include inherited slots so each native class is self-contained
-  for slot in slots:
+
+  for slot in ownSlots:
     let slotName = mangleSlot(slot.name)
     let nativeType = nativeSlotType(slot)
     let fieldType = if nativeType.len > 0: nativeType else: "NodeValue"
     output.add(fmt("    {slotName}*: {fieldType}\n"))
-  
+
   output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
   
   # Constructor
@@ -133,7 +142,10 @@ proc genClassConstants*(cls: ClassInfo): string =
   output.add(fmt("        result.classRef = objVal.instVal.class\n"))
   output.add(fmt("  if result.classRef == nil:\n"))
   output.add(fmt("    result.classRef = compiledClassValue(\"{cls.name}\").classVal\n"))
-  for slot in slots:
+  # Initialise every slot this class can see, inherited ones included. They are
+  # inherited storage now, but each constructor still owns their default values,
+  # matching what the interpreter does on allocation.
+  for slot in cls.getAllSlots():
     if slot.defaultValue.len > 0:
       # A declared default (`#{#x -> 0}`) must match the interpreter exactly.
       output.add(fmt("  result.{mangleSlot(slot.name)} = {slot.defaultValue}\n"))
@@ -1334,8 +1346,23 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
           info.captures.add("self")
           info.captureTypes.add("MutableCell")
 
-  # Generate for each class
-  for cls in analysis.classes.values:
+  # Generate for each class, parents first: a mirrored type derives from its
+  # parent object, so the parent type must already be declared. `classes` is a
+  # name-keyed table with no ordering guarantee, so sort by inheritance depth
+  # (ties by name, for reproducible output).
+  proc classDepth(info: ClassInfo): int =
+    var current = info.parent
+    var guard = 0
+    while current != nil and guard < 64:
+      inc result
+      current = current.parent
+      inc guard
+  var orderedClasses = analysis.classes.values.toSeq()
+  orderedClasses.sort(proc (a, b: ClassInfo): int =
+    let byDepth = cmp(classDepth(a), classDepth(b))
+    if byDepth != 0: byDepth else: cmp(a.name, b.name))
+
+  for cls in orderedClasses:
     output.add(genClassConstants(cls))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))

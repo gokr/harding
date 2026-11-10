@@ -26,6 +26,99 @@ def execute(command):
     return done
 
 
+class MirroredHierarchy(unittest.TestCase):
+    """Compiled classes mirror Harding inheritance in the Nim type hierarchy."""
+
+    SOURCE = """
+Vehicle := Object derivePublic: #{#wheels -> Integer, #owner -> nil}.
+Vehicle>>kind [ ^#vehicle ].
+Vehicle>>describe [ ^wheels ].
+Vehicle>>bump [ wheels := wheels + 1. ^self ].
+Car := Vehicle derivePublic: #{#doors -> Integer}.
+Car>>kind [ ^#car ].
+Truck := Car derivePublic: #(capacity).
+Truck>>kind [ ^#truck ].
+Holder := Object derivePublic: #(held).
+Holder>>ship [ ^held describe ].
+Holder>>shippedKind [ ^held kind ].
+"""
+
+    HOST = """
+initRuntime()
+registerCompiledMethods()
+registerSuperclassHierarchy()
+proc make(name: string): NodeValue =
+  case name
+  of "Vehicle": newClass_56656869636C65().toValue()
+  of "Car": newClass_436172().toValue()
+  of "Truck": newClass_547275636B().toValue()
+  else: quit("bad name")
+
+# A parent-typed slot holds instances of every subclass and shares one storage.
+proc ship(name: string): int =
+  let holder = newClass_486F6C646572().toValue()
+  let value = make(name)
+  discard setSlotValue(holder, "held", value)
+  discard sendMessage(nil, value, "bump", [])
+  discard sendMessage(nil, value, "bump", [])
+  sendMessage(nil, holder, "ship", []).intVal
+
+proc shippedKind(name: string): string =
+  let holder = newClass_486F6C646572().toValue()
+  discard setSlotValue(holder, "held", make(name))
+  sendMessage(nil, holder, "shippedKind", []).symVal
+
+doAssert ship("Vehicle") == 2, $ship("Vehicle")
+doAssert ship("Car") == 2, $ship("Car")
+doAssert ship("Truck") == 2, $ship("Truck")
+# Dispatch still follows the concrete class through a parent-typed slot.
+doAssert shippedKind("Vehicle") == "vehicle"
+doAssert shippedKind("Car") == "car"
+doAssert shippedKind("Truck") == "truck"
+# The inherited field is one storage location regardless of the concrete class.
+let car = newClass_436172().toValue()
+discard sendMessage(nil, car, "bump", [])
+doAssert sendMessage(nil, car, "describe", []).intVal == 1
+discard setSlotValue(car, "doors", toValue(4))
+doAssert getSlotValue(car, "doors").intVal == 4
+doAssert getSlotValue(car, "wheels").intVal == 1
+echo "ok"
+"""
+
+    def test_subclass_storage_and_dispatch(self):
+        base = ROOT / 'build/native-boolean-tests'
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            work = Path(directory)
+            source = work / 'hier.hrd'
+            source.write_text(self.SOURCE)
+            execute([str(ROOT / 'granite'), 'compile', str(source), '--home:' + str(ROOT),
+                     '--dir:' + str(work), '-o:hier'])
+            generated = (work / 'hier.nim').read_text()
+            # The Nim types mirror the three-level Harding chain, parents first.
+            self.assertIn(mangle_type('Car') + 'Obj* {.inheritable.} = object of ' +
+                          mangle_type('Vehicle') + 'Obj', generated)
+            self.assertIn(mangle_type('Truck') + 'Obj* {.inheritable.} = object of ' +
+                          mangle_type('Car') + 'Obj', generated)
+            # Inherited storage is declared exactly once, on the root.
+            self.assertEqual(generated.count('  wheels*: int'), 1)
+            self.assertEqual(generated.count('  owner*: NodeValue'), 1)
+            host = work / 'hierhost.nim'
+            imports = '\n'.join('import "' + str(ROOT / path) + '"' for path in [
+                'src/harding/core/types', 'src/harding/core/scheduler',
+                'src/harding/interpreter/vm', 'src/harding/runtime/runtime'])
+            host.write_text('import std/tables\n' + imports + '\nimport ./hier\n' + self.HOST)
+            for mm in ['arc', 'orc']:
+                with self.subTest(mm=mm):
+                    binary = work / ('hierhost_' + mm)
+                    execute(['nim', 'c', '--mm:' + mm, '--out:' + str(binary), str(host)])
+                    self.assertEqual(execute([str(binary)]).stdout.strip(), 'ok')
+
+
+def mangle_type(name):
+    return 'Class_' + ''.join(f'{ord(c):02X}' for c in name)
+
+
 class NativeIntegerResults(unittest.TestCase):
     def test_int_result_and_fallbacks(self):
         base = ROOT / 'build/native-boolean-tests'

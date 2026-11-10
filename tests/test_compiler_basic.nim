@@ -806,6 +806,29 @@ suite "Compiler: Cached ordinary sends":
     check genMessage(ctx, send).contains("sendMessageHybrid(receiver")
     check not genMessage(ctx, send).contains("cachedSend")
 
+suite "Compiler: Mirrored Harding type hierarchy":
+  test "a subclass derives from its parent and inherits its slot fields":
+    let (nodes, syntax) = parse("Vehicle := Object derivePublic: #{#wheels -> Integer, #owner -> nil}. Vehicle>>wheelsValue [ ^wheels ]. Car := Vehicle derivePublic: #(doors). Car>>expand [ ^self wheelsValue + 1 ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "hierarchy")
+    # Mirror the language hierarchy so a typed parent reference can hold a Car.
+    # mangleClass already yields the "Class_" prefix.
+    let carType = mangleClass("Car") & "Obj"
+    let vehicleType = mangleClass("Vehicle") & "Obj"
+    check code.contains(carType & "* {.inheritable.} = object of " & vehicleType)
+    check code.contains(vehicleType & "* {.inheritable.} = object of HardingObject")
+    # Inherited slots are declared once, on the parent, and not shadowed.
+    check code.count("  wheels*: int") == 1
+    check code.count("  owner*: NodeValue") == 1
+    var carSection = code[code.find(carType & "* {.inheritable.}") .. ^1]
+    carSection = carSection[0 ..< carSection.find(mangleClass("Car") & "* = ref")]
+    check carSection.contains("doors*: NodeValue")
+    check not carSection.contains("wheels*: int")
+    check not carSection.contains("owner*: NodeValue")
+    # Parents are emitted before children; a table iteration order must not leak.
+    check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
+
 suite "Compiler: Native Integer method results":
   test "an Integer-returning self-send feeds a native comparison":
     let (nodes, syntax) = parse("Counter := Object derive: #(). Counter>>advanceBy: n [ | k | k := n * 2. ^k + 1 ]. Counter>>run [ | i | i := 0. [(self advanceBy: 3) < 500] whileTrue: [i := i + 1]. ^i ].")
