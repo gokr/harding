@@ -180,6 +180,9 @@ tests/test_log.nim
 tests/test_stdlib_basics.nim
 tests/test_stdlib_strings.nim
 tests/test_stdlib_collections.nim
+tests/test_collection_alignment.nim
+tests/test_object_protocol.nim
+tests/test_literal_rendering.nim
 tests/test_stdlib_intervals.nim
 tests/test_stdlib_io_and_packages.nim
 tests/test_stdlib_utilities.nim
