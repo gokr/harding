@@ -426,7 +426,7 @@ suite "Compiled hierarchy resolution cache":
     registerCompiledMethod(name, "initialize", replacementAllocation)
     check sendMessage(nil, compiledClassValue(name), "new", @[]).intVal == 2
 
-suite "Compiled monomorphic send caches":
+suite "Compiled polymorphic send caches":
   test "receiver and selector changes never reuse a wrong target":
     let rt = newRuntime()
     let first = proxyReceiver("CacheReceiverOne")
@@ -451,7 +451,7 @@ suite "Compiled monomorphic send caches":
       class: otherClass, isNimProxy: true))
     var cache: CompiledSendCache
     check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
-    check cache.classPtr == first.instVal.class
+    check cache.slots[0].cls == first.instVal.class
     check sendMessageCached(rt, second, "answer", @[], cache).intVal == 1
     check sendMessageCached(rt, first, "answer", @[], cache).intVal == 1
     check first.instVal.class.name == "CachePointerName"
@@ -498,7 +498,85 @@ suite "Compiled monomorphic send caches":
     var cache: CompiledSendCache
     check sendMessageCached(rt, compiledClassValue("CacheClassSide"), "answer", @[], cache).intVal == 1
     check sendMessageCached(rt, compiledClassValue("CacheClassSide"), "answer", @[], cache).intVal == 1
-    check cache.classPtr == nil
+    check cache.count == 0
+
+  test "one through six receiver classes retain four resident entries":
+    var receivers: seq[NodeValue]
+    for index in 0..<6:
+      let name = "PicWidth" & $index
+      registerCompiledMethod(name, "answer", defaultAllocation)
+      receivers.add(proxyReceiver(name))
+    var cache: CompiledSendCache
+    for index, receiver in receivers:
+      check sendMessageCached(nil, receiver, "answer", [], cache).intVal == 1
+      check cache.count == min(index + 1, 4)
+      check cache.megamorphic == (index >= 4)
+    for iteration in 0..<3:
+      for receiver in receivers:
+        check sendMessageCached(nil, receiver, "answer", [], cache).intVal == 1
+    check cache.count == 4
+    for index in 0..<4:
+      check cache.slots[index].cls == receivers[index].instVal.class
+    # Selector switching must invalidate even without a registration epoch bump.
+    check sendMessageCached(nil, receivers[0], "notNil", [], cache).boolVal
+    check cache.count == 1
+    check not cache.megamorphic
+    for receiver in receivers:
+      discard sendMessageCached(nil, receiver, "answer", [], cache)
+    check cache.megamorphic
+    registerCompiledMethod("PicWidth5", "answer", replacementAllocation)
+    check sendMessageCached(nil, receivers[5], "answer", [], cache).intVal == 2
+    check cache.count == 1
+    check not cache.megamorphic
+    check sendMessageCached(nil, receivers[0], "answer", [], cache).intVal == 1
+    registerCompiledMethod("PicWidth0", "other", replacementAllocation)
+    check sendMessageCached(nil, receivers[0], "other", [], cache).intVal == 2
+    check cache.count == 1
+    check cache.selector == "other"
+
+  test "class and instance receivers never share same-class method targets":
+    registerCompiledClass("PicSeparateSides", defaultAllocation)
+    registerCompiledMethod("PicSeparateSides", "answer", defaultAllocation)
+    registerCompiledClassMethod("PicSeparateSides", "answer", replacementAllocation)
+    let cls = compiledClassValue("PicSeparateSides")
+    let instance = NodeValue(kind: vkInstance, instVal: Instance(kind: ikObject,
+      class: cls.classVal, isNimProxy: true))
+    var cache: CompiledSendCache
+    for iteration in 0..<3:
+      check sendMessageCached(nil, instance, "answer", [], cache).intVal == 1
+      check sendMessageCached(nil, cls, "answer", [], cache).intVal == 2
+
+  test "value and instance entries share a PIC without identity collisions":
+    let values = @[toValue(1), toValue(1.5), toValue(true), toValue(false),
+      NodeValue(kind: vkNil), toValue("text")]
+    var cache: CompiledSendCache
+    for iteration in 0..<3:
+      for value in values:
+        check sendMessageCached(nil, value, "isNil", [], cache).boolVal == (value.kind == vkNil)
+    check cache.count == 4
+    check cache.megamorphic
+    registerCompiledMethod("PicMixedIdentity", "isNil", defaultAllocation)
+    let native = proxyReceiver("PicMixedIdentity")
+    check sendMessageCached(nil, native, "isNil", [], cache).intVal == 1
+    for value in values:
+      check sendMessageCached(nil, value, "isNil", [], cache).boolVal == (value.kind == vkNil)
+    registerCompiledMethod("Integer", "isNil", replacementAllocation)
+    check sendMessageCached(nil, values[0], "isNil", [], cache).intVal == 2
+    # Restore absence rather than leave a global override for subsequent tests.
+    compiledMethodProcs.del("Integer>>isNil")
+    inc compiledClassDispatchVersion
+    check not sendMessageCached(nil, values[0], "isNil", [], cache).boolVal
+
+  test "Boolean compiled targets distinguish True from False at one site":
+    registerCompiledMethod("True", "picBooleanProbe", defaultAllocation)
+    registerCompiledMethod("False", "picBooleanProbe", replacementAllocation)
+    var cache: CompiledSendCache
+    for iteration in 0..<3:
+      check sendMessageCached(nil, toValue(true), "picBooleanProbe", [], cache).intVal == 1
+      check sendMessageCached(nil, toValue(false), "picBooleanProbe", [], cache).intVal == 2
+    check cache.count == 2
+    registerCompiledMethod("True", "picBooleanProbe", replacementAllocation)
+    check sendMessageCached(nil, toValue(true), "picBooleanProbe", [], cache).intVal == 2
 
   test "a compiled method reached with fewer arguments answers safely":
     # Generated methods bind borrowed parameters; a missing argument must fall
@@ -559,6 +637,21 @@ suite "Compiled monomorphic send caches":
     check sendMessageCached(rt, value, "message", @[], cache).intVal == 2
     # signal/pass/retry still take the built-in protocol path.
     check sendMessageCached(rt, value, "defaultAction", @[], cache).kind == vkInstance
+
+  test "one template expansion retains checks for dynamic selectors":
+    registerCompiledMethod("PicDynamicSelector", "first", defaultAllocation)
+    registerCompiledMethod("PicDynamicSelector", "second", replacementAllocation)
+    let receiver = proxyReceiver("PicDynamicSelector")
+    proc exercise(selector: string): NodeValue =
+      cachedSend(nil, receiver, selector, [])
+    check exercise("first").intVal == 1
+    check exercise("second").intVal == 2
+    check exercise("first").intVal == 1
+    proc exerciseBound(selector: string): NodeValue =
+      cachedSendBound(receiver, receiver, selector, [])
+    check exerciseBound("first").intVal == 1
+    check exerciseBound("second").intVal == 2
+    check exerciseBound("first").intVal == 1
 
   test "template evaluates receiver and arguments exactly once":
     let rt = newRuntime()

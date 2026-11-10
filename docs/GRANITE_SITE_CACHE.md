@@ -1,6 +1,44 @@
 # Per-site send cache in method bodies
 
-## Change
+## Current design: four-entry PIC
+
+Generated `cachedSend`/`cachedSendBound` sites own thread-local caches in a
+procedure-scoped `{.global, threadvar.}` slot. The first receiver is the
+monomorphic fast path; the next three identity checks are explicitly unrolled.
+After four identities, overflow receivers use the shared bounded method-resolution
+cache. Resident entries stay usable, so a rare fifth receiver does not discard a
+hot first receiver. Registration-version changes reset both entries and overflow
+state. `count` defines occupied entries; a nil method target is a resolved negative,
+not an empty entry.
+
+Native instances key on their `Class` reference. Immediate values key on
+`ValueKind`, with the Boolean value distinguishing True/False. Class-side sends
+keep ordinary class-side lookup; they cannot share instance-method targets even
+when they reference the same Class object. VM-owned instances, bound interpreters,
+exception protocols and unsafe negative selectors retain ordinary routing.
+
+For a compile-time selector, the templates select a fixed-selector runtime
+instantiation: their private site cache needs no per-send selector comparison.
+Dynamic selector APIs remain checked, including a template called with a string
+parameter. String payload addresses are **not** used as selector identities:
+equal strings need not share storage, and mutations or released payloads make
+pointer-only identity unsafe. No globally interned selector lookup is added to the
+hot path. The function target is copied before invocation for reentrant calls.
+
+This is a bounded PIC, not a JIT or a replacement for inference. Slot contracts,
+static analysis and future observed-type hints should remove sends/boxing when
+safe; this cache supports the sends left dynamic. Four entries are a policy
+choice, not a proven universally optimal width. Probe order, stable resident vs
+LRU replacement, cold-site footprint, and large-world invalidation remain
+tradeoffs. It is not accurate to call an indirect function-pointer invocation
+zero overhead, nor is `{.global.}` alone thread-safe; thread-local storage avoids
+sharing these caches, but does not make concurrent registry mutation safe.
+
+Controlled shape tests and application checks are recorded in
+`docs/GRANITE_PROFILE_SLICE.md`. The historical measurements below describe the
+initial monomorphic implementation, not the current cache width.
+
+## Historical change
 
 Codegen already had a per-site cache (`cachedSend` → `sendMessageCached`, a
 `{.global, threadvar.}` `CompiledSendCache` per expanded send site), but it was

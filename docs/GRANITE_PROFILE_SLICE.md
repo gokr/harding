@@ -1,5 +1,87 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Four-entry PIC for remaining dynamic sends
+
+The dual-entry cache is replaced by four unrolled identity checks and a bounded
+overflow policy. The first four receiver classes remain resident; fifth and later
+classes use the shared resolution memo without displacing them. A registration
+epoch change invalidates the entire site. Negative entries remain restricted to
+selectors whose pre-builtin handling can safely be skipped. Class-side and
+instance-method lookup are kept separate. Immediate values distinguish True and
+False, and dynamic selector changes invalidate the site even without an epoch
+change. Literal-selector template expansions omit that repeated string check.
+
+This does not change the interpreter PIC or infer permanent types. It supports
+residual dynamic code while contracts, inference and eventual observed-type hints
+continue to target unboxed native method regions.
+
+### Corrections to preliminary observations
+
+The temporary receiver-shape probe collapsed every native instance class into one
+`vkInstance` bucket; it also aliased Boolean buckets with unrelated value kinds.
+The Json/Havlak definition-only invocations did not run their full workloads.
+Consequently its report of "no sites beyond two classes" is invalid and is not
+used to choose the PIC width. AWFY Bounce, full Json checks and assembled small
+Havlak driver now execute with checked answers under ARC/ORC; these checks establish
+correctness for those workloads, not general representativeness.
+
+Earlier descriptions of Granite as "MIC only" were also inaccurate: it already
+had a two-entry polymorphic cache. The interpreter has one MIC plus three PIC
+entries with promotion and overflow fallback; Granite now has four stable entries.
+A global/static variable alone is not thread-safe; the generated site cache uses
+thread-local storage. An indirect cached target call is not zero overhead.
+
+### Controlled receiver-shape evidence
+
+`scripts/bench_granite_pic.py` isolates the runtime using a private copy of the
+baseline runtime and current shared support; compiler generation and workloads
+are identical. It compiles everything before timing, pins one CPU, alternates
+A/B, discards a warmup and checks exact stdout plus empty stderr on **every** run.
+Synthetic cases are diagnostic workloads, not application speed claims.
+
+15 pairs, CPU 2, 200000 iterations, ARC (`build/pic-experiments/run-jf8z9558`):
+
+| Distinct classes (cyclic) | Faster by | Improving pairs |
+|---|---:|---:|
+| 1 | 1.67% | 12/15 |
+| 2 | 0.29% | 8/15 |
+| 3 | 22.60% | 15/15 |
+| 4 | 24.01% | 15/15 |
+| 5 | 27.90% | 15/15 |
+| 6 | 19.13% | 15/15 |
+
+Adding nine uses of class zero per cycle (`run-17n10ie8`) measured faster by
+0.53%/9.29%/10.77%/10.27% for widths 1/3/4/6, respectively. These controlled
+patterns exercise monomorphic, polymorphic and overflow paths without assuming
+that three existing benchmarks represent all dynamic-language applications.
+
+Application comparison against `run-mads5ie2`, candidate `run-nrb4e1qs`, 21 pinned
+pairs: Richards faster by 1.00% (15/21), DeltaBlue faster by 0.03% (12/21), Queens
+faster by -0.72% (9/21), all near neutral (`build/pic-static-pinned.log`). No
+application speedup is claimed. The initial four-entry prototype without a
+fixed-selector specialization regressed Richards/Queens by ~1–2%; those extra
+checks were removed only for literal-selector, private site caches.
+
+After the sweep finished, another 31-pair idle-host run measured faster by
+-0.12% (Richards, 14/31), 0.82% (DeltaBlue, 24/31), and -0.24% (Queens, 13/31):
+`build/pic-idle-pinned.log`. ORC controlled widths 1/3/6 measured faster by
+1.75%/22.39%/18.86% (4/7, 7/7, 7/7) in `run-p5j02ziu`.
+
+Each PIC slot occupies 32 bytes and the four-entry cache 168 bytes on this host,
+versus the previous 128-byte two-entry cache (`build/pic-layout.log`). It does not
+fit a cache line. Extra storage is bounded per call site; this is a footprint vs
+polymorphic-hit-rate tradeoff, not a claim of a universally optimal layout.
+
+Validation: broad parity **130/130** (`build/pic-parity-full.log`), including the
+new six-class compiled/interpreter case; compiler 120, runtime 57, boundary 39,
+stdlib 6, slot-inference 32 and value-dispatch 1 pass under ARC/ORC. Runtime tests
+exercise 1–6 identities, stable entries after overflow, method/selector invalidation,
+class-side/instance separation, True/False compiled targets, negative entries,
+reentrancy and dynamic-selector template calls. Native-reference and direct-slot
+integration pass under ARC/ORC. AWFY checks are `build/pic-awfy.log`: Bounce 1331,
+Json's complete checks, and the assembled small Havlak graph (9 loops, 16 nodes),
+not the full upstream 5213-node workload. This is not a full repository-suite claim.
+
 ## Value receivers in the per-site send cache
 
 The per-site cache only covered native instances: its entries were keyed by a

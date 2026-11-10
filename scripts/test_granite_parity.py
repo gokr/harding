@@ -8,6 +8,32 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("polymorphic_send_sites", """
+| receivers driver sum |
+PicBase := Object derive: #().
+PicBase>>answer [ ^1 ].
+PicTwo := PicBase derive: #().
+PicTwo>>answer [ ^2 ].
+PicThree := PicBase derive: #().
+PicThree>>answer [ ^3 ].
+PicFour := PicBase derive: #().
+PicFour>>answer [ ^4 ].
+PicFive := PicBase derive: #().
+PicFive>>answer [ ^5 ].
+PicSix := PicBase derive: #().
+PicSix>>answer [ ^6 ].
+PicDriver := Object derive: #().
+PicDriver>>dispatch: object [ ^object answer ].
+PicDriver>>dispatchClass: object [ ^object new answer ].
+receivers := array{PicBase new, PicTwo new, PicThree new, PicFour new, PicFive new, PicSix new}.
+driver := PicDriver new.
+sum := 0.
+3 timesRepeat: [receivers do: [:object | sum := sum + (driver dispatch: object)]].
+sum println.
+(PicSix new perform: #answer) println.
+(driver dispatchClass: PicTwo) println.
+(driver dispatch: PicTwo new) println.
+""", '63\n6\n2\n2\n'),
     ("reference_getter_pair_arithmetic", """
 PairElement := Object derivePublic: #{measure -> Integer}.
 PairChild := PairElement derivePublic: #(extra).

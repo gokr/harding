@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Native compiled-block invocation borrows arguments rather than copying them into a sequence; the interpreted callback ABI remains sequence-based.
 
 ### Performance
+- Granite residual dynamic sends use a four-entry unrolled PIC with bounded overflow resolution and registration invalidation. Literal-selector sites omit repeated selector comparisons; dynamic selectors, class-side lookup and mixed-host fallbacks remain checked. Controlled 3–6-class cyclic sites measured faster by 19–28%; application benchmarks are near neutral.
 - The compiled send cache covers value receivers (nil, Boolean, Block, collections) by kind instead of re-deriving a class name per send; the instance path remains a single class-pointer comparison. Richards measured 4.34% less time in pinned local pairs (31/31), Queens 3.24%, DeltaBlue 1.52%.
 - Compiled blocks keep their native environment pointer in a dedicated field instead of a `capturedEnv` table entry, removing a table and cell allocation from every block creation; interpreter capture initialization is no longer set as a side effect. Richards measured 13.99% less time in pinned local pairs (21/21), DeltaBlue 4.15%.
 - Compiled send caches key native instance receivers by class identity instead of class name, skipping a name lookup and string comparison on every hit; class-side and value receivers keep the name-keyed path. DeltaBlue measured 3.45% less time in pinned local pairs.

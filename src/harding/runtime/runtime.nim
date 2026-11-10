@@ -175,36 +175,44 @@ type
   CompiledDirectGuard* = object
     version: uint64
     valid: bool
-  CompiledSendCache* = object
-    className: string
-    selector: string
-    version: uint64
-    target: CompiledProc
-    negative: bool  ## A resolved "no compiled method" answer, so it is not re-resolved.
-    ## Instance receivers are keyed by class identity instead of name: the version
-    ## guard already invalidates every entry on registration or replacement, so a
-    ## hit needs neither a class-name string nor a method-table lookup.
-    classPtr*: Class
-    altClassPtr*: Class
-    ## A value receiver (Integer, nil, Boolean, Block, Array, Table, ...) has no
-    ## class pointer to compare, so its slot records the value kind instead, plus
-    ## the Boolean flag because True and False are separate classes. The entry-kind
-    ## flags keep an instance entry from ever matching a value receiver (vkInt is
-    ## zero, so a kind field alone cannot express "no entry").
-    valueEntry*: bool
-    altValueEntry*: bool
-    valueKind*: ValueKind
-    altValueKind*: ValueKind
+  SendCacheSlot* = object
+    ## One resolved receiver identity for a call site. Identity is the class
+    ## pointer for native instances; for a value receiver it is
+    ## the (kind, Boolean) pair, because each kind is its own class and True and
+    ## False are distinct classes. `cls == nil` therefore means "value entry",
+    ## and a zero `kind` cannot masquerade as an Integer because value entries are
+    ## only ever created from a real receiver.
+    cls*: Class
+    kind*: ValueKind
     boolVal*: bool
-    altBoolVal*: bool
-    ## Second entry for the same site. Real sites alternate between a small set
-    ## of receiver classes (a boolean conditional site sees True and False), and
-    ## a single-entry cache misses on every other send there. The alternate is
-    ## replaced when it does not match, so the hot set stays resident without an
-    ## unbounded cache.
-    altClassName: string
-    altTarget: CompiledProc
-    altNegative: bool
+    target*: CompiledProc
+
+  CompiledSendCache* = object
+    ## Per-call-site dispatch cache: a fixed 4-way inline cache plus a
+    ## megamorphic marker.
+    ##
+    ## Dynamic selectors are checked once per send; literal-selector templates
+    ## select an instantiation without that check. Entries key on class identity:
+    ## hit is one pointer (or enum) compare -- no class-name string, no hash, no
+    ## method-table lookup. The registration version invalidates everything at
+    ## once, so entries never need per-entry validation.
+    ##
+    ## Entries beyond the first are probed only on misses. Once the receiver set
+    ## exceeds four identities, retain the resident entries and use shared
+    ## resolution for overflow receivers instead of repeatedly evicting slots.
+    selector*: string
+    version*: uint64
+    count*: int
+    megamorphic*: bool
+    slots*: array[4, SendCacheSlot]
+
+proc cacheKeyMatches(slot: SendCacheSlot, cls: Class, kind: ValueKind,
+                     boolVal: bool): bool {.inline.} =
+  ## One comparison chain for both entry forms; inlined into the unrolled probe.
+  if slot.cls != nil:
+    slot.cls == cls and kind == vkInstance
+  else:
+    cls == nil and slot.kind == kind and slot.boolVal == boolVal
 
 var compiledMethodProcs*: Table[string, CompiledProc] =
   initTable[string, CompiledProc]()
@@ -1311,6 +1319,11 @@ proc builtInClassName*(receiver: NodeValue): string =
   of vkNil: "UndefinedObject"
   of vkBlock: "Block"
   else: ""
+
+proc dispatchBuiltinName*(receiver: NodeValue, cls: Class): string {.inline.} =
+  ## Class name, needed only for a negative dispatch (builtin chain) or a miss,
+  ## never on a cache hit.
+  if cls != nil: cls.name else: builtInClassName(receiver)
 
 proc getReceiverClassName*(receiver: NodeValue): string =
   ## Resolve runtime class name for compiled Nim proxy instances
@@ -2665,9 +2678,11 @@ proc probeCompiledDispatch(receiver: NodeValue, cls: Class, selector: string,
       inc specializationProbe.noAggregateArgs
 
 proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
-                        args: openArray[NodeValue], cache: var CompiledSendCache): NodeValue =
-  ## Positive monomorphic cache for registered instance methods only. Builtins,
-  ## class-side sends and exception protocols retain the generic runtime path.
+                        args: openArray[NodeValue], cache: var CompiledSendCache,
+                        fixedSelector: static[bool] = false): NodeValue =
+  ## Per-site dispatch: a fixed 4-way inline cache, then a direct resolution.
+  ## fixedSelector is reserved for templates with a compile-time selector and
+  ## a private per-expansion cache; public dynamic selectors remain checked.
   if selector in ["message", "signal", "defaultAction", "retry", "pass", "==", "~="]:
     return sendMessage(runtime, receiver, selector, args)
   # Standalone compiled programs never bind a host, so skip the call entirely
@@ -2677,160 +2692,83 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     let interpreted = boundInterpretedSend(receiver, selector, @args)
     if interpreted.handled:
       return interpreted.value
+  # Class-side sends have different lookup precedence. VM-owned instances and
+  # proxies without a class retain the ordinary path as well; only canonical
+  # value classes and native instance identities can populate these slots.
+  let cls = if receiver.kind == vkInstance and receiver.instVal != nil and
+               receiver.instVal.isNimProxy: receiver.instVal.class else: nil
+  if receiver.kind == vkClass or (receiver.kind == vkInstance and cls == nil):
+    return sendMessage(runtime, receiver, selector, args)
   let currentVersion = compiledClassDispatchVersion
-  if receiver.kind == vkInstance and receiver.instVal != nil and
-     receiver.instVal.isNimProxy and receiver.instVal.class != nil:
-    let cls = receiver.instVal.class
-    if cache.version != currentVersion or cache.selector != selector:
-      cache = CompiledSendCache(version: currentVersion, selector: selector)
-    if cache.classPtr == cls and (cache.target != nil or cache.negative):
-      if cache.target != nil:
-        let target = cache.target
-        probeCompiledDispatch(receiver, cls, selector, target, args)
-        return target(receiver, args)
-      return dispatchBuiltin(runtime, receiver, selector, @args, cls.name)
-    if cache.altClassPtr == cls and (cache.altTarget != nil or cache.altNegative):
-      if cache.altTarget != nil:
-        let target = cache.altTarget
-        probeCompiledDispatch(receiver, cls, selector, target, args)
-        return target(receiver, args)
-      return dispatchBuiltin(runtime, receiver, selector, @args, cls.name)
-  elif receiver.kind != vkInstance and receiver.kind != vkClass:
-    # Value receivers have no class pointer, so their kind is their class
-    # identity. A hit compares one enum and one flag; without this path every send
-    # to nil, a Boolean, a Block or a collection re-derived a class name.
-    let flag = receiver.kind == vkBool and receiver.boolVal
-    if cache.valueEntry and cache.valueKind == receiver.kind and cache.boolVal == flag and
-       (cache.target != nil or cache.negative):
-      if cache.target != nil:
-        let target = cache.target
-        probeCompiledDispatch(receiver, nil, selector, target, args)
-        return target(receiver, args)
-      return dispatchBuiltin(runtime, receiver, selector, @args, cache.className)
-    if cache.altValueEntry and cache.altValueKind == receiver.kind and
-       cache.altBoolVal == flag and (cache.altTarget != nil or cache.altNegative):
-      if cache.altTarget != nil:
-        let target = cache.altTarget
-        probeCompiledDispatch(receiver, nil, selector, target, args)
-        return target(receiver, args)
-      return dispatchBuiltin(runtime, receiver, selector, @args, cache.altClassName)
-  let proxyClassName = getReceiverClassName(receiver)
-  let className = if proxyClassName.len > 0: proxyClassName
-                  else: builtInClassName(receiver)
-  if className.len > 0:
-    # A site sends one selector, but a cache may be reused across selectors (a
-    # direct caller can pass its own). Entries are keyed by receiver class only,
-    # so a different selector must invalidate them rather than reuse a target.
-    if cache.version != currentVersion or cache.selector != selector:
-      cache = CompiledSendCache(version: currentVersion, selector: selector)
-    if cache.version == currentVersion:
-      # Either slot may hold this receiver class. Check the primary first: it is
-      # the one most sites keep warm.
-      if cache.className == className and (cache.target != nil or cache.negative):
-        if cache.target != nil:
-          let target = cache.target
-          let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
-                      receiver.instVal.class
-                    elif receiver.kind == vkClass: receiver.classVal
-                    else: nil
-          probeCompiledDispatch(receiver, cls, selector, target, args)
-          return target(receiver, args)
-        # Cached negative: no compiled method exists, so go straight to the builtin
-        # chain instead of resolving the same pair again inside `sendMessage`.
-        return dispatchBuiltin(runtime, receiver, selector, @args, className)
-      if cache.altClassName == className and (cache.altTarget != nil or cache.altNegative):
-        if cache.altTarget != nil:
-          let target = cache.altTarget
-          let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
-                      receiver.instVal.class
-                    elif receiver.kind == vkClass: receiver.classVal
-                    else: nil
-          probeCompiledDispatch(receiver, cls, selector, target, args)
-          return target(receiver, args)
-        return dispatchBuiltin(runtime, receiver, selector, @args, className)
+  let kind = receiver.kind
+  let flag = kind == vkBool and receiver.boolVal
+  let selectorChanged = when fixedSelector: false else: cache.selector != selector
+  if cache.version != currentVersion or selectorChanged:
+    cache.selector = selector
+    cache.version = currentVersion
+    cache.count = 0
+    cache.megamorphic = false
+  # Unrolled probe: the expected shape (a monomorphic or two-class site) hits in
+  # the first or second comparison, so no loop overhead precedes the fast path.
+  if cache.count > 0 and cacheKeyMatches(cache.slots[0], cls, kind, flag):
+    let target = cache.slots[0].target
+    if target != nil:
+      probeCompiledDispatch(receiver, cls, selector, target, args)
+      return target(receiver, args)
+    return dispatchBuiltin(runtime, receiver, selector, @args, dispatchBuiltinName(receiver, cls))
+  if cache.count > 1 and cacheKeyMatches(cache.slots[1], cls, kind, flag):
+    let target = cache.slots[1].target
+    if target != nil:
+      probeCompiledDispatch(receiver, cls, selector, target, args)
+      return target(receiver, args)
+    return dispatchBuiltin(runtime, receiver, selector, @args, dispatchBuiltinName(receiver, cls))
+  if cache.count > 2 and cacheKeyMatches(cache.slots[2], cls, kind, flag):
+    let target = cache.slots[2].target
+    if target != nil:
+      probeCompiledDispatch(receiver, cls, selector, target, args)
+      return target(receiver, args)
+    return dispatchBuiltin(runtime, receiver, selector, @args, dispatchBuiltinName(receiver, cls))
+  if cache.count > 3 and cacheKeyMatches(cache.slots[3], cls, kind, flag):
+    let target = cache.slots[3].target
+    if target != nil:
+      probeCompiledDispatch(receiver, cls, selector, target, args)
+      return target(receiver, args)
+    return dispatchBuiltin(runtime, receiver, selector, @args, dispatchBuiltinName(receiver, cls))
+  # Miss. A megamorphic site has more distinct receivers than slots, so filling a
+  # slot would only evict something that is about to be needed again: resolve
+  # through the name-keyed memo and leave the cache alone.
+  let className = dispatchBuiltinName(receiver, cls)
+  if cache.megamorphic and className.len > 0:
     let target = resolveCompiledMethod(className, selector)
     if target != nil:
-      let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
-                  receiver.instVal.class
-                elif receiver.kind == vkClass: receiver.classVal
-                else: nil
       probeCompiledDispatch(receiver, cls, selector, target, args)
-      # Fill the free slot first, otherwise the alternate: alternating classes
-      # then occupy both slots instead of evicting each other forever.
-      let isValue = cls == nil
-      let flag = isValue and receiver.kind == vkBool and receiver.boolVal
-      let samePrimary = cache.className == className and cache.classPtr == cls and
-        (not isValue or (cache.valueEntry and cache.valueKind == receiver.kind and
-                         cache.boolVal == flag))
-      if cache.className.len == 0:
-        cache.className = className
-        cache.classPtr = cls
-        cache.valueEntry = isValue
-        cache.valueKind = receiver.kind
-        cache.boolVal = flag
-        cache.target = target
-        cache.negative = false
-      elif samePrimary:
-        cache.target = target
-        cache.negative = false
-      elif cache.altClassName.len == 0 or cache.altClassName == className:
-        cache.altClassName = className
-        cache.altClassPtr = cls
-        cache.altValueEntry = isValue
-        cache.altValueKind = receiver.kind
-        cache.altBoolVal = flag
-        cache.altTarget = target
-        cache.altNegative = false
+      return target(receiver, args)
+    if selector in negativeCacheSafeSelectors:
+      return dispatchBuiltin(runtime, receiver, selector, args, className)
+    return sendMessage(runtime, receiver, selector, args)
+  if className.len > 0:
+    let target = resolveCompiledMethod(className, selector)
+    if target != nil:
+      probeCompiledDispatch(receiver, cls, selector, target, args)
+      if cache.count < 4:
+        cache.slots[cache.count] = SendCacheSlot(cls: cls, kind: kind, boolVal: flag,
+          target: target)
+        inc cache.count
       else:
-        cache.altClassName = className
-        cache.altClassPtr = cls
-        cache.altValueEntry = isValue
-        cache.altValueKind = receiver.kind
-        cache.altBoolVal = flag
-        cache.altTarget = target
-        cache.altNegative = false
+        cache.megamorphic = true
       return target(receiver, args)
     # A negative answer only says "no compiled method". `sendMessage` still runs
-    # ordered steps before its builtin chain — `perform:` conveys a selector
+    # ordered steps before its builtin chain -- `perform:` conveys a selector
     # dynamically and the exception protocol answers `message`/`signal`/`retry`
-    # for exception instances — so a negative is only safe to cache-and-dispatch
-    # for selectors none of those handle. Everything else falls through to the
-    # generic path, which re-resolves but stays correct.
+    # for exception instances -- so a negative is only cached-and-dispatched for
+    # selectors none of those handle. Everything else uses the generic path.
     if selector in negativeCacheSafeSelectors:
-      let cls = if receiver.kind == vkInstance and receiver.instVal != nil:
-                  receiver.instVal.class
-                else: nil
-      let isValue = cls == nil
-      let flag = isValue and receiver.kind == vkBool and receiver.boolVal
-      let samePrimary = cache.className == className and cache.classPtr == cls and
-        (not isValue or (cache.valueEntry and cache.valueKind == receiver.kind and
-                         cache.boolVal == flag))
-      if cache.className.len == 0:
-        cache.className = className
-        cache.classPtr = cls
-        cache.valueEntry = isValue
-        cache.valueKind = receiver.kind
-        cache.boolVal = flag
-        cache.negative = true
-      elif samePrimary:
-        cache.negative = true
-        cache.target = nil
-      elif cache.altClassName.len == 0 or cache.altClassName == className:
-        cache.altClassName = className
-        cache.altClassPtr = cls
-        cache.altValueEntry = isValue
-        cache.altValueKind = receiver.kind
-        cache.altBoolVal = flag
-        cache.altNegative = true
-        cache.altTarget = nil
+      if cache.count < 4:
+        cache.slots[cache.count] = SendCacheSlot(cls: cls, kind: kind, boolVal: flag,
+          target: nil)
+        inc cache.count
       else:
-        cache.altClassName = className
-        cache.altClassPtr = cls
-        cache.altValueEntry = isValue
-        cache.altValueKind = receiver.kind
-        cache.altBoolVal = flag
-        cache.altNegative = true
-        cache.altTarget = nil
+        cache.megamorphic = true
       return dispatchBuiltin(runtime, receiver, selector, @args, className)
   return sendMessage(runtime, receiver, selector, args)
 
@@ -2845,11 +2783,15 @@ template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,
     proc siteCacheAddress(): ptr CompiledSendCache {.nimcall, inline.} =
       var siteCache {.global, threadvar.}: CompiledSendCache
       addr siteCache
-    sendMessageCached(runtime, receiver, selector, args, siteCacheAddress()[])
+    when compiles(static(selector)):
+      sendMessageCached(runtime, receiver, selector, args, siteCacheAddress()[], true)
+    else:
+      sendMessageCached(runtime, receiver, selector, args, siteCacheAddress()[])
 
 proc sendMessageCachedBound*(ownerReceiver, receiver: NodeValue, selector: string,
                              args: openArray[NodeValue],
-                             cache: var CompiledSendCache): NodeValue =
+                             cache: var CompiledSendCache,
+                             fixedSelector: static[bool] = false): NodeValue =
   ## Sends from inside a compiled method: keep the calling method's host routing
   ## for VM-owned receivers, then use the per-site cache instead of resolving the
   ## class/selector pair again on every send.
@@ -2857,7 +2799,7 @@ proc sendMessageCachedBound*(ownerReceiver, receiver: NodeValue, selector: strin
     let hosted = hostedBuiltin(ownerReceiver, receiver, selector, @args)
     if hosted.handled:
       return hosted.value
-  sendMessageCached(nil, receiver, selector, args, cache)
+  sendMessageCached(nil, receiver, selector, args, cache, fixedSelector)
 
 template cachedSendBound*(ownerReceiver, receiver: NodeValue, selector: string,
                           args: openArray[NodeValue]): NodeValue =
@@ -2866,7 +2808,10 @@ template cachedSendBound*(ownerReceiver, receiver: NodeValue, selector: string,
     proc siteCacheAddress(): ptr CompiledSendCache {.nimcall, inline.} =
       var siteCache {.global, threadvar.}: CompiledSendCache
       addr siteCache
-    sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCacheAddress()[])
+    when compiles(static(selector)):
+      sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCacheAddress()[], true)
+    else:
+      sendMessageCachedBound(ownerReceiver, receiver, selector, args, siteCacheAddress()[])
 
 proc frozenHostInterpreter*(host: SchedulerContext): Interpreter =
   ## Access the interpreter owned by this explicit host's main process.
