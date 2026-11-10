@@ -1,8 +1,41 @@
 # Eager Boolean primitives
 
-## Change
+## Status: superseded
 
-Granite now emits primitive helpers for two eager Boolean sends in compiled code:
+The inline fast paths described below no longer exist. They answered `|` and
+`not` directly when the operands were Booleans, but commit `1920595` ("lift
+source-indexed stdlib methods through ordinary codegen") removed them: `not` and
+`|` are now ordinary Harding methods in `lib/core/True.hrd` and
+`lib/core/False.hrd`, compiled through the normal pipeline like any other
+library method. `nt_pipe`/`nt_not` therefore dispatch:
+
+```nim
+proc nt_not*(value: NodeValue): NodeValue =
+  sendMessage(nil, value, "not", @[])
+```
+
+That is deliberate, and the same rule that made `&` overridable applies here: a
+helper that special-cases Booleans shadows the library method, so
+`True>>not` could not be redefined. Generated modules register `True>>not`,
+`False>>not`, `True>>|` and `False>>|`, so a compiled program still answers the
+truth tables — verified in both engines.
+
+Consequences for the rest of this note:
+
+- The **measured effect** below (Queens ~1.23x) was measured against the inline
+  implementation, so it no longer describes the current build. The win came from
+  removing the dispatch hop, and the hop is back. Re-measure before quoting it.
+- `tests/test_compiled_support.nim` used to assert the retired inline contract,
+  including answers the language does not give: it expected
+  `nt_pipe(true, 1)` and `nt_not(1)` to answer nil, while both engines answer
+  `true` and `MessageNotUnderstood` respectively. It now registers the library
+  methods a generated module registers and asserts the real behaviour.
+- The historical sections below are kept for the reasoning and the rejected
+  experiments, not as a description of current code.
+
+## Change (historical)
+
+Granite emitted primitive helpers for two eager Boolean sends in compiled code:
 
 - `receiver | argument` → `nt_pipe(receiver, argument)`
 - `receiver not` → `nt_not(receiver)`
