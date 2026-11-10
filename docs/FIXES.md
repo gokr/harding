@@ -31,17 +31,47 @@ Coverage is in `test_smalltalk_alignment`, `test_comment_syntax`, `test_cascade`
 Validation logs are under `build/fixes/`; only explicitly listed suites are
 evidence of passing tests.
 
-Known pre-existing failure, reproduced on a clean `HEAD` archive and therefore not
-caused by this work: `tests/test_compiled_support.nim` fails its
-`Boolean helpers` and `indexed iteration` tests because the *tests* call
-`nt_not`/`withIndexDo:` on receivers whose methods are not registered in that
-harness. Recorded here so a later reader neither attributes it to these fixes nor
-assumes it is a runtime regression.
+`tests/test_compiled_support.nim` had been failing since `1920595` lifted the
+stdlib through the ordinary pipeline. Its `nt_not`/`nt_pipe`/`withIndexDo:`
+assertions encoded the retired inline fast paths, including answers the language
+does not give (nil where both engines answer `true` or `MessageNotUnderstood`).
+The tests now register the library methods a generated module registers and
+assert real behaviour; the suite passes under ARC and ORC.
 
-A1–A5/C1–C2 remain separate work. Streams are still deferred, so `Printable` takes
-an injected `write:` sink rather than growing a String sink. Image-level class
-deletion is likewise not silently added: Browser refusal is the implemented
-behaviour, not a stub to be completed later without design.
+## Alignment implementation follow-up
+
+- **A1:** `hash` and `identityHash` are shared Nim primitives. Ordinary objects
+  default to identity; strings/numbers hash by value. Collection hashes use size
+  (collision-safe, cycle-safe, not a content fingerprint). Table and Set honor
+  custom object `hash`/`=` through a hash-filtered canonical-key scan; scalar
+  keys keep primitive lookup. Custom-key lookup is currently O(n), not a new
+  native bucket implementation. Equal keys must have equal hashes, and keys must
+  not change their hash/equality while stored. Hashes are not stable wire IDs.
+- **A2:** Nim-backed `shallowCopy` and `deepCopy`; `copy` calls `postCopy` on the
+  shallow copy. Deep copying preserves cycles and shared references. Classes,
+  blocks and immediate values are shared. Native resources without an explicit
+  copy adapter raise a catchable Error rather than copying pointers. Compiled
+  ordinary objects use their registered allocator and slot accessors.
+- **A3:** deferred, including fast built-in serialization. Existing Printable
+  sinks are unchanged; no Streams or serialization format is introduced.
+- **A4:** Symbol-returning queries now use `selectors`, `definedSelectors`,
+  `classSelectors`, `definedClassSelectors`, `allInstanceSelectors` and
+  `allClassSelectors`. Previous `methods`-named queries remain compatibility
+  aliases. No Method class is introduced. Bona uses selector queries.
+- **A5:** array/table rendering uses comma separators in both engines and in host
+  formatting. This is not a promise that arbitrary objects serialize to source.
+- **C1:** Bag, Interval and SortedCollection adopt Iterable. Generic traversal
+  duplicates are removed; Bag multiplicity and SortedCollection comparator/
+  result construction remain specialized.
+- **C2:** String adopts Iterable, yielding one-character Strings using existing
+  byte indexing. `collect:`/`asArray` return Array; `select:`/`reject:` return
+  String. Added `do:`, `first`, `last`, `includes:` (substring), and `reverse`.
+  Empty `first`/`last` answer nil. No Character class is introduced.
+
+Tests: `test_object_protocol`, `test_collection_alignment`,
+`test_literal_rendering`, and `value_key_protocol`/`object_hash_copy`/
+`shared_collection_protocol` interpreter/Granite parity cases. Logs are under
+`build/fixes/`; validation summaries record only suites actually run.
 
 ## How this list is organized
 
@@ -485,13 +515,13 @@ Printable sinks, missing super methods, comments/symbols and nested cascades.
 
 ## A1 — `hash` and `identityHash`
 
-Agreed. Needed by `Comparable` (D2) and by any user-defined key type.
+Agreed. Useful for user-defined key types; Comparable no longer depends on hashing.
 
 - `Object>>identityHash` — the address-derived integer the VM already has
   (`primitiveIdentity:` exists, so the value is available).
 - `Object>>hash` — defaults to `identityHash`; value classes override:
   `String`/`Symbol` by content, `Integer`/`Float` by value (with
-  `1 hash = 1.0 hash` to keep `=`/`hash` consistent for the numeric case),
+  equal values required to hash alike; `1 = 1.0` remains false),
   `Array`/`Table`/`Set`/`Bag` structurally.
 - `Set` and `Table` should then use `hash`/`=` rather than identity where they
   currently do, so a user class with a value `hash` works as a key.
@@ -531,21 +561,15 @@ only if `String` can be a sink (see X1). Otherwise keep `printString` as the
 primitive-backed default and treat `printOn:` as the user extension point, which
 is enough to unblock D9.
 
-## A4 — naming: methods, not selectors
+## A4 — naming: selectors for Symbol names
 
-Agreed: keep **methods**. The public surface is already consistent
-(`methods`, `definedMethods`, `allInstanceMethods`, `allClassMethods`,
-`removeMethod:`, `conflictSelectors`), and a method is named by a Symbol, which
-is what `perform:` accepts. No `Method` or `Selector` object type should be
-introduced.
-
-The remaining inconsistency is only internal: `selector` survives as a field
-name on `Activation` and in the installation primitives `selector:put:` /
-`classSelector:put:`. Those are the low-level paths the parser emits for `>>`,
-so renaming them is churn with no user-visible benefit. Leave the fields; make
-sure the `MANUAL.md` reflection section talks about methods throughout, and take
-`methods`, `definedMethods` and `allClassMethods` as the vocabulary when adding
-A1–A3.
+Decision: use **selector** when accepting a Symbol naming a message or returning
+such Symbols. The implemented queries are `selectors`, `definedSelectors`,
+`classSelectors`, `definedClassSelectors`, `allInstanceSelectors` and
+`allClassSelectors`. Existing method-named queries remain compatibility aliases.
+`perform:` accepts a selector; `removeMethod:` still removes an implementation
+identified by that selector. A future Method class would be a separate object,
+not the Symbol itself. No Method class is introduced in this change.
 
 ## A5 — `,` in rendered literals
 

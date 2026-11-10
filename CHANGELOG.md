@@ -7,6 +7,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Selector-named Symbol reflection queries, retaining method-named compatibility aliases; Bona uses the selector vocabulary.
+- Nim-backed `hash`/`identityHash` and `shallowCopy`/`deepCopy`, with `copy`/`postCopy`, graph alias/cycle preservation, and explicit refusal of unsupported native resources. Table/Set custom object keys honor `hash`/`=` through a hash-filtered scan.
+- String Iterable protocol (`do:`, Array-valued `collect:`/`asArray`, String-valued filtering, first/last/includes:/reverse); Bag, Interval and SortedCollection share Iterable traversal while retaining specialized semantics.
 - Nimony migration assessment covering potential benefits, compatibility risks and a staged validation plan (`docs/NIMONY_ASSESSMENT.md`).
 - Granite native non-frozen builds lift source-indexed core/standard library methods through the ordinary method pipeline and resolve declared primitives through `primitive_abi.nim`. Collection and string duplicate implementations have been reduced; remaining selector fallbacks and full parity validation are still under review.
 - `demos/notebook`: a complete GTK4 application in Harding source — searchable note list, split title/body editor, new/duplicate/delete/undo-delete/pin/archive, versioned JSON persistence with explicit save, and in-app `--self-test`/`--gui-test` that run in both `harding_gtk` and `granite build --gtk` (`demos/notebook/README.md`).
@@ -42,6 +45,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Consolidated GTK documentation around `docs/GTK.md`, distinguishing Bona's interpreter bridge from the shared standalone interpreted/Granite protocol. `docs/GTK_SUPPORT.md` records current coverage, FFI/lifecycle risks and the staged Harding Notebook showcase plan; removed obsolete GTK overview claims and marked the original Nim-shell demo as superseded for application authoring.
 
 ### Fixed
+- Comma-consistent Array/Table rendering in library and host paths, including nested collection regression/parity coverage.
+- `test_compiled_support` passes again. Two tests had been failing since the stdlib
+  was lifted through the ordinary codegen pipeline, because they asserted the
+  retired inline Boolean/`withIndexDo:` helper contract — including `nil` where
+  both engines answer `true` or `MessageNotUnderstood`. They now register the
+  library methods a generated module registers. `docs/GRANITE_BOOLEAN_PRIMITIVES.md`
+  marks its inline-path design and Queens measurement as superseded.
 - Parenthesized cascades parse through the statement cascade continuation, preserving receiver identity and the final message result; focused parser/runtime tests and native parity cover nesting and `yourself`.
 - Smalltalk-alignment defects: `&` honors overrides (including Boolean conjunction), Comparable ordering no longer depends on a missing hash method, interval conversion/indexing and duplicate definitions are corrected, array writes signal on invalid indices instead of dropping/appending them, Symbol class reflection works, String search misses answer nil, and missing super methods are catchable.
 - Class-side reflection has explicit `classMethods`/`definedClassMethods` queries in both engines; compiled class values answer Object/Class protocol. Printable uses existing `write:` sinks without Streams or Transcript, and Browser class deletion explicitly refuses rather than calling missing `become:` or altering library bindings.

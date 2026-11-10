@@ -2925,3 +2925,40 @@ nimble harding
 - [FUTURE.md](FUTURE.md) - Future plans and roadmap
 - [VSCODE.md](VSCODE.md) - VSCode extension
 - [research/](research/) - Historical design documents
+
+
+## Object protocol: selectors, hashing and copying
+
+A selector is a Symbol naming a message, not its implementation. Class queries
+`selectors`/`definedSelectors` answer inherited/direct instance selectors;
+`classSelectors`/`definedClassSelectors` answer the class side.
+`allInstanceSelectors` and `allClassSelectors` include inherited selectors.
+The previous `methods`-named queries remain compatibility aliases. `perform:`
+accepts a selector Symbol (and retains its existing String compatibility).
+
+`identityHash` identifies a value for its lifetime, not across runs. `hash`
+defaults to identity on ordinary objects; primitive values hash by value.
+Collection hashes use size and may collide. An object overriding `=` for value
+equality must override `hash` consistently: equal objects must hash alike.
+Table and Set honor custom object key protocol using a hash-filtered linear
+scan; scalar keys retain native lookup. Do not mutate a key's equality/hash
+while it is stored. Hashes are not persistent serialization IDs.
+
+`shallowCopy` creates new outer storage sharing child references. `copy` sends
+`postCopy` to that shallow copy; the default hook answers self. `deepCopy` copies
+the graph while preserving cycles and shared references, without invoking
+`postCopy` hooks recursively. Class/block/immediate values are shared. Native
+resources require an explicit adapter; unsupported copies signal Error.
+Compiled ordinary objects copy through their allocator and slot accessors.
+`clone` retains its compatibility behavior.
+
+Iterable is shared by Array, Table, Set, Bag, Interval, SortedCollection and
+String. Bag retains multiplicity semantics, and SortedCollection filtering
+preserves its comparator. String iteration follows existing byte indexing and
+answers one-character Strings: `collect:` and `asArray` return Array,
+`select:`/`reject:` return String. `first`/`last` answer nil on an empty String.
+`includes:` is substring membership; `reverse` returns a reversed String.
+
+Array/table rendered element separators are commas, matching literal syntax.
+This does not make arbitrary object output a serialization format. Fast built-in
+serialization and Streams remain deferred.
