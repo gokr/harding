@@ -120,3 +120,57 @@ String>>notEmpty [
 String>>startsWith: prefix <primitive primitiveStartsWith: prefix>
 
 String>>endsWith: suffix <primitive primitiveEndsWith: suffix>
+
+String>>do: aBlock [
+  | index |
+  index := 0.
+  [ index < self size ] whileTrue: [
+    aBlock value: (self at: index).
+    index := index + 1
+  ].
+  ^ self
+]
+
+String>>species [ ^ Array ]
+
+String>>asArray [
+  ^ self collect: [:each | each]
+]
+
+String>>first [
+  self isEmpty ifTrue: [ ^ nil ].
+  ^ self at: 0
+]
+
+String>>last [
+  self isEmpty ifTrue: [ ^ nil ].
+  ^ self at: (self size - 1)
+]
+
+String>>includes: substring [
+  ^ self includesSubString: substring
+]
+
+String>>select: aBlock [
+  | text |
+  text := "".
+  self do: [:each |
+    (aBlock value: each) ifTrue: [ text := text & each ]
+  ].
+  ^ text
+]
+
+String>>reject: aBlock [
+  ^ self select: [:each | (aBlock value: each) not]
+]
+
+String>>reverse [
+  | text index |
+  text := "".
+  index := self size - 1.
+  [ index >= 0 ] whileTrue: [
+    text := text & (self at: index).
+    index := index - 1
+  ].
+  ^ text
+]
