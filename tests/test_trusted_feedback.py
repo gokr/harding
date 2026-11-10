@@ -82,6 +82,38 @@ for wrong in [nilValue(), toValue("wrong"), toValue(2.5)]:
             self.assertNotEqual(stale.returncode, 0)
             self.assertIn('Stale type feedback', stale.stdout)
 
+    def test_narrowed_build_keeps_reflected_library_slot_layout(self):
+        # Regression: a prebuilt-only class model dropped reflected stdlib classes,
+        # so their methods emitted `self.slots[i]` for a NodeValue receiver and the
+        # generated Nim did not compile. Any program that pulls in a library class
+        # with slots (Array/Bag/...) exercised it.
+        base = ROOT / 'build/trusted-feedback-tests'
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            work = Path(directory)
+            source = work / 'library.hrd'
+            source.write_text(SOURCE + '''\nbag := Bag new.
+bag add: 5.
+Stdout writeline: bag size.
+''')
+            profile = work / 'feedback.json'
+            self.checked([str(ROOT / 'harding'), '--type-feedback', str(profile), str(source)])
+            args = [str(ROOT / 'granite'), 'compile', str(source), '--dir:' + str(work),
+                    '--type-feedback:' + str(profile), '--trust-observed-types']
+            result = self.checked(args)
+            generated = (work / 'library.nim').read_text()
+            # Narrowing still applies to the application slot...
+            self.assertIn('value*: int', generated)
+            # ...and library methods use the checked accessors, never raw indexing
+            # on a boxed receiver.
+            self.assertNotIn('self.slots[', generated)
+            binary = work / 'program'
+            self.checked(['nim', 'c', '-d:release', '--nimcache:' + str(work / 'cache'),
+                          '-o:' + str(binary), str(work / 'library.nim')])
+            run = self.checked([str(binary)])
+            self.assertIn('7', run.stdout)
+            self.assertIn('1', run.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()

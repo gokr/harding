@@ -806,6 +806,21 @@ suite "Compiler: Cached ordinary sends":
     check genMessage(ctx, send).contains("sendMessageHybrid(receiver")
     check not genMessage(ctx, send).contains("cachedSend")
 
+suite "Compiler: Native Integer method results":
+  test "an Integer-returning self-send feeds a native comparison":
+    let (nodes, syntax) = parse("Counter := Object derive: #(). Counter>>advanceBy: n [ | k | k := n * 2. ^k + 1 ]. Counter>>run [ | i | i := 0. [(self advanceBy: 3) < 500] whileTrue: [i := i + 1]. ^i ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "native_integer_result")
+    check code.contains("proc integerResult_" & mangleClass("Counter") & "_" & mangleSlot("advanceBy:") & "_native*(hardingNativeArg_n: int): int")
+    # The success flag is explicit, so a replacement cannot be read as an int.
+    check code.contains("hardingIntegerOut: var int): bool")
+    check code.contains("if integerResult_")
+    check code.contains("hardingIntegerValue < 500")
+    # The fallback re-evaluates the ordinary comparison, preserving its errors.
+    check code.contains("isTruthy((block:")
+    check not code.contains(".intVal <")
+
 suite "Compiler: Native Boolean method returns":
   test "dynamic method parameters keep the boxed condition path":
     let (nodes, syntax) = parse("Predicate := Object derive: #(). Predicate>>below: n limit: bound [ ^n < bound ]. Predicate>>run: bound [ | i | i := 0. [self below: i limit: bound] whileTrue: [i := i + 1]. ^i ].")

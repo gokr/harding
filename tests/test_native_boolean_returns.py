@@ -26,6 +26,58 @@ def execute(command):
     return done
 
 
+class NativeIntegerResults(unittest.TestCase):
+    def test_int_result_and_fallbacks(self):
+        base = ROOT / 'build/native-boolean-tests'
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            work = Path(directory)
+            source = work / 'integers.hrd'
+            source.write_text(SOURCE + '''
+IntCounter := Object derivePublic: #(limit).
+IntCounter>>advanceBy: n [ | k | k := n * 2. ^k + 1 ].
+IntCounter>>run [ | i | i := 0. [(self advanceBy: i) < limit] whileTrue: [i := i + 1]. ^i ].
+''')
+            execute([str(ROOT / 'granite'), 'compile', str(source), '--home:' + str(ROOT),
+                     '--dir:' + str(work), '-o:integers'])
+            generated = (work / 'integers.nim').read_text()
+            self.assertIn('integerResult_', generated)
+            self.assertIn('hardingIntegerOut: var int): bool', generated)
+            host = work / 'inthost.nim'
+            imports = '\n'.join('import "' + str(ROOT / path) + '"' for path in [
+                'src/harding/core/types', 'src/harding/core/scheduler',
+                'src/harding/interpreter/vm', 'src/harding/runtime/runtime'])
+            host.write_text('import std/tables\n' + imports + '\nimport ./integers\n' + '''
+initRuntime()
+registerCompiledMethods()
+registerSuperclassHierarchy()
+let counter = newClass_496E74436F756E746572().toValue()
+discard setSlotValue(counter, "limit", toValue(9))
+# i -> i*2+1 grows, so the loop stops once that reaches the limit. Expected
+# values were taken from the interpreter, not hand-derived: limit 9 -> 4.
+doAssert sendMessage(nil, counter, "run", []).intVal == 4
+discard setSlotValue(counter, "limit", toValue(2))
+doAssert sendMessage(nil, counter, "run", []).intVal == 1
+# Replacing the method with one returning a non-Integer must fall back to the
+# ordinary comparison. "seven" < limit is false, so the loop runs zero times; had
+# the string been coerced to an int it would read as 0, satisfy 0 < limit, and
+# spin forever. A fast answer of 0 therefore shows no coercion happened.
+var replacementCalls = 0
+proc nonInteger(receiver: NodeValue, args: openArray[NodeValue]): NodeValue =
+  inc replacementCalls
+  toValue("seven")
+registerCompiledMethod("IntCounter", "advanceBy:", nonInteger)
+doAssert sendMessage(nil, counter, "run", []).intVal == 0
+doAssert replacementCalls > 0
+echo "ok"
+''')
+            for mm in ['arc', 'orc']:
+                with self.subTest(mm=mm):
+                    binary = work / ('inthost_' + mm)
+                    execute(['nim', 'c', '--mm:' + mm, '--out:' + str(binary), str(host)])
+                    self.assertEqual(execute([str(binary)]).stdout.strip(), 'ok')
+
+
 class NativeBooleanReturns(unittest.TestCase):
     def test_native_result_and_replacement_fallbacks(self):
         base = ROOT / 'build/native-boolean-tests'

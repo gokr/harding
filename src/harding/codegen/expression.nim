@@ -59,6 +59,8 @@ type
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
     integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
     booleanSendCandidates*: Table[string, string] ## Selector -> guarded bool-return region
+    ## Selector -> guarded int-returning region, usable inside a native comparison.
+    integerResultCandidates*: Table[string, string]
     ## "Class>>selector" -> native entry for a class method whose body provably
     ## ignores its receiver; a call site guards the class object and registration.
     staticClassCalls*: Table[string, string]
@@ -345,6 +347,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.nilConditions = ctx.nilConditions
   result.integerSendCandidates = ctx.integerSendCandidates
   result.booleanSendCandidates = ctx.booleanSendCandidates
+  result.integerResultCandidates = ctx.integerResultCandidates
   result.staticClassCalls = ctx.staticClassCalls
   result.inBlock = ctx.inBlock
   result.returnTarget = ctx.returnTarget
@@ -718,6 +721,34 @@ proc conditionClause(ctx: GenContext, conditionNode: Node, fallback: string,
         let code = ctx.booleanSendCandidates[message.selector] & "(" &
           (@[owner, receiver] & arguments).join(", ") & ")"
         return ((if negate: "not (" & code & ")" else: code), true)
+    if not ctx.mixed and message.arguments.len == 1 and
+       message.selector in ["<", "<=", ">", ">=", "="] and
+       message.receiver != nil and message.receiver.kind == nkMessage:
+      # `(self compute) < operand`, where compute is an Integer-returning region.
+      # The fallback re-evaluates the whole original condition, so a replaced
+      # method returning a non-Integer still signals exactly what it did before;
+      # no int is fabricated for it.
+      let inner = message.receiver.MessageNode
+      if inner.selector in ctx.integerResultCandidates and inner.receiver != nil and
+         inner.arguments.len == inner.selector.count(':'):
+        var guards, arguments: seq[string]
+        var eligible = true
+        for argument in inner.arguments:
+          let native = nativeIntArgument(ctx, argument, guards)
+          if native.len == 0:
+            eligible = false
+            break
+          arguments.add(native)
+        let other = if eligible: nativeIntArgument(ctx, message.arguments[0], guards) else: ""
+        if eligible and other.len > 0 and guards.len == 0:
+          let receiver = genExpression(ctx, inner.receiver)
+          let owner = if ctx.inMethod: "self" else: "nilValue()"
+          let call = ctx.integerResultCandidates[inner.selector] & "(" &
+            (@[owner, receiver] & arguments & @["hardingIntegerValue"]).join(", ") & ")"
+          let op = if message.selector == "=": "==" else: message.selector
+          return ("(block:\n    var hardingIntegerValue: int\n    if " & call &
+            ": " & (if negate: "not " else: "") & "(hardingIntegerValue " & op & " " & other &
+            ")\n    else: " & (if negate: "not " else: "") & "isTruthy(" & fallback & "))", true)
     if message.arguments.len == 0 and message.selector in ctx.nilConditions and not ctx.mixed:
       let receiver = genExpression(ctx, message.receiver)
       let owner = if ctx.inMethod: "self" else: "nilValue()"

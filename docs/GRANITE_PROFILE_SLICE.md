@@ -1,5 +1,69 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Native Integer method results
+
+The second return-representation slice, and the more broadly useful one. An
+Integer-returning region (`planIntegerCall`, which already handled arguments,
+locals and slot reads) now also gets an int-returning entry, so a native
+comparison can consume its result without boxing it back:
+
+```nim
+while ...:
+  if (block:
+      var hardingIntegerValue: int
+      if integerResult_Counter_advance_native(self, self, 3, hardingIntegerValue):
+        (hardingIntegerValue < 500)
+      else: isTruthy(<original boxed comparison>)):
+```
+
+The helper returns a `bool` success flag plus an out-param:
+
+```nim
+proc integerResult_..._native(n: int): int = (n * 2) + 1
+proc integerResult_...(owner, receiver: NodeValue, n: int,
+                       hardingIntegerOut: var int): bool
+```
+
+A sentinel int would have been wrong. A replaced method, subclass override or
+redirected accessor must reach the ordinary boxed comparison, and a fabricated
+int cannot express "I did not run". The fallback re-evaluates the **whole
+original condition**, so a replacement returning a non-Integer still signals or
+compares exactly as before — it is never read as an int. The test registers a
+replacement returning `"seven"` and requires the loop to take the ordinary false
+branch: `"seven" < limit` is false, so the loop body runs zero times. Had the
+string been coerced to 0 it would satisfy `0 < limit` and spin forever, so a fast
+answer of 0 is itself the evidence that no coercion happened.
+
+The region is only reached through `(self selector: args) <operand` with native
+operands and no guarded slot arguments, for the same receiver-evaluation reason
+as the Boolean slice. Mixed mode, class-side sends and ambiguous selectors keep
+the existing paths.
+
+Measured with two retained compilers over one source
+(`build/intres/measure.py`, pinned, alternating, 21 pairs after one warmup, exact
+stdout required): a 2,000,000-iteration loop comparing a native method result
+measured **84.20% faster (21/21)**, 167.0 ms to 26.9 ms. The previous compiler
+emits no `integerResult_` site; the current one emits it. ORC run for the same
+shape also matches the interpreter.
+
+A caveat found while validating, recorded because it is easy to repeat: my first
+test loop used `[(self advanceBy: 3) < limit]`, which is loop-invariant and
+never terminates — the *interpreter* hung on it too, so it was a bad test, not a
+compiler defect. Expected values in the committed test were taken from the
+interpreter (limit 9 -> 4, limit 2 -> 1) rather than derived by hand, after a
+hand-derived value was wrong twice.
+
+### Why the application benchmarks do not move
+
+`integerResult_` sites in richards/deltablue/queens: **0**. Inspecting their
+conditions shows why, and this is worth keeping in mind before adding further
+return shapes. Benchmark predicates are mostly local comparisons
+(`place < 65536`, `column < 8`, `index >= 0`), which the existing local-integer
+path already handles unboxed; `notNil` chains; cascade-ish multi-argument Boolean
+sends (`self weaker: left than: right`); and `r = 8` dispatches. None is a
+unary-or-binary Integer send consumed by a comparison. The 84% win is on a shape
+these workloads do not contain.
+
 ## Current standing, measured at `0426caa`
 
 Pinned alternating pairs, ARC, CPU 2, 30 verified passes per process, all engines

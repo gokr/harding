@@ -419,6 +419,7 @@ proc compileFile(config: Config): bool =
   var numericCandidates = initTable[string, string]()
   var observed: JsonNode = nil
   var narrowedSlots: seq[string]
+  var narrowedKinds = initTable[string, string]()
   if not config.mixed:
     # Guarded native arithmetic only where evidence is confirmed by both module
     # analysis and observations; a proposal alone stays dynamic.
@@ -465,6 +466,7 @@ proc compileFile(config: Config): bool =
         if candidate.constraint != tcNone:
           inc narrowed
           narrowedSlots.add(key)
+          narrowedKinds[key] = kind
           echo "  narrowed ", key, " -> ", kind
     echo "Observed-type narrowing: ", narrowed, " slot(s)"
 
@@ -639,8 +641,7 @@ proc compileFile(config: Config): bool =
   let nimCode = genModule(ctx, nodes, moduleName, config.mixed, config.inputFile, reflectedClasses,
                           scriptTemporaries = script.temporaries,
                           inferredNumeric = numericCandidates,
-                          prebuiltClasses = (if config.trustObservedTypes: classModel.classes
-                                             else: initTable[string, ClassInfo]()),
+                          narrowedSlots = narrowedKinds,
                           libraryMethods = libraryMethods,
                           librarySuperclasses = librarySuperclasses,
                           libraryStorage = libraryStorage)

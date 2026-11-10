@@ -472,7 +472,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                          knownGlobals: seq[string] = @[], mixed: bool = false,
                          inferredNumeric: Table[string, string] = initTable[string, string](),
                          integerCandidates: var Table[string, string],
-                         staticClassCalls: var Table[string, string]): string =
+                         staticClassCalls: var Table[string, string],
+                         integerResultCandidates: var Table[string, string]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -583,6 +584,11 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           let emitted = emitIntegerCall(owner, md.selector, md.params, plan)
           output.add(emitted.code)
           integerCandidates[md.selector] = emitted.helper
+          # Also emit an int-returning entry so a native comparison can consume
+          # this result without boxing it back.
+          let asResult = emitIntegerResult(owner, md.selector, md.params, plan)
+          output.add(asResult.code)
+          integerResultCandidates[md.selector] = asResult.helper
           plans[md.selector] = plan
           planned.add(index)
           changed = true
@@ -855,6 +861,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.nilConditions = nilConditions
         genCtx.integerSendCandidates = integerCandidates
         genCtx.booleanSendCandidates = booleanCandidates
+        genCtx.integerResultCandidates = integerResultCandidates
         genCtx.staticClassCalls = staticClassCalls
 
         genCtx.cellNames = methodCellNames
@@ -1090,7 +1097,8 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
                   knownGlobals: seq[string] = @[],
                   temporaries: seq[string] = @[],
                   integerCandidates: Table[string, string] = initTable[string, string](),
-                  staticClassCalls: Table[string, string] = initTable[string, string]()): string =
+                  staticClassCalls: Table[string, string] = initTable[string, string](),
+                  integerResultCandidates: Table[string, string] = initTable[string, string]()): string =
   ## Generate the main() procedure for top-level statement execution
   var output = ""
 
@@ -1136,6 +1144,7 @@ proc genMainProc*(ctx: var CompilerContext, topLevel: seq[Node], moduleName: str
   # Create generation context for top-level code, sharing block registry if provided
   var genCtx = newGenContext(nil, compiledClasses, classInfo, mixed)
   genCtx.integerSendCandidates = integerCandidates
+  genCtx.integerResultCandidates = integerResultCandidates
   genCtx.staticClassCalls = staticClassCalls
   for globalName in knownGlobals:
     if globalName notin genCtx.globals:
@@ -1181,7 +1190,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
                 injectMainArgsVar: bool = false,
                 scriptTemporaries: seq[string] = @[],
                 inferredNumeric: Table[string, string] = initTable[string, string](),
-                prebuiltClasses: Table[string, ClassInfo] = initTable[string, ClassInfo](),
+                narrowedSlots: Table[string, string] = initTable[string, string](),
                 libraryMethods: seq[Node] = @[],
                 librarySuperclasses: seq[(string, string)] = @[],
                 libraryStorage: seq[Node] = @[]): string =
@@ -1235,12 +1244,27 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
 
   # Analyze classes from AST and optionally enrich slots from reflected runtime classes.
   # This avoids pulling unrelated stdlib/internal classes into generated output.
-  # Reuse the caller's class model when it has one: rebuilding here would discard
-  # decisions already applied to it (observed-type narrowing, reflected layout).
-  let analysis = if prebuiltClasses.len > 0:
-                   AnalysisResult(classes: prebuiltClasses)
-                 else:
-                   buildClassModel(defsSourceNodes, reflectedClasses)
+  var analysis = buildClassModel(defsSourceNodes, reflectedClasses)
+  # Observed-type narrowing is applied *after* this build, never by replacing the
+  # model: a prebuilt-only model loses the reflected library classes that the
+  # analysis deliberately filters in here, and codegen then emits raw
+  # `self.slots[i]` access for a receiver that is a NodeValue.
+  if narrowedSlots.len > 0:
+    for key, kind in narrowedSlots:
+      let separator = key.rfind('#')
+      if separator <= 0: continue
+      let className = key[0 ..< separator]
+      let slotName = key[separator + 1 .. ^1]
+      if className notin analysis.classes: continue
+      for candidate in analysis.classes[className].slots.mitems:
+        if candidate.name != slotName or candidate.constraint != tcNone: continue
+        case kind
+        of "skInt": candidate.constraint = tcInt
+        of "skFloat": candidate.constraint = tcFloat
+        of "skBool": candidate.constraint = tcBool
+        of "skString": candidate.constraint = tcString
+        of "skSymbol": candidate.constraint = tcSymbol
+        else: discard
   # Collect compiled class names for native instantiation
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:
@@ -1394,9 +1418,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   # so compiled method bodies can call nt_* helpers without forward declarations.
   var integerCandidates = initTable[string, string]()
   var staticClassCalls = initTable[string, string]()
+  var integerResultCandidates: Table[string, string]
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
                                 knownGlobals, mixed, inferredNumeric, integerCandidates,
-                                staticClassCalls))
+                                staticClassCalls, integerResultCandidates))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")
@@ -1447,7 +1472,7 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   output.add(genMainProc(ctx, executableMainNodes, moduleName, blockReg, compiledClassNames,
                          analysis.classes, mixed, sourceFile, injectMainArgsVar,
                          knownGlobals, mainTemporaries, integerCandidates,
-                         staticClassCalls))
+                         staticClassCalls, integerResultCandidates))
 
   # Module initialization
   output.add("\n")

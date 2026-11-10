@@ -8,6 +8,18 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("native_integer_method_result", """
+| counter |
+IntAcc := Object derivePublic: #(limit).
+IntAcc>>advanceBy: n [ | k | k := n * 2. ^k + 1 ].
+IntAcc>>run [ | i | i := 0. [(self advanceBy: i) < limit] whileTrue: [i := i + 1]. ^i ].
+IntAcc>>label [ ^"acc" ].
+counter := IntAcc new limit: 9.
+(counter run) println.
+counter limit: 2.
+(counter run) println.
+(counter label) println.
+""", '4\n1\nacc\n'),
     ("native_boolean_method_result", """
 | predicate child source driver |
 ReturnPredicate := Object derivePublic: #{limit -> Integer}.

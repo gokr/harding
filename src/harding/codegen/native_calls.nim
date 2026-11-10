@@ -263,6 +263,40 @@ proc emitBooleanCall*(owner, selector: string, parameters: seq[string],
   result.code.add("  isTruthy(cachedSendBound(owner, receiver, \"" & selector & "\", [" &
     names.mapIt("toValue(" & it & ")").join(", ") & "]))\n\n")
 
+proc emitIntegerResult*(owner, selector: string, parameters: seq[string],
+                        plan: IntegerCallPlan): tuple[code, helper: string] =
+  ## Integer-returning variant for use inside a native expression. The helper
+  ## reports success separately instead of returning a sentinel: a replacement,
+  ## subclass override or redirected accessor must fall back to the ordinary
+  ## send, and a fabricated int cannot express that.
+  let stem = "integerResult_" & mangleClass(owner) & "_" & mangleSlot(selector)
+  let receiverType = mangleClass(owner)
+  let usesSelf = plan.touchedSlots.len > 0
+  let names = parameters.mapIt(mangleIdentifier(it))
+  let nativeNames = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
+  let target = receiverType & "_" & mangleSelector(selector)
+  result.helper = stem
+  # The forward declaration belongs to emitIntegerCall, which always runs for the
+  # same plan; declaring it here too makes Nim expect two implementations.
+  result.code = "proc " & stem & "_native*(" &
+    (if usesSelf: "self: " & receiverType & ", " else: "") & nativeNames.join(", ") & ": int): int =\n"
+  if plan.statements.len > 0: result.code.add(plan.statements)
+  else: result.code.add("  " & plan.expression & "\n")
+  result.code.add("var " & stem & "_class {.threadvar.}: Class\n")
+  result.code.add("var " & stem & "_guard {.threadvar.}: CompiledDirectGuard\n")
+  result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & names.join(", ") &
+    ": int, hardingIntegerOut: var int): bool =\n")
+  result.code.add("  if " & stem & "_class == nil: " & stem & "_class = compiledClassValue(\"" & owner & "\").classVal\n")
+  var checks = @["not hostRoutingActive()",
+    "canDirectCompiledSend(receiver, " & stem & "_class, \"" & selector & "\", " & target & ", " & stem & "_guard)"]
+  for slot in plan.touchedSlots:
+    checks.add(receiverType & "_direct_" & mangleSlot(slot) & "_guard(receiver)")
+  result.code.add("  if " & checks.join(" and ") & ":\n")
+  result.code.add("    hardingIntegerOut = " & stem & "_native(" &
+    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") & names.join(", ") & ")\n")
+  result.code.add("    return true\n")
+  result.code.add("  false\n\n")
+
 proc referencesSelf*(node: Node): bool =
   ## True if the body can observe its receiver (directly, through a slot-like
   ## identifier, or inside a nested block). A receiver-free body is safe to call
