@@ -1,5 +1,6 @@
 import std/[tables, algorithm, os, logging, strutils, sequtils, options]
 import ../core/types
+import ../core/object_protocol
 import ../interpreter/objects
 import ./compiled_support
 import ../core/log_support
@@ -64,7 +65,9 @@ proc primitiveArrayAt*(self: NodeValue, args: seq[NodeValue]): NodeValue =
     "Array index out of bounds: " & $index))
 
 proc primitiveArrayAtPut*(self: NodeValue, args: seq[NodeValue]): NodeValue =
-  if args.len < 2: return self
+  if args.len < 2:
+    return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+      "Array at:put: requires an index and a value"))
   let (ok, index) = args[0].tryGetInt()
   if not ok or index < 0:
     return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
@@ -74,11 +77,10 @@ proc primitiveArrayAtPut*(self: NodeValue, args: seq[NodeValue]): NodeValue =
     if index < storage.elements.len:
       storage.elements[index] = args[1]
       return args[1]
-    if index == storage.elements.len:
-      storage.elements.add(args[1])
-      return args[1]
     return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
       "Array index out of bounds: " & $index))
+  if self.kind == vkArray:
+    return nt_at_kput_k(self, args[0], args[1])
   self
 
 proc primitiveArrayAdd*(self: NodeValue, args: seq[NodeValue]): NodeValue =
@@ -409,6 +411,24 @@ proc primitiveIsKindOf*(self: NodeValue, args: seq[NodeValue]): NodeValue =
     proc(name: string): bool = name == target)
   toValue(owner.len > 0)
 
+proc methodNames(self: NodeValue, classSide, inherited: bool): NodeValue =
+  var names: seq[NodeValue]
+  for name in compiledMethodNames(classOfValue(self), classSide, inherited):
+    names.add(toSymbol(name))
+  compiledArray(names)
+
+proc primitiveMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, false, true)
+
+proc primitiveDefinedMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, false, false)
+
+proc primitiveClassMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, true, true)
+
+proc primitiveDefinedClassMethods*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  methodNames(self, true, false)
+
 proc primitiveRespondsTo*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   if args.len == 0: return toValue(false)
   var selector = ""
@@ -420,6 +440,39 @@ proc primitiveRespondsTo*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   let name = classOfValue(self)
   if name.len == 0: return toValue(false)
   toValue(hasCompiledMethodInHierarchy(name, selector))
+
+proc primitiveIdentityHash*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  identityHashValue(self)
+
+proc primitiveHash*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  valueHash(self)
+
+proc primitiveCopy*(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  let deep = args.len > 0 and args[0].kind == vkBool and args[0].boolVal
+  proc allocate(entry: NodeValue): NodeValue =
+    let source = entry.instVal
+    if source.kind == ikObject and source.isNimProxy:
+      let allocator = compiledAllocatorFor(source.class.name)
+      if allocator == nil or source.compiledOwner == nil:
+        raise newException(CopyProtocolError, "Copying native resources requires an explicit adapter")
+      return allocator(entry, @[])
+    if source.kind == ikObject and (source.nimValue != nil or source.nativeSlots != nil):
+      raise newException(CopyProtocolError, "Copying native resources requires an explicit adapter")
+    case source.kind
+    of ikObject: return NodeValue(kind: vkInstance, instVal: newInstance(source.class))
+    of ikArray: return NodeValue(kind: vkInstance, instVal: newArrayInstance(source.class, @[]))
+    of ikTable: return NodeValue(kind: vkInstance, instVal: newTableInstance(source.class, initTable[NodeValue, NodeValue]()))
+    of ikInt: return toValue(source.intVal)
+    of ikFloat: return toValue(source.floatVal)
+    of ikString: return toValue(source.strVal)
+  proc readSlot(entry: NodeValue, name: string): NodeValue =
+    getSlotValue(entry, name)
+  proc writeSlot(entry: NodeValue, name: string, item: NodeValue) =
+    discard setSlotValue(entry, name, item)
+  try:
+    result = copyGraph(self, deep, allocate, readSlot, writeSlot)
+  except CopyProtocolError as error:
+    return raiseCompiledError(compiledErrorValue("Error", error.msg))
 
 proc primitiveClone*(self: NodeValue, args: seq[NodeValue]): NodeValue =
   let storage = storageOf(self)

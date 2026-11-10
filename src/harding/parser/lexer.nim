@@ -291,6 +291,16 @@ proc parseString(lexer: var Lexer): Token =
 
   return Token(kind: tkError, value: "Unterminated string", line: startLine, col: startCol)
 # Parse symbol (starts with #)
+const operatorChars = {'~', '<', '>', '=', '|', '&', '+', '-', '*', '/', '\\', '@', '%'}
+
+proc collectLineComment(lexer: var Lexer): string =
+  ## Consume through end of line and answer the text after the leading `#`s.
+  ## Used for `##` documentation comments, which are emitted as tokens.
+  discard lexer.next()  # Second # of the documentation prefix.
+  while lexer.pos < lexer.input.len and lexer.peek() != '\n':
+    result.add(lexer.next())
+  result = result.strip()
+
 proc parseSymbol(lexer: var Lexer): Token =
   let startLine = lexer.line
   let startCol = lexer.col
@@ -313,8 +323,13 @@ proc parseSymbol(lexer: var Lexer): Token =
       value.add(lexer.next())
     return Token(kind: tkSymbol, value: value, line: startLine, col: startCol)
   else:
-    # Single char symbol
+    # Operator symbol. Consume a whole operator run so `#<=`, `#>=`, `#~=`,
+    # `#==` and `#<<` are single symbols rather than a one-character symbol
+    # followed by a dangling operator. Punctuation the grammar needs is not part
+    # of an operator run, so `#(1, #a)` and `#foo,` still terminate correctly.
     value.add(lexer.next())
+    while lexer.peek() in operatorChars:
+      value.add(lexer.next())
     return Token(kind: tkSymbol, value: value, line: startLine, col: startCol)
 # Parse XML-style tag <primitive> or </primitive>
 proc parseTag(lexer: var Lexer): Token =
@@ -570,7 +585,7 @@ proc nextToken*(lexer: var Lexer): Token =
     return Token(kind: tkError, value: "Single quotes are reserved for future use", line: startLine, col: startCol)
   of '#':
     # # can start: comments, symbols, array/table literals
-    # - #<whitespace> or #==== or #--- → comment
+    # - #<whitespace> or ## → comment
     # - #symbol, #1, #:keyword → symbol (but #1 not commonly used)
     # - #(array), #{table} → literals
     discard lexer.next()
@@ -593,12 +608,22 @@ proc nextToken*(lexer: var Lexer): Token =
       discard lexer.next()
       return Token(kind: tkTableStart, value: "#{", line: startLine, col: startCol)
 
-    # If followed by whitespace or special chars like =-*, it's a comment
-    # (e.g., #====, #---, #***** etc. are comment separators)
-    if nextChar.isSpace or nextChar in {'=', '-', '*', '/', '.', '|', '&', '@', '!'}:
+    # Rule: `#` starts a comment only when it is followed by whitespace, by end
+    # of line, or by another `#`. In every other case it starts a symbol or a
+    # literal. One condition, so `#<=` and `#-` are symbols and `# =====` is a
+    # comment.
+    if nextChar.isSpace or nextChar == '\0':
       while lexer.pos < lexer.input.len and lexer.peek() != '\n':
         discard lexer.next()
       return nextToken(lexer)
+
+    if nextChar == '#':
+      # `##` is a documentation comment (Nim's doc-comment form). The text is
+      # captured on the token so a future Browser hover / LSP `hover` can collect
+      # the block immediately preceding a definition, but parsing skips it: no
+      # consumer exists yet and a comment must never change what a program does.
+      let text = collectLineComment(lexer)
+      return Token(kind: tkComment, value: text, line: startLine, col: startCol)
 
     # Otherwise: symbol (#identifier, #1, #:keyword, #'string')
     lexer.pos = lexer.pos - 1  # Put back the #

@@ -168,6 +168,7 @@ tests/test_literals.nim
 tests/test_slot_ivars.nim
 tests/test_extend.nim
 tests/test_cascade.nim
+tests/test_comment_syntax.nim
 tests/test_float_operations.nim
 tests/test_class_model.nim
 tests/test_smalltalk_alignment.nim
@@ -179,6 +180,9 @@ tests/test_log.nim
 tests/test_stdlib_basics.nim
 tests/test_stdlib_strings.nim
 tests/test_stdlib_collections.nim
+tests/test_collection_alignment.nim
+tests/test_object_protocol.nim
+tests/test_literal_rendering.nim
 tests/test_stdlib_intervals.nim
 tests/test_stdlib_io_and_packages.nim
 tests/test_stdlib_utilities.nim
@@ -190,6 +194,7 @@ tests/test_named_access_and_slots.nim
 
 const TestOther = """
 tests/test_compiled_runtime.nim
+tests/test_alignment_runtime.nim
 tests/test_compiler_basic.nim
 tests/test_compiler_block_parity.nim
 tests/test_website_examples.nim

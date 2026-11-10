@@ -42,6 +42,8 @@ Harding load: "lib/core/Printable.hrd"
 (Array superclassNames includes: "Iterable") ifFalse: [ Array addSuperclass: Iterable ]
 (Table superclassNames includes: "Iterable") ifFalse: [ Table addSuperclass: Iterable ]
 (Set superclassNames includes: "Iterable") ifFalse: [ Set addSuperclass: Iterable ]
+(Bag superclassNames includes: "Iterable") ifFalse: [ Bag addSuperclass: Iterable ]
+(String superclassNames includes: "Iterable") ifFalse: [ String addSuperclass: Iterable ]
 
 # Add Comparable to number types.
 (Number superclassNames includes: "Comparable") ifFalse: [ Number addSuperclass: Comparable ]

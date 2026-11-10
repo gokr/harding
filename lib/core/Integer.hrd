@@ -4,9 +4,9 @@
 # Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================.
+# ====================================================================.
 # Integer arithmetic primitives.
-#====================================================================.
+# ====================================================================.
 
 Integer>>+ other <primitive primitivePlus: other>
 
@@ -20,9 +20,9 @@ Integer>>// other <primitive primitiveIntDiv: other>
 
 Integer>>\\ other <primitive primitiveBackslashModulo: other>
 
-#====================================================================.
+# ====================================================================.
 # Integer comparison primitives.
-#====================================================================.
+# ====================================================================.
 
 Integer>>< other <primitive primitiveLessThan: other>
 
@@ -36,9 +36,9 @@ Integer>>>= other <primitive primitiveGreaterOrEq: other>
 
 Integer>><> other <primitive primitiveNotEquals: other>
 
-#====================================================================.
+# ====================================================================.
 # Integer other primitives.
-#====================================================================.
+# ====================================================================.
 
 Integer>>sqrt <primitive primitiveSqrt>
 

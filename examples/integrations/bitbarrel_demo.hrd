@@ -8,9 +8,9 @@
 #
 # Then run this script with the rebuilt `./harding` binary.
 
-#============================================================.
+# ============================================================.
 # Example 1: Basic BarrelTable (Hash-based storage).
-#============================================================.
+# ============================================================.
 
 # Create or open a hash-based table.
 users := BarrelTable create: "users"
@@ -38,9 +38,9 @@ users do: [:key :value |
 # Get all keys.
 Transcript showCr: ("Keys: " & (users keys printString))
 
-#============================================================.
+# ============================================================.
 # Example 2: BarrelSortedTable (Ordered storage).
-#============================================================.
+# ============================================================.
 
 # Create an ordered table (uses critbit index).
 logs := BarrelSortedTable create: "logs"
@@ -63,9 +63,9 @@ Transcript showCr: ("Jan 1 logs (prefix): " & (jan1Logs2 printString))
 Transcript showCr: ("First log: " & (logs first printString))
 Transcript showCr: ("Last log: " & (logs last printString))
 
-#============================================================.
+# ============================================================.
 # Example 3: Using select: for filtering.
-#============================================================.
+# ============================================================.
 
 # Select users with names starting with "A".
 aUsers := users select: [:key :value |
@@ -73,9 +73,9 @@ aUsers := users select: [:key :value |
 ]
 Transcript showCr: ("A users: " & (aUsers printString))
 
-#============================================================.
+# ============================================================.
 # Cleanup (optional).
-#============================================================.
+# ============================================================.
 
 # Note: Data persists to disk, so next run will see the same data.
 Transcript showCr: "Demo complete!"

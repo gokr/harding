@@ -7,6 +7,179 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("value_key_protocol", r"""
+ValueKey := Object derivePublic: #(value).
+ValueKey>>hash [ ^value ].
+ValueKey>>= other [ (other isKindOf: ValueKey) ifFalse: [^false]. ^value = other value ].
+a := ValueKey new. a value: 4.
+b := ValueKey new. b value: 4.
+t := Table new. t at: a put: "one". t at: b put: "two".
+(t size) println.
+(t at: a) println.
+(t includesKey: b) println.
+s := Set new. s add: a. s add: b.
+(s size) println.
+(s includes: b) println.
+other := Set new. other add: b.
+(s union: other) size println.
+(s intersection: other) size println.
+(s difference: other) size println.
+t removeKey: b.
+(t size) println.
+""", '1\ntwo\ntrue\n1\ntrue\n1\n1\n0\n0\n'),
+    ("object_hash_copy", r"""
+x := Object new.
+(x identityHash = x identityHash) println.
+("same" hash = ("sa" & "me") hash) println.
+CopyProbe := Object derivePublic: #(value, other).
+CopyProbe>>postCopy [ value := value + 1. ^self ].
+x := CopyProbe new. x value: 7.
+y := x copy.
+(y value) println.
+(x value) println.
+child := Array new. child add: 1.
+parent := Array new. parent add: child. parent add: child. parent add: parent.
+copied := parent deepCopy.
+((copied == parent) not) println.
+((copied first == child) not) println.
+(copied first == (copied at: 1)) println.
+((copied at: 2) == copied) println.
+x other: x.
+z := x deepCopy.
+(z other == z) println.
+(z class == CopyProbe) println.
+""", 'true\ntrue\n8\n7\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n'),
+    ("shared_collection_protocol", r"""
+(Object selectors includes: #printString) println.
+(Object classSelectors includes: #new) println.
+("abc" collect: [:ch | ch size]) sum println.
+("abc" select: [:ch | ch ~= "b"]) println.
+("abc" reject: [:ch | ch = "b"]) println.
+("abc" reverse) println.
+("abc" asArray size) println.
+("" first) println.
+("" last) println.
+("abc" includes: "bc") println.
+("abc" detect: [:ch | ch = "b"]) println.
+b := Bag new. b addAll: #(1, 1, 2).
+(b collect: [:x | x + 1]) size println.
+(b includesAll: #(1, 1, 1)) println.
+(1 to: 4) sum println.
+sorted := SortedCollection sortBlock: [:a :b | a > b].
+sorted add: 1. sorted add: 3. sorted add: 2.
+filtered := sorted select: [:x | x > 1].
+(filtered at: 0) println.
+(filtered size) println.
+""", 'true\ntrue\n3\nac\nac\ncba\n3\nnil\nnil\ntrue\nb\n3\nfalse\n10\n3\n2\n'),
+    ("alignment_reflection", r"""
+ReflectionParent := Object derive: #().
+ReflectionParent>>inheritedInstance [ ^ 1 ].
+ReflectionParent class>>inheritedClass [ ^ 2 ].
+ReflectionChild := ReflectionParent derive: #().
+ReflectionChild>>ownInstance [ ^ 3 ].
+ReflectionChild class>>ownClass [ ^ 4 ].
+(ReflectionChild definedMethods includes: #ownInstance) println.
+(ReflectionChild definedMethods includes: #ownClass) println.
+(ReflectionChild definedClassMethods includes: #ownClass) println.
+(ReflectionChild definedClassMethods includes: #inheritedClass) println.
+(ReflectionChild classMethods includes: #inheritedClass) println.
+(ReflectionChild methods includes: #inheritedInstance) println.
+(ReflectionChild class == ReflectionChild) println.
+""", 'true\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\n'),
+    ("alignment_printable", r"""
+PrintSink := Object derive: #(text).
+PrintSink>>initialize [ text := "". ^self ].
+PrintSink>>write: value [ text := text & value. ^self ].
+PrintSink>>contents [ ^text ].
+PrintableProbe := Object derive: #().
+PrintableProbe addSuperclass: Printable.
+sink := PrintSink new.
+PrintableProbe new printOn: sink.
+sink contents println.
+""", '<PrintableProbe>\n'),
+    ("alignment_super_error", r"""
+SuperParent := Object derive: #().
+SuperChild := SuperParent derive: #().
+SuperChild>>missing [ ^super absent ].
+SuperChild class>>missing [ ^super absent ].
+[ SuperChild new missing ] on: MessageNotUnderstood do: [:e | "instance-caught" println ].
+[ SuperChild missing ] on: MessageNotUnderstood do: [:e | "class-caught" println ].
+"alive" println.
+""", 'instance-caught\nclass-caught\nalive\n'),
+    ("alignment_symbols_comments", r"""#!/usr/bin/env harding
+# ordinary comment
+# ===== separator
+## Declaration documentation
+CommentsProbe := Object derive: #().
+CommentsProbe>>answer [ ^42 ]. ## trailing documentation is ignored by evaluation
+CommentsProbe new answer println.
+#(1, 2) size println.
+#{"a" -> 1} size println.
+#<= printString println.
+#== printString println.
+#& printString println.
+#foo class name println.
+""", '42\n2\n1\n#<=\n#==\n#&\nSymbol\n'),
+    ("alignment_class_protocol", r"""
+x := 1 class.
+(x printString) println.
+(x isKindOf: Object) println.
+(x name) println.
+(#foo class name) println.
+ClassProbe := Object derive: #().
+ClassProbe class>>printString [ ^ "custom-class" ].
+ClassChild := ClassProbe derive: #().
+(ClassChild printString) println.
+[ ClassChild absentClassMessage ] on: MessageNotUnderstood do: [:e | "caught" println ].
+""", '<class Integer>\ntrue\nInteger\nSymbol\ncustom-class\ncaught\n'),
+    ("alignment_dispatch", r"""
+AmpProbe := Object derive: #().
+AmpProbe>>& other [ ^ "override" ].
+(AmpProbe new & 1) println.
+(true & false) println.
+(false & true) println.
+(true & true) println.
+(1 & 2) println.
+("a" & "b") println.
+("a" <= "b") println.
+("b" > "a") println.
+("b" compareTo: "a") println.
+("abc" indexOf: "z") println.
+("abc" indexOf: "a") println.
+""", 'override\nfalse\nfalse\ntrue\n12\nab\ntrue\ntrue\n1\nnil\n0\n'),
+    ("alignment_array_bounds", r"""
+a := Array new: 2.
+(a at: 0 put: 7) println.
+(a at: 1 put: 8) println.
+# Both direct and reflective sends must signal without changing the array.
+#(0, 2, -1, 8) do: [:i |
+  i = 0 ifFalse: [
+    [ a at: i put: 9 ] on: SubscriptOutOfBounds do: [:e | "direct" println ].
+    [ a perform: #at:put: with: i with: 9 ] on: SubscriptOutOfBounds do: [:e | "reflective" println ]
+  ]
+].
+a println.
+(1 to: 3) asArray println.
+(5 to: 1 by: -2) asArray println.
+(1 to: 0) asArray println.
+(1 to: 2) withIndexDo: [:each :index | index println ].
+""", '7\n8\ndirect\nreflective\ndirect\nreflective\ndirect\nreflective\n#(7, 8)\n#(1, 2, 3)\n#(5, 3, 1)\n#()\n0\n1\n'),
+    ("parenthesized_cascade", r"""
+a := Array new.
+(a add: 1; add: 2) println.
+((a add: 3; yourself) size) println.
+((a) add: 4; yourself) size println.
+((a add: 5; yourself) inject: 0 into: [:total :each | total + each]) println.
+CascadeFactory := Object derive: #(calls).
+CascadeFactory>>initialize [ calls := 0. ^self ].
+CascadeFactory>>make [ calls := calls + 1. ^Array new ].
+CascadeFactory>>calls [ ^calls ].
+factory := CascadeFactory new.
+receiver := Array new.
+receiver add: (factory make add: 1; add: 2; yourself).
+(receiver first size) println.
+(factory calls) println.
+""", '2\n3\n4\n15\n2\n1\n'),
     ("compiled_stdlib_values", r"""
 (true perform: #asString) println.
 (false perform: #asString) println.
@@ -79,7 +252,7 @@ pairs := table{"k" -> x, #sym -> name, "sum" -> (x + 4)}
 staticArr := #(a, b)
 staticArr println.
 (x = 3) println.
-""", '#(3 3 bob)\n3\n0\n3\nbob\n7\n#(a b)\ntrue\n'),
+""", '#(3, 3, bob)\n3\n0\n3\nbob\n7\n#(a, b)\ntrue\n'),
     ("superclass_names_are_strings", """
 Left := Object derive: #().
 Right := Object derive: #().
@@ -121,7 +294,7 @@ nested add: items.
 nested printString println.
 entries := #{"k" -> "v"}.
 entries printString println.
-""", '"bob"\nbob\nbob\n5\n5\n#("x" 1)\n#(#("x" 1))\n#{"k" -> "v"}\n'),
+""", '"bob"\nbob\nbob\n5\n5\n#("x", 1)\n#(#("x", 1))\n#{"k" -> "v"}\n'),
     ("block_conditional_answer", """
 Picker := Object derive: #().
 Picker>>choose: a other: b [ ^(a = b) ifTrue: [a] ifFalse: [b] ].
@@ -206,7 +379,7 @@ sorted println.
 (a removeAll == a) println.
 a add: 7.
 alias println.
-""", "#(1 2 3)\n#(3 1 2)\n#(3 2 1)\ntrue\n0\n#(1 2 3)\ntrue\n#(7)\n"),
+""", "#(1, 2, 3)\n#(3, 1, 2)\n#(3, 2, 1)\ntrue\n0\n#(1, 2, 3)\ntrue\n#(7)\n"),
     ("add_statement_keeps_receiver", """
 ItemAdder := Object derivePublic: #(stored).
 ItemAdder>>add: item [ stored := item. ^ item ].
@@ -302,7 +475,7 @@ s add: 1. (s addAll: #(4, 5)) println.
 s size println.
 (s includesAll: #(1, 4)) println.
 (s occurrencesOf: 1) println.
-""", "2\n0\n1\n3\nnil\n#(7 8)\n#(7 8)\ntrue\nfalse\n#(3 2 2 1)\n2\n#(1 2 3)\n3\n#(1 2)\n1\n1\n1\n#(4 5)\n3\ntrue\n1\n"),
+""", "2\n0\n1\n3\nnil\n#(7, 8)\n#(7, 8)\ntrue\nfalse\n#(3, 2, 2, 1)\n2\n#(1, 2, 3)\n3\n#(1, 2)\n1\n1\n1\n#(4, 5)\n3\ntrue\n1\n"),
     ("set_query_protocol", """s := Set new.
 s add: 1. s add: 2. s add: 2.
 s size println.
@@ -401,7 +574,7 @@ seen := 0.
 seen println.
 mapper := [:x | x * 2].
 (a collect: mapper) println.
-""", "#(1 3)\n2\n42\n6\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n2\n#(2 4 6)\n"),
+""", "#(1, 3)\n2\n42\n6\ntrue\ntrue\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ntrue\n2\n#(2, 4, 6)\n"),
     ("class_methods", """
 Factory := Object derive: #().
 Factory class>>answer [ ^ 42 ].
@@ -1368,7 +1541,7 @@ NameOverride name println.
 InstOverride := Child derive: #().
 InstOverride>>class [ ^ "not-the-class" ].
 InstOverride new class println.
-""", "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\ncustom-name\nnot-the-class\n"),
+""", "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nGrandchild\nGrandchild\ntrue\ntrue\nChild\n#(Left, Right)\n#(Child)\ncustom-instance\n#(custom-parent)\nfalse\nOverride\n#(custom-class-parent)\ntrue\ntrue\nfalse\nfalse\n#(Root)\ncustom-name\nnot-the-class\n"),
     ("script_temporaries", """
 # File-level locals start as nil and survive closure creation before assignment.
 | count spare read bump |
@@ -1536,7 +1709,7 @@ alias size println.
 (b2 removeAll == b2) println.
 b2 add: 7.
 alias asArray println.
-""", "3\n5\n3\n0\ntrue\nfalse\n#(3 1 3 2 3)\n#(6 2 6 4 6)\n#(3 3 2 3)\n#(1)\n12\n12\n3\ntrue\ntrue\ntrue\n3\n42\nfalse\ntrue\n3\n4\n2\nnil\n4\n#(1 1 2)\n3\ntrue\nfalse\nBag\ntrue\n0\ntrue\n#(7)\n"))
+""", "3\n5\n3\n0\ntrue\nfalse\n#(3, 1, 3, 2, 3)\n#(6, 2, 6, 4, 6)\n#(3, 3, 2, 3)\n#(1)\n12\n12\n3\ntrue\ntrue\ntrue\n3\n42\nfalse\ntrue\n3\n4\n2\nnil\n4\n#(1, 1, 2)\n3\ntrue\nfalse\nBag\ntrue\n0\ntrue\n#(7)\n"))
 
 CASES.append(("stdlib_sorted_collection",
               """
@@ -1574,7 +1747,7 @@ descending asArray println.
 descending size println.
 descending add: 7.
 descending asArray println.
-""", "3\n4\n#(1 2 2 3)\n#(2 4 4 6)\n#(2 2 3)\n#(1 3)\n3\n99\n8\ntrue\ntrue\ntrue\n8\n2\n1\n3\ntrue\n3\n4\n5\n1\n4\n3\n#(2 2 4)\n#(3 2 1)\ntrue\n#(1 2 3)\ntrue\n0\n#(7)\n"))
+""", "3\n4\n#(1, 2, 2, 3)\n#(2, 4, 4, 6)\n#(2, 2, 3)\n#(1, 3)\n3\n99\n8\ntrue\ntrue\ntrue\n8\n2\n1\n3\ntrue\n3\n4\n5\n1\n4\n3\n#(2, 2, 4)\n#(3, 2, 1)\ntrue\n#(1, 2, 3)\ntrue\n0\n#(7)\n"))
 
 
 CASES.append(("json_parsing",

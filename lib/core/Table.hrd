@@ -4,29 +4,45 @@
 # Uses primitive selectors registered in vm.nim initGlobals().
 #
 
-#====================================================================.
+# ====================================================================.
 # Table primitives.
-#====================================================================.
+# ====================================================================.
 
-Table>>at: key <primitive primitiveTableAt: key>
+Table>>at: key [
+    | storedKey |
+    storedKey := self canonicalKey: key.
+    ^ <primitive primitiveTableAt: storedKey>
+]
 
-Table>>at: key put: value <primitive primitiveTableAt: key put: value>
+Table>>at: key put: value [
+    | storedKey |
+    storedKey := self canonicalKey: key.
+    ^ <primitive primitiveTableAt: storedKey put: value>
+]
 
 Table>>keys <primitive primitiveKeys>
 
-Table>>includesKey: key <primitive primitiveIncludesKey: key>
+Table>>includesKey: key [
+    | storedKey |
+    storedKey := self canonicalKey: key.
+    ^ <primitive primitiveIncludesKey: storedKey>
+]
 
-Table>>removeKey: key <primitive primitiveRemoveKey: key>
+Table>>removeKey: key [
+    | storedKey |
+    storedKey := self canonicalKey: key.
+    ^ <primitive primitiveRemoveKey: storedKey>
+]
 
-#====================================================================.
+# ====================================================================.
 # Table class methods.
-#====================================================================.
+# ====================================================================.
 
 Table class>>new <primitive primitiveTableNew>
 
-#====================================================================.
+# ====================================================================.
 # Table iteration.
-#====================================================================.
+# ====================================================================.
 
 Table>>do: block [
     # Iterate over key-value pairs in the table
@@ -138,9 +154,9 @@ Table>>keysAndValuesDo: block [
     ]
 ]
 
-#====================================================================.
+# ====================================================================.
 # Table testing.
-#====================================================================.
+# ====================================================================.
 
 Table>>isEmpty [
     ^ self size = 0
@@ -174,9 +190,9 @@ Table>>size [
     ^ self keys size
 ]
 
-#====================================================================.
+# ====================================================================.
 # Table accessing.
-#====================================================================.
+# ====================================================================.
 
 Table>>at: key ifAbsent: block [
     # Get value at key, or evaluate block if absent
@@ -218,9 +234,9 @@ Table>>removeKey: key ifAbsent: block [
     ]
 ]
 
-#====================================================================.
+# ====================================================================.
 # Table conversion.
-#====================================================================.
+# ====================================================================.
 
 Table>>values [
     # Return Array of all values
@@ -243,4 +259,18 @@ Table>>associations [
         result add: pair
     ]
     ^ result
+]
+
+# Native scalar keys retain their direct primitive lookup. User objects use the
+# public hash/equality protocol and return the existing stored key on a match.
+Table>>canonicalKey: key [
+    | keyHash |
+    ((key isKindOf: String) or: [
+      (key isKindOf: Number) or: [(key isKindOf: Boolean) or: [key isNil]]
+    ]) ifTrue: [ ^ key ].
+    keyHash := key hash.
+    self keys do: [:stored |
+      ((stored hash = keyHash) and: [stored = key]) ifTrue: [ ^ stored ]
+    ].
+    ^ key
 ]

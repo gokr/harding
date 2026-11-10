@@ -3,6 +3,76 @@
 Companion document: [`HARDING_VS_SMALLTALK80.md`](HARDING_VS_SMALLTALK80.md)
 describes the comparison this list came out of.
 
+## Current implementation status
+
+The D1–D13 findings below preserve the original reproductions and proposals.
+The working implementation now has these outcomes:
+
+| Item | Outcome |
+|---|---|
+| D1 | Ordinary `&` dispatch in the interpreter and compiled helper; overrides win. Boolean `&` reaches the shipped conjunction methods, not string conversion. |
+| D2 | Restored `>`; `compareTo:` derives from the adopter's `<` and `=`. The mixin no longer defines `<` recursively. |
+| D3 | Added `classMethods` and `definedClassMethods` in both engines. Existing instance-side queries remain unchanged: `K class == K`, so the proposed receiver-based distinction was impossible. |
+| D4, D8 | Interval conversion appends all values; indexed enumeration starts at zero; duplicate definitions removed. |
+| D5 | Out-of-range array writes signal `SubscriptOutOfBounds`, including writes at `size`; growth uses `add:`. |
+| D6 | Whitespace/EOL starts an ordinary comment; `##` preserves documentation text in lexer tokens and is ignored during evaluation. Operator symbols consume the whole operator. Separators migrated. CLI shebangs remain valid despite script wrapping. Documentation attachment/hover generation remains future work. |
+| D7 | Symbol values resolve to the shared Symbol class cache. |
+| D9 | Printable uses `write:` sinks and plain string formatting; no `writeStream`, `identityHash`, `String cr` or core Transcript dependency. It does not introduce a String sink or Streams. |
+| D10 | Browser deletion explicitly refuses without mutating bindings, selection or source. Real class deletion remains unimplemented; the unsafe partial removal primitive was discarded. |
+| D11 | Shared String search primitive returns nil on a miss; Catalog checks nil before slicing. |
+| D12 | Compiled class sends fall back to Class/Object instance protocol, without requiring Class to have a registered superclass edge. |
+| D13 | Missing super methods signal catchable MessageNotUnderstood; instance- and class-side error parity is covered. |
+| Cascades | Parenthesized expressions now use the same cascade continuation as statements. The receiver is evaluated once; the final message supplies the value (`yourself` returns the receiver). Intermediate cascade results are discarded, so a cascade used as an argument cannot leave extra operands on the VM stack. |
+
+Fixed defects have unconditional assertions, not skip-on-failure tests.
+Coverage is in `test_smalltalk_alignment`, `test_comment_syntax`, `test_cascade`,
+`test_alignment_runtime`, `test_bona_models` and the `alignment_*` /
+`parenthesized_cascade` differential cases in `scripts/test_granite_parity.py`.
+Validation logs are under `build/fixes/`; only explicitly listed suites are
+evidence of passing tests.
+
+`tests/test_compiled_support.nim` had been failing since `1920595` lifted the
+stdlib through the ordinary pipeline. Its `nt_not`/`nt_pipe`/`withIndexDo:`
+assertions encoded the retired inline fast paths, including answers the language
+does not give (nil where both engines answer `true` or `MessageNotUnderstood`).
+The tests now register the library methods a generated module registers and
+assert real behaviour; the suite passes under ARC and ORC.
+
+## Alignment implementation follow-up
+
+- **A1:** `hash` and `identityHash` are shared Nim primitives. Ordinary objects
+  default to identity; strings/numbers hash by value. Collection hashes use size
+  (collision-safe, cycle-safe, not a content fingerprint). Table and Set honor
+  custom object `hash`/`=` through a hash-filtered canonical-key scan; scalar
+  keys keep primitive lookup. Custom-key lookup is currently O(n), not a new
+  native bucket implementation. Equal keys must have equal hashes, and keys must
+  not change their hash/equality while stored. Hashes are not stable wire IDs.
+- **A2:** Nim-backed `shallowCopy` and `deepCopy`; `copy` calls `postCopy` on the
+  shallow copy. Deep copying preserves cycles and shared references. Classes,
+  blocks and immediate values are shared. Native resources without an explicit
+  copy adapter raise a catchable Error rather than copying pointers. Compiled
+  ordinary objects use their registered allocator and slot accessors.
+- **A3:** deferred, including fast built-in serialization. Existing Printable
+  sinks are unchanged; no Streams or serialization format is introduced.
+- **A4:** Symbol-returning queries now use `selectors`, `definedSelectors`,
+  `classSelectors`, `definedClassSelectors`, `allInstanceSelectors` and
+  `allClassSelectors`. Previous `methods`-named queries remain compatibility
+  aliases. No Method class is introduced. Bona uses selector queries.
+- **A5:** array/table rendering uses comma separators in both engines and in host
+  formatting. This is not a promise that arbitrary objects serialize to source.
+- **C1:** Bag, Interval and SortedCollection adopt Iterable. Generic traversal
+  duplicates are removed; Bag multiplicity and SortedCollection comparator/
+  result construction remain specialized.
+- **C2:** String adopts Iterable, yielding one-character Strings using existing
+  byte indexing. `collect:`/`asArray` return Array; `select:`/`reject:` return
+  String. Added `do:`, `first`, `last`, `includes:` (substring), and `reverse`.
+  Empty `first`/`last` answer nil. No Character class is introduced.
+
+Tests: `test_object_protocol`, `test_collection_alignment`,
+`test_literal_rendering`, and `value_key_protocol`/`object_hash_copy`/
+`shared_collection_protocol` interpreter/Granite parity cases. Logs are under
+`build/fixes/`; validation summaries record only suites actually run.
+
 ## How this list is organized
 
 - **Defects (D\*)** — behaviour that is wrong on its own terms: it contradicts
@@ -27,9 +97,8 @@ Guiding constraints applied throughout:
 - Naming: Harding says **methods**, named by Symbols. New protocol uses the
   existing vocabulary rather than reintroducing "selector" as a concept.
 
-Every defect below has a regression test in
-`tests/test_smalltalk_alignment.nim` unless it is marked
-**(no test yet)** with the reason.
+See the coverage map above; the original evidence below is historical, not a
+claim that the implementation still has each defect.
 
 ## D1 — `&` is answered ahead of dispatch, so it cannot be overridden
 
@@ -434,29 +503,25 @@ engines keep agreeing.
 
 ## Regression coverage
 
-`tests/test_smalltalk_alignment.nim` pins every item above and the guards
-around them, and is part of `nimble testCore`. It contains three kinds of test:
+`tests/test_smalltalk_alignment.nim` now fails on a regression rather than
+turning it into SKIPPED. Parser/comment regressions live in
+`tests/test_comment_syntax.nim`, parenthesized cascades in `test_cascade`, and
+Browser deletion refusal in `test_bona_models`. The method-headline scan finds
+no duplicate definitions in its listed standard-library files.
 
-- **defect tests (D\*)** — assert the intended behaviour and call `skip()` while
-the defect is open, so the suite reports them as `SKIPPED` with the contract
-already written down. Fixing the defect makes them pass with no edit to the test.
-- **guard tests** — must stay green; they cover behaviour that is correct today
-and easy to regress, including the three things that were mis-reported during
-this review (`super` in class methods, mixin adoption, `Set>>clone`).
-- **D8's source scan** — reads the `.hrd` files listed in `stdlibSourceFiles`
-and reports any selector defined twice in one file. It currently reports the
-three `Interval.hrd` duplicates and nothing else, which is a useful positive
-control that the scan is precise rather than noisy.
+Interpreter/Granite parity cases cover class protocol, class-side reflection,
+custom/Boolean `&`, String ordering/search, bounds errors, interval conversion,
+Printable sinks, missing super methods, comments/symbols and nested cascades.
 
 ## A1 — `hash` and `identityHash`
 
-Agreed. Needed by `Comparable` (D2) and by any user-defined key type.
+Agreed. Useful for user-defined key types; Comparable no longer depends on hashing.
 
 - `Object>>identityHash` — the address-derived integer the VM already has
   (`primitiveIdentity:` exists, so the value is available).
 - `Object>>hash` — defaults to `identityHash`; value classes override:
   `String`/`Symbol` by content, `Integer`/`Float` by value (with
-  `1 hash = 1.0 hash` to keep `=`/`hash` consistent for the numeric case),
+  equal values required to hash alike; `1 = 1.0` remains false),
   `Array`/`Table`/`Set`/`Bag` structurally.
 - `Set` and `Table` should then use `hash`/`=` rather than identity where they
   currently do, so a user class with a value `hash` works as a key.
@@ -496,21 +561,15 @@ only if `String` can be a sink (see X1). Otherwise keep `printString` as the
 primitive-backed default and treat `printOn:` as the user extension point, which
 is enough to unblock D9.
 
-## A4 — naming: methods, not selectors
+## A4 — naming: selectors for Symbol names
 
-Agreed: keep **methods**. The public surface is already consistent
-(`methods`, `definedMethods`, `allInstanceMethods`, `allClassMethods`,
-`removeMethod:`, `conflictSelectors`), and a method is named by a Symbol, which
-is what `perform:` accepts. No `Method` or `Selector` object type should be
-introduced.
-
-The remaining inconsistency is only internal: `selector` survives as a field
-name on `Activation` and in the installation primitives `selector:put:` /
-`classSelector:put:`. Those are the low-level paths the parser emits for `>>`,
-so renaming them is churn with no user-visible benefit. Leave the fields; make
-sure the `MANUAL.md` reflection section talks about methods throughout, and take
-`methods`, `definedMethods` and `allClassMethods` as the vocabulary when adding
-A1–A3.
+Decision: use **selector** when accepting a Symbol naming a message or returning
+such Symbols. The implemented queries are `selectors`, `definedSelectors`,
+`classSelectors`, `definedClassSelectors`, `allInstanceSelectors` and
+`allClassSelectors`. Existing method-named queries remain compatibility aliases.
+`perform:` accepts a selector; `removeMethod:` still removes an implementation
+identified by that selector. A future Method class would be a separate object,
+not the Symbol itself. No Method class is introduced in this change.
 
 ## A5 — `,` in rendered literals
 
