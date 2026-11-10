@@ -7,6 +7,115 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("alignment_reflection", r"""
+ReflectionParent := Object derive: #().
+ReflectionParent>>inheritedInstance [ ^ 1 ].
+ReflectionParent class>>inheritedClass [ ^ 2 ].
+ReflectionChild := ReflectionParent derive: #().
+ReflectionChild>>ownInstance [ ^ 3 ].
+ReflectionChild class>>ownClass [ ^ 4 ].
+(ReflectionChild definedMethods includes: #ownInstance) println.
+(ReflectionChild definedMethods includes: #ownClass) println.
+(ReflectionChild definedClassMethods includes: #ownClass) println.
+(ReflectionChild definedClassMethods includes: #inheritedClass) println.
+(ReflectionChild classMethods includes: #inheritedClass) println.
+(ReflectionChild methods includes: #inheritedInstance) println.
+(ReflectionChild class == ReflectionChild) println.
+""", 'true\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\n'),
+    ("alignment_printable", r"""
+PrintSink := Object derive: #(text).
+PrintSink>>initialize [ text := "". ^self ].
+PrintSink>>write: value [ text := text & value. ^self ].
+PrintSink>>contents [ ^text ].
+PrintableProbe := Object derive: #().
+PrintableProbe addSuperclass: Printable.
+sink := PrintSink new.
+PrintableProbe new printOn: sink.
+sink contents println.
+""", '<PrintableProbe>\n'),
+    ("alignment_super_error", r"""
+SuperParent := Object derive: #().
+SuperChild := SuperParent derive: #().
+SuperChild>>missing [ ^super absent ].
+SuperChild class>>missing [ ^super absent ].
+[ SuperChild new missing ] on: MessageNotUnderstood do: [:e | "instance-caught" println ].
+[ SuperChild missing ] on: MessageNotUnderstood do: [:e | "class-caught" println ].
+"alive" println.
+""", 'instance-caught\nclass-caught\nalive\n'),
+    ("alignment_symbols_comments", r"""#!/usr/bin/env harding
+# ordinary comment
+# ===== separator
+## Declaration documentation
+CommentsProbe := Object derive: #().
+CommentsProbe>>answer [ ^42 ]. ## trailing documentation is ignored by evaluation
+CommentsProbe new answer println.
+#(1, 2) size println.
+#{"a" -> 1} size println.
+#<= printString println.
+#== printString println.
+#& printString println.
+#foo class name println.
+""", '42\n2\n1\n#<=\n#==\n#&\nSymbol\n'),
+    ("alignment_class_protocol", r"""
+x := 1 class.
+(x printString) println.
+(x isKindOf: Object) println.
+(x name) println.
+(#foo class name) println.
+ClassProbe := Object derive: #().
+ClassProbe class>>printString [ ^ "custom-class" ].
+ClassChild := ClassProbe derive: #().
+(ClassChild printString) println.
+[ ClassChild absentClassMessage ] on: MessageNotUnderstood do: [:e | "caught" println ].
+""", '<class Integer>\ntrue\nInteger\nSymbol\ncustom-class\ncaught\n'),
+    ("alignment_dispatch", r"""
+AmpProbe := Object derive: #().
+AmpProbe>>& other [ ^ "override" ].
+(AmpProbe new & 1) println.
+(true & false) println.
+(false & true) println.
+(true & true) println.
+(1 & 2) println.
+("a" & "b") println.
+("a" <= "b") println.
+("b" > "a") println.
+("b" compareTo: "a") println.
+("abc" indexOf: "z") println.
+("abc" indexOf: "a") println.
+""", 'override\nfalse\nfalse\ntrue\n12\nab\ntrue\ntrue\n1\nnil\n0\n'),
+    ("alignment_array_bounds", r"""
+a := Array new: 2.
+(a at: 0 put: 7) println.
+(a at: 1 put: 8) println.
+# Both direct and reflective sends must signal without changing the array.
+#(0, 2, -1, 8) do: [:i |
+  i = 0 ifFalse: [
+    [ a at: i put: 9 ] on: SubscriptOutOfBounds do: [:e | "direct" println ].
+    [ a perform: #at:put: with: i with: 9 ] on: SubscriptOutOfBounds do: [:e | "reflective" println ]
+  ]
+].
+a println.
+(1 to: 3) asArray println.
+(5 to: 1 by: -2) asArray println.
+(1 to: 0) asArray println.
+(1 to: 2) withIndexDo: [:each :index | index println ].
+""", '7\n8\ndirect\nreflective\ndirect\nreflective\ndirect\nreflective\n#(7 8)\n#(1 2 3)\n#(5 3 1)\n#()\n0\n1\n'),
+    ("parenthesized_cascade", r"""
+a := Array new.
+(a add: 1; add: 2) println.
+((a add: 3; yourself) size) println.
+((a) add: 4; yourself) size println.
+((a add: 5; yourself) inject: 0 into: [:total :each | total + each]) println.
+CascadeFactory := Object derive: #(calls).
+CascadeFactory>>initialize [ calls := 0. ^self ].
+CascadeFactory>>make [ calls := calls + 1. ^Array new ].
+CascadeFactory>>calls [ ^calls ].
+factory := CascadeFactory new.
+receiver := Array new.
+receiver add: (factory make add: 1; add: 2; yourself).
+(receiver first size) println.
+(factory calls) println.
+""", '2\n3\n4\n15\n2\n1\n'),
     ("compiled_stdlib_values", r"""
 (true perform: #asString) println.
 (false perform: #asString) println.

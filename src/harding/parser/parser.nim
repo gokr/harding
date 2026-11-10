@@ -198,6 +198,14 @@ proc initParser*(tokens: seq[Token], filename: string = ""): Parser =
 
 # Peek at current token without advancing
 proc peek*(parser: var Parser): Token =
+  ## Current token, skipping documentation comments.
+  ##
+  ## `##` doc comments are lexed as tkComment so tooling can read the text, but
+  ## they never participate in the grammar: a comment must not change what a
+  ## program means. Skipping here keeps every parser site unaware of them rather
+  ## than asking ~40 separator loops to handle a new kind.
+  while parser.pos < parser.tokens.len and parser.tokens[parser.pos].kind == tkComment:
+    inc parser.pos
   if parser.pos < parser.tokens.len:
     return parser.tokens[parser.pos]
   else:
@@ -330,15 +338,21 @@ proc parsePrimary(parser: var Parser): Node =
     return IdentNode(name: token.value, localIndex: -1)
 
   of tkLParen:
-    # Parenthesized expression
+    # Parenthesized expression. A cascade is part of the expression, so the
+    # keyword-message/statement paths are not the only place it can appear:
+    # `(obj a; b)` must parse like `obj a; b` does at statement level.
     discard parser.next()  # Skip (
     let expr = parser.parseExpression()
+    var parenValue = expr
+    let cascaded = parser.cascadeFrom(expr)
+    if cascaded != nil:
+      parenValue = cascaded
     # Skip any separators (newlines) before closing paren
     while parser.peek().kind == tkSeparator:
       discard parser.next()
     if not parser.expect(tkRParen):
       parser.parseError("Expected ')'")
-    return expr
+    return parenValue
 
   of tkLBracket:
     # Block literal
@@ -1951,7 +1965,7 @@ proc parseScript*(parser: var Parser): BlockNode =
   ## Parse file-level temporaries in a script scope without shifting source lines.
   ## Ordinary source keeps the statement parser's behavior and iteration limit.
   var first = parser.pos
-  while first < parser.tokens.len and parser.tokens[first].kind == tkSeparator:
+  while first < parser.tokens.len and parser.tokens[first].kind in {tkSeparator, tkComment}:
     inc first
   if first < parser.tokens.len and parser.tokens[first].kind == tkPipe:
     let eof = parser.tokens[^1]

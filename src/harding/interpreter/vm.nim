@@ -8699,6 +8699,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
   of wfCascadeMessage, wfCascadeMessageDiscard:
     # Send a message in a cascade - receiver is stored in cascadeReceiver
     let receiverVal = frame.cascadeReceiver
+    if frame.kind == wfCascadeMessageDiscard:
+      interp.pushWorkFrame(newDiscardFrame())
 
     # Push receiver value for message send
     interp.pushValue(receiverVal)
