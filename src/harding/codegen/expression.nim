@@ -58,6 +58,7 @@ type
     nilConditions*: Table[string, string]
     directSendCandidates*: Table[string, string] ## Selector -> guarded generated helper
     integerSendCandidates*: Table[string, string] ## Selector -> guarded Integer region
+    booleanSendCandidates*: Table[string, string] ## Selector -> guarded bool-return region
     ## "Class>>selector" -> native entry for a class method whose body provably
     ## ignores its receiver; a call site guards the class object and registration.
     staticClassCalls*: Table[string, string]
@@ -71,6 +72,7 @@ proc genStatement*(ctx: GenContext, node: Node): string
 proc asBlockNode(node: Node): BlockNode
 proc isBlockWithCaptures*(ctx: GenContext, node: Node): tuple[isBlock: bool, blockInfo: BlockProcInfo]
 proc nativeGetterRegion(ctx: GenContext, blk: BlockNode): string
+proc nativeIntArgument*(ctx: GenContext, node: Node, guards: var seq[string]): string
 
 proc exceptionNamesUnder(classInfo: Table[string, ClassInfo]): seq[string] =
   ## Names of every class in the parse tree that descends from Exception, plus the
@@ -342,6 +344,7 @@ proc inlineBlockContext(ctx: GenContext, blk: BlockNode): GenContext =
   result.booleanCalls = ctx.booleanCalls
   result.nilConditions = ctx.nilConditions
   result.integerSendCandidates = ctx.integerSendCandidates
+  result.booleanSendCandidates = ctx.booleanSendCandidates
   result.staticClassCalls = ctx.staticClassCalls
   result.inBlock = ctx.inBlock
   result.returnTarget = ctx.returnTarget
@@ -698,6 +701,23 @@ proc conditionClause(ctx: GenContext, conditionNode: Node, fallback: string,
   let condition = conditionBody(conditionNode)
   if condition != nil and condition.kind == nkMessage:
     let message = condition.MessageNode
+    if not ctx.mixed and message.selector in ctx.booleanSendCandidates:
+      var guards, arguments: seq[string]
+      var eligible = message.arguments.len > 0
+      for argument in message.arguments:
+        let native = nativeIntArgument(ctx, argument, guards)
+        if native.len == 0:
+          eligible = false
+          break
+        arguments.add(native)
+      # No guarded slot arguments: evaluating the receiver could mutate their
+      # accessors before the helper runs. Start with literal/native lexical args.
+      if eligible and guards.len == 0:
+        let receiver = genExpression(ctx, message.receiver)
+        let owner = if ctx.inMethod: "self" else: "nilValue()"
+        let code = ctx.booleanSendCandidates[message.selector] & "(" &
+          (@[owner, receiver] & arguments).join(", ") & ")"
+        return ((if negate: "not (" & code & ")" else: code), true)
     if message.arguments.len == 0 and message.selector in ctx.nilConditions and not ctx.mixed:
       let receiver = genExpression(ctx, message.receiver)
       let owner = if ctx.inMethod: "self" else: "nilValue()"

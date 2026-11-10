@@ -8,6 +8,28 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = [
+    ("native_boolean_method_result", """
+| predicate child source driver |
+ReturnPredicate := Object derivePublic: #{limit -> Integer}.
+ReturnPredicate>>below: n [ | next | next := n + 1. ^next < limit ].
+ReturnPredicate>>choose [ (self below: 3) ifTrue: [^11]. ^22 ].
+ReturnPredicate>>count [ | i | i := 0. [self below: i] whileTrue: [i := i + 1]. ^i ].
+ReturnChild := ReturnPredicate derivePublic: #(extra).
+ReturnSource := Object derivePublic: #(held, calls).
+ReturnSource>>initialize [ calls := 0 ].
+ReturnSource>>next [ calls := calls + 1. ^held ].
+ReturnDriver := Object derive: #().
+ReturnDriver>>choose: source [ (source next below: 3) ifFalse: [^22]. ^11 ].
+predicate := ReturnPredicate new limit: 8.
+child := ReturnChild new limit: 2.
+predicate choose println.
+predicate count println.
+child choose println.
+source := ReturnSource new held: predicate.
+driver := ReturnDriver new.
+(driver choose: source) println.
+source calls println.
+""", '11\n7\n22\n11\n1\n'),
     ("polymorphic_send_sites", """
 | receivers driver sum |
 PicBase := Object derive: #().

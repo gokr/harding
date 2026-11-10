@@ -1,5 +1,67 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Native Boolean method results
+
+The first return-representation slice. The Integer region planner already derived
+definite initialization and native numeric expressions from Harding source; it now
+also accepts an explicitly Boolean final expression and emits a `bool` return
+(`planBooleanCall`). One guarded native entry takes `int` parameters, computes with
+`int` locals, and returns `bool` straight into a condition or a `while` loop
+instead of a boxed `vkBool`.
+
+```nim
+proc booleanCall_Predicate_below_native(limit: int): bool =
+  return (next < limit)
+
+# Call-site shape, literal/native operands only:
+while booleanCall_Predicate_below(self, self, i, 2000000):
+  i = (i + 1)
+```
+
+Eligibility is deliberately narrow, and the narrowness was measured rather than
+assumed:
+
+- Only arguments `nativeIntArgument` accepts qualify. A **dynamic method
+  parameter** does not, so `[self below: i limit: bound]` keeps the ordinary
+  boxed loop. The literal-bound shape above is the one that specializes.
+- Receiver slot reads are allowed only for declared Integer slots, behind the same
+  method-identity and slot-accessor guards used elsewhere.
+- The fallback is `isTruthy(cachedSendBound(...))`, **never** `.boolVal`. A
+  replaced method may return anything; projecting an unchecked `boolVal` would
+  silently reinterpret a non-Boolean. The integration test registers a
+  replacement returning Integer 99 and requires the ordinary condition contract
+  to reject it rather than coerce it.
+- Mixed mode, class-side methods, ambiguous selectors and non-Boolean bodies keep
+  the existing paths.
+
+`scripts/bench_granite_boolean_returns.py` measures two retained compilers over
+one source, so the emitted call site is the only difference. It is pinned,
+alternating, discards one warmup, and requires exact stdout with empty stderr on
+every run:
+
+| Shape | Native site | Faster by | Improving pairs |
+|---|---|---:|---:|
+| literal bound, ARC | before no / after yes | **80.65%** | 21/21 |
+| literal bound, ORC | before no / after yes | **80.68%** | 11/11 |
+| dynamic `bound` (control) | no / no | 1.04% | 15/21 |
+
+Logs: `build/bool-measure-lit.log`, `build/bool-measure-orc.log`,
+`build/bool-measure-control.log`. The control is the honest baseline: for the
+literal shape the boxed comparison loop disappears; for a dynamic bound nothing
+changes. This is a focused loop measurement, not an application benchmark claim.
+
+The earlier exploratory run in `build/bool-return-measure/` reported ~0.2% here.
+That was correct and uninteresting: its loop passed the dynamic `bound` parameter,
+so no native site was emitted at all. Checking the generated source is what
+separated "no speedup" from "no specialization".
+
+Validation: `tests/test_native_boolean_returns.py` executes the path under ARC and
+ORC with slot-accessor replacement, method replacement (Boolean and non-Boolean),
+a receiver evaluated exactly once with observable side effects, a subclass without
+the override, and a bound interpreter. Compiler 122, native-region planner 13,
+runtime 57, boundary 39, stdlib 6 and slot-inference 32 pass under both memory
+managers. Broad parity passes **131/131** (`build/bool-parity-final.log`).
+
 ## Four-entry PIC for remaining dynamic sends
 
 The dual-entry cache is replaced by four unrolled identity checks and a bounded

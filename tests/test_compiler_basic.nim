@@ -806,6 +806,28 @@ suite "Compiler: Cached ordinary sends":
     check genMessage(ctx, send).contains("sendMessageHybrid(receiver")
     check not genMessage(ctx, send).contains("cachedSend")
 
+suite "Compiler: Native Boolean method returns":
+  test "dynamic method parameters keep the boxed condition path":
+    let (nodes, syntax) = parse("Predicate := Object derive: #(). Predicate>>below: n limit: bound [ ^n < bound ]. Predicate>>run: bound [ | i | i := 0. [self below: i limit: bound] whileTrue: [i := i + 1]. ^i ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "native_boolean_dynamic_argument")
+    check code.contains("proc booleanCall_")
+    check code.contains("while isTruthy((block:")
+    check not code.contains("while booleanCall_")
+
+  test "condition calls consume a source-derived native bool result":
+    let (nodes, syntax) = parse("Predicate := Object derive: #(). Predicate>>below: n [ | next | next := n + 1. ^next < 10 ]. Predicate>>run [ (self below: 3) ifTrue: [^1]. ^0 ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "native_boolean_return")
+    check code.contains("proc booleanCall_" & mangleClass("Predicate") & "_" & mangleSlot("below:") & "_native*(hardingNativeArg_n: int): bool")
+    check code.contains("return (next < 10)")
+    check code.contains("if booleanCall_" & mangleClass("Predicate") & "_" & mangleSlot("below:") & "(self, self, 3)")
+    check code.contains("isTruthy(cachedSendBound(owner, receiver, \"below:\"")
+    let mixed = genModule(compiler, nodes, "native_boolean_return_mixed", mixed = true)
+    check not mixed.contains("proc booleanCall_")
+
 suite "Compiler: Conservative numeric representations":
   test "method temporaries unbox while arguments and slots remain dynamic":
     let (nodes, _) = parse("Counter := Object derive: #(slot). Counter>>sum: limit [ | total k | total := 0. k := 0. [k < limit] whileTrue: [total := total + k. k := k + 1]. ^ total ].")

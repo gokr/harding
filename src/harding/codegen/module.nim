@@ -588,6 +588,21 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           changed = true
         if not changed: break
 
+  var booleanCandidates: Table[string, string]
+  if not mixed:
+    var selectorCounts: Table[string, int]
+    for md in methodDefs:
+      selectorCounts[md.selector] = selectorCounts.getOrDefault(md.selector) + 1
+    for md in methodDefs:
+      if md.isClassMethod or md.className notin classInfo or
+         selectorCounts.getOrDefault(md.selector) != 1: continue
+      let plan = planBooleanCall(md.className, md.params, md.body, md.temporaries,
+                                 classInfo[md.className])
+      if not plan.eligible: continue
+      let emitted = emitBooleanCall(md.className, md.selector, md.params, plan)
+      output.add(emitted.code)
+      booleanCandidates[md.selector] = emitted.helper
+
   # Class-side Integer regions, usable from a call site with a literal class.
   var staticClassCalls = initTable[string, string]()
   if not mixed:
@@ -839,6 +854,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         genCtx.booleanCalls = booleanCalls
         genCtx.nilConditions = nilConditions
         genCtx.integerSendCandidates = integerCandidates
+        genCtx.booleanSendCandidates = booleanCandidates
         genCtx.staticClassCalls = staticClassCalls
 
         genCtx.cellNames = methodCellNames

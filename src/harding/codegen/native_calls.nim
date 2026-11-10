@@ -32,7 +32,7 @@ proc nativeIntegerSlot(cls: ClassInfo, name: string): bool =
 
 proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
                       known: IntegerPlans, temporaries: seq[string] = @[],
-                      cls: ClassInfo = nil): IntegerCallPlan =
+                      cls: ClassInfo = nil, returnBoolean = false): IntegerCallPlan =
   ## Integer arguments, definitely initialized Integer locals, structured
   ## branches/loops with an explicit final return, and direct access to declared
   ## Integer slots of the receiver class. No escaping blocks, recursion,
@@ -94,7 +94,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         return integerStem(owner, message.selector) & "_native(" & arguments.join(", ") & ")"
       let supported = if boolean: message.selector in ["<", "<=", ">", ">=", "=", "<>"]
                       else: message.selector in ["+", "-", "*", "//"]
-      if message.arguments.len == 1 and message.selector == "//":
+      if not boolean and message.arguments.len == 1 and message.selector == "//":
         # Integer division must keep Harding's division-by-zero error rather
         # than turning a zero divisor into a Nim DivisionByZeroDefect. The
         # runtime helper answers exactly this, so reuse its contract.
@@ -204,7 +204,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   var code: string
   if not statements(body[0 ..< body.len - 1], initialized, 2, code):
     return
-  let answer = expression(body[^1].ReturnNode.expression, initialized)
+  let answer = expression(body[^1].ReturnNode.expression, initialized, returnBoolean)
   if answer.len == 0:
     return
   result.expression = answer
@@ -224,6 +224,44 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     if name notin touched:
       touched.incl(name)
       result.touchedSlots.add(name)
+
+proc planBooleanCall*(owner: string, parameters: seq[string], body: seq[Node],
+                      temporaries: seq[string] = @[], cls: ClassInfo = nil): IntegerCallPlan =
+  ## Reuse definite initialization and Integer expression inference, but require
+  ## an explicitly Boolean final expression. Native int parameters/locals stay
+  ## unboxed through a bool return. Method and slot guards belong at the caller.
+  planIntegerCall(owner, parameters, body, initTable[string, IntegerCallPlan](),
+                  temporaries, cls, returnBoolean = true)
+
+proc emitBooleanCall*(owner, selector: string, parameters: seq[string],
+                      plan: IntegerCallPlan): tuple[code, helper: string] =
+  ## A checked bool-return boundary for already-native Integer arguments. A
+  ## replaced method can return anything: only isTruthy on the fallback applies
+  ## the ordinary condition contract, never an unchecked boolVal projection.
+  let stem = "booleanCall_" & mangleClass(owner) & "_" & mangleSlot(selector)
+  let usesSelf = plan.touchedSlots.len > 0
+  let receiverType = mangleClass(owner)
+  let names = parameters.mapIt(mangleIdentifier(it))
+  let nativeNames = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
+  let target = receiverType & "_" & mangleSelector(selector)
+  result.helper = stem
+  result.code = "proc " & target & "*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"
+  result.code.add("proc " & stem & "_native*(" &
+    (if usesSelf: "self: " & receiverType & ", " else: "") & nativeNames.join(", ") & ": int): bool =\n")
+  if plan.statements.len > 0: result.code.add(plan.statements)
+  else: result.code.add("  " & plan.expression & "\n")
+  result.code.add("var " & stem & "_class {.threadvar.}: Class\n")
+  result.code.add("var " & stem & "_guard {.threadvar.}: CompiledDirectGuard\n")
+  result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & names.join(", ") & ": int): bool =\n")
+  result.code.add("  if " & stem & "_class == nil: " & stem & "_class = compiledClassValue(\"" & owner & "\").classVal\n")
+  var checks = @["not hostRoutingActive()", "canDirectCompiledSend(receiver, " & stem & "_class, \"" & selector & "\", " & target & ", " & stem & "_guard)"]
+  for slot in plan.touchedSlots:
+    checks.add(receiverType & "_direct_" & mangleSlot(slot) & "_guard(receiver)")
+  result.code.add("  if " & checks.join(" and ") & ":\n")
+  result.code.add("    return " & stem & "_native(" &
+    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") & names.join(", ") & ")\n")
+  result.code.add("  isTruthy(cachedSendBound(owner, receiver, \"" & selector & "\", [" &
+    names.mapIt("toValue(" & it & ")").join(", ") & "]))\n\n")
 
 proc referencesSelf*(node: Node): bool =
   ## True if the body can observe its receiver (directly, through a slot-like

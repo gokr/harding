@@ -18,6 +18,24 @@ suite "Source-derived Boolean return plans":
     check booleanReturnExpression(@[Node(ReturnNode(expression: LiteralNode(value: toValue(4))))], "other") == ""
     check booleanReturnExpression(@[Node(AssignNode(variable: "x", expression: IdentNode(name: "other"))), Node(ReturnNode(expression: IdentNode(name: "other")))], "other") == ""
 
+suite "Native Boolean result plans":
+  test "Integer locals and comparisons produce a bool-return region":
+    let (nodes, syntax) = parse("x := n + 1. ^x < 10")
+    require not syntax.hasError
+    let p = planBooleanCall("BooleanPlanner", @["n"], nodes, @["x"])
+    check p.eligible
+    check p.statements.contains("return (x < 10)")
+    let emitted = emitBooleanCall("BooleanPlanner", "test:", @["n"], p)
+    check emitted.code.contains(": int): bool")
+    check emitted.code.contains("isTruthy(cachedSendBound")
+    check not emitted.code.contains(".boolVal")
+
+  test "non-Boolean results and possibly uninitialized locals are rejected":
+    for source in ["^n + 1", "^n // 2", "n > 0 ifTrue: [x := n]. ^x < 10", "^self unknown: n"]:
+      let (nodes, syntax) = parse(source)
+      require not syntax.hasError
+      check not planBooleanCall("BooleanPlanner", @["n"], nodes, @["x"]).eligible
+
 suite "Source-derived nil predicates":
   test "pure self chains expand and retain their dependencies":
     let selfNode = Node(PseudoVarNode(name: "self"))
