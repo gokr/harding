@@ -348,7 +348,7 @@ suite "FIXES.md guards: behaviour to keep":
   test "guard: & concatenates string representations of any receiver":
     check answer("(1 & 2) printString") == "12"
     check answer("""("ab" & "cd")""") == "abcd"
-    check answer("#(1, 2) & #(3)") == "#(1 2)#(3)"
+    check answer("#(1, 2) & #(3)") == "#(1, 2)#(3)"
 
   test "guard: & and | on Boolean are conjunction and disjunction":
     # True>>&/False>>& and True>>|/False>>| are Smalltalk's non-short-circuit
