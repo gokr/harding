@@ -25,6 +25,18 @@
 
 Object>>clone <primitive primitiveClone>
 
+Object>>identityHash <primitive primitiveIdentityHash>
+Object>>hash <primitive primitiveHash>
+
+Object>>shallowCopy [ ^ <primitive primitiveCopy: false> ]
+Object>>deepCopy [ ^ <primitive primitiveCopy: true> ]
+
+Object>>copy [
+  ^ self shallowCopy postCopy
+]
+
+Object>>postCopy [ ^ self ]
+
 # ====================================================================.
 # Class-side methods (using class>> syntax).
 # ====================================================================.
@@ -199,6 +211,14 @@ Object class>>allClassMethods <primitive primitiveAllClassMethods>
 Object class>>classMethods <primitive primitiveClassMethods>
 
 Object class>>definedClassMethods <primitive primitiveDefinedClassMethods>
+
+# Selector queries answer Symbols, not Method objects.
+Object class>>selectors <primitive primitiveMethods>
+Object class>>definedSelectors <primitive primitiveDefinedMethods>
+Object class>>allInstanceSelectors <primitive primitiveAllInstanceMethods>
+Object class>>allClassSelectors <primitive primitiveAllClassMethods>
+Object class>>classSelectors <primitive primitiveClassMethods>
+Object class>>definedClassSelectors <primitive primitiveDefinedClassMethods>
 
 Object>>doesNotUnderstand: selector [
   # Default handler for unrecognized messages with just the selector

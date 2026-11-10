@@ -4,11 +4,24 @@
 
 Set>>new <primitive primitiveSetNew>
 
-Set>>add: element <primitive primitiveSetAdd: element>
+Set>>add: element [
+  | storedKey |
+  storedKey := self canonicalKey: element.
+  <primitive primitiveSetAdd: storedKey>.
+  ^ element
+]
 
-Set>>remove: element <primitive primitiveSetRemove: element>
+Set>>remove: element [
+  | storedKey |
+  storedKey := self canonicalKey: element.
+  ^ <primitive primitiveSetRemove: storedKey>
+]
 
-Set>>includes: element <primitive primitiveSetIncludes: element>
+Set>>includes: element [
+  | storedKey |
+  storedKey := self canonicalKey: element.
+  ^ <primitive primitiveSetIncludes: storedKey>
+]
 
 Set>>size <primitive primitiveSetSize>
 
@@ -16,11 +29,27 @@ Set>>isEmpty [
   ^ self size = 0
 ]
 
-Set>>union: otherSet <primitive primitiveSetUnion: otherSet>
+Set>>union: otherSet [
+  | combined |
+  combined := self copyEmpty.
+  self do: [:each | combined add: each].
+  otherSet do: [:each | combined add: each].
+  ^ combined
+]
 
-Set>>intersection: otherSet <primitive primitiveSetIntersection: otherSet>
+Set>>intersection: otherSet [
+  | common |
+  common := self copyEmpty.
+  self do: [:each | (otherSet includes: each) ifTrue: [common add: each]].
+  ^ common
+]
 
-Set>>difference: otherSet <primitive primitiveSetDifference: otherSet>
+Set>>difference: otherSet [
+  | remaining |
+  remaining := self copyEmpty.
+  self do: [:each | (otherSet includes: each) ifFalse: [remaining add: each]].
+  ^ remaining
+]
 
 Set>>asArray <primitive primitiveSetAsArray>
 
@@ -30,3 +59,15 @@ Set>>do: block [
 ]
 
 Set class>>new <primitive primitiveSetNew>
+
+Set>>canonicalKey: key [
+  | keyHash |
+  ((key isKindOf: String) or: [
+    (key isKindOf: Number) or: [(key isKindOf: Boolean) or: [key isNil]]
+  ]) ifTrue: [ ^ key ].
+  keyHash := key hash.
+  self do: [:stored |
+    ((stored hash = keyHash) and: [stored = key]) ifTrue: [ ^ stored ]
+  ].
+  ^ key
+]

@@ -248,12 +248,12 @@ Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLi
         ^ #()
     ]
 
-    methods := classObj methods
+    methods := classObj selectors
     methods isNil ifTrue: [
         Transcript showCr: "methods is nil!"
         ^ #()
     ]
-    definedMethods := classObj definedMethods
+    definedMethods := classObj definedSelectors
     rawNames := Array new
 
     (aCategory = "all") ifTrue: [
@@ -270,7 +270,7 @@ Catalog>>methodNamesForClass: aClassName category: aCategory currentLibrary: aLi
                 ]
             ] ifFalse: [
                 (aCategory = "class") ifTrue: [
-                    classObj allClassMethods do: [:selector | rawNames add: selector ]
+                    classObj allClassSelectors do: [:selector | rawNames add: selector ]
                 ] ifFalse: [
                     methods do: [:selector | rawNames add: selector ]
                 ]

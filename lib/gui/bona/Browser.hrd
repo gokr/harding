@@ -870,7 +870,7 @@ Browser>>installMethodInImage: fullHeader bodyLines: bodyLines [
         ^ self
     ]
 
-    installed := classObj methods includes: (selector asSymbol)
+    installed := classObj selectors includes: (selector asSymbol)
     installed ifFalse: [
         Transcript showCr: ("Method install verification failed for " & selector)
     ]
@@ -947,9 +947,9 @@ Browser>>resolveMethodFileForCurrentClass [
     classObj := self classForName: self currentClass
     classObj isNil ifTrue: [ ^ nil ]
 
-    candidates := classObj definedMethods
+    candidates := classObj definedSelectors
     candidates isEmpty ifTrue: [
-        candidates := classObj methods
+        candidates := classObj selectors
     ]
 
     file := nil
@@ -1290,7 +1290,7 @@ Browser>>showClassInfo: aClassName [
     superclasses := classObj superclassNames
     slots := [ classObj slotNames ] on: Exception do: [ #() ]
     isMixin := [ classObj isMixin ] on: Exception do: [ false ]
-    methodCount := classObj definedMethods size
+    methodCount := classObj definedSelectors size
     
     infoText := aClassName & (isMixin ifTrue: [" (Mixin)"] ifFalse: [" (Class)"])
     infoText := infoText & "\n\n"

@@ -6,6 +6,7 @@ import ../core/process
 import ../core/log_support
 import ../core/string_conversion
 import ../core/value_primitives
+import ../core/object_protocol
 import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
@@ -2822,6 +2823,31 @@ proc initGlobals*(interp: var Interpreter) =
   # Also register primitiveBasicNew for <primitive> syntax
   objectCls.classMethods["primitiveBasicNew"] = classBasicNewMethod
   objectCls.allClassMethods["primitiveBasicNew"] = classBasicNewMethod
+
+  proc identityHashImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    identityHashValue(self)
+  proc hashImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    valueHash(self)
+  proc copyImpl(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let deep = args.len > 0 and args[0].kind == vkBool and args[0].boolVal
+    let copied = tryInterpretedCopy(self, deep)
+    if copied.error.len > 0:
+      signalExceptionByName(interp, "Error", copied.error)
+      return nilValue()
+    result = copied.value
+  let identityHashMethod = createCoreMethod("primitiveIdentityHash")
+  identityHashMethod.setNativeValueImpl(identityHashImpl)
+  objectCls.methods["primitiveIdentityHash"] = identityHashMethod
+  objectCls.allMethods["primitiveIdentityHash"] = identityHashMethod
+  let hashMethod = createCoreMethod("primitiveHash")
+  hashMethod.setNativeValueImpl(hashImpl)
+  objectCls.methods["primitiveHash"] = hashMethod
+  objectCls.allMethods["primitiveHash"] = hashMethod
+  let copyMethod = createCoreMethod("primitiveCopy:")
+  copyMethod.setNativeValueImpl(copyImpl)
+  copyMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveCopy:"] = copyMethod
+  objectCls.allMethods["primitiveCopy:"] = copyMethod
 
   # Add perform: methods to Object class (for primitive dispatch from Smalltalk)
   let objPerformMethod = createCoreMethod("perform:")
