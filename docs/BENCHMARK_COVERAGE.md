@@ -60,6 +60,42 @@ CPython where dispatch dominates and the work per send is small, and still slowe
 where each node visit allocates and the call boundary boxes. That is exactly the
 remaining target listed as native parameters and returns.
 
+## Native Nim references (the floor)
+
+Each added benchmark has a hand-written Nim port in `benchmark/native/`, matching the
+existing richards/deltablue convention: idiomatic Nim, `ref object` hierarchies,
+`paramStr(1)` repetitions, the same asserted answer, and the same printed output.
+
+These exist to give an aim and a floor: they are what the same protocol costs when
+every call is a native method call on a native field. They are representation
+references, not semantics oracles -- they are hand written, and their existence says
+nothing about what the Harding source must compile to. Compare trends, not exact
+multipliers.
+
+Pinned, alternating, answers checked on every run, 20 passes:
+
+| Benchmark | Granite | Native Nim | Granite/Native |
+|---|---:|---:|---:|
+| shapes | 0.989 ms | 0.071 ms | **13.90x** |
+| tree | 4.424 ms | 0.092 ms | **48.01x** |
+
+Through the routine harness at 50 passes (`scripts/bench_compare_native_nim.py`),
+which subtracts startup differently and includes CPython:
+
+| Benchmark | Granite | CPython | Native Nim | Granite/Native | CPython/Native |
+|---|---:|---:|---:|---:|---:|
+| shapes | 0.957 ms | 0.346 ms | 0.035 ms | 26.53x | 9.78x |
+| tree | 4.347 ms | 1.591 ms | 0.036 ms | 118.36x | 44.33x |
+
+Reading these honestly: on `shapes`, Granite is ~2.7x further from native than CPython
+is (26.53 / 9.78). On `tree` it is ~2.7x further as well (118.36 / 44.33). That is a
+more useful statement than either ratio alone, and it says the remaining gap is the
+same order of magnitude on both new workloads rather than concentrated in dispatch.
+
+The absolute floors also show the headroom plainly: native `tree` is ~0.04 ms/pass
+while Granite is ~4.3 ms/pass. The traversal itself is trivial; what costs 100x is
+representing and passing objects.
+
 ## Where they run
 
 Both are now part of the routine tooling rather than ad-hoc scripts:
@@ -70,12 +106,16 @@ Both are now part of the routine tooling rather than ad-hoc scripts:
   baseline run that does not contain those cases.
 - `scripts/bench_compare_python_pinned.py` times them against CPython, using
   mechanical Python ports in `scripts/python_benchmark_source.py`.
+- `scripts/bench_compare_native_nim.py` times them against the hand-written Nim
+  ports, iterating whichever of its known cases the retained run contains.
 - `tests/test_profile_granite.py` pins the expected answers and checks the snapshots
   are the checked sources with no synthesis; it also reads the expected value back
   from the interpreter instead of trusting the constant.
 - `tests/test_python_pinned_runner.py` runs each Python port and the Harding source
   and requires both to print the same answer, so a drifting port cannot quietly
-  make the comparison meaningless.
+  make the comparison meaningless. It does the same for the native Nim ports, for
+  zero, one and two passes, including a zero-pass run so the harness's startup
+  subtraction is exercised.
 
 ## Adding a benchmark
 

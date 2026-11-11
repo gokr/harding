@@ -51,5 +51,32 @@ class PythonPorts(unittest.TestCase):
                     self.assertEqual(harding.stdout.strip(), str(per_pass * count), case)
 
 
+class NativePorts(unittest.TestCase):
+    def test_native_references_agree_with_the_interpreter(self):
+        # The native port is the performance floor, so it must compute the same
+        # thing as the Harding source; otherwise the ratio is meaningless.
+        import subprocess
+        binary_root = ROOT / 'build/native-port-tests'
+        binary_root.mkdir(parents=True, exist_ok=True)
+        for case, per_pass in (('shapes', 178000), ('tree', 10227)):
+            with self.subTest(case=case):
+                binary = binary_root / case
+                subprocess.run(['nim', 'c', '-d:release', '--hints:off',
+                                '--nimcache:' + str(binary_root / ('cache-' + case)),
+                                '-o:' + str(binary),
+                                str(ROOT / 'benchmark' / 'native' / (case + '.nim'))],
+                               check=True, capture_output=True, text=True, timeout=600)
+                for count in (0, 1, 2):
+                    got = subprocess.run([str(binary), str(count)], capture_output=True,
+                                         text=True, timeout=300)
+                    self.assertEqual(got.returncode, 0, got.stdout + got.stderr)
+                    self.assertEqual(got.stdout.strip(), str(per_pass * count), case)
+                    harding = subprocess.run(
+                        [str(ROOT / 'harding'), str(ROOT / 'benchmark' / (case + '.hrd')), '--', str(count)],
+                        cwd=ROOT, capture_output=True, text=True, timeout=300)
+                    self.assertEqual(harding.returncode, 0, harding.stdout + harding.stderr)
+                    self.assertEqual(harding.stdout.strip(), got.stdout.strip(), case)
+
+
 if __name__ == '__main__':
     unittest.main()

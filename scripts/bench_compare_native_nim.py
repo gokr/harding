@@ -29,9 +29,14 @@ def timed(command, cpu, timeout=300):
     return elapsed, done.stdout
 
 
-def build_native(work):
+# Cases with a hand-written Nim port. shapes/tree were added with their ports so the
+# floor is available for the workloads the specialization actually targets.
+NATIVE_CASES = ('richards', 'deltablue', 'shapes', 'tree')
+
+
+def build_native(work, cases):
     results = {}
-    for case in ['richards', 'deltablue']:
+    for case in cases:
         source = ROOT / 'benchmark' / 'native' / f'{case}.nim'
         binary = work / f'native-{case}'
         subprocess.run(['nim', 'c', '-d:release', '--mm:arc',
@@ -58,7 +63,10 @@ def main():
     base.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix='run-', dir=base))
     saved = json.loads((args.run / 'results.json').read_text())
-    natives = build_native(work)
+    cases = [c for c in NATIVE_CASES if c in saved['cases']]
+    if not cases:
+        sys.exit('retained run has none of: ' + ', '.join(NATIVE_CASES))
+    natives = build_native(work, cases)
     print('Artifacts:', work, flush=True)
 
     sys.path.insert(0, str(ROOT / 'scripts'))
@@ -71,7 +79,7 @@ def main():
               'method': 'raw process wall time, checked outputs, pinned alternating engines; startup included',
               'nativeCaveats': 'Representation reference, not semantic parity: Richards embeds task variants and fixed arrays; DeltaBlue uses Float64 values and rank integers. Native ports retain workload checks and teardown.',
               'loadAtStart': Path('/proc/loadavg').read_text().strip(), 'cases': {}}
-    for case in ['richards', 'deltablue']:
+    for case in cases:
         directory = args.run / case
         binary = directory / 'program'
         source = directory / f'{case}.hrd'
