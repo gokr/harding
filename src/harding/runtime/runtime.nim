@@ -1171,20 +1171,50 @@ proc getSuperclasses*(className: string): seq[string] =
 proc walkCompiledHierarchy*(className: string, visit: proc(name: string): bool): string =
   ## Depth-first pre-order over the superclass graph, parents in declaration
   ## order. `visit` returns true to stop; the visited name is returned, or "".
-  ## A `seen` guard keeps a malformed cyclic hierarchy from looping forever.
-  var seen: seq[string] = @[]
-  proc walk(name: string): string =
-    if name.len == 0 or name in seen:
-      return ""
-    seen.add(name)
+  ##
+  ## This runs on the dispatch path for every hierarchy question, so it must not
+  ## allocate. Both the pending stack and the cycle guard are fixed arrays: the
+  ## previous nested-proc form allocated a closure environment and a `seen` seq
+  ## on every call (4.5M allocations on Richards alone). A bounded depth beyond
+  ## the array simply stops descending, which keeps a malformed cyclic or cyclicly
+  ## deep graph finite instead of looping.
+  const MaxHierarchyDepth = 32
+  var stack: array[MaxHierarchyDepth, string]
+  var seen: array[MaxHierarchyDepth, string]
+  var seenLen = 0
+  var stackLen = 0
+  stack[0] = className
+  stackLen = 1
+  while stackLen > 0:
+    dec stackLen
+    let name = stack[stackLen]
+    if name.len == 0: continue
+    var alreadySeen = false
+    for index in 0..<seenLen:
+      if seen[index] == name:
+        alreadySeen = true
+        break
+    if alreadySeen: continue
+    if seenLen < MaxHierarchyDepth:
+      seen[seenLen] = name
+      inc seenLen
     if visit(name):
       return name
-    for parent in getSuperclasses(name):
-      let found = walk(parent)
-      if found.len > 0:
-        return found
-    return ""
-  return walk(className)
+    # Read the registered parents without building a seq per node: this loop is
+    # the hot path and `getSuperclasses` copies its table value on return.
+    if name in superclassLists:
+      let parents = superclassLists[name]
+      var index = parents.len - 1
+      while index >= 0:
+        if stackLen < MaxHierarchyDepth:
+          stack[stackLen] = parents[index]
+          inc stackLen
+        dec index
+    elif name in superclassNames and superclassNames[name].len > 0:
+      if stackLen < MaxHierarchyDepth:
+        stack[stackLen] = superclassNames[name]
+        inc stackLen
+  return ""
 
 proc ensureCompiledExceptionHierarchy*(): void =
   ## Register the built-in exception chain once. Generated modules reference
