@@ -1,5 +1,59 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Allocation-free hierarchy walk
+
+The dispatch path asks the superclass graph a question on most sends
+(`isKindOf:`, method resolution, class-method lookup).
+`walkCompiledHierarchy` answered it by creating a nested `walk` proc and a
+`seen: seq[string]` per call, so every question allocated a closure environment
+and grew a sequence.
+
+A gprof build of Richards made this concrete:
+
+| | before | after |
+|---|---:|---:|
+| `walkCompiledHierarchy` calls | 4,543,956 | absent from profile |
+| `nimNewObj` | 5,729,307 | 5,696,217 |
+| `nimAsgnStrV2` (string copies) | 5,089,917 | not in top entries |
+
+The walk now uses fixed arrays for both the pending stack and the cycle guard, and
+reads `superclassLists`/`superclassNames` directly instead of copying the parent
+seq out of `getSuperclasses` on every node. Depth is bounded at 32; beyond that it
+stops descending, which keeps a malformed graph finite rather than looping.
+
+Traversal semantics are unchanged and now pinned by `tests/test_hierarchy_walk.nim`:
+pre-order with parents in declaration order, first-match stop, empty/unknown class,
+the single-name registration path, and termination on a malformed cycle. That test
+passes under ARC and ORC.
+
+Measured, pinned alternating pairs, 31 trials, idle host:
+
+| Workload | Before | After | Change | Pairs |
+|---|---:|---:|---:|---:|
+| Richards | 9.19 ms | 9.09 ms | **1.14% faster** | 27/31 |
+| DeltaBlue | 14.97 ms | 15.06 ms | 0.60% slower | 9/31 |
+| Queens | 10.26 ms | 10.38 ms | 1.15% slower | 5/31 |
+
+Richards is the hierarchy-query-heavy workload, and it is the one that improves at
+22-27 of 31 pairs across repeated runs. DeltaBlue and Queens are within noise in
+both directions; the remaining allocation count is dominated by `NodeValue`
+boxing at call boundaries, not by hierarchy queries.
+
+### Two measurement traps worth remembering
+
+Both cost real time here and would have produced false claims:
+
+1. **The profiler synthesises a Queens source.** `scripts/profile_granite.py`
+   replaces the Queens driver with a `repetitions timesRepeat:` loop driven by
+   argv, while `benchmark/queens.hrd` runs the solver once and ignores arguments.
+   Comparing a `granite build` of the repo file against a profiler run compared one
+   iteration with thirty and produced a fake 95.81% "speedup". Benchmarks must be
+   built from the *same* source snapshot the baseline used.
+2. **A gprof build running concurrently contaminates timings.** One pinned run
+   reported Queens 2.29% slower at 3/31 pairs purely because a `-pg` compile and
+   profile run overlapped it. Repeat the pair set on a quiet machine before
+   believing a regression.
+
 ## Typed object slot storage
 
 Declared object slots now carry a typed native view instead of only an opaque
