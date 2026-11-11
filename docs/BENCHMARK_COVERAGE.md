@@ -60,6 +60,23 @@ CPython where dispatch dominates and the work per send is small, and still slowe
 where each node visit allocates and the call boundary boxes. That is exactly the
 remaining target listed as native parameters and returns.
 
+## Where they run
+
+Both are now part of the routine tooling rather than ad-hoc scripts:
+
+- `scripts/profile_granite.py` retains checked release binaries and pinned paired
+  comparisons for all five cases. It also gained an optional case subset
+  (`profile_granite.py shapes tree`), and refuses to compare a subset against a
+  baseline run that does not contain those cases.
+- `scripts/bench_compare_python_pinned.py` times them against CPython, using
+  mechanical Python ports in `scripts/python_benchmark_source.py`.
+- `tests/test_profile_granite.py` pins the expected answers and checks the snapshots
+  are the checked sources with no synthesis; it also reads the expected value back
+  from the interpreter instead of trusting the constant.
+- `tests/test_python_pinned_runner.py` runs each Python port and the Harding source
+  and requires both to print the same answer, so a drifting port cannot quietly
+  make the comparison meaningless.
+
 ## Adding a benchmark
 
 1. Write the program in ordinary Harding. Assert the expected answer so the harness

@@ -54,7 +54,10 @@ def main():
               'python': subprocess.check_output([sys.executable, '--version'], text=True).strip(),
               'loadAtStart': Path('/proc/loadavg').read_text().strip(), 'cases': {}}
     print('Artifacts:', work, flush=True)
-    for case in ['richards', 'deltablue', 'queens']:
+    # The retained run decides which cases exist; the added shapes/tree cases are
+    # included when the run has them, so an older baseline still compares.
+    for case in [c for c in ('richards', 'deltablue', 'queens', 'shapes', 'tree')
+                 if c in saved['cases']]:
         directory = args.run / case
         binary = directory / 'program'
         binary_sha = hashlib.sha256(binary.read_bytes()).hexdigest()

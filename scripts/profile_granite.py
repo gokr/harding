@@ -14,7 +14,11 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-CASES = ('richards', 'deltablue', 'queens')
+# The classic three, plus two workloads that target what the specialization
+# actually optimises: many receiver classes at one send site, and objects crossing
+# call boundaries. Without them the corpus reported 0% for slices worth 28-84% on
+# their own shape. See docs/BENCHMARK_COVERAGE.md.
+CASES = ('richards', 'deltablue', 'queens', 'shapes', 'tree')
 
 
 def expected(case, repetitions):
@@ -22,6 +26,10 @@ def expected(case, repetitions):
         return f'Richards queued={2322 * repetitions} held={928 * repetitions}\n'
     if case == 'deltablue':
         return f'DeltaBlue runs={repetitions} verified\n'
+    if case == 'shapes':
+        return f'{178000 * repetitions}\n'
+    if case == 'tree':
+        return f'{10227 * repetitions}\n'
     return '92\n' if repetitions else '0\n'
 
 
@@ -68,7 +76,12 @@ def main():
     parser.add_argument('--mm', choices=('arc', 'orc'), default='arc')
     parser.add_argument('--repetitions', type=int, default=30)
     parser.add_argument('--trials', type=int, default=7)
+    parser.add_argument('cases', nargs='*', help='optional subset of case names')
     args = parser.parse_args()
+    unknown = set(args.cases) - set(CASES)
+    if unknown:
+        parser.error('unknown cases: ' + ', '.join(sorted(unknown)))
+    selected = tuple(args.cases) if args.cases else CASES
     if args.repetitions < 1 or args.trials < 3:
         parser.error('positive repetitions and at least three trials required')
     previous = None
@@ -93,7 +106,9 @@ def main():
         'baseline': str(args.compare) if previous else None,
         'cpu': next((line.split(':', 1)[1].strip() for line in Path('/proc/cpuinfo').read_text().splitlines()
                      if line.startswith('model name')), '')}, 'cases': {}}
-    for case in CASES:
+    for case in selected:
+        if previous and case not in previous['cases']:
+            parser.error('baseline has no ' + case + '; compare against a run that includes it')
         directory = work / case
         directory.mkdir()
         source = directory / (case + '.hrd')

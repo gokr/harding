@@ -284,10 +284,92 @@ def definitions(source):
     return text
 
 
+SHAPES_PYTHON = """
+class Shape:
+    def area(self): return 0
+    def describe(self): return 'shape'
+    def label(self): return 'shape'
+
+class Circle(Shape):
+    def __init__(self, r): self.radius = r
+    def area(self): return self.radius * self.radius * 3
+    def describe(self): return 'circle'
+    def label(self): return 'circle'
+
+class Rect(Shape):
+    def __init__(self, w, h): self.width, self.height = w, h
+    def area(self): return self.width * self.height
+    def describe(self): return 'rect'
+    def label(self): return 'rect'
+
+class Square(Rect):
+    def area(self): return self.width * self.width
+    def describe(self): return 'square'
+    def label(self): return 'square'
+
+class Triangle(Shape):
+    def __init__(self, b, h): self.base, self.height = b, h
+    def area(self): return self.base * self.height // 2
+    def describe(self): return 'triangle'
+    def label(self): return 'triangle'
+
+class Ellipse(Shape):
+    def __init__(self, a, i): self.major, self.minor = a, i
+    def area(self): return self.major * self.minor * 2
+    def describe(self): return 'ellipse'
+    def label(self): return 'ellipse'
+
+def run_shapes():
+    shapes = [Circle(10), Rect(20, 15), Square(12, 12), Triangle(16, 9), Ellipse(7, 3)]
+    total = 0
+    for _i in range(200):
+        for each in shapes: total += each.area()
+        for each in shapes:
+            if each.describe() == 'circle': total += 1
+        for each in shapes: total += len(each.label())
+    return total
+"""
+
+TREE_PYTHON = """
+class TreeNode:
+    def __init__(self, v): self.value, self.left, self.right = v, None, None
+
+class TTree:
+    def build(self, node, d):
+        if d <= 0: return node
+        node.left = self.build(TreeNode(d), d - 1)
+        node.right = self.build(TreeNode(d), d - 1)
+        return node
+    def sumAll(self, node):
+        if node is None: return 0
+        return node.value + self.sumAll(node.left) + self.sumAll(node.right)
+    def maxDepth(self, node):
+        if node is None: return 0
+        l = self.maxDepth(node.left)
+        r = self.maxDepth(node.right)
+        return 1 + (l if l > r else r)
+    def leaves(self, node):
+        if node is None: return 0
+        if node.left is None and node.right is None: return 1
+        return self.leaves(node.left) + self.leaves(node.right)
+
+def run_tree():
+    root = TreeNode(1)
+    tree = TTree()
+    tree.build(root, 11)
+    return tree.sumAll(root) + tree.maxDepth(root) + tree.leaves(root)
+"""
+
+
 def driver(case, count, source):
     if count < 0: raise ValueError('negative repetitions')
     notices = '\n'.join('# ' + line for line in source.splitlines() if line.startswith('#'))
-    code = notices + '\n' + definitions(source)
+    # The two added benchmarks are translated explicitly: their Harding source is
+    # small and the mechanical generator does not cover their constructs.
+    if case in ('shapes', 'tree'):
+        code = notices + '\n' + (SHAPES_PYTHON if case == 'shapes' else TREE_PYTHON)
+    else:
+        code = notices + '\n' + definitions(source)
     if case == 'richards':
         body = '''answer = Richards().benchmark()
     assert (answer.get_queueCount(), answer.get_holdCount()) == (2322, 928)
@@ -296,6 +378,8 @@ def driver(case, count, source):
         code += 'queued = held = 0\n'
     elif case == 'deltablue': body = 'answer = DeltaBlue().benchmark()\n    assert abs(answer - 223305) < 0.000001'
     elif case == 'queens': body = 'answer = Queens().benchmark()\n    assert answer == 92'
+    elif case == 'shapes': body = 'answer = run_shapes()\n    assert answer == 178000'
+    elif case == 'tree': body = 'answer = run_tree()\n    assert answer == 10227'
     else: raise ValueError(case)
     code += f'for _pass in range({count}):\n    ' + body + '\n'
     code += f'print({count})\n'
