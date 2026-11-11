@@ -12,6 +12,33 @@ type
     constraints*: NativeObjectSlot[Class_4442436F6C6C656374696F6E]
 ```
 
+### Measured result: neutral to slightly negative
+
+Pinned alternating pairs, 31 trials, against `run-fows0306` at load 1.84:
+
+| Workload | Before | After | Change | Pairs |
+|---|---:|---:|---:|---:|
+| Richards | 11.17 ms | 11.31 ms | **2.17% slower** | 9/31 |
+| DeltaBlue | 17.79 ms | 17.71 ms | 0.27% faster | 17/31 |
+| Queens | 10.06 ms | 10.05 ms | 0.08% slower | 14/31 |
+
+The typed view does not pay for itself on these workloads, and Richards regressed
+outside noise. Two structural reasons, not tuning:
+
+- **`NativeObjectSlot[T]` is two words wide** (typed ref plus wrapper) versus one
+  for `Instance`, so every such field grew. Richards declares few narrowable
+  object slots, so the extra footprint buys almost nothing there.
+- **The fast path only fires for a no-argument getter send whose receiver is the
+  field.** That shape is rare: most sends through these slots pass arguments or
+  are not getters, and all of them still cross the boxed
+  `openArray[NodeValue]` boundary. The 623/623 parameter/return boundary this was
+  meant to approach is untouched by field storage alone.
+
+Recorded as a negative result rather than reverted, because the storage and view
+are prerequisites for typing parameters and returns, which is where the boxing
+actually is. The honest reading is that field typing by itself is not the lever,
+and the next slice should not assume it was.
+
 ### Why a view and not a bare `ref`
 
 A declared class constrains the value's *class*, not how it is stored. A slot
