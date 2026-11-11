@@ -5,7 +5,7 @@ describes the comparison this list came out of.
 
 ## Current implementation status
 
-The D1–D13 findings below preserve the original reproductions and proposals.
+The D1–D14 findings below preserve the original reproductions and proposals.
 The working implementation now has these outcomes:
 
 | Item | Outcome |
@@ -22,6 +22,7 @@ The working implementation now has these outcomes:
 | D11 | Shared String search primitive returns nil on a miss; Catalog checks nil before slicing. |
 | D12 | Compiled class sends fall back to Class/Object instance protocol, without requiring Class to have a registered superclass edge. |
 | D13 | Missing super methods signal catchable MessageNotUnderstood; instance- and class-side error parity is covered. |
+| D14 | **Open.** `allSlotNames` does not exist, so inherited slots cannot be enumerated. |
 | Cascades | Parenthesized expressions now use the same cascade continuation as statements. The receiver is evaluated once; the final message supplies the value (`yourself` returns the receiver). Intermediate cascade results are discarded, so a cascade used as an argument cannot leave extra operands on the VM stack. |
 
 Fixed defects have unconditional assertions, not skip-on-failure tests.
@@ -500,6 +501,37 @@ whatever `doesNotUnderstand:` uses for ordinary sends) through the ordinary
 signal machinery instead of raising a Nim exception, keeping the parent class
 name and the selector in the message text. Add a Granite parity case so the two
 engines keep agreeing.
+
+## D14 — inherited slots cannot be enumerated
+
+**Evidence.** Verified on a binary built from this tree, not the stale
+`./harding` left in the repo root. `slotNames` answers only the receiver's *own*
+slots, and nothing exposes the full instance layout:
+
+| expression | result |
+|---|---|
+| `K := Object derive: #(a). C := K derive: #(b). C new slotNames` | `#("b")` — `a` missing |
+| the same on the class side, `C slotNames` | `#("b")` |
+| `C new respondsTo: #allSlotNames` | `false` |
+| `C new respondsTo: #instVarAt:` | `false` |
+
+Inherited slots still work: with a public inherited slot, `c::a := 7` then
+`c::a` answers `7`. So this is purely an enumeration gap. The layout already
+exists internally — `Class.allSlotNames` is the parent-first list that
+`getSlotIndex` indexes — the information is simply not exposed.
+
+**Why it matters.** Any generic object walker needs the ordered full slot list.
+The Inspector works around it by reading the class's `slotNames` out of the
+global table (`lib/gui/bona/Inspector.hrd`), which a user has no equivalent of.
+`deepCopy` (A2) and structural hashing (A1) both need to visit every slot,
+inherited ones included.
+
+**Fix.** Expose what the VM maintains: `Object>>allSlotNames` returning the
+parent-first list, keeping `slotNames` as own-slots only, and documenting the
+pair the way `selectors`/`definedSelectors`/`allInstanceSelectors` already
+distinguish own from inherited. `slotAt:` already reads by name, so no
+`instVarAt:` is needed. Then let the Inspector use it instead of the
+global-table workaround. This pairs naturally with A1/A2.
 
 ## Regression coverage
 

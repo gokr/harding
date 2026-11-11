@@ -138,15 +138,28 @@ Verified missing (each answered `Message not understood`):
 | `ExceptionSet`, `on:do:on:do:` | single-handler `on:do:` |
 | `thisContext` giving a reified frame | `thisContext` answers an `Activation` with `receiver`, `sender`, `selector`, `line`, `column`, `isClassMethod`, `cacheKey` — debug metadata; no `method`, `tempAt:`, `pc`, `resume`, `return:` |
 
-### Naming: methods, not selectors
+### Naming: methods are named by Symbols; the queries say "selectors"
 
-Harding says **methods**. The public protocol is `methods`, `definedMethods`,
-`allInstanceMethods`, `allClassMethods`, `removeMethod:`, `removeClassMethod:`,
-`conflictSelectors`. A method is *named* by a Symbol: `(Object methods at: 0)`
-answers `#ifNotNil:`, and `perform:` accepts a Symbol or a String. There is no
-"selector" object type distinct from Symbol; the word survives only inside
-`conflictSelectors`, `selector` on `Activation`, and `selector:put:`, which are
-the low-level installation/debugging paths.
+A method is *named* by a Symbol — `perform:` accepts a Symbol or a String, and
+`(Object selectors at: 0)` answers `#ifNotNil:`. There is no separate selector
+object type and no `Method` or `Selector` class; `Symbol` is the name.
+
+The queries split by side and by own-versus-inherited:
+
+| side | own | own + inherited |
+|---|---|---|
+| instance | `definedSelectors` | `allInstanceSelectors` |
+| class | `definedClassSelectors` | `allClassSelectors` |
+
+`selectors` answers the instance side: a class receiver *is* the class
+(`K class == K`), so the side is chosen by the query rather than the receiver.
+The older `methods`/`definedMethods`/`allInstanceMethods`/`allClassMethods`
+names remain as compatibility aliases, and `removeMethod:`/`removeClassMethod:`
+keep the method vocabulary for mutation.
+
+All six work. Enumerating *slots* has a matching gap, though: `slotNames`
+answers own slots only and there is no `allSlotNames` (see D14 in
+`FIXES.md`).
 
 ## Collections
 

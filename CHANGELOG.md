@@ -55,6 +55,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Parenthesized cascades parse through the statement cascade continuation, preserving receiver identity and the final message result; focused parser/runtime tests and native parity cover nesting and `yourself`.
 - Smalltalk-alignment defects: `&` honors overrides (including Boolean conjunction), Comparable ordering no longer depends on a missing hash method, interval conversion/indexing and duplicate definitions are corrected, array writes signal on invalid indices instead of dropping/appending them, Symbol class reflection works, String search misses answer nil, and missing super methods are catchable.
 - Class-side reflection has explicit `classMethods`/`definedClassMethods` queries in both engines; compiled class values answer Object/Class protocol. Printable uses existing `write:` sinks without Streams or Transcript, and Browser class deletion explicitly refuses rather than calling missing `become:` or altering library bindings.
+- `docs/FIXES.md` D14 records that inherited slots cannot be enumerated:
+  `slotNames` answers own slots only and no `allSlotNames` exposes the
+  parent-first layout the VM already maintains, which `deepCopy` and structural
+  hashing both need. `docs/BONA_ASSESSMENT.md` records that the Launcher has no
+  Inspector entry point.
 - `docs/FIXES.md` D6 now proposes a single `#` rule — `#` plus whitespace is
   a comment, anything else starts a symbol or literal — with `##` reserved for
   documentation comments as in Nim, replacing the lexer's special-character

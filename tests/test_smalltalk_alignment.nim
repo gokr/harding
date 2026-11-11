@@ -252,6 +252,20 @@ suite "FIXES.md controlled defects":
     """
     check answer(source) == "caught"
 
+  test "D14: inherited slots cannot be enumerated":
+    # slotNames answers own slots only, and no accessor exposes the full
+    # parent-first layout (Class.allSlotNames) the VM already maintains.
+    check answer("""
+      K := Object derive: #(a).
+      C := K derive: #(b).
+      C new slotNames printString
+    """) == "#(\"b\")"
+    check answer("""
+      K2 := Object derive: #(a2).
+      C2 := K2 derive: #(b2).
+      C2 new respondsTo: #allSlotNames
+    """) == "false"
+
   test "D8: no stdlib file defines the same method twice":
     # Interval.hrd defined anySatisfy:, allSatisfy: and sum twice; the later
     # definition silently won, and the first read as if it were live code.
