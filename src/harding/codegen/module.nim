@@ -47,15 +47,17 @@ proc genModuleHeader*(ctx: var CompilerContext, moduleName: string,
 
 
 proc nativeSlotType(slot: SlotDef): string =
-  ## Native storage for declared slots; object contracts retain an owning
-  ## Instance reference so subclasses and VM-owned instances share the boundary.
+  ## Native storage for declared slots. Object slots retain the original wrapper
+  ## alongside a typed view when their declared class has a generated layout.
   case slot.constraint
   of tcInt: "int"
   of tcFloat: "float64"
   of tcBool: "bool"
   of tcString, tcSymbol: "string"
   of tcObject:
-    if slot.objectClass.len > 0: "Instance" else: ""
+    if slot.nativeObject: "NativeObjectSlot[" & mangleClass(slot.objectClass) & "]"
+    elif slot.objectClass.len > 0: "Instance"
+    else: ""
   else: ""
 
 proc boxExpression(slot: SlotDef, source: string): string =
@@ -80,46 +82,31 @@ proc unboxExpression(slot: SlotDef, source: string): string =
   of tcString: fmt("compiledSlotString({source})")
   of tcSymbol: fmt("compiledSlotSymbol({source})")
   of tcObject:
-    if slot.objectClass.len > 0: fmt("compiledSlotObject({source}, \"{slot.objectClass}\")")
+    if slot.nativeObject:
+      fmt("compiledTypedSlotObject({source}, \"{slot.objectClass}\", {mangleClass(slot.objectClass)})")
+    elif slot.objectClass.len > 0: fmt("compiledSlotObject({source}, \"{slot.objectClass}\")")
     else: source
   else: source
 
-proc genClassConstants*(cls: ClassInfo): string =
-  ## Generate native Nim type for Harding class with slot accessors
-  let clsName = mangleClass(cls.name)
-
-  # Mirror the Harding hierarchy in the Nim type hierarchy, so a typed reference
-  # to a parent class can later hold any subclass instance. Without this, a
-  # narrowed object slot could only ever hold the exact declared class.
-  #
-  # Only the parent chain is walked. Harding allows duplicate class names under
-  # different owners, so keying inheritance off a name table could let a
-  # template/helper class of the same name reparent an application class and
-  # silently change its layout.
-  let parentName = if cls.parent != nil: mangleClass(cls.parent.name) & "Obj"
-                   else: "HardingObject"
-
-  # Inherited slots already exist on the parent object, so only this class's own
-  # slots are declared here. Redeclaring them would duplicate storage and shadow
-  # the parent field of the same name.
-  var ownSlots: seq[SlotDef]
+proc genNativeClassType(cls: ClassInfo): string =
+  let nativeClass = mangleClass(cls.name)
+  let parent = if cls.parent != nil: mangleClass(cls.parent.name) & "Obj"
+               else: "HardingObject"
+  result = fmt("  {nativeClass}Obj* {{.inheritable.}} = object of {parent}\n")
   for slot in cls.slots:
-    if not slot.isInherited:
-      ownSlots.add(slot)
+    if slot.isInherited: continue
+    let native = nativeSlotType(slot)
+    let fieldType = if native.len > 0: native else: "NodeValue"
+    result.add(fmt("    {mangleSlot(slot.name)}*: {fieldType}\n"))
+  result.add(fmt("  {nativeClass}* = ref {nativeClass}Obj\n"))
 
+proc genClassConstants*(cls: ClassInfo, emitType = true): string =
+  ## Generate native Nim type and allocation helpers for a Harding class.
+  let clsName = mangleClass(cls.name)
   var output = fmt("# {cls.name} Class\n")
   output.add("###################\n\n")
-
-  output.add("type\n")
-  output.add(fmt("  {clsName}Obj* {{.inheritable.}} = object of {parentName}\n"))
-
-  for slot in ownSlots:
-    let slotName = mangleSlot(slot.name)
-    let nativeType = nativeSlotType(slot)
-    let fieldType = if nativeType.len > 0: nativeType else: "NodeValue"
-    output.add(fmt("    {slotName}*: {fieldType}\n"))
-
-  output.add(fmt("  {clsName}* = ref {clsName}Obj\n\n"))
+  if emitType:
+    output.add("type\n" & genNativeClassType(cls) & "\n")
   
   # Constructor
   output.add(fmt("proc new{clsName}*(): {clsName} =\n"))
@@ -156,7 +143,9 @@ proc genClassConstants*(cls: ClassInfo): string =
         of tcBool: "false"
         of tcString, tcSymbol: "\"\""
         of tcObject:
-          if slot.objectClass.len > 0: "nil" else: "NodeValue(kind: vkNil)"
+          if slot.nativeObject: nativeSlotType(slot) & "()"
+          elif slot.objectClass.len > 0: "nil"
+          else: "NodeValue(kind: vkNil)"
         else: "NodeValue(kind: vkNil)"
       output.add(fmt("  result.{mangleSlot(slot.name)} = {zero}\n"))
   output.add("\n")
@@ -564,6 +553,13 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
         referenceGetterCalls[selector] = referenceCall
         referenceTargets[selector] = (choice.owner, choice.target, choice.slot, helper)
         let slot = classInfo[choice.owner].getSlotDef(choice.slot)
+        let nativeRead = boxExpression(slot, "receiver.native[]." & mangleSlot(choice.slot))
+        let referenceGuard = mangleClass(choice.owner) & "_direct_" & mangleSlot(choice.slot) & "_referenceGuard"
+        output.add(fmt("proc {helper}_typed(owner: NodeValue, receiver: NativeObjectSlot[{mangleClass(choice.owner)}]): NodeValue {{.inline.}} =\n"))
+        output.add(fmt("  if {helper}_class == nil: {helper}_class = compiledClassValue(\"{choice.owner}\").classVal\n"))
+        output.add(fmt("  if not hostRoutingActive() and receiver.native != nil and receiver.instance != nil and receiver.instance.compiledOwner == receiver.native and canDirectCompiledSend(receiver.instance, {helper}_class, \"{selector}\", {choice.target}, {helper}_guard) and {referenceGuard}(receiver.instance):\n"))
+        output.add(fmt("    return {nativeRead}\n"))
+        output.add(fmt("  cachedSendBound(owner, compiledObjectSlotValue(receiver), \"{selector}\", [])\n\n"))
         if slot.constraint == tcObject and slot.objectClass.len > 0:
           let guard = helper & "_objectGuard"
           objectGetters[selector] = ObjectGetter(owner: choice.owner, slot: choice.slot,
@@ -1277,6 +1273,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
         of "skString": candidate.constraint = tcString
         of "skSymbol": candidate.constraint = tcSymbol
         else: discard
+  # A declared class contract supplies a typed native view, not a promise that
+  # every compatible instance has native storage. Mixed builds keep the old ABI.
+  if not mixed:
+    for cls in analysis.classes.values:
+      for slot in cls.slots.mitems:
+        slot.nativeObject = slot.constraint == tcObject and
+          slot.objectClass in analysis.classes
+
   # Collect compiled class names for native instantiation
   var compiledClassNames: seq[string] = @[]
   for cls in analysis.classes.values:
@@ -1362,8 +1366,14 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
     let byDepth = cmp(classDepth(a), classDepth(b))
     if byDepth != 0: byDepth else: cmp(a.name, b.name))
 
+  # One type section allows self-links and mutually recursive object fields.
+  output.add("type\n")
   for cls in orderedClasses:
-    output.add(genClassConstants(cls))
+    output.add(genNativeClassType(cls))
+  output.add("\n")
+
+  for cls in orderedClasses:
+    output.add(genClassConstants(cls, emitType = false))
     output.add(genSlotAccessors(cls))
     output.add(genClassInit(cls))
     let nativeClass = mangleClass(cls.name)

@@ -1,5 +1,80 @@
 # Granite profiling: bounded instance-method resolution cache
 
+## Typed object slot storage
+
+Declared object slots now carry a typed native view instead of only an opaque
+`Instance`:
+
+```nim
+type
+  Class_44425661726961626C654F626A = object of HardingObject
+    value*: NodeValue
+    constraints*: NativeObjectSlot[Class_4442436F6C6C656374696F6E]
+```
+
+### Why a view and not a bare `ref`
+
+A declared class constrains the value's *class*, not how it is stored. A slot
+declared `-> DBVariable` can legitimately hold a VM-owned instance, a value
+bridged through `nativeSlots`, or one built by an interpreter. A bare
+`ref Class_DBVariableObj` cannot represent any of those, so the field would have
+to narrow a language contract it does not own.
+
+The storage therefore keeps both parts:
+
+```nim
+NativeObjectSlot*[T] = object
+  native*: T        # populated only for a matching private Nim layout
+  instance*: Instance  # the original wrapper: identity, VM and foreign values
+```
+
+`native` is filled only when the wrapper is a proxy whose `compiledOwner` really
+is a `T`, whose `nimValue` round-trips to that same owner, and which has no bridged
+`nativeSlots`. Every other case keeps `native == nil` and the wrapper, and the
+read goes through the ordinary dynamic boundary. Writes take the same decision in
+`nativeObjectSlot(instance, T)` at the assignment site.
+
+Executed behaviour on the field is now checked three ways in
+`tests/test_object_reference_slots.py`: a native value exposes `native` and a
+native method reads it directly (`storedNumber`), a subclass stored in the parent
+field keeps `native of Class_...`, and a VM-owned value stored in the same field
+reports `native == nil` yet still answers `17` through the same method. Replacing
+an accessor or the getter method still redirects both paths.
+
+### Typed receivers
+
+A send whose receiver is such a field consumes the view directly:
+
+```nim
+if Holder_direct_item_guard(self):
+  guardedSend_Element_number_typed(self, Holder(self.instVal.compiledOwner)[].item)
+else:
+  guardedSend_Element_number(self, Holder_direct_item_read(self))
+```
+
+The typed helper re-checks method identity, the slot-accessor guard, and that the
+view still matches the wrapper before reading `receiver.native[].number`.
+Otherwise it re-enters the ordinary send through
+`compiledObjectSlotValue(receiver)`, so identity and fallbacks are preserved.
+
+### One type section
+
+All class types are emitted in a single `type` section. Self-referential
+(`next -> Node`) and mutually recursive (`Node.peer -> Peer`, `Peer.owner -> Node`)
+slots both need it; per-class sections would require a declaration order that does
+not exist in general. A regression test covers both shapes from the parser AST.
+
+### Known limitation found while building this
+
+A class named in a slot contract *before* its own definition is not yet resolved
+to an object contract. During Granite's definition evaluation the name is still
+undefined, so `#{next -> RefNode}` can record a Symbol default when `RefNode` is
+declared later in the file. Storage for that slot stays boxed and the interpreter
+and compiler agree; it is an inference limitation, not a miscompile. Fixing it
+means resolving contracts from the AST class graph rather than from evaluation
+order, which is a separate change. Declaring the referenced class first avoids it
+today.
+
 ## Mirrored Harding type hierarchy
 
 The enabling change for typed object storage. Generated classes previously derived

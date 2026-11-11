@@ -167,8 +167,11 @@ proc objectSlotWrite(ctx: GenContext, name: string, value: Node): string =
   let field = mangleSlot(name)
   let native = mangleIdentifier(parameter)
   let boxed = "compiledObjectSlotValue(" & native & ")"
+  let stored = if slot.nativeObject:
+                 "nativeObjectSlot(" & native & ", " & mangleClass(slot.objectClass) & ")"
+               else: native
   return "(block:\n    if not hostRoutingActive() and compiledClassDispatchVersion == hardingObjectEntryVersion and " & prefix & "_guard(self):\n" &
-    "      " & clsName & "(self.instVal.compiledOwner)[]." & field & " = " & native &
+    "      " & clsName & "(self.instVal.compiledOwner)[]." & field & " = " & stored &
     "\n      " & boxed & "\n    else:\n      " & slotWrite(ctx, name, boxed) & ")"
 
 proc getSlotIndex*(ctx: GenContext, name: string): int =
@@ -819,6 +822,32 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
     let owner = genSymbolAccess(ctx, "self")
     return ctx.referenceGetterCalls[node.selector] & "(" & owner & ", " & receiver & ")"
 
+  # Consume a declared object field as a typed receiver without round-tripping
+  # through NodeValue. The field's own accessor is checked before bypassing it.
+  if not ctx.mixed and ctx.inMethod and ctx.cls != nil and node.receiver != nil and
+     node.arguments.len == 0 and node.selector in ctx.directSendCandidates:
+    var name = ""
+    if node.receiver.kind == nkIdent:
+      let candidate = node.receiver.IdentNode.name
+      if candidate notin ctx.locals and candidate notin ctx.parameters:
+        name = candidate
+    elif node.receiver.kind == nkSlotAccess and not node.receiver.SlotAccessNode.isAssignment:
+      name = node.receiver.SlotAccessNode.slotName
+      if name.len == 0:
+        for slot in ctx.cls.getAllSlots():
+          if slot.index == node.receiver.SlotAccessNode.slotIndex: name = slot.name
+    let slot = ctx.cls.getSlotDef(name)
+    if slot.nativeObject and slot.objectClass in ctx.classInfo:
+      let target = ctx.classInfo[slot.objectClass]
+      let helper = "guardedSend_" & mangleClass(target.name) & "_" & mangleSlot(node.selector)
+      if node.selector in target.getterSlots and node.selector notin target.instanceSelectors and
+         ctx.directSendCandidates[node.selector] == helper:
+        let prefix = directSlotPrefix(ctx, name)
+        let field = mangleClass(ctx.cls.name) & "(self.instVal.compiledOwner)[]." & mangleSlot(name)
+        return "(block:\n    if " & prefix & "_guard(self):\n      " & helper &
+          "_typed(self, " & field & ")\n    else:\n      " & helper & "(self, " &
+          slotRead(ctx, name) & "))"
+
   # Generate receiver
   var receiverCode: string
   if node.receiver != nil:
@@ -1367,6 +1396,7 @@ proc objectGetterStore(ctx: GenContext, name: string, value: Node): string =
   let info = ctx.objectGetters[getter.selector]
   let slot = ctx.cls.getSlotDef(name)
   if slot.constraint != tcObject or slot.objectClass != info.className: return ""
+  if slot.nativeObject != ctx.classInfo[info.owner].getSlotDef(info.slot).nativeObject: return ""
   let receiver = genExpression(ctx, getter.receiver)
   let targetGuard = directSlotPrefix(ctx, name) & "_guard(self)"
   let sourceField = mangleClass(info.owner) & "(hardingReferenceReceiver.instVal.compiledOwner)[]." & mangleSlot(info.slot)

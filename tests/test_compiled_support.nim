@@ -182,3 +182,54 @@ suite "Compiled shared support":
     home.active = false
     expect CompiledHardingError:
       discard raiseNonLocalReturn(home, nilValue())
+
+type
+  SlotNodeObj {.inheritable.} = object of HardingObject
+    number: int
+  SlotNode = ref SlotNodeObj
+  SlotNodeChildObj {.inheritable.} = object of SlotNodeObj
+    extra: int
+  SlotNodeChild = ref SlotNodeChildObj
+
+proc newSlotNode(number: int): SlotNode =
+  result = SlotNode(new(SlotNodeObj))
+  result.number = number
+
+suite "Native object slot views":
+  test "a matching native layout exposes a typed view and keeps the wrapper":
+    let node = newSlotNode(42)
+    let instance = Instance(kind: ikObject, class: nil, isNimProxy: true,
+                            compiledOwner: node)
+    instance.nimValue = cast[pointer](node)
+    let view = nativeObjectSlot(instance, SlotNode)
+    check view.native == node
+    check view.native.number == 42
+    check view.instance == instance
+    # The wrapper is still what identity is checked against.
+    check compiledObjectSlotValue(view).instVal == instance
+
+  test "subclass storage keeps the same typed view":
+    let child = SlotNodeChild(new(SlotNodeChildObj))
+    child.number = 7
+    let instance = Instance(kind: ikObject, class: nil, isNimProxy: true,
+                            compiledOwner: child)
+    instance.nimValue = cast[pointer](child)
+    let view = nativeObjectSlot(instance, SlotNode)
+    check view.native.number == 7
+    check view.native of SlotNodeChild
+
+  test "a VM-owned or differently laid out value keeps only the wrapper":
+    let plain = Instance(kind: ikObject, class: nil, isNimProxy: true)
+    check nativeObjectSlot(plain, SlotNode).native == nil
+    # A compiled owner of the wrong type must not be viewed as SlotNode.
+    let other = newSlotNode(1)
+    let mismatched = Instance(kind: ikObject, class: nil, isNimProxy: true,
+                              compiledOwner: other)
+    mismatched.nimValue = cast[pointer](other)
+    check nativeObjectSlot(mismatched, SlotNodeChild).native == nil
+    # Storage already bridged to a VM layout is not a private native layout.
+    let bridged = Instance(kind: ikObject, class: nil, isNimProxy: true,
+                           compiledOwner: other)
+    bridged.nimValue = cast[pointer](other)
+    bridged.nativeSlots = NativeSlotStorage()
+    check nativeObjectSlot(bridged, SlotNode).native == nil

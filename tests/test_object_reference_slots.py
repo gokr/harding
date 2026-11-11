@@ -16,6 +16,7 @@ RefHolder>>readOnly: candidate [ ^candidate number ].
 RefHolder class>>less: left than: right [ ^left number < right number ].
 RefHolder class>>difference: left from: right [ ^left number - right number ].
 RefHolder>>copyFrom: source [ item := source item. ^item ].
+RefHolder>>storedNumber [ ^item number ].
 RefHolder>>storeAfter: action value: candidate [ action value. item := candidate. ^item ].
 RefHolder>>conditional: candidate [ candidate = 7 ifTrue: [^123]. item := candidate. ^item ].
 RefHolderChild := RefHolder derivePublic: #(padding).
@@ -44,7 +45,8 @@ class ObjectReferences(unittest.TestCase):
             execute([str(ROOT / 'granite'), 'compile', str(source), '--home:' + str(ROOT),
                      '--dir:' + str(work), '-o:reference_slots'])
             generated = (work / 'reference_slots.nim').read_text()
-            self.assertIn('item*: Instance', generated)
+            self.assertIn('item*: NativeObjectSlot[Class_5265664974656D]', generated)
+            self.assertIn('_typed(self, ', generated)
             self.assertIn('dynamic*: NodeValue', generated)
             self.assertIn('hardingNative_candidate: Instance', generated)
             self.assertIn('let hardingReferenceValue =', generated)
@@ -64,7 +66,7 @@ registerCompiledMethods()
 registerSuperclassHierarchy()
 let holderNative = newHOLDER()
 let holder = holderNative.toValue()
-doAssert sizeof(holderNative.item) == sizeof(Instance)
+doAssert sizeof(holderNative.item) == 2 * sizeof(Instance)
 doAssert sizeof(holderNative.item) < sizeof(NodeValue)
 doAssert isNilValue(getSlotValue(holder, "item"))
 block:
@@ -74,11 +76,15 @@ block:
   doAssert getSlotValue(holder, "item").instVal == item.instVal
 # The holder owns the wrapper and its native storage after the creator's scope.
 doAssert getSlotValue(getSlotValue(holder, "item"), "number").intVal == 42
+doAssert holderNative.item.native != nil
+doAssert holderNative.item.native.number == 42
+doAssert sendMessage(nil, holder, "storedNumber", []).intVal == 42
 let initial = getSlotValue(holder, "item")
 doAssert sendMessage(nil, holder, "store:", [initial]).instVal == initial.instVal
 doAssert sendMessage(nil, holder, "storeInline:", [initial]).instVal == initial.instVal
 doAssert isNilValue(sendMessage(nil, holder, "store:", []))
-doAssert holderNative.item == nil
+doAssert holderNative.item.instance == nil
+doAssert holderNative.item.native == nil
 discard sendMessage(nil, holder, "store:", [initial])
 doAssert sendMessage(nil, holder, "readCandidate:", [initial]).intVal == 42
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 42
@@ -101,6 +107,9 @@ doAssert sendMessage(nil, holderClass, "less:than:", [initial, child]).boolVal
 doAssert sendMessage(nil, holderClass, "difference:from:", [child, initial]).intVal == 57
 discard sendMessage(nil, holder, "item:", [child])
 doAssert sendMessage(nil, holder, "item", []).instVal == child.instVal
+doAssert holderNative.item.native != nil
+doAssert holderNative.item.native of Class_5265664368696C64
+doAssert sendMessage(nil, holder, "storedNumber", []).intVal == 99
 doAssert getSlotValue(getSlotValue(holder, "item"), "number").intVal == 99
 discard setSlotValue(child, "number", toValue(100))
 doAssert getSlotValue(getSlotValue(holder, "item"), "number").intVal == 100
@@ -120,9 +129,11 @@ except CompiledHardingError:
 doAssert rejected
 doAssert holderNative.item == old
 discard setSlotValue(holder, "item", NodeValue(kind: vkNil))
-doAssert holderNative.item == nil
+doAssert holderNative.item.instance == nil
+doAssert holderNative.item.native == nil
 discard setSlotValue(holder, "item", nilValue())
-doAssert holderNative.item == nil
+doAssert holderNative.item.instance == nil
+doAssert holderNative.item.native == nil
 let derivedHolder = newHOLDERCHILD().toValue()
 discard setSlotValue(derivedHolder, "item", child)
 doAssert getSlotValue(derivedHolder, "item").instVal == child.instVal
@@ -149,6 +160,8 @@ registerCompiledMethod("RefHolder", "item", originalMethod)
 let numberMethod = findCompiledMethod("RefItem", "number")
 registerCompiledMethod("RefItem", "number", wrongGetter)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 9
+discard setSlotValue(holder, "item", initial)
+doAssert sendMessage(nil, holder, "storedNumber", []).intVal == 9
 registerCompiledMethod("RefItem", "number", numberMethod)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 42
 var numberCalls = 0
@@ -172,6 +185,7 @@ let numberGetter = slotGetters["RefItem::number"]
 let numberSetter = slotSetters["RefItem::number"]
 registerSlotAccessor("RefItem", "number", wrongNumber, numberSetter)
 doAssert sendMessage(nil, holder, "readOnly:", [initial]).intVal == 3
+doAssert sendMessage(nil, holder, "storedNumber", []).intVal == 3
 doAssert sendMessage(nil, holderClass, "difference:from:", [initial, initial]).intVal == 0
 registerSlotAccessor("RefItem", "number", numberGetter, numberSetter)
 # A callback can replace the slot setter after the argument guard has run.
@@ -200,6 +214,8 @@ bindCompiledMethodsTo(interp)
 let vmItem = interp.globals[]["VmItem"]
 discard setSlotValue(holder, "item", vmItem)
 doAssert getSlotValue(holder, "item").instVal == vmItem.instVal
+doAssert holderNative.item.native == nil
+doAssert sendMessage(nil, holder, "storedNumber", []).intVal == 17
 # Binding a native instance exposes the same reference through nativeSlots.
 doAssert bindNativeInstanceTo(interp, holder)
 interp.globals[]["NativeHolder"] = holder
@@ -208,14 +224,17 @@ doAssert readError.len == 0, readError
 doAssert answer.intVal == 17
 let (_, clearError) = interp.doit("NativeHolder::item := nil")
 doAssert clearError.len == 0, clearError
-doAssert holderNative.item == nil
+doAssert holderNative.item.instance == nil
+doAssert holderNative.item.native == nil
 let (_, writeError) = interp.doit("NativeHolder::item := VmItem")
 doAssert writeError.len == 0, writeError
-doAssert holderNative.item == vmItem.instVal
+doAssert holderNative.item.instance == vmItem.instVal
+doAssert holderNative.item.native == nil
 let (recovery, badError) = interp.doit("[NativeHolder::item := 3] on: Error do: [:e | 123]")
 doAssert badError.len == 0, badError
 doAssert recovery.intVal == 123
-doAssert holderNative.item == vmItem.instVal
+doAssert holderNative.item.instance == vmItem.instVal
+doAssert holderNative.item.native == nil
 let (storedViaMethod, methodError) = interp.doit("NativeHolder store: VmItem")
 doAssert methodError.len == 0, methodError
 doAssert storedViaMethod.instVal == vmItem.instVal

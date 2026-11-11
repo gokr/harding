@@ -316,11 +316,11 @@ suite "Compiler: Analyzer":
     require not syntax.hasError
     var compiler = newCompiler()
     let code = genModule(compiler, nodes, "object_reference_storage")
-    check code.contains("item*: Instance")
+    check code.contains("item*: NativeObjectSlot[" & mangleClass("Element") & "]")
     check code.contains("dynamic*: NodeValue")
-    check code.contains("result.item = nil")
+    check code.contains("result.item = NativeObjectSlot[" & mangleClass("Element") & "]()")
     check code.contains("compiledObjectSlotValue(self[].item)")
-    check code.contains("compiledSlotObject(value, \"Element\")")
+    check code.contains("compiledTypedSlotObject(value, \"Element\", " & mangleClass("Element") & ")")
 
   test "object parameters and getter stores cross reference boundaries without boxing":
     let (nodes, syntax) = parse("Element := Object derive: #(). Holder := Object derivePublic: #{item -> Element}. Holder>>store: candidate [item := candidate. ^candidate]. Holder>>copy: source [item := source item. ^item].")
@@ -330,7 +330,7 @@ suite "Compiler: Analyzer":
     check code.contains("hardingNative_candidate: Instance")
     check code.contains("compiledObjectArgumentMatches(args[0], \"Element\")")
     check code.contains("compiledClassDispatchVersion == hardingObjectEntryVersion")
-    check code.contains("[].item = candidate")
+    check code.contains("[].item = nativeObjectSlot(candidate, " & mangleClass("Element") & ")")
     check code.contains("let hardingReferenceValue = " & mangleClass("Holder") & "(hardingReferenceReceiver.instVal.compiledOwner)[].item")
     check code.contains("[].item = hardingReferenceValue")
     let mixed = genModule(compiler, nodes, "object_reference_abi_mixed", mixed = true)
@@ -805,6 +805,28 @@ suite "Compiler: Cached ordinary sends":
     ctx.mixed = true
     check genMessage(ctx, send).contains("sendMessageHybrid(receiver")
     check not genMessage(ctx, send).contains("cachedSend")
+
+suite "Compiler: Typed object slot storage":
+  test "self-referential and mutually recursive object slots emit one type section":
+    let (nodes, syntax) = parse("Node := Object derivePublic: #{next -> Node, peer -> Peer}. Peer := Object derivePublic: #{owner -> Node}.")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "recursive_object_slots")
+    # A single type section lets the fields refer to each other in any order.
+    check code.contains("next*: NativeObjectSlot[" & mangleClass("Node") & "]")
+    check code.contains("peer*: NativeObjectSlot[" & mangleClass("Peer") & "]")
+    check code.contains("owner*: NativeObjectSlot[" & mangleClass("Node") & "]")
+    check code.count("type\n") >= 1
+    # Storage is addressed through the typed view, never the boxed wrapper.
+    check not code.contains("next*: Instance")
+
+  test "mixed builds keep the nullable Instance storage ABI":
+    let (nodes, syntax) = parse("Element := Object derive: #(). Holder := Object derivePublic: #{item -> Element}.")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "object_slots_mixed", mixed = true)
+    check code.contains("item*: Instance")
+    check not code.contains("NativeObjectSlot")
 
 suite "Compiler: Mirrored Harding type hierarchy":
   test "a subclass derives from its parent and inherits its slot fields":

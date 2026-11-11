@@ -318,6 +318,28 @@ type
     classRef*: Class
   HardingObjectRef* = ref HardingObject
 
+  NativeObjectSlot*[T] = object
+    ## The original wrapper owns identity and supports VM/foreign storage. The
+    ## typed view is populated only for a matching physical Nim layout.
+    native*: T
+    instance*: Instance
+
+proc nativeObjectSlot*[T](instance: Instance, target: typedesc[T]): NativeObjectSlot[T] {.inline.} =
+  result.instance = instance
+  if instance != nil and instance.kind == ikObject and instance.isNimProxy and
+     instance.nativeSlots == nil and instance.compiledOwner != nil and
+     instance.nimValue == cast[pointer](instance.compiledOwner) and
+     instance.compiledOwner of T:
+    result.native = T(instance.compiledOwner)
+
+proc compiledTypedSlotObject*[T](value: NodeValue, className: string,
+                                 target: typedesc[T]): NativeObjectSlot[T] {.inline.} =
+  ## Validate the Harding contract before constructing either representation.
+  nativeObjectSlot(compiledSlotObject(value, className), target)
+
+proc compiledObjectSlotValue*[T](value: NativeObjectSlot[T]): NodeValue {.inline.} =
+  compiledObjectSlotValue(value.instance)
+
 
 # Control Flow Methods
 ######################

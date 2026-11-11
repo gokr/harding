@@ -11,6 +11,7 @@ type
     name*: string              ## Slot name
     constraint*: TypeConstraint ## Type constraint
     objectClass*: string       ## For tcObject: the declared class name
+    nativeObject*: bool        ## Generated class available for a typed reference view
     defaultValue*: string      ## Literal default from `#{#x -> 0}`; "" = none
     index*: int                ## Slot index (O(1) access)
     isInherited*: bool         ## Inherited from parent
