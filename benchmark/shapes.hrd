@@ -1,0 +1,77 @@
+#!/usr/bin/env harding
+# Polymorphic geometry: heterogeneous shapes in one collection, area summed
+# through a single send site.
+#
+# This is the shape mainstream drawing/model/editor code uses: a container holding
+# several concrete types behind one abstract protocol. Deliberately written as
+# ordinary Smalltalk rather than to flatter the compiler: two subclasses of the
+# same parent, one of which is further subclassed, and a nil-terminated chain.
+#
+# Expected: 890 per pass (asserted below): areas 300+300+144+72+42 = 858,
+# plus one circle match and the label lengths 6+4+6+8+7 = 31.
+
+| shapes total repetitions |
+Shape := Object derive: #().
+Shape>>area [ ^0 ].
+Shape>>describe [ ^#shape ].
+Shape>>label [ ^"shape" ].
+
+Circle := Shape derivePublic: #{#radius -> Integer}.
+Circle>>initRadius: r [ radius := r. ^self ].
+Circle>>area [ ^radius * radius * 3 ].
+Circle>>describe [ ^#circle ].
+Circle>>label [ ^"circle" ].
+
+Rect := Shape derivePublic: #{#width -> Integer, #height -> Integer}.
+Rect>>initWidth: w height: h [ width := w. height := h. ^self ].
+Rect>>area [ ^width * height ].
+Rect>>describe [ ^#rect ].
+Rect>>label [ ^"rect" ].
+
+Square := Rect derive: #().
+Square>>area [ ^width * width ].
+Square>>describe [ ^#square ].
+Square>>label [ ^"square" ].
+
+Triangle := Shape derivePublic: #{#base -> Integer, #height -> Integer}.
+Triangle>>initBase: b height: h [ base := b. height := h. ^self ].
+Triangle>>area [ ^base * height // 2 ].
+Triangle>>describe [ ^#triangle ].
+Triangle>>label [ ^"triangle" ].
+
+Ellipse := Shape derivePublic: #{#major -> Integer, #minor -> Integer}.
+Ellipse>>initMajor: a minor: i [ major := a. minor := i. ^self ].
+Ellipse>>area [ ^major * minor * 2 ].
+Ellipse>>describe [ ^#ellipse ].
+Ellipse>>label [ ^"ellipse" ].
+
+shapes := array{
+  (Circle new) initRadius: 10,
+  (Rect new) initWidth: 20 height: 15,
+  (Square new) initWidth: 12 height: 12,
+  (Triangle new) initBase: 16 height: 9,
+  (Ellipse new) initMajor: 7 minor: 3
+}.
+
+total := 0.
+repetitions := 1.
+(System arguments size > 0) ifTrue: [repetitions := (System arguments at: 0) asInteger].
+
+# The measured region repeats the whole protocol over the heterogeneous
+# collection on every iteration, so dispatch cost dominates setup.
+repetitions timesRepeat: [
+  | sum i |
+  sum := 0.
+  i := 0.
+  [i < 200] whileTrue: [
+    shapes do: [:each | sum := sum + each area].
+    shapes do: [:each | (each describe = #circle) ifTrue: [sum := sum + 1]].
+    shapes do: [:each | sum := sum + each label size].
+    i := i + 1
+  ].
+  total := total + sum
+].
+
+
+(total = (178000 * repetitions)) ifFalse: [Error signal: "Wrong shapes result"].
+total println.

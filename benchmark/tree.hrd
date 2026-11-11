@@ -1,0 +1,58 @@
+#!/usr/bin/env harding
+# Object graph traversal: objects passed as arguments across method boundaries.
+#
+# Targets a different cost than the arithmetic benchmarks: every call passes an
+# object to another method, reads slots through it, and returns an object again.
+# If parameter and return representation is boxed, this pays for it on every edge.
+#
+# Expected value is asserted below; each pass adds the same amount.
+
+| root total repetitions |
+Node := Object derivePublic: #{#value -> Integer, #left -> nil, #right -> nil}.
+Node>>initValue: v [ value := v. ^self ].
+Node>>setLeft: l [ left := l. ^self ].
+Node>>setRight: r [ right := r. ^self ].
+
+Tree := Object derive: #().
+Tree>>build: node depth: d [
+  d > 0 ifFalse: [^node].
+  node setLeft: (self build: (Node new initValue: d) depth: (d - 1)).
+  node setRight: (self build: (Node new initValue: d) depth: (d - 1)).
+  ^node
+].
+Tree>>sumAll: node [
+  node isNil ifTrue: [^0].
+  ^node value + (self sumAll: node left) + (self sumAll: node right)
+].
+Tree>>maxDepth: node [
+  | l r |
+  node isNil ifTrue: [^0].
+  l := self maxDepth: node left.
+  r := self maxDepth: node right.
+  ^1 + (l > r ifTrue: [l] ifFalse: [r])
+].
+Tree>>leaves: node [
+  node isNil ifTrue: [^0].
+  (node left isNil and: [node right isNil]) ifTrue: [^1].
+  ^(self leaves: node left) + (self leaves: node right)
+].
+
+root := Node new initValue: 1.
+tree := Tree new.
+tree build: root depth: 11.
+
+total := 0.
+repetitions := 1.
+(System arguments size > 0) ifTrue: [repetitions := (System arguments at: 0) asInteger].
+
+repetitions timesRepeat: [
+  | s |
+  s := tree sumAll: root.
+  s := s + (tree maxDepth: root).
+  s := s + (tree leaves: root).
+  total := total + s
+].
+
+
+(total = (10227 * repetitions)) ifFalse: [Error signal: "Wrong tree result"].
+total println.
