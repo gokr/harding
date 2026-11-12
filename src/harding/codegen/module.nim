@@ -474,7 +474,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                          inferredNumeric: Table[string, string] = initTable[string, string](),
                          integerCandidates: var Table[string, string],
                          staticClassCalls: var Table[string, string],
-                         integerResultCandidates: var Table[string, string]): string =
+                         integerResultCandidates: var Table[string, string],
+                         emittedSlotGuards: var HashSet[(string, string)]): string =
   ## Generate compiled method procs from extracted method definitions
   var output = ""
   var registrationCode = ""
@@ -589,6 +590,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
           output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
+          # One accessor guard per class/slot, shared by every region touching it.
+          for slot in plan.touchedSlots:
+            if (owner, slot) notin emittedSlotGuards:
+              emittedSlotGuards.incl((owner, slot))
+              output.add(fmt("proc {integerSlotGuardName(owner, slot)}(receiver: NodeValue): bool {{.inline.}} =\n"))
+              output.add(fmt("  {mangleClass(owner)}_direct_{mangleSlot(slot)}_guard(receiver)\n"))
           let emitted = emitIntegerCall(owner, md.selector, md.params, plan)
           output.add(emitted.code)
           integerCandidates[md.selector] = emitted.helper
@@ -1456,9 +1463,10 @@ proc genModule*(ctx: var CompilerContext, nodes: seq[Node],
   var integerCandidates = initTable[string, string]()
   var staticClassCalls = initTable[string, string]()
   var integerResultCandidates: Table[string, string]
+  var emittedSlotGuards: HashSet[(string, string)]
   output.add(genCompiledMethods(methodDefs, compiledClassNames, analysis.classes, blockReg,
                                 knownGlobals, mixed, inferredNumeric, integerCandidates,
-                                staticClassCalls, integerResultCandidates))
+                                staticClassCalls, integerResultCandidates,  emittedSlotGuards))
 
   # Generate block procedure definitions (after primitives so they can reference them)
   output.add("\n")

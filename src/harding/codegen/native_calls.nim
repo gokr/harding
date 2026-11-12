@@ -10,6 +10,9 @@ type
     ## before entry; no callbacks or heap mutation can invalidate it inside.
     eligible*: bool
     arity*: int
+    ## True when any touched callee also reads the receiver, so this region must
+    ## take the typed receiver itself and forward it.
+    needsReceiver*: bool
     expression*: string
     statements*: string
     dependencies*: seq[string]
@@ -47,6 +50,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     return ""
 
   var dependencies: seq[string]
+  var needsReceiver = false
   var initialized = initHashSet[string]()
   var written = initHashSet[string]()
   var read = initHashSet[string]()
@@ -91,7 +95,14 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         if arguments.len != known[message.selector].arity: return ""
         for dependency in @[message.selector] & known[message.selector].dependencies:
           if dependency notin dependencies: dependencies.add(dependency)
-        return integerStem(owner, message.selector) & "_native(" & arguments.join(", ") & ")"
+        # A callee region that touches its receiver takes it as a typed first
+        # parameter; omitting it makes the generated call arity-mismatched.
+        let callee = known[message.selector]
+        let calleeNeedsReceiver = callee.touchedSlots.len > 0 or callee.needsReceiver
+        if calleeNeedsReceiver: needsReceiver = true
+        let receiverArg = if calleeNeedsReceiver: "self, " else: ""
+        return integerStem(owner, message.selector) & "_native(" & receiverArg &
+               arguments.join(", ") & ")"
       let supported = if boolean: message.selector in ["<", "<=", ">", ">=", "=", "<>"]
                       else: message.selector in ["+", "-", "*", "//"]
       if not boolean and message.arguments.len == 1 and message.selector == "//":
@@ -219,6 +230,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   result.dependencies = dependencies
   result.slotWrites = written.toSeq
   result.slotReads = read.toSeq
+  result.needsReceiver = needsReceiver
   var touched = initHashSet[string]()
   for name in written.toSeq & read.toSeq:
     if name notin touched:
@@ -271,7 +283,7 @@ proc emitIntegerResult*(owner, selector: string, parameters: seq[string],
   ## send, and a fabricated int cannot express that.
   let stem = "integerResult_" & mangleClass(owner) & "_" & mangleSlot(selector)
   let receiverType = mangleClass(owner)
-  let usesSelf = plan.touchedSlots.len > 0
+  let usesSelf = plan.touchedSlots.len > 0 or plan.needsReceiver
   let names = parameters.mapIt(mangleIdentifier(it))
   let nativeNames = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
   let target = receiverType & "_" & mangleSelector(selector)
@@ -421,6 +433,12 @@ proc emitStaticClassCall*(owner, selector: string, parameters: seq[string],
   if plan.statements.len > 0: result.code.add(plan.statements)
   else: result.code.add("  " & plan.expression & "\n")
 
+proc integerSlotGuardName*(owner, slot: string): string =
+  ## The per-slot accessor guard is a property of the class and slot, not of a
+  ## method, so it must be defined once per class/slot and shared by every region
+  ## that touches it. Emitting it per method redefines the proc.
+  "nativeSlotAccessorGuard_" & mangleClass(owner) & "_" & mangleSlot(slot)
+
 proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
                       plan: IntegerCallPlan): tuple[code, helper: string] =
   ## Arguments arrive evaluated before any guard. The entire pure call chain
@@ -428,7 +446,7 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   let stem = integerStem(owner, selector)
   let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
   let boundary = parameters.mapIt("argument_" & mangleIdentifier(it))
-  let usesSelf = plan.slotReads.len > 0 or plan.slotWrites.len > 0
+  let usesSelf = plan.touchedSlots.len > 0 or plan.needsReceiver
   result.helper = stem
   # A region that touches slots takes the typed receiver, so field access is a
   # plain load/store instead of an accessor call per read and write.
@@ -439,13 +457,6 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   else: result.code.add("  " & plan.expression & "\n")
   for dependency in @[selector] & plan.dependencies:
     result.code.add("var " & stem & "_guard_" & mangleSlot(dependency) & " {.threadvar.}: CompiledDirectGuard\n")
-  for slot in plan.touchedSlots:
-    # Reuses the generated per-slot accessor guard, which tracks
-    # compiledSlotAccessorVersion and compares the registered getter/setter, so a
-    # replaced accessor disables the region instead of being bypassed.
-    result.code.add("proc nativeSlotAccessorGuard_" & mangleClass(owner) & "_" & mangleSlot(slot) &
-                    "(receiver: NodeValue): bool {.inline.} =\n" &
-                    "  " & mangleClass(owner) & "_direct_" & mangleSlot(slot) & "_guard(receiver)\n")
   result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & boundary.join(", ") & ": NodeValue): NodeValue =\n")
   var checks = boundary.mapIt(it & ".kind == vkInt")
   # A region that reads or writes slots touches storage the accessor table can
@@ -453,7 +464,7 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   # in ordinary code exist for that; here the same check runs once at entry, so
   # a replaced accessor falls back to normal dispatch instead of being bypassed.
   for slot in plan.touchedSlots:
-    checks.add("nativeSlotAccessorGuard_" & mangleClass(owner) & "_" & mangleSlot(slot) & "(receiver)")
+    checks.add(integerSlotGuardName(owner, slot) & "(receiver)")
   for dependency in @[selector] & plan.dependencies:
     checks.add("canDirectCompiledSend(receiver, compiledClassValue(\"" & owner & "\").classVal, \"" & dependency & "\", " & mangleClass(owner) & "_" & mangleSelector(dependency) & ", " & stem & "_guard_" & mangleSlot(dependency) & ")")
   result.code.add("  if " & checks.join(" and ") & ":\n")

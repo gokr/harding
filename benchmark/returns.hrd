@@ -1,0 +1,42 @@
+#!/usr/bin/env harding
+# Integer results consumed by callers: a method returns an Integer that is then
+# used as an operand, accumulated, and passed to another method.
+#
+# The existing benchmarks either compare a method result (genuinely native already)
+# or assign it to a local. This one makes the *return value itself* the hot path:
+# every iteration calls a method, adds its result to a running total, and feeds a
+# result into another call.
+#
+# Expected: 3499500 per pass (asserted below); value read from the interpreter.
+
+| acc total repetitions |
+Accumulator := Object derivePublic: #{#scale -> Integer}.
+Accumulator>>initScale: s [ scale := s. ^self ].
+Accumulator>>scaled: n [ ^n * scale ].
+Accumulator>>offset: n [ ^n + scale ].
+Accumulator>>combine: n [ ^(self scaled: n) + (self offset: n) ].
+
+total := 0.
+repetitions := 1.
+(System arguments size > 0) ifTrue: [repetitions := (System arguments at: 0) asInteger].
+
+repetitions timesRepeat: [
+  | sum i |
+  acc := Accumulator new initScale: 3.
+  sum := 0.
+  i := 0.
+  [i < 1000] whileTrue: [
+    sum := sum + (acc scaled: i).
+    i := i + 1
+  ].
+  i := 0.
+  [i < 1000] whileTrue: [
+    sum := sum + (acc combine: i).
+    i := i + 1
+  ].
+  total := total + sum
+].
+
+
+(total = (3499500 * repetitions)) ifFalse: [Error signal: "Wrong total"].
+total println.

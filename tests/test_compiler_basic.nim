@@ -851,6 +851,21 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: Integer regions that call another region":
+  test "shared accessor guard is emitted once and the receiver is forwarded":
+    # Two Integer-region methods touching the same slot used to redefine the
+    # shared accessor guard, and a caller of a slot-reading callee omitted the
+    # receiver, producing an arity-mismatched call to its native body.
+    let (nodes, syntax) = parse("Acc := Object derivePublic: #{#scale -> Integer}. Acc>>initScale: s [ scale := s. ^self ]. Acc>>scaled: n [ ^n * scale ]. Acc>>combine: n [ ^(self scaled: n) + (self scaled: n) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "integer_region_callers")
+    let guardName = "nativeSlotAccessorGuard_" & mangleClass("Acc") & "_" & mangleSlot("scale")
+    check code.count("proc " & guardName) == 1
+    check code.contains("proc integerCall_" & mangleClass("Acc") & "_" & mangleSlot("combine:") &
+                        "_native*(self: " & mangleClass("Acc") & ", n: int): int")
+    check code.contains("integerCall_" & mangleClass("Acc") & "_" & mangleSlot("scaled:") & "_native(self, n)")
+
 suite "Compiler: Native Integer method results":
   test "an Integer-returning self-send feeds a native comparison":
     let (nodes, syntax) = parse("Counter := Object derive: #(). Counter>>advanceBy: n [ | k | k := n * 2. ^k + 1 ]. Counter>>run [ | i | i := 0. [(self advanceBy: 3) < 500] whileTrue: [i := i + 1]. ^i ].")
