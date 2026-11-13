@@ -851,6 +851,25 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: short-circuit and:/or: inlining":
+  test "a Boolean receiver runs the block inline without a block environment":
+    let (nodes, syntax) = parse("P := Object derive: #(). P>>go: a [ ^(a and: [a]) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "shortcircuit")
+    # The Boolean path is inlined; the block environment survives only in the
+    # fallback branch for a non-Boolean receiver or a replaced selector.
+    check code.contains("hardingShortReceiver.kind == vkBool")
+    check code.contains("NodeValue(kind: vkBool, boolVal: false)")
+
+  test "a non-Boolean receiver keeps the ordinary send":
+    let (nodes, syntax) = parse("P := Object derive: #(). P>>go: a [ ^(a and: [a]) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "shortcircuit")
+    # Falling back preserves user-defined `and:` and its DNU behaviour.
+    check code.contains("\"and:\"")
+
 suite "Compiler: Integer regions that call another region":
   test "shared accessor guard is emitted once and the receiver is forwarded":
     # Two Integer-region methods touching the same slot used to redefine the

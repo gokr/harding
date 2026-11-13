@@ -965,6 +965,34 @@ proc genMessage*(ctx: GenContext, node: MessageNode): string =
       return genHostedBuiltin(ctx, receiverCode, "|", "nt_pipe", @[argCode])
     if node.selector == "not" and node.arguments.len == 0:
       return genHostedBuiltin(ctx, receiverCode, "not", "nt_not")
+    # Short-circuit `and:`/`or:` on a Boolean receiver. Sending these allocated a
+    # block environment plus a cell for every captured temporary on each call --
+    # the dominant allocation in object-graph code. The receiver is evaluated once
+    # and its kind decides: a Boolean short-circuits or runs the block inline, and
+    # anything else falls back to the ordinary send, so a user-defined `and:` or a
+    # non-Boolean receiver keeps its existing behaviour and its DNU signal.
+    if node.selector in ["and:", "or:"] and node.arguments.len == 1 and
+       node.arguments[0].kind == nkBlock and
+       not hasReturnNode(node.arguments[0]):
+      let owner = if ctx.inMethod: "self" else: "nilValue()"
+      let receiverVar = "hardingShortReceiver"
+      let inline = inlineBlockExpression(ctx, node.arguments[0].BlockNode)
+      let isAnd = node.selector == "and:"
+      let takeBlock = if isAnd: "hardingShortReceiver.boolVal"
+                      else: "not hardingShortReceiver.boolVal"
+      let shortValue = if isAnd: "false" else: "true"
+      # The block is materialised only in the fallback branch: building it
+      # eagerly would keep the allocation this inlining exists to remove.
+      let generic = "cachedSendBound(" & owner & ", " & receiverVar & ", \"" &
+                    escapeNimString(node.selector) & "\", [" &
+                    genExpression(ctx, node.arguments[0]) & "])"
+      var code = "(block:\n    let " & receiverVar & " = " &
+                 receiverCode.replace("\n", "\n    ") & "\n    if " & receiverVar &
+                 ".kind == vkBool:\n      if " & takeBlock & ":\n"
+      code.add(indentBlock(inline, 8))
+      code.add("\n      else:\n        NodeValue(kind: vkBool, boolVal: " & shortValue & ")")
+      code.add("\n    else:\n      " & generic & "\n  )")
+      return code
 
   case node.selector
   of "+", "-", "*", "/":
