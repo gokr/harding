@@ -972,15 +972,23 @@ template hostedBuiltinDeferred*(ownerReceiver, receiver: NodeValue, selector: st
                                 args: untyped): untyped =
   ## Generated callers bind evaluated operands before this entry. Only buffer
   ## construction is deferred; the interpreted call still owns a normal seq.
-  block:
-    var hostAnswer: tuple[handled: bool, value: NodeValue]
-    if hostRoutingActive():
-      let hostReceiver {.cursor.} = receiver
-      var hostInterpreter = hostedBuiltinInterpreter(ownerReceiver, hostReceiver, selector)
-      if hostInterpreter != nil:
-        hostAnswer.value = sendMessageInterpreted(hostInterpreter, hostReceiver, selector, args)
-        hostAnswer.handled = true
-    hostAnswer
+  ##
+  ## A native (non-mixed) build never binds an interpreter host, so the
+  ## consultation is dead code there and is compiled out. Emitting it anyway put a
+  ## result tuple, a cursor binding and a check at every arithmetic site; removing
+  ## it from the generated tree benchmark measured 7.29% (8/8 paired trials).
+  when defined(hardingNativeOnly):
+    (handled: false, value: NodeValue(kind: vkNil))
+  else:
+    block:
+      var hostAnswer: tuple[handled: bool, value: NodeValue]
+      if hostRoutingActive():
+        let hostReceiver {.cursor.} = receiver
+        var hostInterpreter = hostedBuiltinInterpreter(ownerReceiver, hostReceiver, selector)
+        if hostInterpreter != nil:
+          hostAnswer.value = sendMessageInterpreted(hostInterpreter, hostReceiver, selector, args)
+          hostAnswer.handled = true
+      hostAnswer
 
 proc sendMessageBound*(ownerReceiver, receiver: NodeValue, selector: string,
                        args: openArray[NodeValue]): NodeValue =

@@ -679,7 +679,12 @@ proc buildFile(config: Config): bool =
   var extra = ""
   for option in config.nimOptions:
     extra.add(" " & quoteShell(option))
-  let cmd = "nim c" & releaseFlag & extra & " -o:" &
+  # A native (non-mixed) build cannot bind an interpreter host, so the generated
+  # code compiles the host consultation out of every builtin send. Mixed and frozen
+  # builds keep it, because they do host compiled code in a live interpreter.
+  let nativeOnlyFlag = if config.mixed or config.frozenManifest.len > 0: ""
+                       else: " -d:hardingNativeOnly"
+  let cmd = "nim c" & releaseFlag & extra & nativeOnlyFlag & " -o:" &
             quoteShell(binaryName) & " " & quoteShell(nimFile)
 
   echo "Building: ", cmd
