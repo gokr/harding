@@ -223,6 +223,17 @@ standalone window/box/label/button slice, not the complete Bona bridge or genera
 GTK signal ABI. `--mixed` and frozen-manifest combinations are rejected. See
 [GTK applications](GTK_APPLICATIONS.md) and `nimble testGtkApplications`.
 
+## Native-only build flag
+
+`granite build` passes `-d:hardingNativeOnly` unless `--mixed` is requested or a
+frozen manifest is used. A native program cannot bind an interpreter host, so the
+generated code compiles the host consultation out of every builtin send instead of
+carrying a result tuple, a cursor binding and a check into each arithmetic site.
+Mixed and frozen builds keep the consultation because they do host compiled code in
+a live interpreter. Removing it from a native build measured 3-7% across the
+benchmark set, with `deltablue` and `tree` unanimous in pinned pairs; see the
+changelog for the per-benchmark figures.
+
 ## Original native GTK demo proof
 
 `demos/native-gtk-counter` assembles a GTK4 native shell with a Granite-compiled
