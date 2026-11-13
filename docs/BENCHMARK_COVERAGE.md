@@ -72,29 +72,20 @@ references, not semantics oracles -- they are hand written, and their existence 
 nothing about what the Harding source must compile to. Compare trends, not exact
 multipliers.
 
-Pinned, alternating, answers checked on every run, 20 passes:
+Ratios are only meaningful once each engine does enough work that process startup
+does not dominate it: at 20 passes both binaries finish inside a few ms of noise and
+the ratio reads as 14x or 48x. With an idle host and repetition counts chosen so each
+run exceeds ~150 ms, subtracting a zero-pass run for startup:
 
-| Benchmark | Granite | Native Nim | Granite/Native |
+| Benchmark | Granite | Native Nim | Ratio |
 |---|---:|---:|---:|
-| shapes | 0.989 ms | 0.071 ms | **13.90x** |
-| tree | 4.424 ms | 0.092 ms | **48.01x** |
+| shapes (200 passes) | 791 us/pass | 7.6 us/pass | **104x** |
+| tree (40 passes) | 3115 us/pass | 14.2 us/pass | **219x** |
 
-Through the routine harness at 50 passes (`scripts/bench_compare_native_nim.py`),
-which subtracts startup differently and includes CPython:
-
-| Benchmark | Granite | CPython | Native Nim | Granite/Native | CPython/Native |
-|---|---:|---:|---:|---:|---:|
-| shapes | 0.957 ms | 0.346 ms | 0.035 ms | 26.53x | 9.78x |
-| tree | 4.347 ms | 1.591 ms | 0.036 ms | 118.36x | 44.33x |
-
-Reading these honestly: on `shapes`, Granite is ~2.7x further from native than CPython
-is (26.53 / 9.78). On `tree` it is ~2.7x further as well (118.36 / 44.33). That is a
-more useful statement than either ratio alone, and it says the remaining gap is the
-same order of magnitude on both new workloads rather than concentrated in dispatch.
-
-The absolute floors also show the headroom plainly: native `tree` is ~0.04 ms/pass
-while Granite is ~4.3 ms/pass. The traversal itself is trivial; what costs 100x is
-representing and passing objects.
+An earlier version of this file reported 13.90x and 48.01x from 20-pass runs. Those
+figures were startup-dominated and are wrong by four to seven times; the table above
+supersedes them. Native `tree` at 20 passes measured 52-68 us/pass against 14.2 us/pass
+once the run is long enough, which is the whole discrepancy.
 
 ## Where they run
 
