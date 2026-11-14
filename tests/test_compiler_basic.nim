@@ -851,6 +851,43 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: early returns inside a conditional":
+  test "ifTrue: with a return plans as a native region":
+    # `(c) ifTrue: [^x]` is the most common Smalltalk method shape. It parses to
+    # nkIf, whose branches used to be required to compile as statements, so every
+    # method containing an early return was rejected as a region.
+    let (nodes, syntax) = parse("G := Object derivePublic: #{#limit -> Integer}. G>>init: n [ limit := n. ^self ]. G>>early: v [ (v < limit) ifTrue: [^v]. ^limit ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "earlyreturn")
+    # The region entry takes an int and answers int: no NodeValue at either end.
+    check code.contains("integerCall_" & mangleClass("G") & "_hardingUser6561726C793A_native*(self: " &
+                        mangleClass("G") & ", hardingNativeArg_v: int): int")
+    check code.contains("return v")
+    check code.contains("return self[].limit")
+
+  test "ifTrue:ifFalse: with returns on both branches plans as a native region":
+    let (nodes, syntax) = parse("G := Object derivePublic: #{#limit -> Integer}. G>>init: n [ limit := n. ^self ]. G>>both: v [ (v < limit) ifTrue: [^v] ifFalse: [^limit] ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "earlyreturnboth")
+    check code.contains("integerCall_" & mangleClass("G") & "_hardingUser626F74683A_native")
+    check code.contains("return v")
+    # Both branches leave the region, so no tail expression is emitted.
+    check code.contains("return self[].limit")
+    check not code.contains("\\n  return v\n  return")
+
+  test "a conditional without an else keeps the ordinary fall-through path":
+    # No return in either branch: this is a plain statement inside the region, not
+    # an early exit, and must still build as a native body.
+    let (nodes, syntax) = parse("G := Object derivePublic: #{#limit -> Integer}. G>>init: n [ limit := n. ^self ]. G>>partial: v [ (v < limit) ifTrue: [v := v + 1]. ^v ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "earlyreturnpartial")
+    check code.contains("hardingUser7061727469616C3A_native*(self: " & mangleClass("G") &
+                        ", hardingNativeArg_v: int): int")
+    check code.contains("v = (v + 1)")
+
 suite "Compiler: short-circuit and:/or: inlining":
   test "a Boolean receiver runs the block inline without a block environment":
     let (nodes, syntax) = parse("P := Object derive: #(). P>>go: a [ ^(a and: [a]) ].")

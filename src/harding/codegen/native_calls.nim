@@ -40,7 +40,15 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   ## branches/loops with an explicit final return, and direct access to declared
   ## Integer slots of the receiver class. No escaping blocks, recursion,
   ## division, non-local returns or dynamic slots.
-  if parameters.len == 0 or body.len == 0 or body[^1].kind != nkReturn: return
+  # A body may end either in `^expr` or in a conditional that returns from every
+  # branch; both leave the region exactly once.
+  # Boolean regions answer from an explicit `^boolExpr` only. A conditional tail
+  # is accepted for Integer regions, where a branch returning an int is the
+  # answer; inferring that as a bool would be a silent miscompile.
+  let endsWithConditional = not returnBoolean and body.len > 0 and
+                             body[^1].kind == nkIf and body[^1].IfNode.elseBranch != nil
+  if parameters.len == 0 or body.len == 0 or
+     (body[^1].kind != nkReturn and not endsWithConditional): return
   proc slotNameOf(node: Node): string =
     let slotNode = node.SlotAccessNode
     if slotNode.slotName.len > 0: return slotNode.slotName
@@ -144,6 +152,14 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     if statements.len == 1: return expression(statements[0], available, true)
     return expression(node, available, true)
 
+  proc earlyReturnValue(branch: Node, available: HashSet[string]): string =
+    ## A branch whose body is exactly one `^expr` becomes a native early return.
+    ## `(c) ifTrue: [^x]` is the most common Smalltalk method shape, and without
+    ## this every method that used one was rejected as a region.
+    let body = blockBody(branch)
+    if body.len != 1 or body[0].kind != nkReturn: return ""
+    expression(body[0].ReturnNode.expression, available)
+
   proc statements(nodes: seq[Node], available: var HashSet[string], depth: int,
                   code: var string): bool =
     let indent = " ".repeat(depth)
@@ -182,22 +198,42 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
       of nkIf:
         let branch = node.IfNode
         let test = condition(branch.condition, available)
-        let yes = blockBody(branch.thenBranch)
-        if test.len == 0 or yes.len == 0:
+        if test.len == 0:
           return false
-        var yesAvailable = available
-        code.add(indent & "if " & test & ":\n")
-        if not statements(yes, yesAvailable, depth + 2, code): return false
-        if branch.elseBranch != nil:
-          let no = blockBody(branch.elseBranch)
-          if no.len == 0:
+        let yesReturn = earlyReturnValue(branch.thenBranch, available)
+        let noReturn = if branch.elseBranch != nil:
+                         earlyReturnValue(branch.elseBranch, available) else: ""
+        if yesReturn.len > 0 and (branch.elseBranch == nil or noReturn.len > 0):
+          # Both paths leave the region: `if c: return a` / `else: return b`.
+          code.add(indent & "if " & test & ":\n")
+          code.add(indent & "  return " & yesReturn & "\n")
+          if branch.elseBranch != nil:
+            code.add(indent & "else:\n" & indent & "  return " & noReturn & "\n")
+        elif noReturn.len > 0 and yesReturn.len == 0:
+          # Only the else path leaves: `if not c: return b`, then fall through.
+          code.add(indent & "if not (" & test & "):\n")
+          code.add(indent & "  return " & noReturn & "\n")
+        elif yesReturn.len > 0:
+          # Only the then path leaves; the rest of the body continues.
+          code.add(indent & "if " & test & ":\n")
+          code.add(indent & "  return " & yesReturn & "\n")
+        else:
+          let yes = blockBody(branch.thenBranch)
+          if yes.len == 0:
             return false
-          var noAvailable = available
-          code.add(indent & "else:\n")
-          if not statements(no, noAvailable, depth + 2, code): return false
-          # Only assignments executed on both paths establish initialization.
-          for name in yesAvailable:
-            if name in noAvailable: available.incl(name)
+          var yesAvailable = available
+          code.add(indent & "if " & test & ":\n")
+          if not statements(yes, yesAvailable, depth + 2, code): return false
+          if branch.elseBranch != nil:
+            let no = blockBody(branch.elseBranch)
+            if no.len == 0:
+              return false
+            var noAvailable = available
+            code.add(indent & "else:\n")
+            if not statements(no, noAvailable, depth + 2, code): return false
+            # Only assignments executed on both paths establish initialization.
+            for name in yesAvailable:
+              if name in noAvailable: available.incl(name)
       of nkWhile:
         let loop = node.WhileNode
         let test = condition(loop.condition, available)
@@ -213,18 +249,28 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     return true
 
   var code: string
-  if not statements(body[0 ..< body.len - 1], initialized, 2, code):
-    return
-  let answer = expression(body[^1].ReturnNode.expression, initialized, returnBoolean)
-  if answer.len == 0:
-    return
+  # A body that ends in a conditional returning on every branch needs no separate
+  # tail expression: the region already answers from inside the branches.
+  let tailIsConditional = endsWithConditional
+  var answer = ""
+  if tailIsConditional:
+    if not statements(body, initialized, 2, code): return
+  else:
+    if not statements(body[0 ..< body.len - 1], initialized, 2, code):
+      return
+    answer = expression(body[^1].ReturnNode.expression, initialized, returnBoolean)
+    if answer.len == 0:
+      return
   result.expression = answer
-  if body.len > 1:
+  # Emit statements only when the body needs them: a single-expression region
+  # is a bare `return expr` and its parameters are read directly. A conditional
+  # tail always needs the statements, including for a one-statement body.
+  if tailIsConditional or body.len > 1 or temporaries.len > 0:
     for name in temporaries:
       code = "  var " & mangleIdentifier(name) & ": int\n" & code
     for name in parameters:
       code = "  var " & mangleIdentifier(name) & " = hardingNativeArg_" & mangleIdentifier(name) & "\n" & code
-    result.statements = code & "  return " & answer & "\n"
+    result.statements = code & (if tailIsConditional: "" else: "  return " & answer & "\n")
   result.eligible = true
   result.arity = parameters.len
   result.dependencies = dependencies
