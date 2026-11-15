@@ -197,9 +197,9 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
               fieldReadObjects.incl(refName)
               let field = "cast[" & mangleClass(target) & "](" & mangleIdentifier(refName) &
                           ".compiledOwner)[]. " & mangleSlot(message.selector)
-              return "(if " & (if slot.nativeObject: field & ".instance == nil"
-                               else: "isNilValue(" & field & ")") & ": nil else: " &
-                     (if slot.nativeObject: field & ".instance" else: field & ".instVal") & ")"
+              # `nil` is already the empty reference; the conditional only made a
+              # temporary that ARC had to count. The field itself is nil-able.
+              return (if slot.nativeObject: field & ".instance" else: field & ".instVal")
       # Recursion: a self-send of this very selector has this region's own
       # signature, so it needs no separate plan and its result is this region's
       # Integer result. That is what lets `f x + f y` type without a declared
