@@ -39,7 +39,8 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
                       known: IntegerPlans, temporaries: seq[string] = @[],
                       cls: ClassInfo = nil, returnBoolean = false,
                       objects: Table[string, string] = default(Table[string, string]),
-                      allClasses: Table[string, ClassInfo] = default(Table[string, ClassInfo])): IntegerCallPlan =
+                      allClasses: Table[string, ClassInfo] = default(Table[string, ClassInfo]),
+                      selfSelector: string = ""): IntegerCallPlan =
   ## Integer arguments, definitely initialized Integer locals, structured
   ## branches/loops with an explicit final return, and direct access to declared
   ## Integer slots of the receiver class. No escaping blocks, recursion,
@@ -128,6 +129,38 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
             fieldReadObjects.incl(refName)
             return "cast[" & mangleClass(target) & "](" & mangleIdentifier(refName) &
                    ".compiledOwner)[]. " & mangleSlot(message.selector)
+          # An object-typed slot read yields the stored Instance, so it flows into
+          # a recursive call with no NodeValue hop. A typed wrapper carries both
+          # the native view and the original Instance.
+          if target in allClasses:
+            let slot = allClasses[target].getSlotDef(message.selector)
+            if slot.constraint == tcObject:
+              fieldReadObjects.incl(refName)
+              let field = "cast[" & mangleClass(target) & "](" & mangleIdentifier(refName) &
+                          ".compiledOwner)[]. " & mangleSlot(message.selector)
+              return "(if " & (if slot.nativeObject: field & ".instance == nil"
+                               else: "isNilValue(" & field & ")") & ": nil else: " &
+                     (if slot.nativeObject: field & ".instance" else: field & ".instVal") & ")"
+      # Recursion: a self-send of this very selector has this region's own
+      # signature, so it needs no separate plan and its result is this region's
+      # Integer result. That is what lets `f x + f y` type without a declared
+      # return contract on the method.
+      if not boolean and selfSelector.len > 0 and message.receiver != nil and
+         message.receiver.kind == nkPseudoVar and
+         message.receiver.PseudoVarNode.name == "self" and
+         message.selector == selfSelector:
+        var arguments: seq[string]
+        for argument in message.arguments:
+          let value = expression(argument, available)
+          if value.len == 0: return ""
+          arguments.add(value)
+        if arguments.len != parameters.len: return ""
+        # The recursive call is this region, so it needs the receiver exactly when
+        # this region does. Request it now: `read`/`written` may be filled later.
+        # This region needs the receiver because the recursive call passes it.
+        needsReceiver = true
+        return integerStem(owner, message.selector) & "_native(self, " &
+               arguments.join(", ") & ")"
       if not boolean and message.receiver != nil and message.receiver.kind == nkPseudoVar and
          message.receiver.PseudoVarNode.name == "self" and message.selector in known:
         var arguments: seq[string]

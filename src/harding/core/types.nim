@@ -91,6 +91,10 @@ type
   SlotContract* = object
     kind*: SlotContractKind
     objectType*: Class
+    pendingType*: string
+      ## A class name that was not yet defined when the contract was declared,
+      ## e.g. `Node := ... derive: #{#left -> Node}` naming the class currently
+      ## being defined. Resolved on first use instead of degrading to a symbol.
 
   SlotTypeError* = object of CatchableError
 
@@ -1395,10 +1399,22 @@ proc slotObjectMatches*(actual, expected: Class): bool =
     false
   expected != nil and matches(actual)
 
+proc resolvedContract*(contract: SlotContract): SlotContract =
+  ## Resolve a contract that named an as-yet-undefined class. Definition order must
+  ## not decide a slot's type: `Node := Object derive: #{#left -> Node}` refers to
+  ## the class being defined, which is only in the registry afterwards.
+  result = contract
+  if result.kind == scObject and result.objectType == nil and result.pendingType.len > 0:
+    let live = classNamed(result.pendingType)
+    if live != nil:
+      result.objectType = live
+      result.pendingType = ""
+
 proc normalizeSlotValue*(contract: SlotContract, value: NodeValue,
                         objectMatches = false): tuple[value: NodeValue, error: string] =
   ## Validate without storing. A failure cannot overwrite the old slot value.
   result.value = value
+  let contract = resolvedContract(contract)
   case contract.kind
   of scDynamic: return
   of scObject:

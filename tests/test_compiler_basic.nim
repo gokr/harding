@@ -851,6 +851,29 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: recursive object regions":
+  test "a self-recursive method over a typed object slot plans as a region":
+    # The shape that makes a tree walk native: an object parameter, a typed slot
+    # read yielding the stored Instance, and a self-send of the same selector.
+    let (nodes, syntax) = parse("Node := Object derivePublic: #{#value -> Integer, #left -> Node, #right -> Node}. Node>>initValue: v [ value := v. ^self ]. Tree := Object derive: #(). Tree>>sumAll: node [ node isNil ifTrue: [^0]. ^node value + (self sumAll: node left) + (self sumAll: node right) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "recursiveobject")
+    check code.contains("hardingNativeArg_node: Instance): int")
+    check code.contains("hardingUser73756D416C6C3A_native(self, ")
+    # The recursive argument is the stored Instance, not a NodeValue wrapper.
+    check code.contains(".instance)")
+
+  test "a self-referential slot contract survives the definition order":
+    # `#left -> Node` inside Node's own definition: the class is not registered
+    # while its contract is read, so it must resolve later rather than become a
+    # Symbol default.
+    let (nodes, syntax) = parse("Node := Object derivePublic: #{#value -> Integer, #left -> Node}.")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "selfref")
+    check code.contains("left*: NativeObjectSlot[")
+
 suite "Compiler: object-parameter regions":
   test "an Integer slot read through a typed reference stays native":
     # A parameter whose class is derivable takes a typed reference, and an

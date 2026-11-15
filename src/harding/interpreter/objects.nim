@@ -1419,6 +1419,12 @@ proc applyDeclaredSlotDefaults(cls: Class, declaration: NodeValue) =
           if hinted != nil:
             contract = SlotContract(kind: scObject, objectType: hinted)
             initial = nilValue()
+          elif value.symVal.len > 0 and value.symVal[0] in {'A'..'Z'}:
+            # A capitalised name is a class reference, not a symbol value. It may
+            # name the class currently being defined, so defer resolution rather
+            # than degrading the slot to a Symbol.
+            contract = SlotContract(kind: scObject, pendingType: value.symVal)
+            initial = nilValue()
           else:
             contract.kind = scSymbol
       else: raise newException(SlotTypeError, "Slot declaration requires a class, primitive default or nil")

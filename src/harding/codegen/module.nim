@@ -602,7 +602,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
               regionCells & regionAssigned.toSeq, ownerClass, getterReceiverHints)
           let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries,
                                      ownerClass, objects = regionObjects,
-                                     allClasses = classInfo)
+                                     allClasses = classInfo, selfSelector = md.selector)
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
           output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))

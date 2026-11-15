@@ -8,7 +8,7 @@
 # Expected value is asserted below; each pass adds the same amount.
 
 | root total repetitions |
-Node := Object derivePublic: #{#value -> Integer, #left -> nil, #right -> nil}.
+Node := Object derivePublic: #{#value -> Integer, #left -> Node, #right -> Node}.
 Node>>initValue: v [ value := v. ^self ].
 Node>>setLeft: l [ left := l. ^self ].
 Node>>setRight: r [ right := r. ^self ].
