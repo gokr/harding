@@ -585,8 +585,18 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
           if md.className != owner or md.isClassMethod or index in planned or
              selectorCounts.getOrDefault(md.selector) != 1: continue
           let ownerClass = if owner in classInfo: classInfo[owner] else: nil
+          # Object parameters the specialization already proved are typed
+          # references, so a region can take them without boxing or unboxing.
+          var regionObjects: Table[string, string]
+          if ownerClass != nil:
+            let regionCells = scopeCaptureCellNames(md.body, md.params & md.temporaries)
+            var regionAssigned = initHashSet[string]()
+            for statement in md.body: collectAssignedVars(statement, regionAssigned)
+            regionObjects = objectParameterCandidates(md.body, md.params, md.temporaries,
+              regionCells & regionAssigned.toSeq, ownerClass, getterReceiverHints)
           let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries,
-                                     ownerClass)
+                                     ownerClass, objects = regionObjects,
+                                     allClasses = classInfo)
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
           output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))

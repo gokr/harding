@@ -19,6 +19,8 @@ type
     slotWrites*: seq[string]
     slotReads*: seq[string]
     touchedSlots*: seq[string]  ## deduplicated reads + writes, for entry guards
+    objectParameters*: Table[string, string]  ## typed reference parameters
+    fieldReadObjects*: seq[string]  ## object params whose typed fields are read
   IntegerPlans* = Table[string, IntegerCallPlan]
 
 proc integerStem*(owner, selector: string): string =
@@ -35,7 +37,9 @@ proc nativeIntegerSlot(cls: ClassInfo, name: string): bool =
 
 proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
                       known: IntegerPlans, temporaries: seq[string] = @[],
-                      cls: ClassInfo = nil, returnBoolean = false): IntegerCallPlan =
+                      cls: ClassInfo = nil, returnBoolean = false,
+                      objects: Table[string, string] = default(Table[string, string]),
+                      allClasses: Table[string, ClassInfo] = default(Table[string, ClassInfo])): IntegerCallPlan =
   ## Integer arguments, definitely initialized Integer locals, structured
   ## branches/loops with an explicit final return, and direct access to declared
   ## Integer slots of the receiver class. No escaping blocks, recursion,
@@ -59,6 +63,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
 
   var dependencies: seq[string]
   var needsReceiver = false
+  var fieldReadObjects = initHashSet[string]()
   var initialized = initHashSet[string]()
   var written = initHashSet[string]()
   var read = initHashSet[string]()
@@ -69,6 +74,9 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     case node.kind
     of nkIdent:
       let name = node.IdentNode.name
+      # An object parameter is a typed reference; reading it needs no boxing.
+      if not boolean and name in objects and name in available:
+        return mangleIdentifier(name)
       if not boolean and name in available:
         return mangleIdentifier(name)
       # A receiver slot reads as a plain field. The entry guard already proved
@@ -93,6 +101,33 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         return node.PseudoVarNode.name
     of nkMessage:
       let message = node.MessageNode
+      # `x isNil` on a typed reference is a pointer compare, not a send.
+      if boolean and message.arguments.len == 0 and
+         message.selector in ["isNil", "notNil"] and message.receiver != nil and
+         message.receiver.kind == nkIdent:
+        let name = message.receiver.IdentNode.name
+        if name in objects and name in available:
+          let op = if message.selector == "isNil": "== " else: "!= "
+          return "(" & mangleIdentifier(name) & " " & op & "nil)"
+      # `o amount` where o is a typed reference: an Integer slot of the declared
+      # class reads as a plain field through the reference, with no send.
+      if not boolean and message.arguments.len == 0 and message.receiver != nil and
+         message.receiver.kind == nkIdent:
+        let refName = message.receiver.IdentNode.name
+        if refName in objects and refName in available:
+          let target = objects[refName]
+          if target in allClasses and nativeIntegerSlot(name = message.selector,
+                                                        cls = allClasses[target]):
+            # Do NOT record this as a touched slot of the region's own receiver:
+            # the guard table belongs to the parameter's class, and a plain field
+            # read through an already class-checked reference has no accessor to
+            # redirect.
+            # The typed view lives in compiledOwner, exactly as the direct field
+            # helpers read it. A nil argument must not reach this read, so the
+            # entry guard requires non-nil (see fieldReadObjects below).
+            fieldReadObjects.incl(refName)
+            return "cast[" & mangleClass(target) & "](" & mangleIdentifier(refName) &
+                   ".compiledOwner)[]. " & mangleSlot(message.selector)
       if not boolean and message.receiver != nil and message.receiver.kind == nkPseudoVar and
          message.receiver.PseudoVarNode.name == "self" and message.selector in known:
         var arguments: seq[string]
@@ -277,6 +312,8 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   result.slotWrites = written.toSeq
   result.slotReads = read.toSeq
   result.needsReceiver = needsReceiver
+  result.objectParameters = objects
+  result.fieldReadObjects = fieldReadObjects.toSeq
   var touched = initHashSet[string]()
   for name in written.toSeq & read.toSeq:
     if name notin touched:
@@ -317,7 +354,8 @@ proc emitBooleanCall*(owner, selector: string, parameters: seq[string],
     checks.add(receiverType & "_direct_" & mangleSlot(slot) & "_guard(receiver)")
   result.code.add("  if " & checks.join(" and ") & ":\n")
   result.code.add("    return " & stem & "_native(" &
-    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") & names.join(", ") & ")\n")
+    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") &
+    names.join(", ") & ")\n")
   result.code.add("  isTruthy(cachedSendBound(owner, receiver, \"" & selector & "\", [" &
     names.mapIt("toValue(" & it & ")").join(", ") & "]))\n\n")
 
@@ -330,28 +368,44 @@ proc emitIntegerResult*(owner, selector: string, parameters: seq[string],
   let stem = "integerResult_" & mangleClass(owner) & "_" & mangleSlot(selector)
   let receiverType = mangleClass(owner)
   let usesSelf = plan.touchedSlots.len > 0 or plan.needsReceiver
-  let names = parameters.mapIt(mangleIdentifier(it))
-  let nativeNames = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
+  proc paramType(name: string): string =
+    if name in plan.objectParameters: "Instance" else: "int"
+  let names = parameters.mapIt(mangleIdentifier(it) & ": NodeValue")
+  let nativeNames = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") &
+    mangleIdentifier(it) & ": " & paramType(it))
   let target = receiverType & "_" & mangleSelector(selector)
   result.helper = stem
   # The forward declaration belongs to emitIntegerCall, which always runs for the
   # same plan; declaring it here too makes Nim expect two implementations.
   result.code = "proc " & stem & "_native*(" &
-    (if usesSelf: "self: " & receiverType & ", " else: "") & nativeNames.join(", ") & ": int): int =\n"
+    (if usesSelf: "self: " & receiverType & ", " else: "") & nativeNames.join(", ") & "): int =\n"
   if plan.statements.len > 0: result.code.add(plan.statements)
   else: result.code.add("  " & plan.expression & "\n")
   result.code.add("var " & stem & "_class {.threadvar.}: Class\n")
   result.code.add("var " & stem & "_guard {.threadvar.}: CompiledDirectGuard\n")
-  result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & names.join(", ") &
-    ": int, hardingIntegerOut: var int): bool =\n")
+  result.code.add("proc " & stem & "(owner, receiver: NodeValue, " &
+    "hardingIntegerOut: var int" &
+    (if names.len > 0: ", " & names.join(", ") else: "") & "): bool =\n")
   result.code.add("  if " & stem & "_class == nil: " & stem & "_class = compiledClassValue(\"" & owner & "\").classVal\n")
-  var checks = @["not hostRoutingActive()",
-    "canDirectCompiledSend(receiver, " & stem & "_class, \"" & selector & "\", " & target & ", " & stem & "_guard)"]
+  var checks = @["not hostRoutingActive()"]
+  for index, name in parameters:
+    if name in plan.objectParameters:
+      checks.add("compiledObjectArgumentMatches(" & mangleIdentifier(name) & ", \"" &
+                 plan.objectParameters[name] & "\")")
+      if name in plan.fieldReadObjects:
+        checks.add("not isNilValue(" & mangleIdentifier(name) & ")")
+    else:
+      checks.add(mangleIdentifier(name) & ".kind == vkInt")
+  checks.add("canDirectCompiledSend(receiver, " & stem & "_class, \"" & selector & "\", " & target & ", " & stem & "_guard)")
   for slot in plan.touchedSlots:
     checks.add(receiverType & "_direct_" & mangleSlot(slot) & "_guard(receiver)")
   result.code.add("  if " & checks.join(" and ") & ":\n")
   result.code.add("    hardingIntegerOut = " & stem & "_native(" &
-    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") & names.join(", ") & ")\n")
+    (if usesSelf: receiverType & "(receiver.instVal.compiledOwner), " else: "") &
+    parameters.mapIt(if it in plan.objectParameters:
+                       "(if isNilValue(" & mangleIdentifier(it) & "): nil else: " &
+                       mangleIdentifier(it) & ".instVal)"
+                     else: mangleIdentifier(it) & ".intVal").join(", ") & ")\n")
   result.code.add("    return true\n")
   result.code.add("  false\n\n")
 
@@ -473,9 +527,10 @@ proc emitStaticClassCall*(owner, selector: string, parameters: seq[string],
   ## object identity and the class-method registration before using it, so a
   ## subclass override or a replaced method keeps the ordinary send.
   let stem = "integerClassCall_" & mangleClass(owner) & "_" & mangleSlot(selector)
-  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
+  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") &
+    mangleIdentifier(it) & ": " & (if it in plan.objectParameters: "Instance" else: "int"))
   result.nativeName = stem & "_native"
-  result.code = "proc " & result.nativeName & "*(" & args.join(", ") & ": int): int =\n"
+  result.code = "proc " & result.nativeName & "*(" & args.join(", ") & "): int =\n"
   if plan.statements.len > 0: result.code.add(plan.statements)
   else: result.code.add("  " & plan.expression & "\n")
 
@@ -490,7 +545,9 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   ## Arguments arrive evaluated before any guard. The entire pure call chain
   ## stays in int signatures; boxing happens only at this dynamic boundary.
   let stem = integerStem(owner, selector)
-  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it))
+  proc paramType(name: string): string =
+    if name in plan.objectParameters: "Instance" else: "int"
+  let args = parameters.mapIt((if plan.statements.len > 0: "hardingNativeArg_" else: "") & mangleIdentifier(it) & ": " & paramType(it))
   let boundary = parameters.mapIt("argument_" & mangleIdentifier(it))
   let usesSelf = plan.touchedSlots.len > 0 or plan.needsReceiver
   result.helper = stem
@@ -498,13 +555,23 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   # plain load/store instead of an accessor call per read and write.
   result.code = "proc " & stem & "_native*(" &
                 (if usesSelf: "self: " & mangleClass(owner) & ", " else: "") &
-                args.join(", ") & ": int): int =\n"
+                args.join(", ") & "): int =\n"
   if plan.statements.len > 0: result.code.add(plan.statements)
   else: result.code.add("  " & plan.expression & "\n")
   for dependency in @[selector] & plan.dependencies:
     result.code.add("var " & stem & "_guard_" & mangleSlot(dependency) & " {.threadvar.}: CompiledDirectGuard\n")
   result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & boundary.join(", ") & ": NodeValue): NodeValue =\n")
-  var checks = boundary.mapIt(it & ".kind == vkInt")
+  var checks: seq[string]
+  for index, name in parameters:
+    let arg = boundary[index]
+    if name in plan.objectParameters:
+      checks.add("compiledObjectArgumentMatches(" & arg & ", \"" & plan.objectParameters[name] & "\")")
+      if name in plan.fieldReadObjects:
+        # A nil argument must take the ordinary send so `nil slot` raises the
+        # same MessageNotUnderstood it always did.
+        checks.add("not isNilValue(" & arg & ")")
+    else:
+      checks.add(arg & ".kind == vkInt")
   # A region that reads or writes slots touches storage the accessor table can
   # redirect (registerSlotAccessor / a redefined getter). The per-access guards
   # in ordinary code exist for that; here the same check runs once at entry, so
@@ -516,6 +583,8 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   result.code.add("  if " & checks.join(" and ") & ":\n")
   let nativeCall = stem & "_native(" &
                    (if usesSelf: "cast[" & mangleClass(owner) & "](receiver.instVal.compiledOwner)" & (if boundary.len > 0: ", " else: "") else: "") &
-                   boundary.mapIt(it & ".intVal").join(", ") & ")"
+                   boundary.mapIt(if parameters[boundary.find(it)] in plan.objectParameters:
+                                    "(if isNilValue(" & it & "): nil else: " & it & ".instVal)"
+                                  else: it & ".intVal").join(", ") & ")"
   result.code.add("    return toValue(" & nativeCall & ")\n")
   result.code.add("  sendMessageBound(owner, receiver, \"" & selector & "\", [" & boundary.join(", ") & "])\n\n")

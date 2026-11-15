@@ -851,6 +851,27 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: object-parameter regions":
+  test "an Integer slot read through a typed reference stays native":
+    # A parameter whose class is derivable takes a typed reference, and an
+    # Integer slot of that class reads as a direct field load.
+    let (nodes, syntax) = parse("Holder := Object derivePublic: #{#amount -> Integer}. Holder>>init: v [ amount := v. ^self ]. Helper := Object derive: #(). Helper>>sum: o [ o isNil ifTrue: [^0]. ^o amount + 1 ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "objectparam")
+    check code.contains("hardingNativeArg_o: Instance): int")
+    check code.contains("compiledOwner)[]. " & mangleSlot("amount"))
+
+  test "a nil argument falls back to the ordinary send":
+    # Reading a field through nil must still raise MessageNotUnderstood, so the
+    # entry guard refuses nil rather than dereferencing it.
+    let (nodes, syntax) = parse("Holder := Object derivePublic: #{#amount -> Integer}. Holder>>init: v [ amount := v. ^self ]. Helper := Object derive: #(). Helper>>sum: o [ o isNil ifTrue: [^0]. ^o amount + 1 ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "objectparamnil")
+    check code.contains("not isNilValue(argument_o)")
+    check code.contains("not isNilValue(o)")
+
 suite "Compiler: early returns inside a conditional":
   test "ifTrue: with a return plans as a native region":
     # `(c) ifTrue: [^x]` is the most common Smalltalk method shape. It parses to
@@ -930,7 +951,8 @@ suite "Compiler: Native Integer method results":
     let code = genModule(compiler, nodes, "native_integer_result")
     check code.contains("proc integerResult_" & mangleClass("Counter") & "_" & mangleSlot("advanceBy:") & "_native*(hardingNativeArg_n: int): int")
     # The success flag is explicit, so a replacement cannot be read as an int.
-    check code.contains("hardingIntegerOut: var int): bool")
+    # It comes first so a following typed parameter cannot share its declaration.
+    check code.contains("hardingIntegerOut: var int") and code.contains("): bool =")
     check code.contains("if integerResult_")
     check code.contains("hardingIntegerValue < 500")
     # The fallback re-evaluates the ordinary comparison, preserving its errors.
