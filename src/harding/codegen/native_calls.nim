@@ -65,6 +65,7 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   var dependencies: seq[string]
   var needsReceiver = false
   var fieldReadObjects = initHashSet[string]()
+  var assignedBindings = initHashSet[string]()
   var initialized = initHashSet[string]()
   var written = initHashSet[string]()
   var read = initHashSet[string]()
@@ -314,6 +315,9 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         if assignment.variable in temporaries or assignment.variable in parameters:
           code.add(indent & mangleIdentifier(assignment.variable) & " = " & value & "\n")
           available.incl(assignment.variable)
+          # A reassigned binding cannot be a borrowed cursor, and an assigned
+          # parameter must keep an owned `var` declaration.
+          assignedBindings.incl(assignment.variable)
         elif nativeIntegerSlot(cls, assignment.variable):
           # Declared Integer storage is already an int field and every write is
           # contract-checked here: the value came from int arithmetic or an int
@@ -416,7 +420,12 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     for name in temporaries:
       code = "  var " & mangleIdentifier(name) & ": int\n" & code
     for name in parameters:
-      code = "  var " & mangleIdentifier(name) & " = hardingNativeArg_" & mangleIdentifier(name) & "\n" & code
+      # A parameter only read inside the region is borrowed. Copying a reference
+      # parameter increments its refcount on entry and decrements it on exit; the
+      # Nim profiler showed that at 60% of the remaining tree time.
+      let borrow = if name in assignedBindings or name in written: "" else: " {.cursor.}"
+      code = "  var " & mangleIdentifier(name) & borrow &
+             " = hardingNativeArg_" & mangleIdentifier(name) & "\n" & code
     result.statements = code & (if tailIsConditional: "" else: "  return " & answer & "\n")
   result.eligible = true
   result.arity = parameters.len
