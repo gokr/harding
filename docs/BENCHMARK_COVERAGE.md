@@ -82,11 +82,20 @@ run exceeds ~150 ms, subtracting a zero-pass run for startup:
 | shapes (200 passes) | 791 us/pass | 7.6 us/pass | **104x** |
 | tree (40 passes) | 3115 us/pass | 14.2 us/pass | **219x** |
 | tree after native regions (100 passes) | 221.3 us/pass | 15.8 us/pass | **14.1x** |
+| tree after the reference-traffic fixes (200 passes) | 37.4 us/pass | 18.8 us/pass | **2.0x** |
 
 `tree`'s three walks are native regions as of the recursive-object-region work, which
 closed most of its gap: 219x -> 14.1x native Nim, and an 82% reduction in its own
-wall time. `shapes` is unchanged; its dispatch is already well ahead of CPython and
-the remaining cost is per-send, not per-call-boundary.
+wall time. Two reference-traffic fixes then took it to 2.0x: region parameters that
+are only read became `{.cursor.}` borrows rather than refcount-counted copies (the
+profiler had nimDecRefIsLast at 59.81% of the frame), and an object-typed field read
+stopped wrapping itself in a redundant nil conditional that forced a temporary.
+Across the whole series tree went from 3115 us/pass to 37.4 us/pass and from 219x to
+2.0x native Nim; against CPython it went from 2.56x slower to 0.12x, i.e. about 8x
+faster.
+
+`shapes` is unchanged; its dispatch is already well ahead of CPython and the remaining
+cost is per-send, not per-call-boundary.
 
 An earlier version of this file reported 13.90x and 48.01x from 20-pass runs. Those
 figures were startup-dominated and are wrong by four to seven times; the table above
