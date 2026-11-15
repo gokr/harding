@@ -1,4 +1,4 @@
-import std/[tables, strutils, sequtils, sets]
+import std/[tables, strutils, sequtils, sets, os]
 import ../core/types
 import ../compiler/symbols
 import ../compiler/context
@@ -70,6 +70,8 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   var read = initHashSet[string]()
   for name in parameters: initialized.incl(name)
 
+  proc conditionalBranchValue(branch: Node, available: HashSet[string]): string {.used.}
+
   proc expression(node: Node, available: HashSet[string], boolean = false): string =
     if node == nil: return ""
     case node.kind
@@ -110,6 +112,26 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         if name in objects and name in available:
           let op = if message.selector == "isNil": "== " else: "!= "
           return "(" & mangleIdentifier(name) & " " & op & "nil)"
+      # `node left isNil`: a nil test on an object-typed slot of a typed reference.
+      if boolean and message.arguments.len == 0 and
+         message.selector in ["isNil", "notNil"] and message.receiver != nil and
+         message.receiver.kind == nkMessage:
+        let inner = message.receiver.MessageNode
+        if inner.arguments.len == 0 and inner.receiver != nil and
+           inner.receiver.kind == nkIdent:
+          let refName = inner.receiver.IdentNode.name
+          if refName in objects and refName in available:
+            let target = objects[refName]
+            if target in allClasses and
+               allClasses[target].getSlotDef(inner.selector).constraint == tcObject:
+              fieldReadObjects.incl(refName)
+              let slotDef = allClasses[target].getSlotDef(inner.selector)
+              let field = "cast[" & mangleClass(target) & "](" & mangleIdentifier(refName) &
+                          ".compiledOwner)[]. " & mangleSlot(inner.selector)
+              let nilTest = if slotDef.nativeObject: field & ".instance == nil"
+                            else: "isNilValue(" & field & ")"
+              return (if message.selector == "isNil": "(" & nilTest & ")"
+                      else: "(not (" & nilTest & "))")
       # `o amount` where o is a typed reference: an Integer slot of the declared
       # class reads as a plain field through the reference, with no send.
       if not boolean and message.arguments.len == 0 and message.receiver != nil and
@@ -179,6 +201,30 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         let receiverArg = if calleeNeedsReceiver: "self, " else: ""
         return integerStem(owner, message.selector) & "_native(" & receiverArg &
                arguments.join(", ") & ")"
+      # A conditional used as a value: `c ifTrue: [a] ifFalse: [b]` answers one of
+      # two native expressions. Only the value form fits here; a branch that
+      # returns is handled by the statement walker instead.
+      if not boolean and message.selector in ["ifTrue:ifFalse:", "ifFalse:ifTrue:"] and
+         message.arguments.len == 2:
+        let test = expression(message.receiver, available, true)
+        if test.len > 0:
+          let positive = message.selector == "ifTrue:ifFalse:"
+          let firstArg = if positive: message.arguments[0] else: message.arguments[1]
+          let secondArg = if positive: message.arguments[1] else: message.arguments[0]
+          let yes = conditionalBranchValue(firstArg, available)
+          let no = conditionalBranchValue(secondArg, available)
+          if yes.len > 0 and no.len > 0:
+            return "(if " & test & ": " & yes & " else: " & no & ")"
+      # `c ifTrue: [a]` used as a value answers nil when the test fails.
+      if not boolean and message.selector in ["ifTrue:", "ifFalse:"] and
+         message.arguments.len == 1:
+        let test = expression(message.receiver, available, true)
+        if test.len > 0:
+          let positive = message.selector == "ifTrue:"
+          let yes = conditionalBranchValue(message.arguments[0], available)
+          if yes.len > 0:
+            return "(if " & (if positive: test else: "not (" & test & ")") & ": " &
+                   yes & " else: 0)"
       let supported = if boolean: message.selector in ["<", "<=", ">", ">=", "=", "<>"]
                       else: message.selector in ["+", "-", "*", "//"]
       if not boolean and message.arguments.len == 1 and message.selector == "//":
@@ -320,6 +366,14 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   # A body that ends in a conditional returning on every branch needs no separate
   # tail expression: the region already answers from inside the branches.
   let tailIsConditional = endsWithConditional
+  proc conditionalBranchValue(branch: Node, available: HashSet[string]): string =
+    ## A branch usable as a value: one expression, or one explicit return.
+    let body = blockBody(branch)
+    if body.len != 1: return ""
+    if body[0].kind == nkReturn:
+      return expression(body[0].ReturnNode.expression, available)
+    expression(body[0], available)
+
   var answer = ""
   if tailIsConditional:
     if not statements(body, initialized, 2, code): return

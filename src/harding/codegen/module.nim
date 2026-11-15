@@ -598,8 +598,10 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
             let regionCells = scopeCaptureCellNames(md.body, md.params & md.temporaries)
             var regionAssigned = initHashSet[string]()
             for statement in md.body: collectAssignedVars(statement, regionAssigned)
+            var regionAll: seq[ClassInfo]
+            for info in classInfo.values: regionAll.add(info)
             regionObjects = objectParameterCandidates(md.body, md.params, md.temporaries,
-              regionCells & regionAssigned.toSeq, ownerClass, getterReceiverHints)
+              regionCells & regionAssigned.toSeq, ownerClass, getterReceiverHints, regionAll)
           let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries,
                                      ownerClass, objects = regionObjects,
                                      allClasses = classInfo, selfSelector = md.selector)
