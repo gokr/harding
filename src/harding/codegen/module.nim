@@ -135,7 +135,13 @@ proc genClassConstants*(cls: ClassInfo, emitType = true): string =
   for slot in cls.getAllSlots():
     if slot.defaultValue.len > 0:
       # A declared default (`#{#x -> 0}`) must match the interpreter exactly.
-      output.add(fmt("  result.{mangleSlot(slot.name)} = {slot.defaultValue}\n"))
+      # A typed object slot stores a wrapper, not the contract's class name: the
+      # contract text defaults a self-referential slot (a Node slot declared in
+      # Node) to its own name, which is not a value of that storage type.
+      if slot.nativeObject:
+        output.add(fmt("  result.{mangleSlot(slot.name)} = {nativeSlotType(slot)}()\n"))
+      else:
+        output.add(fmt("  result.{mangleSlot(slot.name)} = {slot.defaultValue}\n"))
     else:
       let zero = case slot.constraint
         of tcInt: "0"
