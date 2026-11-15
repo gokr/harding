@@ -103,7 +103,10 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
     of nkIf:
       # `c ifTrue: [a] ifFalse: [b]` used as a value. The parser lowered the send
       # form already, so the conditional arrives as nkIf here. Each branch must be
-      # a single native expression.
+      # a single native expression. Boolean regions answer from an explicit
+      # `^boolExpr`, so a value conditional must not be inferred there: its branch
+      # values need not be Boolean.
+      if boolean: return ""
       let branch = node.IfNode
       let test = expression(branch.condition, available, true)
       if test.len > 0 and branch.thenBranch != nil and branch.elseBranch != nil:
