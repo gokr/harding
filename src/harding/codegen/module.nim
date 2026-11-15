@@ -600,8 +600,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
             for statement in md.body: collectAssignedVars(statement, regionAssigned)
             var regionAll: seq[ClassInfo]
             for info in classInfo.values: regionAll.add(info)
+            # A region cannot capture blocks: a block in its body is either inlined
+            # or makes the plan ineligible. So a parameter captured only by blocks
+            # is not an obstacle here, unlike on the boxed path where every capture
+            # becomes a shared cell.
             regionObjects = objectParameterCandidates(md.body, md.params, md.temporaries,
-              regionCells & regionAssigned.toSeq, ownerClass, getterReceiverHints, regionAll)
+              regionAssigned.toSeq, ownerClass, getterReceiverHints, regionAll)
           let plan = planIntegerCall(owner, md.params, md.body, plans, md.temporaries,
                                      ownerClass, objects = regionObjects,
                                      allClasses = classInfo, selfSelector = md.selector)

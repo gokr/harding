@@ -851,6 +851,29 @@ suite "Compiler: Mirrored Harding type hierarchy":
     # Parents are emitted before children; a table iteration order must not leak.
     check code.find(vehicleType & "* {.inheritable.}") < code.find(carType & "* {.inheritable.}")
 
+suite "Compiler: value conditionals and short-circuit conditions":
+  test "ifTrue:ifFalse: used as a value selects between two native expressions":
+    # `l > r ifTrue: [l] ifFalse: [r]` arrives as nkIf in value position; without
+    # this case maxDepth: could not become a region.
+    let (nodes, syntax) = parse("Node := Object derivePublic: #{#value -> Integer, #left -> Node, #right -> Node}. Tree := Object derive: #(). Tree>>maxDepth: node [ | l r | node isNil ifTrue: [^0]. l := self maxDepth: node left. r := self maxDepth: node right. ^1 + (l > r ifTrue: [l] ifFalse: [r]) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "valuedepth")
+    check code.contains("hardingUser6D617844657074683A_native")
+    check code.contains("(if (l > r): l else: r)")
+    check code.contains("var l: int")
+
+  test "and: between two native conditions stays native":
+    # `(node left isNil and: [node right isNil])` -- the block is inlined, so the
+    # parameter is not rejected as a captured cell.
+    let (nodes, syntax) = parse("Node := Object derivePublic: #{#value -> Integer, #left -> Node, #right -> Node}. Tree := Object derive: #(). Tree>>leaves: node [ node isNil ifTrue: [^0]. (node left isNil and: [node right isNil]) ifTrue: [^1]. ^(self leaves: node left) + (self leaves: node right) ].")
+    require not syntax.hasError
+    var compiler = newCompiler()
+    let code = genModule(compiler, nodes, "leafand")
+    check code.contains("hardingUser6C65617665733A_native*(self: " & mangleClass("Tree") &
+                        ", hardingNativeArg_node: Instance): int")
+    check code.contains(") and (")
+
 suite "Compiler: recursive object regions":
   test "a self-recursive method over a typed object slot plans as a region":
     # The shape that makes a tree walk native: an object parameter, a typed slot

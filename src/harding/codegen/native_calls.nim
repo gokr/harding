@@ -72,6 +72,17 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
 
   proc conditionalBranchValue(branch: Node, available: HashSet[string]): string {.used.}
 
+  proc blockBody(node: Node): seq[Node] =
+    if node == nil: return @[]
+    let blk = if node.kind == nkBlock: node.BlockNode
+              elif node.kind == nkLiteral and node.LiteralNode.value.kind == vkBlock:
+                node.LiteralNode.value.blockVal
+              else: nil
+    # Block-local shadowing and parameters require a separate scope analysis.
+    if blk != nil and blk.parameters.len == 0 and blk.temporaries.len == 0:
+      return blk.body
+    return @[]
+
   proc expression(node: Node, available: HashSet[string], boolean = false): string =
     if node == nil: return ""
     case node.kind
@@ -89,6 +100,17 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         if nativeIntegerSlot(cls, name):
           read.incl(name)
           return "self[]." & mangleSlot(name)
+    of nkIf:
+      # `c ifTrue: [a] ifFalse: [b]` used as a value. The parser lowered the send
+      # form already, so the conditional arrives as nkIf here. Each branch must be
+      # a single native expression.
+      let branch = node.IfNode
+      let test = expression(branch.condition, available, true)
+      if test.len > 0 and branch.thenBranch != nil and branch.elseBranch != nil:
+        let yes = conditionalBranchValue(branch.thenBranch, available)
+        let no = conditionalBranchValue(branch.elseBranch, available)
+        if yes.len > 0 and no.len > 0:
+          return "(if " & test & ": " & yes & " else: " & no & ")"
     of nkLiteral:
       let value = node.LiteralNode.value
       if not boolean and value.kind == vkInt: return $value.intVal
@@ -104,6 +126,17 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
         return node.PseudoVarNode.name
     of nkMessage:
       let message = node.MessageNode
+      # Short-circuit `and:`/`or:` between two native conditions. The argument is
+      # a block literal whose single statement is the second condition.
+      if boolean and message.selector in ["and:", "or:"] and
+         message.arguments.len == 1:
+        let left = expression(message.receiver, available, true)
+        var right = ""
+        let body = blockBody(message.arguments[0])
+        if body.len == 1: right = expression(body[0], available, true)
+        if left.len > 0 and right.len > 0:
+          let op = if message.selector == "and:": "and" else: "or"
+          return "((" & left & ") " & op & " (" & right & "))"
       # `x isNil` on a typed reference is a pointer compare, not a send.
       if boolean and message.arguments.len == 0 and
          message.selector in ["isNil", "notNil"] and message.receiver != nil and
@@ -249,17 +282,6 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
           return "(" & left & " " & op & " " & right & ")"
     else: discard
     return ""
-
-  proc blockBody(node: Node): seq[Node] =
-    if node == nil: return @[]
-    let blk = if node.kind == nkBlock: node.BlockNode
-              elif node.kind == nkLiteral and node.LiteralNode.value.kind == vkBlock:
-                node.LiteralNode.value.blockVal
-              else: nil
-    # Block-local shadowing and parameters require a separate scope analysis.
-    if blk != nil and blk.parameters.len == 0 and blk.temporaries.len == 0:
-      return blk.body
-    return @[]
 
   proc condition(node: Node, available: HashSet[string]): string =
     let statements = blockBody(node)
