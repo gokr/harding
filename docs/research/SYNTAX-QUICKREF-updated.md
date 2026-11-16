@@ -592,5 +592,5 @@ The `>>` syntax is transformed by the parser into the standard `at:put:` message
 
 - [NEWLINE_RULES.md](NEWLINE_RULES.md) - Newline handling rules
 - [SPECIFICATION.md](SPECIFICATION.md) - Language specification details
-- [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Debugging guide
+- [TOOLS_AND_DEBUGGING.md](../TOOLS_AND_DEBUGGING.md) - Debugging guide
 - [closures.md](closures.md) - Closure implementation details

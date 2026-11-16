@@ -358,4 +358,4 @@ Single `<<primitive>>` syntax for both declarative and inline forms:
 - [IMPLEMENTATION.md](../../IMPLEMENTATION.md) - VM internals
 - [GTK.md](../../gtk/GTK.md) - GTK integration
 - [TOOLS_AND_DEBUGGING.md](../../TOOLS_AND_DEBUGGING.md) - Tool usage
-- [research/](../) - Historical design documents
+- [research/](..) - Historical design documents

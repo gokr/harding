@@ -1189,4 +1189,4 @@ proc len*(keyDir: var KeyDir): int =
 - [GTK.md](gtk/GTK.md) - GTK integration
 - [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Tool usage and debugging
 - [FUTURE.md](research/planning/FUTURE.md) - Future plans
-- [research/](research/) - Historical design documents
+- [research/](research) - Historical design documents
