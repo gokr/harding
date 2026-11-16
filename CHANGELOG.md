@@ -63,6 +63,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Selector-named Symbol reflection queries, retaining method-named compatibility aliases; Bona uses the selector vocabulary.
 - Nim-backed `hash`/`identityHash` and `shallowCopy`/`deepCopy`, with `copy`/`postCopy`, graph alias/cycle preservation, and explicit refusal of unsupported native resources. Table/Set custom object keys honor `hash`/`=` through a hash-filtered scan.
 - String Iterable protocol (`do:`, Array-valued `collect:`/`asArray`, String-valued filtering, first/last/includes:/reverse); Bag, Interval and SortedCollection share Iterable traversal while retaining specialized semantics.
+- Documentation consolidation: `docs/` now describes current behaviour only,
+  `docs/plans/` holds active intent, and `docs/research/` holds historical
+  audits, superseded plans and measurement snapshots. Index: `docs/README.md`.
 - Nimony migration assessment covering potential benefits, compatibility risks and a staged validation plan (`docs/NIMONY_ASSESSMENT.md`).
 - Granite native non-frozen builds lift source-indexed core/standard library methods through the ordinary method pipeline and resolve declared primitives through `primitive_abi.nim`. Collection and string duplicate implementations have been reduced; remaining selector fallbacks and full parity validation are still under review.
 - `demos/notebook`: a complete GTK4 application in Harding source — searchable note list, split title/body editor, new/duplicate/delete/undo-delete/pin/archive, versioned JSON persistence with explicit save, and in-app `--self-test`/`--gui-test` that run in both `harding_gtk` and `granite build --gtk` (`demos/notebook/README.md`).

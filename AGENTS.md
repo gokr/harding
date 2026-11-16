@@ -43,7 +43,7 @@ Tests use Nim's unittest framework, run via testament: `nimble test` runs all te
 
 ## Bona Production Hardening
 
-The active goal is a reliable Smalltalk environment: Workspace, Browser, Inspector, Transcript, and Builder. See `docs/research/gui/BONA_ASSESSMENT.md` for reproduced defects and evidence; keep this section current as fixes land.
+The active goal is a reliable Smalltalk environment: Workspace, Browser, Inspector, Transcript, and Builder. See `docs/gtk/BONA.md` for current state and gaps and `docs/research/gui/BONA_ASSESSMENT.md` for the original reproductions; keep both current as fixes land.
 
 ### Phases and scope
 
@@ -51,7 +51,7 @@ The active goal is a reliable Smalltalk environment: Workspace, Browser, Inspect
 2. Exercise every existing tool through deterministic model/integration tests and black-box GTK acceptance tests. Cover save/reload, errors and recovery, dialogs/cancellation, repeated open/close, and preservation of unsaved edits.
 3. Make creating GTK apps in Harding straightforward and make Builder produce a single executable that embeds the application sources and the Harding interpreter, with a defined system dependency contract (GTK4, GtkSourceView 5, VTE for the IDE, MummyX/NimCP for web/MCP builds). The embedded-interpreter target is agreed and is the first packaging mode; Granite compilation remains a separate backend that Builder can select later. A packaged app must run without the source tree and without a separate `harding` binary.
 
-Granite compiler development was tracked on `worktrees/granite-completeness` and is now merged into `main`; that worktree is a leftover and no longer a separate line of work. Compiler changes on main follow the validation in `docs/research/compiler/GRANITE_STATUS.md` and the parity runner below. Preserve unrelated/uncommitted changes, including installed external-library changes.
+Granite compiler development was tracked on `worktrees/granite-completeness` and is now merged into `main`; that worktree is a leftover and no longer a separate line of work. Compiler changes on main follow the validation in `docs/compiler/GRANITE.md` and the parity runner below. Preserve unrelated/uncommitted changes, including installed external-library changes.
 
 ### Current progress
 
@@ -117,7 +117,7 @@ Bona needs GTK4, GtkSourceView 5, and **GTK4** VTE (`libvte-2.91-gtk4.so.0`); GT
 
 The bounded-queue livelock is fixed. A blocked consumer previously lost its loop/method continuation and was terminated before incrementing the coordinator's completion counter. `runCurrentProcess` now advances only the outer fork activation (`activationStack[0]`), preserves VM frames and evaluated operands across blocking/yielding, and terminates only when the outer block is complete and the work queue is empty. The VM requeues the blocked native send; do not restart the whole statement, rewind its PC, or truncate its continuations. Regression tests in `test_sync_primitives.nim` drive a bounded number of scheduler slices so failure cannot hang indefinitely. All 21 synchronization tests pass under ARC and ORC, including nested method reads, full-queue writes without repeated argument side effects, and repeated semaphore waits in a fork's final loop statement. This fixes continuation loss, not captured-variable visibility; the consumer had never executed its final completion-counter assignment.
 
-The following validation was reported on main before its merge into granite-completeness; it is historical evidence, not a full-suite claim for the merged tree. Use current focused logs and docs/research/compiler/GRANITE_STATUS.md for this branch (the nimble tasks mask failures with `|| true`):
+The following validation was reported on main before its merge into granite-completeness; it is historical evidence, not a full-suite claim for the merged tree. Use current focused logs and `docs/compiler/GRANITE.md` for this branch (the nimble tasks mask failures with `|| true`):
 
 - `test_sync_primitives` (21), `test_scheduler_complete` (45), `test_interpreter_core` (57), `test_exception_handling` (17), `test_precedence`, `test_primitives`, `test_closures`, `test_class_model`, `test_load_and_eval`, `test_dynamic_features`, `test_literals`, `test_slot_ivars`, `test_extend`, `test_cascade`, `test_float_operations`, `test_nil_conditionals`, `test_tagged`, `test_library_namespace`, `test_cli_args`, `test_source_editor`, `test_bona_models`, `test_signal_point_debugging`, `test_bitbarrel`, `test_sqlite`, `test_mysql`, `test_website_examples` (55), `test_html_canvas` (14), `test_web_html_template_cache` (6), `test_html_render_cache` (4), `test_mcp_bridge` (12), the whole stdlib group and both compiler suites pass, under ARC and (for the scheduler/sync/exception suites) ORC.
 - The three Html suites and the MCP suite were rewritten/fixed against the current API: the removed class-side `Html div: ... with:` form and `Html canvas:`/`render:` caching are gone, so they now exercise `Html render:` plus `Component`/`RenderCache` reuse-and-invalidate (`test_web_html_template_cache`), component nesting, and the real `Table[int, McpServerState]`/`BlockNode` shapes.
@@ -270,14 +270,23 @@ src/harding/
 └── web/            # MummyX and MCP bridges
 lib/                # Harding stdlib (.hrd), layered: core, standard, syntax, gui, web, granite, mummyx, reactive, process, mysql, corral
 external/           # Installed external libraries (bitbarrel, mysql, sqlite, jwt, nimcp, ...)
-docs/               # Documentation
-    ├── research/   # Historical design docs (may be outdated)
+docs/               # Documentation: current behaviour only
+    ├── plans/      # Roadmap, defect list, agreed-but-unimplemented targets
+    ├── compiler/   # Granite capability, runtime contracts, optimisation index
+    ├── gtk/        # GTK applications and the Bona IDE
+    ├── web/        # MummyX, Html DSL, reactive rendering
+    ├── performance/# Profiling workflow, cross-engine benchmarks, port records
+    ├── research/   # Historical design docs, dated audits, rejected experiments
+    └── evidence/   # Captured evidence for records that cite it
 examples/           # Example .hrd scripts
 tests/              # Nim unittest files (test_*.nim)
 ```
 
 - Source files: `.nim`, test files: `test_*.nim`, Harding source: `.hrd`
-- Prefer root-level docs over `docs/research/` for current behavior
+- `docs/` describes current behaviour. `docs/plans/` describes intent.
+  `docs/research/` is history and may contradict the code. Start at `docs/README.md`.
+- A consolidated document replaces its sources; move the originals to
+  `docs/research/` and fix links in the same change set rather than deleting them.
 - `src/harding/external/external_libs_generated.nim` is auto-generated by `nimble discover`; do not edit by hand
 
 ### Changelog Maintenance

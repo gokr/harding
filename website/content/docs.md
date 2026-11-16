@@ -58,9 +58,9 @@ granite run myprogram.hrd
 ### Web And APIs
 
 - [MummyX Integration](https://github.com/gokr/harding/blob/main/docs/web/MUMMYX.md)
-- [Reactive Web Rendering](https://github.com/gokr/harding/blob/main/docs/research/web/REACTIVE_WEB_RENDERING.md)
+- [Reactive Web Rendering](https://github.com/gokr/harding/blob/main/docs/web/HTML.md)
 - [JSON API Server Tutorial](https://github.com/gokr/harding/blob/main/docs/web/API_SERVER_TUTORIAL.md)
-- [Bona Todo Workflow](https://github.com/gokr/harding/blob/main/docs/research/web/BONA_WEB_TODO.md)
+- [Bona Todo Workflow](https://github.com/gokr/harding/blob/main/docs/gtk/BONA.md)
 
 MummyX is Harding's current web server path: a fast scalable native multithreaded HTTP server with Harding handlers executed through the interpreter's green-process model.
 
@@ -196,7 +196,7 @@ Current emphasis:
 
 ## Project Docs
 
-- [Future Plans](https://github.com/gokr/harding/blob/main/docs/research/planning/FUTURE.md)
+- [Roadmap](https://github.com/gokr/harding/blob/main/docs/plans/ROADMAP.md)
 - [Contributing](https://github.com/gokr/harding/blob/main/CONTRIBUTING.md)
 
 ## Getting Help

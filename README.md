@@ -266,18 +266,23 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 
 ## Documentation
 
+Start at [`docs/README.md`](docs/README.md) for the full index.
+
 - [Quick Reference](docs/QUICKREF.md) - Syntax quick reference
 - [Language Manual](docs/MANUAL.md) - Complete language manual
-- [Implementation](docs/IMPLEMENTATION.md) - VM internals
+- [Comparisons](docs/COMPARISONS.md) - Against Smalltalk-80, Python, Ruby, Go and Smalltalk VMs
+- [Implementations & VM internals](docs/IMPLEMENTATION.md) - Stackless VM, scheduler, dispatch
 - [Bootstrap](docs/BOOTSTRAP.md) - Bootstrap architecture and stdlib loading
 - [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
+- [Granite compiler](docs/compiler/GRANITE.md) - What compiles today and what does not
 - [Compilation Pipeline](docs/COMPILATION_PIPELINE.md) - Granite compiler architecture
 - [Nim Package Tutorial](docs/NIM_PACKAGE_TUTORIAL.md) - Bundle Nim primitives with `.hrd` sources
 - [Roadmap](docs/plans/ROADMAP.md) - Active priorities and milestones
 - [Performance](docs/performance/PERFORMANCE.md) - Performance workflow and priorities
-- [Future Plans](docs/research/planning/FUTURE.md) - Long-term roadmap
+- [Benchmarks](docs/performance/BENCHMARKS.md) - Cross-engine numbers and how to reproduce them
 - [AGENTS.md](AGENTS.md) - Developer guide and repository conventions for AI coding agents
 - [GTK Integration](docs/gtk/GTK.md) - GUI development
+- [Bona IDE](docs/gtk/BONA.md) - The GTK4 Smalltalk IDE
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
 - [GtkSourceView](docs/gtk/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting
 

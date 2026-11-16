@@ -12,12 +12,18 @@ result.
 | Runner | Workloads | Engines | Script |
 |---|---|---|---|
 | Practical cross-engine | Richards, DeltaBlue, Queens | Granite, CPython, GNU Smalltalk, native Nim | `scripts/bench_compare_practical.py` |
+| Dispatch and object-graph | shapes, tree | Granite, CPython, native Nim | `scripts/profile_granite.py` |
 | AWFY | Bounce, Json, Havlak (upstream's own sources) | Granite, CPython, GNU Smalltalk | `scripts/bench_compare_awfy.py` |
 | AWFY on Smalltalk VMs | Bounce, Json, Havlak | Cog, Oil (Squeak) | `scripts/bench_compare_oil.py` |
 | Sieve | trial division to 5000 | C, Go, Node, Ruby, Python, Nim, Granite, interpreter | `scripts/bench_sieve_languages.py` |
 
 Algorithm and performance workloads live in `benchmark/`, not in `examples/`,
 and are not part of the example audit.
+
+Why `shapes` and `tree` exist, and what each one exercises, is in
+[BENCHMARK_COVERAGE.md](BENCHMARK_COVERAGE.md). The classic three workloads
+measured 0% improvement on several optimisation slices that were worth 28-84% on
+their own receiver shape.
 
 ### Method, common to all runners
 
