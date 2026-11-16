@@ -505,6 +505,8 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
     output.add("\n")
     return output
   
+  # Targets already forward-declared, so no selector is declared twice.
+  var forwardDeclared = initHashSet[string]()
   var directCandidates = initTable[string, string]()
   var numericGetters: Table[string, NumericGetter]
   var objectGetters: Table[string, ObjectGetter]
@@ -535,6 +537,7 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
       directCandidates[selector] = helper
       if choice.slot.len == 0:
         output.add(fmt("proc {choice.target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
+        forwardDeclared.incl(choice.target)
       output.add(fmt("var {helper}_class {{.threadvar.}}: Class\n"))
       output.add(fmt("var {helper}_guard {{.threadvar.}}: CompiledDirectGuard\n"))
       output.add(fmt("proc {helper}(owner, receiver: NodeValue): NodeValue {{.inline.}} =\n"))
@@ -611,7 +614,12 @@ proc genCompiledMethods*(methodDefs: seq[tuple[className, selector: string, para
                                      allClasses = classInfo, selfSelector = md.selector)
           if not plan.eligible: continue
           let target = mangleClass(owner) & "_" & mangleSelector(md.selector)
-          output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
+          # A zero-parameter method already forward-declared by the guarded-send
+          # helper must not be declared twice: a duplicate declaration without a
+          # definition is a compile error.
+          if target notin forwardDeclared:
+            forwardDeclared.incl(target)
+            output.add(fmt("proc {target}*(self: NodeValue, args: openArray[NodeValue]): NodeValue\n"))
           # One accessor guard per class/slot, shared by every region touching it.
           for slot in plan.touchedSlots:
             if (owner, slot) notin emittedSlotGuards:

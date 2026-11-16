@@ -52,8 +52,18 @@ proc planIntegerCall*(owner: string, parameters: seq[string], body: seq[Node],
   # answer; inferring that as a bool would be a silent miscompile.
   let endsWithConditional = not returnBoolean and body.len > 0 and
                              body[^1].kind == nkIf and body[^1].IfNode.elseBranch != nil
-  if parameters.len == 0 or body.len == 0 or
+  # A method with no parameters is a getter or a predicate and can still be a
+  # region: it reads the receiver's slots and answers natively. Requiring a
+  # parameter would exclude every zero-argument method in the language.
+  if body.len == 0 or
      (body[^1].kind != nkReturn and not endsWithConditional): return
+  # A plain getter (`^slot`) already compiles to a direct field read through the
+  # slot-accessor path, which is strictly cheaper than a region call and has its
+  # own forward declaration. Two candidates for the same selector collide.
+  if parameters.len == 0 and body.len == 1 and body[0].kind == nkReturn:
+    let only = body[0].ReturnNode.expression
+    if only != nil and only.kind in {nkIdent, nkSlotAccess}:
+      return
   proc slotNameOf(node: Node): string =
     let slotNode = node.SlotAccessNode
     if slotNode.slotName.len > 0: return slotNode.slotName
@@ -674,14 +684,20 @@ proc emitIntegerCall*(owner, selector: string, parameters: seq[string],
   result.helper = stem
   # A region that touches slots takes the typed receiver, so field access is a
   # plain load/store instead of an accessor call per read and write.
-  result.code = "proc " & stem & "_native*(" &
-                (if usesSelf: "self: " & mangleClass(owner) & ", " else: "") &
-                args.join(", ") & "): int =\n"
+  # Build the parameter list as a list, so a zero-parameter region has neither a
+  # trailing comma nor an empty slot.
+  var nativeParams: seq[string]
+  if usesSelf: nativeParams.add("self: " & mangleClass(owner))
+  nativeParams.add(args)
+  result.code = "proc " & stem & "_native*(" & nativeParams.join(", ") & "): int =\n"
   if plan.statements.len > 0: result.code.add(plan.statements)
   else: result.code.add("  " & plan.expression & "\n")
   for dependency in @[selector] & plan.dependencies:
     result.code.add("var " & stem & "_guard_" & mangleSlot(dependency) & " {.threadvar.}: CompiledDirectGuard\n")
-  result.code.add("proc " & stem & "(owner, receiver: NodeValue, " & boundary.join(", ") & ": NodeValue): NodeValue =\n")
+  # A zero-parameter region (a getter or predicate) has no argument list.
+  let boundaryParams = if boundary.len > 0: ", " & boundary.join(", ") & ": NodeValue" else: ""
+  result.code.add("proc " & stem & "(owner, receiver: NodeValue" & boundaryParams &
+                  "): NodeValue =\n")
   var checks: seq[string]
   for index, name in parameters:
     let arg = boundary[index]
