@@ -1,4 +1,4 @@
-import std/[unittest, tables, strutils, json]
+import std/[unittest, tables, strutils, json, sets]
 import ../src/harding/parser/parser
 import ../src/harding/compiler/analyzer
 import ../src/harding/compiler/slot_inference
@@ -10,7 +10,25 @@ proc infer(source: string): InferenceResult =
   let analysis = buildClassGraph(nodes)
   inferSlots(nodes, analysis.classes)
 
+proc infer(source: string, known: openArray[string]): InferenceResult =
+  let (nodes, syntax) = parse(source)
+  require not syntax.hasError
+  let analysis = buildClassGraph(nodes)
+  var names = initHashSet[string]()
+  for name in known: names.incl(name)
+  inferSlots(nodes, analysis.classes, names)
+
 suite "Static slot-kind inference":
+  test "a slot holding a class from outside this source is typed":
+    # `Array` is not defined in this file, which is the normal case for any
+    # program at all. Without the known-class set the slot stayed dynamic.
+    let source = "C := Object derive: #(items). C>>initialize [items := Array new]."
+    let without = infer(source)
+    let withKnown = infer(source, ["Array"])
+    check without.slots["C#items"].kind == skDynamic
+    check withKnown.slots["C#items"].kind == skObject
+    check withKnown.slots["C#items"].className == "Array"
+    check withKnown.slots["C#items"].conclusive
   test "literal writes classify primitives":
     let result = infer("""
       Point := Object derivePublic: #(x, y, tag, label).
