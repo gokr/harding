@@ -5,8 +5,8 @@ This document outlines the implementation of cooperative green processes (green 
 **Status**: Phase 1 (Core Scheduler) ✅ Implemented | Phase 2 (GTK Integration) 🚧 Planned
 
 **See also:**
-- [Concurrency Design](./CONCURRENCY.md) – background theory and comparisons.
-- [Gtk Intro](./GINTRO.md) – GTK4 Nim bindings.
+- [Concurrency Design](CONCURRENCY.md) – background theory and comparisons.
+- [Gtk Intro](GINTRO.md) – GTK4 Nim bindings.
 - [API Reference](#api-reference) – Harding-side API documentation.
 
 ---

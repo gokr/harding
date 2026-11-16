@@ -158,7 +158,7 @@ This document tracks current work items and future directions for Harding develo
 - [x] Language Manual (docs/MANUAL.md)
 - [x] Implementation docs (docs/IMPLEMENTATION.md)
 - [x] Tools & Debugging docs (docs/TOOLS_AND_DEBUGGING.md)
-- [x] GtkSourceView syntax highlighting (docs/GTKSOURCEVIEW.md)
+- [x] GtkSourceView syntax highlighting (docs/gtk/GTKSOURCEVIEW.md)
 - [ ] Tutorials and comprehensive examples
 - [ ] API reference for built-in objects
 - [ ] Help text improvements

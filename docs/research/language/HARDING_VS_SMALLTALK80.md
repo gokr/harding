@@ -1,13 +1,13 @@
 # Harding compared to classic Smalltalk-80
 
-Companion document: [`FIXES.md`](FIXES.md) records the defects found here with
+Companion document: [`FIXES.md`](../../plans/FIXES.md) records the defects found here with
 concrete, Harding-consistent fixes. This document is the comparison summary;
 that one is the work list.
 
 ## Implementation follow-up
 
 The D1–D13 defects and parenthesized cascades have implementation updates; see
-[FIXES.md](FIXES.md#current-implementation-status) for the current status, safe
+[FIXES.md](../../plans/FIXES.md#current-implementation-status) for the current status, safe
 Browser-deletion refusal, and validation scope. The observations below preserve
 the original review baseline, not a claim that every defect remains present.
 

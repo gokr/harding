@@ -6,7 +6,7 @@ appear". Each occurrence is assigned to the position it occupies, because the
 answers differ sharply: a nil that is assigned to a slot is a normal absent
 value, while a nil passed as an argument usually encodes an optional parameter.
 
-Used by docs/NIL_AND_ABSENCE.md. Re-run it after any migration step; the counts
+Used by docs/research/language/NIL_AND_ABSENCE.md. Re-run it after any migration step; the counts
 in that document are only meaningful for the revision they were taken at.
 
 Usage:

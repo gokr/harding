@@ -39,4 +39,4 @@ Upstream's `src/v2/readme.md` describes a Nim 2 import plugin but says it curren
 
 - [Nimony FAQ](https://nimony.org/faq.html), [home](https://nimony.org/), [tools](https://nimony.org/tools.html), [installation and FFI linking](https://nimony.org/install.html).
 - [Nimony source](https://github.com/nim-lang/nimony), particularly `doc/differences.md`, `doc/assembler.md`, `doc/lenientnils.md`, `doc/language.md`, and `src/v2/readme.md` at the revision above.
-- Harding: `harding.nimble`, `src/harding/core/tagged.nim`, `src/harding/core/types.nim`, `src/harding/interpreter/vm.nim`, `src/harding/compiler/granite.nim`, `src/harding/codegen/module.nim`, and `docs/GRANITE_STATUS.md`.
+- Harding: `harding.nimble`, `src/harding/core/tagged.nim`, `src/harding/core/types.nim`, `src/harding/interpreter/vm.nim`, `src/harding/compiler/granite.nim`, `src/harding/codegen/module.nim`, and `docs/research/compiler/GRANITE_STATUS.md`.

@@ -33,7 +33,7 @@ These documents represent historical design work. For the current implementation
 - See [MANUAL.md](../MANUAL.md) for current language behavior
 - See [QUICKREF.md](../QUICKREF.md) for syntax reference
 - See [TOOLS_AND_DEBUGGING.md](../TOOLS_AND_DEBUGGING.md) for tool usage and debugging
-- See [ROADMAP.md](../ROADMAP.md) for active priorities
+- See [ROADMAP.md](../plans/ROADMAP.md) for active priorities
 - See [AGENTS.md](../../AGENTS.md) for development guidelines
 
 ## When to Refer Here

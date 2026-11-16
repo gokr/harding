@@ -61,7 +61,7 @@ Harding includes multiple tools for different workflows:
 - `harding-lsp` - Language Server Protocol support
 - `bona` - GTK-based IDE
 
-Optional builds can enable the MummyX HTTP server bridge. See [MUMMYX.md](MUMMYX.md).
+Optional builds can enable the MummyX HTTP server bridge. See [MUMMYX.md](web/MUMMYX.md).
 
 Typical workflows:
 
@@ -84,7 +84,7 @@ on PATH for direct builds and Granite's generated-program builds as well.
 
 This manual describes Harding's language semantics. Granite's native backend is
 still being brought into parity with the interpreter; compilation does not imply
-support for every language feature. See [GRANITE_STATUS.md](GRANITE_STATUS.md)
+support for every language feature. See [GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md)
 for tested coverage and remaining gaps, including processes and mixed-mode
 boundaries. Compiled blocks, lexical non-local returns, and multiple inheritance
 have focused coverage; general exception resumption is deliberately unsupported
@@ -261,7 +261,7 @@ Native `basicNew` allocates without calling `initialize`; `new` retains initiali
 
 Native object JSON serialization supports inherited slots, `jsonRepresentation`
 and class-side JSON specifications. See [native collections and JSON](GRANITE_COLLECTIONS_AND_JSON.md)
-for supported paths and validation limits, and [collection protocol audit](COLLECTION_PROTOCOL_AUDIT.md)
+for supported paths and validation limits, and [collection protocol audit](research/language/COLLECTION_PROTOCOL_AUDIT.md)
 for differences from Smalltalk-80.
 
 ### Native GTK4 applications
@@ -274,8 +274,8 @@ panes and list boxes, with typed `clicked`/`changed`/`row-selected`/`close-reque
 callbacks. GTK4 is a runtime system dependency; native packages do not load
 `.hrd` source or start an interpreter. `--mixed` and freeze manifests are not yet
 supported together with `--gtk`. `demos/notebook` is a complete application in
-this protocol. See [GTK applications](GTK_APPLICATIONS.md) for builds and
-[GTK support](GTK_SUPPORT.md) for coverage and remaining work.
+this protocol. See [GTK applications](gtk/GTK_APPLICATIONS.md) for builds and
+[GTK support](research/gui/GTK_SUPPORT.md) for coverage and remaining work.
 
 ### Checked frozen compilation (experimental)
 
@@ -1530,7 +1530,7 @@ Handlers run **synchronously while the signaling computation is still active**,
 so for a notification, statements after the signal still run. Errors instead
 abandon the protected computation before the handler executes. Both engines
 follow this contract; see [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) and
-[GRANITE_STATUS.md](GRANITE_STATUS.md). Remaining custom-class, foreign/process,
+[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md). Remaining custom-class, foreign/process,
 and mixed-mode gaps are listed in the status document.
 
 Harding provides exception handling through the `on:do:` mechanism:
@@ -1636,7 +1636,7 @@ the signaling body's scopes remain active. Error `pass` also cleans intervening
 protected scopes, and `retry` cleans handler-local scopes before restarting.
 A cleanup failure replaces the pending delegation/retry. Custom default-action
 overrides, process yields, and mixed mode still need coverage; see
-[GRANITE_STATUS.md](GRANITE_STATUS.md).
+[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
@@ -2312,7 +2312,7 @@ Compiled code runs significantly faster than interpreted. On a sieve of Eratosth
 
 First-class blocks and lexical non-local returns are compiled and have focused
 regressions. This does not imply complete interpreter parity: see
-[GRANITE_STATUS.md](GRANITE_STATUS.md) for current coverage and boundary gaps.
+[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md) for current coverage and boundary gaps.
 In-VM compilation and mixed-mode features have separate limitations.
 
 ### Missing Features
@@ -2928,13 +2928,13 @@ nimble harding
 
 - [QUICKREF.md](QUICKREF.md) - Quick syntax reference
 - [BOOTSTRAP.md](BOOTSTRAP.md) - Bootstrap architecture and core loading
-- [GTK.md](GTK.md) - GTK integration and GUI development
+- [GTK.md](gtk/GTK.md) - GTK integration and GUI development
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) - VM internals and architecture
 - [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Tool usage and debugging
 - [COMPILATION_PIPELINE.md](COMPILATION_PIPELINE.md) - Granite pipeline architecture
-- [ROADMAP.md](ROADMAP.md) - Active development roadmap
-- [PERFORMANCE.md](PERFORMANCE.md) - Performance workflow and priorities
-- [FUTURE.md](FUTURE.md) - Future plans and roadmap
+- [ROADMAP.md](plans/ROADMAP.md) - Active development roadmap
+- [PERFORMANCE.md](performance/PERFORMANCE.md) - Performance workflow and priorities
+- [FUTURE.md](research/planning/FUTURE.md) - Future plans and roadmap
 - [VSCODE.md](VSCODE.md) - VSCode extension
 - [research/](research/) - Historical design documents
 

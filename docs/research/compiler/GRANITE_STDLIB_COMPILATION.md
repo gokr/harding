@@ -1,7 +1,7 @@
 # Compiling the standard library with Granite
 
 Status: **library method bodies compile; declared primitives remain the only
-hand-written leaf.** The design this extends is [PLAN.md](../PLAN.md) section 6
+hand-written leaf.** The design this extends is [PLAN.md](../../../PLAN.md) section 6
 ("Frozen stdlib and the engine boundary").
 
 ## The problem

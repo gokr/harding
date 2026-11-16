@@ -10,27 +10,27 @@ These are the active, maintained documents:
 |----------|---------|----------|
 | [MANUAL.md](MANUAL.md) | Complete language and runtime reference | All users |
 | [QUICKREF.md](QUICKREF.md) | Syntax and common idioms cheat sheet | Daily reference |
-| [LANGUAGE_COMPARISON.md](LANGUAGE_COMPARISON.md) | Language-design review against Smalltalk-80, Python, Ruby and Go; distinctive features, simplifications and known shortcomings | Users and contributors |
-| [HARDING_VS_SMALLTALK80.md](HARDING_VS_SMALLTALK80.md) | What the language and stdlib have and lack compared with classic Smalltalk-80 | Users and contributors |
-| [FIXES.md](FIXES.md) | Confirmed defects from that review, cheap Smalltalk-alignment fixes, and what is deliberately deferred | Contributors |
+| [LANGUAGE_COMPARISON.md](research/language/LANGUAGE_COMPARISON.md) | Language-design review against Smalltalk-80, Python, Ruby and Go; distinctive features, simplifications and known shortcomings | Users and contributors |
+| [HARDING_VS_SMALLTALK80.md](research/language/HARDING_VS_SMALLTALK80.md) | What the language and stdlib have and lack compared with classic Smalltalk-80 | Users and contributors |
+| [FIXES.md](plans/FIXES.md) | Confirmed defects from that review, cheap Smalltalk-alignment fixes, and what is deliberately deferred | Contributors |
 | [AI_HARNESS_INTEGRATION.md](AI_HARNESS_INTEGRATION.md) | What Harding offers LLM/agent harnesses, why source beats AST generation, and the gaps to close | Contributors |
-| [NIL_AND_ABSENCE.md](NIL_AND_ABSENCE.md) | Findings on nil/absence: why removing nameable nil was rejected, measured nil-usage audit, decided fixes (lookup signals, `isNil` primitive, `Root`) | Contributors |
-| [MUMMYX.md](MUMMYX.md) | Optional HTTP server integration | Users and contributors |
-| [API_SERVER_TUTORIAL.md](API_SERVER_TUTORIAL.md) | Build a plain JSON API server with MummyX and BitBarrel | Users |
+| [NIL_AND_ABSENCE.md](research/language/NIL_AND_ABSENCE.md) | Findings on nil/absence: why removing nameable nil was rejected, measured nil-usage audit, decided fixes (lookup signals, `isNil` primitive, `Root`) | Contributors |
+| [MUMMYX.md](web/MUMMYX.md) | Optional HTTP server integration | Users and contributors |
+| [API_SERVER_TUTORIAL.md](web/API_SERVER_TUTORIAL.md) | Build a plain JSON API server with MummyX and BitBarrel | Users |
 | [NIM_PACKAGE_TUTORIAL.md](NIM_PACKAGE_TUTORIAL.md) | Packaging Nim primitives with Harding code | Contributors |
 | [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) | CLI tools, workflows, and debugging | Users and contributors |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | VM/runtime architecture details | Contributors |
 | [BOOTSTRAP.md](BOOTSTRAP.md) | Bootstrap architecture and stdlib loading | Contributors |
 | [COMPILATION_PIPELINE.md](COMPILATION_PIPELINE.md) | Granite compiler pipeline | Contributors |
-| [GRANITE_STDLIB_COMPILATION.md](GRANITE_STDLIB_COMPILATION.md) | Plan: compile the stdlib with Granite (whole-stdlib coverage) | Contributors |
-| [ROADMAP.md](ROADMAP.md) | Active development priorities | Contributors |
-| [PERFORMANCE.md](PERFORMANCE.md) | Performance workflow and current priorities | Contributors |
+| [GRANITE_STDLIB_COMPILATION.md](research/compiler/GRANITE_STDLIB_COMPILATION.md) | Plan: compile the stdlib with Granite (whole-stdlib coverage) | Contributors |
+| [ROADMAP.md](plans/ROADMAP.md) | Active development priorities | Contributors |
+| [PERFORMANCE.md](performance/PERFORMANCE.md) | Performance workflow and current priorities | Contributors |
 | [VSCODE.md](VSCODE.md) | VSCode extension usage | VSCode users |
-| [GTK.md](GTK.md) | GTK documentation entry point and Bona bridge | GUI developers |
-| [GTK_APPLICATIONS.md](GTK_APPLICATIONS.md) | Standalone Harding GTK4 applications, interpreted and native | Application developers |
-| [GTK_SUPPORT.md](GTK_SUPPORT.md) | GTK coverage audit and Harding Notebook implementation plan | Contributors |
-| [GTKSOURCEVIEW.md](GTKSOURCEVIEW.md) | GtkSourceView syntax highlighting | GNOME/GtkSourceView users |
-| [FUTURE.md](FUTURE.md) | Longer-term plans and directions | Contributors |
+| [GTK.md](gtk/GTK.md) | GTK documentation entry point and Bona bridge | GUI developers |
+| [GTK_APPLICATIONS.md](gtk/GTK_APPLICATIONS.md) | Standalone Harding GTK4 applications, interpreted and native | Application developers |
+| [GTK_SUPPORT.md](research/gui/GTK_SUPPORT.md) | GTK coverage audit and Harding Notebook implementation plan | Contributors |
+| [GTKSOURCEVIEW.md](gtk/GTKSOURCEVIEW.md) | GtkSourceView syntax highlighting | GNOME/GtkSourceView users |
+| [FUTURE.md](research/planning/FUTURE.md) | Longer-term plans and directions | Contributors |
 
 ## Getting Started
 

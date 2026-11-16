@@ -1,6 +1,6 @@
 # A native numeric kernel generated from Harding
 
-Source: [`examples/compilation/native_sum_squares.hrd`](../examples/compilation/native_sum_squares.hrd).
+Source: [`examples/compilation/native_sum_squares.hrd`](../../../examples/compilation/native_sum_squares.hrd).
 
 ```harding
 SumSquares := Object derive: #().

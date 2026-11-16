@@ -41,7 +41,7 @@ References:
 
 - `docs/research/EXAMPLE_MATRIX.md`
 - `docs/research/COMPILER-PLAN.md`
-- `docs/ROADMAP.md`
+- `docs/plans/ROADMAP.md`
 
 ### Main Remaining Gaps (updated 2026-08-29)
 

@@ -70,7 +70,7 @@ Binaries:
 - `bona` - GTK IDE
 
 Optional MummyX-enabled builds expose HTTP server support through `lib/mummyx/Bootstrap.hrd`.
-See [`docs/MUMMYX.md`](docs/MUMMYX.md).
+See [`docs/web/MUMMYX.md`](docs/web/MUMMYX.md).
 
 ### IDE Desktop Integration (Ubuntu/GNOME)
 
@@ -152,7 +152,7 @@ This optional integration is also available in Bona builds:
 nimble bona_mummyx
 ```
 
-See [`docs/MUMMYX.md`](docs/MUMMYX.md) for the API, build tasks, and concurrency model.
+See [`docs/web/MUMMYX.md`](docs/web/MUMMYX.md) for the API, build tasks, and concurrency model.
 
 ### Environment Variables
 
@@ -273,13 +273,13 @@ Harding distinguishes globals from locals by capitalization and enforces this in
 - [Tools & Debugging](docs/TOOLS_AND_DEBUGGING.md) - Tool usage
 - [Compilation Pipeline](docs/COMPILATION_PIPELINE.md) - Granite compiler architecture
 - [Nim Package Tutorial](docs/NIM_PACKAGE_TUTORIAL.md) - Bundle Nim primitives with `.hrd` sources
-- [Roadmap](docs/ROADMAP.md) - Active priorities and milestones
-- [Performance](docs/PERFORMANCE.md) - Performance workflow and priorities
-- [Future Plans](docs/FUTURE.md) - Long-term roadmap
+- [Roadmap](docs/plans/ROADMAP.md) - Active priorities and milestones
+- [Performance](docs/performance/PERFORMANCE.md) - Performance workflow and priorities
+- [Future Plans](docs/research/planning/FUTURE.md) - Long-term roadmap
 - [AGENTS.md](AGENTS.md) - Developer guide and repository conventions for AI coding agents
-- [GTK Integration](docs/GTK.md) - GUI development
+- [GTK Integration](docs/gtk/GTK.md) - GUI development
 - [VSCode Extension](docs/VSCODE.md) - VSCode editor support
-- [GtkSourceView](docs/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting
+- [GtkSourceView](docs/gtk/GTKSOURCEVIEW.md) - Gedit/GNOME Text Editor syntax highlighting
 
 ## Examples
 

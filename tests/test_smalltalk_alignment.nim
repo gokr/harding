@@ -1,5 +1,5 @@
 #
-# test_smalltalk_alignment.nim - Regressions for the findings in docs/FIXES.md.
+# test_smalltalk_alignment.nim - Regressions for the findings in docs/plans/FIXES.md.
 #
 # Each test names the FIXES.md item it protects.
 #

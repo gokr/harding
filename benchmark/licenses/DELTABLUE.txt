@@ -9,7 +9,7 @@ Modifications: Harding classes and message syntax; prefixed class names; explici
 per-graph planner ownership instead of a global planner; deterministic graph
 cleanup for ARC/ORC; numeric tolerance checks for mixed Integer/Float projection;
 repetition driver. Collection LIFO and strength mappings retain reference behavior.
-See docs/DELTABLUE.md. This benchmark is separately licensed, not under the
+See docs/performance/DELTABLUE.md. This benchmark is separately licensed, not under the
 repository default license. Distribution of linked benchmark binaries must also
 comply with the GPL and applicable runtime licenses; no linking exception is granted.
 

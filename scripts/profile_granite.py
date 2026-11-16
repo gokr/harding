@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # The classic three, plus two workloads that target what the specialization
 # actually optimises: many receiver classes at one send site, and objects crossing
 # call boundaries. Without them the corpus reported 0% for slices worth 28-84% on
-# their own shape. See docs/BENCHMARK_COVERAGE.md.
+# their own shape. See docs/performance/BENCHMARK_COVERAGE.md.
 CASES = ('richards', 'deltablue', 'queens', 'shapes', 'tree')
 
 

@@ -17,7 +17,7 @@ nimble harding_gtk
 NATIVE_GTK_ATSPI=1 nimble testGtkApplications
 ```
 
-See [GTK application library](../../docs/GTK_APPLICATIONS.md) for the shared API,
+See [GTK application library](../../docs/gtk/GTK_APPLICATIONS.md) for the shared API,
 lifecycle contract and current limitations. GTK4 remains a system dependency.
 
 ## Original Nim-shell proof
@@ -87,5 +87,5 @@ not claim the executable contains no interpreter-related machine code.
 
 The shared backend used by `counter.hrd` above supersedes the need for this
 app-specific shell. Further reusable widget coverage and the Harding Notebook
-showcase are tracked in [GTK support](../../docs/GTK_SUPPORT.md). Retain this
+showcase are tracked in [GTK support](../../docs/research/gui/GTK_SUPPORT.md). Retain this
 original proof as a separate regression, not as the application-authoring path.

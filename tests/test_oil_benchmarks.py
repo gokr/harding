@@ -18,7 +18,7 @@ import awfy_cog
 class OilBenchmarkTests(unittest.TestCase):
     def test_setup_pins_full_upstream_revision(self):
         self.assertRegex(REVISION, r'^[0-9a-f]{40}$')
-        self.assertIn(REVISION, (ROOT / 'docs/OPENSMALLTALK_OIL_COMPARISON.md').read_text())
+        self.assertIn(REVISION, (ROOT / 'docs/research/benchmarks/OPENSMALLTALK_OIL_COMPARISON.md').read_text())
 
     def test_awfy_provenance_and_driver_contract(self):
         manifest = awfy_cog.provenance()

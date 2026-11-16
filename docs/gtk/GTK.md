@@ -9,9 +9,9 @@ they share class names but are not interchangeable or safe to load together.
 |---|---|---|
 | Write a standalone application entirely in Harding; interpret or compile the same source | `lib/gui/Gtk.hrd`, `harding_gtk`, `granite build --gtk` | [GTK applications](GTK_APPLICATIONS.md) |
 | Develop Bona tools in its live interpreter | `lib/gui/gtk4/`, `initGtkBridge`, Bona host | [Bona bridge](#bona-bridge) below |
-| Review current coverage and the Notebook implementation plan | Both bridges, with explicit gaps | [Coverage and Notebook plan](GTK_SUPPORT.md) |
+| Review current coverage and the Notebook implementation plan | Both bridges, with explicit gaps | [Coverage and Notebook plan](../research/gui/GTK_SUPPORT.md) |
 | Install editor syntax highlighting | GtkSourceView language definition | [GtkSourceView](GTKSOURCEVIEW.md) |
-| Review Bona defects and acceptance evidence | IDE workflows and runtime integration | [Bona assessment](BONA_ASSESSMENT.md) |
+| Review Bona defects and acceptance evidence | IDE workflows and runtime integration | [Bona assessment](../research/gui/BONA_ASSESSMENT.md) |
 
 The native wrapper is handwritten Nim over GTK's C ABI, not a complete generated
 GObject-introspection binding. Having a raw declaration in `ffi.nim` does not
@@ -30,7 +30,7 @@ methods. Applications need no app-specific Nim shell.
 The initial protocol covers activation, windows, boxes, labels and buttons.
 It is not yet a general desktop application toolkit. In particular, entries,
 list selection and multiline editing from the Bona bridge are not available
-through this protocol. [Coverage](GTK_SUPPORT.md) distinguishes implemented
+through this protocol. [Coverage](../research/gui/GTK_SUPPORT.md) distinguishes implemented
 features from planned additions.
 
 Native packages require system GTK4 and its normal transitive dependencies,
@@ -53,8 +53,8 @@ nimble bona
 
 Bona requires GTK4, GtkSourceView 5 and the **GTK4** VTE library
 (`libvte-2.91-gtk4.so.0`). The GTK3 VTE library is not a substitute. See
-[Bona assessment](BONA_ASSESSMENT.md) and
-[tools and debugging](TOOLS_AND_DEBUGGING.md) for dependency and build details.
+[Bona assessment](../research/gui/BONA_ASSESSMENT.md) and
+[tools and debugging](../TOOLS_AND_DEBUGGING.md) for dependency and build details.
 
 Bona's host owns application initialization and the event loop. The following
 is an example for an already initialized Bona interpreter, not a standalone
@@ -79,7 +79,7 @@ window present
 The bridge registers windows, boxes, buttons, entries, labels, scrolled windows,
 split panes, list boxes, text views and buffers, source views, VTE terminals,
 keyboard helpers, GTK4 alerts and popovers. The detailed inventory and remaining
-limitations are in [GTK support](GTK_SUPPORT.md).
+limitations are in [GTK support](../research/gui/GTK_SUPPORT.md).
 
 Use the registered protocol and `.hrd` wrappers as the selector reference;
 raw Nim function names and previous documentation examples are not API promises.
@@ -103,7 +103,7 @@ emission API.
 Do not infer complete lifetime safety from a proxy's `destroyed` flag or the
 existence of lookup tables. Validation and cleanup differ between wrappers;
 controller, dialog and buffer ownership must be checked independently.
-[Coverage and risks](GTK_SUPPORT.md) records the audit boundary.
+[Coverage and risks](../research/gui/GTK_SUPPORT.md) records the audit boundary.
 
 ### Text editing in Bona
 
@@ -115,7 +115,7 @@ controller, dialog and buffer ownership must be checked independently.
 Workspace Do It evaluates selected text or the current line and reports the
 result to Transcript. Print It inserts the result after the selection and
 selects it. These are IDE workflows, not standalone GTK application selectors.
-See the [Bona assessment](BONA_ASSESSMENT.md) for tested behavior and outstanding
+See the [Bona assessment](../research/gui/BONA_ASSESSMENT.md) for tested behavior and outstanding
 acceptance work.
 
 ### Desktop integration

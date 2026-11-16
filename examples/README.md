@@ -33,7 +33,7 @@ From the repository root:
 [`compiler/portfolio_stress.hrd`](compiler/portfolio_stress.hrd) combines JSON,
 polymorphic positions, inherited factories, `super`, dynamic sends, escaped
 closures and exception cleanup in a deterministic portfolio stress report.
-See [build instructions and measured release comparison](../docs/GRANITE_PORTFOLIO_EXAMPLE.md).
+See [build instructions and measured release comparison](../docs/research/compiler/GRANITE_PORTFOLIO_EXAMPLE.md).
 
 ## Regression suite
 
@@ -74,7 +74,7 @@ is a compatibility entry point for the same runner (the old shell flags are gone
 When changing an example intentionally, review its stdout file in `expected/` and
 update it explicitly; the runner never rewrites snapshots. Empty-output benchmarks
 are smoke checks only. The permutation, queens and towers outputs additionally
-check their expected counts. See [the audit report](../docs/GRANITE_EXAMPLE_AUDIT.md)
+check their expected counts. See [the audit report](../docs/research/compiler/GRANITE_EXAMPLE_AUDIT.md)
 for limits and remaining compiler gaps. Website docs/index/features Harding fences
 are extracted directly by the same runner (13 runnable, 17 syntax-only gates).
 Other Markdown fences remain separate follow-up work;
