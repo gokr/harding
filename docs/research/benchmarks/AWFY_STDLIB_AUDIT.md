@@ -151,6 +151,6 @@ After coordination, run focused stdlib tests and executed Granite conformance
 for each agreed change; compile actual library bodies when testing library-only
 additions. Include literal and separately bound callback blocks, empty inputs,
 short-circuit call counts, mutable aliases and ARC/ORC where captures/ownership
-are involved. Use `docs/research/compiler/GRANITE_STATUS.md`'s parity workflow, not a successful
+are involved. Use `docs/compiler/GRANITE.md`'s parity workflow, not a successful
 code-generation-only assertion or masked nimble test exit. This audit reports
 source findings and proposed tests, not new executed conformance evidence.

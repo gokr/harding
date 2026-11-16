@@ -161,7 +161,7 @@ semantics; any intended language change must be explicit and documented.
 - [x] Native collection reference-storage slice: mutation aliasing, shallow clones,
       identity equality, builtin reflection and Array/Table/Set query callbacks.
 - [ ] Complete derived-collection, bulk/removal, override and mutation-during-loop
-      coverage; Smalltalk-80 gaps are inventoried in COLLECTION_PROTOCOL_AUDIT.md.
+      coverage; Smalltalk-80 gaps are inventoried in docs/research/language/COLLECTION_PROTOCOL_AUDIT.md.
 - [x] Native ordinary-object JSON serialization with slots, hooks and class specs.
 - [ ] Cache native JSON plans with explicit hierarchy/config invalidation after
       measuring the per-write plan construction path.
@@ -189,7 +189,7 @@ semantics; any intended language change must be explicit and documented.
       lexical `super` lookup.
 - [x] Review `docs/QUICKREF.md` for corresponding corrections.
 - [x] Distinguish intended language semantics from Granite's tested support and
-      remaining limitations; link to `docs/research/compiler/GRANITE_STATUS.md`.
+      remaining limitations; link to `docs/compiler/GRANITE.md`.
 - [x] Link semantic examples to executable regression cases and add missing
       tests where manual examples expose gaps.
 - [ ] Review the manual and quick reference with every coherent semantic change;
@@ -850,7 +850,7 @@ to nested calls, captured state, cleanup, errors, lexical non-local returns and
 foreign callbacks; passing a suspend/resume smoke test alone is not sufficient.
 Nimony is an evaluation target, not a replacement for the pinned Nim toolchain.
 
-Measured baseline and methodology: [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md).
+Measured baseline and methodology: [GRANITE_BENCHMARKS.md](docs/research/benchmarks/GRANITE_BENCHMARKS.md).
 On the trial-division benchmark Granite native is ~89x faster than the release
 interpreter but ~40x slower than C and ~25x slower than Nim, consistent with
 tagged values and dynamic dispatch. Use that benchmark to evaluate the items

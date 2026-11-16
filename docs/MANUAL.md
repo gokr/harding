@@ -84,11 +84,14 @@ on PATH for direct builds and Granite's generated-program builds as well.
 
 This manual describes Harding's language semantics. Granite's native backend is
 still being brought into parity with the interpreter; compilation does not imply
-support for every language feature. See [GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md)
-for tested coverage and remaining gaps, including processes and mixed-mode
+support for every language feature. See [GRANITE.md](compiler/GRANITE.md) for
+tested coverage and remaining gaps, including processes and mixed-mode
 boundaries. Compiled blocks, lexical non-local returns, and multiple inheritance
 have focused coverage; general exception resumption is deliberately unsupported
 by the language, not a Granite parity target.
+
+Per-slice evidence is archived in
+[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md).
 
 For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md).
 
@@ -260,7 +263,7 @@ resorting. Array `sorted`/`sorted:` return independent shallow sorted arrays.
 Native `basicNew` allocates without calling `initialize`; `new` retains initialization.
 
 Native object JSON serialization supports inherited slots, `jsonRepresentation`
-and class-side JSON specifications. See [native collections and JSON](GRANITE_COLLECTIONS_AND_JSON.md)
+and class-side JSON specifications. See [native collections and JSON](compiler/GRANITE_RUNTIME.md)
 for supported paths and validation limits, and [collection protocol audit](research/language/COLLECTION_PROTOCOL_AUDIT.md)
 for differences from Smalltalk-80.
 
@@ -1530,7 +1533,7 @@ Handlers run **synchronously while the signaling computation is still active**,
 so for a notification, statements after the signal still run. Errors instead
 abandon the protected computation before the handler executes. Both engines
 follow this contract; see [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md) and
-[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md). Remaining custom-class, foreign/process,
+[GRANITE.md](compiler/GRANITE.md). Remaining custom-class, foreign/process,
 and mixed-mode gaps are listed in the status document.
 
 Harding provides exception handling through the `on:do:` mechanism:
@@ -1636,7 +1639,7 @@ the signaling body's scopes remain active. Error `pass` also cleans intervening
 protected scopes, and `retry` cleans handler-local scopes before restarting.
 A cleanup failure replaces the pending delegation/retry. Custom default-action
 overrides, process yields, and mixed mode still need coverage; see
-[GRANITE_STATUS.md](research/compiler/GRANITE_STATUS.md).
+[GRANITE.md](compiler/GRANITE.md).
 
 Executed native/interpreter regressions: `error_unwind`, `error_actions`,
 `unhandled_error`, and `unhandled_pass` in `scripts/test_granite_parity.py`.
@@ -2936,7 +2939,7 @@ nimble harding
 - [PERFORMANCE.md](performance/PERFORMANCE.md) - Performance workflow and priorities
 - [FUTURE.md](research/planning/FUTURE.md) - Future plans and roadmap
 - [VSCODE.md](VSCODE.md) - VSCode extension
-- [research/](research/) - Historical design documents
+- [research/](research) - Historical design documents
 
 
 ## Object protocol: selectors, hashing and copying

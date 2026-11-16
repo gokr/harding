@@ -70,7 +70,7 @@ and drawing. This is a workflow inventory, not a percentage of GTK's entire API.
 
 ## Harding Notebook
 
-[`demos/notebook`](../../../demos/notebook/) is a complete application in Harding
+[`demos/notebook`](../../../demos/notebook) is a complete application in Harding
 source: model, filtering, versioned JSON persistence and every handler. The same
 `notebook.hrd` runs in `harding_gtk` and as a `granite build --gtk` binary.
 

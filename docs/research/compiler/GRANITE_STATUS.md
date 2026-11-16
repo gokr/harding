@@ -148,7 +148,7 @@ Table and Set query regressions and ordinary-object JSON slot/hook/spec
 serialization now execute natively. The expanded baseline recorded 89 passing
 semantic cases; later targeted regressions cover Table literal callbacks, Set
 queries and mutation return values. Runtime tests pass under ARC/ORC.
-See [implementation contract](../../GRANITE_COLLECTIONS_AND_JSON.md) and
+See [implementation contract](../../compiler/GRANITE_RUNTIME.md) and
 [Smalltalk-80 collection audit](../language/COLLECTION_PROTOCOL_AUDIT.md). The historical
 coverage/gaps below predate this follow-up: native object JSON is no longer
 entirely unsupported, but native JSON plan caching and full collection-protocol

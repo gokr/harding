@@ -27,11 +27,13 @@ platform bindings remain Nim. Both interpreted and Granite adapters use
 `src/harding/gui/gtk/application_backend.nim` and the same Harding convenience
 methods. Applications need no app-specific Nim shell.
 
-The initial protocol covers activation, windows, boxes, labels and buttons.
-It is not yet a general desktop application toolkit. In particular, entries,
-list selection and multiline editing from the Bona bridge are not available
-through this protocol. [Coverage](../research/gui/GTK_SUPPORT.md) distinguishes implemented
-features from planned additions.
+The protocol covers activation, windows, boxes, labels, buttons, entries, list
+selection, split panes and multiline editing. It is not a complete GTK4 binding:
+file dialogs, actions and accelerators, header bars, menus, a modern list model,
+keyboard controllers and the broader widget catalog remain outside the standalone
+protocol. [Coverage](../research/gui/GTK_SUPPORT.md) distinguishes implemented
+features from planned additions; its "Missing" column predates the entry, list
+and text-view additions and should be read against the source.
 
 Native packages require system GTK4 and its normal transitive dependencies,
 not GtkSourceView or VTE. Source-free native execution is tested; this is
