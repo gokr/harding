@@ -83,6 +83,7 @@ run exceeds ~150 ms, subtracting a zero-pass run for startup:
 | tree (40 passes) | 3115 us/pass | 14.2 us/pass | **219x** |
 | tree after native regions (100 passes) | 221.3 us/pass | 15.8 us/pass | **14.1x** |
 | tree after the reference-traffic fixes (200 passes) | 37.4 us/pass | 18.8 us/pass | **2.0x** |
+| tree, full three-way run (200 passes) | 73 us/pass | 26 us/pass | **2.99x** |
 
 `tree`'s three walks are native regions as of the recursive-object-region work, which
 closed most of its gap: 219x -> 14.1x native Nim, and an 82% reduction in its own
@@ -136,3 +137,27 @@ Both are now part of the routine tooling rather than ad-hoc scripts:
 4. Take pinned alternating pairs on an idle machine, and check the pair count as
    well as the percentage. A concurrent compile once produced a 3/31 result that
    read as a regression and became 5/31 noise when repeated quietly.
+
+## Three-way snapshot, consolidate run
+
+Same source snapshot, same host, CPU-pinned alternating trials, startup subtracted.
+Granite from `scripts/profile_granite.py`, then the same retained binaries compared
+against CPython and hand-written Nim. 200 passes, 7 trials.
+
+| case | Granite | CPython | Native Nim | vs CPython | vs Native |
+|---|---:|---:|---:|---:|---:|
+| tree | 0.073 ms | 1.720 ms | 0.026 ms | **0.04x** (24x faster) | 2.99x |
+| shapes | 1.151 ms | 0.280 ms | 0.019 ms | 4.11x slower | 61.79x |
+| richards | 11.116 ms | 5.357 ms | 0.211 ms | 2.08x slower | 52.76x |
+| deltablue | 19.819 ms | 7.517 ms | 0.195 ms | 2.64x slower | 104.70x |
+| queens | 13.227 ms | 12.638 ms | — | 1.01x | — |
+
+`tree` is the only case the native-region work reaches, and it is now faster than
+CPython by a wide margin. The other four are unimpeded by it: their hot methods are
+either overridden somewhere in the hierarchy (which the planner currently refuses,
+because plans are keyed by selector alone) or iterate with a call as their loop bound
+(`index < steps size`), which a region cannot express yet.
+
+`tree` also had to be measured at 300 passes in the CPython comparison: at 30 the
+startup subtraction left it below the harness's timing resolution, and the harness
+correctly refused to report a number rather than report noise.
