@@ -84,9 +84,15 @@ proc methodBody(node: Node): BlockNode =
   if node.kind == nkLiteral and node.LiteralNode.value.kind == vkBlock:
     return node.LiteralNode.value.blockVal
 
-proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): InferenceResult =
+proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo],
+                 knownClasses: HashSet[string] = initHashSet[string]()): InferenceResult =
   ## Advisory module evidence. No storage narrowing or source rewriting. Calls
   ## outside this source, dynamic selectors and method replacement remain open.
+  ##
+  ## `knownClasses` names the classes reachable without being defined in this
+  ## source -- the stdlib and the builtins. Without them a slot assigned
+  ## `Array new` would infer as dynamic, because the referenced class simply is
+  ## not in this file, which is the common case for any program at all.
   var methods: seq[MethodEvidence]
   proc collect(node: Node) =
     if node == nil: return
@@ -193,7 +199,8 @@ proc inferSlots*(nodes: seq[Node], classes: Table[string, ClassInfo]): Inference
     let msg = node.MessageNode
     if msg.receiver != nil and msg.receiver.kind == nkIdent and msg.selector in ["new", "basicNew"]:
       let cls = msg.receiver.IdentNode.name
-      if cls in classes: return SlotInference(kind: skObject, className: cls, conclusive: true)
+      if cls in classes or cls in knownClasses:
+        return SlotInference(kind: skObject, className: cls, conclusive: true)
     let left = kind(msg.receiver, locals, owner, classSide)
     if msg.arguments.len == 1:
       let right = kind(msg.arguments[0], locals, owner, classSide)

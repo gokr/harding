@@ -417,13 +417,18 @@ proc compileFile(config: Config): bool =
     echo "Error: --trust-observed-types requires --type-feedback and native (not --mixed) compilation"
     return false
   var numericCandidates = initTable[string, string]()
+  # Classes reachable without being defined in this source: the stdlib and the
+  # builtins. Slot inference needs them to type a slot assigned `Array new`.
+  var knownClassNames = initHashSet[string]()
+  for name in libraryClassNames: knownClassNames.incl(name)
+  for name in classModel.classes.keys: knownClassNames.incl(name)
   var observed: JsonNode = nil
   var narrowedSlots: seq[string]
   var narrowedKinds = initTable[string, string]()
   if not config.mixed:
     # Guarded native arithmetic only where evidence is confirmed by both module
     # analysis and observations; a proposal alone stays dynamic.
-    let staticOnly = inferSlots(nodes, classModel.classes)
+    let staticOnly = inferSlots(nodes, classModel.classes, knownClassNames)
     if config.typeFeedback.len > 0:
       try:
         observed = loadTypeFeedback(config.typeFeedback, config.inputFile)
@@ -446,7 +451,7 @@ proc compileFile(config: Config): bool =
   # it is not the default.
   if config.trustObservedTypes and observed != nil and not config.mixed:
     var narrowed = 0
-    for key, slot in inferenceReport(inferSlots(nodes, classModel.classes), observed)["slots"]:
+    for key, slot in inferenceReport(inferSlots(nodes, classModel.classes, knownClassNames), observed)["slots"]:
       if slot["evidence"].getStr notin ["observed-proposal", "static+observations"]: continue
       let kind = slot["effectiveCandidate"].getStr
       let separator = key.rfind('#')
