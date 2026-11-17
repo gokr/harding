@@ -139,7 +139,7 @@ sequenceDiagram
 
 See `examples/web/mummyx_hello.hrd`.
 
-For the live-editable Bona Todo workflow, see `docs/BONA_WEB_TODO.md`.
+For the live-editable Bona Todo workflow, see `docs/gtk/BONA.md`.
 
 It includes:
 

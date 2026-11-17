@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted language direction for the `granite-completeness` work. This document
-specifies the target contract, not a claim that either engine fully implements
-it. Interpreter and Granite must implement the same observable behavior.
+Accepted exception contract for interpreter and Granite. Focused parity covers
+errors, notifications, handler-local cleanup, `pass` and `retry`; mixed mode,
+process boundaries and diagnostic formatting remain incomplete. Coverage is
+tracked in [compiler/GRANITE.md](compiler/GRANITE.md).
 
 The goal is conventional error handling and native integration without arbitrary
 signal-point continuation restoration. Lexical block non-local returns remain

@@ -93,7 +93,7 @@ inventory gaps alone does not establish the overall objective. See
 
 Release ARC profiles and verified Richards, DeltaBlue, Queens, AWFY JSON and
 Notebook model runs at `a1bbea0` are recorded in
-[the baseline](GRANITE_BASELINE_A1BBEA0.md). Dispatch, argument allocation and
+[the baseline](../benchmarks/GRANITE_BASELINE_A1BBEA0.md). Dispatch, argument allocation and
 value copying warrant a bounded experiment; existing numbers do not establish a
 speedup or complete method-path audit.
 
@@ -148,8 +148,8 @@ Table and Set query regressions and ordinary-object JSON slot/hook/spec
 serialization now execute natively. The expanded baseline recorded 89 passing
 semantic cases; later targeted regressions cover Table literal callbacks, Set
 queries and mutation return values. Runtime tests pass under ARC/ORC.
-See [implementation contract](GRANITE_COLLECTIONS_AND_JSON.md) and
-[Smalltalk-80 collection audit](COLLECTION_PROTOCOL_AUDIT.md). The historical
+See [implementation contract](../../compiler/GRANITE_RUNTIME.md) and
+[Smalltalk-80 collection audit](../language/COLLECTION_PROTOCOL_AUDIT.md). The historical
 coverage/gaps below predate this follow-up: native object JSON is no longer
 entirely unsupported, but native JSON plan caching and full collection-protocol
 coverage remain open.
@@ -221,7 +221,7 @@ updates and callback-error recovery. Backend tests verify repeated sessions,
 resource release, invalid calls and closed-wrapper rejection. This is an initial
 standalone window/box/label/button slice, not the complete Bona bridge or general
 GTK signal ABI. `--mixed` and frozen-manifest combinations are rejected. See
-[GTK applications](GTK_APPLICATIONS.md) and `nimble testGtkApplications`.
+[GTK applications](../../gtk/GTK_APPLICATIONS.md) and `nimble testGtkApplications`.
 
 ## Native-only build flag
 
@@ -259,7 +259,7 @@ the reference's 2,322 queue and 928 hold counts. Local arithmetic implements the
 required bit operations without adding language primitives. `nimble testRichards`
 checks both engines under ARC/ORC; `scripts/bench_richards.py` records reproducible
 release timings, raw samples and startup baselines. See
-[Richards provenance and measurement](RICHARDS.md).
+[Richards provenance and measurement](../../performance/RICHARDS.md).
 
 ## DeltaBlue benchmark
 
@@ -270,7 +270,7 @@ LIFO collections and unusual strength-transition mapping are preserved. Explicit
 ownership cleanup and numeric tolerance checks are documented adaptations.
 `nimble testDeltaBlue` exercises interpreter/native release binaries under
 ARC/ORC; `scripts/bench_deltablue.py` records checked paired release timings.
-See [DeltaBlue provenance, licensing and measurement](DELTABLUE.md).
+See [DeltaBlue provenance, licensing and measurement](../../performance/DELTABLUE.md).
 
 ## Validation
 
@@ -362,7 +362,7 @@ so dynamically typed receivers and generated accessors named `last`, `size` or
 method replacement are covered under ARC/ORC; primitive fast paths are retained.
 Declared numeric method temporaries with proven one-kind initialization unbox to
 native storage (`numeric_method_locals`); measured gains and limits are in
-[GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md). Mixed mode stays boxed.
+[GRANITE_BENCHMARKS.md](../benchmarks/GRANITE_BENCHMARKS.md). Mixed mode stays boxed.
 Collection mutation and numeric value-equality coverage remain separate gaps.
 Logging stream/filter parity is covered too: lazy native sinks use Harding's
 threshold, CLI logging uses stderr,
@@ -419,7 +419,7 @@ cover both paths. Compiled blocks retain a unique home-invocation return target;
 recursive callbacks and nested-loop returns pass. Targets become inactive on exit,
 and a later return signals `BlockCannotReturn`, which both engines raise as an
 `Error` subclass. The recursive callback regression also passes under ORC. The
-accepted [exception model](EXCEPTION_MODEL.md) removes arbitrary error resumption;
+accepted [exception model](../../EXCEPTION_MODEL.md) removes arbitrary error resumption;
 inactive-home returns, conventional errors and `ensure:` cleanup are integrated
 across both engines, and synchronous notifications do not require signal-point
 restoration.
@@ -472,7 +472,7 @@ Verified eight-queens search (92 solutions) and object-based Towers of Hanoi
 Instance wrappers strongly retain native storage through `compiledOwner` before
 storing its raw pointer, avoiding premature collection without permanently rooting
 every allocation. General cyclic-object lifetime coverage remains outstanding.
-See [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md) for measured object-workload
+See [GRANITE_BENCHMARKS.md](../benchmarks/GRANITE_BENCHMARKS.md) for measured object-workload
 baselines; no Cog comparison has been measured for these workloads.
 
 Generated accessor messages use ordinary compiled method registration, preserving
@@ -582,7 +582,7 @@ boxed. `numeric_method_locals` checks integer/float methods, class-side locals,
 early nil reads, type changes, captured cells, shadowing, slot dependencies and
 zero-divisor fallback. Paired release benchmarks measured ~5.16x/~5.28x for
 Integer/Float method loops and ~2.23x with a dynamic bound parameter; see
-[GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md) for scope and raw evidence.
+[GRANITE_BENCHMARKS.md](../benchmarks/GRANITE_BENCHMARKS.md) for scope and raw evidence.
 This is not evidence of broad arithmetic-error or full compiler parity.
 
 ## Guarded allocation (first direct-call slice)

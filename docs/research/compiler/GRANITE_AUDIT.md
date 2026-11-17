@@ -1,7 +1,7 @@
 # Granite exception and return migration audit
 
 This is partial migration evidence, not a full compiler or application-suite
-completion claim. The accepted contract is [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md).
+completion claim. The accepted contract is [EXCEPTION_MODEL.md](../../EXCEPTION_MODEL.md).
 
 ## Handler cleanup
 

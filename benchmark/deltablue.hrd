@@ -3,7 +3,7 @@
 # Copyright 2008 the V8 project authors. All rights reserved.
 # Copyright 1996 John Maloney and Mario Wolczko.
 # Harding adaptation: class syntax, explicit planner ownership, graph cleanup,
-# numeric tolerance checks and a repetition driver. See docs/DELTABLUE.md.
+# numeric tolerance checks and a repetition driver. See docs/performance/DELTABLUE.md.
 # This program is free software: you can redistribute it and/or modify it under
 # the GNU General Public License, version 2 or (at your option) any later version.
 # It is distributed WITHOUT ANY WARRANTY; without even the implied warranty of

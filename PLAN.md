@@ -14,14 +14,14 @@ semantics; any intended language change must be explicit and documented.
       method-assigned globals, native `String at:`/`from:to:`, empty-range
       `to:do:`, `to:by:do:` and class-object `=`.
 - [x] Compare the AWFY ports against CPython and GNU Smalltalk with checked,
-      paired timings (`scripts/bench_compare_awfy.py`, `docs/AWFY_COMPARISON.md`).
+      paired timings (`scripts/bench_compare_awfy.py`, `docs/research/benchmarks/AWFY_COMPARISON.md`).
       GNU Smalltalk covers Bounce only; Json's escape-heavy fixture and Havlak's
       SOM Core collections are reported as uncovered rather than substituted.
 - [ ] Add a Harding-specific collection-idiom workload (`collect:`, `select:`,
       `inject:into:` over pipeline data), since AWFY deliberately excludes
       standard-library breadth.
 - [x] Remove the per-send collection value-view copy that made `size` O(n)
-      (`docs/GRANITE_COLLECTION_VIEWS.md`). Havlak 181.6s -> 48.4s.
+      (`docs/research/compiler/GRANITE_COLLECTION_VIEWS.md`). Havlak 181.6s -> 48.4s.
 - [ ] Replace the remaining owning value view with a non-owning representation,
       so materializing fallback selectors stop copying element sequences. Alias
       semantics are reference-based already; this is a representation change that
@@ -35,14 +35,14 @@ semantics; any intended language change must be explicit and documented.
 - [x] Diagnose expression-block send-cache resets and retain per-site TLS in an
       accessor proc. ARC/ORC compiled-runtime tests pass; negative control fails
       with the old template. Default-build paired timings improve Queens 1.18x
-      and Richards 1.09x (`docs/GRANITE_CACHE_LIFETIME.md`).
+      and Richards 1.09x (`docs/research/compiler/GRANITE_CACHE_LIFETIME.md`).
 
 ## Native call specialization
 
 - [x] Pure Integer expression/self-call regions with native parameters and returns;
       guard all transitive method dependencies at entry and retain boxed fallback.
       ARC/ORC region boundary tests and 105-case parity sweep pass; no workload
-      performance gain claimed (`docs/GRANITE_NATIVE_CALL_REGIONS.md`).
+      performance gain claimed (`docs/research/compiler/GRANITE_NATIVE_CALL_REGIONS.md`).
 - [x] Extend regions to definitely initialized Integer locals and structured if/while
       control flow; ARC/ORC execution and eight definite-initialization tests pass,
       plus 105-case parity (`build/native-loop-parity.log`).
@@ -161,7 +161,7 @@ semantics; any intended language change must be explicit and documented.
 - [x] Native collection reference-storage slice: mutation aliasing, shallow clones,
       identity equality, builtin reflection and Array/Table/Set query callbacks.
 - [ ] Complete derived-collection, bulk/removal, override and mutation-during-loop
-      coverage; Smalltalk-80 gaps are inventoried in COLLECTION_PROTOCOL_AUDIT.md.
+      coverage; Smalltalk-80 gaps are inventoried in docs/research/language/COLLECTION_PROTOCOL_AUDIT.md.
 - [x] Native ordinary-object JSON serialization with slots, hooks and class specs.
 - [ ] Cache native JSON plans with explicit hierarchy/config invalidation after
       measuring the per-write plan construction path.
@@ -189,7 +189,7 @@ semantics; any intended language change must be explicit and documented.
       lexical `super` lookup.
 - [x] Review `docs/QUICKREF.md` for corresponding corrections.
 - [x] Distinguish intended language semantics from Granite's tested support and
-      remaining limitations; link to `docs/GRANITE_STATUS.md`.
+      remaining limitations; link to `docs/compiler/GRANITE.md`.
 - [x] Link semantic examples to executable regression cases and add missing
       tests where manual examples expose gaps.
 - [ ] Review the manual and quick reference with every coherent semantic change;
@@ -338,7 +338,7 @@ arbitrary error resumption solely in the interpreter.
       checkout, five fail parsing and installed external .hrd sources are absent.
       Seven selected examples/benchmarks have execution parity; storage fails
       natively on unsupported Array new:. Markdown/dynamic callback registration
-      and foreign/process paths remain unverified. See docs/GRANITE_AUDIT.md.
+      and foreign/process paths remain unverified. See docs/research/compiler/GRANITE_AUDIT.md.
 - [x] Ensure cleanup executes while unwinding in tested native and VM paths;
       process and legacy re-entrant paths remain follow-up coverage.
 
@@ -479,7 +479,7 @@ Declared primitives resolve to Nim procs in
 `stdlib gap` diagnostics, currently zero for the loaded core/standard inventory.
 The remaining runtime selector fallbacks and codegen specializations still need
 a final audit; full parity and ARC/ORC validation are in progress. See
-[docs/GRANITE_STDLIB_COMPILATION.md](docs/GRANITE_STDLIB_COMPILATION.md).
+[docs/research/compiler/GRANITE_STDLIB_COMPILATION.md](docs/research/compiler/GRANITE_STDLIB_COMPILATION.md).
 
 Remaining language/protocol choices and control-transfer defects are listed
 below. The historical baseline records the original measurements, not the current
@@ -725,7 +725,7 @@ Effort is relative to this codebase, not a schedule commitment.
    VM mutation and direct Nim field/table writes are not proven safe, so it is not
    the complete full-deliverable contract.
    Whole-stdlib compilation is scoped separately in
-   [GRANITE_STDLIB_COMPILATION.md](docs/GRANITE_STDLIB_COMPILATION.md), which
+   [GRANITE_STDLIB_COMPILATION.md](docs/research/compiler/GRANITE_STDLIB_COMPILATION.md), which
    records the three-implementation problem, the measured `--mixed` trade-off and
    a staged closure plan. Native non-frozen builds now lift 42 Harding-defined
    methods from Integer, Float, Boolean/True/False, UndefinedObject and String
@@ -834,7 +834,7 @@ engines, process/green-thread state, and library-external classes.
 
 ## Legacy work salvage
 
-See [LEGACY_GRANITE_AUDIT.md](docs/LEGACY_GRANITE_AUDIT.md) for original commit
+See [LEGACY_GRANITE_AUDIT.md](docs/research/compiler/LEGACY_GRANITE_AUDIT.md) for original commit
 IDs, saved evidence, and deferred choices. Log and stream aliases are salvaged;
 old resumption lowering and unguarded self/slot optimizations are not restored.
 Collection/reflection implementations remain design material for section 4.
@@ -850,7 +850,7 @@ to nested calls, captured state, cleanup, errors, lexical non-local returns and
 foreign callbacks; passing a suspend/resume smoke test alone is not sufficient.
 Nimony is an evaluation target, not a replacement for the pinned Nim toolchain.
 
-Measured baseline and methodology: [GRANITE_BENCHMARKS.md](GRANITE_BENCHMARKS.md).
+Measured baseline and methodology: [GRANITE_BENCHMARKS.md](docs/research/benchmarks/GRANITE_BENCHMARKS.md).
 On the trial-division benchmark Granite native is ~89x faster than the release
 interpreter but ~40x slower than C and ~25x slower than Nim, consistent with
 tagged values and dynamic dispatch. Use that benchmark to evaluate the items

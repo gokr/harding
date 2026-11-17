@@ -94,4 +94,4 @@ includes it.
 GtkSourceView highlighting, VTE and tree views are not part of the standalone
 protocol. Close confirmation is supported by the backend (`onCloseRequest:`) but
 the notebook currently permits the close and saves. See
-[GTK coverage](../../docs/GTK_SUPPORT.md) for the remaining work.
+[GTK coverage](../../docs/research/gui/GTK_SUPPORT.md) for the remaining work.

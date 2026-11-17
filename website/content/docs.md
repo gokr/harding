@@ -57,10 +57,10 @@ granite run myprogram.hrd
 
 ### Web And APIs
 
-- [MummyX Integration](https://github.com/gokr/harding/blob/main/docs/MUMMYX.md)
-- [Reactive Web Rendering](https://github.com/gokr/harding/blob/main/docs/REACTIVE_WEB_RENDERING.md)
-- [JSON API Server Tutorial](https://github.com/gokr/harding/blob/main/docs/API_SERVER_TUTORIAL.md)
-- [Bona Todo Workflow](https://github.com/gokr/harding/blob/main/docs/BONA_WEB_TODO.md)
+- [MummyX Integration](https://github.com/gokr/harding/blob/main/docs/web/MUMMYX.md)
+- [Reactive Web Rendering](https://github.com/gokr/harding/blob/main/docs/web/HTML.md)
+- [JSON API Server Tutorial](https://github.com/gokr/harding/blob/main/docs/web/API_SERVER_TUTORIAL.md)
+- [Bona Todo Workflow](https://github.com/gokr/harding/blob/main/docs/gtk/BONA.md)
 
 MummyX is Harding's current web server path: a fast scalable native multithreaded HTTP server with Harding handlers executed through the interpreter's green-process model.
 
@@ -75,7 +75,7 @@ Harding packages can bundle native Nim code and Harding source together, so one 
 
 - [Tools & Debugging](https://github.com/gokr/harding/blob/main/docs/TOOLS_AND_DEBUGGING.md)
 - [VSCode Extension](https://github.com/gokr/harding/blob/main/docs/VSCODE.md)
-- [GTK Integration](https://github.com/gokr/harding/blob/main/docs/GTK.md)
+- [GTK Integration](https://github.com/gokr/harding/blob/main/docs/gtk/GTK.md)
 
 ## Example Code
 
@@ -196,7 +196,7 @@ Current emphasis:
 
 ## Project Docs
 
-- [Future Plans](https://github.com/gokr/harding/blob/main/docs/FUTURE.md)
+- [Roadmap](https://github.com/gokr/harding/blob/main/docs/plans/ROADMAP.md)
 - [Contributing](https://github.com/gokr/harding/blob/main/CONTRIBUTING.md)
 
 ## Getting Help

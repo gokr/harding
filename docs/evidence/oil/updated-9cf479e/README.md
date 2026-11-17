@@ -12,7 +12,7 @@ Source: OpenSmalltalk/opensmalltalk-vm `Cog`,
   Per-process result and stderr files are retained alongside it.
 - `extra-results.json`: GCC Oil and clang Oil with both announcement add-ons,
   5000 passes of each workload, six checked processes. Add-on hashes are in
-  `docs/OPENSMALLTALK_OIL_COMPARISON.md`.
+  `docs/research/benchmarks/OPENSMALLTALK_OIL_COMPARISON.md`.
 - `tests.txt`: `REQUIRE_OSVM=1 nimble testBenchmarkPorts` (20 passed, two optional
   GNU Smalltalk tests skipped).
 

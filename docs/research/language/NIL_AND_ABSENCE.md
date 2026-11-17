@@ -815,9 +815,8 @@ Before trusting this note:
 
 - `git log --oneline -1` — the review reflects `5ff020b`.
 - Re-run the audit: `python3 scripts/audit_nil_usage.py`.
-- Confirm the decision items are still open or done:
-  `grep -n '^Root derive\|NotFound' docs/REMOVING_NAMEABLE_NIL.md` and check
-  `lib/core/` for a `NotFound.hrd`.
+- Confirm the decision items are still open or done: check `lib/core/` for a
+  `NotFound.hrd`, and whether access lookups signal instead of answering nil.
 - Re-verify that access lookups still answer nil rather than signalling
   (`Array at:` out of bounds, `Table at:` on a missing key) before relying on the
   defect list.

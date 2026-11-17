@@ -262,10 +262,10 @@ Granite exists to make Harding fast, and the honest summary is "much faster than
 its own interpreter, much slower than a mature VM":
 
 - Granite is **~89x faster** than the release interpreter on trial division
-  (`docs/GRANITE_BENCHMARKS.md`), and ~23x/~13x on object workloads.
+  (`docs/research/benchmarks/GRANITE_BENCHMARKS.md`), and ~23x/~13x on object workloads.
 - Against Cog (Squeak 6.0, Spur/Cog), Cog is **~17x, ~112x and ~355x faster**
   on trial division, queens and towers respectively
-  (`docs/BENCHMARK_COMPARISON_CURRENT.md`); Granite is ~325x/~195x slower than
+  (`docs/research/benchmarks/BENCHMARK_COMPARISON_CURRENT.md`); Granite is ~325x/~195x slower than
   Cog on the object workloads recorded there.
 - These are workload-specific ratios, not a language ranking, and the docs are
   careful to say so.

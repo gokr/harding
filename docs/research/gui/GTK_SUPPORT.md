@@ -8,8 +8,8 @@ and Bona's registrations in `bridge.nim` and wrapper files in `lib/gui/gtk4/`.
 Coverage here means a registered path exists, not that every operation has
 passed interactive acceptance. Validation results are recorded separately.
 
-[GTK overview](GTK.md) is the documentation entry point;
-[GTK applications](GTK_APPLICATIONS.md) owns standalone build commands, API and
+[GTK overview](../../gtk/GTK.md) is the documentation entry point;
+[GTK applications](../../gtk/GTK_APPLICATIONS.md) owns standalone build commands, API and
 lifecycle contracts. This document owns the gap inventory and implementation
 checklist, not another copy of those instructions.
 
@@ -70,7 +70,7 @@ and drawing. This is a workflow inventory, not a percentage of GTK's entire API.
 
 ## Harding Notebook
 
-[`demos/notebook`](../demos/notebook/) is a complete application in Harding
+[`demos/notebook`](../../../demos/notebook) is a complete application in Harding
 source: model, filtering, versioned JSON persistence and every handler. The same
 `notebook.hrd` runs in `harding_gtk` and as a `granite build --gtk` binary.
 

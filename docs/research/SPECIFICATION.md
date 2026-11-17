@@ -550,7 +550,7 @@ Both `harding` supports `--loglevel`:
 
 ### VSCode Extension
 
-Syntax highlighting for `.harding` files is available via the included VSCode extension. See [VSCODE.md](VSCODE.md) for installation instructions.
+Syntax highlighting for `.harding` files is available via the included VSCode extension. See [VSCODE.md](../VSCODE.md) for installation instructions.
 
 ## Performance
 

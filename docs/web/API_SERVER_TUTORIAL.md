@@ -331,7 +331,7 @@ That keeps the example:
 - understandable
 - predictable
 - OpenAPI-compliant
-- close to the future metadata-driven direction described in `docs/plans/OPENAPI_AND_API_SERVER_PLAN.md`
+- close to the future metadata-driven direction described in `docs/research/OPENAPI_AND_API_SERVER_PLAN.md`
 
 ## Suggested Next Improvements
 
@@ -345,6 +345,6 @@ If you want to turn this into a reusable API framework, the next steps are:
 ## Related Files
 
 - `examples/web/api_todos.hrd`
-- `docs/MUMMYX.md`
+- `docs/web/MUMMYX.md`
 - `docs/MANUAL.md`
-- `docs/plans/OPENAPI_AND_API_SERVER_PLAN.md`
+- `docs/research/OPENAPI_AND_API_SERVER_PLAN.md`

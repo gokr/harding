@@ -1,8 +1,11 @@
 # Declared slot contract
 
 This document records the approved semantics implemented in interpreter and
-Granite. It supersedes earlier exploratory nil/default proposals in
-`GRANITE_TYPED_MEMBERS_DESIGN.md` and `GRANITE_SLOT_TYPE_INFERENCE.md`.
+Granite, and the compile-time numeric policy built on top of them. It supersedes
+earlier exploratory nil/default proposals, preserved in
+[plans/GRANITE_TYPED_MEMBERS_DESIGN.md](plans/GRANITE_TYPED_MEMBERS_DESIGN.md)
+and
+[research/compiler/GRANITE_SLOT_TYPE_INFERENCE.md](research/compiler/GRANITE_SLOT_TYPE_INFERENCE.md).
 
 ```harding
 Banana := Object derivePublic: #().
@@ -70,7 +73,64 @@ a compatible bridge; this change does not introduce live field migration.
 Arrays, Tables, Blocks and other non-scalar classes used as declaration values
 are object constraints, not new unboxed container representations. Mutable
 collection literals are not slot-default factories. Specialized arrays remain
-future work in `PRIMITIVE_TYPES_ROADMAP.md`.
+future work in
+[plans/PRIMITIVE_TYPES_ROADMAP.md](plans/PRIMITIVE_TYPES_ROADMAP.md).
+
+## Compile-time numeric policy
+
+The interpreter stays permissive: dynamic storage and Float slots accepting
+Integer writes keep working, which is what makes exploratory Smalltalk pleasant.
+
+A production build should make a decision instead. Granite therefore reports
+**provable** numeric contradictions:
+
+| Situation | Normal build | `--strict-slots` |
+|---|---|---|
+| Integer stored into a declared Float slot | warning | error |
+| Float stored into a declared Integer slot | error | error |
+| Not provable from literals/arithmetic | silent | silent |
+
+Runtime behaviour is unchanged: a Float slot still converts Integer writes, and
+an Integer slot still rejects Float with a catchable `Error`. **These diagnostics
+are compile-time only.**
+
+Only provable cases are reported. A warning on every arithmetic expression would
+train developers to ignore the output, so a value whose numeric kind cannot be
+determined from the source is deliberately not diagnosed.
+
+### Why warn on Integer into Float
+
+A `Float64` represents Integers exactly only up to 2^53. A slot declared `Float`
+that receives large integer identifiers silently loses precision:
+
+```harding
+Counter := Object derivePublic: #{#total -> Float}.
+Counter>>add: n [ total := total + n. ^self ].   # Integer n, warned
+```
+
+The warning says so, rather than the compiler quietly choosing a representation
+on the developer's behalf.
+
+Inference never widens silently. When observations see both Integer and Float,
+that is reported as `numeric-conflict` with a recommendation to declare one,
+because widening is exactly the decision the developer should make consciously.
+
+### Does inference make the build faster?
+
+Not by itself. Measured: the generated Nim for Queens, Richards and DeltaBlue is
+identical with and without the inference report. Inference and feedback produce a
+*report* — no storage change, no guard, no specialization.
+
+What produces native code is the **declared** path, and only for classes that
+author declarations themselves. None of the benchmarks declare slot types:
+
+| Measurement | Before | After | Note |
+|---|---:|---:|---|
+| Declared-Integer counter, 500k increments | 110.2 ms | 38.2 ms | annotated microbenchmark |
+| Richards, 20 runs, no declarations | 1097.2 ms | 879.4 ms | benefit is direct access, not typing |
+
+Inference is therefore a map: it tells a developer which declarations are worth
+adding, and adding them is what unlocks the typed codegen path.
 
 ## Validation
 

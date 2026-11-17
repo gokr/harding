@@ -1,20 +1,13 @@
 # Harding Syntax Quick Reference
 
 Build toolchain: Nim 2.2.12. This reference describes language semantics; see
-[GRANITE_STATUS.md](GRANITE_STATUS.md) for native compiler coverage and limitations.
-The accepted exception-model migration replaces arbitrary error resumption with
-non-resumable errors and synchronous notifications; guaranteed cleanup is required
-in both engines. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md). This migration is
-partially implemented: error handlers abandon failed computations and errors
-reject resumption; notification handlers supply the signal's value without
-unwinding and reject retry. **Resumption is not supported**: `resume`,
-`resume:`, `return:` and `isResumable` do not exist — a handler's result is the
-value, and `pass` delegates outward. `ensure:` cleanup runs exactly once on
-normal completion, errors and non-local returns, nested innermost-first. Each
-retry attempt runs its cleanup. Cleanup errors/returns replace pending transfers;
-outer cleanup still runs, including before an uncaught-error exit. `pass` exits
-handler-local cleanup scopes before outer dispatch; notification signaling scopes
-remain active. `retry` also cleans handler-local scopes before restarting.
+[the Granite compiler](compiler/GRANITE.md) for native compiler coverage and
+limitations.
+
+**Resumption is not supported**: `resume`, `resume:`, `return:` and `isResumable`
+do not exist. A handler's result is the value, and `pass` delegates outward.
+`ensure:` cleanup runs exactly once on normal completion, errors and non-local
+returns, nested innermost-first. See [EXCEPTION_MODEL.md](EXCEPTION_MODEL.md).
 
 ## Literals
 
@@ -1011,6 +1004,6 @@ Harding load: "path/to/file.hrd"      # Loads directly into global namespace
 ## For More Information
 
 - [MANUAL.md](MANUAL.md) - Complete language manual
-- [GTK.md](GTK.md) - GTK integration
+- [GTK.md](gtk/GTK.md) - GTK integration
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) - VM internals
 - [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Tool usage

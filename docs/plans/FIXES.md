@@ -1,6 +1,6 @@
 # Fixes: confirmed defects and cheap Smalltalk alignment
 
-Companion document: [`HARDING_VS_SMALLTALK80.md`](HARDING_VS_SMALLTALK80.md)
+Companion document: [`HARDING_VS_SMALLTALK80.md`](../research/language/HARDING_VS_SMALLTALK80.md)
 describes the comparison this list came out of.
 
 ## Current implementation status

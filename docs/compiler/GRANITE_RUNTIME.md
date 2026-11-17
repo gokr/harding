@@ -27,10 +27,9 @@ returns Array, select/reject return Table. Two-argument literal callbacks are no
 lowered as Array loops. Set query behavior uses one-argument element callbacks
 and retains Set species for collect/select/reject.
 
-This is not a claim of complete stdlib compilation: derived SortedCollection and
-Interval classes, all removal/bulk operations, arbitrary callback arities, mutation
-during iteration, user-defined collection subclasses and mixed mode still need
-broader coverage. See COLLECTION_PROTOCOL_AUDIT.md for Smalltalk-80 gaps.
+This is not a claim of complete stdlib compilation: arbitrary callback arities,
+mutation during iteration, user-defined collection subclasses and mixed mode still
+need broader coverage. See [comparisons](../COMPARISONS.md) for Smalltalk-80 gaps.
 
 ## Slot layout boundary
 
@@ -80,8 +79,9 @@ Set query results retain Set species. Inline do:/collect:/select: lowering is no
 restricted to literal Array receivers, so Table and Set keep ordinary dispatch and
 therefore correct callback arity and result species.
 
-Array removal-by-value, generic remove:ifAbsent:, replaceFrom:to:with:startingAt:,
-Bag/OrderedCollection/IdentitySet and SortedCollection compilation are not covered.
+`replaceFrom:to:with:startingAt:`, and the `OrderedCollection`/`IdentitySet`
+classes, are not covered. `Bag` and `SortedCollection` compile from stdlib source;
+their full species and equality conformance is separate work.
 
 ## Validation
 

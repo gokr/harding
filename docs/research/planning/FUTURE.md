@@ -354,8 +354,8 @@ Single `<<primitive>>` syntax for both declarative and inline forms:
 
 ## For More Information
 
-- [MANUAL.md](MANUAL.md) - Core language manual
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - VM internals
-- [GTK.md](GTK.md) - GTK integration
-- [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md) - Tool usage
-- [research/](research/) - Historical design documents
+- [MANUAL.md](../../MANUAL.md) - Core language manual
+- [IMPLEMENTATION.md](../../IMPLEMENTATION.md) - VM internals
+- [GTK.md](../../gtk/GTK.md) - GTK integration
+- [TOOLS_AND_DEBUGGING.md](../../TOOLS_AND_DEBUGGING.md) - Tool usage
+- [research/](..) - Historical design documents

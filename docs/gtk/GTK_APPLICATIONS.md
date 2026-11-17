@@ -1,7 +1,7 @@
 # GTK4 applications in Harding
 
 See [GTK support](GTK.md) for the documentation entry point, the separate Bona
-bridge, and the [coverage and Notebook plan](GTK_SUPPORT.md). This guide owns
+bridge, and the [coverage and Notebook plan](../research/gui/GTK_SUPPORT.md). This guide owns
 the standalone application protocol; Bona's broader widget API is not available
 through `--gtk` merely because its wrappers exist in the repository.
 

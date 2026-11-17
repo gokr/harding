@@ -2,7 +2,7 @@
 """Report how much compiled dispatch a native-parameter specialization could reach.
 
 Builds each benchmark with Granite, then runs it with HARDING_SPEC_PROBE=1 and
-forwards the SPECPROBE summary. See docs/GRANITE_SPECIALIZATION_PROBE.md.
+forwards the SPECPROBE summary. See docs/research/compiler/GRANITE_SPECIALIZATION_PROBE.md.
 """
 import os
 from pathlib import Path

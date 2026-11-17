@@ -35,7 +35,7 @@ zero overhead, nor is `{.global.}` alone thread-safe; thread-local storage avoid
 sharing these caches, but does not make concurrent registry mutation safe.
 
 Controlled shape tests and application checks are recorded in
-`docs/GRANITE_PROFILE_SLICE.md`. The historical measurements below describe the
+[GRANITE_PROFILE_SLICE.md](GRANITE_PROFILE_SLICE.md). The historical measurements below describe the
 initial monomorphic implementation, not the current cache width.
 
 ## Historical change

@@ -37,7 +37,7 @@ on the developer's behalf.
 
 ## Inference no longer widens silently
 
-`docs/TYPE_INFERENCE_FEEDBACK.md` previously proposed Float when observations saw
+`docs/research/compiler/TYPE_INFERENCE_FEEDBACK.md` previously proposed Float when observations saw
 both Integer and Float. That is now reported as `numeric-conflict` with the
 recommendation to declare Float or Integer, because widening is exactly the
 decision the developer should make consciously.

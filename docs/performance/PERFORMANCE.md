@@ -84,7 +84,7 @@ Harding automatically optimizes constant Array and Table literals at parse time:
 - Arrays/tables containing variables or message sends are not cached
 - Conservative approach avoids type mismatch between cached values and runtime instances
 
-For full implementation details, see `docs/plans/CONSTANT_LITERAL_OPTIMIZATION.md`.
+For full implementation details, see `docs/research/CONSTANT_LITERAL_OPTIMIZATION.md`.
 
 ## Historical Performance Notes
 

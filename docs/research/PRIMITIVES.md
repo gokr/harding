@@ -267,5 +267,5 @@ This eliminates:
 
 ## See Also
 
-- [SYNTAX.md](SYNTAX.md) - General syntax reference
-- [RUNTIME.md](RUNTIME.md) - Runtime behavior details
+- [current syntax reference](../QUICKREF.md) - General syntax reference
+- [current implementation guide](../IMPLEMENTATION.md) - Runtime behavior details
