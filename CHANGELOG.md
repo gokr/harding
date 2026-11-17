@@ -58,6 +58,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Recorded current-revision Granite release profiles, verified object and JSON benchmarks, and Notebook model baseline in `docs/GRANITE_BASELINE_A1BBEA0.md`.
 
 ### Added- Selector-named Symbol reflection queries, retaining method-named compatibility aliases; Bona uses the selector vocabulary.
+- Markdown example inventory and opt-in interpreter/Granite stdout runner; unclassified fragments remain visible and are not executed.
+- Updated the manual's Comparable, equality, exception, printing and Granite limitation descriptions and corrected examples.
+- Selector-named Symbol reflection queries, retaining method-named compatibility aliases; Bona uses the selector vocabulary.
 - Nim-backed `hash`/`identityHash` and `shallowCopy`/`deepCopy`, with `copy`/`postCopy`, graph alias/cycle preservation, and explicit refusal of unsupported native resources. Table/Set custom object keys honor `hash`/`=` through a hash-filtered scan.
 - String Iterable protocol (`do:`, Array-valued `collect:`/`asArray`, String-valued filtering, first/last/includes:/reverse); Bag, Interval and SortedCollection share Iterable traversal while retaining specialized semantics.
 - Nimony migration assessment covering potential benefits, compatibility risks and a staged validation plan (`docs/NIMONY_ASSESSMENT.md`).

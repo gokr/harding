@@ -85,8 +85,10 @@ on PATH for direct builds and Granite's generated-program builds as well.
 This manual describes Harding's language semantics. Granite's native backend is
 still being brought into parity with the interpreter; compilation does not imply
 support for every language feature. See [GRANITE_STATUS.md](GRANITE_STATUS.md)
-for tested coverage and remaining gaps, including activation-specific non-local
-returns, multiple inheritance, resumable exceptions, processes, and mixed mode.
+for tested coverage and remaining gaps, including processes and mixed-mode
+boundaries. Compiled blocks, lexical non-local returns, and multiple inheritance
+have focused coverage; general exception resumption is deliberately unsupported
+by the language, not a Granite parity target.
 
 For full command options and debugging workflows, see [TOOLS_AND_DEBUGGING.md](TOOLS_AND_DEBUGGING.md).
 
@@ -122,7 +124,7 @@ json{"x": 10}       # JSON literal (returns JSON string)
 time and nothing inside them is evaluated at runtime.
 
 ```smalltalk
-#(1, 2, name)          # a bare identifier is a symbol: #(1 2 #name)
+#(1, 2, name)          # a bare identifier is a symbol: #(1, 2, #name)
 #((a, b), (c, d))      # a nested literal needs no extra "#"
 #(#(a, b))             # the explicit form is equally valid
 #{"kind" -> #circle}   # literal table
@@ -153,7 +155,7 @@ error rather than a runtime one.
 ```smalltalk
 x := 3.
 name := "bob".
-array{x, 1 + 2, name}            # #(3 3 bob)
+array{x, 1 + 2, name}            # #(3, 3, bob)
 table{"id" -> x, #name -> name}  # evaluated keys and values
 array{}                          # empty array
 table{}                          # empty table
@@ -208,25 +210,26 @@ both engines:
 - Built-in scalar `=` compares values within a kind. `100 = 100.0` is false and
 `100.0 = 100` is false. `nil` equals only `nil`. User-defined `=` methods retain
 ordinary dispatch for object receivers.
-- `~=` is the negation of identity (`==`), not of user-defined value equality
-(`=`). `100.0 ~= 100` is true.
+- The interpreter currently fast-paths `~=` as the negation of identity (`==`),
+although `Object>>~=` is defined in terms of `=`. Do not rely on custom value
+inequality matching `~=` until this dispatch inconsistency is resolved; `~~` is
+intended as identity inequality.
 - `<>` is defined for Integer, Float, String and Symbol. Any other receiver keeps
 ordinary dispatch, which for objects means `MessageNotUnderstood`.
 - Ordering comparisons (`<`, `<=`, `>`, `>=`) do compare a mixed Integer/Float
 pair as Float. `100 <= 100.0` is true.
 
 So equality is strict while ordering coerces: `100 <= 100.0` is true, but
-`100 = 100.0` is false. Comparing an Integer against a Float is a likely source of
-surprise; convert explicitly with `asFloat` when you want cross-kind equality.
+`100 = 100.0` is false. Comparing an Integer against a Float is a likely source
+of surprise; do not assume mixed-kind equality.
 
-```harding
-100 = 100              # true
-100.0 = 100.0          # true
-100 = 100.0            # false - Integer is not Float
-100 <= 100.0           # true  - ordering compares as Float
-100 asFloat = 100.0    # true  - convert explicitly
-nil = nil              # true
-nil = 100              # false
+```harding test=manual-numeric-equality stdout="true\ntrue\nfalse\ntrue\ntrue\nfalse\n"
+(100 = 100) println
+(100.0 = 100.0) println
+(100 = 100.0) println
+(100 <= 100.0) println
+(nil = nil) println
+(nil = 100) println
 ```
 
 Coverage: `numeric_equality` parity case and the mixed Integer/Float tests in
@@ -386,8 +389,8 @@ propagate to the embedding caller.
 Interpreted methods can invoke compiled block callbacks with zero to three
 arguments. Captured state stays in the retained native environment; callbacks
 answer their actual value, including `nil`. Wrong-arity calls fail before invoking
-the native procedure. This synchronous bridge does not translate resumable
-exceptions or non-local returns between engines, and cannot suspend native calls.
+the native procedure. This synchronous bridge does not translate non-local
+returns between engines and cannot suspend native calls.
 
 In bound compiled methods, statically named `ClassName new` sends resolve the
 live class in the receiver's host and use its ordinary `new` protocol. These
@@ -741,27 +744,16 @@ Shape3D := ColoredPoint derive: #(depth)
 
 Mixin is a slotless class designed for behavior composition. It derives from Root (alongside Object) and carries no slots, which avoids diamond-problem conflicts when mixed into other classes.
 
-```smalltalk
-# Create a mixin
-Comparable := Mixin derive
-
-# Add methods to it
-Comparable >> < other [ ^ (self compareTo: other) < 0 ]
-Comparable >> > other [ ^ (self compareTo: other) > 0 ]
-Comparable >> between: min and: max [
-    ^ (self >= min) and: [ self <= max ]
-]
-
-# Mix into any class
-Point := Object derive: #(x, y)
-Point addSuperclass: Comparable
-
-# Implement the required method
-Point >> compareTo: other [
-    ^ ((x * x) + (y * y)) - ((other x * other x) + (other y * other y))
-]
-
-# Now Point supports <, >, between:and:, etc.
+```harding test=manual-comparable stdout="true\ntrue\n"
+# Reuse the built-in Comparable mixin.
+Rank := Object derivePublic: #(value)
+Rank addSuperclass: Comparable
+Rank >> < other [ ^ value < other value ]
+Rank >> = other [ ^ value = other value ]
+a := Rank new. a value: 1
+b := Rank new. b value: 2
+(a < b) println
+(b > a) println
 ```
 
 #### Class Hierarchy
@@ -787,26 +779,27 @@ The core and process libraries provide these mixins in `lib/core/Comparable.hrd`
 
 | Mixin | Requires | Provides |
 |-------|----------|----------|
-| `Comparable` | `compareTo:` | `<`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:`, `clampTo:max:` |
+| `Comparable` | `<` and `=` (or an override of `compareTo:`) | `compareTo:`, `<=`, `>`, `>=`, `between:and:`, `min:`, `max:`, `clampTo:max:` |
 | `Equatable` | `compareTo:` | `=`, `~=` |
 | `Iterable` | `do:` | `collect:`, `select:`, `reject:`, `detect:`, `inject:into:`, `anySatisfy:`, `allSatisfy:`, `noneSatisfy:`, `count:`, `sum` |
-| `Printable` | `printOn:` | `printString`, `print`, `printCr` |
-| `Displayable` | `displayOn:` | `displayString` |
+| `Printable` | A sink implementing `write:` for its existing sink methods | `printString`, `displayString`, `print`, `printCr` |
 | `Synchronizable` | — | `critical:`, `acquire`, `release` |
 
-**Printing versus display.** Two protocols describe an object in text, and every
-class answers both:
+**Printing versus display.** `printString` provides a representation; strings
+are quoted and collections render their elements, for example `#("x", 1)`.
+Not every object has a reconstructible source representation. `displayString`
+is intended for human-readable output: `Object` delegates to `printString`,
+while `String` answers its contents. Interpolation uses `displayString`.
 
-- `printString` / `printOn:` is the *literal* form: what you would type to
-  reconstruct the object. A string quotes itself (`"bob"`), and a collection
-  quotes its elements (`#("x" 1)`).
-- `displayString` / `displayOn:` is the *human-facing* form. `Object` answers
-  `printString`, and `String` overrides it to answer its characters (`bob`).
+The general stream/sink protocols, including `printOn:`, `displayOn:` and
+`storeOn:`, are deferred pending a Harding stream design. `Printable` currently
+contains sink methods that send `write:`; their presence is not a general stream
+contract.
 
-String interpolation uses `displayString`, so `"Hi $name"` embeds `bob`, not
-`"bob"`. Both engines answer these identically.
-
-**Combining Comparable and Equatable**: Use both mixins together when you need both ordering and equality. Comparable provides ordering operators (`<`, `>`, etc.) while Equatable provides equality operators (`=`, `~=`). Both require `compareTo:` to be implemented.
+**Combining Comparable and Equatable:** `Comparable` derives `compareTo:` from
+`=` and `<`; `Equatable` derives `=` from `compareTo:`. An adopter combining
+them must implement `compareTo:` or `=` to avoid recursive defaults, and must
+supply `<` for ordering.
 
 #### Using Multiple Mixins
 
@@ -820,10 +813,8 @@ MyCollection >> do: block [
     items do: block
 ]
 
-MyCollection >> printOn: stream [
-    stream show: "MyCollection(".
-    stream show: items size printString.
-    stream show: " items)"
+MyCollection >> printString [
+    ^ "MyCollection(" & items size printString & " items)"
 ]
 ```
 
@@ -1035,7 +1026,7 @@ Child addSuperclass: Parent1
 Child addSuperclass: Parent2  # Error: Slot name conflict
 ```
 
-**Method selector conflicts**: If directly-defined method selectors conflict between parents, an error is raised.
+**Method selector conflicts**: Conflicts between directly-defined parent methods are recorded; lookup uses the first parent unless the child overrides the method.
 
 ```smalltalk
 Parent1 := Object derive: #(a)
@@ -1046,7 +1037,7 @@ Parent2 >> foo [ ^ "foo2" ]
 
 Child := Object derive: #(x)
 Child addSuperclass: Parent1
-Child addSuperclass: Parent2  # Error: Method selector conflict
+Child addSuperclass: Parent2  # Conflict is recorded; the first parent wins
 ```
 
 ### Resolving Conflicts
@@ -1597,7 +1588,7 @@ result := [ 10.0 / 0.0 ] on: DivisionByZero do: [ :ex |
 ]
 ```
 
-All zero divisors signal `DivisionByZero`: integer `//`, `%` and `\`, and `/`
+All zero divisors signal `DivisionByZero`: integer `//`, `%` and `\\`, and `/`
 for integer/integer, integer/float, float/integer and float/float operands. Both
 engines agree, including the exact `Integer division by zero` / `Float division by
 zero` messages; executed parity: `arithmetic_zero_divisor`.
@@ -1755,7 +1746,7 @@ while `signal`/`pass`/`retry` keep it.
 |---------|------|-----------|
 | Implementation | VM work queue (stackless) | Custom VM mechanism |
 | Stack unwinding | Errors abandon protected computation; notifications keep signaling computation active | Depends on handler action; resumption retains computation |
-| Resumption (`resume:`, `return:`) | **Not supported** — no continuations | Supported by resumable exception protocols |
+| Resumption (`resume:`, `return:`) | **Unsupported by design**: implementation complexity outweighs identified use cases | Available in resumable exception protocols |
 
 ---
 
@@ -2319,9 +2310,10 @@ Compiled code runs significantly faster than interpreted. On a sieve of Eratosth
 
 #### Current Limitations
 
-- First-class blocks (blocks assigned to variables or passed as arguments) are not yet compiled
-- Non-local returns (`^`) from blocks are not yet supported in compiled code
-- Class/method compilation from in-VM code is in progress
+First-class blocks and lexical non-local returns are compiled and have focused
+regressions. This does not imply complete interpreter parity: see
+[GRANITE_STATUS.md](GRANITE_STATUS.md) for current coverage and boundary gaps.
+In-VM compilation and mixed-mode features have separate limitations.
 
 ### Missing Features
 
@@ -2351,6 +2343,17 @@ Several Smalltalk-80 features are not implemented:
 
 ### Operators
 
+Assignment uses `:=`. The `=` message tests equality; `==` tests identity.
+
+```harding test=manual-equality stdout="true\nfalse\ntrue\n"
+a := Array new
+b := a
+c := Array new
+(a == b) println
+(a == c) println
+(1 = 1) println
+```
+
 ```smalltalk
 # Binary operators
 3 + 4            # Addition
@@ -2359,17 +2362,18 @@ x * y            # Multiplication
 a / b            # Division
 x > y            # Greater than
 x < y            # Less than
-x = y            # Assignment or value comparison
-x == y           # Equality comparison
+x := y           # Assignment
+x = y            # Value equality
+x == y           # Identity comparison
 x ~= y           # Inequality
 a <= b           # Less than or equal
 a >= b           # Greater than or equal
 a // b           # Integer division
-a \ b            # Modulo
+a \\ b           # Modulo
 a ~~ b           # Not identity
 "a" & "b"        # String concatenation (non-destructive, returns new string)
 "Value: " & 42    # Auto-converts to string: "Value: 42"
-s << "text"        # In-place append (mutates string, returns self)
+s << "text"      # Append; mutation depends on the string representation
 a and: [ b ]        # Logical AND with short-circuit
 a | b              # Logical OR
 ```
