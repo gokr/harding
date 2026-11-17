@@ -11,6 +11,36 @@ Harding provides several command-line tools to support development, debugging, a
 - `bona` - GTK-based graphical IDE (Bonadventure)
 - `nimble` - Build automation and package management
 
+## Testing Markdown examples
+
+Build fresh `harding` and `granite` binaries first (`nimble harding` and
+`nim c -p:external -o:granite src/harding/compiler/granite.nim`). Then run:
+
+```bash
+python3 scripts/test_markdown_examples.py --list
+python3 scripts/test_markdown_examples.py
+python3 -m unittest discover -s tests -p test_markdown_examples.py
+```
+
+The inventory includes `harding` and `smalltalk` fences throughout `docs/`.
+Unannotated fences are reported as unclassified: they may be fragments, require
+fixtures or external services, or have side effects. They are **not** executed
+or counted as passing. To opt a self-contained, trusted example into execution,
+add a unique name and exact JSON-escaped stdout to its fence:
+
+````markdown
+```harding test=addition stdout="2\n"
+(1 + 1) println
+```
+````
+
+Each annotated case runs in its own disposable directory against both engines,
+with exact stdout comparison and timeouts. The runner is not a sandbox: only
+annotate trusted examples, and do not include destructive or network operations.
+Passing the runner is not evidence that unclassified examples are correct.
+Optional paths restrict inventory and execution. `--harding` and `--granite`
+select explicitly built binaries.
+
 ## The REPL: harding
 
 The `harding` command provides both interactive REPL and script execution capabilities.
