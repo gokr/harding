@@ -592,6 +592,7 @@ var
   integerClass*: Class = nil
   floatClass*: Class = nil
   stringClass*: Class = nil
+  symbolClassCache*: Class = nil                 # Symbol class, filled once the Symbol global exists
   bufferClass*: Class = nil
   arrayClass*: Class = nil
   tableClass*: Class = nil
@@ -780,13 +781,13 @@ proc formatValue(val: NodeValue, quoteStrings: bool): string =
     var parts: seq[string] = @[]
     for v in elements:
       parts.add(formatValue(v, quoteStrings))
-    "#(" & parts.join(" ") & ")"
+    "#(" & parts.join(", ") & ")"
 
   proc formatTable(entries: Table[NodeValue, NodeValue]): string =
     var parts: seq[string] = @[]
     for k, v in entries:
       parts.add(formatValue(k, true) & " -> " & formatValue(v, true))
-    "#{" & parts.join(" . ") & "}"
+    "#{" & parts.join(", ") & "}"
 
   case val.kind
   of vkInt: $val.intVal
@@ -960,7 +961,7 @@ proc classOfValue*(val: NodeValue): Class =
   of vkClass:
     return val.classVal
   of vkSymbol:
-    return nil
+    return symbolClassCache
 
 proc toValue*(arr: seq[NodeValue]): NodeValue =
   NodeValue(kind: vkArray, arrayVal: arr)

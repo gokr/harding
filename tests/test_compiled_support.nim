@@ -35,6 +35,44 @@ proc helperOverride(self: NodeValue, args: openArray[NodeValue]): NodeValue =
 proc nilHelperOverride(self: NodeValue, args: openArray[NodeValue]): NodeValue =
   nilValue()
 
+# The helpers are ordinary dispatch, not inline fast paths: since the stdlib is
+# compiled through the normal pipeline, `True>>not` and friends come from
+# `lib/core/` and a user override must be able to win. A generated module
+# registers them, so these tests register them too. Special-casing Booleans in
+# the helper instead would shadow the library method, which is the bug that made
+# `&` unoverridable.
+proc trueNot(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  NodeValue(kind: vkBool, boolVal: false)
+
+proc falseNot(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  NodeValue(kind: vkBool, boolVal: true)
+
+proc truePipe(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  NodeValue(kind: vkBool, boolVal: true)
+
+proc falsePipe(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## False>>| answers the argument, which is already evaluated.
+  if args.len > 0: args[0] else: NodeValue(kind: vkBool, boolVal: false)
+
+proc registerBooleanLibrary =
+  registerCompiledMethod("True", "not", trueNot)
+  registerCompiledMethod("False", "not", falseNot)
+  registerCompiledMethod("True", "|", truePipe)
+  registerCompiledMethod("False", "|", falsePipe)
+
+proc arrayWithIndexDo(self: NodeValue, args: seq[NodeValue]): NodeValue =
+  ## Mirrors `lib/core/Array.hrd`: zero-based index, answers the receiver.
+  if args.len == 0:
+    return self
+  let callback = args[0]
+  let elements = if self.kind == vkArray: self.arrayVal
+                 elif self.kind == vkInstance and self.instVal != nil and self.instVal.kind == ikArray:
+                   self.instVal.elements
+                 else: @[]
+  for index, element in elements:
+    discard invokeCompiledBlock(callback.blockVal, @[element, toValue(index)])
+  self
+
 suite "Compiled shared support":
   test "builtin helpers honor dynamic instance methods and replacement":
     let cls = newClass(name = "DynamicHelperOverrides")
@@ -57,6 +95,7 @@ suite "Compiled shared support":
     check isNilValue(nt_last(receiver))
 
   test "Boolean helpers preserve truth tables and dynamic overrides":
+    registerBooleanLibrary()
     for left in [false, true]:
       check nt_not(toValue(left)).boolVal == not left
       for right in [false, true]:
@@ -70,9 +109,15 @@ suite "Compiled shared support":
     check nt_not(receiver).strVal == "override"
     registerCompiledMethod(instance.class.name, "not", nilHelperOverride)
     check isNilValue(nt_not(receiver))
-    # Wrong primitive kinds retain the existing generic answer, not a bool cast.
-    check isNilValue(nt_pipe(toValue(true), toValue(1)))
-    check isNilValue(nt_not(toValue(1)))
+    # These are ordinary sends, so a non-Boolean answers from the library exactly
+    # as the interpreter does: `true | 1` is true, `false | 5` is 5, and a
+    # selector no class implements is MessageNotUnderstood rather than nil.
+    check nt_pipe(toValue(true), toValue(1)).boolVal
+    check nt_pipe(toValue(false), toValue(5)).intVal == 5
+    expect CompiledHardingError:
+      discard nt_pipe(toValue(1), toValue(2))
+    expect CompiledHardingError:
+      discard nt_not(toValue(1))
 
   test "base storage is retainable by instance wrappers":
     let owner = HardingObjectRef(className: "OwnedTest")
@@ -140,17 +185,20 @@ suite "Compiled shared support":
       discard invokeCompiledBlock(unsupported.blockVal, @[toValue(1), toValue(2), toValue(3), toValue(4)])
 
   test "indexed iteration passes element and zero-based index and answers receiver":
+    registerCompiledMethod("Array", "withIndexDo:", arrayWithIndexDo)
     indexedElements = @[]
     indexedIndices = @[]
     let callback = createBlock2(recordIndexed, 2)
-    let array = NodeValue(kind: vkArray, arrayVal: @[toValue("first"), toValue("second")])
+    # Compiled code represents an Array as an instance-backed value, which is what
+    # carries a class name and therefore reaches the registered method. Raw
+    # vkArray values are an intermediate form and have no class name at all.
+    let array = compiledArray(@[toValue("first"), toValue("second")])
     check sendMessage(newRuntime(), array, "withIndexDo:", @[callback]) == array
-    check indexedElements == array.arrayVal
+    check indexedElements == array.instVal.elements
     check indexedIndices == @[0, 1]
     indexedElements = @[]
     indexedIndices = @[]
-    discard sendMessage(newRuntime(), NodeValue(kind: vkArray, arrayVal: @[]),
-                        "withIndexDo:", @[callback])
+    discard sendMessage(newRuntime(), compiledArray(@[]), "withIndexDo:", @[callback])
     check indexedElements.len == 0
     check indexedIndices.len == 0
 

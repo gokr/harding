@@ -3,9 +3,9 @@
 # FileStream.hrd - File I/O operations.
 # Provides Smalltalk-style file streaming.
 
-#====================================================================.
+# ====================================================================.
 # FileStream methods.
-#====================================================================.
+# ====================================================================.
 
 FileStream := Object derive: #(file, mode, isOpen)
 # FileStream provides stream-oriented reading and writing on filesystem-backed text or binary data.
@@ -55,9 +55,9 @@ FileStream>>isOpen [
   ^ self getSlot: "isOpen"
 ]
 
-#====================================================================.
+# ====================================================================.
 # Class methods for convenience.
-#====================================================================.
+# ====================================================================.
 
 FileStream class>>openRead: filename [
   # Open file for reading

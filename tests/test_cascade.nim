@@ -2,6 +2,7 @@ import unittest
 import ../src/harding/core/types
 import ../src/harding/parser/parser
 import ../src/harding/interpreter/vm
+import ./stdlib_test_support
 
 suite "Cascade Tests":
   setup:
@@ -56,12 +57,16 @@ suite "Cascade Tests":
     check(cast[MessageNode](cascade.messages[1]).selector == "add:")
     check(cast[MessageNode](cascade.messages[2]).selector == "size")
 
-  test "Evaluate cascade with receiver chaining":
-    # Test cascade where each message result is used as receiver for next
-    # With new cascade semantics: obj msg1; msg2 sends msg1 to obj,
-    # then sends msg2 to the result of msg1
-    # Note: This test verifies the new semantics (not traditional Smalltalk)
-    skip()  # Skip this test - cascade semantics are in flux
+  test "cascade messages retain the receiver rather than chaining results":
+    let (values, error) = interp.evalStatements("""
+      CascadeReceiver := Object derive: #().
+      CascadeReceiver>>first [ ^ 1 ].
+      CascadeReceiver>>second [ ^ 2 ].
+      CascadeReceiver new first; second
+    """)
+    require error.len == 0
+    require values.len > 0
+    check values[^1].intVal == 2
 
   test "AST printing for cascade":
     let source = "counter increment; increment; value"
@@ -158,4 +163,92 @@ obj at: 1 put: #a;
     check error.len == 0
     check values.len > 0
     check values[^1].kind == vkInt
+    check values[^1].intVal == 3
+
+suite "Cascades inside parentheses":
+  # These cases use builtin collections, so they need a stdlib interpreter.
+  var interp = newSharedStdlibInterpreter()
+
+  test "parse: cascade inside parentheses":
+    let (nodes, parser) = parse("(obj foo; bar)")
+    check not parser.hasError
+    check nodes.len == 1
+    check nodes[0] != nil
+    check nodes[0].kind == nkCascade
+
+  test "parse: cascade inside parentheses followed by a unary message":
+    let (nodes, parser) = parse("(obj foo; bar) size")
+    check not parser.hasError
+    check nodes.len == 1
+
+  test "parenthesized cascade retains its receiver across messages":
+    let (values, error) = interp.evalStatements("""
+      K := Object derive: #(count).
+      K>>initialize [ count := 0. ^ self ].
+      K>>bump [ count := count + 1 ].
+      K>>count [ ^ count ].
+      Result := (K new initialize; bump; bump) count.
+    """)
+    check error.len == 0
+    check values.len > 0
+    check values[^1].kind == vkInt
+    check values[^1].intVal == 2
+
+  test "cascade on a parenthesized receiver inside parentheses":
+    let (values, error) = interp.evalStatements("""
+      Arr := Array new.
+      Result := ((Arr) add: 1; add: 2; yourself) size.
+    """)
+    check error.len == 0
+    check values.len > 0
+    check values[^1].intVal == 2
+
+  test "a parenthesized cascade answers the last message, like a statement":
+    # Smalltalk semantics: `obj a; b` answers what `b` answers, not the
+    # receiver. `yourself` is how a caller recovers the receiver.
+    let (values, error) = interp.evalStatements("""
+      Arr := Array new.
+      Last := (Arr add: 1; add: 2).
+      Whole := (Arr add: 3; yourself).
+      Result := array{Last = 2, Whole isKindOf: Array}
+    """)
+    check error.len == 0
+    check values.len > 0
+    let flags = values[^1].instVal.elements
+    check flags[0].boolVal
+    check flags[1].boolVal
+
+  test "parenthesized cascade is a keyword argument and evaluates its receiver once":
+    let (values, error) = interp.evalStatements("""
+      CascadeFactory := Object derive: #(calls).
+      CascadeFactory>>initialize [ calls := 0. ^self ].
+      CascadeFactory>>make [ calls := calls + 1. ^Array new ].
+      CascadeFactory>>calls [ ^calls ].
+      factory := CascadeFactory new.
+      receiver := Array new.
+      receiver add: (factory make add: 1; add: 2; yourself).
+      ((receiver first size) = 2) and: [ factory calls = 1 ]
+    """)
+    require error.len == 0
+    require values.len > 0
+    check values[^1].boolVal
+
+  test "parenthesized cascades allow unary and binary messages across lines":
+    let (values, error) = interp.evalStatements("""
+      a := Array new.
+      ((a add: 1;
+          add: 2;
+          yourself) size) + (1 + 2; + 3)
+    """)
+    require error.len == 0
+    require values.len > 0
+    check values[^1].intVal == 6
+
+  test "cascade inside parentheses can be nested in a larger expression":
+    let (values, error) = interp.evalStatements("""
+      Arr := Array new.
+      Result := ((Arr add: 1; add: 2; yourself) inject: 0 into: [:a :b | a + b]).
+    """)
+    check error.len == 0
+    check values.len > 0
     check values[^1].intVal == 3

@@ -30,7 +30,7 @@ s := "Hello, World!"
 ("Uppercase: " & (s uppercase)) println
 ("Lowercase: " & (s lowercase)) println
 ("Trim: " & ("  spaces  " trim)) println
-("Index of World: " & (s indexOf: "World") asString) println
+("Index of World: " & ((s indexOf: "World") ifNil: [ "absent" ]) asString) println
 ("Contains Hello: " & (s includesSubString: "Hello") asString) println
 ("Replace: " & (s replace: "World" with: "Harding")) println
 

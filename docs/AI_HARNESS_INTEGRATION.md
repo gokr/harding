@@ -200,9 +200,11 @@ The small grammar matters less than the structure:
 - **One method, one unit.** Edit by `Class>>selector`, validated and written
   atomically. No line ranges or brace matching.
 - **No precedence table to mislearn.** Binary is strictly left-to-right:
-  `2 + 3 * 4` is `20`, not `14`. One genuine trap: keyword messages bind *loosest*,
-  so `2 * 3 max: 4` is `6` while `2 * (3 max: 4)` is `8`. This differs from
-  Smalltalk-80 and is undocumented; an agent will get it wrong.
+  `2 + 3 * 4` is `20`, not `14`. Keyword messages bind loosest, exactly as in
+  Smalltalk-80, so `2 * 3 max: 4` is `6` (parsed `(2 * 3) max: 4`) and
+  `2 * (3 max: 4)` is `8`. The table is documented under "Grammar Reference" in
+  `MANUAL.md`; an agent arriving from a language with arithmetic precedence will
+  still get `2 + 3 * 4` wrong.
 - **Consequences do the semantic work.** `ifTrue:`, `whileTrue:`, `do:` are
   ordinary sends, so a wrong selector yields `MessageNotUnderstood` rather than a
   mis-parse.

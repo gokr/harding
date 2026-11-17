@@ -72,28 +72,28 @@ Verified by execution:
 | `<<` append | mutates the receiver | mutates **only** instance-backed strings; a value string answers a new string |
 | Module system | image-wide namespace | `Library load:` captures bindings into a named library; `Harding load:` loads globally |
 
-### Precedence: mostly Smalltalk, with one divergence
+### Precedence: the same table as Smalltalk
 
 Smalltalk's rule is unary > binary > keyword, with binary strictly
-left-to-right and no arithmetic precedence. Harding matches the first two:
+left-to-right and no arithmetic precedence. Harding implements the same table:
 
 ```
-2 + 3 * 4        -> 20      # left-to-right, no arithmetic precedence
-10 - 2 - 3       -> 5
-3 + 4 printString -> 4      # unary binds tighter than binary
+2 + 3 * 4          -> 20      # left-to-right, no arithmetic precedence
+10 - 2 - 3         -> 5
+5 - 2 negated      -> 7       # unary binds tighter than binary
+2 * 3 negated      -> -6
+#(10,20,30,40,50) at: 1 + 2 -> 40   # binary binds tighter than keyword
+2 * 3 max: 4       -> 6       # parses as (2 * 3) max: 4
+2 * (3 max: 4)     -> 8
 ```
 
-It does **not** match the third. Binary operators bind tighter than keyword
-message arguments:
+Keyword messages bind loosest, so `2 * 3 max: 4` is `(2 * 3) max: 4` and answers
+`6` in both Smalltalk-80 and Harding. The table is documented under "Grammar
+Reference" in `docs/MANUAL.md`.
 
-```
-2 * 3 max: 4     -> 6       # parses as (2 * 3) max: 4
-2 * (3 max: 4)   -> 8
-```
-
-In Smalltalk-80 the unparenthesised form parses as `2 * (3 max: 4)` and answers
-`8`. This is the kind of difference that silently changes arithmetic in
-otherwise portable code, and it is currently undocumented.
+The practical trap is the absence of arithmetic precedence, not a difference
+from Smalltalk: `2 + 3 * 4` is `20`, which surprises anyone arriving from
+Python, Ruby or Go.
 
 ## Python and Ruby: dynamic, but not a scripting-language syntax
 
@@ -116,9 +116,9 @@ Ruby is the nearer relative: blocks read like `do |x|`, and
 
 Where Python and Ruby are friendlier, and Harding is not:
 
-- **Integers trap.** `9223372036854775807 + 1` raises `Error: VM error: over- or
-  underflow`, and it is **not catchable**: wrapping it in `on: Error do:` still
-  aborts the script. Python promotes to a bignum, Ruby to a Float.
+- **Integers trap.** `9223372036854775807 + 1` signals a catchable `Overflow`
+  (subclass of `ArithmeticError`), but an unhandled one ends the run. Python
+  promotes to a bignum, Ruby to a Float.
 - String-to-number conversion is nil-answering rather than exception-raising:
   `"42" asInteger` -> `42`, `"bad" asNumber` -> `nil` (documented in
   `docs/QUICKREF.md`). That is more disciplined than Ruby's `to_i` -> `0`.
@@ -194,9 +194,11 @@ Aggressive simplifications worth flagging:
   exist (`docs/EXCEPTION_MODEL.md`). Defensible as a contract, but it changes
   what exception handling is *for*: handlers become value suppliers rather than
   resumption points.
-- **No `subclassResponsibility`** (answers *Message not understood*), no
-  `allInstances`, and no method-list reflection -- `respondsTo:` works, `methods`
-  does not. Class-side `removeMethod:` does work at runtime.
+- **No `subclassResponsibility`** (answers *Message not understood*) and no
+  `allInstances`. Method-list reflection exists but is named for methods, not
+  selectors: `methods`, `definedMethods`, `allInstanceMethods`,
+  `allClassMethods`, and `removeMethod:` works at runtime. There is no
+  method *source* reflection from the language.
 - **No `case`/`switch`** construct.
 - **`json{...}` builds a JSON *string***, not a Table, so it is a different type
   from the visually similar `#{...}` table literal.
@@ -207,11 +209,13 @@ Aggressive simplifications worth flagging:
 
 These are places where behaviour contradicts the promise. Each was reproduced.
 
-1. **Arithmetic overflow is fatal and uncatchable.**
-   `9223372036854775807 + 1` aborts the process with `VM error: over- or
-   underflow`; an `on: Error do:` wrapper does not intercept it. This is the
-   sharpest edge in the language, because a numeric bug becomes a dead process
-   with no in-language recovery.
+1. **Arithmetic overflow ends an unhandled run.**
+   `9223372036854775807 + 1` at the top level prints `1` and then aborts with
+   `=== Uncaught Exception === Overflow: over- or underflow`. It *is* catchable:
+   `[ 9223372036854775807 + 1 ] on: Overflow do: [...]` runs the handler in both
+   engines, and `Overflow` derives from `ArithmeticError`. The remaining edge is
+   that an unguarded overflow in a script still ends the process, so a numeric
+   bug in an unwrapped expression has no in-language recovery.
 
 2. **`<<` is documented as mutating but mutates conditionally.**
 
@@ -243,10 +247,7 @@ These are places where behaviour contradicts the promise. Each was reproduced.
 5. **`doesNotUnderstand:` cannot see its arguments**, as described above. Reaching
    them would require a message object rather than a symbol.
 
-6. **Precedence divergence** between binary and keyword messages (see above) is
-   undocumented and differs from Smalltalk-80.
-
-7. **Documentation drift, both directions:**
+6. **Documentation drift, both directions:**
    - string interpolation is listed in `src/harding/core/types.nim`'s literal
      section (`#` + `{`) but `"Hello, #{name}!"` prints literally; it is not in
      `docs/QUICKREF.md`. This looks like a Nim-ism that never fires.

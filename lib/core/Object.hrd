@@ -7,9 +7,9 @@
 # It provides fundamental behaviors that all objects inherit.
 
 # Note: Object is set by initGlobals() in interpreter/evaluator.nim.
-#====================================================================.
+# ====================================================================.
 # Object creation and copying.
-#====================================================================.
+# ====================================================================.
 
 # Note: derive, derive:, and new are defined as class methods in initCoreClasses.
 # They are installed as native methods on the Object class and create proper.
@@ -25,9 +25,21 @@
 
 Object>>clone <primitive primitiveClone>
 
-#====================================================================.
+Object>>identityHash <primitive primitiveIdentityHash>
+Object>>hash <primitive primitiveHash>
+
+Object>>shallowCopy [ ^ <primitive primitiveCopy: false> ]
+Object>>deepCopy [ ^ <primitive primitiveCopy: true> ]
+
+Object>>copy [
+  ^ self shallowCopy postCopy
+]
+
+Object>>postCopy [ ^ self ]
+
+# ====================================================================.
 # Class-side methods (using class>> syntax).
-#====================================================================.
+# ====================================================================.
 
 Object class>>derive: slotsArray methods: methodBlock [
   # Create a subclass with extra slots AND define methods in one expression
@@ -144,17 +156,17 @@ Object>>printClassIndent: level [
     ]
 ]
 
-#====================================================================.
+# ====================================================================.
 # Property access.
-#====================================================================.
+# ====================================================================.
 
 Object>>hasProperty: key <primitive primitiveHasProperty: key>
 
 Object>>properties <primitive primitiveProperties>
 
-#====================================================================.
+# ====================================================================.
 # Class reflection.
-#====================================================================.
+# ====================================================================.
 
 Object>>slotNames <primitive primitiveSlotNames>
 
@@ -165,9 +177,9 @@ Object>>conflictSelectors <primitive primitiveConflictSelectors>
 Object>>classConflictSelectors <primitive primitiveClassConflictSelectors>
 
 
-#====================================================================.
+# ====================================================================.
 # Method management.
-#====================================================================.
+# ====================================================================.
 
 Object>>respondsTo: selector <primitive primitiveRespondsTo: selector>
 
@@ -177,13 +189,9 @@ Object>>implements: interfaceOrMixin [
   ^ self class implements: interfaceOrMixin
 ]
 
-Object class>>methods [
-  ^ self primitiveMethods
-]
+Object class>>methods <primitive primitiveMethods>
 
-Object class>>definedMethods [
-  ^ self primitiveDefinedMethods
-]
+Object class>>definedMethods <primitive primitiveDefinedMethods>
 
 Object class>>removeMethod: selector [
   ^ self primitiveRemoveMethod: selector
@@ -193,13 +201,24 @@ Object class>>removeClassMethod: selector [
   ^ self primitiveRemoveClassMethod: selector
 ]
 
-Object class>>allInstanceMethods [
-  ^ self primitiveAllInstanceMethods
-]
+Object class>>allInstanceMethods <primitive primitiveAllInstanceMethods>
 
-Object class>>allClassMethods [
-  ^ self primitiveAllClassMethods
-]
+Object class>>allClassMethods <primitive primitiveAllClassMethods>
+
+# Method names for the class side. `methods`/`definedMethods` answer the
+# instance side, because `K class == K` means there is no distinct class
+# receiver that could select a side.
+Object class>>classMethods <primitive primitiveClassMethods>
+
+Object class>>definedClassMethods <primitive primitiveDefinedClassMethods>
+
+# Selector queries answer Symbols, not Method objects.
+Object class>>selectors <primitive primitiveMethods>
+Object class>>definedSelectors <primitive primitiveDefinedMethods>
+Object class>>allInstanceSelectors <primitive primitiveAllInstanceMethods>
+Object class>>allClassSelectors <primitive primitiveAllClassMethods>
+Object class>>classSelectors <primitive primitiveClassMethods>
+Object class>>definedClassSelectors <primitive primitiveDefinedClassMethods>
 
 Object>>doesNotUnderstand: selector [
   # Default handler for unrecognized messages with just the selector
@@ -217,9 +236,9 @@ Object>>doesNotUnderstand: selector with: arg1 with: arg2 [
   self doesNotUnderstand: selector
 ]
 
-#====================================================================.
+# ====================================================================.
 # Dynamic message dispatch (perform:).
-#====================================================================.
+# ====================================================================.
 
 Object>>perform: selector <primitive primitivePerform: selector>
 
@@ -227,9 +246,9 @@ Object>>perform: selector with: arg1 <primitive primitivePerform: selector with:
 
 Object>>perform: selector with: arg1 with: arg2 <primitive primitivePerform: selector with: arg1 with: arg2>
 
-#====================================================================.
+# ====================================================================.
 # Identity and comparison.
-#====================================================================.
+# ====================================================================.
 
 Object>>= other [
   # Test if this object equals other (value equality)
@@ -258,15 +277,15 @@ Object>>className <primitive primitiveClassName>
 
 Object>>class <primitive primitiveClass>
 
-#====================================================================.
+# ====================================================================.
 # Error handling.
-#====================================================================.
+# ====================================================================.
 
 Object>>error: message <primitive primitiveError: message>
 
-#====================================================================.
+# ====================================================================.
 # Testing and debugging.
-#====================================================================.
+# ====================================================================.
 
 Object>>inspect [
   # Open an inspector on this object
@@ -290,18 +309,18 @@ Object>>thisContext [
   ^ activation isNil ifTrue: [ nil ] ifFalse: [ activation sender ]
 ]
 
-#====================================================================.
+# ====================================================================.
 # Initialization.
-#====================================================================.
+# ====================================================================.
 
 Object>>initialize [
   # Initialize a new instance. Subclasses should override
   ^ self
 ]
 
-#====================================================================.
+# ====================================================================.
 # Utility methods.
-#====================================================================.
+# ====================================================================.
 
 Object>>isNil [
   # Check if object is nil
@@ -342,6 +361,13 @@ Object>>isKindOf: aClass <primitive primitiveIsKindOf: aClass>
 Object>>asString [
   # Return string representation
   ^ self printString
+]
+
+Object>>& other [
+  # Concatenation for any receiver: convert both sides to strings.
+  # String>>& overrides this with its primitive, and a class may override it
+  # to change what concatenation means for its instances.
+  ^ self asString & other asString
 ]
 
 Object>>htmlEscape <primitive primitiveHtmlEscape>
@@ -409,9 +435,9 @@ Object class>>implements: thing [
 # Note: Object>>print and Object>>println are registered as native methods.
 # in the interpreter, so they don't need to be defined here.
 
-#====================================================================.
+# ====================================================================.
 # Comparison.
-#====================================================================.
+# ====================================================================.
 
 Object>>~= other [
   # Not equal - delegates to = and negates

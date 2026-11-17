@@ -1532,6 +1532,24 @@ proc hasCompiledClassMethodInHierarchy*(className, selector: string): bool =
   return walkCompiledHierarchy(className,
     proc(name: string): bool = name & ">>" & selector in compiledClassMethods).len > 0
 
+proc compiledMethodNames*(className: string, classSide, inherited: bool): seq[string] =
+  ## Method names in a compiled registration table, without implementation objects.
+  var names = initTable[string, bool]()
+  proc collect(owner: string): bool =
+    let prefix = owner & ">>"
+    if classSide:
+      for key in compiledClassMethods.keys:
+        if key.startsWith(prefix): names[key[prefix.len..^1]] = true
+    else:
+      for key in compiledMethodProcs.keys:
+        if key.startsWith(prefix): names[key[prefix.len..^1]] = true
+    false
+  if inherited:
+    discard walkCompiledHierarchy(className, collect)
+  else:
+    discard collect(className)
+  for name in names.keys: result.add(name)
+
 proc implementsPerform(receiver: NodeValue, receiverClassName, selector: string): bool =
   ## True when a compiled user method implements this `perform:` selector for the
   ## receiver, in which case the builtin table must not convey the send itself.
@@ -1579,7 +1597,8 @@ proc compiledNewInstance*(className: string, allocator: CompiledProc): NodeValue
   return created
 
 proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: string,
-                                 args: openArray[NodeValue]): NodeValue =
+                                 args: openArray[NodeValue],
+                                 includeObjectProtocol = true): NodeValue =
   let owner = walkCompiledHierarchy(startClass,
     proc(name: string): bool = name & ">>" & selector in compiledClassMethods)
   if owner.len > 0:
@@ -1601,6 +1620,15 @@ proc dispatchCompiledClassMethod(receiver: NodeValue, startClass, selector: stri
       if selector == "new" and hasCompiledMethodInHierarchy(name, "initialize"):
         return dispatchCompiledMethodFromClass(created, name, "initialize", @[])
       return created
+  # A class value also answers the ordinary instance-side protocol, because in
+  # the image a class object is just a receiver for it. Without this fallback
+  # `1 class printString` and `1 class isKindOf: Object` failed under Granite
+  # while the interpreter answered them.
+  if includeObjectProtocol:
+    for protocolClass in ["Class", "Object"]:
+      let target = resolveCompiledMethod(protocolClass, selector)
+      if target != nil:
+        return target(receiver, args)
   return compiledMissingMessage(receiver, selector)
 
 proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
@@ -1639,7 +1667,8 @@ proc sendSuperMessage*(receiver: NodeValue, definingClassName: string,
   if startClass.len == 0:
     return compiledMissingMessage(receiver, selector)
   if receiver.kind == vkClass:
-    return dispatchCompiledClassMethod(receiver, startClass, selector, args)
+    return dispatchCompiledClassMethod(receiver, startClass, selector, args,
+                                       includeObjectProtocol = false)
   return dispatchCompiledMethodFromClass(receiver, startClass, selector, args)
 
 proc invokeCompiledBlock*(blk: BlockNode, args: openArray[NodeValue]): NodeValue
@@ -2163,15 +2192,17 @@ proc dispatchBuiltin(runtime: Runtime, receiver: NodeValue, selector: string,
       let name = if args[0].kind == vkSymbol: args[0].symVal else: args[0].strVal
       return setSlotValue(receiver, name, args[1])
     if args.len >= 2:
-      if receiver.kind == vkArray and args[0].kind == vkInt:
-        let idx = args[0].intVal
-        if idx >= 0:
+      if receiver.kind == vkArray:
+        let (ok, idx) = args[0].tryGetInt()
+        if not ok:
+          return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+            "Array at:put: requires an integer index"))
+        if idx >= 0 and idx < receiver.arrayVal.len:
           var arr = receiver.arrayVal
-          if idx < arr.len:
-            arr[idx] = args[1]
-          elif idx == arr.len:
-            arr.add(args[1])
-          return compiledArray(arr)
+          arr[idx] = args[1]
+          return args[1]
+        return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+          "Array index out of bounds: " & $idx))
       elif receiver.kind == vkTable:
         var tbl = receiver.tableVal
         tbl[args[0]] = args[1]
@@ -2393,7 +2424,10 @@ proc sendMessage*(runtime: Runtime, receiver: NodeValue,
           if index >= 0 and index < storage.elements.len:
             storage.elements[index] = args[1]
             return args[1]
-          return args[1]
+          return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+            "Array index out of bounds: " & $index))
+        return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+          "Array at:put: requires an integer index"))
     of "class": return toValue(storage.class)
     of "className": return toValue(storage.class.name)
     # O(1) shape queries answer from the instance storage directly. Falling
@@ -2801,13 +2835,15 @@ proc sendMessageCached*(runtime: Runtime, receiver: NodeValue, selector: string,
     # for exception instances -- so a negative is only cached-and-dispatched for
     # selectors none of those handle. Everything else uses the generic path.
     if selector in negativeCacheSafeSelectors:
+      # Record the negative so the next send of this class is a slot hit with a
+      # nil target, which dispatches to the builtin without a name lookup.
       if cache.count < 4:
         cache.slots[cache.count] = SendCacheSlot(cls: cls, kind: kind, boolVal: flag,
           target: nil)
         inc cache.count
       else:
         cache.megamorphic = true
-      return dispatchBuiltin(runtime, receiver, selector, @args, className)
+      return dispatchBuiltin(runtime, receiver, selector, args, className)
   return sendMessage(runtime, receiver, selector, args)
 
 template cachedSend*(runtime: Runtime, receiver: NodeValue, selector: string,

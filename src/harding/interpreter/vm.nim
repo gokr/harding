@@ -6,6 +6,7 @@ import ../core/process
 import ../core/log_support
 import ../core/string_conversion
 import ../core/value_primitives
+import ../core/object_protocol
 import ../parser/lexer
 import ../parser/parser
 import ../interpreter/objects
@@ -2245,8 +2246,22 @@ proc primitiveRespondsToImpl(interp: var Interpreter, self: Instance, args: seq[
       return trueValue
   return falseValue
 
+proc isClassReceiver(inst: Instance): bool =
+  ## True when the receiver is a class value rather than an ordinary instance.
+  ##
+  ## A class receiver is a tagged wrapper instance whose nimValue is the class
+  ## itself (see primitiveIsClassImpl). A regular zero-slot object is not a
+  ## class even though its `class` field is set.
+  inst != nil and inst.kind == ikObject and inst.class != nil and inst.isNimProxy and
+    inst.nimValue == cast[pointer](inst.class)
+
 proc primitiveMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Return the class's method selector names as an array
+  ## Answer the inherited methods this object can respond to as an instance.
+  ##
+  ## There is no metaclass, so a class receiver IS the class (`K class == K`) and
+  ## cannot be used to select a side. Each table therefore needs its own
+  ## selector: `methods`/`definedMethods` are instance-side, and
+  ## `classMethods`/`definedClassMethods` are the class side.
   var selectors: seq[NodeValue] = @[]
   if self.kind == ikObject and self.class != nil:
     for selector in self.class.allMethods.keys():
@@ -2254,10 +2269,29 @@ proc primitiveMethodsImpl(interp: var Interpreter, self: Instance, args: seq[Nod
   return newArrayInstance(arrayClass, selectors).toValue()
 
 proc primitiveDefinedMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
-  ## Return only methods defined directly on this class (not inherited)
+  ## Answer only the instance-side methods defined directly on this class.
   var selectors: seq[NodeValue] = @[]
   if self.kind == ikObject and self.class != nil:
     for selector in self.class.methods.keys():
+      selectors.add(toSymbol(selector))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveClassMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Answer the class-side methods this class responds to, inherited included.
+  var selectors: seq[NodeValue] = @[]
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.allClassMethods.keys():
+      selectors.add(toSymbol(selector))
+  return newArrayInstance(arrayClass, selectors).toValue()
+
+proc primitiveDefinedClassMethodsImpl(interp: var Interpreter, self: Instance, args: seq[NodeValue]): NodeValue =
+  ## Answer only the class-side methods defined directly on this class.
+  ##
+  ## This is the question `definedMethods` cannot answer, because a class
+  ## receiver is indistinguishable from its own class object.
+  var selectors: seq[NodeValue] = @[]
+  if self.kind == ikObject and self.class != nil:
+    for selector in self.class.classMethods.keys():
       selectors.add(toSymbol(selector))
   return newArrayInstance(arrayClass, selectors).toValue()
 
@@ -2790,6 +2824,31 @@ proc initGlobals*(interp: var Interpreter) =
   objectCls.classMethods["primitiveBasicNew"] = classBasicNewMethod
   objectCls.allClassMethods["primitiveBasicNew"] = classBasicNewMethod
 
+  proc identityHashImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    identityHashValue(self)
+  proc hashImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
+    valueHash(self)
+  proc copyImpl(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    let deep = args.len > 0 and args[0].kind == vkBool and args[0].boolVal
+    let copied = tryInterpretedCopy(self, deep)
+    if copied.error.len > 0:
+      signalExceptionByName(interp, "Error", copied.error)
+      return nilValue()
+    result = copied.value
+  let identityHashMethod = createCoreMethod("primitiveIdentityHash")
+  identityHashMethod.setNativeValueImpl(identityHashImpl)
+  objectCls.methods["primitiveIdentityHash"] = identityHashMethod
+  objectCls.allMethods["primitiveIdentityHash"] = identityHashMethod
+  let hashMethod = createCoreMethod("primitiveHash")
+  hashMethod.setNativeValueImpl(hashImpl)
+  objectCls.methods["primitiveHash"] = hashMethod
+  objectCls.allMethods["primitiveHash"] = hashMethod
+  let copyMethod = createCoreMethod("primitiveCopy:")
+  copyMethod.setNativeValueImpl(copyImpl)
+  copyMethod.hasInterpreterParam = true
+  objectCls.methods["primitiveCopy:"] = copyMethod
+  objectCls.allMethods["primitiveCopy:"] = copyMethod
+
   # Add perform: methods to Object class (for primitive dispatch from Smalltalk)
   let objPerformMethod = createCoreMethod("perform:")
   objPerformMethod.setNativeImpl(performWithImpl)
@@ -2884,6 +2943,20 @@ proc initGlobals*(interp: var Interpreter) =
   objDefinedMethodsMethod.hasInterpreterParam = true
   objectCls.methods["primitiveDefinedMethods"] = objDefinedMethodsMethod
   objectCls.allMethods["primitiveDefinedMethods"] = objDefinedMethodsMethod
+
+  # Class-side method reflection. A class receiver is the class itself, so the
+  # side has to be chosen by selector rather than by receiver.
+  let objClassMethodsMethod = createCoreMethod("primitiveClassMethods")
+  objClassMethodsMethod.setNativeImpl(primitiveClassMethodsImpl)
+  objClassMethodsMethod.hasInterpreterParam = true
+  objectCls.classMethods["primitiveClassMethods"] = objClassMethodsMethod
+  objectCls.allClassMethods["primitiveClassMethods"] = objClassMethodsMethod
+
+  let objDefinedClassMethodsMethod = createCoreMethod("primitiveDefinedClassMethods")
+  objDefinedClassMethodsMethod.setNativeImpl(primitiveDefinedClassMethodsImpl)
+  objDefinedClassMethodsMethod.hasInterpreterParam = true
+  objectCls.classMethods["primitiveDefinedClassMethods"] = objDefinedClassMethodsMethod
+  objectCls.allClassMethods["primitiveDefinedClassMethods"] = objDefinedClassMethodsMethod
 
   # Add primitiveRemoveMethod: for removing methods from a class
   let objRemoveMethodMethod = createCoreMethod("primitiveRemoveMethod:")
@@ -3150,6 +3223,39 @@ proc initGlobals*(interp: var Interpreter) =
       "Array index out of bounds: " & $idx)
     return nilValue()
 
+  proc primitiveArrayAtPutValueImpl(interp: var Interpreter, self: NodeValue, args: seq[NodeValue]): NodeValue =
+    ## Assignment-style write, with the same bounds rule as `at:`.
+    ##
+    ## An index outside `0 ..< size` signals SubscriptOutOfBounds instead of
+    ## silently dropping the write. Growing an array stays the job of `add:`,
+    ## which is explicit. The compiled runtime previously appended on the
+    ## boundary index and raised beyond it, so the engines disagreed in both
+    ## directions.
+    if args.len < 2:
+      signalExceptionByName(interp, "SubscriptOutOfBounds", "Array at:put: requires an index and a value")
+      return nilValue()
+    let (ok, idx) = args[0].tryGetInt()
+    if not ok:
+      signalExceptionByName(interp, "SubscriptOutOfBounds", "Array at:put: requires an integer index")
+      return nilValue()
+
+    case self.kind
+    of vkArray:
+      if idx >= 0 and idx < self.arrayVal.len:
+        var written = self.arrayVal
+        written[idx] = args[1]
+        return args[1]
+    of vkInstance:
+      if self.instVal != nil and self.instVal.kind == ikArray and
+         idx >= 0 and idx < self.instVal.elements.len:
+        self.instVal.elements[idx] = args[1]
+        return args[1]
+    else:
+      discard
+    signalExceptionByName(interp, "SubscriptOutOfBounds",
+      "Array index out of bounds: " & $idx)
+    return nilValue()
+
   proc primitiveArrayIncludesValueImpl(self: NodeValue, args: seq[NodeValue]): NodeValue =
     if args.len == 0:
       return falseValue
@@ -3281,8 +3387,7 @@ proc initGlobals*(interp: var Interpreter) =
     # A class receiver is represented as a tagged wrapper instance created
     # by the vkClass dispatch path. Regular zero-slot objects must not report
     # themselves as classes.
-    if self.kind == ikObject and self.class != nil and self.isNimProxy and
-       self.nimValue == cast[pointer](self.class):
+    if self.isClassReceiver:
       return trueValue
     return falseValue
 
@@ -3770,6 +3875,8 @@ proc initGlobals*(interp: var Interpreter) =
   let arrayAtPutMethod = createCoreMethod("primitiveArrayAt:put:")
   arrayAtPutMethod.setNativeImpl(arrayAtPutImpl)
   setNativeValueFromInstance(arrayAtPutMethod, arrayAtPutImpl)
+  arrayAtPutMethod.setNativeValueImpl(primitiveArrayAtPutValueImpl)
+  arrayAtPutMethod.hasInterpreterParam = true
   arrayCls.methods["primitiveArrayAt:put:"] = arrayAtPutMethod
   arrayCls.allMethods["primitiveArrayAt:put:"] = arrayAtPutMethod
 
@@ -7160,11 +7267,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
           targetParent = parent
           break
       if targetParent == nil:
-        raise newException(ValueError, "Parent class '" & superNode.explicitParent & "' not found in inheritance chain")
+        signalExceptionByName(interp, "Error",
+          "Parent class '" & superNode.explicitParent & "' not found in inheritance chain")
+        return true
     else:
       # Unqualified super: use first parent of the defining class
       if definingClass.superclasses.len == 0:
-        raise newException(ValueError, "super send in class with no parents")
+        signalExceptionByName(interp, "Error", "super send in class with no parents")
+        return true
       targetParent = definingClass.superclasses[0]
 
     let isClassMethod = interp.currentActivation != nil and interp.currentActivation.isClassMethod
@@ -7173,7 +7283,14 @@ proc handleEvalNode(interp: var Interpreter, frame: WorkFrame): bool =
                       else:
                         lookupInstanceMethod(targetParent, superNode.selector)
     if methodBlock == nil:
-      raise newException(ValueError, "Method '" & superNode.selector & "' not found in super class " & targetParent.name)
+      # A `super` send whose parent does not implement the selector is an
+      # ordinary dispatch failure, so it must be catchable like one. Raising a
+      # Nim ValueError here killed the script and bypassed on:do:, which
+      # contradicted "a handler supplies the value".
+      signalExceptionByName(interp, "MessageNotUnderstood",
+        "Message not understood: " & superNode.selector &
+        " (super, class " & targetParent.name & ")")
+      return true
 
     # Evaluate arguments using evalWithVM, then call executeMethod directly
     # This avoids wfSendMessage which doesn't carry super class context
@@ -7549,22 +7666,6 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
     # Fast-path for class, isNil, notNil, ==, ~= before MIC/PIC
     # ============================================================================
     case frame.selector
-    of "&":
-      if hasSingleArg:
-        case receiverVal.kind
-        of vkString:
-          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.strVal & singleArg.toString()))
-          return true
-        of vkSymbol:
-          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.symVal & singleArg.toString()))
-          return true
-        of vkInt, vkFloat, vkBool, vkNil:
-          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString() & singleArg.toString()))
-          return true
-        else:
-          interp.pushValue(NodeValue(kind: vkString, strVal: receiverVal.toString() & singleArg.toString()))
-          return true
-
     of "asString":
       if args.len == 0:
         case receiverVal.kind
@@ -8699,6 +8800,8 @@ proc handleContinuation(interp: var Interpreter, frame: WorkFrame): bool =
   of wfCascadeMessage, wfCascadeMessageDiscard:
     # Send a message in a cascade - receiver is stored in cascadeReceiver
     let receiverVal = frame.cascadeReceiver
+    if frame.kind == wfCascadeMessageDiscard:
+      interp.pushWorkFrame(newDiscardFrame())
 
     # Push receiver value for message send
     interp.pushValue(receiverVal)

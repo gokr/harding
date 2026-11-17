@@ -125,6 +125,7 @@ Sources: `lib/gui/bona/Builder.hrd`, `lib/granite/Application.hrd`, `src/harding
 - Workspace, Browser, Inspector, and BonaMCP detect errors using string prefixes. A valid result such as `"Error: example"` is therefore misclassified. Evaluation should return explicit success/error data.
 - Library rename is an explicit stub. Primitive-line methods cannot be saved or deleted from Browser.
 - No integrated Bona debugger UI for stepping, suspended processes, or resumable exception interaction was found in the inspected tool files. Runtime introspection and the separate debugger/LSP infrastructure are not the same as that UI.
+- The Launcher header bar has no Inspector entry point. `createHeaderBar` builds Workspace, Terminal, Transcript, Browser and Builder buttons, and `Launcher>>openInspector` does not exist; the Inspector is reachable only through `Inspector class>>openOn:` and `openOn:for:` from other tools. An earlier working copy had an Inspector button with a toolbar spacer that was never landed; note its body called `Inspector openFor:`, an API that no longer exists, so the entry point needs writing against `openOn:` rather than resurrecting.
 
 ## Automation recommendation
 

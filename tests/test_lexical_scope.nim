@@ -34,7 +34,7 @@ suite "Lexical scope isolation":
       LexResults add: ((LexForward at: 1) value).
       LexResults
     """)
-    check value.toString() == "#(10 11)"
+    check value.toString() == "#(10, 11)"
 
   test "control-flow slot reads and writes ignore caller locals":
     let value = evaluate("""
@@ -52,7 +52,7 @@ suite "Lexical scope isolation":
       LexResults add: LexRead. LexResults add: LexCallerLocal. LexResults add: LexTarget payload.
       LexResults
     """)
-    check value.toString() == "#(5 77 9)"
+    check value.toString() == "#(5, 77, 9)"
 
   test "nil slots and ordinary methods do not expose caller temporaries":
     let value = evaluate("""
@@ -63,9 +63,9 @@ suite "Lexical scope isolation":
       LexCaller>>plainFrom: target [| stored | stored := 77. ^target sample].
       LexCaller>>nilFrom: target [| stored | stored := 77. ^target conditional].
       LexFresh := LexPlain new.
-      #((LexCaller new plainFrom: LexFresh), (LexCaller new nilFrom: LexFresh))
+      array{(LexCaller new plainFrom: LexFresh), (LexCaller new nilFrom: LexFresh)}
     """)
-    check value.toString() == "#(nil nil)"
+    check value.toString() == "#(nil, nil)"
 
   test "unbound reads cannot see a caller and writes stay in the callee":
     let value = evaluate("""
@@ -74,9 +74,9 @@ suite "Lexical scope isolation":
       LexUnbound>>mutate [callerOnly := 9].
       LexCaller>>unboundFrom: target [| callerOnly | callerOnly := 77. ^target sample].
       LexCaller>>isolatedFrom: target [| callerOnly | callerOnly := 77. target mutate. ^callerOnly].
-      #((LexCaller new unboundFrom: LexUnbound new), (LexCaller new isolatedFrom: LexUnbound new))
+      array{(LexCaller new unboundFrom: LexUnbound new), (LexCaller new isolatedFrom: LexUnbound new)}
     """)
-    check value.toString() == "#(nil 77)"
+    check value.toString() == "#(nil, 77)"
 
   test "nested control flow shares lexical cells without caller scope":
     let value = evaluate("""
@@ -97,7 +97,7 @@ suite "Lexical scope isolation":
       LexResults add: ((LexPair at: 3) value).
       LexResults
     """)
-    check value.toString() == "#(0 2 5)"
+    check value.toString() == "#(0, 2, 5)"
 
   test "an escaped block uses its defining locals instead of invoking method locals":
     let value = evaluate("""
@@ -105,6 +105,6 @@ suite "Lexical scope isolation":
       LexCaller>>invoke: callback [| count values | count := 77. values := Array new.
         values add: callback value. values add: count. ^values].
       LexCounter := LexClosure new makeCounter.
-      #((LexCaller new invoke: LexCounter), (LexCaller new invoke: LexCounter))
+      array{(LexCaller new invoke: LexCounter), (LexCaller new invoke: LexCounter)}
     """)
-    check value.toString() == "#(#(11 77) #(12 77))"
+    check value.toString() == "#(#(11, 77), #(12, 77))"

@@ -68,12 +68,9 @@ proc nt_asString*(value: NodeValue): NodeValue =
   sendMessage(nil, value, "asString", emptyNodeArgs)
 
 proc nt_comma*(a: NodeValue, b: NodeValue): NodeValue =
-  ## String concatenation
-  if a.kind in {vkInstance, vkClass}:
-    return sendMessage(nil, a, "&", [b])
-  let aStr = a.toString()
-  let bStr = b.toString()
-  return NodeValue(kind: vkString, strVal: aStr & bStr)
+  ## Resolve `&` normally, including immediate-value overrides and Booleans.
+  ## A stack array keeps the openArray ABI allocation-free.
+  sendMessage(nil, a, "&", [b])
 
 # Collection access primitives
 
@@ -103,19 +100,23 @@ proc nt_at_k*(receiver: NodeValue, key: NodeValue): NodeValue =
 
 proc nt_at_kput_k*(receiver: NodeValue, key: NodeValue, value: NodeValue): NodeValue =
   ## Collection assignment: receiver at: key put: value
-  ## Works for both Arrays (0-based indexing) and Tables
+  ##
+  ## Arrays are fixed-size here, matching the interpreter: an index outside
+  ## `0 ..< size` signals SubscriptOutOfBounds rather than appending or silently
+  ## dropping the write. Use `add:` to grow.
   if receiver.kind == vkInstance:
     return sendMessage(nil, receiver, "at:put:", [key, value])
-  if receiver.kind == vkArray and key.kind == vkInt:
+  if receiver.kind == vkArray:
+    if key.kind != vkInt:
+      return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+        "Array at:put: requires an integer index"))
     let idx = key.intVal
     if idx >= 0 and idx < receiver.arrayVal.len:
       var newArr = receiver
       newArr.arrayVal[idx] = value
-      return newArr
-    if idx == receiver.arrayVal.len:
-      var newArr = receiver
-      newArr.arrayVal.add(value)
-      return newArr
+      return value
+    return raiseCompiledError(compiledErrorValue("SubscriptOutOfBounds",
+      "Array index out of bounds: " & $idx))
   elif receiver.kind == vkTable:
     var newTbl = receiver
     newTbl.tableVal[key] = value

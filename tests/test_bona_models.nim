@@ -24,6 +24,37 @@ proc newHeadlessToolInterpreter(): Interpreter =
     loadHeadlessToolFile(result, path)
 
 suite "Bona headless models":
+  test "Browser deletion refuses without changing classes or selection":
+    var interp = newHeadlessToolInterpreter()
+    loadHeadlessToolFile(interp, "lib/gui/bona/Browser.hrd")
+    loadHeadlessToolFile(interp, "lib/gui/bona/Transcript.hrd")
+    let (value, error) = interp.doit("""
+      DeletionProbe := Object derive: #().
+      BrowserProbe := Browser new.
+      BrowserProbe currentClass: "DeletionProbe".
+      SavedDeletionProbe := DeletionProbe.
+      BrowserProbe deleteClass: "DeletionProbe".
+      (DeletionProbe == SavedDeletionProbe) and: [
+        (BrowserProbe currentClass = "DeletionProbe") and: [
+          Transcript contents includesSubString: "Class deletion is not supported"
+        ]
+      ]
+    """)
+    require error.len == 0
+    check value.kind == vkBool
+    check value.boolVal
+
+  test "Catalog header lookup tolerates a missing separator":
+    var interp = newHeadlessToolInterpreter()
+    let (value, error) = interp.doit("""
+      catalog := Catalog new.
+      (catalog editableHeaderFromMethodHeader: "plain" fallback: "fallback") = "plain"
+        and: [ (catalog editableHeaderFromMethodHeader: "Foo>>answer" fallback: "fallback") = "answer" ]
+    """)
+    require error.len == 0
+    check value.kind == vkBool
+    check value.boolVal
+
   test "Browser rewrite preserves shared files and rejects invalid source":
     var interp = newHeadlessToolInterpreter()
     loadHeadlessToolFile(interp, "lib/gui/bona/Browser.hrd")

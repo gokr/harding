@@ -283,7 +283,7 @@ suite "Stdlib: Bag and class binding names":
     let result = interp.evalStatements("""
       B := Bag new.
       B add: 3. B add: 1. B add: 3.
-      Counts := #((B size), (B occurrencesOf: 3), (B occurrencesOf: 9))
+      Counts := array{(B size), (B occurrencesOf: 3), (B occurrencesOf: 9)}
     """)
     check(result[1].len == 0)
     let counts = result[0][^1].instVal.elements
@@ -297,8 +297,8 @@ suite "Stdlib: Bag and class binding names":
       B add: 5. B add: 5.
       Removed := B remove: 5.
       Missing := B remove: 9.
-      Counts := #((Removed = 5), (Missing isNil), ((B size) = 1),
-                  ((B occurrencesOf: 5) = 1))
+      Counts := array{(Removed = 5), (Missing isNil), ((B size) = 1),
+                  ((B occurrencesOf: 5) = 1)}
     """)
     check(result[1].len == 0)
     let values = result[0][^1].instVal.elements
@@ -312,7 +312,7 @@ suite "Stdlib: Bag and class binding names":
       B := Bag new.
       B add: 1. B add: 2. B add: 2.
       Selected := B select: [:each | each = 2].
-      Names := #((Selected species name), ((B collect: [:each | each]) size))
+      Names := array{(Selected species name), ((B collect: [:each | each]) size)}
     """)
     check(result[1].len == 0)
     let values = result[0][^1].instVal.elements
@@ -323,7 +323,7 @@ suite "Stdlib: Bag and class binding names":
     let result = interp.evalStatements("""
       B := Bag new.
       B addAll: #(1, 1, 2).
-      Flags := #((B includesAll: #(1, 1)), (B includesAll: #(1, 1, 1)))
+      Flags := array{(B includesAll: #(1, 1)), (B includesAll: #(1, 1, 1))}
     """)
     check(result[1].len == 0)
     let flags = result[0][^1].instVal.elements
@@ -335,7 +335,7 @@ suite "Stdlib: Bag and class binding names":
       B := Bag new.
       B add: 4.
       Alias := B.
-      Flags := #(((B removeAll) == B), ((Alias size) = 0), (B isEmpty)).
+      Flags := array{((B removeAll) == B), ((Alias size) = 0), (B isEmpty)}.
       B add: 7.
       Reused := (Alias asArray) size.
       Flags
@@ -353,7 +353,7 @@ suite "Stdlib: Bag and class binding names":
     let result = interp.evalStatements("""
       Rebound := Object derive: #().
       Rebound := Object derive: #(value).
-      Names := #((Rebound name), ((Rebound new) class name))
+      Names := array{(Rebound name), ((Rebound new) class name)}
     """)
     check(result[1].len == 0)
     let names = result[0][^1].instVal.elements
@@ -363,7 +363,7 @@ suite "Stdlib: Bag and class binding names":
   test "aliasing an existing class does not rename it":
     let result = interp.evalStatements("""
       Alias := Bag.
-      Names := #((Bag name), (Alias name))
+      Names := array{(Bag name), (Alias name)}
     """)
     check(result[1].len == 0)
     let names = result[0][^1].instVal.elements

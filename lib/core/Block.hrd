@@ -6,9 +6,9 @@
 # Note: The Block class is defined in the interpreter.
 # This file extends it with additional methods using >> syntax.
 
-#====================================================================.
+# ====================================================================.
 # Block control flow.
-#====================================================================.
+# ====================================================================.
 
 # Block value methods for evaluating blocks.
 Block>>value <primitive primitiveValue>

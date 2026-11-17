@@ -239,7 +239,6 @@ var falseClassCache*: Class = nil
 var numberClassCache*: Class = nil
 var integerClassCache*: Class = nil
 var stringClassCache*: Class = nil
-var symbolClassCache*: Class = nil
 var arrayClassCache*: Class = nil
 var tableClassCache*: Class = nil
 var blockClassCache*: Class = nil
