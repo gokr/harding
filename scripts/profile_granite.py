@@ -38,6 +38,13 @@ def snapshot(case):
     if case != 'queens':
         return source
     definitions = source.split('# Benchmark driver')[0]
+    # The lexer only treats `#!` as a shebang on line 1 of a file. Prefixing the
+    # driver would push the benchmark's shebang onto line 2, where it parses as an
+    # operator expression (`! / usr / bin / env harding`) and the program fails
+    # with `Message not understood: usr`. The driver replaces it, so drop it.
+    lines = definitions.split('\n')
+    if lines and lines[0].startswith('#!'):
+        definitions = '\n'.join(lines[1:])
     return '| repetitions solver answer |\n' + definitions + '''
 repetitions := (System arguments at: 0) asInteger.
 solver := Queens new. answer := 0.

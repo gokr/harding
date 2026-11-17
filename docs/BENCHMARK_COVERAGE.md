@@ -161,3 +161,26 @@ because plans are keyed by selector alone) or iterate with a call as their loop 
 `tree` also had to be measured at 300 passes in the CPython comparison: at 30 the
 startup subtraction left it below the harness's timing resolution, and the harness
 correctly refused to report a number rather than report noise.
+
+## After the main merge
+
+Same methodology, 300 passes and 9 trials for the Python comparison, 200 and 7 for
+the native comparison.
+
+| case | Granite | CPython | Native Nim | vs CPython | vs Native |
+|---|---:|---:|---:|---:|---:|
+| tree | 0.058 ms | 1.583 ms | 0.026 ms | **0.04x** (27x faster) | 2.58x |
+| shapes | 1.036 ms | 0.234 ms | 0.017 ms | 4.42x slower | 61.30x |
+| richards | 9.457 ms | 4.468 ms | 0.184 ms | 2.11x slower | 54.59x |
+| deltablue | 16.841 ms | 6.211 ms | 0.165 ms | 2.72x slower | 102.89x |
+| queens | 11.938 ms | 11.252 ms | — | 1.06x | — |
+
+The merge preserved the tree win. `tree` remained at 0.04x CPython and 2.58x native
+Nim; the other cases moved only within the usual run-to-run spread.
+
+`scripts/profile_granite.py` needed a fix for queens: it synthesizes a driver by
+prefixing `| repetitions solver answer |` to the benchmark's definitions, which pushed
+the file's `#!/usr/bin/env harding` onto line 2. The lexer only recognizes a shebang on
+line 1, so it parsed as `! / usr / bin / env harding` and the program died with
+`Message not understood: usr`. The synthesized source now drops the shebang, which the
+driver replaces. This was pre-existing on main as well, not introduced by the merge.
